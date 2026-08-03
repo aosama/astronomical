@@ -1,0 +1,280 @@
+use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState};
+use astronomical_supervisor::{
+    ActiveRequestProgress, WorkerActivity, WorkerHealthSnapshot, build_application,
+};
+use axum::{
+    body::{Body, to_bytes},
+    http::{Request, StatusCode},
+};
+use tower::ServiceExt;
+
+const OBSERVATORY_CONTRACT_MODEL_ID: &str = "astronomical/observatory-contract-model";
+
+fn ready_health_snapshot_with_model() -> WorkerHealthSnapshot {
+    WorkerHealthSnapshot::ready_with_model(
+        OBSERVATORY_CONTRACT_MODEL_ID.to_owned(),
+        ChatModelCapabilities {
+            supports_reasoning: true,
+            supports_tool_calls: true,
+            has_vision: true,
+            max_input_tokens: 241_664,
+            max_output_tokens: 20_480,
+            context_window: 262_144,
+        },
+        astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
+        MtpRuntimeState::Disabled,
+        None,
+    )
+}
+
+#[tokio::test]
+async fn should_expose_ready_model_id_and_serving_session_in_status_when_ready_and_idle() {
+    let application = build_application(ContractScriptedExecutor::ready(
+        ready_health_snapshot_with_model(),
+    ));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return a status response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
+
+    assert_eq!(status_document["status"], "ready");
+    assert_eq!(status_document["activity"], "idle");
+    assert_eq!(
+        status_document["ready_model_id"],
+        OBSERVATORY_CONTRACT_MODEL_ID
+    );
+    assert_eq!(status_document["config_warning"], serde_json::Value::Null);
+    // The Observatory UI must never assume progress is present while idle.
+    assert!(
+        status_document.get("progress").is_none() || status_document["progress"].is_null(),
+        "idle status should not carry a progress object"
+    );
+    assert!(status_document["serving_session"].is_object());
+    assert!(status_document["persistent_prompt_cache"].is_object());
+}
+
+#[tokio::test]
+async fn should_expose_prefill_progress_with_processed_and_total_tokens_when_active() {
+    let mut health_snapshot = ready_health_snapshot_with_model();
+    health_snapshot.activity = WorkerActivity::PromptProcessing;
+    health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
+        processed_tokens: 1_024,
+        total_tokens: 8_192,
+        elapsed_millis: 800,
+        completed_prefill_chunck_tokens: Some(1_024),
+    });
+    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return a status response");
+    let response_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
+
+    assert_eq!(status_document["activity"], "prompt_processing");
+    assert_eq!(status_document["progress"]["phase"], "prefill");
+    assert_eq!(status_document["progress"]["processed_tokens"], 1_024);
+    assert_eq!(status_document["progress"]["total_tokens"], 8_192);
+    assert_eq!(status_document["progress"]["elapsed_ms"], 800);
+    assert_eq!(
+        status_document["progress"]["completed_prefill_chunck_tokens"],
+        1_024
+    );
+}
+
+#[tokio::test]
+async fn should_expose_generation_progress_with_processed_and_total_tokens_when_active() {
+    let mut health_snapshot = ready_health_snapshot_with_model();
+    health_snapshot.activity = WorkerActivity::Generating;
+    health_snapshot.active_request_progress = Some(ActiveRequestProgress::Generation {
+        generated_token_count: 42,
+        maximum_output_tokens: 512,
+        elapsed_millis: 3_200,
+    });
+    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return a status response");
+    let response_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
+
+    assert_eq!(status_document["activity"], "generating");
+    assert_eq!(status_document["progress"]["phase"], "generation");
+    assert_eq!(status_document["progress"]["processed_tokens"], 42);
+    assert_eq!(status_document["progress"]["total_tokens"], 512);
+    assert_eq!(status_document["progress"]["elapsed_ms"], 3_200);
+    // Generation progress never carries completed_prefill_chunck_tokens.
+    assert!(
+        status_document["progress"]
+            .get("completed_prefill_chunck_tokens")
+            .is_none()
+            || status_document["progress"]["completed_prefill_chunck_tokens"].is_null()
+    );
+}
+
+#[tokio::test]
+async fn should_zero_fill_cache_stats_when_no_worker_data_so_the_ui_never_sees_missing_fields() {
+    let application = build_application(ContractScriptedExecutor::ready(
+        ready_health_snapshot_with_model(),
+    ));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/cache/stats")
+                .body(Body::empty())
+                .expect("the cache-stats request should be valid"),
+        )
+        .await
+        .expect("the application should return a cache-stats response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = to_bytes(response.into_body(), 8 * 1024)
+        .await
+        .expect("the cache-stats body should be readable");
+    let cache_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the cache-stats body should contain JSON");
+
+    assert_eq!(cache_document["persistent_prompt_cache_hits"], 0);
+    assert_eq!(cache_document["persistent_prompt_cache_misses"], 0);
+    assert_eq!(cache_document["persistent_prompt_cache_tokens_saved"], 0);
+    assert_eq!(cache_document["persistent_prompt_cache_hit_rate"], 0.0);
+    assert_eq!(
+        cache_document["persistent_prompt_cache_total_size_bytes"],
+        0
+    );
+    assert_eq!(
+        cache_document["persistent_prompt_cache_maximum_size_bytes"],
+        0
+    );
+    // Every field the Observatory cache panel reads must be present.
+    assert!(cache_document["persistent_prompt_cache_sequence_state_block_count"].is_u64());
+    assert!(cache_document["persistent_prompt_cache_boundary_state_snapshot_count"].is_u64());
+}
+
+#[tokio::test]
+async fn should_expose_gpu_utilization_through_the_system_telemetry_endpoint() {
+    let application = build_application(ContractScriptedExecutor::ready(
+        ready_health_snapshot_with_model(),
+    ));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/system/telemetry")
+                .body(Body::empty())
+                .expect("the telemetry request should be valid"),
+        )
+        .await
+        .expect("the application should return a telemetry response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = to_bytes(response.into_body(), 4 * 1024)
+        .await
+        .expect("the telemetry body should be readable");
+    let telemetry_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the telemetry body should contain JSON");
+    // The field must always be present. On Apple Silicon with a GPU it is a
+    // number in 0–100; on machines without an AGX accelerator it is null.
+    assert!(
+        telemetry_document["gpu_utilization_percentage"].is_number()
+            || telemetry_document["gpu_utilization_percentage"].is_null(),
+        "gpu_utilization_percentage must be a number or null"
+    );
+    if let Some(gpu_percentage) = telemetry_document["gpu_utilization_percentage"].as_f64() {
+        assert!(
+            (0.0..=100.0).contains(&gpu_percentage),
+            "gpu_utilization_percentage must be in 0–100 range"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_expose_mlx_memory_snapshot_and_serving_session_in_status_for_the_memory_panel() {
+    let application = build_application(ContractScriptedExecutor::ready(
+        ready_health_snapshot_with_model(),
+    ));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return a status response");
+    let response_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
+    // MLX memory snapshot is optional (None when no worker observation yet)
+    // but the ceiling must always be present.
+    assert!(status_document["mlx_memory_ceiling_bytes"].is_u64());
+    // serving_session must always be present for the session panel.
+    assert!(status_document["serving_session"].is_object());
+    assert!(status_document["serving_session"]["completed_request_count"].is_u64());
+    assert!(status_document["serving_session"]["total_prompt_token_count"].is_u64());
+    assert!(status_document["serving_session"]["total_reused_prompt_token_count"].is_u64());
+}
+
+struct ContractScriptedExecutor {
+    health_snapshot: WorkerHealthSnapshot,
+}
+
+impl ContractScriptedExecutor {
+    fn ready(health_snapshot: WorkerHealthSnapshot) -> Self {
+        Self { health_snapshot }
+    }
+}
+
+impl astronomical_supervisor::ChatGenerationExecutor for ContractScriptedExecutor {
+    fn start_chat_generation(
+        &self,
+        _generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        tokio::sync::mpsc::Receiver<
+                            astronomical_supervisor::ChatGenerationStreamEvent,
+                        >,
+                        astronomical_supervisor::GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(
+            async move { Err(astronomical_supervisor::GenerationStartError::WorkerUnavailable) },
+        )
+    }
+
+    fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
+        self.health_snapshot.clone()
+    }
+}

@@ -1,0 +1,39 @@
+[package]
+name = "astronomical-model-serving"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "astronomical-model-preparer"
+path = "src/bin/astronomical-model-preparer.rs"
+required-features = ["direct-mlx"]
+
+[lints]
+workspace = true
+
+[features]
+default = []
+direct-mlx = ["dep:astronomical-runtime-integration"]
+
+[dependencies]
+astronomical-config = { path = "../config" }
+astronomical-ipc-protocol = { path = "../ipc-protocol" }
+astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+fs4.workspace = true
+image.workspace = true
+libc.workspace = true
+safetensors.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokenizers.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"

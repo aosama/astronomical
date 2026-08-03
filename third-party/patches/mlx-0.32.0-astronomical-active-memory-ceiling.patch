@@ -1,0 +1,150 @@
+diff --git a/mlx/backend/metal/allocator.cpp b/mlx/backend/metal/allocator.cpp
+index 3c6b5a0d..00000000 100644
+--- a/mlx/backend/metal/allocator.cpp
++++ b/mlx/backend/metal/allocator.cpp
+@@ -8,7 +8,9 @@
+ #include <mach/vm_page_size.h>
+ #include <unistd.h>
+ #include <cassert>
+ #include <cstdlib>
++#include <sstream>
++#include <limits>
+ 
+ namespace mlx::core {
+ 
+@@ -42,6 +44,40 @@ bool can_reuse_alien_buffer(void* ptr) {
+ 
+ namespace metal {
+ 
++constexpr size_t astronomical_transient_allowance_divisor = 100;
++constexpr const char* astronomical_active_memory_limit_error_marker =
++    "ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED";
++
++size_t astronomical_allowed_active_memory_bytes(size_t configured_limit_bytes) {
++  const size_t allowance_bytes =
++      configured_limit_bytes / astronomical_transient_allowance_divisor;
++  if (configured_limit_bytes >
++      std::numeric_limits<size_t>::max() - allowance_bytes) {
++    return std::numeric_limits<size_t>::max();
++  }
++  return configured_limit_bytes + allowance_bytes;
++}
++
++bool astronomical_allocation_exceeds_limit(
++    size_t active_memory_bytes,
++    size_t allocation_bytes,
++    size_t allowed_active_memory_bytes) {
++  return active_memory_bytes > allowed_active_memory_bytes ||
++      allocation_bytes > allowed_active_memory_bytes - active_memory_bytes;
++}
++
++std::runtime_error astronomical_active_memory_limit_error(
++    size_t active_memory_bytes,
++    size_t allocation_bytes,
++    size_t allowed_active_memory_bytes) {
++  std::ostringstream message;
++  message << astronomical_active_memory_limit_error_marker
++          << " active_bytes=" << active_memory_bytes
++          << " allocation_bytes=" << allocation_bytes
++          << " allowed_bytes=" << allowed_active_memory_bytes;
++  return std::runtime_error(message.str());
++}
++
+ MetalAllocator::MetalAllocator(Device& d)
+     : device_(d.mtl_device()),
+       residency_set_(d.residency_set()),
+@@ -127,7 +163,22 @@ Buffer MetalAllocator::malloc(size_t size) {
+ 
+   // Try the cache
+   std::unique_lock lk(mutex_);
+   MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
++  const size_t allowed_active_memory_bytes =
++      astronomical_allowed_active_memory_bytes(block_limit_);
++  if (buf && astronomical_allocation_exceeds_limit(
++                  active_memory_,
++                  buf->length(),
++                  allowed_active_memory_bytes)) {
++    const size_t rejected_allocation_bytes = buf->length();
++    const size_t active_memory_bytes = active_memory_;
++    buffer_cache_.recycle_to_cache(buf);
++    num_resources_ -= buffer_cache_.clear();
++    throw astronomical_active_memory_limit_error(
++        active_memory_bytes,
++        rejected_allocation_bytes,
++        allowed_active_memory_bytes);
++  }
+   if (!buf) {
+     size_t mem_required = get_active_memory() + get_cache_memory() + size;
+ 
+@@ -145,5 +196,11 @@ Buffer MetalAllocator::malloc(size_t size) {
+       throw std::runtime_error(msg.str());
+     }
++    if (astronomical_allocation_exceeds_limit(
++            active_memory_, size, allowed_active_memory_bytes)) {
++      num_resources_ -= buffer_cache_.clear();
++      throw astronomical_active_memory_limit_error(
++          active_memory_, size, allowed_active_memory_bytes);
++    }
+     lk.unlock();
+     if (size < small_size_ && heap_) {
+       buf = heap_->newBuffer(size, resource_options);
+@@ -157,6 +214,22 @@ Buffer MetalAllocator::malloc(size_t size) {
+       throw std::runtime_error(msg.str());
+     }
+     lk.lock();
++    const size_t post_allocation_allowed_active_memory_bytes =
++        astronomical_allowed_active_memory_bytes(block_limit_);
++    if (astronomical_allocation_exceeds_limit(
++            active_memory_,
++            buf->length(),
++            post_allocation_allowed_active_memory_bytes)) {
++      const size_t rejected_allocation_bytes = buf->length();
++      const size_t active_memory_bytes = active_memory_;
++      lk.unlock();
++      auto pool = metal::new_scoped_memory_pool();
++      buf->release();
++      throw astronomical_active_memory_limit_error(
++          active_memory_bytes,
++          rejected_allocation_bytes,
++          post_allocation_allowed_active_memory_bytes);
++    }
+     num_resources_++;
+     if (!buf->heap()) {
+       residency_set_.insert(buf);
+@@ -205,11 +278,36 @@ size_t MetalAllocator::size(Buffer buffer) const {
+ }
+ 
+ Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
++  {
++    std::unique_lock lk(mutex_);
++    const size_t allowed_active_memory_bytes =
++        astronomical_allowed_active_memory_bytes(block_limit_);
++    if (astronomical_allocation_exceeds_limit(
++            active_memory_, size, allowed_active_memory_bytes)) {
++      num_resources_ -= buffer_cache_.clear();
++      throw astronomical_active_memory_limit_error(
++          active_memory_, size, allowed_active_memory_bytes);
++    }
++  }
+   auto buf = device_->newBuffer(ptr, size, resource_options, nullptr);
+   if (!buf) {
+     return Buffer{nullptr};
+   }
+   std::unique_lock lk(mutex_);
++  const size_t allowed_active_memory_bytes =
++      astronomical_allowed_active_memory_bytes(block_limit_);
++  if (astronomical_allocation_exceeds_limit(
++          active_memory_, buf->length(), allowed_active_memory_bytes)) {
++    const size_t rejected_allocation_bytes = buf->length();
++    const size_t active_memory_bytes = active_memory_;
++    lk.unlock();
++    auto pool = metal::new_scoped_memory_pool();
++    buf->release();
++    throw astronomical_active_memory_limit_error(
++        active_memory_bytes,
++        rejected_allocation_bytes,
++        allowed_active_memory_bytes);
++  }
+   residency_set_.insert(buf);
+   active_memory_ += buf->length();
+   peak_memory_ = std::max(peak_memory_, active_memory_);

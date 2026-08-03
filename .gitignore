@@ -1,0 +1,115 @@
+# macOS filesystem metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor and IDE local state
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Agent harness local state
+.opencode/
+
+# Agent instructions (local developer environment, not project source)
+AGENTS.md
+.github/instructions/rust.instructions.md
+docs/
+
+# Local UI screenshot captures
+ScreenShots/
+
+# Local environment and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.cache/
+tmp/
+temp/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Rust / Cargo
+target/
+debug/
+release/
+*.rs.bk
+*.profraw
+*.profdata
+
+# Swift Package Manager
+.build/
+
+# Native build directories
+build/
+out/
+dist/
+cmake-build-*/
+DerivedData/
+
+# CMake and generated build-system files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Ninja build metadata
+.ninja_deps
+.ninja_log
+build.ninja
+rules.ninja
+
+# C, C++, Objective-C, and Objective-C++ outputs
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.app/
+
+# Debug symbols, sanitizer, profiling, and coverage artifacts
+*.dSYM/
+*.pdb
+*.ilk
+*.gcno
+*.gcda
+*.gcov
+coverage/
+profraw/
+
+# Apple / Xcode local user state
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+
+# Metal shader build outputs
+*.air
+*.metallib
+*.metallibsym
+
+# Package-manager and archive outputs
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.crate

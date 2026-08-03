@@ -1,0 +1,296 @@
+use std::fs;
+
+use astronomical_model_serving::Qwen3_5MoEArtifactValidator;
+#[cfg(feature = "direct-mlx")]
+use astronomical_model_serving::{
+    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
+    Qwen3_5MoEEngine, Qwen3_5MoEInferenceRequest, Qwen3_5MoEPrefillChunckSizer,
+};
+
+/// Links or copies a regular file from source to target, falling back to copy
+/// when hard linking is not permitted (e.g. cross-volume or APFS restricted).
+/// Skips directories and symlinks — the artifact validator only needs regular files.
+fn link_or_copy_file(source: &std::path::Path, target: &std::path::Path) {
+    if !source.is_file() {
+        return;
+    }
+    if fs::hard_link(source, target).is_err() {
+        fs::copy(source, target).unwrap_or_else(|error| {
+            panic!("the test should copy {source:?} to {target:?}: {error}")
+        });
+    }
+}
+
+#[test]
+#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
+    let model_directory = crate::common::configured_ornith_model_artifact_directory();
+    let text_artifact_directory = tempfile::tempdir()
+        .expect("the qualification test should create a temporary text artifact directory");
+    // Link all files from the model directory except the vision sidecar.
+    for directory_entry in fs::read_dir(&model_directory)
+        .expect("the test should read the model directory")
+        .filter_map(Result::ok)
+    {
+        let entry_path = directory_entry.path();
+        let file_name = directory_entry.file_name();
+        let file_name_str = file_name.to_string_lossy();
+        if file_name_str == "optiq" {
+            // Skip the vision sidecar directory entirely for a text-only test.
+            continue;
+        }
+        if entry_path.is_dir() {
+            // Skip subdirectories (e.g. .cache, refs) — the text-only
+            // artifact validator only needs files, not nested directories.
+            continue;
+        }
+        let target_path = text_artifact_directory.path().join(&*file_name_str);
+        link_or_copy_file(&entry_path, &target_path);
+    }
+
+    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+        .validate(text_artifact_directory.path(), 20_480)
+        .expect("a text-only artifact should validate without the vision sidecar");
+
+    let shard_count = validated_artifact.shard_count();
+    let total_payload_bytes = validated_artifact.total_payload_bytes();
+    let shard_index = validated_artifact.shard_index();
+    assert_eq!(shard_count, shard_index.shard_count());
+    assert_eq!(total_payload_bytes, shard_index.total_payload_bytes());
+    let shard_files = validated_artifact
+        .into_shard_files()
+        .expect("all retained language shard descriptors should transfer safely");
+    assert_eq!(shard_files.len(), shard_count);
+}
+
+#[test]
+#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
+    let model_directory = crate::common::configured_ornith_model_artifact_directory();
+    let vision_artifact_directory = tempfile::tempdir()
+        .expect("the qualification test should create a temporary vision artifact directory");
+    // Link all files from the model directory including the optiq vision sidecar.
+    for directory_entry in fs::read_dir(&model_directory)
+        .expect("the test should read the model directory")
+        .filter_map(Result::ok)
+    {
+        let entry_path = directory_entry.path();
+        let file_name = directory_entry.file_name();
+        let file_name_str = file_name.to_string_lossy();
+        let target_path = vision_artifact_directory.path().join(&*file_name_str);
+        if entry_path.is_dir() {
+            // Skip non-model directories like .cache, .git, refs.
+            // Only copy the optiq vision sidecar directory.
+            if file_name_str == "optiq" {
+                fs::create_dir_all(&target_path).expect("the test should create subdirectories");
+                for sub_entry in fs::read_dir(&entry_path)
+                    .expect("the test should read the subdirectory")
+                    .filter_map(Result::ok)
+                {
+                    let sub_target = target_path.join(sub_entry.file_name());
+                    link_or_copy_file(&sub_entry.path(), &sub_target);
+                }
+            }
+            // Skip other directories — the artifact validator only needs
+            // model files and the optiq vision sidecar, not .cache/refs/etc.
+        } else {
+            link_or_copy_file(&entry_path, &target_path);
+        }
+    }
+
+    let mut validated_artifact = Qwen3_5MoEArtifactValidator::new()
+        .validate(vision_artifact_directory.path(), 20_480)
+        .expect("a vision-enabled artifact should validate with the vision sidecar");
+
+    // The vision sidecar should be present in the validated artifact.
+    assert!(
+        validated_artifact.take_vision_sidecar_file().is_ok(),
+        "the vision sidecar should be available for transfer"
+    );
+}
+
+#[test]
+#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+fn should_ignore_non_execution_files_in_the_configured_local_artifact() {
+    let model_directory = crate::common::configured_ornith_model_artifact_directory();
+
+    Qwen3_5MoEArtifactValidator::new()
+        .validate(model_directory, 20_480)
+        .expect("non-execution repository files should not block text-model validation");
+}
+
+#[test]
+#[ignore = "requires model_directories to discover Ornith-1.0-35B-6bit"]
+fn should_validate_a_standard_six_bit_qwen3_5_moe_artifact() {
+    let model_directory =
+        crate::common::configured_model_artifact_directory_by_id("Ornith-1.0-35B-6bit");
+
+    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the standard MLX six-bit Ornith artifact should validate");
+
+    assert_eq!(validated_artifact.shard_count(), 6);
+    assert!(!validated_artifact.has_separate_vision_sidecar());
+    assert_eq!(validated_artifact.config().default_quantization_bits(), 6);
+}
+
+#[cfg(feature = "direct-mlx")]
+#[tokio::test]
+#[ignore = "loads and decodes the configured Ornith-1.0-35B-bf16 artifact"]
+async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expert_paging() {
+    use std::time::Duration;
+
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let model_directory =
+        crate::common::configured_model_artifact_directory_by_id("Ornith-1.0-35B-bf16");
+    eprintln!("native-bf16-paging status=progress phase=artifact_validation");
+    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the native BF16 Ornith artifact should validate before engine loading");
+    let mlx_memory_limits =
+        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+    let mut native_bfloat16_engine = Qwen3_5MoEEngine::new_with_prefill_chunck_sizer(
+        validated_artifact,
+        mlx_memory_limits.active_memory_limit_bytes(),
+        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        None,
+        Qwen3_5MoEPrefillChunckSizer::for_fixed_prefill_chunck_tokens(2_048)
+            .expect("the BF16 qualification prefill chunk size should be valid"),
+        248_069,
+        model_directory,
+        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        false,
+    )
+    .expect("the native BF16 paged engine settings should be valid");
+    eprintln!("native-bf16-paging status=progress phase=model_load");
+    tokio::time::timeout(Duration::from_secs(110), native_bfloat16_engine.load())
+        .await
+        .expect("native BF16 model load must finish within 110 seconds")
+        .expect("native BF16 dense weights and paged experts should load");
+    native_bfloat16_engine
+        .start_generation(
+            Qwen3_5MoEInferenceRequest::new(
+                astronomical_ipc_protocol::RequestId::new(90_001),
+                std::iter::repeat_n(846, 636)
+                    .chain([
+                        248_045, 846, 198, 248_046, 198, 248_045, 74_455, 198, 248_068, 271,
+                    ])
+                    .collect(),
+                1,
+            )
+            .with_image_pad_token_id(248_069),
+        )
+        .await
+        .expect("the native BF16 paged engine should accept a short request");
+    eprintln!("native-bf16-paging status=progress phase=decode");
+    let generated_token = tokio::time::timeout(Duration::from_secs(110), async {
+        loop {
+            match native_bfloat16_engine
+                .decode_next_token(astronomical_ipc_protocol::RequestId::new(90_001))
+                .await
+                .expect("native BF16 paged decode should succeed")
+            {
+                GeneratedToken::PrefillProgress { .. } => continue,
+                generated_token => return generated_token,
+            }
+        }
+    })
+    .await
+    .expect("native BF16 prefill and decode must finish within 110 seconds");
+    assert!(matches!(
+        generated_token,
+        GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence
+    ));
+}
+
+#[test]
+#[ignore = "requires model_directories to discover Qwen3.6-35B-A3B-8bit"]
+fn should_validate_the_qwen3_6_35b_a3b_eight_bit_artifact() {
+    const EXPECTED_TOTAL_PAYLOAD_BYTES: u64 = 37_721_128_672;
+    const EXPECTED_MODEL_ID: &str = "Qwen3.6-35B-A3B-8bit";
+
+    let model_directory = super::qwen3_6_35b_a3b_eight_bit_model_directory();
+
+    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the complete Qwen3.6-35B-A3B eight-bit artifact should validate");
+
+    assert_eq!(validated_artifact.shard_count(), 8);
+    assert_eq!(validated_artifact.model_id(), EXPECTED_MODEL_ID);
+    assert_eq!(
+        validated_artifact.total_payload_bytes(),
+        EXPECTED_TOTAL_PAYLOAD_BYTES
+    );
+    assert_eq!(validated_artifact.config().layer_count(), 40);
+    assert_eq!(validated_artifact.config().expert_count(), 256);
+    assert_eq!(validated_artifact.config().experts_per_token(), 8);
+    assert_eq!(validated_artifact.config().default_quantization_bits(), 8);
+    assert_eq!(
+        validated_artifact
+            .config()
+            .default_quantization_group_size(),
+        64
+    );
+    assert!(validated_artifact.supports_image_input());
+    assert!(!validated_artifact.has_separate_vision_sidecar());
+}
+
+#[test]
+#[ignore = "requires model_directories to discover XYZ-Aquila-mini-OptiQ-4bit"]
+fn should_validate_the_xyz_aquila_mini_optiq_four_bit_artifact() {
+    const EXPECTED_TOTAL_PAYLOAD_BYTES: u64 = 36_290_615_552;
+    const EXPECTED_MODEL_ID: &str = "XYZ-Aquila-mini-OptiQ-4bit";
+
+    let model_directory = super::xyz_aquila_mini_optiq_four_bit_model_directory();
+
+    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the complete XYZ-Aquila-mini OptiQ artifact should validate");
+
+    assert_eq!(validated_artifact.shard_count(), 7);
+    assert_eq!(validated_artifact.model_id(), EXPECTED_MODEL_ID);
+    assert_eq!(
+        validated_artifact.total_payload_bytes(),
+        EXPECTED_TOTAL_PAYLOAD_BYTES
+    );
+    assert_eq!(validated_artifact.config().layer_count(), 40);
+    assert_eq!(validated_artifact.config().expert_count(), 256);
+    assert_eq!(validated_artifact.config().experts_per_token(), 8);
+    assert_eq!(validated_artifact.config().default_quantization_bits(), 4);
+    assert_eq!(
+        validated_artifact
+            .config()
+            .default_quantization_group_size(),
+        64
+    );
+    assert!(validated_artifact.has_separate_vision_sidecar());
+}
+
+#[test]
+#[ignore = "requires model_directories to discover Qwen3.6-35B-A3B-oQ4e-mtp"]
+fn should_validate_the_qwen3_6_35b_a3b_oq4e_mtp_artifact() {
+    const EXPECTED_MEASURED_PAYLOAD_BYTES: u64 = 21_612_530_528;
+    const EXPECTED_MODEL_ID: &str = "Qwen3.6-35B-A3B-oQ4e-mtp";
+
+    let model_directory = super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+
+    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the complete Qwen3.6-35B-A3B-oQ4e-mtp artifact should validate");
+
+    assert_eq!(validated_artifact.shard_count(), 5);
+    assert_eq!(validated_artifact.shard_index().mtp_tensor_count(), 42);
+    assert_eq!(validated_artifact.model_id(), EXPECTED_MODEL_ID);
+    assert_eq!(
+        validated_artifact.total_payload_bytes(),
+        EXPECTED_MEASURED_PAYLOAD_BYTES
+    );
+    assert_eq!(validated_artifact.config().mtp_layer_count(), 1);
+    assert_eq!(validated_artifact.config().default_quantization_bits(), 4);
+    assert_eq!(
+        validated_artifact
+            .config()
+            .default_quantization_group_size(),
+        64
+    );
+}

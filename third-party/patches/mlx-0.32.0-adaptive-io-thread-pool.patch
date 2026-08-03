@@ -1,0 +1,21 @@
+diff --git a/mlx/io/load.cpp b/mlx/io/load.cpp
+index b6c4918..3919a6e 100644
+--- a/mlx/io/load.cpp
++++ b/mlx/io/load.cpp
+@@ -6,0 +7 @@
++#include <thread>
+@@ -336,0 +338,11 @@ namespace io {
++size_t io_thread_count() {
++  constexpr size_t minimum_io_thread_count = 4;
++  constexpr size_t maximum_io_thread_count = 8;
++  const auto logical_cpu_count = std::thread::hardware_concurrency();
++  const auto half_logical_cpu_count = (logical_cpu_count + 1) / 2;
++  return std::clamp(
++      static_cast<size_t>(half_logical_cpu_count),
++      minimum_io_thread_count,
++      maximum_io_thread_count);
++}
++
+@@ -339 +350 @@ ThreadPool& thread_pool() {
+-  static ThreadPool* pool_ = new ThreadPool{4};
++  static ThreadPool* pool_ = new ThreadPool{io_thread_count()};

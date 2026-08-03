@@ -1,0 +1,32 @@
+[
+  {
+    "model_id": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+    "revision": "ce62c23d34b91d84f838e0b292d517dbe4b9b60f",
+    "tested_at": "2025-07-19",
+    "notes": "Original certified model. 5 shards, separate vision sidecar."
+  },
+  {
+    "model_id": "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
+    "revision": "discovered",
+    "tested_at": "2025-07-22",
+    "notes": "Qwen3.6 base. 5 shards, separate vision sidecar, MTP head, kv_config.json."
+  },
+  {
+    "model_id": "Jundot/Qwen3.6-35B-A3B-oQ4e-mtp",
+    "revision": "discovered",
+    "tested_at": "2026-07-31",
+    "notes": "Qwen3.6 sparse-MoE MTP artifact. 5 shards, separate vision sidecar, and one MTP layer; used by the serial allocator model-swap qualification."
+  },
+  {
+    "model_id": "brainworkup/Ornith-1.0-9B-oQ8e",
+    "revision": "595c38e28462f73d",
+    "tested_at": "2026-08-02",
+    "notes": "Dense Qwen3.5 8-bit affine artifact with a validated embedded vision tower across three model shards, including one vision-only shard. Direct MLX and OpenAI image-stream smoke tests passed. MTP tensor inventory is absent, so it serves target-only."
+  },
+  {
+    "model_id": "mlx-community/XYZ-Aquila-mini-OptiQ-4bit",
+    "revision": "b897e54279d02c37174b3d7b1dc002d0bd2c09d9",
+    "tested_at": "2026-07-29",
+    "notes": "OptiQ mixed-precision affine model: 7 language shards, separate vision sidecar, 40 layers, 256 experts, and 8 routed experts per token. Ignored artifact and REST text/image E2E qualifications cover the local checkpoint."
+  }
+]

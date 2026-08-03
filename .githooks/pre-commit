@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+
+set -eu
+
+REPOSITORY_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+    printf '%s\n' '[pre-commit] status=failed reason=not-a-git-worktree' >&2
+    exit 1
+}
+
+printf '%s\n' "[pre-commit] status=start check=staged-source-size root=${REPOSITORY_ROOT}"
+started_epoch_seconds="$(date +%s)"
+if sh "${REPOSITORY_ROOT}/scripts/check-source-size.sh" --staged; then
+    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+    printf '%s\n' "[pre-commit] status=success check=staged-source-size elapsed_seconds=${elapsed_seconds}"
+    exit 0
+fi
+elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+printf '%s\n' "[pre-commit] status=failed check=staged-source-size elapsed_seconds=${elapsed_seconds}" >&2
+exit 1

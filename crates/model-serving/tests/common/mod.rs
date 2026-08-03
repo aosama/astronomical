@@ -1,0 +1,156 @@
+#[cfg(feature = "direct-mlx")]
+use std::path::PathBuf;
+#[cfg(feature = "direct-mlx")]
+use std::time::Duration;
+
+#[cfg(feature = "direct-mlx")]
+use astronomical_config::AstronomicalConfig;
+#[cfg(feature = "direct-mlx")]
+use astronomical_runtime_integration::{
+    MlxMemoryLimits, maximum_recommended_gpu_working_set_size_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+use tokio::sync::{Mutex, MutexGuard};
+#[cfg(feature = "direct-mlx")]
+use tokio::{process::Command, time::timeout};
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) mod generation_progress;
+pub(crate) mod qwen3_5_moe;
+
+pub(crate) const SYNTHETIC_RED_PNG_BYTES: &[u8] = &[
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0,
+    0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240, 31, 0,
+    5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+];
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+static DIRECT_MLX_TEST_LOCK: Mutex<()> = Mutex::const_new(());
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+const BYTES_PER_MEBIBYTE: usize = 1024 * 1024;
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+const IOGPU_WIRED_LIMIT_SYSCTL_KEY: &str = "iogpu.wired_limit_mb";
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+const MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) const DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES: usize = 128 * 1024 * 1024;
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) const DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
+    DIRECT_MLX_TEST_LOCK.lock().await
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> MlxMemoryLimits {
+    let mut sysctl_command = Command::new(SYSCTL_EXECUTABLE_PATH);
+    sysctl_command
+        .arg("-n")
+        .arg(IOGPU_WIRED_LIMIT_SYSCTL_KEY)
+        .kill_on_drop(true);
+    let sysctl_output = timeout(
+        MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT,
+        sysctl_command.output(),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        panic!(
+            "sampling {IOGPU_WIRED_LIMIT_SYSCTL_KEY} should finish within {} seconds",
+            MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT.as_secs()
+        )
+    })
+    .unwrap_or_else(|sample_error| {
+        panic!("should sample {IOGPU_WIRED_LIMIT_SYSCTL_KEY}: {sample_error}")
+    });
+    assert!(
+        sysctl_output.status.success(),
+        "sysctl should read {IOGPU_WIRED_LIMIT_SYSCTL_KEY} successfully"
+    );
+    let wired_limit_mebibytes_text = String::from_utf8_lossy(&sysctl_output.stdout);
+    let wired_limit_mebibytes = wired_limit_mebibytes_text
+        .trim()
+        .parse::<usize>()
+        .unwrap_or_else(|parse_error| {
+            panic!("{IOGPU_WIRED_LIMIT_SYSCTL_KEY} should be an unsigned integer: {parse_error}")
+        });
+    let gpu_wired_memory_limit_bytes = if wired_limit_mebibytes == 0 {
+        maximum_recommended_gpu_working_set_size_bytes()
+            .expect("MLX should expose the default GPU wired-memory working set")
+    } else {
+        wired_limit_mebibytes
+            .checked_mul(BYTES_PER_MEBIBYTE)
+            .expect("the GPU wired-memory limit should fit in usize bytes")
+    };
+    eprintln!(
+        "[model-artifact-memory] gpu_wired_memory_limit_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
+        gpu_wired_memory_limit_bytes, gpu_wired_memory_limit_bytes, gpu_wired_memory_limit_bytes
+    );
+    MlxMemoryLimits::new(gpu_wired_memory_limit_bytes, gpu_wired_memory_limit_bytes)
+        .expect("the machine-derived model-artifact MLX memory limits should be valid")
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn configured_ornith_model_artifact_directory() -> PathBuf {
+    configured_model_artifact_directory_by_id(
+        astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
+    )
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathBuf {
+    let astronomical_config = AstronomicalConfig::load_from_default_location()
+        .expect("the standard Astronomical configuration should load for model qualification");
+    astronomical_config
+        .find_configured_model_directory_by_id(model_id)
+        .unwrap_or_else(|discovery_error| {
+            panic!(
+                "model_directories discovery should complete for model ID {model_id}: {discovery_error}"
+            )
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "the standard Astronomical configuration model_directories should discover model ID {model_id}"
+            )
+        })
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf> {
+    let astronomical_config = AstronomicalConfig::load_from_default_location()
+        .expect("the standard Astronomical configuration should load for model qualification");
+    astronomical_config
+        .find_configured_model_directory_by_id(model_id)
+        .unwrap_or_else(|discovery_error| {
+            panic!(
+                "model_directories discovery should complete for model ID {model_id}: {discovery_error}"
+            )
+        })
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn configured_model_artifact_prompt_cache_maximum_size_bytes() -> u64 {
+    AstronomicalConfig::load_from_default_location()
+        .expect("~/.astronomical/config.json should load for model-artifact qualification")
+        .prompt_cache()
+        .expect("~/.astronomical/config.json should define prompt_cache.max_size_gb")
+        .global_prompt_cache_maximum_size_bytes()
+}

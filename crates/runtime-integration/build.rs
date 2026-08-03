@@ -1,0 +1,395 @@
+use std::{
+    env,
+    error::Error,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+use sha2::{Digest, Sha256};
+
+const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
+const MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX_MEMORY_CONTRACT_PROBE";
+const RUSTC_WRAPPER_VARIABLE: &str = "RUSTC_WRAPPER";
+const NATIVE_DEPENDENCY_CACHE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
+const SCCACHE_EXECUTABLE_NAME: &str = "sccache";
+const BINDGEN_FUNCTION_ALLOWLIST: &str = concat!(
+    "mlx_(set_error_handler|metal_set_metallib_path|version|string_(new|data|free)|clear_cache|",
+    "device_(new_type|free)|device_info_(new|get|get_size|free)|",
+    "compile|closure_(new|new_func|free|apply)|",
+    "get_(active_memory|cache_memory|memory_limit|peak_memory)|reset_peak_memory|set_(cache|memory|wired)_limit|",
+    "array_(new|new_data|free|eval|shape|ndim|dtype|size|nbytes|data_(float32|uint32)|item_uint32|set)|",
+    "default_(cpu|gpu)_stream_new|stream_free|synchronize|",
+    "(add(mm)?|arange|argmax_axis|argpartition_axis|argsort_axis|astype|broadcast_to|concatenate_axis|contiguous|conv(1d|3d)|cos|cumsum|dequantize|divide|erf|exp|expand_dims|floor_divide|gather_(mm|qmm)|greater|greater_equal|log1p|logaddexp|matmul|power|",
+    "max_axis|multiply|negative|put_along_axis|quantized_matmul|repeat_axis|reshape|sigmoid|sin|slice(_update)?|softmax_axis|subtract|sum_axis|tanh|",
+    "squeeze_axis|stack_axis|take_along_axis|take_axis|topk_axis|transpose_axes|where|zeros)|",
+    "fast_(rms_norm|layer_norm|rope|scaled_dot_product_attention)|fast_metal_kernel(_config)?_(new|free|apply|add_output_arg|set_grid|set_thread_group|add_template_arg_(dtype|int|bool))|random_(categorical|key|split)|eval|async_eval|",
+    "vector_array_(new|new_data|free|get|size|set_value)|vector_string_(new_data|free)|io_(reader|writer)_(new|free)|",
+    "save_safetensors_writer|",
+    "load_safetensors_reader|map_string_to_array_(new|free|get)|",
+    "map_string_to_array_insert|map_string_to_string_(new|free|insert))|",
+    "astronomical_metal_expert_loader_(start|wait|free)",
+);
+const BINDGEN_TYPE_ALLOWLIST: &str = concat!(
+    "(mlx_(error_handler_func|string|array|dtype|stream|closure|device|device_info|device_type|io_reader|io_vtable|",
+    "optional_(dtype|float|int)|vector_array|vector_string|fast_metal_kernel(_config)?|map_string_to_array|map_string_to_string)|",
+    "astronomical_metal_expert_loader_(output_tensor|load_range|metrics|handle))",
+);
+const NATIVE_ARCHIVE_VARIABLES: [&str; 5] = [
+    "ASTRONOMICAL_MLX_SOURCE_ARCHIVE",
+    "ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE",
+    "ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE",
+    "ASTRONOMICAL_JSON_SOURCE_ARCHIVE",
+    "ASTRONOMICAL_FMT_SOURCE_ARCHIVE",
+];
+
+fn main() -> Result<(), Box<dyn Error>> {
+    println!("cargo:rerun-if-env-changed={MLX_FEATURE_VARIABLE}");
+    println!("cargo:rerun-if-env-changed={MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE}");
+    println!("cargo:rerun-if-env-changed={RUSTC_WRAPPER_VARIABLE}");
+    println!("cargo:rerun-if-env-changed={NATIVE_DEPENDENCY_CACHE_VARIABLE}");
+    for archive_variable in NATIVE_ARCHIVE_VARIABLES {
+        println!("cargo:rerun-if-env-changed={archive_variable}");
+    }
+    if env::var_os(MLX_FEATURE_VARIABLE).is_none() {
+        return Ok(());
+    }
+
+    let manifest_directory = required_path_variable("CARGO_MANIFEST_DIR")?;
+    let native_build_directory = required_path_variable("OUT_DIR")?.join("mlx-c-runtime-build");
+    let native_source_directory = manifest_directory.join("native");
+    let should_build_memory_contract_probe =
+        env::var_os(MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE).is_some();
+
+    let mut configure_command = Command::new("cmake");
+    configure_command
+        .arg("-S")
+        .arg(&native_source_directory)
+        .arg("-B")
+        .arg(&native_build_directory)
+        .arg("-DCMAKE_BUILD_TYPE=Release");
+    let compiler_launcher_path = sccache_compiler_launcher_path();
+    let compiler_launcher_argument = compiler_launcher_path
+        .as_deref()
+        .map_or_else(String::new, |launcher_path| {
+            launcher_path.display().to_string()
+        });
+    configure_command
+        .arg(format!(
+            "-DCMAKE_C_COMPILER_LAUNCHER={compiler_launcher_argument}"
+        ))
+        .arg(format!(
+            "-DCMAKE_CXX_COMPILER_LAUNCHER={compiler_launcher_argument}"
+        ));
+    if should_build_memory_contract_probe {
+        configure_command.arg("-DASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE=ON");
+    } else {
+        configure_command.arg("-DASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE=OFF");
+    }
+    if let Some(native_dependency_cache_directory) = native_dependency_cache_directory() {
+        println!(
+            "cargo:rerun-if-changed={}",
+            native_dependency_cache_directory.display()
+        );
+        configure_command.arg(format!(
+            "-D{NATIVE_DEPENDENCY_CACHE_VARIABLE}={}",
+            native_dependency_cache_directory.display()
+        ));
+    }
+    for archive_variable in NATIVE_ARCHIVE_VARIABLES {
+        if let Some(archive_path) = env::var_os(archive_variable).map(PathBuf::from) {
+            println!("cargo:rerun-if-changed={}", archive_path.display());
+            configure_command.arg(format!("-D{archive_variable}={}", archive_path.display()));
+        } else {
+            configure_command.arg("-U").arg(archive_variable);
+        }
+    }
+    run_command(&mut configure_command, "configure the pinned MLX C runtime")?;
+
+    let mut native_build_command = Command::new("cmake");
+    native_build_command
+        .arg("--build")
+        .arg(&native_build_directory)
+        .arg("--target")
+        .arg("mlxc")
+        .arg("astronomical_metal_expert_loader")
+        .arg("--parallel")
+        .arg(cargo_build_job_count());
+    run_command(&mut native_build_command, "build the pinned MLX C runtime")?;
+
+    let memory_contract_probe_path = if should_build_memory_contract_probe {
+        let mut probe_build_command = Command::new("cmake");
+        probe_build_command
+            .arg("--build")
+            .arg(&native_build_directory)
+            .arg("--target")
+            .arg("mlx_memory_contract_probe")
+            .arg("--parallel")
+            .arg(cargo_build_job_count());
+        run_command(
+            &mut probe_build_command,
+            "build the pinned MLX memory contract probe",
+        )?;
+        let probe_path = native_build_directory
+            .join("bin")
+            .join("mlx_memory_contract_probe");
+        require_file(&probe_path, "MLX memory contract probe")?;
+        Some(probe_path)
+    } else {
+        None
+    };
+
+    let mlx_c_source_directory = native_build_directory.join("_deps/mlx_c-src");
+    generate_bindings(&mlx_c_source_directory)?;
+
+    let native_library_directory = native_build_directory.join("lib");
+    require_file(
+        &native_library_directory.join("libmlx.a"),
+        "MLX static library",
+    )?;
+    require_file(
+        &native_library_directory.join("libmlxc.a"),
+        "MLX C static library",
+    )?;
+    require_file(
+        &native_library_directory.join("libastronomical_metal_expert_loader.a"),
+        "Astronomical Metal expert loader static library",
+    )?;
+    let metallib_path =
+        native_build_directory.join("_deps/mlx-build/mlx/backend/metal/kernels/mlx.metallib");
+    require_file(&metallib_path, "MLX AOT metallib")?;
+    let metallib_size_bytes = metallib_path.metadata()?.len();
+    let metallib_sha256_hex = sha256_file_hex(&metallib_path)?;
+
+    println!(
+        "cargo:rustc-link-search=native={}",
+        native_library_directory.display()
+    );
+    println!("cargo:rustc-link-lib=static=astronomical_metal_expert_loader");
+    println!("cargo:rustc-link-lib=static=mlxc");
+    println!("cargo:rustc-link-lib=static=mlx");
+    println!("cargo:rustc-link-lib=dylib=c++");
+    println!("cargo:rustc-link-lib=framework=Metal");
+    println!("cargo:rustc-link-lib=framework=Foundation");
+    println!("cargo:rustc-link-lib=framework=IOKit");
+    println!("cargo:rustc-link-lib=framework=CoreFoundation");
+    println!("cargo:rustc-link-lib=framework=QuartzCore");
+    println!("cargo:rustc-link-lib=framework=Accelerate");
+    let clang_runtime_directory = discover_clang_runtime_directory()?;
+    require_file(
+        &clang_runtime_directory.join("libclang_rt.osx.a"),
+        "Clang macOS runtime archive",
+    )?;
+    println!(
+        "cargo:rustc-link-search=native={}",
+        clang_runtime_directory.display()
+    );
+    println!("cargo:rustc-link-lib=static=clang_rt.osx");
+    println!(
+        "cargo:rustc-env=ASTRONOMICAL_MLX_METALLIB_PATH={}",
+        metallib_path.display()
+    );
+    println!("cargo:rustc-env=ASTRONOMICAL_MLX_METALLIB_SIZE_BYTES={metallib_size_bytes}");
+    println!("cargo:rustc-env=ASTRONOMICAL_MLX_METALLIB_SHA256={metallib_sha256_hex}");
+    if let Some(memory_contract_probe_path) = memory_contract_probe_path {
+        println!(
+            "cargo:rustc-env=ASTRONOMICAL_MLX_MEMORY_CONTRACT_PROBE={}",
+            memory_contract_probe_path.display()
+        );
+    }
+    println!(
+        "cargo:rerun-if-changed={}",
+        native_source_directory.join("CMakeLists.txt").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        native_source_directory
+            .join("astronomical_metal_expert_loader.h")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        native_source_directory
+            .join("astronomical_metal_expert_loader.cpp")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        native_source_directory
+            .join("tests/mlx_memory_contract_probe.cpp")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        native_source_directory
+            .join("apply_patch_if_needed.cmake")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/pins/mlx-v0.32.0.cmake")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/pins/mlx-c-v0.6.0.cmake")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/patches/mlx-0.32.0-nax-head-dim-256-attention.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/patches/mlx-0.32.0-stable-prefill-split-k.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/patches/mlx-0.32.0-astronomical-active-memory-ceiling.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/patches/mlx-0.32.0-adaptive-io-thread-pool.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/patches/mlx-c-0.6.0-metallib-path.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/patches/mlx-c-0.6.0-mlx-0.32.0-fft-compatibility.patch")
+            .display()
+    );
+
+    Ok(())
+}
+
+fn generate_bindings(mlx_c_source_directory: &Path) -> Result<(), Box<dyn Error>> {
+    let mlx_c_header = mlx_c_source_directory.join("mlx/c/mlx.h");
+    let astronomical_metal_expert_loader_header = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("native")
+        .join("astronomical_metal_expert_loader.h");
+    let astronomical_metal_expert_loader_directory = astronomical_metal_expert_loader_header
+        .parent()
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Astronomical Metal expert loader header has no parent directory",
+            )
+        })?;
+    require_file(&mlx_c_header, "MLX C umbrella header")?;
+    require_file(
+        &astronomical_metal_expert_loader_header,
+        "Astronomical Metal expert loader header",
+    )?;
+    let bindings = bindgen::Builder::default()
+        .header(mlx_c_header.to_string_lossy())
+        .header(astronomical_metal_expert_loader_header.to_string_lossy())
+        .clang_arg(format!("-I{}", mlx_c_source_directory.display()))
+        .clang_arg(format!(
+            "-I{}",
+            astronomical_metal_expert_loader_directory.display()
+        ))
+        .allowlist_function(BINDGEN_FUNCTION_ALLOWLIST)
+        .allowlist_type(BINDGEN_TYPE_ALLOWLIST)
+        .generate_comments(false)
+        .generate()?;
+    let bindings_path = required_path_variable("OUT_DIR")?.join("mlx_c_bindings.rs");
+    bindings.write_to_file(bindings_path)?;
+    Ok(())
+}
+
+fn required_path_variable(variable_name: &str) -> Result<PathBuf, Box<dyn Error>> {
+    env::var_os(variable_name)
+        .map(PathBuf::from)
+        .ok_or_else(|| format!("required environment variable {variable_name} is missing").into())
+}
+
+fn native_dependency_cache_directory() -> Option<PathBuf> {
+    env::var_os(NATIVE_DEPENDENCY_CACHE_VARIABLE)
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var_os("HOME")
+                .map(PathBuf::from)
+                .map(|home_directory| {
+                    home_directory.join("Library/Caches/Astronomical/native-dependencies")
+                })
+        })
+}
+
+fn discover_clang_runtime_directory() -> Result<PathBuf, Box<dyn Error>> {
+    let clang_runtime_output = Command::new("xcrun")
+        .args(["clang", "--print-runtime-dir"])
+        .output()?;
+    if !clang_runtime_output.status.success() {
+        return Err("xcrun clang could not report its runtime directory".into());
+    }
+    let clang_runtime_text = String::from_utf8(clang_runtime_output.stdout)?;
+    let clang_runtime_directory = PathBuf::from(clang_runtime_text.trim());
+    if !clang_runtime_directory.is_absolute() {
+        return Err("xcrun clang reported a non-absolute runtime directory".into());
+    }
+    Ok(clang_runtime_directory)
+}
+
+fn cargo_build_job_count() -> String {
+    env::var("CARGO_BUILD_JOBS")
+        .or_else(|_| env::var("NUM_JOBS"))
+        .unwrap_or_else(|_| "1".to_owned())
+}
+
+fn sccache_compiler_launcher_path() -> Option<PathBuf> {
+    let rustc_wrapper_path = env::var_os(RUSTC_WRAPPER_VARIABLE).map(PathBuf::from)?;
+    let wrapper_file_name = rustc_wrapper_path.file_name()?.to_str()?;
+    (wrapper_file_name == SCCACHE_EXECUTABLE_NAME).then_some(rustc_wrapper_path)
+}
+
+fn run_command(command: &mut Command, operation: &str) -> Result<(), Box<dyn Error>> {
+    let command_status = command.status()?;
+    if !command_status.success() {
+        return Err(format!("failed to {operation}: command exited with {command_status}").into());
+    }
+    Ok(())
+}
+
+fn require_file(file_path: &Path, description: &str) -> Result<(), Box<dyn Error>> {
+    if !file_path.is_file() {
+        return Err(format!("missing {description} at {}", file_path.display()).into());
+    }
+    Ok(())
+}
+
+fn sha256_file_hex(file_path: &Path) -> Result<String, Box<dyn Error>> {
+    let mut source_file = File::open(file_path)?;
+    let mut digest = Sha256::new();
+    let mut digest_buffer = [0_u8; 64 * 1024];
+    loop {
+        let bytes_read = source_file.read(&mut digest_buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        digest.update(&digest_buffer[..bytes_read]);
+    }
+    Ok(hex_digest_bytes(&digest.finalize()))
+}
+
+fn hex_digest_bytes(digest_bytes: &[u8]) -> String {
+    digest_bytes
+        .iter()
+        .map(|digest_byte| format!("{digest_byte:02x}"))
+        .collect()
+}

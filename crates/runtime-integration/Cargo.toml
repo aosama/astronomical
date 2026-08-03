@@ -1,0 +1,33 @@
+[package]
+name = "astronomical-runtime-integration"
+build = "build.rs"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[features]
+default = []
+mlx = []
+mlx-memory-contract-probe = ["mlx"]
+
+[lints.rust]
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[dependencies]
+libc.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+bindgen = "0.72"
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"

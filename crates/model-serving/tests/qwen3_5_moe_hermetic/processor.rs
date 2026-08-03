@@ -1,0 +1,92 @@
+use astronomical_ipc_protocol::ChatGenerationFailureReason;
+use astronomical_model_serving::{
+    MalformedModelOutputDiagnostic, ModelGenerationOutputError, Qwen3_5MoEImageProcessingError,
+    Qwen3_5MoEOutputParserError, Qwen3_5MoERequestOutputError, Qwen3_5MoETokenizerError,
+    translate_qwen3_5_moe_preparation_error, translate_request_output_error,
+};
+
+#[test]
+fn should_map_a_tokenizer_error_as_fatal_not_malformed() {
+    let tokenizer_error = Qwen3_5MoETokenizerError::GeneratedTokenOutOfVocabulary {
+        generated_token_id: 999_999,
+        model_vocabulary_size: 248_320,
+    };
+    let request_output_error = Qwen3_5MoERequestOutputError::Tokenizer(tokenizer_error);
+
+    let output_error = translate_request_output_error(request_output_error);
+
+    assert!(
+        matches!(output_error, ModelGenerationOutputError::Fatal { .. }),
+        "a tokenizer error during generation must be Fatal so the worker terminates \
+         rather than reporting a reusable malformed-output failure"
+    );
+}
+
+#[test]
+fn should_map_model_context_overflow_to_the_typed_failure() {
+    let failure_reason =
+        translate_qwen3_5_moe_preparation_error(Qwen3_5MoETokenizerError::TotalContextTooLarge {
+            actual_total_context_tokens: 262_145,
+            maximum_total_context_tokens: 262_144,
+        });
+
+    assert_eq!(
+        failure_reason,
+        ChatGenerationFailureReason::ContextLengthExceeded {
+            actual_total_context_tokens: 262_145,
+            maximum_context_tokens: 262_144,
+        }
+    );
+}
+
+#[test]
+fn should_include_the_image_processing_reason_in_an_invalid_request_failure() {
+    let image_processing_failure = Qwen3_5MoEImageProcessingError::AspectRatioTooLarge {
+        height_pixels: 1,
+        width_pixels: 201,
+        aspect_ratio: 201.0,
+        maximum_aspect_ratio: 200.0,
+    };
+
+    let failure_reason = translate_qwen3_5_moe_preparation_error(
+        Qwen3_5MoETokenizerError::ImageProcessing(image_processing_failure),
+    );
+    let expected_image_processing_failure_reason = concat!(
+        "failed to process chat image input through the vision pipeline: ",
+        "image aspect ratio 201.00 exceeds maximum 200.00 for 1x201 image"
+    );
+
+    assert_eq!(
+        failure_reason,
+        ChatGenerationFailureReason::InvalidRequest {
+            reason: expected_image_processing_failure_reason.to_owned(),
+        }
+    );
+}
+
+#[test]
+fn should_map_a_parser_error_as_malformed_output() {
+    let parser_error = Qwen3_5MoEOutputParserError::UnclosedToolCall;
+    let malformed_output_diagnostic = MalformedModelOutputDiagnostic {
+        diagnostic_code: "unclosed_tool_call",
+        parser_error: "Qwen3.5-MoE tool call did not close".to_owned(),
+        generated_token_ids: vec![101, 202],
+        pending_token_ids: vec![202],
+        decoded_output_text: "<tool_call>".to_owned(),
+        parser_state: "tool_call",
+        parser_pending_output_text: "<function=read>".to_owned(),
+    };
+    let request_output_error = Qwen3_5MoERequestOutputError::Parser {
+        source: parser_error,
+        diagnostic: Box::new(malformed_output_diagnostic.clone()),
+    };
+
+    let output_error = translate_request_output_error(request_output_error);
+
+    assert_eq!(
+        output_error,
+        ModelGenerationOutputError::MalformedOutput {
+            diagnostic: Box::new(malformed_output_diagnostic),
+        }
+    );
+}

@@ -1,0 +1,44 @@
+diff --git a/mlx/c/metal.h b/mlx/c/metal.h
+index c0e3e76..f7fe1d8 100644
+--- a/mlx/c/metal.h
++++ b/mlx/c/metal.h
+@@ -29,4 +29,13 @@ extern "C" {
+ /**@{*/
+
+ int mlx_metal_is_available(bool* res);
++/**
++ * Overrides the AOT Metal library path before the first Metal operation.
++ *
++ * The borrowed path must be a non-null, NUL-terminated UTF-8 string that
++ * remains valid for this call. The function copies the path and never retains
++ * the caller's pointer. It returns zero on success and reports failures through
++ * the configured MLX C error handler.
++ */
++int mlx_metal_set_metallib_path(const char* path);
+ int mlx_metal_start_capture(const char* path);
+ int mlx_metal_stop_capture(void);
+
+diff --git a/mlx/c/metal.cpp b/mlx/c/metal.cpp
+index ab99798..e7a95c1 100644
+--- a/mlx/c/metal.cpp
++++ b/mlx/c/metal.cpp
+@@ -17,6 +17,19 @@ extern "C" int mlx_metal_is_available(bool* res) {
+   }
+   return 0;
+ }
++extern "C" int mlx_metal_set_metallib_path(const char* path) {
++  try {
++    if (path == nullptr) {
++      throw std::invalid_argument(
++          "[mlx_metal_set_metallib_path] Path must not be null.");
++    }
++    mlx::core::metal::set_metallib_path(std::string(path));
++  } catch (std::exception& e) {
++    mlx_error(e.what());
++    return 1;
++  }
++  return 0;
++}
+ extern "C" int mlx_metal_start_capture(const char* path) {
+   try {
+     mlx::core::metal::start_capture(std::string(path));

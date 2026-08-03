@@ -1,0 +1,47 @@
+[package]
+name = "astronomical-inference-worker"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "astronomical-inference-worker-scripted-worker"
+path = "tests/fixtures/scripted_worker.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-inference-worker-stubborn-eof-worker"
+path = "tests/fixtures/stubborn_eof_worker.rs"
+bench = false
+test = false
+
+[lints]
+workspace = true
+
+[features]
+performance-measurement = []
+model-artifact-qualification = []
+
+[dependencies]
+astronomical-config = { path = "../../crates/config" }
+astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
+astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+astronomical-supervisor = { path = "../supervisor" }
+axum.workspace = true
+base64.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile = "=3.27.0"
+tokenizers.workspace = true

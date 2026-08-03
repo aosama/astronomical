@@ -1,0 +1,49 @@
+name: Bug report
+description: Report reproducible incorrect Astronomical behavior
+title: "Bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste credentials, prompts, personal paths, local model inventories, proprietary model files, or unredacted logs.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Describe what happened and the user-visible impact.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide minimal steps using fictional paths and redacted data.
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Astronomical revision
+      placeholder: Commit identifier or release
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: macOS version and Apple Silicon generation only. Do not include device names or serial numbers.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Additional evidence
+      description: Include bounded, redacted diagnostics only when necessary.

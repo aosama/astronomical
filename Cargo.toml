@@ -1,0 +1,57 @@
+[workspace]
+members = [
+    "apps/inference-worker",
+    "apps/supervisor",
+    "crates/config",
+    "crates/ipc-protocol",
+    "crates/model-serving",
+    "crates/rest-contract",
+    "crates/runtime-integration",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+repository = "https://github.com/aosama/astronomical"
+rust-version = "1.97.1"
+version = "0.1.0"
+
+[workspace.dependencies]
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+base64 = "0.23"
+bytes = "1"
+futures-util = { version = "0.3", features = ["sink"] }
+fs4 = "1.1.0"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+libc = "0.2"
+safetensors = "=0.8.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "=0.11.0"
+thiserror = "2"
+tokenizers = { version = "=0.23.1", default-features = false, features = ["fancy-regex"] }
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+tracing = "0.1"
+tracing-appender = "0.2.5"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.full-debug]
+inherits = "dev"
+debug = true
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

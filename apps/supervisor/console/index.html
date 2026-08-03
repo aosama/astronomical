@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Astronomical local model server status, telemetry, chat playground, and controls.">
+    <title>Astronomical Observatory</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/console.css">
+</head>
+<body class="observatory">
+    <header id="status-header" class="status-header unavailable">
+        <svg id="status-star" class="status-star" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="20" fill="currentColor"/></svg>
+        <div class="status-text">
+            <span id="status-word" class="status-word">Unavailable</span>
+            <code id="status-model-id" class="status-model-id">No model loaded</code>
+        </div>
+        <span id="config-warning-badge" class="config-warning-badge" hidden>Config note</span>
+    </header>
+    <main class="observatory-main">
+        <section id="now-strip" class="panel now-strip">
+            <div id="phase-label" class="phase-label">Idle</div>
+            <div class="phase-bar"><div id="phase-fill" class="phase-fill"></div></div>
+            <div class="phase-stats">
+                <span id="phase-tokens" class="phase-stat-value">—</span>
+                <span class="phase-stat-sep">·</span>
+                <span id="phase-tps" class="phase-stat-value">— tok/s</span>
+                <span class="phase-stat-sep">·</span>
+                <span id="phase-elapsed" class="phase-stat-value">— ms</span>
+            </div>
+        </section>
+        <section id="gpu-panel" class="panel gpu-panel">
+            <div class="gpu-row">
+                <span class="metric-label">GPU utilization</span>
+                <span id="gpu-percentage" class="metric-value">Unavailable</span>
+            </div>
+            <div class="gpu-bar"><div id="gpu-fill" class="gpu-fill"></div></div>
+        </section>
+        <section id="mlx-memory-panel" class="panel mlx-memory-panel">
+            <h2 class="panel-title">MLX memory</h2>
+            <div class="mlx-headline">
+                <span id="mlx-active" class="big-number">0 GB</span>
+                <span class="big-number-label">active</span>
+                <span id="mlx-ceiling" class="mlx-ceiling-value">/ 0 GB</span>
+            </div>
+            <div id="mlx-source" class="mlx-source-label">Not measured</div>
+            <div class="mlx-bar" id="mlx-bar">
+                <div class="mlx-segment mlx-segment-experts" id="mlx-seg-experts"></div>
+                <div class="mlx-segment mlx-segment-model-core" id="mlx-seg-model-core"></div>
+                <div class="mlx-segment mlx-segment-context-state" id="mlx-seg-context-state"></div>
+                <div class="mlx-segment mlx-segment-runtime-work" id="mlx-seg-runtime-work"></div>
+                <div class="mlx-segment mlx-segment-available" id="mlx-seg-available"></div>
+            </div>
+            <div class="mlx-legend">
+                <div class="mlx-legend-row" data-segment="experts"><span class="mlx-swatch mlx-sw-experts"></span><span class="mlx-legend-label">Experts</span><button class="mlx-info-btn" type="button" aria-label="Explain Experts">i</button><span class="mlx-legend-value" id="mlx-val-experts">0 GB</span></div>
+                <div class="mlx-legend-row" data-segment="model-core"><span class="mlx-swatch mlx-sw-model-core"></span><span class="mlx-legend-label">Model core</span><button class="mlx-info-btn" type="button" aria-label="Explain Model core">i</button><span class="mlx-legend-value" id="mlx-val-model-core">0 GB</span></div>
+                <div class="mlx-legend-row" data-segment="context-state"><span class="mlx-swatch mlx-sw-context-state"></span><span class="mlx-legend-label">Live context state</span><button class="mlx-info-btn" type="button" aria-label="Explain Live context state">i</button><span class="mlx-legend-value" id="mlx-val-context-state">0 GB</span></div>
+                <div class="mlx-legend-row" data-segment="runtime-work"><span class="mlx-swatch mlx-sw-runtime-work"></span><span class="mlx-legend-label">Runtime work</span><button class="mlx-info-btn" type="button" aria-label="Explain Runtime work">i</button><span class="mlx-legend-value" id="mlx-val-runtime-work">0 GB</span></div>
+                <div class="mlx-legend-row" data-segment="available"><span class="mlx-swatch mlx-sw-available"></span><span class="mlx-legend-label">Nominal MLX headroom</span><button class="mlx-info-btn" type="button" aria-label="Explain Nominal MLX headroom">i</button><span class="mlx-legend-value" id="mlx-val-available">0 GB</span></div>
+            </div>
+            <div class="mlx-memory-control">
+                <label for="maximum-mlx-memory-gb">Maximum model RAM (decimal GB)</label>
+                <div class="mlx-memory-control-row">
+                    <input id="maximum-mlx-memory-gb" type="number" inputmode="numeric" step="1" aria-label="Maximum model RAM in decimal gigabytes">
+                    <button id="maximum-mlx-memory-apply" class="button button-primary" type="button">Apply</button>
+                    <button id="maximum-mlx-memory-reset" class="button button-secondary" type="button">Use Mac Maximum</button>
+                </div>
+                <div id="maximum-mlx-memory-status" class="mlx-memory-control-status" aria-live="polite"></div>
+            </div>
+        </section>
+        <section id="cache-panel" class="panel cache-panel">
+            <h2 class="panel-title">Persistent prompt cache</h2>
+            <div class="cache-headline">
+                <span id="cache-hit-rate" class="big-number">0.0%</span>
+                <span class="big-number-label">hit rate</span>
+                <svg id="cache-sparkline" class="cache-sparkline" viewBox="0 0 120 24" width="120" height="24" aria-hidden="true"><polyline id="cache-sparkline-line" points="" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="cache-stats-grid">
+                <div class="cache-stat"><span id="cache-tokens-saved" class="cache-stat-value">0</span><span class="cache-stat-label">tokens saved</span></div>
+                <div class="cache-stat"><span id="cache-hits" class="cache-stat-value">0</span><span class="cache-stat-label">hits</span></div>
+                <div class="cache-stat"><span id="cache-misses" class="cache-stat-value">0</span><span class="cache-stat-label">misses</span></div>
+                <div class="cache-stat"><span id="cache-snapshots" class="cache-stat-value">0</span><span class="cache-stat-label">recurrent snapshots</span></div>
+                <div class="cache-stat"><span id="cache-blocks" class="cache-stat-value">0</span><span class="cache-stat-label">KV blocks</span></div>
+            </div>
+            <div class="cache-disk-bar">
+                <div id="cache-disk-fill" class="cache-disk-fill"></div>
+                <span id="cache-disk-label" class="cache-disk-label">0 GB / 0 GB</span>
+            </div>
+            <details class="cache-advanced"><summary>Advanced counters</summary>
+                <div class="cache-advanced-grid">
+                    <div><span id="cache-visual-embeddings" class="cache-stat-value">0</span><span class="cache-stat-label">visual embeddings</span></div>
+                    <div><span id="cache-visual-hits" class="cache-stat-value">0</span><span class="cache-stat-label">visual hits</span></div>
+                    <div><span id="cache-visual-misses" class="cache-stat-value">0</span><span class="cache-stat-label">visual misses</span></div>
+                    <div><span id="cache-visual-size" class="cache-stat-value">0 GB</span><span class="cache-stat-label">visual cache size</span></div>
+                </div>
+            </details>
+        </section>
+        <section id="session-panel" class="panel session-panel">
+            <h2 class="panel-title">Session</h2>
+            <div class="session-row">
+                <span class="metric-label">Completed</span>
+                <span id="session-requests" class="metric-value">0 requests</span>
+            </div>
+            <div class="session-row">
+                <span class="metric-label">Average generation</span>
+                <span id="session-avg-gen" class="metric-value">0 tok/s</span>
+            </div>
+            <div class="session-row">
+                <span class="metric-label">Prompt reuse</span>
+                <span id="session-reuse-pct" class="metric-value">Not measured</span>
+            </div>
+            <div class="reuse-bar"><div id="reuse-fill" class="reuse-fill"></div></div>
+            <div class="session-row">
+                <span class="metric-label">Session prompts</span>
+                <span id="session-reuse-breakdown" class="metric-value">No completed prompts</span>
+            </div>
+        </section>
+        <section id="playground" class="panel playground">
+            <h2 class="panel-title">Chat playground</h2>
+            <div class="playground-grid">
+                <div class="playground-left">
+                    <section id="chat-transcript" class="chat-transcript" aria-live="polite" aria-label="Chat transcript"></section>
+                    <div id="chat-error-banner" class="chat-error-banner" hidden></div>
+                    <div class="chat-image-preview-row">
+                        <img id="chat-image-preview" class="chat-image-preview" alt="" hidden>
+                        <button id="chat-image-clear" class="button button-secondary" type="button" hidden>Remove image</button>
+                    </div>
+                    <textarea id="chat-input" class="chat-input" placeholder="Ask Astronomical anything…" rows="3" aria-label="Message to send"></textarea>
+                    <div class="chat-composer-row">
+                        <label class="chat-attach"><span class="chat-attach-label">Attach image</span><input type="file" id="chat-image" accept="image/*" hidden></label>
+                        <button id="chat-send" class="button button-primary" type="button">Send</button>
+                        <button id="chat-stop" class="button button-secondary" type="button" disabled>Stop</button>
+                    </div>
+                    <div class="sampling-controls">
+                        <label class="sampling-control"><span class="sampling-label">Temperature</span><input type="range" id="sampling-temperature" min="0" max="2" step="0.05" value="0.7"><span id="sampling-temperature-value" class="sampling-value">0.70</span></label>
+                        <label class="sampling-control"><span class="sampling-label">Top p</span><input type="range" id="sampling-top-p" min="0" max="1" step="0.01" value="1.0"><span id="sampling-top-p-value" class="sampling-value">1.00</span></label>
+                        <label class="sampling-control"><span class="sampling-label">Max tokens</span><input type="range" id="sampling-max-tokens" min="1" max="8192" step="1" value="512"><span id="sampling-max-tokens-value" class="sampling-value">512</span></label>
+                    </div>
+                </div>
+                <div class="playground-right">
+                    <details class="raw-stream-wrapper"><summary>Raw stream</summary><pre id="raw-stream" class="raw-stream"></pre></details>
+                </div>
+            </div>
+        </section>
+        <section id="about-panel" class="panel about-panel">
+            <h2 class="panel-title">About this model</h2>
+            <div class="about-grid">
+                <div class="about-stat"><span id="about-model-id" class="about-stat-value">No model loaded</span><span class="about-stat-label">model</span></div>
+                <div class="about-stat"><span id="about-context-window" class="about-stat-value">—</span><span class="about-stat-label">context window</span></div>
+                <div class="about-stat"><span id="about-max-input" class="about-stat-value">—</span><span class="about-stat-label">max input tokens</span></div>
+                <div class="about-stat"><span id="about-max-output" class="about-stat-value">—</span><span class="about-stat-label">max output tokens</span></div>
+                <div class="about-stat"><span id="about-modalities" class="about-stat-value">—</span><span class="about-stat-label">input modalities</span></div>
+                <div class="about-stat"><span id="about-expert-storage" class="about-stat-value">—</span><span class="about-stat-label">expert storage</span></div>
+                <div class="about-stat"><span id="about-expert-memory" class="about-stat-value">—</span><span class="about-stat-label">expert memory</span></div>
+                <div class="about-stat"><span id="about-mtp" class="about-stat-value">—</span><span class="about-stat-label">MTP state</span></div>
+                <div class="about-stat"><span id="about-mtp-reason" class="about-stat-value">—</span><span class="about-stat-label">MTP note</span></div>
+                <div class="about-stat"><span id="about-disk-size" class="about-stat-value">—</span><span class="about-stat-label">size on disk</span></div>
+                <div class="about-stat"><span id="about-residency" class="about-stat-value">—</span><span class="about-stat-label">residency</span></div>
+            </div>
+            <p class="about-note">Single-user local console. Served by astronomicald on this machine. Config: ~/.astronomical/config.json</p>
+        </section>
+        <section id="controls-panel" class="panel controls-panel">
+            <h2 class="panel-title">Server controls</h2>
+            <div id="control-feedback" class="control-feedback" hidden></div>
+            <div class="controls-row">
+                <button id="control-reload" class="button button-primary" type="button">Reload config</button>
+                <button id="control-stop" class="button button-danger" type="button">Stop server</button>
+            </div>
+            <p class="controls-note">Reload validates and applies config changes; worker-affecting changes restart the worker. Stop shuts down the daemon — restart it via the menu bar app or run astronomicald again. This console goes offline when the server stops.</p>
+        </section>
+    </main>
+    <footer class="observatory-footer">Astronomical Observatory — local console, served by astronomicald on this machine.</footer>
+    <script src="/memory-control.js" defer></script>
+    <script src="/console.js" defer></script>
+    <script src="/playground.js" defer></script>
+</body>
+</html>

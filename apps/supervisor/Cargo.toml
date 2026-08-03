@@ -1,0 +1,83 @@
+[package]
+name = "astronomical-supervisor"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "astronomicald"
+path = "src/main.rs"
+
+[[bin]]
+name = "astronomical-supervisor-test-worker"
+path = "tests/fixtures/scripted_worker.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-supervisor-idle-worker"
+path = "tests/fixtures/idle_worker.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-supervisor-test-daemon"
+path = "tests/fixtures/test_daemon.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-supervisor-loading-forever-worker"
+path = "tests/fixtures/loading_forever_worker.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-supervisor-delayed-engine-ready-worker"
+path = "tests/fixtures/delayed_engine_ready_worker.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-supervisor-mismatched-ready-worker"
+path = "tests/fixtures/mismatched_ready_worker.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-supervisor-stderr-probe-worker"
+path = "tests/fixtures/stderr_probe_worker.rs"
+bench = false
+test = false
+
+[[bin]]
+name = "astronomical-supervisor-replacement-ready-worker"
+path = "tests/fixtures/replacement_ready_worker.rs"
+bench = false
+test = false
+
+[lints]
+workspace = true
+
+[dependencies]
+astronomical-config = { path = "../../crates/config" }
+astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
+astronomical-rest-contract = { path = "../../crates/rest-contract" }
+axum.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+tokio = { workspace = true, features = ["test-util"] }
+tower = { version = "0.5.3", features = ["util"] }

@@ -1,0 +1,21 @@
+diff --git a/mlx/backend/metal/quantized.cpp b/mlx/backend/metal/quantized.cpp
+index 9f24f083..599212c2 100644
+--- a/mlx/backend/metal/quantized.cpp
++++ b/mlx/backend/metal/quantized.cpp
+@@ -880,8 +880,15 @@ void qmm_splitk(
+   // Choose split_k to target ~512 threadgroups
+   int bm = 32, bn = 32;
+   int n_tiles = (N + bn - 1) / bn;
+   int m_tiles = (M + bm - 1) / bm;
+-  int current_tgs = n_tiles * m_tiles;
++  // Once M already supplies 64 row tiles, changing split_k with larger M
++  // changes the floating-point reduction topology without being needed to
++  // expose basic row parallelism. Keep the topology stable so equivalent
++  // row partitions produce the same quantized projection values.
++  constexpr int maximum_split_k_selection_m_tiles = 64;
++  int split_k_selection_m_tiles =
++      std::min(m_tiles, maximum_split_k_selection_m_tiles);
++  int current_tgs = n_tiles * split_k_selection_m_tiles;
+   int split_k = std::max(1, 512 / current_tgs);
+ 
+   // Cap split_k by the number of quantization groups

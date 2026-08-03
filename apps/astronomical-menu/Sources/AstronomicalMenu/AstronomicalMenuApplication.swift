@@ -1,0 +1,128 @@
+import AppKit
+import SwiftUI
+
+@MainActor
+final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+  private let supervisorClient = LocalSupervisorClient()
+  private lazy var telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+  private lazy var daemonLifecycleController = DaemonLifecycleController(
+    supervisorClient: supervisorClient)
+  private var statusItem: NSStatusItem?
+  private var telemetryPopover: NSPopover?
+  private var latestMenuBarTitle = ""
+
+  nonisolated func applicationWillFinishLaunching(_ notification: Notification) {
+    DispatchQueue.main.async { NSApp.setActivationPolicy(.regular) }
+  }
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    let menuBarStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    menuBarStatusItem.button?.target = self
+    menuBarStatusItem.button?.action = #selector(toggleTelemetryPopover)
+    menuBarStatusItem.button?.image = NSImage(
+      systemSymbolName: "sparkles", accessibilityDescription: "Astronomical")
+    menuBarStatusItem.button?.image?.size = NSSize(width: 18, height: 18)
+    menuBarStatusItem.button?.image?.isTemplate = true
+    menuBarStatusItem.button?.setAccessibilityLabel("Astronomical telemetry")
+    menuBarStatusItem.button?.toolTip = "Astronomical telemetry"
+    statusItem = menuBarStatusItem
+
+    let popover = NSPopover()
+    popover.behavior = .transient
+    popover.delegate = self
+    popover.contentViewController = NSHostingController(
+      rootView: OrbitalTelemetryPopover(
+        telemetryStore: telemetryStore,
+        reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
+        restartServer: { [weak self] in self?.restartServer() },
+        revealConfiguration: revealConfiguration,
+        quitApplication: { NSApp.terminate(nil) }
+      )
+    )
+    telemetryPopover = popover
+    telemetryStore.onMenuBarTitleChanged = { [weak self] menuBarTitle in
+      guard let self else { return }
+      latestMenuBarTitle = menuBarTitle
+      let currentTitle = statusItem?.button?.title ?? ""
+      statusItem?.button?.title = menuBarTitleToDisplay(
+        currentTitle: currentTitle,
+        latestTitle: menuBarTitle,
+        popoverIsShown: telemetryPopover?.isShown == true
+      )
+    }
+    Task { [weak self] in await self?.daemonLifecycleController.startDaemonIfNeeded() }
+    telemetryStore.startPolling()
+    DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    telemetryStore.stopPolling()
+    daemonLifecycleController.stopOwnedDaemon()
+  }
+
+  @objc private func toggleTelemetryPopover() {
+    guard let telemetryPopover else { return }
+    telemetryPopover.isShown ? telemetryPopover.performClose(nil) : showTelemetryPopover()
+  }
+
+  private func showTelemetryPopover() {
+    guard let statusButton = statusItem?.button, let telemetryPopover else { return }
+    statusItem?.length = menuBarStatusItemLength(
+      popoverIsShown: true, currentButtonWidth: statusButton.bounds.width)
+    telemetryPopover.show(
+      relativeTo: popoverAnchorRect(
+        statusButtonBounds: statusButton.bounds,
+        statusItemImageRect: statusButton.cell?.imageRect(forBounds: statusButton.bounds)
+      ), of: statusButton,
+      preferredEdge: .minY)
+    telemetryStore.setPopoverVisible(true)
+  }
+
+  func popoverDidClose(_ notification: Notification) {
+    telemetryStore.setPopoverVisible(false)
+    statusItem?.length = menuBarStatusItemLength(
+      popoverIsShown: false,
+      currentButtonWidth: statusItem?.button?.bounds.width ?? NSStatusItem.squareLength
+    )
+    statusItem?.button?.title = latestMenuBarTitle
+  }
+
+  private func restartServer() {
+    telemetryStore.beginServerRestart()
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        let restartMessage = try await daemonLifecycleController.restartDaemon()
+        telemetryStore.completeServerRestart(restartMessage: restartMessage)
+      } catch {
+        telemetryStore.failServerRestart(error)
+      }
+      telemetryStore.refreshNow()
+    }
+  }
+
+  private func revealConfiguration() {
+    let configurationURL = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".astronomical/config.json")
+    NSWorkspace.shared.activateFileViewerSelecting([configurationURL])
+  }
+}
+
+func menuBarStatusItemLength(popoverIsShown: Bool, currentButtonWidth: CGFloat) -> CGFloat {
+  popoverIsShown ? currentButtonWidth : NSStatusItem.variableLength
+}
+
+func menuBarTitleToDisplay(
+  currentTitle: String,
+  latestTitle: String,
+  popoverIsShown: Bool
+) -> String {
+  popoverIsShown ? currentTitle : latestTitle
+}
+
+func popoverAnchorRect(
+  statusButtonBounds: CGRect,
+  statusItemImageRect: CGRect?
+) -> CGRect {
+  statusItemImageRect ?? statusButtonBounds
+}
