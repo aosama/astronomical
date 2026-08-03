@@ -3,42 +3,21 @@
 #[cfg(feature = "direct-mlx")]
 use astronomical_model_serving::PersistentPromptCacheModelContract;
 #[cfg(feature = "direct-mlx")]
-use astronomical_model_serving::qwen3_5_moe_decoder_cache_layout;
+use astronomical_model_serving::qwen3_5_decoder_cache_layout;
 use astronomical_model_serving::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    PersistentVisualEmbeddingModelContract, Qwen3_5MoEConfig, Qwen3_5MoEImageProcessor,
-    Qwen3_5MoEVisionConfig, TensorProfile, qwen3_5_moe_language_tensor_profiles,
+    PersistentVisualEmbeddingModelContract, Qwen3_5Config, Qwen3_5ImageProcessor,
+    Qwen3_5VisionConfig, TensorProfile, qwen3_5_language_tensor_profiles,
 };
 use serde_json::{Value, json};
 
-pub fn certified_ornith_config() -> Qwen3_5MoEConfig {
-    Qwen3_5MoEConfig::from_json_bytes(&certified_optiq_ornith_config_bytes())
+pub fn certified_ornith_config() -> Qwen3_5Config {
+    Qwen3_5Config::from_json_bytes(&certified_optiq_ornith_config_bytes())
         .expect("the certified Ornith config should parse")
 }
 
-pub fn certified_dense_qwen3_6_config() -> Qwen3_5MoEConfig {
-    let mut dense_config_document =
-        serde_json::from_slice::<Value>(&certified_optiq_ornith_config_bytes())
-            .expect("the certified OptiQ config should decode as JSON");
-    dense_config_document["architectures"] = json!(["Qwen3_5ForConditionalGeneration"]);
-    dense_config_document["model_type"] = json!("qwen3_5");
-    dense_config_document["text_config"]["model_type"] = json!("qwen3_5_text");
-    dense_config_document["text_config"]["num_experts"] = json!(0);
-    dense_config_document["text_config"]["num_experts_per_tok"] = json!(0);
-    dense_config_document["text_config"]["moe_intermediate_size"] = json!(0);
-    dense_config_document["text_config"]["shared_expert_intermediate_size"] = json!(0);
-    dense_config_document["text_config"]["intermediate_size"] = json!(512);
-    let dense_quantization_config = json!({"bits": 4, "group_size": 64, "mode": "affine"});
-    dense_config_document["quantization"] = dense_quantization_config.clone();
-    dense_config_document["quantization_config"] = dense_quantization_config;
-    let dense_config_bytes = serde_json::to_vec(&dense_config_document)
-        .expect("the certified dense config should serialize as JSON");
-    Qwen3_5MoEConfig::from_json_bytes(&dense_config_bytes)
-        .expect("the certified dense config should parse")
-}
-
-pub fn certified_ornith_vision_config() -> Qwen3_5MoEVisionConfig {
-    Qwen3_5MoEVisionConfig::from_json_bytes(&certified_optiq_ornith_vision_config_bytes())
+pub fn certified_ornith_vision_config() -> Qwen3_5VisionConfig {
+    Qwen3_5VisionConfig::from_json_bytes(&certified_optiq_ornith_vision_config_bytes())
         .expect("the certified Ornith vision config should parse")
 }
 
@@ -47,25 +26,25 @@ pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelCon
     PersistentPromptCacheModelContract::new(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_moe_decoder_cache_layout(&certified_ornith_config())
+        qwen3_5_decoder_cache_layout(&certified_ornith_config())
             .expect("the certified Ornith configuration should build a decoder-cache layout"),
     )
 }
 
 pub fn persistent_visual_embedding_model_contract() -> PersistentVisualEmbeddingModelContract {
     let certified_ornith_vision_config = certified_ornith_vision_config();
-    let qwen3_5_moe_image_processor =
-        Qwen3_5MoEImageProcessor::from_vision_config(&certified_ornith_vision_config);
+    let qwen3_5_image_processor =
+        Qwen3_5ImageProcessor::from_vision_config(&certified_ornith_vision_config);
     PersistentVisualEmbeddingModelContract::new(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
         certified_ornith_vision_config.out_hidden_size() as usize,
-        qwen3_5_moe_image_processor.maximum_image_token_count_after_spatial_merge(),
+        qwen3_5_image_processor.maximum_image_token_count_after_spatial_merge(),
     )
 }
 
-pub fn certified_qwen3_5_moe_language_tensor_profiles() -> Vec<TensorProfile> {
-    qwen3_5_moe_language_tensor_profiles(&certified_ornith_config())
+pub fn certified_qwen3_5_language_tensor_profiles() -> Vec<TensorProfile> {
+    qwen3_5_language_tensor_profiles(&certified_ornith_config())
 }
 
 pub fn certified_ornith_config_bytes() -> Vec<u8> {

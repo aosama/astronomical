@@ -1,8 +1,10 @@
 use astronomical_ipc_protocol::ExpertStorageFormat;
 
-use super::{Qwen3_5MoEModel, expert_paging::ExpertPager};
+use crate::qwen3_5::model::Qwen3_5Model;
 
-impl Qwen3_5MoEModel {
+use super::super::expert_paging::ExpertPager;
+
+impl Qwen3_5Model {
     /// Returns the expert file layout selected for request-time paging.
     #[must_use]
     pub fn expert_storage_format(&self) -> ExpertStorageFormat {

@@ -4,9 +4,9 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::MlxArray;
 
-use super::super::model::decoder_layer_weights::Qwen3_5MoEAffineWeights;
 use super::expert_pager::{ExpertPagingError, PagedExpertWeights};
 use super::quantized_expert_manifest::QuantizedExpertLayerPlan;
+use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
 pub(super) fn build_paged_expert_weights(
     loaded_tensors: &mut HashMap<String, MlxArray>,
@@ -86,7 +86,7 @@ fn take_affine_weights_from_tensors(
     projection_name: &str,
     quantization_bits: i32,
     quantization_group_size: i32,
-) -> Result<Qwen3_5MoEAffineWeights, ExpertPagingError> {
+) -> Result<Qwen3_5AffineWeights, ExpertPagingError> {
     let weight_tensor_name = short_tensor_name(tensor_name_prefix, projection_name, "weight");
     if matches!(
         layer_plan.quantization_mode,
@@ -97,7 +97,7 @@ fn take_affine_weights_from_tensors(
                 description: format!("paged expert weights missing {weight_tensor_name}"),
             }
         })?;
-        return Ok(Qwen3_5MoEAffineWeights::NativeBfloat16 { weight });
+        return Ok(Qwen3_5AffineWeights::NativeBfloat16 { weight });
     }
     let scales_tensor_name = short_tensor_name(tensor_name_prefix, projection_name, "scales");
     let biases_tensor_name = short_tensor_name(tensor_name_prefix, projection_name, "biases");
@@ -119,7 +119,7 @@ fn take_affine_weights_from_tensors(
             .ok_or_else(|| ExpertPagingError::Runtime {
                 description: format!("paged expert weights missing {biases_tensor_name}"),
             })?;
-    Ok(Qwen3_5MoEAffineWeights::Quantized {
+    Ok(Qwen3_5AffineWeights::Quantized {
         packed_weight,
         quantization_scales,
         quantization_biases,

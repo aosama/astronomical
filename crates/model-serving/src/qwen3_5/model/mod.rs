@@ -1,0 +1,74 @@
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod adaptive_ram_growth_logging;
+#[cfg(feature = "direct-mlx")]
+mod artifact_loading;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod decoder_layer_weights;
+#[cfg(feature = "direct-mlx")]
+mod error;
+#[cfg(feature = "direct-mlx")]
+mod evaluation;
+#[cfg(feature = "direct-mlx")]
+mod forward_attribution;
+#[cfg(feature = "direct-mlx")]
+mod forward_contract;
+#[cfg(feature = "direct-mlx")]
+mod forward_graph;
+#[cfg(feature = "direct-mlx")]
+mod full_attention;
+#[cfg(feature = "direct-mlx")]
+mod gated_delta;
+#[cfg(feature = "direct-mlx")]
+mod gated_delta_sequence;
+#[cfg(feature = "direct-mlx")]
+mod live_memory_limit;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod memory_admission;
+#[cfg(feature = "direct-mlx")]
+mod memory_breakdown;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod model;
+#[cfg(feature = "direct-mlx")]
+mod mtp;
+#[cfg(feature = "direct-mlx")]
+mod mtp_forward;
+#[cfg(feature = "direct-mlx")]
+mod tensor_slicing;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod weights;
+#[cfg(feature = "direct-mlx")]
+mod weights_validation;
+
+#[cfg(feature = "direct-mlx")]
+pub use error::Qwen3_5ExecutionError;
+#[cfg(feature = "direct-mlx")]
+pub use forward_graph::Qwen3_5TargetForwardOutput;
+#[cfg(feature = "direct-mlx")]
+pub use full_attention::qwen3_5_full_attention_step;
+#[cfg(feature = "direct-mlx")]
+pub use gated_delta::qwen3_5_gated_delta_step;
+#[cfg(feature = "direct-mlx")]
+pub use gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
+#[cfg(feature = "direct-mlx")]
+pub use memory_admission::{
+    combined_target_and_mtp_persistent_growth_bytes,
+    context_memory_admission_projected_active_memory_bytes,
+    persistent_prompt_cache_restore_temporary_workspace_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+pub use model::Qwen3_5Model;
+#[cfg(feature = "direct-mlx")]
+pub use mtp_forward::Qwen3_5MtpForwardOutput;
+#[cfg(feature = "direct-mlx")]
+pub use weights::Qwen3_5Weights;
+
+#[cfg(feature = "direct-mlx")]
+pub(crate) use super::artifacts::qwen3_5_resident_language_tensor_profiles;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use super::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use super::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use super::decoder::RequestDecoderStateStack;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use super::vision::{Qwen3_5VisionModel, visual_embedding_injection};

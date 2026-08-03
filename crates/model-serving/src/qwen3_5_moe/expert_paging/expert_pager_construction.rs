@@ -5,13 +5,13 @@ use std::path::PathBuf;
 
 use astronomical_ipc_protocol::ExpertStorageFormat;
 
-use super::super::{ModelWeightStorage, Qwen3_5MoEConfig};
 use super::aligned_expert_pack_loader::discover_aligned_expert_pack_layers;
 use super::complete_layer_retention::complete_layer_expert_payload_byte_count;
 use super::expert_pager::{ExpertPager, ExpertPagingError};
 use super::memory_budget::LiveMetalBudget;
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
 use super::quantized_expert_manifest::QuantizationMode;
+use crate::qwen3_5::{ModelWeightStorage, Qwen3_5Config};
 
 impl ExpertPager {
     /// Returns the expert file layout selected during complete-revision discovery.
@@ -58,7 +58,7 @@ impl ExpertPager {
         model_id: &str,
         model_revision: &str,
         weight_map: &HashMap<String, String>,
-        config: &Qwen3_5MoEConfig,
+        config: &Qwen3_5Config,
         configured_mlx_memory_cap_bytes: usize,
         include_mtp_sparse_expert_layer: bool,
     ) -> Result<Self, ExpertPagingError> {

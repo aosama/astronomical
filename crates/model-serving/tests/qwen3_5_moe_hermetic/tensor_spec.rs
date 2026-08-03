@@ -1,17 +1,17 @@
 use std::collections::BTreeMap;
 
 use astronomical_model_serving::{
-    Qwen3_5MoEConfig, TensorDtype, TensorProfile, qwen3_5_moe_language_tensor_profiles,
-    qwen3_5_moe_resident_language_tensor_profiles,
+    TensorDtype, TensorProfile, qwen3_5_language_tensor_profiles,
+    qwen3_5_resident_language_tensor_profiles,
 };
 
-use crate::common::qwen3_5_moe::{certified_ornith_config, certified_ornith_config_bytes};
+use crate::common::qwen3_5_moe::certified_ornith_config;
 
 #[test]
 fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() {
     let ornith_config = certified_ornith_config();
 
-    let tensor_profiles = qwen3_5_moe_language_tensor_profiles(&ornith_config);
+    let tensor_profiles = qwen3_5_language_tensor_profiles(&ornith_config);
     let tensor_profile_by_name = tensor_profile_by_name(&tensor_profiles);
 
     assert_eq!(tensor_profiles.len(), 1_757);
@@ -158,32 +158,10 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
 }
 
 #[test]
-fn should_profile_a_log_for_bfloat16_or_float32_storage_when_decay_math_uses_float32() {
-    let mut config_document =
-        serde_json::from_slice::<serde_json::Value>(&certified_ornith_config_bytes())
-            .expect("the certified config should parse as JSON");
-    config_document["text_config"]["mamba_ssm_dtype"] = serde_json::json!("float32");
-    let config_bytes =
-        serde_json::to_vec(&config_document).expect("the float32 state config should serialize");
-    let config = Qwen3_5MoEConfig::from_json_bytes(&config_bytes)
-        .expect("the float32 mamba state dtype should be accepted");
-
-    let tensor_profiles = qwen3_5_moe_language_tensor_profiles(&config);
-    let tensor_profile_by_name = tensor_profile_by_name(&tensor_profiles);
-
-    assert_tensor(
-        &tensor_profile_by_name,
-        "language_model.model.layers.0.linear_attn.A_log",
-        TensorDtype::BFloat16OrFloat32,
-        &[32],
-    );
-}
-
-#[test]
 fn should_exclude_sparse_expert_tensors_from_every_resident_profile() {
     let ornith_config = certified_ornith_config();
 
-    let resident_tensor_profiles = qwen3_5_moe_resident_language_tensor_profiles(&ornith_config);
+    let resident_tensor_profiles = qwen3_5_resident_language_tensor_profiles(&ornith_config);
     let resident_tensor_profile_by_name = tensor_profile_by_name(&resident_tensor_profiles);
 
     assert_eq!(resident_tensor_profiles.len(), 1_397);

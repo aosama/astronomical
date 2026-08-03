@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use astronomical_ipc_protocol::ProtocolError;
 use astronomical_model_serving::{
-    Qwen3_5MoEArtifactValidationError, Qwen3_5MoEPrefillChunckSizerError, Qwen3_5MoETokenizerError,
+    Qwen3_5ArtifactValidationError, Qwen3_5PrefillChunckSizerError, Qwen3_5TokenizerError,
     WorkerRuntimeError,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
@@ -36,17 +36,17 @@ pub enum WorkerStartupError {
     GpuWiredMemoryLimitSampleFailed,
     #[error("failed to read MLX recommended GPU working set")]
     ReadMlxRecommendedGpuWorkingSet(#[source] MlxRuntimeError),
-    #[error("failed to validate Qwen3.5-MoE artifact at {model_directory:?}")]
-    Qwen3_5MoEArtifactValidation {
+    #[error("failed to validate Qwen3.5 artifact at {model_directory:?}")]
+    Qwen3_5ArtifactValidation {
         model_directory: PathBuf,
         #[source]
-        source: Qwen3_5MoEArtifactValidationError,
+        source: Qwen3_5ArtifactValidationError,
     },
-    #[error("failed to initialize Qwen3.5-MoE processor at {model_directory:?}")]
-    Qwen3_5MoEProcessorInitialization {
+    #[error("failed to initialize Qwen3.5 processor at {model_directory:?}")]
+    Qwen3_5ProcessorInitialization {
         model_directory: PathBuf,
         #[source]
-        source: Qwen3_5MoETokenizerError,
+        source: Qwen3_5TokenizerError,
     },
     #[error("failed to open performance-attribution log at {performance_attribution_log_path:?}")]
     OpenPerformanceAttributionLog {
@@ -54,10 +54,10 @@ pub enum WorkerStartupError {
         #[source]
         source: io::Error,
     },
-    #[error("failed to configure Qwen3.5-MoE prompt-processing chunks")]
-    PrefillChunckSizing(#[source] Qwen3_5MoEPrefillChunckSizerError),
-    #[error("failed to start Qwen3.5-MoE engine at {model_directory:?}")]
-    Qwen3_5MoEEngineInitialization {
+    #[error("failed to configure Qwen3.5 prompt-processing chunks")]
+    PrefillChunckSizing(#[source] Qwen3_5PrefillChunckSizerError),
+    #[error("failed to start Qwen3.5 engine at {model_directory:?}")]
+    Qwen3_5EngineInitialization {
         model_directory: PathBuf,
         #[source]
         source: astronomical_model_serving::InferenceEngineError,
@@ -69,32 +69,32 @@ impl WorkerStartupError {
     #[must_use]
     pub fn public_model_load_failure_reason(&self) -> String {
         let unbounded_public_model_load_failure_reason = match self {
-            Self::Qwen3_5MoEArtifactValidation {
-                source: Qwen3_5MoEArtifactValidationError::OptiQMetadata(metadata_error),
+            Self::Qwen3_5ArtifactValidation {
+                source: Qwen3_5ArtifactValidationError::OptiQMetadata(metadata_error),
                 ..
             } => {
-                format!("Qwen3.5-MoE OptiQ metadata validation failed: {metadata_error}")
+                format!("Qwen3.5 OptiQ metadata validation failed: {metadata_error}")
             }
-            Self::Qwen3_5MoEArtifactValidation {
-                source: Qwen3_5MoEArtifactValidationError::Config(config_error),
+            Self::Qwen3_5ArtifactValidation {
+                source: Qwen3_5ArtifactValidationError::Config(config_error),
                 ..
             } => {
-                format!("Qwen3.5-MoE config validation failed: {config_error}")
+                format!("Qwen3.5 config validation failed: {config_error}")
             }
-            Self::Qwen3_5MoEArtifactValidation {
-                source: Qwen3_5MoEArtifactValidationError::Qwen3_5MoEShardIndex(shard_index_error),
+            Self::Qwen3_5ArtifactValidation {
+                source: Qwen3_5ArtifactValidationError::Qwen3_5ShardIndex(shard_index_error),
                 ..
             } => {
-                format!("Qwen3.5-MoE shard-index validation failed: {shard_index_error}")
+                format!("Qwen3.5 shard-index validation failed: {shard_index_error}")
             }
-            Self::Qwen3_5MoEArtifactValidation { .. } => {
-                "Qwen3.5-MoE artifact validation failed".to_owned()
+            Self::Qwen3_5ArtifactValidation { .. } => {
+                "Qwen3.5 artifact validation failed".to_owned()
             }
-            Self::Qwen3_5MoEProcessorInitialization { .. } => {
-                "Qwen3.5-MoE processor initialization failed".to_owned()
+            Self::Qwen3_5ProcessorInitialization { .. } => {
+                "Qwen3.5 processor initialization failed".to_owned()
             }
-            Self::Qwen3_5MoEEngineInitialization { .. } => {
-                "Qwen3.5-MoE engine initialization failed".to_owned()
+            Self::Qwen3_5EngineInitialization { .. } => {
+                "Qwen3.5 engine initialization failed".to_owned()
             }
             _ => "model initialization failed".to_owned(),
         };

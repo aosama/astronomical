@@ -17,7 +17,7 @@ use super::quantized_expert_validation::{
     validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
 };
 use super::safetensors_header::{SafetensorsDtype, SafetensorsHeader, TensorHeaderEntry};
-use crate::qwen3_5_moe::Qwen3_5MoEConfig;
+use crate::qwen3_5::Qwen3_5Config;
 
 /// The three MoE projection names in an expert's SwitchMLP block.
 const PROJECTION_NAMES: &[&str] = &["gate_proj", "up_proj", "down_proj"];
@@ -49,7 +49,7 @@ pub fn build_quantized_expert_layer_plan(
     model_dir: &std::path::Path,
     weight_map: &HashMap<String, String>,
     layer_prefix: &str,
-    qwen3_5_moe_config: &Qwen3_5MoEConfig,
+    qwen3_5_config: &Qwen3_5Config,
     quantization_mode: QuantizationMode,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
     let mut tensor_sources = Vec::new();
@@ -58,7 +58,7 @@ pub fn build_quantized_expert_layer_plan(
     for projection_name in PROJECTION_NAMES {
         let projection_module_name = format!("{layer_prefix}.switch_mlp.{projection_name}");
         let projection_quantization_profile =
-            qwen3_5_moe_config.quantization_profile_for_module(&projection_module_name);
+            qwen3_5_config.quantization_profile_for_module(&projection_module_name);
         let (quantization_bits, quantization_group_size, parameter_names): (i32, i32, &[&str]) =
             match quantization_mode {
                 QuantizationMode::Affine => {
@@ -169,15 +169,13 @@ pub fn build_quantized_expert_layer_plan(
         tensor_sources,
         expert_capacity,
         quantization_bits: match quantization_mode {
-            QuantizationMode::Affine => {
-                i32::try_from(qwen3_5_moe_config.default_quantization_bits())
-                    .map_err(|_| ExpertManifestError::InvalidBits)?
-            }
+            QuantizationMode::Affine => i32::try_from(qwen3_5_config.default_quantization_bits())
+                .map_err(|_| ExpertManifestError::InvalidBits)?,
             QuantizationMode::NativeBfloat16 => 0,
         },
         quantization_group_size: match quantization_mode {
             QuantizationMode::Affine => {
-                i32::try_from(qwen3_5_moe_config.default_quantization_group_size())
+                i32::try_from(qwen3_5_config.default_quantization_group_size())
                     .map_err(|_| ExpertManifestError::InvalidGroupSize)?
             }
             QuantizationMode::NativeBfloat16 => 0,
