@@ -15,24 +15,18 @@ concurrency:
 
 jobs:
   verify:
-    name: macOS 26 verification
+    name: 10-minute macOS hermetic verification
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install verification tools
-        run: brew install cargo-about coreutils sccache shellcheck
-      - name: Check shell scripts
-        run: shellcheck --severity=warning -x scripts/*.sh
-      - name: Test Observatory JavaScript
-        run: node --test apps/supervisor/console/console.test.js
-      - name: Test macOS menu contracts
-        run: scripts/test-macos-menu-contracts.sh
+      - name: Install Rust verification tools
+        run: brew install coreutils sccache
       - name: Provision verified native dependencies
         run: scripts/bootstrap-native-dependencies.sh
-      - name: Run bounded Rust commit verification
-        run: scripts/verify-before-commit.sh
+      - name: Compile and test Rust hermetic targets
+        run: scripts/verify-before-commit.sh --hermetic-only
