@@ -2,26 +2,91 @@ use std::path::PathBuf;
 
 #[test]
 fn should_group_qwen_modules_by_their_concrete_domain_concern() {
-    let qwen_source_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("qwen3_5_moe");
+    let model_serving_source_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let shared_qwen_source_directory = model_serving_source_directory.join("qwen3_5");
+    let sparse_qwen_source_directory = model_serving_source_directory.join("qwen3_5_moe");
 
-    for required_qwen_package_name in [
+    for required_shared_qwen_package_name in [
         "artifacts",
         "configuration",
         "decoder",
+        "dense",
         "inference_execution",
         "model",
+        "quantizations",
         "text",
         "vision",
     ] {
         assert!(
-            qwen_source_directory
-                .join(required_qwen_package_name)
+            shared_qwen_source_directory
+                .join(required_shared_qwen_package_name)
                 .is_dir(),
-            "Qwen package {required_qwen_package_name} must exist"
+            "Shared Qwen package {required_shared_qwen_package_name} must exist"
         );
     }
+
+    for required_sparse_qwen_package_name in ["artifacts", "expert_paging", "model"] {
+        assert!(
+            sparse_qwen_source_directory
+                .join(required_sparse_qwen_package_name)
+                .is_dir(),
+            "Sparse Qwen package {required_sparse_qwen_package_name} must exist"
+        );
+    }
+
+    for shared_only_qwen_package_name in [
+        "configuration",
+        "decoder",
+        "dense",
+        "inference_execution",
+        "quantizations",
+        "text",
+        "vision",
+    ] {
+        assert!(
+            !sparse_qwen_source_directory
+                .join(shared_only_qwen_package_name)
+                .exists(),
+            "Sparse Qwen package must not own {shared_only_qwen_package_name}"
+        );
+    }
+    assert!(
+        !shared_qwen_source_directory.join("expert_paging").exists(),
+        "Shared Qwen package must not own sparse expert paging"
+    );
+
+    let model_memory_admission_source = std::fs::read_to_string(
+        shared_qwen_source_directory
+            .join("model")
+            .join("memory_admission.rs"),
+    )
+    .expect("Qwen model memory-admission source must be readable");
+    assert!(
+        !model_memory_admission_source.contains("impl super::super::inference_execution"),
+        "Qwen model memory admission must not own inference-execution implementation blocks"
+    );
+    assert!(
+        shared_qwen_source_directory
+            .join("inference_execution")
+            .join("memory_admission.rs")
+            .is_file(),
+        "Qwen inference execution must own adaptive memory-admission orchestration"
+    );
+
+    let sparse_model_module_source =
+        std::fs::read_to_string(sparse_qwen_source_directory.join("model").join("mod.rs"))
+            .expect("sparse Qwen model module source must be readable");
+    assert!(
+        !sparse_model_module_source.contains("pub(crate) use crate::qwen3_5"),
+        "sparse Qwen modules must import explicit shared contracts without re-export bridges"
+    );
+    let shared_model_module_source =
+        std::fs::read_to_string(shared_qwen_source_directory.join("model").join("mod.rs"))
+            .expect("shared Qwen model module source must be readable");
+    assert!(
+        !shared_model_module_source.contains("pub(crate) use crate::qwen3_5_moe"),
+        "shared Qwen modules must import explicit sparse contracts without re-export bridges"
+    );
 
     for retired_flat_qwen_module_name in [
         "artifact.rs",
@@ -38,7 +103,7 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
         "vision_model.rs",
     ] {
         assert!(
-            !qwen_source_directory
+            !shared_qwen_source_directory
                 .join(retired_flat_qwen_module_name)
                 .exists(),
             "Qwen module {retired_flat_qwen_module_name} must live in its domain package"
@@ -63,7 +128,10 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
         );
     }
     assert!(
-        !qwen_source_directory.join("engine").join("mod.rs").exists(),
+        !shared_qwen_source_directory
+            .join("engine")
+            .join("mod.rs")
+            .exists(),
         "Qwen must not own an engine module after inference execution is separated"
     );
 }

@@ -6,10 +6,10 @@ mod memory_cache;
 
 use thiserror::Error;
 
-use super::super::model::decoder_layer_weights::Qwen3_5MoEAffineWeights;
 use super::memory_budget::{LiveMetalBudget, MemoryBudgetError, MemoryBudgetSnapshot};
 use super::quantized_expert_manifest::{ExpertManifestError, QuantizedExpertLayerPlan};
 use super::safetensors_header::SafetensorsHeaderError;
+use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
 /// Typed failures during expert paging operations.
 #[derive(Debug, Error)]
@@ -44,9 +44,9 @@ pub struct ExpertPager {
 /// Quantized affine weights loaded for selected experts in one layer.
 #[derive(Debug)]
 pub struct PagedExpertWeights {
-    pub(crate) gate_projection: Qwen3_5MoEAffineWeights,
-    pub(crate) up_projection: Qwen3_5MoEAffineWeights,
-    pub(crate) down_projection: Qwen3_5MoEAffineWeights,
+    pub(crate) gate_projection: Qwen3_5AffineWeights,
+    pub(crate) up_projection: Qwen3_5AffineWeights,
+    pub(crate) down_projection: Qwen3_5AffineWeights,
     pub(super) _metal_expert_pack_load_owner:
         Option<astronomical_runtime_integration::MlxMetalExpertPackLoad>,
 }

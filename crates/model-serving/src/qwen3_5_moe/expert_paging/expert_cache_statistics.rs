@@ -1,7 +1,7 @@
 //! Cache accounting DTOs and exact retained-weight payload sizing.
 
-use super::super::model::decoder_layer_weights::Qwen3_5MoEAffineWeights;
 use super::expert_pager::PagedExpertWeights;
+use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
 /// One point-in-time report for a cache-assisted expert paging request.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -34,10 +34,10 @@ pub(crate) fn paged_expert_payload_byte_count(paged_expert_weights: &PagedExpert
     payload_byte_count as u64
 }
 
-fn affine_payload_byte_count(affine_weights: &Qwen3_5MoEAffineWeights) -> usize {
+fn affine_payload_byte_count(affine_weights: &Qwen3_5AffineWeights) -> usize {
     match affine_weights {
-        Qwen3_5MoEAffineWeights::NativeBfloat16 { weight } => weight.byte_count(),
-        Qwen3_5MoEAffineWeights::Quantized {
+        Qwen3_5AffineWeights::NativeBfloat16 { weight } => weight.byte_count(),
+        Qwen3_5AffineWeights::Quantized {
             packed_weight,
             quantization_scales,
             quantization_biases,

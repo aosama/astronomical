@@ -9,8 +9,7 @@ use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, EngineBackedWorker, ModelFactory,
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5MoEArtifactValidator, Qwen3_5MoEEngine, Qwen3_5MoEGenerationProcessor,
-    Qwen3_5MoEPrefillChunckSizer,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PrefillChunckSizer,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tracing_appender::non_blocking::WorkerGuard;
@@ -25,25 +24,25 @@ pub use crate::worker_startup_gpu_memory::{
     sample_iogpu_wired_limit_bytes,
 };
 
-/// Factory that creates a Qwen3.5-MoE processor and engine when a REST request
+/// Factory that creates a Qwen3.5 processor and engine when a REST request
 /// selects a model directory.
-struct Qwen3_5MoEModelFactory {
+struct Qwen3_5ModelFactory {
     effective_mlx_memory_ceiling_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
     prefill_chunck_sizing_policy: PrefillChunckSizingPolicy,
     optimizer_state_directory: Option<PathBuf>,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
-    prefill_chunck_sizer_override: Option<Qwen3_5MoEPrefillChunckSizer>,
+    prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
     mtp_enabled: bool,
 }
 
-impl ModelFactory<Qwen3_5MoEGenerationProcessor, Qwen3_5MoEEngine> for Qwen3_5MoEModelFactory {
+impl ModelFactory<Qwen3_5GenerationProcessor, Qwen3_5Engine> for Qwen3_5ModelFactory {
     async fn create(
         &self,
         model_directory: &str,
         max_output_tokens: u32,
-    ) -> Result<(Qwen3_5MoEGenerationProcessor, Qwen3_5MoEEngine), String> {
+    ) -> Result<(Qwen3_5GenerationProcessor, Qwen3_5Engine), String> {
         let model_directory_path = PathBuf::from(model_directory);
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let prompt_cache_config = self.prompt_cache_config.clone();
@@ -56,7 +55,7 @@ impl ModelFactory<Qwen3_5MoEGenerationProcessor, Qwen3_5MoEEngine> for Qwen3_5Mo
         // Model initialization involves blocking I/O (artifact validation, tokenizer
         // loading) and must run off the async runtime.
         tokio::task::spawn_blocking(move || {
-            initialize_qwen3_5_moe_model(
+            initialize_qwen3_5_model(
                 model_directory_path,
                 effective_mlx_memory_ceiling_bytes,
                 prompt_cache_config,
@@ -127,7 +126,7 @@ fn worker_log_level_name(worker_log_level: WorkerLogLevel) -> &'static str {
     }
 }
 
-/// Starts an idle worker that loads a Qwen3.5-MoE model only after an explicit
+/// Starts an idle worker that loads a Qwen3.5 model only after an explicit
 /// `SwapModel` command from the supervisor.
 pub async fn run_bootstrapped_worker<ReadTransport, WriteTransport>(
     read_transport: ReadTransport,
@@ -148,7 +147,7 @@ where
 async fn run_bootstrapped_worker_with_prefill_chunck_sizer_override<ReadTransport, WriteTransport>(
     read_transport: ReadTransport,
     write_transport: WriteTransport,
-    prefill_chunck_sizer_override: Option<Qwen3_5MoEPrefillChunckSizer>,
+    prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
 ) -> Result<(), WorkerProcessError>
 where
     ReadTransport: AsyncRead + Unpin,
@@ -188,7 +187,7 @@ pub async fn run_configured_worker_with_prefill_chunck_sizer_override<
 >(
     read_transport: ReadTransport,
     write_transport: WriteTransport,
-    prefill_chunck_sizer: Qwen3_5MoEPrefillChunckSizer,
+    prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
 ) -> Result<(), WorkerProcessError>
 where
     ReadTransport: AsyncRead + Unpin,
@@ -206,7 +205,7 @@ async fn run_initialized_worker<ReadTransport, WriteTransport>(
     worker_startup_configuration: WorkerStartupConfiguration,
     command_reader: ProtocolReader<ReadTransport>,
     event_writer: ProtocolWriter<WriteTransport>,
-    prefill_chunck_sizer_override: Option<Qwen3_5MoEPrefillChunckSizer>,
+    prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
 ) -> Result<(), WorkerProcessError>
 where
     ReadTransport: AsyncRead + Unpin,
@@ -258,7 +257,7 @@ where
         mtp_enabled,
         "starting idle inference worker"
     );
-    let model_factory = Qwen3_5MoEModelFactory {
+    let model_factory = Qwen3_5ModelFactory {
         effective_mlx_memory_ceiling_bytes,
         prompt_cache_config,
         prefill_chunck_sizing_policy,
@@ -287,18 +286,18 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn initialize_qwen3_5_moe_model(
+fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
     prefill_chunck_sizing_policy: PrefillChunckSizingPolicy,
-    prefill_chunck_sizer_override: Option<Qwen3_5MoEPrefillChunckSizer>,
+    prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
     optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
     mtp_enabled: bool,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
-) -> Result<(Qwen3_5MoEGenerationProcessor, Qwen3_5MoEEngine), WorkerStartupError> {
+) -> Result<(Qwen3_5GenerationProcessor, Qwen3_5Engine), WorkerStartupError> {
     let mut model_loading_performance_attribution = if performance_attribution_enabled {
         PerformanceAttribution::enabled()
     } else {
@@ -315,7 +314,7 @@ fn initialize_qwen3_5_moe_model(
     let validated_artifact = match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::ArtifactValidation,
         |_performance_attribution| {
-            Qwen3_5MoEArtifactValidator::new().validate(&model_directory_path, max_output_tokens)
+            Qwen3_5ArtifactValidator::new().validate(&model_directory_path, max_output_tokens)
         },
     ) {
         Ok(validated_artifact) => validated_artifact,
@@ -323,7 +322,7 @@ fn initialize_qwen3_5_moe_model(
             tracing::warn!(
                 error = %source,
                 model_directory = ?model_directory_path,
-                "Qwen3.5-MoE artifact validation failed during model initialization"
+                "Qwen3.5 artifact validation failed during model initialization"
             );
             record_failed_model_loading_performance_attribution(
                 model_loading_performance_attribution,
@@ -334,7 +333,7 @@ fn initialize_qwen3_5_moe_model(
                 None,
                 "artifact validation failed",
             );
-            return Err(WorkerStartupError::Qwen3_5MoEArtifactValidation {
+            return Err(WorkerStartupError::Qwen3_5ArtifactValidation {
                 model_directory: model_directory_path.clone(),
                 source,
             });
@@ -347,7 +346,7 @@ fn initialize_qwen3_5_moe_model(
     let generation_processor = match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::TokenizerInitialization,
         |_performance_attribution| {
-            Qwen3_5MoEGenerationProcessor::from_validated_artifact(
+            Qwen3_5GenerationProcessor::from_validated_artifact(
                 &validated_artifact,
                 true,
                 performance_attribution_enabled,
@@ -365,7 +364,7 @@ fn initialize_qwen3_5_moe_model(
                 Some(artifact_shard_count),
                 "tokenizer initialization failed",
             );
-            return Err(WorkerStartupError::Qwen3_5MoEProcessorInitialization {
+            return Err(WorkerStartupError::Qwen3_5ProcessorInitialization {
                 model_directory: model_directory_path.clone(),
                 source,
             });
@@ -393,19 +392,19 @@ fn initialize_qwen3_5_moe_model(
         None => match prefill_chunck_sizing_policy {
             PrefillChunckSizingPolicy::Fixed {
                 fixed_prefill_chunck_tokens,
-            } => Qwen3_5MoEPrefillChunckSizer::for_fixed_prefill_chunck_tokens(
+            } => Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(
                 fixed_prefill_chunck_tokens,
             ),
             PrefillChunckSizingPolicy::Optimized => match optimizer_state_directory {
                 Some(optimizer_directory) => {
-                    Qwen3_5MoEPrefillChunckSizer::for_optimized_production_with_persisted_state(
+                    Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state(
                         maximum_prefill_chunck_tokens,
                         optimizer_directory,
                         model_id,
                         model_revision,
                     )
                 }
-                None => Qwen3_5MoEPrefillChunckSizer::production(maximum_prefill_chunck_tokens),
+                None => Qwen3_5PrefillChunckSizer::production(maximum_prefill_chunck_tokens),
             },
         },
     };
@@ -426,28 +425,25 @@ fn initialize_qwen3_5_moe_model(
             ));
         }
     };
-    let qwen3_5_moe_engine =
-        Qwen3_5MoEEngine::new_with_prefill_chunck_sizer_and_performance_attribution(
-            validated_artifact,
-            active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
-            prefill_chunck_sizer,
-            think_end_token_id,
-            model_directory_path.clone(),
-            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
-            true,
-            mtp_enabled,
-            model_loading_performance_attribution,
-            performance_attribution_log,
-        )
-        .map_err(
-            |source| WorkerStartupError::Qwen3_5MoEEngineInitialization {
-                model_directory: model_directory_path,
-                source,
-            },
-        )?;
-    Ok((generation_processor, qwen3_5_moe_engine))
+    let qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+        validated_artifact,
+        active_memory_limit_bytes,
+        allocator_cache_memory_limit_bytes,
+        persistent_prompt_cache_disk_store_config,
+        prefill_chunck_sizer,
+        think_end_token_id,
+        model_directory_path.clone(),
+        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        true,
+        mtp_enabled,
+        model_loading_performance_attribution,
+        performance_attribution_log,
+    )
+    .map_err(|source| WorkerStartupError::Qwen3_5EngineInitialization {
+        model_directory: model_directory_path,
+        source,
+    })?;
+    Ok((generation_processor, qwen3_5_engine))
 }
 
 #[allow(clippy::too_many_arguments)]

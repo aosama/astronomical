@@ -2,9 +2,9 @@
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
-use super::super::model::decoder_layer_weights::Qwen3_5MoEAffineWeights;
 use super::expert_cache::ExpertWeightMemoryCache;
 use super::expert_pager::{ExpertPagingError, PagedExpertWeights};
+use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
 impl ExpertWeightMemoryCache {
     pub(crate) fn assemble_selected_experts(
@@ -56,28 +56,28 @@ impl ExpertWeightMemoryCache {
 
 fn concatenate_affine_projections(
     runtime: &MlxRuntime,
-    cached_projections: &[&Qwen3_5MoEAffineWeights],
+    cached_projections: &[&Qwen3_5AffineWeights],
     projection_description: &str,
-) -> Result<Qwen3_5MoEAffineWeights, ExpertPagingError> {
+) -> Result<Qwen3_5AffineWeights, ExpertPagingError> {
     let Some(first_projection) = cached_projections.first() else {
         return Err(ExpertPagingError::Runtime {
             description: "cannot concatenate empty expert projections".to_owned(),
         });
     };
     match first_projection {
-        Qwen3_5MoEAffineWeights::NativeBfloat16 { .. } => {
+        Qwen3_5AffineWeights::NativeBfloat16 { .. } => {
             let native_bfloat16_weights = cached_projections
                 .iter()
                 .map(|projection| match projection {
-                    Qwen3_5MoEAffineWeights::NativeBfloat16 { weight } => Ok(weight),
-                    Qwen3_5MoEAffineWeights::Quantized { .. } => Err(ExpertPagingError::Runtime {
+                    Qwen3_5AffineWeights::NativeBfloat16 { weight } => Ok(weight),
+                    Qwen3_5AffineWeights::Quantized { .. } => Err(ExpertPagingError::Runtime {
                         description: format!(
                             "{projection_description} pages use mixed storage formats"
                         ),
                     }),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(Qwen3_5MoEAffineWeights::NativeBfloat16 {
+            Ok(Qwen3_5AffineWeights::NativeBfloat16 {
                 weight: concatenate_cached_arrays(
                     runtime,
                     &native_bfloat16_weights,
@@ -86,7 +86,7 @@ fn concatenate_affine_projections(
                 )?,
             })
         }
-        Qwen3_5MoEAffineWeights::Quantized {
+        Qwen3_5AffineWeights::Quantized {
             quantization_bits,
             quantization_group_size,
             ..
@@ -95,7 +95,7 @@ fn concatenate_affine_projections(
             let mut quantization_scales = Vec::with_capacity(cached_projections.len());
             let mut quantization_biases = Vec::with_capacity(cached_projections.len());
             for projection in cached_projections {
-                let Qwen3_5MoEAffineWeights::Quantized {
+                let Qwen3_5AffineWeights::Quantized {
                     packed_weight,
                     quantization_scales: scales,
                     quantization_biases: biases,
@@ -112,7 +112,7 @@ fn concatenate_affine_projections(
                 quantization_scales.push(scales);
                 quantization_biases.push(biases);
             }
-            Ok(Qwen3_5MoEAffineWeights::Quantized {
+            Ok(Qwen3_5AffineWeights::Quantized {
                 packed_weight: concatenate_cached_arrays(
                     runtime,
                     &packed_weights,

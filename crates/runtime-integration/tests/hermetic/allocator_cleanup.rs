@@ -1,19 +1,17 @@
 const MLX_RUNTIME_MEMORY_POLICY_SOURCE: &str =
     include_str!("../../src/mlx_runtime/memory_policy.rs");
 const QWEN_MEMORY_ADMISSION_SOURCE: &str =
-    include_str!("../../../model-serving/src/qwen3_5_moe/model/memory_admission.rs");
+    include_str!("../../../model-serving/src/qwen3_5/inference_execution/memory_admission.rs");
 const EXPERT_PAGING_MEMORY_BUDGET_SOURCE: &str =
     include_str!("../../../model-serving/src/qwen3_5_moe/expert_paging/memory_budget.rs");
 const QWEN_PREFILL_ADVANCE_SOURCE: &str =
-    include_str!("../../../model-serving/src/qwen3_5_moe/inference_execution/prefill_advance.rs");
-const QWEN_ADVANCE_GENERATION_SOURCE: &str = include_str!(
-    "../../../model-serving/src/qwen3_5_moe/inference_execution/advance_generation.rs"
-);
-const QWEN_INJECT_INPUT_TOKENS_SOURCE: &str = include_str!(
-    "../../../model-serving/src/qwen3_5_moe/inference_execution/inject_input_tokens.rs"
-);
+    include_str!("../../../model-serving/src/qwen3_5/inference_execution/prefill_advance.rs");
+const QWEN_ADVANCE_GENERATION_SOURCE: &str =
+    include_str!("../../../model-serving/src/qwen3_5/inference_execution/advance_generation.rs");
+const QWEN_INJECT_INPUT_TOKENS_SOURCE: &str =
+    include_str!("../../../model-serving/src/qwen3_5/inference_execution/inject_input_tokens.rs");
 const QWEN_GENERATION_FINALIZATION_SOURCE: &str = include_str!(
-    "../../../model-serving/src/qwen3_5_moe/inference_execution/generation_finalization.rs"
+    "../../../model-serving/src/qwen3_5/inference_execution/generation_finalization.rs"
 );
 
 #[test]

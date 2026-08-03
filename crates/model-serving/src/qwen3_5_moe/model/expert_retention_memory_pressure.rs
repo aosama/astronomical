@@ -2,17 +2,18 @@ use astronomical_runtime_integration::MlxMemorySnapshot;
 
 use crate::InferenceEngineError;
 
-use super::super::inference_execution::qwen3_5_moe_runtime_error;
-use super::Qwen3_5MoEModel;
+use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
+use crate::qwen3_5::model::Qwen3_5Model;
 
-impl Qwen3_5MoEModel {
-    pub(in crate::qwen3_5_moe) fn freeze_expert_retention_growth_for_request_memory_pressure(
-        &self,
-    ) -> bool {
+impl Qwen3_5Model {
+    pub(crate) fn freeze_expert_retention_growth_for_request_memory_pressure(&self) -> bool {
+        let Some(expert_weight_memory_cache) = self.expert_weight_memory_cache.as_ref() else {
+            return false;
+        };
         if self.expert_pager.is_none() {
             return false;
         }
-        self.expert_weight_memory_cache
+        expert_weight_memory_cache
             .borrow_mut()
             .freeze_retention_growth_for_request_memory_pressure()
     }
@@ -21,6 +22,9 @@ impl Qwen3_5MoEModel {
         &self,
         retained_expert_payload_reclamation_target_bytes: usize,
     ) -> bool {
+        let Some(expert_weight_memory_cache) = self.expert_weight_memory_cache.as_ref() else {
+            return false;
+        };
         if self.expert_pager.is_none() {
             return false;
         }
@@ -30,23 +34,24 @@ impl Qwen3_5MoEModel {
             .saturating_sub(
                 u64::try_from(retained_expert_payload_reclamation_target_bytes).unwrap_or(u64::MAX),
             );
-        self.expert_weight_memory_cache
+        expert_weight_memory_cache
             .borrow_mut()
             .limit_retention_for_request_memory_pressure(maximum_retained_payload_byte_count);
         true
     }
 
-    pub(in crate::qwen3_5_moe) fn resume_expert_retention_after_request_memory_pressure(
-        &self,
-    ) -> bool {
-        self.expert_weight_memory_cache
+    pub(crate) fn resume_expert_retention_after_request_memory_pressure(&self) -> bool {
+        let Some(expert_weight_memory_cache) = self.expert_weight_memory_cache.as_ref() else {
+            return false;
+        };
+        expert_weight_memory_cache
             .borrow_mut()
             .resume_retention_after_request_memory_pressure()
     }
 }
 
-pub(in crate::qwen3_5_moe) fn reclaim_retained_experts_for_request_memory_pressure(
-    model: &Qwen3_5MoEModel,
+pub(crate) fn reclaim_retained_experts_for_request_memory_pressure(
+    model: &Qwen3_5Model,
     retained_expert_payload_reclamation_target_bytes: usize,
 ) -> Result<Option<MlxMemorySnapshot>, InferenceEngineError> {
     if !model.limit_expert_retention_for_request_memory_pressure(
@@ -59,13 +64,13 @@ pub(in crate::qwen3_5_moe) fn reclaim_retained_experts_for_request_memory_pressu
         .synchronize_gpu_stream_and_clear_allocator_cache()
     {
         model.resume_expert_retention_after_request_memory_pressure();
-        return Err(qwen3_5_moe_runtime_error(allocator_reclamation_error));
+        return Err(qwen3_5_runtime_error(allocator_reclamation_error));
     }
     let memory_snapshot_after_reclamation = match model.runtime().memory_snapshot() {
         Ok(memory_snapshot_after_reclamation) => memory_snapshot_after_reclamation,
         Err(memory_snapshot_error) => {
             model.resume_expert_retention_after_request_memory_pressure();
-            return Err(qwen3_5_moe_runtime_error(memory_snapshot_error));
+            return Err(qwen3_5_runtime_error(memory_snapshot_error));
         }
     };
     Ok(Some(memory_snapshot_after_reclamation))
