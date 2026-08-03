@@ -71,6 +71,10 @@ fn should_reject_every_retired_consumer_configuration_field() {
             r#"{"full_attention_kv_state_growth_tokens":256}"#,
         ),
         (
+            "spectre_attention_enabled",
+            r#"{"spectre_attention_enabled":true}"#,
+        ),
+        (
             "nested prompt_cache",
             r#"{"prompt_cache":{"enabled":true,"max_size_gb":50}}"#,
         ),

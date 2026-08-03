@@ -14,11 +14,6 @@
 # Agent harness local state
 .opencode/
 
-# Agent instructions (local developer environment, not project source)
-AGENTS.md
-.github/instructions/rust.instructions.md
-docs/
-
 # Local UI screenshot captures
 ScreenShots/
 
