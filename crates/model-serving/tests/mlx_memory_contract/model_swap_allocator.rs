@@ -3,8 +3,8 @@ use std::{fs, path::Path, time::Instant};
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5MoEArtifactValidator,
-    Qwen3_5MoEEngine, Qwen3_5MoEInferenceRequest, Qwen3_5MoEPrefillChunckSizer,
+    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::Value;
@@ -180,16 +180,16 @@ fn create_engine(
     mlx_memory_limits: &MlxMemoryLimits,
     model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: PerformanceAttributionLog,
-) -> Qwen3_5MoEEngine {
-    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+) -> Qwen3_5Engine {
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, VALIDATION_MAXIMUM_OUTPUT_TOKENS)
         .expect("the selected Qwen3.5-MoE artifact should validate before loading");
-    Qwen3_5MoEEngine::new_with_prefill_chunck_sizer_and_performance_attribution(
+    Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5MoEPrefillChunckSizer::for_fixed_prefill_chunck_tokens(FIXED_PREFILL_CHUNCK_TOKENS)
+        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(FIXED_PREFILL_CHUNCK_TOKENS)
             .expect("the fixed prefill chunck size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
@@ -202,12 +202,12 @@ fn create_engine(
     .expect("the selected Qwen3.5-MoE engine settings should be valid")
 }
 
-async fn load_engine_with_progress(qwen3_5_moe_engine: &mut Qwen3_5MoEEngine, model_id: &str) {
+async fn load_engine_with_progress(qwen3_5_engine: &mut Qwen3_5Engine, model_id: &str) {
     let model_load_started_at = Instant::now();
     let mut progress_interval = interval(LONG_OPERATION_PROGRESS_INTERVAL);
     progress_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     progress_interval.tick().await;
-    let model_load_future = qwen3_5_moe_engine.load();
+    let model_load_future = qwen3_5_engine.load();
     tokio::pin!(model_load_future);
     loop {
         tokio::select! {
@@ -227,10 +227,10 @@ async fn load_engine_with_progress(qwen3_5_moe_engine: &mut Qwen3_5MoEEngine, mo
     }
 }
 
-async fn run_bounded_generation(qwen3_5_moe_engine: &mut Qwen3_5MoEEngine, request_id: RequestId) {
-    qwen3_5_moe_engine
+async fn run_bounded_generation(qwen3_5_engine: &mut Qwen3_5Engine, request_id: RequestId) {
+    qwen3_5_engine
         .start_generation(
-            Qwen3_5MoEInferenceRequest::new(
+            Qwen3_5InferenceRequest::new(
                 request_id,
                 SAY_HI_PROMPT_TOKEN_IDS.to_vec(),
                 GENERATION_OUTPUT_TOKEN_COUNT,
@@ -248,7 +248,7 @@ async fn run_bounded_generation(qwen3_5_moe_engine: &mut Qwen3_5MoEEngine, reque
     generation_progress_interval.tick().await;
     loop {
         let generation_advance_outcome = await_generation_advance_with_live_progress(
-            qwen3_5_moe_engine.decode_next_token(request_id),
+            qwen3_5_engine.decode_next_token(request_id),
             &mut generation_progress_interval,
             || eprintln!(
                 "[memory-contract] status=progress phase=generation_advance request_id={} generated_token_count={generated_token_count} elapsed_seconds={:.1} ETA_seconds=unknown",

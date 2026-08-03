@@ -5,7 +5,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };
-use astronomical_model_serving::Qwen3_5MoEPrefillChunckSizer;
+use astronomical_model_serving::Qwen3_5PrefillChunckSizer;
 use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use tokio::time::{Instant, timeout};
 
@@ -60,7 +60,7 @@ async fn should_measure_model_throughput_with_prefill_chunck_tokens_8192() {
 }
 
 async fn run_prefill_chunck_sweep_with_timeout(
-    prefill_chunck_sizer: Qwen3_5MoEPrefillChunckSizer,
+    prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
 ) -> PrefillChunckMetrics {
     timeout(
         SWEEP_TIMEOUT,
@@ -81,7 +81,7 @@ fn assert_valid_prefill_chunck_sweep_result(prefill_chunck_metrics: PrefillChunc
 /// chunk sizer. Does not measure OS-level peak footprint, but MLX still errors
 /// on out-of-memory conditions.
 async fn run_model_artifact_with_prefill_chunck_sizer(
-    prefill_chunck_sizer: Qwen3_5MoEPrefillChunckSizer,
+    prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
 ) -> PrefillChunckMetrics {
     let prefill_chunck_tokens = prefill_chunck_sizer.prefill_chunck_tokens();
     let (test_to_worker, worker_from_test) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
@@ -249,8 +249,8 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
     }
 }
 
-fn prefill_chunck_sizer(prefill_chunck_tokens: u32) -> Qwen3_5MoEPrefillChunckSizer {
-    Qwen3_5MoEPrefillChunckSizer::for_fixed_prefill_chunck_tokens(prefill_chunck_tokens)
+fn prefill_chunck_sizer(prefill_chunck_tokens: u32) -> Qwen3_5PrefillChunckSizer {
+    Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(prefill_chunck_tokens)
         .expect("the measured prefill_chunck_tokens should be positive")
 }
 

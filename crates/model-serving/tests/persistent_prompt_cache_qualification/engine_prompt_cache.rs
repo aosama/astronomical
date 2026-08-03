@@ -4,8 +4,7 @@ use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
     PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5MoEArtifactValidator, Qwen3_5MoEEngine, Qwen3_5MoEInferenceRequest,
-    Qwen3_5MoEPrefillChunckSizer,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 
@@ -29,17 +28,17 @@ async fn should_generate_identical_output_with_prompt_cache_disabled_and_cold_pr
 async fn run_prompt_cache_disabled_cold_prefill_qualification() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
-    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the pinned Ornith artifact should validate before engine loading");
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let mut qwen3_5_moe_engine = Qwen3_5MoEEngine::new_with_prefill_chunck_sizer(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5MoEPrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
+        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
             .expect("the test prefill_chunck_tokens should be valid"),
         248_069,
         model_directory.to_path_buf(),
@@ -47,14 +46,14 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
         false,
     )
     .expect("the bounded Ornith engine settings should be valid");
-    qwen3_5_moe_engine
+    qwen3_5_engine
         .load()
         .await
         .expect("the engine should materialize the complete Ornith model");
     let request_id = RequestId::new(2_000);
-    qwen3_5_moe_engine
+    qwen3_5_engine
         .start_generation(
-            Qwen3_5MoEInferenceRequest::new(request_id, SAY_HI_PROMPT_TOKEN_IDS.to_vec(), 10)
+            Qwen3_5InferenceRequest::new(request_id, SAY_HI_PROMPT_TOKEN_IDS.to_vec(), 10)
                 .with_image_pad_token_id(248_069),
         )
         .await
@@ -62,7 +61,7 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
 
     let mut generated_token_ids = Vec::new();
     while generated_token_ids.len() < 10 {
-        match qwen3_5_moe_engine
+        match qwen3_5_engine
             .decode_next_token(request_id)
             .await
             .expect("each engine boundary should advance the request")
@@ -142,13 +141,13 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         tempfile::tempdir().expect("the test should create a prompt-cache directory");
 
     // First run: cold prefill, should populate the persistent prompt cache.
-    let validated_artifact = Qwen3_5MoEArtifactValidator::new()
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
     let maximum_prefill_chunck_tokens = validated_artifact.config().maximum_position_count();
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let mut qwen3_5_moe_engine = Qwen3_5MoEEngine::new_with_prefill_chunck_sizer(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -157,7 +156,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
             persistent_prompt_cache_directory.path().to_path_buf(),
             crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
         )),
-        Qwen3_5MoEPrefillChunckSizer::production(maximum_prefill_chunck_tokens)
+        Qwen3_5PrefillChunckSizer::production(maximum_prefill_chunck_tokens)
             .expect("the validated model context maximum should configure the optimizer"),
         248_069,
         model_directory.to_path_buf(),
@@ -165,14 +164,14 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         false,
     )
     .expect("the engine should accept the prompt-cache directory");
-    qwen3_5_moe_engine
+    qwen3_5_engine
         .load()
         .await
         .expect("the engine should load the model");
     let first_request_id = RequestId::new(2_001);
-    let first_generation_start = qwen3_5_moe_engine
+    let first_generation_start = qwen3_5_engine
         .start_generation(
-            Qwen3_5MoEInferenceRequest::new(
+            Qwen3_5InferenceRequest::new(
                 first_request_id,
                 prompt_token_ids.clone(),
                 u16::try_from(generated_token_count)
@@ -183,20 +182,16 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         .await
         .expect("the first engine should accept the request");
     assert_eq!(first_generation_start.cached_token_count(), 0);
-    let first_generated_token_ids = generate_token_ids(
-        &mut qwen3_5_moe_engine,
-        first_request_id,
-        generated_token_count,
-    )
-    .await;
+    let first_generated_token_ids =
+        generate_token_ids(&mut qwen3_5_engine, first_request_id, generated_token_count).await;
 
     // Second run: same prompt, same loaded engine, same prompt-cache directory. The
     // prompt is longer than one persistent prompt-cache block, so the second start
     // must report a hit without paying another full model load in this proof.
     let second_request_id = RequestId::new(2_002);
-    let second_generation_start = qwen3_5_moe_engine
+    let second_generation_start = qwen3_5_engine
         .start_generation(
-            Qwen3_5MoEInferenceRequest::new(
+            Qwen3_5InferenceRequest::new(
                 second_request_id,
                 prompt_token_ids,
                 u16::try_from(generated_token_count)
@@ -212,7 +207,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         "the second run should report at least one restored prompt-cache block"
     );
     let second_generated_token_ids = generate_token_ids(
-        &mut qwen3_5_moe_engine,
+        &mut qwen3_5_engine,
         second_request_id,
         generated_token_count,
     )
@@ -221,13 +216,13 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
 }
 
 async fn generate_token_ids(
-    qwen3_5_moe_engine: &mut Qwen3_5MoEEngine,
+    qwen3_5_engine: &mut Qwen3_5Engine,
     request_id: RequestId,
     generated_token_count: usize,
 ) -> Vec<u32> {
     let mut generated_token_ids = Vec::new();
     loop {
-        match qwen3_5_moe_engine
+        match qwen3_5_engine
             .decode_next_token(request_id)
             .await
             .expect("the engine should advance")

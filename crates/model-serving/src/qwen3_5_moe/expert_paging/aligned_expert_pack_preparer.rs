@@ -18,8 +18,8 @@ use super::{
     quantized_expert_manifest::QuantizedExpertLayerPlan,
     quantized_expert_manifest::{ExpertManifestError, QuantizationMode},
 };
-use crate::qwen3_5_moe::{
-    ModelWeightStorage, Qwen3_5MoEArtifactValidationError, Qwen3_5MoEArtifactValidator,
+use crate::qwen3_5::{
+    ModelWeightStorage, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
 };
 
 const ALIGNED_EXPERT_PACK_ROOT_DIRECTORY_NAME: &str = ".astronomical-aligned-expert-packs";
@@ -87,7 +87,7 @@ pub enum AlignedExpertPackPreparationError {
     #[error("aligned expert-pack construction failed: {0}")]
     Pack(#[from] AlignedExpertPackError),
     #[error("model artifact validation failed: {0}")]
-    Artifact(#[from] Qwen3_5MoEArtifactValidationError),
+    Artifact(#[from] Qwen3_5ArtifactValidationError),
     #[error("expert layer planning failed: {0}")]
     ExpertManifest(#[from] ExpertManifestError),
 }
@@ -106,8 +106,7 @@ impl AlignedExpertPackPreparer {
         model_directory: impl AsRef<Path>,
     ) -> Result<Self, AlignedExpertPackPreparationError> {
         let model_directory = fs::canonicalize(model_directory)?;
-        let validated_artifact =
-            Qwen3_5MoEArtifactValidator::new().validate(&model_directory, 1)?;
+        let validated_artifact = Qwen3_5ArtifactValidator::new().validate(&model_directory, 1)?;
         let model_id = validated_artifact.model_id().to_owned();
         let model_revision = validated_artifact.revision().to_owned();
         let config = validated_artifact.config();
