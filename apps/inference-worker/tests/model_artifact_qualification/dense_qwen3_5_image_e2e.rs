@@ -1,29 +1,21 @@
-use std::path::PathBuf;
-
-use astronomical_model_serving::Qwen3_5ArtifactValidator;
+use astronomical_config::{AstronomicalConfig, discover_qwen3_5_models};
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
 use tokio::time::timeout;
 
 use super::model_artifact_rest_qualification::{
     E2E_TIMEOUT, image_chat_request_body_for_model, run_model_artifact_request_e2e_for_model,
 };
 
-const DENSE_QWEN3_5_VISION_MODEL_DIRECTORY_ENVIRONMENT_VARIABLE: &str =
-    "ASTRONOMICAL_DENSE_QWEN3_5_VISION_MODEL_DIRECTORY";
-
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires ASTRONOMICAL_DENSE_QWEN3_5_VISION_MODEL_DIRECTORY"]
+#[ignore = "loads the smallest configured dense Qwen3.5 vision artifact through REST"]
 async fn should_stream_image_output_from_a_dense_qwen3_5_vision_model_through_the_openai_endpoint()
 {
-    let Some(model_directory) = configured_dense_qwen3_5_vision_model_directory() else {
-        eprintln!(
-            "[dense-qwen3-5-image-e2e] status=skipped reason=required_model_directory_missing"
-        );
-        return;
-    };
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the dense Qwen3.5 vision artifact should validate before the REST smoke test");
-    assert!(validated_artifact.config().is_dense_model());
+    let (model_directory, validated_artifact) = configured_dense_qwen3_5_vision_artifact()
+        .expect("configured model roots should contain a dense Qwen3.5 vision artifact");
+    assert_eq!(
+        validated_artifact.config().feed_forward_architecture(),
+        Qwen3_5FeedForwardArchitecture::Dense
+    );
     assert!(validated_artifact.supports_image_input());
     let dense_qwen3_5_vision_model_id = validated_artifact.model_id().to_owned();
 
@@ -40,6 +32,39 @@ async fn should_stream_image_output_from_a_dense_qwen3_5_vision_model_through_th
     .expect("the dense Qwen3.5 image E2E test must finish within 115 seconds");
 }
 
-fn configured_dense_qwen3_5_vision_model_directory() -> Option<PathBuf> {
-    std::env::var_os(DENSE_QWEN3_5_VISION_MODEL_DIRECTORY_ENVIRONMENT_VARIABLE).map(PathBuf::from)
+fn configured_dense_qwen3_5_vision_artifact() -> Option<(
+    std::path::PathBuf,
+    astronomical_model_serving::ValidatedQwen3_5Artifact,
+)> {
+    let astronomical_config = AstronomicalConfig::load_from_default_location()
+        .expect("the standard Astronomical configuration should load for model qualification");
+    let maximum_output_tokens = astronomical_config.max_output_tokens();
+    let configured_model_directory_scans = discover_qwen3_5_models(
+        astronomical_config.model_directories(),
+        maximum_output_tokens,
+    )
+    .expect("configured model-directory discovery should complete");
+    let mut discovered_vision_models = configured_model_directory_scans
+        .into_iter()
+        .flat_map(|configured_model_directory_scan| {
+            configured_model_directory_scan.discovered_models
+        })
+        .filter(|discovered_model| discovered_model.has_vision)
+        .collect::<Vec<_>>();
+    discovered_vision_models.sort_by_key(|discovered_model| discovered_model.model_size_bytes);
+
+    discovered_vision_models
+        .into_iter()
+        .find_map(|discovered_vision_model| {
+            let validated_artifact = Qwen3_5ArtifactValidator::new()
+                .validate(
+                    &discovered_vision_model.model_directory,
+                    maximum_output_tokens,
+                )
+                .ok()?;
+            (validated_artifact.config().feed_forward_architecture()
+                == Qwen3_5FeedForwardArchitecture::Dense
+                && validated_artifact.supports_image_input())
+            .then_some((discovered_vision_model.model_directory, validated_artifact))
+        })
 }

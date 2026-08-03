@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use astronomical_ipc_protocol::ChatMessage;
-use astronomical_model_serving::Qwen3_5MoEPromptRenderer;
+use astronomical_model_serving::Qwen3_5PromptRenderer;
 use tokenizers::Tokenizer;
 
 pub(crate) fn build_exact_model_prompt_content(
@@ -53,7 +53,7 @@ pub(crate) fn append_missing_single_token_fillers(
 }
 
 fn rendered_prompt_token_count(tokenizer: &Tokenizer, content: &str) -> usize {
-    let rendered_prompt = Qwen3_5MoEPromptRenderer::render(
+    let rendered_prompt = Qwen3_5PromptRenderer::render(
         &[ChatMessage::User {
             content: content.to_owned(),
             images: Vec::new(),
