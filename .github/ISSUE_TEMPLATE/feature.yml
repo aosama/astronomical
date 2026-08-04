@@ -5,26 +5,9 @@ labels:
   - enhancement
 body:
   - type: textarea
-    id: problem
+    id: proposal
     attributes:
-      label: User problem
-      description: Describe the concrete local-user problem without private machine details.
+      label: What would make Astronomical better?
+      description: Describe the improvement in your own words. Do not include private machine details.
     validations:
       required: true
-  - type: textarea
-    id: outcome
-    attributes:
-      label: Desired outcome
-      description: State observable acceptance criteria rather than an architecture.
-    validations:
-      required: true
-  - type: textarea
-    id: constraints
-    attributes:
-      label: Precision, performance, and memory constraints
-      description: Explain any model-fidelity or adaptive-memory requirements.
-  - type: textarea
-    id: simplicity
-    attributes:
-      label: Simplest viable approach
-      description: Identify how to avoid new layers or configuration when possible.
