@@ -24,6 +24,18 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Configure compiler artifact directory
+        run: printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache" >> "$GITHUB_ENV"
+      - name: Restore Rust and native build state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            ~/Library/Caches/Astronomical/sccache
+            ~/Library/Caches/Astronomical/native-dependencies
+          key: ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'third-party/native-dependency-manifest.cmake', 'third-party/pins/**', 'third-party/patches/**', 'crates/runtime-integration/build.rs', 'crates/runtime-integration/native/**') }}
       - name: Install Rust verification tools
         run: brew install coreutils sccache
       - name: Provision verified native dependencies
