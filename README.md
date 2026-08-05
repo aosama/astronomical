@@ -4,6 +4,8 @@
 
 Astronomical is a performance-first local model runner for Mac users who want serious models, private inference, and direct control over memory. Set the maximum model RAM your laptop can spare and Astronomical automatically balances hot expert weights, live context, runtime work, and solid-state-drive streaming under that ceiling.
 
+Read the product story and public engineering reports at [aosama.github.io/astronomical](https://aosama.github.io/astronomical/).
+
 ![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](.github/assets/astronomical-ram-ssd-streaming.jpeg)
 
 *A captured development run of Qwen3.6-35B-A3B-oQ4e-mtp: 21.61 GB on disk, an 11 GB model-memory ceiling, automatic RAM plus SSD expert streaming, and live prompt-processing telemetry. This demonstrates the operating mode, not a universal throughput guarantee; results vary by model, context, storage, and Mac.*
