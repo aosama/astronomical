@@ -13,11 +13,11 @@ const SAY_HI_PROMPT_TOKEN_IDS: [u32; 15] = [
     248_045, 846, 198, 44_240, 15_131, 13, 248_046, 198, 248_045, 74_455, 198, 248_068, 271,
     248_069, 271,
 ];
-const QWEN3_6_35B_A3B_EIGHT_BIT_MODEL_ID: &str = "Qwen3.6-35B-A3B-8bit";
+const QWEN3_6_35B_A3B_OQ6E_MTP_MODEL_ID: &str = "Qwen3.6-35B-A3B-oQ6e-mtp";
 const MAXIMUM_GREEDY_OUTPUT_TOKEN_COUNT: usize = 10;
 
 #[tokio::test]
-#[ignore = "loads and generates with the complete pinned 22 GB Ornith artifact"]
+#[ignore = "loads and generates with the complete pinned Qwen3.6 artifact"]
 async fn should_generate_identical_output_with_prompt_cache_disabled_and_cold_prefill() {
     require_persistent_prompt_cache_qualification_completion(
         run_prompt_cache_disabled_cold_prefill_qualification(),
@@ -27,10 +27,11 @@ async fn should_generate_identical_output_with_prompt_cache_disabled_and_cold_pr
 
 async fn run_prompt_cache_disabled_cold_prefill_qualification() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_ornith_model_artifact_directory();
+    let model_directory =
+        crate::common::configured_model_artifact_directory_by_id(QWEN3_6_35B_A3B_OQ6E_MTP_MODEL_ID);
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the pinned Ornith artifact should validate before engine loading");
+        .expect("the pinned Qwen3.6 artifact should validate before engine loading");
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
@@ -45,11 +46,11 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
         false,
     )
-    .expect("the bounded Ornith engine settings should be valid");
+    .expect("the bounded Qwen3.6 engine settings should be valid");
     qwen3_5_engine
         .load()
         .await
-        .expect("the engine should materialize the complete Ornith model");
+        .expect("the engine should materialize the complete Qwen3.6 model");
     let request_id = RequestId::new(2_000);
     qwen3_5_engine
         .start_generation(
@@ -79,7 +80,7 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
 }
 
 #[tokio::test]
-#[ignore = "loads and generates with the complete pinned 22 GB Ornith artifact"]
+#[ignore = "loads and generates with the complete pinned Qwen3.6 artifact"]
 async fn should_restore_persistent_prompt_cache_blocks_and_report_cached_tokens_on_the_second_run()
 {
     require_persistent_prompt_cache_qualification_completion(
@@ -90,7 +91,8 @@ async fn should_restore_persistent_prompt_cache_blocks_and_report_cached_tokens_
 
 async fn run_persistent_prompt_cache_restore_qualification() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_ornith_model_artifact_directory();
+    let model_directory =
+        crate::common::configured_model_artifact_directory_by_id(QWEN3_6_35B_A3B_OQ6E_MTP_MODEL_ID);
     let (first_generated_token_ids, second_generated_token_ids) =
         run_persistent_prompt_cache_greedy_parity_qualification(
             &model_directory,
@@ -106,12 +108,12 @@ async fn run_persistent_prompt_cache_restore_qualification() {
 }
 
 #[tokio::test]
-#[ignore = "loads Qwen3.6-35B-A3B-8bit and compares cold and restored prompt-cache greedy tokens"]
+#[ignore = "loads Qwen3.6-35B-A3B-oQ6e-mtp and compares cold and restored prompt-cache greedy tokens"]
 async fn should_preserve_qwen3_6_greedy_tokens_after_persistent_prompt_cache_restore() {
     require_persistent_prompt_cache_qualification_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let model_directory = crate::common::configured_model_artifact_directory_by_id(
-            QWEN3_6_35B_A3B_EIGHT_BIT_MODEL_ID,
+            QWEN3_6_35B_A3B_OQ6E_MTP_MODEL_ID,
         );
         let (first_generated_token_ids, second_generated_token_ids) =
             run_persistent_prompt_cache_greedy_parity_qualification(
@@ -161,7 +163,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         248_069,
         model_directory.to_path_buf(),
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
-        false,
+        true,
     )
     .expect("the engine should accept the prompt-cache directory");
     qwen3_5_engine

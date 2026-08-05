@@ -129,15 +129,18 @@ impl Qwen3_5EngineState {
                 .count();
             let has_precomputed_visual_embeddings = inference_request.has_visual_embeddings();
             let has_processed_visual_images = inference_request.has_processed_visual_images();
+            let persistent_prompt_cache_is_available = self.persistent_prompt_cache.is_some();
+            // Persistent snapshots currently contain target decoder state only. Prefer target-only
+            // execution whenever the cache is available so MTP artifacts retain prompt reuse
+            // without restoring an incompatible shifted MTP history.
             let mtp_is_eligible = self.mtp_enabled
                 && self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active
                 && model_has_mtp_head
                 && inference_request.sampling_strategy() == Qwen3_5SamplingStrategy::Greedy
                 && !has_precomputed_visual_embeddings
-                && !has_processed_visual_images;
-            // Target-only persistent snapshots cannot restore MTP's shifted prompt history.
-            let can_use_persistent_prompt_cache =
-                !has_precomputed_visual_embeddings && !mtp_is_eligible;
+                && !has_processed_visual_images
+                && !persistent_prompt_cache_is_available;
+            let can_use_persistent_prompt_cache = !has_precomputed_visual_embeddings;
             let ordered_image_sha256_digests = if has_processed_visual_images {
                 inference_request
                     .processed_visual_images()

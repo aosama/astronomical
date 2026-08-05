@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use super::block_key::PersistentPromptCacheBlockKey;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
@@ -19,7 +19,7 @@ use super::disk_store_global_quota::prepare_prompt_cache_directory_tree;
 use super::disk_store_index::PersistentPromptCacheDiskStoreIndex;
 use super::disk_store_scan::scan_current_format_directory;
 use super::model_contract::PersistentPromptCacheModelContract;
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::{MlxArray, MlxRuntime, PositionalFileReadMetrics};
 use std::collections::HashMap;
 
 const KV_BLOCKS_DIRECTORY_NAME: &str = "kv_blocks";
@@ -216,11 +216,13 @@ impl PersistentPromptCacheDiskStore {
         &self,
         runtime: &MlxRuntime,
         persistent_prompt_cache_block_key: &PersistentPromptCacheBlockKey,
+        positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Option<HashMap<String, MlxArray>>, PersistentPromptCacheDiskStoreError> {
         self.load_file_kind(
             runtime,
             persistent_prompt_cache_block_key,
             PersistentPromptCacheFileKind::SequenceStateBlock,
+            positional_file_read_metrics,
         )
     }
 
@@ -228,11 +230,13 @@ impl PersistentPromptCacheDiskStore {
         &self,
         runtime: &MlxRuntime,
         persistent_prompt_cache_block_key: &PersistentPromptCacheBlockKey,
+        positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Option<HashMap<String, MlxArray>>, PersistentPromptCacheDiskStoreError> {
         self.load_file_kind(
             runtime,
             persistent_prompt_cache_block_key,
             PersistentPromptCacheFileKind::BoundaryStateSnapshot,
+            positional_file_read_metrics,
         )
     }
 
@@ -241,6 +245,7 @@ impl PersistentPromptCacheDiskStore {
         runtime: &MlxRuntime,
         persistent_prompt_cache_block_key: &PersistentPromptCacheBlockKey,
         file_kind: PersistentPromptCacheFileKind,
+        positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Option<HashMap<String, MlxArray>>, PersistentPromptCacheDiskStoreError> {
         let block_file_path = {
             let tracked_files = self.lock_tracked_files();
@@ -286,7 +291,7 @@ impl PersistentPromptCacheDiskStore {
             });
         }
         let loaded_safetensors = runtime
-            .load_safetensors(block_file)
+            .load_safetensors(block_file, positional_file_read_metrics)
             .map_err(|source| PersistentPromptCacheDiskStoreError::LoadSafetensors { source })?;
         let mut tensors = HashMap::new();
         for tensor_name in expected_tensor_names(file_kind, &self.model_contract) {

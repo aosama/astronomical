@@ -281,24 +281,56 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "aligned_expert_pack_metal_io_logical_payload_bytes",
         ),
         (
-            PerformanceCounter::ExpertSsdReadCallCount,
-            "expert_ssd_read_call_count",
+            PerformanceCounter::AlignedExpertPackMetalIoRequestedByteCount,
+            "aligned_expert_pack_metal_io_requested_byte_count",
         ),
         (
-            PerformanceCounter::ExpertSsdReadByteCount,
-            "expert_ssd_read_byte_count",
+            PerformanceCounter::AlignedExpertPackMetalIoCommandCount,
+            "aligned_expert_pack_metal_io_command_count",
         ),
         (
-            PerformanceCounter::ExpertSsdReadElapsedNanoseconds,
-            "expert_ssd_read_elapsed_nanoseconds",
+            PerformanceCounter::AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds,
+            "aligned_expert_pack_metal_io_host_encoding_elapsed_nanoseconds",
         ),
         (
-            PerformanceCounter::ExpertSsdReadMaximumElapsedNanoseconds,
-            "expert_ssd_read_maximum_elapsed_nanoseconds",
+            PerformanceCounter::AlignedExpertPackMetalIoCompletedLoadCount,
+            "aligned_expert_pack_metal_io_completed_load_count",
         ),
         (
-            PerformanceCounter::ExpertSsdReadFailureCount,
-            "expert_ssd_read_failure_count",
+            PerformanceCounter::AlignedExpertPackMetalIoQueueElapsedNanoseconds,
+            "aligned_expert_pack_metal_io_queue_elapsed_nanoseconds",
+        ),
+        (
+            PerformanceCounter::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds,
+            "aligned_expert_pack_metal_io_maximum_queue_elapsed_nanoseconds",
+        ),
+        (
+            PerformanceCounter::AlignedExpertPackMetalIoFailureCount,
+            "aligned_expert_pack_metal_io_failure_count",
+        ),
+        (
+            PerformanceCounter::PositionalFileReadCallCount,
+            "positional_file_read_call_count",
+        ),
+        (
+            PerformanceCounter::PositionalFileReadByteCount,
+            "positional_file_read_byte_count",
+        ),
+        (
+            PerformanceCounter::PositionalFileReadElapsedNanoseconds,
+            "positional_file_read_elapsed_nanoseconds",
+        ),
+        (
+            PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds,
+            "positional_file_read_maximum_elapsed_nanoseconds",
+        ),
+        (
+            PerformanceCounter::PositionalFileReadMaximumConcurrentCount,
+            "positional_file_read_maximum_concurrent_count",
+        ),
+        (
+            PerformanceCounter::PositionalFileReadFailureCount,
+            "positional_file_read_failure_count",
         ),
         (
             PerformanceCounter::ExpertRoutePredictedExpertCount,

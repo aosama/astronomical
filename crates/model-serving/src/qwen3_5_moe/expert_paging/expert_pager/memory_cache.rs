@@ -304,7 +304,7 @@ impl ExpertPager {
                         load_quantized_expert_page(
                             runtime,
                             &cache_population_manifest,
-                            performance_attribution.expert_ssd_read_metrics(),
+                            performance_attribution.positional_file_read_metrics(),
                         )
                     },
                 )

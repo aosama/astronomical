@@ -78,6 +78,7 @@ pub(super) fn measure_metal_io_projections(
             aligned_expert_pack_path,
             metal_output_tensors,
             metal_load_ranges,
+            None,
         )
         .expect("Metal I/O should submit the selected expert tensor ranges");
     let projection_outputs = ["gate_proj", "up_proj", "down_proj"]

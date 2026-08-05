@@ -1,10 +1,68 @@
 use std::fs;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use astronomical_runtime_integration::{
-    MlxDtype, MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
+    MlxDtype, MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadRange,
+    MlxMetalExpertPackOutputTensor,
 };
 
 use crate::common::runtime_test_support::runtime;
+
+#[test]
+fn should_record_metal_io_completion_metrics_without_an_explicit_wait() {
+    const PACK_BYTE_COUNT: usize = 64 * 1024;
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let source_pack_path = temporary_directory.path().join("attributed.expert-pack");
+    fs::write(&source_pack_path, vec![0x5A_u8; PACK_BYTE_COUNT])
+        .expect("the test should write a synthetic expert pack");
+    let runtime = runtime();
+    let metal_expert_pack_load_metrics =
+        Arc::new(MlxMetalExpertPackLoadMetricsAccumulator::default());
+
+    let metal_expert_pack_load = runtime
+        .load_metal_expert_pack_ranges(
+            &source_pack_path,
+            &[MlxMetalExpertPackOutputTensor::new(
+                vec![
+                    i32::try_from(PACK_BYTE_COUNT / std::mem::size_of::<u32>())
+                        .expect("the output shape should fit i32"),
+                ],
+                MlxDtype::UInt32,
+            )],
+            &[MlxMetalExpertPackLoadRange::new(0, 0, 0, PACK_BYTE_COUNT)],
+            Some(Arc::clone(&metal_expert_pack_load_metrics)),
+        )
+        .expect("Metal I/O should submit with completion attribution");
+    let loaded_values = metal_expert_pack_load
+        .output_array(0)
+        .expect("the attributed output should exist")
+        .to_vec_u32()
+        .expect("the GPU should consume the attributed Metal I/O output");
+    assert_eq!(loaded_values.len(), PACK_BYTE_COUNT / size_of::<u32>());
+
+    let completion_deadline = Instant::now() + Duration::from_secs(1);
+    let metal_expert_pack_load_metrics_snapshot = loop {
+        let metrics_snapshot = metal_expert_pack_load_metrics.snapshot();
+        if metrics_snapshot.completed_load_count == 1 {
+            break metrics_snapshot;
+        }
+        assert!(
+            Instant::now() < completion_deadline,
+            "the native completion handler should report within one second"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    };
+    assert_eq!(
+        metal_expert_pack_load_metrics_snapshot.requested_byte_count,
+        PACK_BYTE_COUNT as u64
+    );
+    assert_eq!(metal_expert_pack_load_metrics_snapshot.command_count, 1);
+    assert!(metal_expert_pack_load_metrics_snapshot.host_encoding_elapsed_nanoseconds > 0);
+    assert!(metal_expert_pack_load_metrics_snapshot.queue_elapsed_nanoseconds > 0);
+    assert_eq!(metal_expert_pack_load_metrics_snapshot.failed_load_count, 0);
+}
 
 #[test]
 fn should_load_a_file_range_into_an_mlx_owned_metal_buffer_before_gpu_use() {
@@ -35,6 +93,7 @@ fn should_load_a_file_range_into_an_mlx_owned_metal_buffer_before_gpu_use() {
                 MlxDtype::UInt32,
             )],
             &[MlxMetalExpertPackLoadRange::new(0, 0, 0, PACK_BYTE_COUNT)],
+            None,
         )
         .expect("Metal I/O should submit the synthetic expert pack range");
 
@@ -84,9 +143,40 @@ fn should_reject_a_metal_expert_pack_range_that_exceeds_its_source_file() {
             MlxDtype::UInt32,
         )],
         &[MlxMetalExpertPackLoadRange::new(0, 0, 1, 64 * 1024)],
+        None,
     );
 
     assert!(load_outcome.is_err());
+}
+
+#[test]
+fn should_release_attribution_ownership_when_metal_io_submission_is_rejected() {
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let source_pack_path = temporary_directory
+        .path()
+        .join("invalid-attributed.expert-pack");
+    fs::write(&source_pack_path, vec![0_u8; 64 * 1024])
+        .expect("the test should write a synthetic expert pack");
+    let metal_expert_pack_load_metrics =
+        Arc::new(MlxMetalExpertPackLoadMetricsAccumulator::default());
+
+    let load_outcome = runtime().load_metal_expert_pack_ranges(
+        &source_pack_path,
+        &[MlxMetalExpertPackOutputTensor::new(
+            vec![16_384],
+            MlxDtype::UInt32,
+        )],
+        &[MlxMetalExpertPackLoadRange::new(0, 0, 1, 64 * 1024)],
+        Some(Arc::clone(&metal_expert_pack_load_metrics)),
+    );
+
+    assert!(load_outcome.is_err());
+    assert_eq!(Arc::strong_count(&metal_expert_pack_load_metrics), 1);
+    assert_eq!(
+        metal_expert_pack_load_metrics.snapshot(),
+        MlxMetalExpertPackLoadMetricsAccumulator::default().snapshot()
+    );
 }
 
 #[test]
@@ -111,6 +201,7 @@ fn should_release_an_inflight_metal_load_without_an_explicit_completion_wait() {
                     MlxDtype::UInt32,
                 )],
                 &[MlxMetalExpertPackLoadRange::new(0, 0, 0, PACK_BYTE_COUNT)],
+                None,
             )
             .expect("Metal I/O should submit before immediate owner release");
 
@@ -182,6 +273,7 @@ fn should_assemble_noncontiguous_ranges_into_multiple_mlx_owned_output_buffers()
                     range_byte_count,
                 ),
             ],
+            None,
         )
         .expect("Metal I/O should submit noncontiguous ranges for multiple outputs");
 

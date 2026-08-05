@@ -45,7 +45,7 @@ impl Qwen3_5VisionWeights {
             // The artifact either embeds visual weights or has none.
             return Ok(None);
         };
-        let vision_sidecar = runtime.load_safetensors(vision_sidecar_file.into_file())?;
+        let vision_sidecar = runtime.load_safetensors(vision_sidecar_file.into_file(), None)?;
 
         let mut bound_tensors = HashMap::with_capacity(vision_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;

@@ -16,6 +16,7 @@ use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::PersistentPromptCacheSerializedFileWriter;
 use super::disk_store_write::{
     PersistentPromptCacheSerializationOutcome, PersistentPromptCacheSerializedBlock,
+    estimated_serialized_safetensors_file_byte_count,
 };
 
 const MAXIMUM_PENDING_SERIALIZED_BYTES: u64 = 256_000_000;
@@ -186,6 +187,16 @@ impl PersistentPromptCacheWriteQueue {
             .contains(&persistent_prompt_cache_block_hash)
         {
             return Ok(PersistentPromptCacheWriteQueueOutcome::AlreadyQueued);
+        }
+        let estimated_serialized_byte_count =
+            estimated_serialized_safetensors_file_byte_count(kv_block_tensors).saturating_add(
+                estimated_serialized_safetensors_file_byte_count(recurrent_snapshot_tensors),
+            );
+        if !persistent_prompt_cache_write_queue_can_accept(
+            self.pending_serialized_bytes.load(Ordering::Acquire),
+            estimated_serialized_byte_count,
+        ) {
+            return Ok(PersistentPromptCacheWriteQueueOutcome::DroppedBecauseQueueIsFull);
         }
         let serialization_outcome = self
             .disk_store

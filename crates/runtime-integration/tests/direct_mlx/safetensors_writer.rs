@@ -35,7 +35,7 @@ fn should_save_multiple_arrays_and_metadata_through_a_retained_file_descriptor()
     let saved_cache_file =
         File::open(&cache_file_path).expect("the test should reopen the saved cache file");
     let saved_tensors = runtime
-        .load_safetensors(saved_cache_file)
+        .load_safetensors(saved_cache_file, None)
         .expect("MLX should load the file written through its official writer");
     let restored_first_tensor = saved_tensors
         .tensor("layer_0_recurrent")
@@ -81,6 +81,7 @@ fn should_serialize_safetensors_to_memory_before_background_file_writing() {
     let restored_safetensors = runtime
         .load_safetensors(
             File::open(serialized_file_path).expect("the test should reopen serialized bytes"),
+            None,
         )
         .expect("MLX should load the memory-serialized safetensors");
     assert_eq!(

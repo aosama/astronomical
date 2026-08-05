@@ -64,7 +64,7 @@ async fn run_representative_fully_resident_target_only_decode() {
         BENCHMARK_INPUT_TOKEN_COUNT, BENCHMARK_OUTPUT_TOKEN_COUNT,
     );
     let (mut target_only_engine, _temporary_log_directory, _performance_attribution_log_path) =
-        load_mtp_test_engine(&model_directory, false).await;
+        load_mtp_test_engine(&model_directory, false, false).await;
     target_only_engine
         .load()
         .await
@@ -100,7 +100,7 @@ async fn run_representative_fully_resident_target_only_decode_attribution() {
     let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
     let benchmark_prompt_cases = prepare_benchmark_prompt_cases(&model_directory);
     let (mut target_only_engine, _temporary_log_directory, performance_attribution_log_path) =
-        load_mtp_test_engine(&model_directory, false).await;
+        load_mtp_test_engine(&model_directory, false, false).await;
     target_only_engine
         .load()
         .await
@@ -355,7 +355,7 @@ async fn run_engine_benchmark_cases(
     request_id_base: u64,
 ) -> Vec<BenchmarkMeasurement> {
     let (mut engine, _temporary_log_directory, _performance_attribution_log_path) =
-        load_mtp_test_engine(model_directory, mtp_enabled).await;
+        load_mtp_test_engine(model_directory, mtp_enabled, false).await;
     let engine_load_result = engine
         .load()
         .await
