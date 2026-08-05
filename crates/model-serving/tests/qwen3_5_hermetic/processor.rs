@@ -2,8 +2,18 @@ use astronomical_ipc_protocol::ChatGenerationFailureReason;
 use astronomical_model_serving::{
     MalformedModelOutputDiagnostic, ModelGenerationOutputError, Qwen3_5ImageProcessingError,
     Qwen3_5OutputParserError, Qwen3_5RequestOutputError, Qwen3_5TokenizerError,
-    translate_qwen3_5_preparation_error, translate_request_output_error,
+    qwen3_5_request_enables_thinking, translate_qwen3_5_preparation_error,
+    translate_request_output_error,
 };
+
+#[test]
+fn should_disable_thinking_for_a_zero_budget_without_removing_model_capability() {
+    assert!(!qwen3_5_request_enables_thinking(true, Some(0)));
+    assert!(qwen3_5_request_enables_thinking(true, Some(512)));
+    assert!(qwen3_5_request_enables_thinking(true, None));
+    assert!(!qwen3_5_request_enables_thinking(false, None));
+    assert!(!qwen3_5_request_enables_thinking(false, Some(512)));
+}
 
 #[test]
 fn should_map_a_tokenizer_error_as_fatal_not_malformed() {
