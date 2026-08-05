@@ -24,6 +24,25 @@ fn should_render_one_user_turn_with_the_pinned_ornith_thinking_prefix() {
 }
 
 #[test]
+fn should_render_one_user_turn_with_a_closed_thinking_block_when_thinking_is_disabled() {
+    let rendered_prompt = Qwen3_5PromptRenderer::render(
+        &[ChatMessage::User {
+            content: "Inspect src.".to_owned(),
+            images: Vec::new(),
+        }],
+        &[],
+        false,
+        &[],
+    )
+    .expect("a bounded user-only Ornith conversation should render");
+
+    assert_eq!(
+        rendered_prompt,
+        "<|im_start|>user\nInspect src.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    );
+}
+
+#[test]
 fn should_render_vision_markers_with_the_correct_image_pad_token_count_per_image() {
     let rendered_prompt = Qwen3_5PromptRenderer::render(
         &[ChatMessage::User {
@@ -177,5 +196,18 @@ fn should_render_model_visible_correction_as_tool_response_then_reopen_assistant
     assert_eq!(
         rendered_correction,
         "<|im_end|>\n<|im_start|>user\n<tool_response>\nThe previous tool call requested undeclared function 'open_brain', but no tool with that exact name exists. Please correct the tool call by using one of the exact declared tool names.\n</tool_response><|im_end|>\n<|im_start|>assistant\n<think>\n"
+    );
+}
+
+#[test]
+fn should_render_model_visible_correction_with_closed_thinking_when_thinking_is_disabled() {
+    let rendered_correction = Qwen3_5PromptRenderer::render_model_visible_correction(
+        "Please correct the tool call.",
+        false,
+    );
+
+    assert_eq!(
+        rendered_correction,
+        "<|im_end|>\n<|im_start|>user\n<tool_response>\nPlease correct the tool call.\n</tool_response><|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
     );
 }

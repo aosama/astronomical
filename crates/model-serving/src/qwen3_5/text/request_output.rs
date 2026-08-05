@@ -12,6 +12,7 @@ use crate::MalformedModelOutputDiagnostic;
 pub struct Qwen3_5RequestOutput {
     output_parser: Qwen3_5OutputParser,
     token_decoder: Qwen3_5TokenDecoder,
+    enable_thinking: bool,
 }
 
 impl Qwen3_5RequestOutput {
@@ -30,7 +31,14 @@ impl Qwen3_5RequestOutput {
         Ok(Self {
             output_parser,
             token_decoder: tokenizer.incremental_decoder(),
+            enable_thinking,
         })
+    }
+
+    /// Returns whether this request's parser uses the reasoning-prefixed state.
+    #[must_use]
+    pub const fn enable_thinking(&self) -> bool {
+        self.enable_thinking
     }
 
     /// Decodes and parses one generated model token at a stable engine boundary.
