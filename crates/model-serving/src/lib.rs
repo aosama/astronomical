@@ -1,18 +1,10 @@
 #![forbid(unsafe_code)]
 
-mod adaptive_ram_growth_guard;
-mod bounded_safetensors;
-mod bounded_safetensors_header;
+mod artifact_validation;
 mod decoder_cache;
 mod engine_backed_worker;
-mod engine_backed_worker_construction;
-mod engine_backed_worker_fatal;
-mod engine_backed_worker_output;
-mod engine_backed_worker_protocol;
-mod engine_backed_worker_support;
-mod error;
 mod inference_engine;
-mod mlx_memory_telemetry;
+mod memory;
 mod model_generation_processor;
 mod performance_attribution;
 mod persistent_cache;
@@ -20,14 +12,12 @@ mod persistent_cache;
 mod prefill_chunck_size_optimizer;
 mod qwen3_5;
 mod qwen3_5_moe;
-mod required_files;
-mod safetensors_dtype;
-mod types;
-mod validated_artifact;
+mod safetensors;
 
-pub use adaptive_ram_growth_guard::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection,
+#[doc(hidden)]
+pub use artifact_validation::validate_required_file_for_tests;
+pub use artifact_validation::{
+    ArtifactValidationError, RequiredFileProfile, TensorDtype, TensorProfile, ValidatedWeightsFile,
 };
 #[cfg(feature = "direct-mlx")]
 pub use decoder_cache::{
@@ -40,16 +30,16 @@ pub use decoder_cache::{
     DecoderCacheLayout, DecoderCacheLayoutError, DecoderCachePersistedTensorLayout,
     DecoderCacheTensorDtype, DecoderCacheTensorLayout,
 };
-pub use engine_backed_worker::EngineBackedWorker;
-pub use engine_backed_worker_support::{ModelFactory, WorkerRuntimeError};
-pub use error::ArtifactValidationError;
+pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngine, InferenceEngineError, MlxInferenceEngine, MlxInferenceExecution,
     PreparedInferenceRequest,
 };
-pub use mlx_memory_telemetry::{
-    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+pub use memory::{
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
+    AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection, MlxActiveMemoryBreakdown,
+    MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
 };
 pub use model_generation_processor::{
     MalformedModelOutputDiagnostic, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
@@ -145,10 +135,6 @@ pub use qwen3_5_moe::{
     validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
 };
 pub use qwen3_5_moe::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION};
-#[doc(hidden)]
-pub use required_files::validate_required_file_for_tests;
-pub use types::{RequiredFileProfile, TensorDtype, TensorProfile};
-pub use validated_artifact::ValidatedWeightsFile;
 
 /// Validates a safetensors shard where some tensors have strict dtype/shape profiles
 /// and remaining tensors are accepted by name only.
@@ -160,8 +146,8 @@ pub fn validate_bounded_safetensors_with_partial_profiles(
     weights_file_name: &str,
     profiled_tensor_profiles: &[TensorProfile],
     accepted_extra_tensor_names: &std::collections::HashSet<&str>,
-) -> Result<bounded_safetensors::PartialProfileMetadata, ArtifactValidationError> {
-    bounded_safetensors::validate_bounded_safetensors_with_partial_profiles(
+) -> Result<artifact_validation::PartialProfileMetadata, ArtifactValidationError> {
+    artifact_validation::validate_bounded_safetensors_with_partial_profiles(
         weights_file,
         file_size_bytes,
         weights_file_name,
@@ -183,8 +169,8 @@ pub fn validate_bounded_safetensors_with_permissive_extras(
     file_size_bytes: u64,
     weights_file_name: &str,
     profiled_tensor_profiles: &[TensorProfile],
-) -> Result<bounded_safetensors::PartialProfileMetadata, ArtifactValidationError> {
-    bounded_safetensors::validate_bounded_safetensors_with_permissive_extras(
+) -> Result<artifact_validation::PartialProfileMetadata, ArtifactValidationError> {
+    artifact_validation::validate_bounded_safetensors_with_permissive_extras(
         weights_file,
         file_size_bytes,
         weights_file_name,

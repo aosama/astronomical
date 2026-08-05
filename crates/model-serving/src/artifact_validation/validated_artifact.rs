@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::os::unix::fs::MetadataExt;
 
-use crate::ArtifactValidationError;
+use super::ArtifactValidationError;
 
 /// An open required-file descriptor whose identity was checked during validation.
 #[derive(Debug)]

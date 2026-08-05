@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::TensorProfile;
+use crate::artifact_validation::TensorProfile;
 use crate::qwen3_5::Qwen3_5Config;
 use crate::qwen3_5::artifacts::mtp_tensor_namespace::{
     append_qwen3_5_mtp_quantized_affine_tensor_names,

@@ -2,6 +2,7 @@ mod adaptive_ram_growth_guard;
 mod artifact_validator;
 mod decoder_cache;
 mod engine_backed_worker;
+mod model_serving_package_structure;
 mod performance_attribution;
 mod persistent_cache_structure;
 mod prefill_chunck_size_optimizer;

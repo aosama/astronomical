@@ -9,7 +9,7 @@ use std::path::Path;
 
 use thiserror::Error;
 
-use crate::bounded_safetensors_header::{
+use crate::safetensors::{
     BoundedSafetensorsHeaderError, SAFETENSORS_HEADER_LENGTH_PREFIX_BYTES,
     read_bounded_safetensors_json_header,
 };

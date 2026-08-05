@@ -19,6 +19,7 @@ use tokio::{
 
 use crate::common::{discovered_model_artifact, single_model_directories};
 
+use super::deployment_litmus_model::configured_deployment_litmus_model;
 use super::model_artifact_rest_transport::{
     assert_streamed_model_text_mentions_red, send_http_request,
     streamed_model_text_from_chat_response,
@@ -27,6 +28,8 @@ use super::model_artifact_rest_transport::{
 pub(super) const E2E_TIMEOUT: Duration = Duration::from_secs(115);
 const MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
 const READY_ATTEMPT_LIMIT: u8 = 70;
+// The litmus checks Responses completion and worker reuse, not long output volume.
+const DEPLOYMENT_LITMUS_RESPONSES_MAX_OUTPUT_TOKENS: u32 = 512;
 pub(super) const DEPLOYMENT_LITMUS_PROMPT: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
@@ -139,7 +142,14 @@ async fn run_model_artifact_request_and_return_response_with_server(
 }
 
 async fn run_deployed_rest_surface_litmus() {
-    let model_artifact_rest_server = launch_model_artifact_rest_server().await;
+    let selected_deployment_litmus_model = configured_deployment_litmus_model();
+    let deployment_litmus_model_id = selected_deployment_litmus_model.model_id;
+    let model_artifact_rest_server = launch_model_artifact_rest_server_for_model(
+        &deployment_litmus_model_id,
+        selected_deployment_litmus_model.model_directory,
+        None,
+    )
+    .await;
     let server_address = model_artifact_rest_server.server_address;
     let repeated_long_prompt = format!(
         "{}\n\nReply with exactly OK.",
@@ -147,13 +157,17 @@ async fn run_deployed_rest_surface_litmus() {
     );
     let first_chat_response = post_chat_completion(
         server_address,
-        deployment_litmus_chat_request_body(&repeated_long_prompt),
+        deployment_litmus_chat_request_body(&deployment_litmus_model_id, &repeated_long_prompt),
     )
     .await;
     assert_successful_streaming_chat_response(&first_chat_response);
     eprintln!("[deployment-litmus 1/4] status=success phase=initial_long_chat_request");
 
-    let short_chat_response = post_chat_completion(server_address, text_chat_request_body()).await;
+    let short_chat_response = post_chat_completion(
+        server_address,
+        text_chat_request_body_for_model(&deployment_litmus_model_id),
+    )
+    .await;
     assert_successful_streaming_chat_response(&short_chat_response);
     eprintln!("[deployment-litmus 2/4] status=success phase=intervening_short_chat_request");
 
@@ -162,7 +176,7 @@ async fn run_deployed_rest_surface_litmus() {
     );
     let second_long_chat_response = post_chat_completion(
         server_address,
-        deployment_litmus_chat_request_body(&reused_prompt),
+        deployment_litmus_chat_request_body(&deployment_litmus_model_id, &reused_prompt),
     )
     .await;
     assert_successful_streaming_chat_response(&second_long_chat_response);
@@ -170,7 +184,7 @@ async fn run_deployed_rest_surface_litmus() {
 
     let reused_prompt_responses_response = post_responses_completion(
         server_address,
-        deployment_litmus_responses_request_body(&reused_prompt),
+        deployment_litmus_responses_request_body(&deployment_litmus_model_id, &reused_prompt),
     )
     .await;
     assert_successful_streaming_responses_response(&reused_prompt_responses_response);
@@ -353,7 +367,7 @@ pub(super) fn text_chat_request_body_for_model(model_id: &str) -> String {
     .to_string()
 }
 
-fn deployment_litmus_chat_request_body(user_prompt: &str) -> String {
+fn deployment_litmus_chat_request_body(model_id: &str, user_prompt: &str) -> String {
     let production_shaped_tools = (0..67)
         .map(|tool_number| {
             json!({
@@ -371,7 +385,7 @@ fn deployment_litmus_chat_request_body(user_prompt: &str) -> String {
         })
         .collect::<Vec<_>>();
     json!({
-        "model": MODEL_ID,
+        "model": model_id,
         "messages": [{
             "role": "user",
             "content": user_prompt,
@@ -384,12 +398,13 @@ fn deployment_litmus_chat_request_body(user_prompt: &str) -> String {
     .to_string()
 }
 
-fn deployment_litmus_responses_request_body(user_prompt: &str) -> String {
+fn deployment_litmus_responses_request_body(model_id: &str, user_prompt: &str) -> String {
     json!({
-        "model": MODEL_ID,
+        "model": model_id,
+        "instructions": "Reply with exactly OK and nothing else. Do not provide reasoning or explanation.",
         "input": user_prompt,
         "stream": true,
-        "max_output_tokens": 20_480,
+        "max_output_tokens": DEPLOYMENT_LITMUS_RESPONSES_MAX_OUTPUT_TOKENS,
     })
     .to_string()
 }

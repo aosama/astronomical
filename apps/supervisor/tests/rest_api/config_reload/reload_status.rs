@@ -133,7 +133,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
             .join(".astronomical")
             .join("optimizer"),
         performance_attribution_enabled: false,
-        mtp_enabled: false,
+        mtp_enabled: true,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             config_home_directory.join(".astronomical").join("cache"),
             50_000_000_000,
