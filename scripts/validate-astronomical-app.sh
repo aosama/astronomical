@@ -360,11 +360,6 @@ main() {
         exit 1
     fi
 
-    model_preparer_executable="${app_bundle_path}/Contents/MacOS/astronomical-model-preparer"
-    if [ ! -x "$model_preparer_executable" ]; then
-        print_error "model preparer executable not found or not executable: ${model_preparer_executable}"
-        exit 1
-    fi
     app_license_path="${app_bundle_path}/Contents/Resources/LICENSE"
     if [ ! -f "$app_license_path" ]; then
         print_error "app license not found: ${app_license_path}"
@@ -380,13 +375,6 @@ main() {
         print_error "Rust dependency notices not found or empty: ${rust_dependency_notices_path}"
         exit 1
     fi
-    start_step "model-preparer-help"
-    if ! "$model_preparer_executable" --help >/dev/null; then
-        print_error "model preparer help command failed"
-        finish_step "model-preparer-help" "failed"
-        exit 1
-    fi
-    finish_step "model-preparer-help" "success"
 
     config_path="${HOME}/.astronomical/config.json"
     if [ ! -f "$config_path" ]; then

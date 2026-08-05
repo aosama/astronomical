@@ -215,8 +215,6 @@ pub struct WorkerHealthSnapshot {
     pub active_request_progress: Option<ActiveRequestProgress>,
     /// Latest worker-reported sparse-expert residency.
     pub expert_memory_mode: Option<ExpertMemoryMode>,
-    /// Expert file layout selected by the loaded model.
-    pub expert_storage_format: Option<astronomical_ipc_protocol::ExpertStorageFormat>,
     /// Actual MTP runtime state: Disabled, TargetOnly, Active, or Unavailable.
     pub mtp_runtime_state: MtpRuntimeState,
     /// Concise reason when MTP runtime state is Unavailable.
@@ -243,7 +241,6 @@ impl WorkerHealthSnapshot {
     pub fn ready_with_model(
         model_id: String,
         capabilities: ChatModelCapabilities,
-        expert_storage_format: astronomical_ipc_protocol::ExpertStorageFormat,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
     ) -> Self {
@@ -254,7 +251,6 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: Some(capabilities),
             active_request_progress: None,
             expert_memory_mode: None,
-            expert_storage_format: Some(expert_storage_format),
             mtp_runtime_state,
             mtp_unavailable_reason,
             persistent_prompt_cache_stats: None,
@@ -273,7 +269,6 @@ impl WorkerHealthSnapshot {
     pub fn ready_with_replacement_model(
         model_id: String,
         capabilities: ChatModelCapabilities,
-        expert_storage_format: astronomical_ipc_protocol::ExpertStorageFormat,
         minimum_mlx_memory_ceiling_bytes: u64,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
@@ -282,7 +277,6 @@ impl WorkerHealthSnapshot {
         let mut replacement_health_snapshot = Self::ready_with_model(
             model_id,
             capabilities,
-            expert_storage_format,
             mtp_runtime_state,
             mtp_unavailable_reason,
         );
@@ -320,7 +314,6 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: None,
             active_request_progress: None,
             expert_memory_mode: None,
-            expert_storage_format: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             persistent_prompt_cache_stats: None,
@@ -344,7 +337,6 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: None,
             active_request_progress: None,
             expert_memory_mode: None,
-            expert_storage_format: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             persistent_prompt_cache_stats: None,

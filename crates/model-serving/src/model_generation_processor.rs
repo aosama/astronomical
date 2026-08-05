@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ExpertStorageFormat,
-    MtpRuntimeState, WorkerEvent,
+    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, MtpRuntimeState,
+    WorkerEvent,
 };
 use serde::Serialize;
 
@@ -16,7 +16,6 @@ pub trait ModelGenerationProcessor {
     /// Reports the exact loaded model identity and output capabilities.
     fn ready_event(
         &self,
-        expert_storage_format: ExpertStorageFormat,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
     ) -> WorkerEvent;

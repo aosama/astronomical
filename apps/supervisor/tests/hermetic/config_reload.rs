@@ -185,6 +185,21 @@ fn should_classify_prompt_cache_capacity_change_as_worker_restart() {
 }
 
 #[test]
+fn should_restart_worker_when_persistent_prompt_cache_flag_changes() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.persistent_prompt_cache_enabled = false;
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(
+        matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields.contains(&"persistent_prompt_cache_enabled".to_owned())),
+        "changing the persistent prompt-cache flag must restart the worker, got {decision:?}"
+    );
+}
+
+#[test]
 fn should_mark_logging_level_change_as_rest_api_restart_required() {
     let mut current = sample_resolved_config();
     current.logging_config = LoggingConfig::new(PathBuf::from("/tmp/logs"), LogLevel::Warn, 7);
@@ -210,6 +225,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         config_warning: None,
         prefill_chunck_sizing_policy: PrefillChunckSizingPolicy::Optimized,
         optimizer_state_directory: PathBuf::from("/tmp/astronomical-optimizer"),
+        persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
         prompt_cache_config: PromptCacheConfig::new(

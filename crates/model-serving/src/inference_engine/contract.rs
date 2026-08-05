@@ -1,9 +1,7 @@
 use std::future::Future;
 
 use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
-use astronomical_ipc_protocol::{
-    ExpertMemoryMode, ExpertStorageFormat, MtpRuntimeState, RequestId, WorkerEvent,
-};
+use astronomical_ipc_protocol::{ExpertMemoryMode, MtpRuntimeState, RequestId, WorkerEvent};
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
 pub trait InferenceEngine {
@@ -135,18 +133,16 @@ pub trait MlxInferenceExecution: 'static {
 /// Result of loading engine resources, including MTP runtime state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EngineLoadResult {
-    expert_storage_format: ExpertStorageFormat,
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
     minimum_mlx_memory_ceiling_bytes: u64,
 }
 
 impl EngineLoadResult {
-    /// Creates a load result with the given expert storage format and default MTP state.
+    /// Creates a load result with the default MTP state.
     #[must_use]
-    pub fn new(expert_storage_format: ExpertStorageFormat) -> Self {
+    pub fn new() -> Self {
         Self {
-            expert_storage_format,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             minimum_mlx_memory_ceiling_bytes: 1,
@@ -175,12 +171,6 @@ impl EngineLoadResult {
     ) -> Self {
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
         self
-    }
-
-    /// Returns the expert storage format.
-    #[must_use]
-    pub const fn expert_storage_format(&self) -> ExpertStorageFormat {
-        self.expert_storage_format
     }
 
     /// Returns the MTP runtime state.

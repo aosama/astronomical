@@ -7,6 +7,16 @@ members = [
     "crates/model-serving",
     "crates/rest-contract",
     "crates/runtime-integration",
+    "experimental/aligned-expert-packs",
+]
+default-members = [
+    "apps/inference-worker",
+    "apps/supervisor",
+    "crates/config",
+    "crates/ipc-protocol",
+    "crates/model-serving",
+    "crates/rest-contract",
+    "crates/runtime-integration",
 ]
 resolver = "3"
 

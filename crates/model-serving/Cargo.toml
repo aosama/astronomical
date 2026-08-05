@@ -7,11 +7,6 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
-[[bin]]
-name = "astronomical-model-preparer"
-path = "src/bin/astronomical-model-preparer.rs"
-required-features = ["direct-mlx"]
-
 [lints]
 workspace = true
 

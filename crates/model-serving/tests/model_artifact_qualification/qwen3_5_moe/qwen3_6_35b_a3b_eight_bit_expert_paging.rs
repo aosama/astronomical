@@ -121,7 +121,8 @@ async fn run_representative_performance_probe() {
         "Qwen3.6-35B-A3B-8bit",
         REPRESENTATIVE_INPUT_TOKEN_COUNT,
         REPRESENTATIVE_OUTPUT_TOKEN_COUNT as u16,
-    );
+    )
+    .expect("the Qwen3.6 eight-bit prompt should prepare at the exact requested length");
     let (qwen3_5_model, config) = load_paged_model().await;
     run_representative_performance_probe_for_loaded_model(
         &qwen3_5_model,

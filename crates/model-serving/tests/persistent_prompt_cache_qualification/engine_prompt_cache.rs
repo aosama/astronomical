@@ -45,6 +45,7 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
         model_directory.to_path_buf(),
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
         false,
+        true,
     )
     .expect("the bounded Qwen3.6 engine settings should be valid");
     qwen3_5_engine
@@ -163,6 +164,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         248_069,
         model_directory.to_path_buf(),
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        true,
         true,
     )
     .expect("the engine should accept the prompt-cache directory");

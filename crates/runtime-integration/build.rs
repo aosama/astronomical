@@ -1,7 +1,7 @@
 use std::{
     env,
     error::Error,
-    fs::File,
+    fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
     process::Command,
@@ -10,6 +10,8 @@ use std::{
 use sha2::{Digest, Sha256};
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
+const EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE: &str =
+    "CARGO_FEATURE_EXPERIMENTAL_ALIGNED_EXPERT_PACKS";
 const MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX_MEMORY_CONTRACT_PROBE";
 const RUSTC_WRAPPER_VARIABLE: &str = "RUSTC_WRAPPER";
 const NATIVE_DEPENDENCY_CACHE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
@@ -46,6 +48,7 @@ const NATIVE_ARCHIVE_VARIABLES: [&str; 5] = [
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-env-changed={MLX_FEATURE_VARIABLE}");
+    println!("cargo:rerun-if-env-changed={EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE}");
     println!("cargo:rerun-if-env-changed={MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE}");
     println!("cargo:rerun-if-env-changed={RUSTC_WRAPPER_VARIABLE}");
     println!("cargo:rerun-if-env-changed={NATIVE_DEPENDENCY_CACHE_VARIABLE}");
@@ -61,6 +64,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let native_source_directory = manifest_directory.join("native");
     let should_build_memory_contract_probe =
         env::var_os(MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE).is_some();
+    let should_build_experimental_aligned_expert_packs =
+        env::var_os(EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE).is_some();
 
     let mut configure_command = Command::new("cmake");
     configure_command
@@ -87,6 +92,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         configure_command.arg("-DASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE=OFF");
     }
+    if should_build_experimental_aligned_expert_packs {
+        configure_command.arg("-DASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS=ON");
+    } else {
+        configure_command.arg("-DASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS=OFF");
+    }
     if let Some(native_dependency_cache_directory) = native_dependency_cache_directory() {
         println!(
             "cargo:rerun-if-changed={}",
@@ -112,8 +122,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg("--build")
         .arg(&native_build_directory)
         .arg("--target")
-        .arg("mlxc")
-        .arg("astronomical_metal_expert_loader")
+        .arg("mlxc");
+    if should_build_experimental_aligned_expert_packs {
+        native_build_command.arg("astronomical_metal_expert_loader");
+    }
+    native_build_command
         .arg("--parallel")
         .arg(cargo_build_job_count());
     run_command(&mut native_build_command, "build the pinned MLX C runtime")?;
@@ -141,9 +154,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let mlx_c_source_directory = native_build_directory.join("_deps/mlx_c-src");
-    generate_bindings(&mlx_c_source_directory)?;
+    generate_bindings(
+        &mlx_c_source_directory,
+        should_build_experimental_aligned_expert_packs,
+    )?;
 
     let native_library_directory = native_build_directory.join("lib");
+    let experimental_native_library_path =
+        native_library_directory.join("libastronomical_metal_expert_loader.a");
+    let experimental_native_test_path = native_build_directory
+        .join("bin")
+        .join("astronomical_metal_expert_loader_native_tests");
+    if !should_build_experimental_aligned_expert_packs {
+        remove_stale_experimental_artifact(&experimental_native_library_path)?;
+        remove_stale_experimental_artifact(&experimental_native_test_path)?;
+    }
     require_file(
         &native_library_directory.join("libmlx.a"),
         "MLX static library",
@@ -152,10 +177,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         &native_library_directory.join("libmlxc.a"),
         "MLX C static library",
     )?;
-    require_file(
-        &native_library_directory.join("libastronomical_metal_expert_loader.a"),
-        "Astronomical Metal expert loader static library",
-    )?;
+    if should_build_experimental_aligned_expert_packs {
+        require_file(
+            &experimental_native_library_path,
+            "experimental Astronomical Metal expert loader static library",
+        )?;
+    }
     let metallib_path =
         native_build_directory.join("_deps/mlx-build/mlx/backend/metal/kernels/mlx.metallib");
     require_file(&metallib_path, "MLX AOT metallib")?;
@@ -166,7 +193,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         "cargo:rustc-link-search=native={}",
         native_library_directory.display()
     );
-    println!("cargo:rustc-link-lib=static=astronomical_metal_expert_loader");
+    if should_build_experimental_aligned_expert_packs {
+        println!("cargo:rustc-link-lib=static=astronomical_metal_expert_loader");
+    }
     println!("cargo:rustc-link-lib=static=mlxc");
     println!("cargo:rustc-link-lib=static=mlx");
     println!("cargo:rustc-link-lib=dylib=c++");
@@ -202,18 +231,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         "cargo:rerun-if-changed={}",
         native_source_directory.join("CMakeLists.txt").display()
     );
-    println!(
-        "cargo:rerun-if-changed={}",
-        native_source_directory
-            .join("astronomical_metal_expert_loader.h")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        native_source_directory
-            .join("astronomical_metal_expert_loader.cpp")
-            .display()
-    );
+    if should_build_experimental_aligned_expert_packs {
+        println!(
+            "cargo:rerun-if-changed={}",
+            native_source_directory
+                .join("experimental/aligned_expert_packs/astronomical_metal_expert_loader.h")
+                .display()
+        );
+        println!(
+            "cargo:rerun-if-changed={}",
+            native_source_directory
+                .join("experimental/aligned_expert_packs/astronomical_metal_expert_loader.cpp")
+                .display()
+        );
+    }
     println!(
         "cargo:rerun-if-changed={}",
         native_source_directory
@@ -278,11 +309,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn generate_bindings(mlx_c_source_directory: &Path) -> Result<(), Box<dyn Error>> {
+fn generate_bindings(
+    mlx_c_source_directory: &Path,
+    should_build_experimental_aligned_expert_packs: bool,
+) -> Result<(), Box<dyn Error>> {
     let mlx_c_header = mlx_c_source_directory.join("mlx/c/mlx.h");
     let astronomical_metal_expert_loader_header = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("native")
-        .join("astronomical_metal_expert_loader.h");
+        .join("experimental/aligned_expert_packs/astronomical_metal_expert_loader.h");
     let astronomical_metal_expert_loader_directory = astronomical_metal_expert_loader_header
         .parent()
         .ok_or_else(|| {
@@ -292,22 +326,24 @@ fn generate_bindings(mlx_c_source_directory: &Path) -> Result<(), Box<dyn Error>
             )
         })?;
     require_file(&mlx_c_header, "MLX C umbrella header")?;
-    require_file(
-        &astronomical_metal_expert_loader_header,
-        "Astronomical Metal expert loader header",
-    )?;
-    let bindings = bindgen::Builder::default()
+    let mut bindings_builder = bindgen::Builder::default()
         .header(mlx_c_header.to_string_lossy())
-        .header(astronomical_metal_expert_loader_header.to_string_lossy())
         .clang_arg(format!("-I{}", mlx_c_source_directory.display()))
-        .clang_arg(format!(
-            "-I{}",
-            astronomical_metal_expert_loader_directory.display()
-        ))
         .allowlist_function(BINDGEN_FUNCTION_ALLOWLIST)
-        .allowlist_type(BINDGEN_TYPE_ALLOWLIST)
-        .generate_comments(false)
-        .generate()?;
+        .allowlist_type(BINDGEN_TYPE_ALLOWLIST);
+    if should_build_experimental_aligned_expert_packs {
+        require_file(
+            &astronomical_metal_expert_loader_header,
+            "experimental Astronomical Metal expert loader header",
+        )?;
+        bindings_builder = bindings_builder
+            .header(astronomical_metal_expert_loader_header.to_string_lossy())
+            .clang_arg(format!(
+                "-I{}",
+                astronomical_metal_expert_loader_directory.display()
+            ));
+    }
+    let bindings = bindings_builder.generate_comments(false).generate()?;
     let bindings_path = required_path_variable("OUT_DIR")?.join("mlx_c_bindings.rs");
     bindings.write_to_file(bindings_path)?;
     Ok(())
@@ -371,6 +407,14 @@ fn require_file(file_path: &Path, description: &str) -> Result<(), Box<dyn Error
         return Err(format!("missing {description} at {}", file_path.display()).into());
     }
     Ok(())
+}
+
+fn remove_stale_experimental_artifact(artifact_path: &Path) -> Result<(), Box<dyn Error>> {
+    match fs::remove_file(artifact_path) {
+        Ok(()) => Ok(()),
+        Err(remove_error) if remove_error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(remove_error) => Err(remove_error.into()),
+    }
 }
 
 fn sha256_file_hex(file_path: &Path) -> Result<String, Box<dyn Error>> {

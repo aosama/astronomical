@@ -1,10 +1,11 @@
 use std::{fs::File, os::unix::fs::FileExt};
 
-use super::aligned_expert_pack::{
+use astronomical_model_serving::QuantizedTensorSource;
+
+use crate::aligned_expert_pack::{
     ALIGNED_EXPERT_PACK_HEADER_BYTES, ALIGNED_EXPERT_PACK_HEADER_PREFIX_BYTES,
     ALIGNED_EXPERT_PACK_MAGIC, AlignedExpertPackError, AlignedExpertPackTensorDescriptor,
 };
-use super::quantized_expert_manifest::QuantizedTensorSource;
 
 const PACK_COPY_SCRATCH_BYTES: usize = 64 * 1024;
 

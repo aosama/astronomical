@@ -26,6 +26,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         optimizer_state_directory: config_home_directory
             .join(".astronomical")
             .join("optimizer"),
+        persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
@@ -132,6 +133,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
         optimizer_state_directory: config_home_directory
             .join(".astronomical")
             .join("optimizer"),
+        persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: true,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(

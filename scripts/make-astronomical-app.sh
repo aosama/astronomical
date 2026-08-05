@@ -136,8 +136,7 @@ main() {
     # Cargo prints its own live compilation progress to stderr.
     cargo build --release \
         -p astronomical-inference-worker --bin astronomical-inference-worker \
-        -p astronomical-supervisor --bin astronomicald \
-        -p astronomical-model-serving --features direct-mlx --bin astronomical-model-preparer
+        -p astronomical-supervisor --bin astronomicald
     swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu"
     finish_phase "success"
 
@@ -171,8 +170,6 @@ main() {
        "${app_bundle_path}/Contents/MacOS/astronomicald"
     cp "${repository_root}/target/release/astronomical-inference-worker" \
        "${app_bundle_path}/Contents/MacOS/astronomical-inference-worker"
-    cp "${repository_root}/target/release/astronomical-model-preparer" \
-       "${app_bundle_path}/Contents/MacOS/astronomical-model-preparer"
     cp "${repository_root}/LICENSE" \
        "${app_bundle_path}/Contents/Resources/LICENSE"
     cp "${repository_root}/third-party/THIRD_PARTY_NOTICES" \
@@ -182,13 +179,12 @@ main() {
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-menu"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomicald"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-inference-worker"
-    chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-model-preparer"
 
     printf '  signing embedded executables...\n'
     # The macOS runtime signature monitor can reject linker-signed nested
     # executables even when static bundle verification succeeds. Sign each
     # executable before sealing the enclosing bundle.
-    for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker astronomical-model-preparer; do
+    for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
         codesign --force --sign - "${app_bundle_path}/Contents/MacOS/${bundled_executable_name}"
     done
 

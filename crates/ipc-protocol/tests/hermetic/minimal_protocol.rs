@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationOutput,
-    ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice, ExpertMemoryMode,
-    ExpertStorageFormat, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpRuntimeState,
-    ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
-    decode_command,
+    ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
+    MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
+    WorkerCommand, WorkerEvent, WorkerLogLevel, WorkerMlxMemorySnapshot,
+    WorkerPrefillChunckSizingPolicy, WorkerStartupConfiguration, decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -19,36 +21,37 @@ fn should_default_mtp_runtime_state_to_disabled() {
 }
 
 #[tokio::test]
-async fn should_round_trip_the_ready_models_astronomical_optimized_expert_storage_format() {
-    let worker_event = WorkerEvent::Ready {
-        model_id: "Ornith-1.0-35B-8bit".to_owned(),
-        capabilities: ChatModelCapabilities {
-            supports_reasoning: true,
-            supports_tool_calls: true,
-            has_vision: true,
-            max_input_tokens: 241_664,
-            max_output_tokens: 20_480,
-            context_window: 262_144,
+async fn should_round_trip_worker_startup_configuration() {
+    let worker_command = WorkerCommand::InitializeWorker(WorkerStartupConfiguration {
+        global_prompt_cache_root_directory: PathBuf::from("/tmp/fictional-prompt-cache"),
+        global_prompt_cache_maximum_size_bytes: 50_000_000_000,
+        persistent_prompt_cache_enabled: false,
+        prefill_chunck_sizing_policy: WorkerPrefillChunckSizingPolicy::Fixed {
+            fixed_prefill_chunck_tokens: 2_048,
         },
-        expert_storage_format: ExpertStorageFormat::AstronomicalAligned,
-        mtp_runtime_state: MtpRuntimeState::Disabled,
-        mtp_unavailable_reason: None,
-    };
+        optimizer_state_directory: None,
+        configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
+        mtp_enabled: true,
+        performance_attribution_enabled: false,
+        logging_directory: PathBuf::from("/tmp/fictional-logs"),
+        logging_level: WorkerLogLevel::Warn,
+        retained_log_file_count: 1,
+    });
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let mut worker_reader = ProtocolReader::new(worker_transport);
 
-    worker_writer
-        .send_event(&worker_event)
+    supervisor_writer
+        .send_command(&worker_command)
         .await
-        .expect("a ready event with expert storage format should be written");
+        .expect("worker startup configuration should be written");
 
     assert_eq!(
-        supervisor_reader
-            .next_event()
+        worker_reader
+            .next_command()
             .await
-            .expect("the ready event frame should decode"),
-        Some(worker_event)
+            .expect("worker startup configuration should decode"),
+        Some(worker_command)
     );
 }
 

@@ -7,7 +7,9 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{
+use astronomical_model_serving::{QuantizationMode, QuantizedExpertLayerPlan};
+
+use crate::{
     aligned_expert_pack_layout::{
         descriptor_from_source, ordered_tensor_sources, validate_segment_extent,
         validate_source_file_range,
@@ -15,7 +17,6 @@ use super::{
     aligned_expert_pack_positional_io::{
         compare_source_tensor_to_pack, copy_source_tensor_to_pack, write_header_region,
     },
-    quantized_expert_manifest::QuantizedExpertLayerPlan,
 };
 
 pub const ALIGNED_EXPERT_PACK_SEGMENT_ALIGNMENT_BYTES: u64 = 64 * 1024;
@@ -488,7 +489,7 @@ fn serialize_header_with_stable_length(
 
 fn quantization_mode_name(layer_plan: &QuantizedExpertLayerPlan) -> &'static str {
     match layer_plan.quantization_mode {
-        super::quantized_expert_manifest::QuantizationMode::Affine => "affine",
-        super::quantized_expert_manifest::QuantizationMode::NativeBfloat16 => "native_bfloat16",
+        QuantizationMode::Affine => "affine",
+        QuantizationMode::NativeBfloat16 => "native_bfloat16",
     }
 }
