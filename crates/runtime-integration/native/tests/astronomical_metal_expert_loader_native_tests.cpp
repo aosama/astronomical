@@ -227,7 +227,11 @@ void should_reject_source_overflow_and_empty_ranges(
       source_overflow_range.size(),
       gpu_stream.get(),
       output_arrays.data(),
-      &load_handle);
+      &load_handle,
+      nullptr,
+      nullptr,
+      nullptr,
+      nullptr);
   astronomical_metal_expert_loader_free(load_handle);
   free_output_arrays(output_arrays);
   require_condition(
@@ -247,7 +251,11 @@ void should_reject_source_overflow_and_empty_ranges(
       0,
       gpu_stream.get(),
       output_arrays.data(),
-      &load_handle);
+      &load_handle,
+      nullptr,
+      nullptr,
+      nullptr,
+      nullptr);
   astronomical_metal_expert_loader_free(load_handle);
   free_output_arrays(output_arrays);
   require_condition(
@@ -268,7 +276,11 @@ void should_reject_source_overflow_and_empty_ranges(
           partially_initialized_output_range.size(),
           gpu_stream.get(),
           output_arrays.data(),
-          &load_handle);
+          &load_handle,
+          nullptr,
+          nullptr,
+          nullptr,
+          nullptr);
   astronomical_metal_expert_loader_free(load_handle);
   free_output_arrays(output_arrays);
   require_condition(
@@ -475,7 +487,11 @@ void should_reject_overlapping_native_output_ranges(
       overlapping_load_ranges.size(),
       gpu_stream.get(),
       output_arrays.data(),
-      &load_handle);
+      &load_handle,
+      nullptr,
+      nullptr,
+      nullptr,
+      nullptr);
   astronomical_metal_expert_loader_free(load_handle);
   free_output_arrays(output_arrays);
 

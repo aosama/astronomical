@@ -12,6 +12,7 @@ use super::IMAGE_PAD_TOKEN_ID;
 pub(super) async fn load_mtp_test_engine(
     model_directory: &Path,
     mtp_enabled: bool,
+    attribute_model_loading: bool,
 ) -> (Qwen3_5Engine, tempfile::TempDir, PathBuf) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
@@ -41,7 +42,11 @@ pub(super) async fn load_mtp_test_engine(
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
         true,
         mtp_enabled,
-        PerformanceAttribution::disabled(),
+        if attribute_model_loading {
+            PerformanceAttribution::enabled()
+        } else {
+            PerformanceAttribution::disabled()
+        },
         performance_attribution_log,
     )
     .expect("the oQ4e MTP engine settings should be valid");
@@ -58,7 +63,7 @@ pub(super) async fn generate_with_mtp_engine(
     force_next_mtp_draft_rejection: bool,
 ) -> (Vec<u32>, serde_json::Value) {
     let (mut qwen3_5_engine, _temporary_log_directory, performance_attribution_log_path) =
-        load_mtp_test_engine(model_directory, true).await;
+        load_mtp_test_engine(model_directory, true, false).await;
     qwen3_5_engine
         .load()
         .await

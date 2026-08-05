@@ -39,6 +39,7 @@ pub(crate) fn discovered_model_artifact(
 }
 
 #[cfg(feature = "model-artifact-qualification")]
+#[allow(dead_code)] // Used only by model-artifact qualification test binaries.
 pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::DiscoveredModel> {
     let astronomical_config = astronomical_config::AstronomicalConfig::load_from_default_location()
         .expect("the standard Astronomical configuration should load for model qualification");

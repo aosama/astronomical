@@ -31,7 +31,11 @@ pub(super) struct EnabledPerformanceAttribution {
     pub(super) previous_token_expert_route_reuse_by_layer:
         Vec<PreviousTokenExpertRouteReuseMeasurement>,
     #[cfg(feature = "direct-mlx")]
-    pub(super) expert_ssd_read_metrics: Arc<astronomical_runtime_integration::ExpertSsdReadMetrics>,
+    pub(super) positional_file_read_metrics:
+        Arc<astronomical_runtime_integration::PositionalFileReadMetrics>,
+    #[cfg(feature = "direct-mlx")]
+    pub(super) metal_expert_pack_load_metrics:
+        Arc<astronomical_runtime_integration::MlxMetalExpertPackLoadMetricsAccumulator>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -64,8 +68,12 @@ impl PerformanceAttribution {
                 previous_token_selected_expert_ids_by_layer: Vec::new(),
                 previous_token_expert_route_reuse_by_layer: Vec::new(),
                 #[cfg(feature = "direct-mlx")]
-                expert_ssd_read_metrics: Arc::new(
-                    astronomical_runtime_integration::ExpertSsdReadMetrics::default(),
+                positional_file_read_metrics: Arc::new(
+                    astronomical_runtime_integration::PositionalFileReadMetrics::default(),
+                ),
+                #[cfg(feature = "direct-mlx")]
+                metal_expert_pack_load_metrics: Arc::new(
+                    astronomical_runtime_integration::MlxMetalExpertPackLoadMetricsAccumulator::default(),
                 ),
             })),
         }
@@ -125,12 +133,26 @@ impl PerformanceAttribution {
     }
 
     #[cfg(feature = "direct-mlx")]
-    pub(crate) fn expert_ssd_read_metrics(
+    pub(crate) fn positional_file_read_metrics(
         &self,
-    ) -> Option<Arc<astronomical_runtime_integration::ExpertSsdReadMetrics>> {
+    ) -> Option<Arc<astronomical_runtime_integration::PositionalFileReadMetrics>> {
         self.enabled_attribution
             .as_ref()
-            .map(|enabled_attribution| Arc::clone(&enabled_attribution.expert_ssd_read_metrics))
+            .map(|enabled_attribution| {
+                Arc::clone(&enabled_attribution.positional_file_read_metrics)
+            })
+    }
+
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn metal_expert_pack_load_metrics(
+        &self,
+    ) -> Option<Arc<astronomical_runtime_integration::MlxMetalExpertPackLoadMetricsAccumulator>>
+    {
+        self.enabled_attribution
+            .as_ref()
+            .map(|enabled_attribution| {
+                Arc::clone(&enabled_attribution.metal_expert_pack_load_metrics)
+            })
     }
 
     /// Records deterministic offsets; exposed for aggregation tests and pre-measured boundaries.

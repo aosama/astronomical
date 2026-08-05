@@ -25,6 +25,8 @@ mod mlx_convolution_operations;
 #[cfg(feature = "mlx")]
 mod mlx_creation_operations;
 #[cfg(feature = "mlx")]
+mod mlx_descriptor_file_reader;
+#[cfg(feature = "mlx")]
 mod mlx_metal_expert_pack_loader;
 #[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
@@ -51,20 +53,21 @@ mod mlx_shape_operations;
 #[cfg(feature = "mlx")]
 mod mlx_stream;
 #[cfg(feature = "mlx")]
+mod positional_file_read_metrics;
+#[cfg(feature = "mlx")]
 mod raw;
 
 #[cfg(feature = "mlx")]
 pub use mlx_array::{MlxArray, MlxDtype};
-#[cfg(feature = "mlx")]
-pub use mlx_bounded_safetensors_reader::{ExpertSsdReadMetrics, ExpertSsdReadMetricsSnapshot};
 #[cfg(feature = "mlx")]
 pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
 #[cfg(feature = "mlx")]
 pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
 #[cfg(feature = "mlx")]
 pub use mlx_metal_expert_pack_loader::{
-    MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics, MlxMetalExpertPackLoadRange,
-    MlxMetalExpertPackOutputTensor,
+    MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics,
+    MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadMetricsSnapshot,
+    MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
 };
 #[cfg(feature = "mlx")]
 pub use mlx_metal_kernel::{MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
@@ -76,3 +79,7 @@ pub use mlx_runtime_device_info::maximum_recommended_gpu_working_set_size_bytes;
 pub use mlx_runtime_types::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError};
 #[cfg(feature = "mlx")]
 pub use mlx_safetensors::{BoundedReadInterval, MlxSafetensors, SafetensorsLoadResult};
+#[cfg(feature = "mlx")]
+pub use positional_file_read_metrics::{
+    PositionalFileReadMetrics, PositionalFileReadMetricsSnapshot,
+};

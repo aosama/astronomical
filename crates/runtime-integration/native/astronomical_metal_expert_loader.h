@@ -35,6 +35,14 @@ typedef struct astronomical_metal_expert_loader_metrics_ {
 typedef struct astronomical_metal_expert_loader_handle_
     astronomical_metal_expert_loader_handle;
 
+typedef void (*astronomical_metal_expert_loader_completion_callback)(
+    void* callback_context,
+    uint64_t queue_elapsed_nanoseconds,
+    int load_succeeded);
+
+typedef void (*astronomical_metal_expert_loader_release_callback)(
+    void* callback_context);
+
 int astronomical_metal_expert_loader_start(
     const char* source_file_path,
     const astronomical_metal_expert_loader_output_tensor* output_tensors,
@@ -43,7 +51,11 @@ int astronomical_metal_expert_loader_start(
     size_t load_range_count,
     mlx_stream target_gpu_stream,
     mlx_array* output_arrays,
-    astronomical_metal_expert_loader_handle** output_handle);
+    astronomical_metal_expert_loader_handle** output_handle,
+    astronomical_metal_expert_loader_metrics* output_submission_metrics,
+    void* completion_callback_context,
+    astronomical_metal_expert_loader_completion_callback completion_callback,
+    astronomical_metal_expert_loader_release_callback release_callback);
 
 int astronomical_metal_expert_loader_wait(
     astronomical_metal_expert_loader_handle* load_handle,

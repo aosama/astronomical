@@ -119,14 +119,14 @@ This document records the verified Qwen3.5 and Qwen3.6 mixture-of-experts paging
         |      - commits the Metal I/O command buffer                      |
         |      - makes the target GPU stream wait on that event            |
         |                                                                 v
-        | SSD and Metal I/O subsystem                                      |
+        | File storage and Metal I/O subsystem                             |
         |      Reads exact ranges from the aligned expert-pack file.       |
         |      Transfers those bytes into MLX-owned MTL::Buffer objects.   |
         |      Signals the completion event.                               |
         |                                                                 |
         |      If no aligned pack is active, the direct path instead       |
         |      constructs lazy bounded safetensors Load arrays, whose      |
-        |      positional SSD reads occur on MLX I/O workers during        |
+        |      positional file reads occur on MLX I/O workers during       |
         |      later graph evaluation.                                     |
         |                                                                 |
         +-----------------------------------------------------------------+
@@ -176,11 +176,11 @@ The expert-weight memory-cache least-recently-used policy executes on the CPU. I
 - Direct multi-token prompt processing admits complete layers against physical retained capacity without reserving decode-route payload.
 - Temporary direct-page admission can reconcile retained pages when the live memory budget is insufficient.
 
-The policy does not read SSD payload bytes and does not execute mixture-of-experts arithmetic.
+The policy does not read expert payload bytes and does not execute mixture-of-experts arithmetic.
 
-## SSD read locations
+## File-read locations
 
-There are two distinct SSD mechanisms.
+There are two distinct file-read mechanisms.
 
 ### Aligned expert-pack Metal I/O
 
@@ -188,7 +188,7 @@ The CPU calculates exact ranges and submits MTL::IOCommandBuffer::loadBuffer com
 
 ### Bounded safetensors MLX loading
 
-The CPU constructs lazy MLX Load arrays backed by bounded positional readers. The physical positional reads occur later on MLX input/output workers when evaluation requires the arrays. This is the fallback when no aligned pack is active and is also used by the retained one-expert population path.
+The CPU constructs lazy MLX Load arrays backed by bounded positional readers. Host positional reads occur later on MLX input/output workers when evaluation requires the arrays. The operating-system page cache may satisfy them, so these timings do not prove physical solid-state-drive service. This is the fallback when no aligned pack is active and is also used by the retained one-expert population path.
 
 ## Attribution interpretation
 

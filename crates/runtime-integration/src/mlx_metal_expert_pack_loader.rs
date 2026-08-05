@@ -1,4 +1,12 @@
-use std::{ffi::CString, path::Path, ptr::NonNull};
+use std::{
+    ffi::{CString, c_int, c_void},
+    path::Path,
+    ptr::NonNull,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_runtime::check_status, raw};
 
@@ -77,6 +85,73 @@ pub struct MlxMetalExpertPackLoadMetrics {
     pub queue_elapsed_nanoseconds: u64,
 }
 
+/// Lock-free aggregate of attributed direct Metal I/O expert-pack loads.
+#[derive(Debug, Default)]
+pub struct MlxMetalExpertPackLoadMetricsAccumulator {
+    requested_byte_count: AtomicU64,
+    command_count: AtomicU64,
+    host_encoding_elapsed_nanoseconds: AtomicU64,
+    completed_load_count: AtomicU64,
+    queue_elapsed_nanoseconds: AtomicU64,
+    maximum_queue_elapsed_nanoseconds: AtomicU64,
+    failed_load_count: AtomicU64,
+}
+
+/// Immutable direct Metal I/O counters captured without waiting for completion.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MlxMetalExpertPackLoadMetricsSnapshot {
+    pub requested_byte_count: u64,
+    pub command_count: u64,
+    pub host_encoding_elapsed_nanoseconds: u64,
+    pub completed_load_count: u64,
+    pub queue_elapsed_nanoseconds: u64,
+    pub maximum_queue_elapsed_nanoseconds: u64,
+    pub failed_load_count: u64,
+}
+
+impl MlxMetalExpertPackLoadMetricsAccumulator {
+    #[must_use]
+    pub fn snapshot(&self) -> MlxMetalExpertPackLoadMetricsSnapshot {
+        MlxMetalExpertPackLoadMetricsSnapshot {
+            requested_byte_count: self.requested_byte_count.load(Ordering::Relaxed),
+            command_count: self.command_count.load(Ordering::Relaxed),
+            host_encoding_elapsed_nanoseconds: self
+                .host_encoding_elapsed_nanoseconds
+                .load(Ordering::Relaxed),
+            completed_load_count: self.completed_load_count.load(Ordering::Acquire),
+            queue_elapsed_nanoseconds: self.queue_elapsed_nanoseconds.load(Ordering::Relaxed),
+            maximum_queue_elapsed_nanoseconds: self
+                .maximum_queue_elapsed_nanoseconds
+                .load(Ordering::Relaxed),
+            failed_load_count: self.failed_load_count.load(Ordering::Relaxed),
+        }
+    }
+
+    fn record_submission(&self, submission_metrics: MlxMetalExpertPackLoadMetrics) {
+        self.requested_byte_count
+            .fetch_add(submission_metrics.requested_byte_count, Ordering::Relaxed);
+        self.command_count.fetch_add(
+            u64::try_from(submission_metrics.command_count).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        self.host_encoding_elapsed_nanoseconds.fetch_add(
+            submission_metrics.host_encoding_elapsed_nanoseconds,
+            Ordering::Relaxed,
+        );
+    }
+
+    fn record_completion(&self, queue_elapsed_nanoseconds: u64, load_succeeded: c_int) {
+        self.queue_elapsed_nanoseconds
+            .fetch_add(queue_elapsed_nanoseconds, Ordering::Relaxed);
+        self.maximum_queue_elapsed_nanoseconds
+            .fetch_max(queue_elapsed_nanoseconds, Ordering::Relaxed);
+        if load_succeeded == 0 {
+            self.failed_load_count.fetch_add(1, Ordering::Relaxed);
+        }
+        self.completed_load_count.fetch_add(1, Ordering::Release);
+    }
+}
+
 /// Arrays and native lifetime required for an in-flight Metal I/O expert-pack load.
 #[derive(Debug)]
 pub struct MlxMetalExpertPackLoad {
@@ -151,12 +226,13 @@ impl Drop for NativeMetalExpertPackLoadHandle {
 }
 
 impl MlxRuntime {
-    /// Loads packed expert ranges into MLX-owned Metal buffers without a CPU byte copy.
+    /// Loads packed expert ranges and optionally records asynchronous completion metrics.
     pub fn load_metal_expert_pack_ranges(
         &self,
         source_file_path: &Path,
         output_tensors: &[MlxMetalExpertPackOutputTensor],
         load_ranges: &[MlxMetalExpertPackLoadRange],
+        metal_expert_pack_load_metrics: Option<Arc<MlxMetalExpertPackLoadMetricsAccumulator>>,
     ) -> Result<MlxMetalExpertPackLoad, MlxRuntimeError> {
         const OPERATION: &str = "submit a Metal I/O expert-pack load";
         let source_file_path_text = source_file_path.to_str().ok_or_else(|| {
@@ -195,24 +271,70 @@ impl MlxRuntime {
             .map(|_| MlxArray::empty_raw())
             .collect::<Vec<_>>();
         let mut native_load_handle_pointer = std::ptr::null_mut();
+        let mut native_submission_metrics = raw::astronomical_metal_expert_loader_metrics {
+            requested_byte_count: 0,
+            command_count: 0,
+            host_encoding_elapsed_nanoseconds: 0,
+            queue_elapsed_nanoseconds: 0,
+            final_status: 0,
+        };
         // SAFETY: The C strings and descriptor vectors remain live throughout
         // the call, output handles are uniquely writable, and the runtime owns
         // the supplied live MLX GPU stream.
-        let submission_status = unsafe {
-            raw::astronomical_metal_expert_loader_start(
-                source_file_path_c_string.as_ptr(),
-                native_output_tensors.as_ptr(),
-                native_output_tensors.len(),
-                native_load_ranges.as_ptr(),
-                native_load_ranges.len(),
-                self.gpu_stream().raw(),
-                raw_output_arrays.as_mut_ptr(),
-                &mut native_load_handle_pointer,
-            )
+        let submission_status = match metal_expert_pack_load_metrics.as_ref() {
+            Some(metal_expert_pack_load_metrics) => {
+                let completion_callback_context =
+                    Arc::into_raw(Arc::clone(metal_expert_pack_load_metrics))
+                        .cast_mut()
+                        .cast::<c_void>();
+                // SAFETY: Native code owns the transferred Arc reference and releases it exactly
+                // once after invoking the completion callback or rejecting submission.
+                unsafe {
+                    raw::astronomical_metal_expert_loader_start(
+                        source_file_path_c_string.as_ptr(),
+                        native_output_tensors.as_ptr(),
+                        native_output_tensors.len(),
+                        native_load_ranges.as_ptr(),
+                        native_load_ranges.len(),
+                        self.gpu_stream().raw(),
+                        raw_output_arrays.as_mut_ptr(),
+                        &mut native_load_handle_pointer,
+                        &mut native_submission_metrics,
+                        completion_callback_context,
+                        Some(record_metal_expert_pack_load_completion),
+                        Some(release_metal_expert_pack_load_metrics),
+                    )
+                }
+            }
+            None => unsafe {
+                raw::astronomical_metal_expert_loader_start(
+                    source_file_path_c_string.as_ptr(),
+                    native_output_tensors.as_ptr(),
+                    native_output_tensors.len(),
+                    native_load_ranges.as_ptr(),
+                    native_load_ranges.len(),
+                    self.gpu_stream().raw(),
+                    raw_output_arrays.as_mut_ptr(),
+                    &mut native_load_handle_pointer,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    None,
+                    None,
+                )
+            },
         };
         if let Err(submission_error) = check_status(submission_status, OPERATION) {
             free_raw_output_arrays(&mut raw_output_arrays);
             return Err(submission_error);
+        }
+        if let Some(metal_expert_pack_load_metrics) = metal_expert_pack_load_metrics.as_ref() {
+            metal_expert_pack_load_metrics.record_submission(MlxMetalExpertPackLoadMetrics {
+                requested_byte_count: native_submission_metrics.requested_byte_count,
+                command_count: native_submission_metrics.command_count,
+                host_encoding_elapsed_nanoseconds: native_submission_metrics
+                    .host_encoding_elapsed_nanoseconds,
+                queue_elapsed_nanoseconds: 0,
+            });
         }
         let native_load_handle = match NonNull::new(native_load_handle_pointer) {
             Some(native_load_handle) => native_load_handle,
@@ -250,6 +372,35 @@ impl MlxRuntime {
             native_load_handle,
             output_arrays,
         })
+    }
+}
+
+unsafe extern "C" fn record_metal_expert_pack_load_completion(
+    completion_callback_context: *mut c_void,
+    queue_elapsed_nanoseconds: u64,
+    load_succeeded: c_int,
+) {
+    if completion_callback_context.is_null() {
+        return;
+    }
+    // SAFETY: Native code retains one Arc reference until this callback and its release callback
+    // have completed, so the accumulator remains live for this non-owning access.
+    let metal_expert_pack_load_metrics =
+        unsafe { &*completion_callback_context.cast::<MlxMetalExpertPackLoadMetricsAccumulator>() };
+    metal_expert_pack_load_metrics.record_completion(queue_elapsed_nanoseconds, load_succeeded);
+}
+
+unsafe extern "C" fn release_metal_expert_pack_load_metrics(
+    completion_callback_context: *mut c_void,
+) {
+    if completion_callback_context.is_null() {
+        return;
+    }
+    // SAFETY: This pointer came from Arc::into_raw and native code releases it exactly once.
+    unsafe {
+        drop(Arc::from_raw(
+            completion_callback_context.cast::<MlxMetalExpertPackLoadMetricsAccumulator>(),
+        ));
     }
 }
 

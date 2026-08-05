@@ -1,15 +1,17 @@
 use std::{
     fs::{self, File},
     sync::Arc,
+    time::Instant,
 };
 
 use astronomical_runtime_integration::{
-    BoundedReadInterval, ExpertSsdReadMetrics, MlxDtype, MlxMemoryLimits, MlxRuntime,
-    MlxRuntimeError,
+    BoundedReadInterval, MlxDtype, MlxMemoryLimits, MlxRuntime, MlxRuntimeError,
+    PositionalFileReadMetrics,
 };
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
+const CONCURRENT_READ_TENSOR_BYTE_COUNT: usize = 16 * 1024 * 1024;
 
 #[test]
 fn should_async_evaluate_safetensors_after_dropping_the_load_result_and_removing_its_path() {
@@ -30,7 +32,7 @@ fn should_async_evaluate_safetensors_after_dropping_the_load_result_and_removing
     let runtime =
         MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize");
     let weights = runtime
-        .load_safetensors(retained_weights_file)
+        .load_safetensors(retained_weights_file, None)
         .expect("MLX should load through the retained file descriptor");
     assert!(matches!(
         weights.tensor("missing.weight"),
@@ -80,7 +82,7 @@ fn should_async_evaluate_multiple_tensors_from_independent_bounded_source_interv
     .expect("the test memory limits should be valid");
     let runtime =
         MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize");
-    let expert_ssd_read_metrics = Arc::new(ExpertSsdReadMetrics::default());
+    let expert_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());
     let bounded_load_result = runtime
         .load_safetensors_from_bounded_ranges(
             File::open(&weights_path).expect("the test should open its bounded source"),
@@ -98,7 +100,7 @@ fn should_async_evaluate_multiple_tensors_from_independent_bounded_source_interv
                 },
             ],
             16,
-            Some(Arc::clone(&expert_ssd_read_metrics)),
+            Some(Arc::clone(&expert_file_read_metrics)),
         )
         .expect("the bounded multi-range reader should construct lazy tensors");
     let first_weight = bounded_load_result
@@ -125,12 +127,75 @@ fn should_async_evaluate_multiple_tensors_from_independent_bounded_source_interv
             .expect("the second bounded tensor should evaluate"),
         vec![3.0, 4.0],
     );
-    let expert_ssd_read_snapshot = expert_ssd_read_metrics.snapshot();
-    assert_eq!(expert_ssd_read_snapshot.read_call_count, 2);
-    assert_eq!(expert_ssd_read_snapshot.read_byte_count, 16);
-    assert!(expert_ssd_read_snapshot.total_read_elapsed_nanoseconds > 0);
-    assert!(expert_ssd_read_snapshot.maximum_read_elapsed_nanoseconds > 0);
-    assert_eq!(expert_ssd_read_snapshot.read_failure_count, 0);
+    let expert_file_read_snapshot = expert_file_read_metrics.snapshot();
+    assert_eq!(expert_file_read_snapshot.read_call_count, 2);
+    assert_eq!(expert_file_read_snapshot.read_byte_count, 16);
+    assert!(expert_file_read_snapshot.total_read_elapsed_nanoseconds > 0);
+    assert!(expert_file_read_snapshot.maximum_read_elapsed_nanoseconds > 0);
+    assert_eq!(expert_file_read_snapshot.read_failure_count, 0);
+}
+
+#[test]
+#[ignore = "measures positional file-read concurrency through one MLX safetensors reader"]
+fn should_measure_positional_reads_for_multiple_tensors_from_one_safetensors_reader() {
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let weights_path = temporary_directory
+        .path()
+        .join("concurrent-read.safetensors");
+    fs::write(
+        &weights_path,
+        four_tensor_safetensors_bytes(CONCURRENT_READ_TENSOR_BYTE_COUNT),
+    )
+    .expect("the test should write four substantial safetensors payloads");
+
+    let memory_limits = MlxMemoryLimits::new(
+        ACTIVE_MEMORY_LIMIT_BYTES,
+        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    )
+    .expect("the test memory limits should be valid");
+    let runtime =
+        MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize");
+    let positional_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());
+    let weights = runtime
+        .load_safetensors(
+            File::open(&weights_path).expect("the test should open its safetensors file"),
+            Some(Arc::clone(&positional_file_read_metrics)),
+        )
+        .expect("MLX should construct four lazy tensors from one reader");
+    let first_weight = weights
+        .tensor("first.weight")
+        .expect("the first tensor should exist");
+    let second_weight = weights
+        .tensor("second.weight")
+        .expect("the second tensor should exist");
+    let third_weight = weights
+        .tensor("third.weight")
+        .expect("the third tensor should exist");
+    let fourth_weight = weights
+        .tensor("fourth.weight")
+        .expect("the fourth tensor should exist");
+
+    let concurrent_evaluation_started_at = Instant::now();
+    runtime
+        .evaluate_arrays(&[&first_weight, &second_weight, &third_weight, &fourth_weight])
+        .expect("MLX should evaluate all four lazy tensors together");
+    let concurrent_evaluation_elapsed = concurrent_evaluation_started_at.elapsed();
+
+    let positional_file_read_snapshot = positional_file_read_metrics.snapshot();
+    assert_eq!(positional_file_read_snapshot.read_call_count, 4);
+    assert_eq!(
+        positional_file_read_snapshot.read_byte_count,
+        u64::try_from(CONCURRENT_READ_TENSOR_BYTE_COUNT * 4)
+            .expect("the test payload byte count should fit u64")
+    );
+    eprintln!(
+        "[safetensors-positional-read] status=success tensors=4 bytes={} maximum_concurrent_reads={} summed_read_milliseconds={:.3} evaluation_milliseconds={:.3}",
+        positional_file_read_snapshot.read_byte_count,
+        positional_file_read_snapshot.maximum_concurrent_read_count,
+        positional_file_read_snapshot.total_read_elapsed_nanoseconds as f64 / 1_000_000.0,
+        concurrent_evaluation_elapsed.as_secs_f64() * 1_000.0,
+    );
 }
 
 fn tiny_safetensors_bytes() -> Vec<u8> {
@@ -163,4 +228,27 @@ fn two_tensor_synthetic_safetensors_header() -> Vec<u8> {
     );
     synthetic_header_bytes.extend_from_slice(encoded_header);
     synthetic_header_bytes
+}
+
+fn four_tensor_safetensors_bytes(tensor_byte_count: usize) -> Vec<u8> {
+    assert!(tensor_byte_count.is_multiple_of(size_of::<f32>()));
+    let tensor_element_count = tensor_byte_count / size_of::<f32>();
+    let header = format!(
+        r#"{{"first.weight":{{"dtype":"F32","shape":[{tensor_element_count}],"data_offsets":[0,{tensor_byte_count}]}},"second.weight":{{"dtype":"F32","shape":[{tensor_element_count}],"data_offsets":[{tensor_byte_count},{}]}},"third.weight":{{"dtype":"F32","shape":[{tensor_element_count}],"data_offsets":[{},{}]}},"fourth.weight":{{"dtype":"F32","shape":[{tensor_element_count}],"data_offsets":[{},{}]}}}}"#,
+        tensor_byte_count * 2,
+        tensor_byte_count * 2,
+        tensor_byte_count * 3,
+        tensor_byte_count * 3,
+        tensor_byte_count * 4,
+    );
+    let total_payload_byte_count = tensor_byte_count * 4;
+    let mut safetensors_bytes = Vec::with_capacity(8 + header.len() + total_payload_byte_count);
+    safetensors_bytes.extend_from_slice(
+        &u64::try_from(header.len())
+            .expect("the concurrent-read header length should fit u64")
+            .to_le_bytes(),
+    );
+    safetensors_bytes.extend_from_slice(header.as_bytes());
+    safetensors_bytes.resize(8 + header.len() + total_payload_byte_count, 0);
+    safetensors_bytes
 }

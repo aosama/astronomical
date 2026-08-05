@@ -31,7 +31,7 @@ async fn run_mtp_lifecycle_qualification() {
 
     eprintln!("[oq4e-mtp-lifecycle] status=progress phase=active_engine_load");
     let (mut mtp_engine, _temporary_log_directory, performance_attribution_log_path) =
-        load_mtp_test_engine(&model_directory, true).await;
+        load_mtp_test_engine(&model_directory, true, false).await;
     let engine_load_result = mtp_engine
         .load()
         .await
@@ -113,7 +113,7 @@ async fn run_mtp_lifecycle_qualification() {
 
 async fn run_target_only_injection_control(model_directory: &Path) -> Vec<u32> {
     let (mut target_only_engine, _temporary_log_directory, _performance_attribution_log_path) =
-        load_mtp_test_engine(model_directory, false).await;
+        load_mtp_test_engine(model_directory, false, false).await;
     let engine_load_result = target_only_engine
         .load()
         .await

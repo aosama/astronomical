@@ -37,6 +37,32 @@ struct IoCompletionState {
   int final_status{0};
 };
 
+struct IoCompletionObserver {
+  void* callback_context;
+  astronomical_metal_expert_loader_completion_callback completion_callback;
+  astronomical_metal_expert_loader_release_callback release_callback;
+
+  IoCompletionObserver(
+      void* callback_context,
+      astronomical_metal_expert_loader_completion_callback completion_callback,
+      astronomical_metal_expert_loader_release_callback release_callback)
+      : callback_context(callback_context),
+        completion_callback(completion_callback),
+        release_callback(release_callback) {}
+
+  IoCompletionObserver(const IoCompletionObserver&) = delete;
+  IoCompletionObserver& operator=(const IoCompletionObserver&) = delete;
+
+  ~IoCompletionObserver() {
+    release_callback(callback_context);
+  }
+
+  void record(uint64_t queue_elapsed_nanoseconds, bool load_succeeded) const {
+    completion_callback(
+        callback_context, queue_elapsed_nanoseconds, load_succeeded ? 1 : 0);
+  }
+};
+
 void clear_output_arrays(mlx_array* output_arrays, size_t output_tensor_count) {
   if (output_arrays == nullptr) {
     return;
@@ -235,7 +261,7 @@ struct astronomical_metal_expert_loader_handle_ {
   std::shared_ptr<IoCompletionState> completion_state;
 };
 
-extern "C" int astronomical_metal_expert_loader_start(
+static int start_metal_expert_loader(
     const char* source_file_path,
     const astronomical_metal_expert_loader_output_tensor* output_tensors,
     size_t output_tensor_count,
@@ -243,7 +269,9 @@ extern "C" int astronomical_metal_expert_loader_start(
     size_t load_range_count,
     mlx_stream target_gpu_stream,
     mlx_array* output_arrays,
-    astronomical_metal_expert_loader_handle** output_handle) {
+    astronomical_metal_expert_loader_handle** output_handle,
+    astronomical_metal_expert_loader_metrics* output_submission_metrics,
+    std::shared_ptr<IoCompletionObserver> completion_observer) {
   if (output_handle != nullptr) {
     *output_handle = nullptr;
   }
@@ -313,8 +341,9 @@ extern "C" int astronomical_metal_expert_loader_start(
     auto completion_state = std::make_shared<IoCompletionState>();
     io_command_buffer->addCompletedHandler(
         [completion_event_for_failure,
-         completion_state,
-         submitted_at](MTL::IOCommandBuffer* completed_command_buffer) {
+          completion_state,
+          completion_observer,
+          submitted_at](MTL::IOCommandBuffer* completed_command_buffer) {
           const auto final_status = completed_command_buffer->status();
           {
             std::lock_guard completion_lock(completion_state->mutex);
@@ -331,12 +360,21 @@ extern "C" int astronomical_metal_expert_loader_start(
                     "Metal I/O expert-pack command buffer failed"));
             completion_event_for_failure->signal(kSharedEventValue);
           }
+          if (completion_observer) {
+            completion_observer->record(
+                completion_state->elapsed_nanoseconds,
+                completed_command_buffer->status() == MTL::IOStatusComplete);
+          }
           completion_state->completion_condition.notify_all();
         });
     io_command_buffer->commit();
     auto& command_encoder = mlx::core::metal::get_command_encoder(
         mlx_stream_get_(target_gpu_stream));
     command_encoder.wait_event(completion_event, kSharedEventValue);
+    const auto host_encoding_elapsed_nanoseconds = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            SteadyClock::now() - encoding_started_at)
+            .count());
     auto* load_handle = new astronomical_metal_expert_loader_handle{
         std::move(io_command_queue),
         std::move(io_command_buffer),
@@ -344,11 +382,16 @@ extern "C" int astronomical_metal_expert_loader_start(
         std::move(completion_event),
         requested_byte_count,
         load_range_count,
-        static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                SteadyClock::now() - encoding_started_at)
-                .count()),
+        host_encoding_elapsed_nanoseconds,
         std::move(completion_state)};
+    if (output_submission_metrics != nullptr) {
+      *output_submission_metrics = {
+          requested_byte_count,
+          load_range_count,
+          host_encoding_elapsed_nanoseconds,
+          0,
+          0};
+    }
     *output_handle = load_handle;
     return 0;
   } catch (const std::exception& native_failure) {
@@ -357,6 +400,71 @@ extern "C" int astronomical_metal_expert_loader_start(
     return 1;
   } catch (...) {
     clear_output_arrays(output_arrays, output_tensor_count);
+    report_unknown_native_failure();
+    return 1;
+  }
+}
+
+extern "C" int astronomical_metal_expert_loader_start(
+    const char* source_file_path,
+    const astronomical_metal_expert_loader_output_tensor* output_tensors,
+    size_t output_tensor_count,
+    const astronomical_metal_expert_loader_load_range* load_ranges,
+    size_t load_range_count,
+    mlx_stream target_gpu_stream,
+    mlx_array* output_arrays,
+    astronomical_metal_expert_loader_handle** output_handle,
+    astronomical_metal_expert_loader_metrics* output_submission_metrics,
+    void* completion_callback_context,
+    astronomical_metal_expert_loader_completion_callback completion_callback,
+    astronomical_metal_expert_loader_release_callback release_callback) {
+  try {
+    if (completion_callback_context == nullptr) {
+      if (output_submission_metrics != nullptr || completion_callback != nullptr ||
+          release_callback != nullptr) {
+        throw std::invalid_argument(
+            "Metal I/O expert-pack attribution arguments are incomplete");
+      }
+      return start_metal_expert_loader(
+          source_file_path,
+          output_tensors,
+          output_tensor_count,
+          load_ranges,
+          load_range_count,
+          target_gpu_stream,
+          output_arrays,
+          output_handle,
+          nullptr,
+          nullptr);
+    }
+    if (output_submission_metrics == nullptr || completion_callback == nullptr ||
+        release_callback == nullptr) {
+      throw std::invalid_argument(
+          "Metal I/O expert-pack attribution arguments are invalid");
+    }
+    auto completion_observer = std::make_shared<IoCompletionObserver>(
+        completion_callback_context, completion_callback, release_callback);
+    return start_metal_expert_loader(
+        source_file_path,
+        output_tensors,
+        output_tensor_count,
+        load_ranges,
+        load_range_count,
+        target_gpu_stream,
+        output_arrays,
+        output_handle,
+        output_submission_metrics,
+        std::move(completion_observer));
+  } catch (const std::exception& native_failure) {
+    if (completion_callback_context != nullptr && release_callback != nullptr) {
+      release_callback(completion_callback_context);
+    }
+    report_native_failure(native_failure);
+    return 1;
+  } catch (...) {
+    if (completion_callback_context != nullptr && release_callback != nullptr) {
+      release_callback(completion_callback_context);
+    }
     report_unknown_native_failure();
     return 1;
   }
