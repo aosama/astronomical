@@ -3,10 +3,8 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use crate::engine_backed_worker_output::worker_memory_snapshot;
-use crate::engine_backed_worker_support::{
-    ModelFactory, WorkerRuntimeError, engine_generation_error,
-};
+use super::output::worker_memory_snapshot;
+use super::support::{ModelFactory, WorkerRuntimeError, engine_generation_error};
 use crate::{InferenceEngine, InferenceEngineError, ModelGenerationProcessor};
 
 use super::EngineBackedWorker;

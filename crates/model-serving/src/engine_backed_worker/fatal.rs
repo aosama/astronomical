@@ -3,8 +3,8 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
+use super::support::{WorkerRuntimeError, engine_generation_error};
 use crate::InferenceEngineError;
-use crate::engine_backed_worker_support::{WorkerRuntimeError, engine_generation_error};
 
 pub(crate) async fn report_fatal_engine_error<WriteTransport, ActiveGeneration>(
     request_id: RequestId,

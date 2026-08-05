@@ -38,6 +38,20 @@ pub(crate) fn discovered_model_artifact(
     }
 }
 
+#[cfg(feature = "model-artifact-qualification")]
+pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::DiscoveredModel> {
+    let astronomical_config = astronomical_config::AstronomicalConfig::load_from_default_location()
+        .expect("the standard Astronomical configuration should load for model qualification");
+    astronomical_config::discover_qwen3_5_models(
+        astronomical_config.model_directories(),
+        astronomical_config.max_output_tokens(),
+    )
+    .expect("configured model-directory discovery should complete")
+    .into_iter()
+    .flat_map(|configured_model_directory_scan| configured_model_directory_scan.discovered_models)
+    .collect()
+}
+
 #[cfg(any(
     feature = "model-artifact-qualification",
     feature = "performance-measurement"

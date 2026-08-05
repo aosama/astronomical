@@ -193,10 +193,12 @@ impl AstronomicalConfig {
             .unwrap_or(false)
     }
 
-    /// Returns the explicit Qwen multi-token prediction opt-in.
+    /// Returns whether qualified Qwen multi-token prediction is enabled.
+    ///
+    /// MTP is enabled by default when the setting is omitted from the user configuration.
     #[must_use]
     pub fn mtp_enabled(&self) -> bool {
-        self.user_config_file.mtp_enabled.unwrap_or(false)
+        self.user_config_file.mtp_enabled.unwrap_or(true)
     }
 
     /// Resolves the optional user MLX memory ceiling in decimal SI bytes.

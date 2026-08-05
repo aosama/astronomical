@@ -13,8 +13,8 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-use crate::bounded_safetensors_header::SafetensorsTensorView;
 use crate::decoder_cache::{DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype};
+use crate::safetensors::SafetensorsTensorView;
 
 use super::block_format_error::PersistentPromptCacheBlockError;
 use super::model_contract::PersistentPromptCacheModelContract;

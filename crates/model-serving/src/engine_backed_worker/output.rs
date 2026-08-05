@@ -4,7 +4,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use crate::engine_backed_worker_support::{ActiveEngineGeneration, engine_generation_error};
+use super::support::{ActiveEngineGeneration, engine_generation_error};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{
     EngineBackedWorker, GenerationFinalization, InferenceEngine, MlxMemoryTelemetry,

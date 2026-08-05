@@ -4,8 +4,8 @@ use std::io;
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 
-use crate::validated_artifact::{ValidatedRequiredFile, validated_file_identity};
-use crate::{ArtifactValidationError, RequiredFileProfile};
+use super::validated_artifact::{ValidatedRequiredFile, validated_file_identity};
+use super::{ArtifactValidationError, RequiredFileProfile, ValidatedWeightsFile};
 
 const CAPTURE_BUFFER_SIZE_BYTES: usize = 64 * 1024;
 const CONFIG_FILE_NAME: &str = "config.json";
@@ -143,7 +143,7 @@ pub(crate) fn validate_required_file(
 pub fn validate_required_file_for_tests(
     model_directory: &Path,
     required_file_profile: &RequiredFileProfile,
-) -> Result<crate::ValidatedWeightsFile, ArtifactValidationError> {
+) -> Result<ValidatedWeightsFile, ArtifactValidationError> {
     validate_required_file(model_directory, required_file_profile)?.into_validated_weights_file()
 }
 
