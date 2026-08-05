@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -6,13 +8,13 @@ use astronomical_ipc_protocol::{
     MtpRuntimeState, RequestId,
 };
 use astronomical_model_serving::{
-    GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5ArtifactValidator,
+    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::IMAGE_PAD_TOKEN_ID;
-use super::engine_support::load_mtp_test_engine;
+use super::engine_support::{generation_report_for_request, load_mtp_test_engine};
 
 const BENCHMARK_INPUT_TOKEN_COUNT: usize = 1_024;
 const BENCHMARK_OUTPUT_TOKEN_COUNT: u16 = 1_024;
@@ -42,6 +44,17 @@ async fn should_measure_representative_fully_resident_target_only_decode() {
     .expect("representative fully resident decode should finish within 60 seconds");
 }
 
+#[tokio::test]
+#[ignore = "loads the fully resident target model for representative decode attribution"]
+async fn should_attribute_representative_fully_resident_target_only_decode() {
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        run_representative_fully_resident_target_only_decode_attribution(),
+    )
+    .await
+    .expect("representative fully resident decode attribution should finish within 60 seconds");
+}
+
 async fn run_representative_fully_resident_target_only_decode() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
@@ -65,6 +78,7 @@ async fn run_representative_fully_resident_target_only_decode() {
         RequestId::new(40_100),
         &benchmark_prompt_cases[0],
         BENCHMARK_OUTPUT_TOKEN_COUNT,
+        PerformanceAttribution::disabled(),
     )
     .await;
     assert_eq!(
@@ -73,10 +87,92 @@ async fn run_representative_fully_resident_target_only_decode() {
         "the resident decode measurement must use the complete output budget"
     );
     eprintln!(
-        "[oq4e-resident-decode] status=success input_tokens={} output_tokens={} target_only_tok_per_second={:.2}",
+        "[oq4e-resident-decode] status=success input_tokens={} output_tokens={} output_fingerprint={:016x} target_only_tok_per_second={:.2}",
+        BENCHMARK_INPUT_TOKEN_COUNT,
+        BENCHMARK_OUTPUT_TOKEN_COUNT,
+        target_only_measurement.generated_token_id_fingerprint(),
+        target_only_measurement.tokens_per_second(),
+    );
+}
+
+async fn run_representative_fully_resident_target_only_decode_attribution() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+    let benchmark_prompt_cases = prepare_benchmark_prompt_cases(&model_directory);
+    let (mut target_only_engine, _temporary_log_directory, performance_attribution_log_path) =
+        load_mtp_test_engine(&model_directory, false).await;
+    target_only_engine
+        .load()
+        .await
+        .expect("the attributed fully resident target-only engine should load");
+    target_only_engine
+        .disable_adaptive_ram_growth_memory_guard_for_tests()
+        .await
+        .expect("the attributed resident benchmark should disable adaptive guarding");
+    let request_id = RequestId::new(40_101);
+    let target_only_measurement = run_one_generation(
+        &mut target_only_engine,
+        request_id,
+        &benchmark_prompt_cases[0],
+        BENCHMARK_OUTPUT_TOKEN_COUNT,
+        PerformanceAttribution::enabled(),
+    )
+    .await;
+    drop(target_only_engine);
+
+    let generation_report =
+        generation_report_for_request(&performance_attribution_log_path, request_id);
+    assert_eq!(
+        generation_report["retained_complete_expert_layer_count"], 40,
+        "the attributed benchmark must remain fully resident"
+    );
+    let mut attributed_operations = generation_report["operations"]
+        .as_array()
+        .expect("the generation report should contain operations")
+        .iter()
+        .collect::<Vec<_>>();
+    attributed_operations.sort_by_key(|attributed_operation| {
+        Reverse(
+            attributed_operation["total_elapsed_nanoseconds"]
+                .as_u64()
+                .unwrap_or(0),
+        )
+    });
+    for attributed_operation in attributed_operations.into_iter().take(20) {
+        eprintln!(
+            "[oq4e-resident-attribution] operation={} occurrences={} total_milliseconds={:.3} average_microseconds={:.3}",
+            attributed_operation["operation"]
+                .as_str()
+                .unwrap_or("unknown"),
+            attributed_operation["occurrence_count"]
+                .as_u64()
+                .unwrap_or(0),
+            attributed_operation["total_elapsed_nanoseconds"]
+                .as_u64()
+                .unwrap_or(0) as f64
+                / 1_000_000.0,
+            attributed_operation["total_elapsed_nanoseconds"]
+                .as_u64()
+                .unwrap_or(0) as f64
+                / attributed_operation["occurrence_count"]
+                    .as_u64()
+                    .unwrap_or(1)
+                    .max(1) as f64
+                / 1_000.0,
+        );
+    }
+    eprintln!(
+        "[oq4e-resident-attribution] status=success input_tokens={} output_tokens={} target_only_tok_per_second={:.2} report_elapsed_milliseconds={:.3} attributed_percent={:.2}",
         BENCHMARK_INPUT_TOKEN_COUNT,
         BENCHMARK_OUTPUT_TOKEN_COUNT,
         target_only_measurement.tokens_per_second(),
+        generation_report["report_elapsed_nanoseconds"]
+            .as_u64()
+            .unwrap_or(0) as f64
+            / 1_000_000.0,
+        generation_report["attributed_percent"]
+            .as_f64()
+            .unwrap_or(0.0),
     );
 }
 
@@ -281,6 +377,7 @@ async fn run_engine_benchmark_cases(
         RequestId::new(request_id_base),
         &benchmark_prompt_cases[measured_prompt_order[0]],
         4,
+        PerformanceAttribution::disabled(),
     )
     .await;
 
@@ -299,6 +396,7 @@ async fn run_engine_benchmark_cases(
             request_id,
             &benchmark_prompt_cases[prompt_case_index],
             BENCHMARK_OUTPUT_TOKEN_COUNT,
+            PerformanceAttribution::disabled(),
         )
         .await;
         indexed_measurements.push((prompt_case_index, benchmark_measurement));
@@ -316,13 +414,15 @@ async fn run_one_generation(
     request_id: RequestId,
     benchmark_prompt_case: &BenchmarkPromptCase,
     maximum_output_tokens: u16,
+    performance_attribution: PerformanceAttribution,
 ) -> BenchmarkMeasurement {
     let inference_request = Qwen3_5InferenceRequest::new(
         request_id,
         benchmark_prompt_case.prompt_token_ids.clone(),
         maximum_output_tokens,
     )
-    .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID);
+    .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID)
+    .with_performance_attribution(performance_attribution);
     let generation_start = engine
         .start_generation(inference_request)
         .await
@@ -388,6 +488,13 @@ struct BenchmarkMeasurement {
 }
 
 impl BenchmarkMeasurement {
+    fn generated_token_id_fingerprint(&self) -> u64 {
+        let mut generated_token_id_hasher = DefaultHasher::new();
+        self.generated_token_ids
+            .hash(&mut generated_token_id_hasher);
+        generated_token_id_hasher.finish()
+    }
+
     fn tokens_per_second(&self) -> f64 {
         self.generated_token_ids.len().saturating_sub(1) as f64
             / self.generation_elapsed_seconds.max(f64::EPSILON)
