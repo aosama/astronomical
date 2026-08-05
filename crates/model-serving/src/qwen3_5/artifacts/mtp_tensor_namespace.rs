@@ -78,20 +78,20 @@ pub fn qwen3_5_mtp_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<Tensor
     ] {
         mtp_tensor_profiles.push(qwen3_5_tensor_profile(
             format!("{mtp_prefix}.{normalization_name}"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size],
         ));
     }
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{mtp_prefix}.fc.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size, hidden_size * 2],
     ));
 
     let mtp_layer_prefix = format!("{mtp_prefix}.layers.0");
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{mtp_layer_prefix}.input_layernorm.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
     for (projection_name, output_dimension, input_dimension) in [
@@ -111,13 +111,13 @@ pub fn qwen3_5_mtp_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<Tensor
     for normalization_name in ["q_norm.weight", "k_norm.weight"] {
         mtp_tensor_profiles.push(qwen3_5_tensor_profile(
             format!("{mtp_layer_prefix}.self_attn.{normalization_name}"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![head_dimension],
         ));
     }
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{mtp_layer_prefix}.post_attention_layernorm.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
     match qwen3_5_config.feed_forward_architecture() {
@@ -174,12 +174,12 @@ pub(crate) fn append_qwen3_5_mtp_quantized_affine_tensor_profiles(
     ));
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{module_name}.scales"),
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         scale_shape.clone(),
     ));
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{module_name}.biases"),
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         scale_shape,
     ));
 }

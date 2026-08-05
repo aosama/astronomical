@@ -121,12 +121,12 @@ fn should_generate_the_complete_ornith_vision_tensor_profile() {
     assert_eq!(merger_fc2_bias.name, "vision_tower.merger.linear_fc2.bias");
     assert_eq!(merger_fc2_bias.shape, vec![2048]);
 
-    // All tensors must be BF16
+    // Every stored floating tensor must retain an MLX-supported model dtype.
     for tensor_profile in &vision_tensor_profiles {
         assert_eq!(
             tensor_profile.dtype,
-            astronomical_model_serving::TensorDtype::BFloat16,
-            "tensor {} must be BF16",
+            astronomical_model_serving::TensorDtype::ModelFloat,
+            "tensor {} must retain a supported stored model float dtype",
             tensor_profile.name
         );
     }

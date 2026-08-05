@@ -10,9 +10,9 @@ use crate::{TensorDtype, TensorProfile};
 
 use super::Qwen3_5VisionConfig;
 
-/// Generates the vision tower tensor metadata for the pinned Qwen3.5 artifact.
+/// Generates config-derived Qwen3.5 vision tower tensor metadata.
 ///
-/// All 333 tensors are BF16 and grouped into:
+/// Stored floating tensors retain any MLX-supported model float dtype and are grouped into:
 /// - 27 transformer blocks (12 tensors each = 324)
 /// - patch embedding (weight + bias = 2)
 /// - positional embedding (weight = 1)
@@ -37,7 +37,7 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
     // Patch embedding: [hidden_size, temporal_patch_size, patch_size, patch_size, in_channels]
     tensor_profiles.push(tensor_profile(
         "vision_tower.patch_embed.proj.weight".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![
             hidden_size,
             temporal_patch_size,
@@ -48,14 +48,14 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
     ));
     tensor_profiles.push(tensor_profile(
         "vision_tower.patch_embed.proj.bias".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
 
     // Positional embedding: [position_embedding_count, hidden_size]
     tensor_profiles.push(tensor_profile(
         "vision_tower.pos_embed.weight".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![position_embedding_count, hidden_size],
     ));
 
@@ -66,72 +66,72 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
         // Attention QKV: [3*hidden_size, hidden_size] + bias [3*hidden_size]
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.attn.qkv.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![qkv_dimension, hidden_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.attn.qkv.bias"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![qkv_dimension],
         ));
 
         // Attention projection: [hidden_size, hidden_size] + bias [hidden_size]
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.attn.proj.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size, hidden_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.attn.proj.bias"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size],
         ));
 
         // LayerNorm 1: [hidden_size] x2 (weight + bias)
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm1.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm1.bias"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size],
         ));
 
         // MLP fc1: [intermediate_size, hidden_size] + bias [intermediate_size]
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.mlp.linear_fc1.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![intermediate_size, hidden_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.mlp.linear_fc1.bias"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![intermediate_size],
         ));
 
         // MLP fc2: [hidden_size, intermediate_size] + bias [hidden_size]
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.mlp.linear_fc2.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size, intermediate_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.mlp.linear_fc2.bias"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size],
         ));
 
         // LayerNorm 2: [hidden_size] x2 (weight + bias)
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm2.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm2.bias"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![hidden_size],
         ));
     }
@@ -141,32 +141,32 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
     // model's out_hidden_size.
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.norm.weight".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.norm.bias".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.linear_fc1.weight".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![merger_input_dimension, merger_input_dimension],
     ));
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.linear_fc1.bias".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![merger_input_dimension],
     ));
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.linear_fc2.weight".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![out_hidden_size, merger_input_dimension],
     ));
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.linear_fc2.bias".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![out_hidden_size],
     ));
 

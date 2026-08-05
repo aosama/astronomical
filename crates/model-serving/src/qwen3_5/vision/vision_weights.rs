@@ -175,10 +175,15 @@ fn validate_bound_vision_tensor(
     tensor: &MlxArray,
 ) -> Result<(), Qwen3_5ExecutionError> {
     let tensor_dtype_matches_profile = match tensor_profile.dtype {
+        TensorDtype::AffineQuantizationFloat => matches!(
+            tensor.dtype(),
+            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
+        ),
+        TensorDtype::ModelFloat => matches!(
+            tensor.dtype(),
+            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
+        ),
         TensorDtype::BFloat16 => tensor.dtype() == MlxDtype::BFloat16,
-        TensorDtype::BFloat16OrFloat32 => {
-            matches!(tensor.dtype(), MlxDtype::BFloat16 | MlxDtype::Float32)
-        }
         TensorDtype::Float32 => tensor.dtype() == MlxDtype::Float32,
         TensorDtype::UInt32 => tensor.dtype() == MlxDtype::UInt32,
     };
