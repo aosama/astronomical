@@ -91,9 +91,10 @@ pub use qwen3_5::{
     ValidatedQwen3_5Artifact, discover_sampler_config, discover_token_ids,
     plan_qwen3_5_visual_embedding_suffix, qwen3_5_decoder_cache_layout,
     qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_profiles,
-    qwen3_5_quantized_mtp_tensor_names, qwen3_5_resident_language_tensor_profiles,
-    qwen3_5_vision_tensor_profiles, resolve_sampling_seed, translate_qwen3_5_preparation_error,
-    translate_request_output_error, validate_context_token_count,
+    qwen3_5_quantized_mtp_tensor_names, qwen3_5_request_enables_thinking,
+    qwen3_5_resident_language_tensor_profiles, qwen3_5_vision_tensor_profiles,
+    resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
+    validate_context_token_count,
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{

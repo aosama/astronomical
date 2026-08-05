@@ -106,11 +106,15 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
         } else {
             PerformanceAttribution::disabled()
         };
+        let request_enable_thinking = qwen3_5_request_enables_thinking(
+            self.enable_thinking,
+            chat_generation_command.settings.thinking_budget,
+        );
         let inference_request = self
             .tokenizer
             .prepare_chat_with_performance_attribution(
                 chat_generation_command,
-                self.enable_thinking,
+                request_enable_thinking,
                 &mut performance_attribution,
             )
             .map_err(|validation_error| {
@@ -136,7 +140,7 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
                     Qwen3_5RequestOutput::new(
                         &self.tokenizer,
                         &chat_generation_command.tools,
-                        self.enable_thinking,
+                        request_enable_thinking,
                     )
                 },
             )
@@ -170,12 +174,7 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
         let output_events = request_output
             .push_token(generated_token_id)
             .map_err(translate_request_output_error)?;
-        translate_output_events(
-            &self.tokenizer,
-            self.enable_thinking,
-            request_output,
-            output_events,
-        )
+        translate_output_events(&self.tokenizer, request_output, output_events)
     }
 
     fn finish_request_output(
@@ -185,14 +184,24 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
         let output_events = request_output
             .finish()
             .map_err(translate_request_output_error)?;
-        let (public_outputs, _model_feedback_token_ids) = translate_output_events(
-            &self.tokenizer,
-            self.enable_thinking,
-            request_output,
-            output_events,
-        )?
-        .into_parts();
+        let (public_outputs, _model_feedback_token_ids) =
+            translate_output_events(&self.tokenizer, request_output, output_events)?.into_parts();
         Ok(public_outputs)
+    }
+}
+
+/// Resolves per-request thinking mode without changing the model capability flag.
+#[must_use]
+pub const fn qwen3_5_request_enables_thinking(
+    model_supports_thinking: bool,
+    thinking_budget: Option<u16>,
+) -> bool {
+    if !model_supports_thinking {
+        return false;
+    }
+    match thinking_budget {
+        Some(0) => false,
+        Some(_) | None => true,
     }
 }
 
@@ -217,7 +226,6 @@ pub fn translate_qwen3_5_preparation_error(
 
 fn translate_output_events(
     tokenizer: &Qwen3_5Tokenizer,
-    enable_thinking: bool,
     request_output: &mut Qwen3_5RequestOutput,
     output_events: Vec<Qwen3_5OutputEvent>,
 ) -> Result<ModelGeneratedTokenTranslation, ModelGenerationOutputError> {
@@ -240,6 +248,7 @@ fn translate_output_events(
                 });
             }
             Qwen3_5OutputEvent::ModelVisibleCorrection { correction_text } => {
+                let enable_thinking = request_output.enable_thinking();
                 let correction_token_ids = tokenizer
                     .encode_model_visible_correction(&correction_text, enable_thinking)
                     .map_err(|tokenizer_error| ModelGenerationOutputError::Fatal {
