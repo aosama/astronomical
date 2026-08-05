@@ -234,9 +234,25 @@ struct SupervisorStatusDocument: Codable, Equatable {
   var progressTitle: String {
     progress.map { "\($0.processedTokens) / \($0.totalTokens) tokens" } ?? "Standing by"
   }
+  var elapsedTimeMetricTitle: String {
+    progress?.phase == "generation" ? "Elapsed" : "Elapsed / ETA"
+  }
+
   var elapsedTimeTitle: String {
     guard let progress else { return "Not active" }
-    return String(format: "%.1f s", Double(progress.elapsedMilliseconds) / 1_000)
+    let elapsedSeconds = Double(progress.elapsedMilliseconds) / 1_000
+    guard progress.phase != "generation" else {
+      return String(format: "%.1f s", elapsedSeconds)
+    }
+    guard progress.processedTokens > 0 else {
+      return String(format: "%.1f s / Calculating", elapsedSeconds)
+    }
+    let remainingTokenCount =
+      progress.totalTokens > progress.processedTokens
+      ? progress.totalTokens - progress.processedTokens : 0
+    let estimatedRemainingSeconds =
+      elapsedSeconds * Double(remainingTokenCount) / Double(progress.processedTokens)
+    return String(format: "%.1f s / %.1f s", elapsedSeconds, estimatedRemainingSeconds)
   }
   var progressProcessedTokenCount: UInt32 { progress?.processedTokens ?? 0 }
   var progressTotalTokenCount: UInt32 { max(1, progress?.totalTokens ?? 1) }
