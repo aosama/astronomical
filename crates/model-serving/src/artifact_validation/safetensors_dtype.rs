@@ -1,4 +1,6 @@
-use crate::ArtifactValidationError;
+use ::safetensors::Dtype;
+
+use super::ArtifactValidationError;
 
 pub(crate) fn dtype_bits_per_element(
     dtype_string: &str,
@@ -23,19 +25,19 @@ pub(crate) fn parse_safetensors_dtype(
     dtype_string: &str,
     file_name: &str,
     tensor_name: &str,
-) -> Result<safetensors::Dtype, ArtifactValidationError> {
+) -> Result<Dtype, ArtifactValidationError> {
     match dtype_string {
-        "F64" => Ok(safetensors::Dtype::F64),
-        "F32" => Ok(safetensors::Dtype::F32),
-        "F16" => Ok(safetensors::Dtype::F16),
-        "BF16" => Ok(safetensors::Dtype::BF16),
-        "I64" => Ok(safetensors::Dtype::I64),
-        "I32" => Ok(safetensors::Dtype::I32),
-        "I16" => Ok(safetensors::Dtype::I16),
-        "I8" => Ok(safetensors::Dtype::I8),
-        "U32" => Ok(safetensors::Dtype::U32),
-        "U8" => Ok(safetensors::Dtype::U8),
-        "BOOL" => Ok(safetensors::Dtype::BOOL),
+        "F64" => Ok(Dtype::F64),
+        "F32" => Ok(Dtype::F32),
+        "F16" => Ok(Dtype::F16),
+        "BF16" => Ok(Dtype::BF16),
+        "I64" => Ok(Dtype::I64),
+        "I32" => Ok(Dtype::I32),
+        "I16" => Ok(Dtype::I16),
+        "I8" => Ok(Dtype::I8),
+        "U32" => Ok(Dtype::U32),
+        "U8" => Ok(Dtype::U8),
+        "BOOL" => Ok(Dtype::BOOL),
         _ => Err(ArtifactValidationError::UnknownSafetensorsDtype {
             file_name: file_name.to_owned(),
             tensor_name: tensor_name.to_owned(),

@@ -9,11 +9,11 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
-use crate::bounded_safetensors_header::{
+use super::safetensors_dtype::{dtype_bits_per_element, parse_safetensors_dtype};
+use super::{ArtifactValidationError, TensorDtype, TensorProfile};
+use crate::safetensors::{
     BoundedSafetensorsHeaderError, SafetensorsTensorView, read_bounded_safetensors_json_header,
 };
-use crate::safetensors_dtype::{dtype_bits_per_element, parse_safetensors_dtype};
-use crate::{ArtifactValidationError, TensorDtype, TensorProfile};
 
 const MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES: u64 = 16 * 1024 * 1024;
 

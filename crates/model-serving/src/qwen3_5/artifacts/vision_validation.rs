@@ -1,7 +1,9 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use crate::ArtifactValidationError;
-use crate::validated_artifact::ValidatedRequiredFile;
+use crate::artifact_validation::{
+    ArtifactValidationError, TensorProfile, ValidatedRequiredFile,
+    validate_bounded_safetensors_with_partial_profiles,
+};
 
 use super::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
 use super::{Qwen3_5ArtifactError, Qwen3_5ShardIndex, Qwen3_5VisionConfig};
@@ -98,10 +100,10 @@ pub(super) fn validate_vision_tower_inventory(
 /// Returns strict visual tensor profiles stored in one embedded model shard.
 #[must_use]
 pub(super) fn embedded_vision_tensor_profiles_for_shard(
-    vision_tensor_profiles: &[crate::TensorProfile],
+    vision_tensor_profiles: &[TensorProfile],
     shard_index: &Qwen3_5ShardIndex,
     shard_file_name: &str,
-) -> Vec<crate::TensorProfile> {
+) -> Vec<TensorProfile> {
     vision_tensor_profiles
         .iter()
         .filter(|tensor_profile| {
@@ -117,7 +119,7 @@ pub(super) fn embedded_vision_tensor_profiles_for_shard(
 /// Validates the complete separate visual-tower sidecar before MLX mapping.
 pub(super) fn validate_vision_sidecar(
     required_files: &HashMap<String, ValidatedRequiredFile>,
-    vision_tensor_profiles: &[crate::TensorProfile],
+    vision_tensor_profiles: &[TensorProfile],
 ) -> Result<(), ArtifactValidationError> {
     let vision_sidecar_file = required_files
         .get(VISION_SIDECAR_FILE_NAME)
@@ -125,7 +127,7 @@ pub(super) fn validate_vision_sidecar(
             file_name: VISION_SIDECAR_FILE_NAME.to_owned(),
         })?;
     let accepted_extra_tensor_names = HashSet::new();
-    crate::bounded_safetensors::validate_bounded_safetensors_with_partial_profiles(
+    validate_bounded_safetensors_with_partial_profiles(
         vision_sidecar_file.file(),
         vision_sidecar_file.size_bytes(),
         VISION_SIDECAR_FILE_NAME,

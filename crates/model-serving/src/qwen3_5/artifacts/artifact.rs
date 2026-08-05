@@ -5,11 +5,11 @@ use std::path::Path;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::required_files::{
-    hugging_face_snapshot_model_id, validate_required_file, validate_required_files,
+use crate::artifact_validation::{
+    ArtifactValidationError, RequiredFileProfile, TensorProfile, hugging_face_snapshot_model_id,
+    validate_required_file, validate_required_files,
 };
-use crate::validated_artifact::{ValidatedRequiredFile, ValidatedWeightsFile};
-use crate::{ArtifactValidationError, RequiredFileProfile, TensorProfile};
+use crate::artifact_validation::{ValidatedRequiredFile, ValidatedWeightsFile};
 
 use super::MAXIMUM_INDEX_BYTES;
 use super::Qwen3_5MtpArtifactCapability;
@@ -176,7 +176,7 @@ impl Qwen3_5ArtifactValidator {
                     .into_iter()
                     .collect::<HashSet<_>>();
                 let shard_metadata =
-                    crate::bounded_safetensors::validate_bounded_safetensors_with_partial_profiles(
+                    crate::artifact_validation::validate_bounded_safetensors_with_partial_profiles(
                         shard_file.file(),
                         shard_file.size_bytes(),
                         shard_file_name,
@@ -200,7 +200,7 @@ impl Qwen3_5ArtifactValidator {
                     .into_iter()
                     .collect::<HashSet<_>>();
                 let shard_metadata =
-                    crate::bounded_safetensors::validate_bounded_safetensors_with_partial_profiles(
+                    crate::artifact_validation::validate_bounded_safetensors_with_partial_profiles(
                         shard_file.file(),
                         shard_file.size_bytes(),
                         shard_file_name,
@@ -211,7 +211,7 @@ impl Qwen3_5ArtifactValidator {
                     .checked_add(shard_metadata.total_payload_bytes)
                     .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
             } else {
-                let shard_metadata = crate::bounded_safetensors::validate_bounded_safetensors_with_permissive_extras(
+                let shard_metadata = crate::artifact_validation::validate_bounded_safetensors_with_permissive_extras(
                     shard_file.file(),
                     shard_file.size_bytes(),
                     shard_file_name,

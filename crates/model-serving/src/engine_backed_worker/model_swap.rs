@@ -1,8 +1,8 @@
 use astronomical_ipc_protocol::{MlxMemorySnapshotSource, ProtocolWriter, WorkerEvent};
 use tokio::io::AsyncWrite;
 
+use super::support::{ModelFactory, WorkerRuntimeError};
 use crate::InferenceEngine;
-use crate::engine_backed_worker_support::{ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::ModelGenerationProcessor;
 
 use super::{EngineBackedWorker, LoadedModel};

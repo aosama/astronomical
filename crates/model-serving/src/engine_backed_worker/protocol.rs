@@ -6,8 +6,8 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::engine_backed_worker::EngineBackedWorker;
-use crate::engine_backed_worker_support::{ModelFactory, WorkerRuntimeError};
+use super::EngineBackedWorker;
+use super::support::{ModelFactory, WorkerRuntimeError};
 use crate::{InferenceEngine, ModelGenerationProcessor};
 
 impl<Processor, Engine, Factory> EngineBackedWorker<Processor, Engine, Factory>

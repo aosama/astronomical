@@ -11,8 +11,15 @@ pub(crate) struct LoadedModel<Processor, Engine> {
     pub(crate) engine: Engine,
 }
 
+mod construction;
+mod fatal;
 mod generation_advance;
 mod generation_start;
 mod idle_command;
 mod memory_limit;
 mod model_swap;
+mod output;
+mod protocol;
+mod support;
+
+pub use support::{ModelFactory, WorkerRuntimeError};

@@ -55,6 +55,21 @@ fn should_load_supported_runtime_settings_from_user_config_file() {
 }
 
 #[test]
+fn should_enable_mtp_when_omitted_from_user_config_file() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"model_directories": []}"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("config should load");
+
+    assert!(astronomical_config.mtp_enabled());
+}
+
+#[test]
 fn should_create_a_first_run_config_template_with_an_empty_model_directory_list() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
 
@@ -81,6 +96,13 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
             .and_then(serde_json::Value::as_u64),
         Some(50)
     );
+    assert_eq!(
+        generated_config_json
+            .get("mtp_enabled")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert!(astronomical_config.mtp_enabled());
     assert_eq!(
         astronomical_config
             .prompt_cache()
