@@ -221,6 +221,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.phaseTitle, "Generating")
     XCTAssertEqual(statusDocument.modelFootprintTitle, "RAM + SSD streaming")
     XCTAssertEqual(statusDocument.progressTitle, "27 / 512 tokens")
+    XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s")
     XCTAssertEqual(statusDocument.progressProcessedTokenCount, 27)
     XCTAssertEqual(statusDocument.progressTotalTokenCount, 512)
@@ -275,10 +276,25 @@ final class StatusPresentationContractTests: XCTestCase {
 
     XCTAssertEqual(statusDocument.flightTitle, "Standing by")
     XCTAssertEqual(statusDocument.progressTitle, "Standing by")
+    XCTAssertEqual(statusDocument.elapsedTimeTitle, "Not active")
     XCTAssertEqual(statusDocument.progressProcessedTokenCount, 0)
     XCTAssertEqual(statusDocument.progressTotalTokenCount, 1)
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Not loaded")
     XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "40.00 GB")
+  }
+
+  func test_should_calculate_eta_after_the_first_progress_token() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"prompt_processing","progress":{"phase":"prefill","processed_tokens":0,"total_tokens":14412,"elapsed_ms":250}}"#.utf8
+      )
+    )
+
+    XCTAssertEqual(
+      statusDocument.elapsedTimeTitle,
+      "0.2 s / Calculating"
+    )
   }
 
   func test_should_use_plain_language_for_prompt_processing_rate() throws {
@@ -292,6 +308,8 @@ final class StatusPresentationContractTests: XCTestCase {
 
     XCTAssertEqual(statusDocument.menuBarTitle, "PP 1076 tok/s")
     XCTAssertEqual(statusDocument.flightTitle, "Prompt processing · 1076 tok/s")
+    XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed / ETA")
+    XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s / 12.4 s")
   }
 
   func test_should_use_singular_request_grammar_for_one_completed_request() throws {
