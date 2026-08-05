@@ -85,7 +85,6 @@ struct OrbitalTelemetryPopover: View {
             statusDocument.isActive ? .cyan.opacity(0.2) : .secondary.opacity(0.15), in: Capsule())
       }
       metricRow("Size on disk", statusDocument.modelDiskSizeTitle)
-      metricRow("Expert storage", statusDocument.expertStorageFormatTitle)
       metricRow("Generation mode", statusDocument.mtpRuntimeStateTitle)
       if let mtpUnavailableReason = statusDocument.mtpUnavailableReason {
         Text(mtpUnavailableReason)

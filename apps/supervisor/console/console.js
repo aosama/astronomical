@@ -232,12 +232,6 @@ function renderAboutFromStatus(data) {
     if (data.ready_model_id) {
         document.getElementById("about-model-id").textContent = data.ready_model_id;
     }
-    const expertStorage = data.expert_storage_format;
-    const expertStorageElement = document.getElementById("about-expert-storage");
-    if (expertStorage) {
-        expertStorageElement.textContent =
-            expertStorage === "astronomical_aligned" ? "Astronomical Optimized" : "Standard";
-    } else { expertStorageElement.textContent = "—"; }
     const expertMemory = data.expert_memory_mode;
     const expertMemoryElement = document.getElementById("about-expert-memory");
     if (expertMemory) {

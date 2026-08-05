@@ -19,10 +19,9 @@ use crate::qwen3_5::{
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         if let Some(model) = self.model.as_ref() {
-            return Ok(self.engine_load_result_for_mtp_state(
-                model.expert_storage_format(),
-                model.minimum_mlx_memory_ceiling_bytes()?,
-            ));
+            return Ok(
+                self.engine_load_result_for_mtp_state(model.minimum_mlx_memory_ceiling_bytes()?)
+            );
         }
         let mut model_loading_performance_attribution = self
             .model_loading_performance_attribution
@@ -241,7 +240,6 @@ impl Qwen3_5EngineState {
                 self.persistent_prompt_cache_write_queue = persistent_prompt_cache_write_queue;
                 let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
                 let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
-                let expert_storage_format = model.expert_storage_format();
                 let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;
                 let model_has_mtp_weights = model.mtp_weights();
                 self.model = Some(model);
@@ -286,10 +284,7 @@ impl Qwen3_5EngineState {
                     mlx_memory_snapshot,
                     None,
                 );
-                Ok(self.engine_load_result_for_mtp_state(
-                    expert_storage_format,
-                    minimum_mlx_memory_ceiling_bytes,
-                ))
+                Ok(self.engine_load_result_for_mtp_state(minimum_mlx_memory_ceiling_bytes))
             }
             Err(model_loading_error) => {
                 self.record_model_loading_performance_attribution(
@@ -310,7 +305,6 @@ impl Qwen3_5EngineState {
 
     fn engine_load_result_for_mtp_state(
         &self,
-        expert_storage_format: astronomical_ipc_protocol::ExpertStorageFormat,
         minimum_mlx_memory_ceiling_bytes: u64,
     ) -> EngineLoadResult {
         let mtp_runtime_state = match self.mtp_runtime_state {
@@ -326,7 +320,7 @@ impl Qwen3_5EngineState {
             }
         };
         let mut engine_load_result =
-            EngineLoadResult::new(expert_storage_format).with_mtp_runtime_state(mtp_runtime_state);
+            EngineLoadResult::new().with_mtp_runtime_state(mtp_runtime_state);
         if self.mtp_runtime_state == Qwen3_5MtpRuntimeState::Unavailable {
             if let Some(mtp_unavailable_reason) = self.mtp_unavailable_reason.as_ref() {
                 engine_load_result =

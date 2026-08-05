@@ -196,6 +196,7 @@ fn create_engine(
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
         true,
         false,
+        true,
         model_loading_performance_attribution,
         performance_attribution_log,
     )

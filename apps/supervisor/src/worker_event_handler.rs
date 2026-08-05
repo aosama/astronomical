@@ -38,7 +38,6 @@ pub(super) fn handle_worker_event(
         WorkerEvent::Ready {
             model_id,
             capabilities,
-            expert_storage_format,
             mtp_runtime_state,
             mtp_unavailable_reason,
         } => {
@@ -53,7 +52,6 @@ pub(super) fn handle_worker_event(
                 WorkerHealthSnapshot::ready_with_model(
                     model_id,
                     capabilities,
-                    expert_storage_format,
                     mtp_runtime_state,
                     mtp_unavailable_reason,
                 ),
@@ -115,7 +113,6 @@ pub(super) fn handle_worker_event(
         WorkerEvent::ModelSwapped {
             model_id,
             capabilities,
-            expert_storage_format,
             minimum_mlx_memory_ceiling_bytes,
             mtp_runtime_state,
             mtp_unavailable_reason,
@@ -129,7 +126,6 @@ pub(super) fn handle_worker_event(
                     WorkerHealthSnapshot::ready_with_replacement_model(
                         model_id,
                         capabilities,
-                        expert_storage_format,
                         minimum_mlx_memory_ceiling_bytes,
                         mtp_runtime_state,
                         mtp_unavailable_reason,
@@ -139,7 +135,6 @@ pub(super) fn handle_worker_event(
                     let mut replacement_health_snapshot = WorkerHealthSnapshot::ready_with_model(
                         model_id,
                         capabilities,
-                        expert_storage_format,
                         mtp_runtime_state,
                         mtp_unavailable_reason,
                     );

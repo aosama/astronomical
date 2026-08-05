@@ -62,28 +62,24 @@ where
                         .to_owned(),
                 }
             })?;
-        let expert_storage_format = engine_load_result.expert_storage_format();
         let minimum_mlx_memory_ceiling_bytes =
             engine_load_result.minimum_mlx_memory_ceiling_bytes();
         let mtp_runtime_state = engine_load_result.mtp_runtime_state();
         let mtp_unavailable_reason = engine_load_result
             .mtp_unavailable_reason()
             .map(String::from);
-        let model_swapped_event = match replacement_model.processor.ready_event(
-            expert_storage_format,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-        ) {
+        let model_swapped_event = match replacement_model
+            .processor
+            .ready_event(mtp_runtime_state, mtp_unavailable_reason)
+        {
             WorkerEvent::Ready {
                 model_id,
                 capabilities,
-                expert_storage_format,
                 mtp_runtime_state,
                 mtp_unavailable_reason,
             } => WorkerEvent::ModelSwapped {
                 model_id,
                 capabilities,
-                expert_storage_format,
                 minimum_mlx_memory_ceiling_bytes,
                 mtp_runtime_state,
                 mtp_unavailable_reason,

@@ -77,8 +77,6 @@ impl Qwen3_5Model {
                 description: decoder_cache_layout_error.to_string(),
             },
         )?;
-        let model_id = validated_artifact.model_id().to_owned();
-        let model_revision = validated_artifact.revision().to_owned();
         let vision_config = validated_artifact.vision_config().cloned();
         let has_separate_vision_sidecar = validated_artifact.has_separate_vision_sidecar();
         let has_embedded_vision_tower =
@@ -167,8 +165,6 @@ impl Qwen3_5Model {
                         |_performance_attribution| {
                             ExpertPager::new(
                                 model_directory.to_path_buf(),
-                                &model_id,
-                                &model_revision,
                                 &tensor_name_to_shard_file_name,
                                 &config,
                                 runtime.configured_wired_memory_limit_bytes(),

@@ -71,7 +71,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let readyModelSizeBytes: UInt64?
   let progress: Progress?
   let expertMemoryMode: String?
-  let expertStorageFormat: String?
   let mtpEnabled: Bool
   let mtpRuntimeState: String
   let mtpUnavailableReason: String?
@@ -89,7 +88,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     case readyModelIdentifier = "ready_model_id"
     case readyModelSizeBytes = "ready_model_size_bytes"
     case expertMemoryMode = "expert_memory_mode"
-    case expertStorageFormat = "expert_storage_format"
     case mtpEnabled = "mtp_enabled"
     case mtpRuntimeState = "mtp_runtime_state"
     case mtpUnavailableReason = "mtp_unavailable_reason"
@@ -111,7 +109,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     readyModelSizeBytes = try container.decodeIfPresent(UInt64.self, forKey: .readyModelSizeBytes)
     progress = try container.decodeIfPresent(Progress.self, forKey: .progress)
     expertMemoryMode = try container.decodeIfPresent(String.self, forKey: .expertMemoryMode)
-    expertStorageFormat = try container.decodeIfPresent(String.self, forKey: .expertStorageFormat)
     mtpEnabled = try container.decodeIfPresent(Bool.self, forKey: .mtpEnabled) ?? false
     mtpRuntimeState = try container.decodeIfPresent(String.self, forKey: .mtpRuntimeState) ?? "disabled"
     mtpUnavailableReason = try container.decodeIfPresent(String.self, forKey: .mtpUnavailableReason)
@@ -138,7 +135,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     readyModelSizeBytes: UInt64? = nil,
     progress: Progress?,
     expertMemoryMode: String?,
-    expertStorageFormat: String? = nil,
     mtpEnabled: Bool = false,
     mtpRuntimeState: String = "disabled",
     mtpUnavailableReason: String? = nil,
@@ -157,7 +153,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.readyModelSizeBytes = readyModelSizeBytes
     self.progress = progress
     self.expertMemoryMode = expertMemoryMode
-    self.expertStorageFormat = expertStorageFormat
     self.mtpEnabled = mtpEnabled
     self.mtpRuntimeState = mtpRuntimeState
     self.mtpUnavailableReason = mtpUnavailableReason
@@ -213,14 +208,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
   }
   var modelDiskSizeTitle: String {
     readyModelSizeBytes.map(decimalGigabyteText) ?? "Not measured"
-  }
-  var expertStorageFormatTitle: String {
-    guard readyModelIdentifier != nil else { return "Not loaded" }
-    switch expertStorageFormat {
-    case "astronomical_aligned": return "Astronomical Optimized"
-    case "standard_safetensors": return "Standard"
-    default: return "Not reported"
-    }
   }
   var mtpRuntimeStateTitle: String {
     guard readyModelIdentifier != nil else { return "Not loaded" }

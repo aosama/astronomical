@@ -74,9 +74,7 @@ impl InferenceEngine for CorrectionAwareChatEngine {
     type Request = ScriptedInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Ok(EngineLoadResult::new(
-            ExpertStorageFormat::StandardSafetensors,
-        ))
+        Ok(EngineLoadResult::new())
     }
 
     async fn start_generation(

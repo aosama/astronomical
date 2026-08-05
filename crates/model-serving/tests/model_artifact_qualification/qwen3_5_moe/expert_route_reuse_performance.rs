@@ -103,7 +103,8 @@ async fn run_expert_route_reuse_probe(
         model_id,
         input_token_count,
         output_token_count,
-    );
+    )
+    .expect("the route-reuse prompt should prepare at the exact requested length");
     let generated_token_ids = run_attributed_generation(
         &mut qwen3_5_engine,
         RequestId::new(request_id),

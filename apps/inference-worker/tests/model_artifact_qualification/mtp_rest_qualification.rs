@@ -48,6 +48,7 @@ async fn run_mtp_rest_qualification() {
         MTP_MODEL_ID,
         model_directory,
         Some(isolated_worker_home.path()),
+        None,
     )
     .await;
     let server_address = model_artifact_rest_server.server_address;

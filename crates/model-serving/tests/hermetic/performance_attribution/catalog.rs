@@ -185,10 +185,6 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "expert_bounded_safetensors_lazy_page_construction",
         ),
         (
-            PerformanceOperation::AlignedExpertPackMetalIoPageLoad,
-            "aligned_expert_pack_metal_io_page_load",
-        ),
-        (
             PerformanceOperation::ExpertWeightMemoryCachePageAssemblyGraphConstruction,
             "expert_weight_memory_cache_page_assembly_graph_construction",
         ),
@@ -271,42 +267,6 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceCounter::ExpertPageLogicalPayloadBytes,
             "expert_page_logical_payload_bytes",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoPageLoadCount,
-            "aligned_expert_pack_metal_io_page_load_count",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoLogicalPayloadBytes,
-            "aligned_expert_pack_metal_io_logical_payload_bytes",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoRequestedByteCount,
-            "aligned_expert_pack_metal_io_requested_byte_count",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoCommandCount,
-            "aligned_expert_pack_metal_io_command_count",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds,
-            "aligned_expert_pack_metal_io_host_encoding_elapsed_nanoseconds",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoCompletedLoadCount,
-            "aligned_expert_pack_metal_io_completed_load_count",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoQueueElapsedNanoseconds,
-            "aligned_expert_pack_metal_io_queue_elapsed_nanoseconds",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds,
-            "aligned_expert_pack_metal_io_maximum_queue_elapsed_nanoseconds",
-        ),
-        (
-            PerformanceCounter::AlignedExpertPackMetalIoFailureCount,
-            "aligned_expert_pack_metal_io_failure_count",
         ),
         (
             PerformanceCounter::PositionalFileReadCallCount,

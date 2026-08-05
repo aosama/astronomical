@@ -8,8 +8,6 @@ use astronomical_ipc_protocol::{
 async fn main() {
     let _send_outcome = ProtocolWriter::new(tokio::io::stdout())
         .send_event(&WorkerEvent::Ready {
-            expert_storage_format:
-                astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             model_id: "astronomical/wrong-model".to_owned(),

@@ -79,15 +79,10 @@ impl ModelGenerationProcessor for MalformedFinishProcessor {
 
     fn ready_event(
         &self,
-        expert_storage_format: ExpertStorageFormat,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
     ) -> WorkerEvent {
-        ready_event_with_load_details(
-            expert_storage_format,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-        )
+        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
     }
 
     fn prepare_chat_generation(
@@ -136,15 +131,10 @@ impl ModelGenerationProcessor for ScriptedChatProcessor {
 
     fn ready_event(
         &self,
-        expert_storage_format: ExpertStorageFormat,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
     ) -> WorkerEvent {
-        ready_event_with_load_details(
-            expert_storage_format,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-        )
+        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
     }
 
     fn prepare_chat_generation(
@@ -214,15 +204,10 @@ impl ModelGenerationProcessor for CorrectionRequestingProcessor {
 
     fn ready_event(
         &self,
-        expert_storage_format: ExpertStorageFormat,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
     ) -> WorkerEvent {
-        ready_event_with_load_details(
-            expert_storage_format,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-        )
+        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
     }
 
     fn prepare_chat_generation(
@@ -288,7 +273,6 @@ pub(super) struct ScriptedChatEngine {
     fatal_decode_reason: Option<String>,
     pub(super) initial_expert_memory_mode: Option<ExpertMemoryMode>,
     cancelled_generation_finalization: GenerationFinalization,
-    expert_storage_format: ExpertStorageFormat,
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
 }
@@ -333,7 +317,6 @@ impl ScriptedChatEngine {
             fatal_decode_reason: None,
             initial_expert_memory_mode: None,
             cancelled_generation_finalization: GenerationFinalization::default(),
-            expert_storage_format: ExpertStorageFormat::StandardSafetensors,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
         }
@@ -349,7 +332,6 @@ impl ScriptedChatEngine {
             fatal_decode_reason: Some(fatal_decode_reason.to_owned()),
             initial_expert_memory_mode: None,
             cancelled_generation_finalization: GenerationFinalization::default(),
-            expert_storage_format: ExpertStorageFormat::StandardSafetensors,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
         }
@@ -381,14 +363,6 @@ impl ScriptedChatEngine {
         scripted_engine
     }
 
-    pub(super) fn with_expert_storage_format(
-        mut self,
-        expert_storage_format: ExpertStorageFormat,
-    ) -> Self {
-        self.expert_storage_format = expert_storage_format;
-        self
-    }
-
     pub(super) fn with_mtp_runtime_state(
         mut self,
         mtp_runtime_state: MtpRuntimeState,
@@ -408,8 +382,8 @@ impl InferenceEngine for ScriptedChatEngine {
     type Request = ScriptedInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        let mut engine_load_result = EngineLoadResult::new(self.expert_storage_format)
-            .with_mtp_runtime_state(self.mtp_runtime_state);
+        let mut engine_load_result =
+            EngineLoadResult::new().with_mtp_runtime_state(self.mtp_runtime_state);
         if let Some(mtp_unavailable_reason) = self.mtp_unavailable_reason.clone() {
             engine_load_result =
                 engine_load_result.with_mtp_unavailable_reason(mtp_unavailable_reason);
@@ -508,9 +482,7 @@ impl InferenceEngine for TrackingChatEngine {
     type Request = ScriptedInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Ok(EngineLoadResult::new(
-            ExpertStorageFormat::StandardSafetensors,
-        ))
+        Ok(EngineLoadResult::new())
     }
 
     async fn start_generation(

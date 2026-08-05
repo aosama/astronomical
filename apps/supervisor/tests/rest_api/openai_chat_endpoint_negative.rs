@@ -221,7 +221,6 @@ fn ready_worker_health_snapshot() -> WorkerHealthSnapshot {
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
         MtpRuntimeState::Disabled,
         None,
     )

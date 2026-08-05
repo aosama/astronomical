@@ -276,8 +276,6 @@ async fn status_check(State(application_state): State<ApplicationState>) -> Resp
             }
         )
     );
-    status_json["expert_storage_format"] =
-        serde_json::json!(worker_health_snapshot.expert_storage_format);
     status_json["mlx_memory_snapshot"] =
         serde_json::json!(worker_health_snapshot.latest_mlx_memory_snapshot);
     status_json["mlx_memory_ceiling_bytes"] =

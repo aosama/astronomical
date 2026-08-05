@@ -1,0 +1,28 @@
+[package]
+name = "astronomical-experimental-aligned-expert-packs"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "astronomical-experimental-aligned-expert-pack-preparer"
+path = "src/bin/astronomical-experimental-aligned-expert-pack-preparer.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["experimental-aligned-expert-packs"] }
+fs4.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+astronomical-config = { path = "../../crates/config" }
+tempfile = "=3.27.0"
+tokio.workspace = true

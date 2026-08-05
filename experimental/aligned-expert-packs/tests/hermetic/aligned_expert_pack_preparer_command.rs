@@ -6,8 +6,9 @@ const COMMAND_TEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[tokio::test]
 async fn should_explain_the_explicit_model_preparation_command_without_mutation() {
-    let command_path = std::env::var("CARGO_BIN_EXE_astronomical-model-preparer")
-        .expect("Cargo should provide the production model-preparer executable path");
+    let command_path =
+        std::env::var("CARGO_BIN_EXE_astronomical-experimental-aligned-expert-pack-preparer")
+            .expect("Cargo should provide the experimental model-preparer executable path");
 
     let command_output = timeout(
         COMMAND_TEST_TIMEOUT,
@@ -66,8 +67,9 @@ async fn should_reject_mutation_flags_combined_with_dry_run() {
 }
 
 async fn run_model_preparer(arguments: Vec<&str>) -> std::process::Output {
-    let command_path = std::env::var("CARGO_BIN_EXE_astronomical-model-preparer")
-        .expect("Cargo should provide the production model-preparer executable path");
+    let command_path =
+        std::env::var("CARGO_BIN_EXE_astronomical-experimental-aligned-expert-pack-preparer")
+            .expect("Cargo should provide the experimental model-preparer executable path");
     timeout(
         COMMAND_TEST_TIMEOUT,
         Command::new(command_path).args(arguments).output(),
