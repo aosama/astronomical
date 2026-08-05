@@ -245,29 +245,73 @@ impl EnabledPerformanceAttribution {
         #[cfg(feature = "direct-mlx")]
         let counter_values = {
             let mut counter_values = self.counter_values;
-            let expert_ssd_read_snapshot = self.expert_ssd_read_metrics.snapshot();
+            let metal_expert_pack_load_metrics_snapshot =
+                self.metal_expert_pack_load_metrics.snapshot();
             add_counter_amount(
                 &mut counter_values,
-                PerformanceCounter::ExpertSsdReadCallCount,
-                expert_ssd_read_snapshot.read_call_count,
+                PerformanceCounter::AlignedExpertPackMetalIoRequestedByteCount,
+                metal_expert_pack_load_metrics_snapshot.requested_byte_count,
             );
             add_counter_amount(
                 &mut counter_values,
-                PerformanceCounter::ExpertSsdReadByteCount,
-                expert_ssd_read_snapshot.read_byte_count,
+                PerformanceCounter::AlignedExpertPackMetalIoCommandCount,
+                metal_expert_pack_load_metrics_snapshot.command_count,
             );
             add_counter_amount(
                 &mut counter_values,
-                PerformanceCounter::ExpertSsdReadElapsedNanoseconds,
-                expert_ssd_read_snapshot.total_read_elapsed_nanoseconds,
+                PerformanceCounter::AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds,
+                metal_expert_pack_load_metrics_snapshot.host_encoding_elapsed_nanoseconds,
             );
-            counter_values[PerformanceCounter::ExpertSsdReadMaximumElapsedNanoseconds as usize] =
-                counter_values[PerformanceCounter::ExpertSsdReadMaximumElapsedNanoseconds as usize]
-                    .max(expert_ssd_read_snapshot.maximum_read_elapsed_nanoseconds);
             add_counter_amount(
                 &mut counter_values,
-                PerformanceCounter::ExpertSsdReadFailureCount,
-                expert_ssd_read_snapshot.read_failure_count,
+                PerformanceCounter::AlignedExpertPackMetalIoCompletedLoadCount,
+                metal_expert_pack_load_metrics_snapshot.completed_load_count,
+            );
+            add_counter_amount(
+                &mut counter_values,
+                PerformanceCounter::AlignedExpertPackMetalIoQueueElapsedNanoseconds,
+                metal_expert_pack_load_metrics_snapshot.queue_elapsed_nanoseconds,
+            );
+            counter_values
+                [PerformanceCounter::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds
+                    as usize] = counter_values
+                [PerformanceCounter::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds
+                    as usize]
+                .max(metal_expert_pack_load_metrics_snapshot.maximum_queue_elapsed_nanoseconds);
+            add_counter_amount(
+                &mut counter_values,
+                PerformanceCounter::AlignedExpertPackMetalIoFailureCount,
+                metal_expert_pack_load_metrics_snapshot.failed_load_count,
+            );
+            let positional_file_read_snapshot = self.positional_file_read_metrics.snapshot();
+            add_counter_amount(
+                &mut counter_values,
+                PerformanceCounter::PositionalFileReadCallCount,
+                positional_file_read_snapshot.read_call_count,
+            );
+            add_counter_amount(
+                &mut counter_values,
+                PerformanceCounter::PositionalFileReadByteCount,
+                positional_file_read_snapshot.read_byte_count,
+            );
+            add_counter_amount(
+                &mut counter_values,
+                PerformanceCounter::PositionalFileReadElapsedNanoseconds,
+                positional_file_read_snapshot.total_read_elapsed_nanoseconds,
+            );
+            counter_values
+                [PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds as usize] =
+                counter_values
+                    [PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds as usize]
+                    .max(positional_file_read_snapshot.maximum_read_elapsed_nanoseconds);
+            counter_values[PerformanceCounter::PositionalFileReadMaximumConcurrentCount as usize] =
+                counter_values
+                    [PerformanceCounter::PositionalFileReadMaximumConcurrentCount as usize]
+                    .max(positional_file_read_snapshot.maximum_concurrent_read_count);
+            add_counter_amount(
+                &mut counter_values,
+                PerformanceCounter::PositionalFileReadFailureCount,
+                positional_file_read_snapshot.read_failure_count,
             );
             counter_values
         };

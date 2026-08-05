@@ -1,6 +1,6 @@
 //! End-to-end persistent prompt cache tests that exercise the full SSD cache pipeline.
 //!
-//! **These tests are dead-slow**: they load the 22 GB Ornith model and exercise the
+//! **These tests are dead-slow**: they load the complete Qwen3.6 model and exercise the
 //! persistent prompt cache end-to-end, including cold prefill, cache save, and cache
 //! restore. Each test has an internal 115-second timeout.
 //!

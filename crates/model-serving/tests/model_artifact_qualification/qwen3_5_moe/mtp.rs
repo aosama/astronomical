@@ -12,6 +12,7 @@ use crate::model_artifact_qualification::qwen3_5::mtp_support::run_one_layer_mtp
 mod benchmark;
 mod engine_support;
 mod lifecycle;
+mod model_loading;
 
 use engine_support::{generate_with_mtp_engine, performance_counter_amount};
 

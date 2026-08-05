@@ -3,11 +3,13 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use astronomical_runtime_integration::{
-    MlxDtype, MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor, MlxRuntime,
+    MlxDtype, MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadRange,
+    MlxMetalExpertPackOutputTensor, MlxRuntime,
 };
 
 use super::{
@@ -97,11 +99,12 @@ pub(super) fn discover_aligned_expert_pack_layers(
     }
 }
 
-pub(super) fn load_selected_experts_from_aligned_pack(
+fn load_selected_experts_from_aligned_pack(
     runtime: &MlxRuntime,
     aligned_pack_layer: &AlignedExpertPackLayer,
     layer_plan: &QuantizedExpertLayerPlan,
     selected_expert_ids: &[usize],
+    metal_expert_pack_load_metrics: Option<Arc<MlxMetalExpertPackLoadMetricsAccumulator>>,
 ) -> Result<PagedExpertWeights, ExpertPagingError> {
     let (metal_output_tensors, metal_io_load_ranges) =
         build_aligned_expert_pack_metal_io_descriptors(
@@ -114,6 +117,7 @@ pub(super) fn load_selected_experts_from_aligned_pack(
             &aligned_pack_layer.pack_path,
             &metal_output_tensors,
             &metal_io_load_ranges,
+            metal_expert_pack_load_metrics,
         )
         .map_err(|load_error| runtime_description(load_error.to_string()))?;
     let mut loaded_expert_tensors_by_name = HashMap::with_capacity(metal_output_tensors.len());
@@ -260,6 +264,7 @@ pub(super) fn load_selected_experts_from_aligned_pack_with_performance_attributi
     logical_payload_byte_count: u64,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<PagedExpertWeights, ExpertPagingError> {
+    let metal_expert_pack_load_metrics = performance_attribution.metal_expert_pack_load_metrics();
     let paged_expert_weights = performance_attribution.measure_operation(
         PerformanceOperation::AlignedExpertPackMetalIoPageLoad,
         |_performance_attribution| {
@@ -268,6 +273,7 @@ pub(super) fn load_selected_experts_from_aligned_pack_with_performance_attributi
                 aligned_pack_layer,
                 layer_plan,
                 selected_expert_ids,
+                metal_expert_pack_load_metrics,
             )
         },
     )?;

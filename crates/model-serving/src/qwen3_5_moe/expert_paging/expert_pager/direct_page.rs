@@ -119,7 +119,7 @@ impl ExpertPager {
                             let mut loaded_tensors = load_quantized_expert_page(
                                 runtime,
                                 &page_manifest,
-                                performance_attribution.expert_ssd_read_metrics(),
+                                performance_attribution.positional_file_read_metrics(),
                             )
                             .map_err(|load_error| ExpertPagingError::Runtime {
                                 description: load_error.to_string(),

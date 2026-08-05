@@ -52,10 +52,19 @@ impl Qwen3_5Weights {
         let model_shard_files = validated_artifact.into_shard_files()?;
         let model_shards = performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
-            |_performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
+            |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
                 let mut model_shards = Vec::with_capacity(model_shard_files.len());
+                let positional_file_read_metrics =
+                    performance_attribution.positional_file_read_metrics();
                 for model_shard_file in model_shard_files {
-                    model_shards.push(runtime.load_safetensors(model_shard_file.into_file())?);
+                    model_shards.push(
+                        runtime.load_safetensors(
+                            model_shard_file.into_file(),
+                            positional_file_read_metrics
+                                .as_ref()
+                                .map(std::sync::Arc::clone),
+                        )?,
+                    );
                 }
                 Ok(model_shards)
             },

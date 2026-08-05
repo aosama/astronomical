@@ -1,12 +1,13 @@
 use std::fs;
 use std::sync::Arc;
+use std::time::Instant;
 
 use astronomical_model_serving::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PerformanceAttribution,
     PersistentPromptCacheDiskStoreError, PersistentPromptCacheWriteQueue,
     PersistentPromptCacheWriteQueueOutcome, PersistentVisualEmbeddingKey,
 };
-use astronomical_runtime_integration::MlxDtype;
+use astronomical_runtime_integration::{MlxDtype, PositionalFileReadMetrics};
 
 use super::persistent_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe::persistent_visual_embedding_model_contract;
@@ -122,12 +123,21 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
             .is_file()
     );
 
+    let positional_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());
     let loaded_kv_block_tensors = persistent_prompt_cache
-        .load_kv_block(&runtime, &persistent_prompt_cache_block_key)
+        .load_kv_block(
+            &runtime,
+            &persistent_prompt_cache_block_key,
+            Some(Arc::clone(&positional_file_read_metrics)),
+        )
         .expect("the persistent prompt cache should load the saved KV block")
         .expect("the saved KV block should be present");
     let loaded_recurrent_snapshot_tensors = persistent_prompt_cache
-        .load_recurrent_snapshot(&runtime, &persistent_prompt_cache_block_key)
+        .load_recurrent_snapshot(
+            &runtime,
+            &persistent_prompt_cache_block_key,
+            Some(Arc::clone(&positional_file_read_metrics)),
+        )
         .expect("the persistent prompt cache should load the saved recurrent snapshot")
         .expect("the saved recurrent snapshot should be present");
 
@@ -137,6 +147,32 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
     assert_split_tensor_shapes_match(
         &loaded_recurrent_snapshot_tensors,
         &recurrent_snapshot_tensors,
+    );
+    drop(kv_block_tensors);
+    drop(recurrent_snapshot_tensors);
+    runtime
+        .synchronize_gpu_stream_and_clear_allocator_cache()
+        .expect("the test should release serialized source tensors before restore evaluation");
+    let loaded_state_arrays = loaded_kv_block_tensors
+        .values()
+        .chain(loaded_recurrent_snapshot_tensors.values())
+        .collect::<Vec<_>>();
+    let restore_evaluation_started_at = Instant::now();
+    runtime
+        .evaluate_arrays(&loaded_state_arrays)
+        .expect("the restored prompt-cache tensors should evaluate");
+    let restore_evaluation_elapsed = restore_evaluation_started_at.elapsed();
+    let positional_file_read_snapshot = positional_file_read_metrics.snapshot();
+    assert_eq!(positional_file_read_snapshot.read_call_count, 80);
+    assert!(positional_file_read_snapshot.read_byte_count > 0);
+    assert_eq!(positional_file_read_snapshot.read_failure_count, 0);
+    eprintln!(
+        "[prompt-cache-positional-read] status=success tensors=80 read_calls={} read_bytes={} maximum_concurrent_reads={} summed_read_milliseconds={:.3} evaluation_milliseconds={:.3}",
+        positional_file_read_snapshot.read_call_count,
+        positional_file_read_snapshot.read_byte_count,
+        positional_file_read_snapshot.maximum_concurrent_read_count,
+        positional_file_read_snapshot.total_read_elapsed_nanoseconds as f64 / 1_000_000.0,
+        restore_evaluation_elapsed.as_secs_f64() * 1_000.0,
     );
 }
 

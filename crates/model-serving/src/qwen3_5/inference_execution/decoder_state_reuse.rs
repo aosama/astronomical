@@ -136,9 +136,12 @@ impl Qwen3_5EngineState {
             let loaded_kv_block_tensors = performance_attribution
                 .measure_operation(
                     PerformanceOperation::PersistentPromptCacheKvBlockRead,
-                    |_performance_attribution| {
-                        persistent_prompt_cache
-                            .load_kv_block(model.runtime(), &persistent_prompt_cache_block_key)
+                    |performance_attribution| {
+                        persistent_prompt_cache.load_kv_block(
+                            model.runtime(),
+                            &persistent_prompt_cache_block_key,
+                            performance_attribution.positional_file_read_metrics(),
+                        )
                     },
                 )
                 .map_err(|persistent_prompt_cache_error| {
@@ -165,9 +168,12 @@ impl Qwen3_5EngineState {
         let persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheRecurrentSnapshotRead,
-                |_performance_attribution| {
-                    persistent_prompt_cache
-                        .load_recurrent_snapshot(model.runtime(), recurrent_snapshot_block_key)
+                |performance_attribution| {
+                    persistent_prompt_cache.load_recurrent_snapshot(
+                        model.runtime(),
+                        recurrent_snapshot_block_key,
+                        performance_attribution.positional_file_read_metrics(),
+                    )
                 },
             )
             .map_err(|persistent_prompt_cache_error| {
