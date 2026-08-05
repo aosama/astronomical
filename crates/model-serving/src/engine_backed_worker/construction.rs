@@ -1,5 +1,5 @@
-use crate::engine_backed_worker::{EngineBackedWorker, LoadedModel};
-use crate::engine_backed_worker_support::ModelFactory;
+use super::support::ModelFactory;
+use super::{EngineBackedWorker, LoadedModel};
 use crate::{InferenceEngine, ModelGenerationProcessor};
 
 impl<Processor, Engine> EngineBackedWorker<Processor, Engine, ()>

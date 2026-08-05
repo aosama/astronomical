@@ -5,10 +5,8 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use crate::engine_backed_worker_fatal::report_fatal_engine_error;
-use crate::engine_backed_worker_support::{
-    ActiveEngineGeneration, ModelFactory, WorkerRuntimeError,
-};
+use super::fatal::report_fatal_engine_error;
+use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{GeneratedToken, InferenceEngine, InferenceEngineError};
 

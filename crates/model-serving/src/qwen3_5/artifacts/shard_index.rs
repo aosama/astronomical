@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::TensorProfile;
+use crate::artifact_validation::TensorProfile;
 
 use super::tensor_spec::validate_language_tensor_names;
 

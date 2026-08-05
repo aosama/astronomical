@@ -1,4 +1,3 @@
-use astronomical_config::{AstronomicalConfig, discover_qwen3_5_models};
 use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
 use tokio::time::timeout;
 
@@ -36,19 +35,8 @@ fn configured_dense_qwen3_5_vision_artifact() -> Option<(
     std::path::PathBuf,
     astronomical_model_serving::ValidatedQwen3_5Artifact,
 )> {
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
-        .expect("the standard Astronomical configuration should load for model qualification");
-    let maximum_output_tokens = astronomical_config.max_output_tokens();
-    let configured_model_directory_scans = discover_qwen3_5_models(
-        astronomical_config.model_directories(),
-        maximum_output_tokens,
-    )
-    .expect("configured model-directory discovery should complete");
-    let mut discovered_vision_models = configured_model_directory_scans
+    let mut discovered_vision_models = crate::common::configured_discovered_models()
         .into_iter()
-        .flat_map(|configured_model_directory_scan| {
-            configured_model_directory_scan.discovered_models
-        })
         .filter(|discovered_model| discovered_model.has_vision)
         .collect::<Vec<_>>();
     discovered_vision_models.sort_by_key(|discovered_model| discovered_model.model_size_bytes);
@@ -59,7 +47,7 @@ fn configured_dense_qwen3_5_vision_artifact() -> Option<(
             let validated_artifact = Qwen3_5ArtifactValidator::new()
                 .validate(
                     &discovered_vision_model.model_directory,
-                    maximum_output_tokens,
+                    discovered_vision_model.max_output_tokens,
                 )
                 .ok()?;
             (validated_artifact.config().feed_forward_architecture()

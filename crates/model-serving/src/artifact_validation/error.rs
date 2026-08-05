@@ -1,9 +1,9 @@
 use std::{io, path::PathBuf};
 
-use safetensors::Dtype;
+use ::safetensors::Dtype;
 use thiserror::Error;
 
-use crate::TensorDtype;
+use super::TensorDtype;
 
 /// Errors produced while failing closed on an invalid model artifact.
 #[derive(Debug, Error)]

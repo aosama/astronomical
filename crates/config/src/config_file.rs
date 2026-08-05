@@ -32,6 +32,7 @@ pub(crate) struct UserConfigFile {
     /// Optional decimal SI GB ceiling for MLX memory. Omission selects the machine maximum.
     pub(crate) maximum_mlx_memory_gb: Option<u64>,
     /// Enables qualified Qwen multi-token prediction when the artifact supports it.
+    /// Defaults to enabled when omitted.
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     pub(crate) mtp_enabled: Option<bool>,
     pub(crate) supervisor: Option<SupervisorConfigFile>,
@@ -76,6 +77,7 @@ pub(crate) fn read_user_config_file(
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
             let first_run_config_bytes = serde_json::to_vec_pretty(&serde_json::json!({
                 "model_directories": [],
+                "mtp_enabled": true,
                 "prefill_chunck_size_optimizer_enabled": true,
                 "prompt_cache_max_size_gb": DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
             }))

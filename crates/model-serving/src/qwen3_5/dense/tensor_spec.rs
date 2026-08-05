@@ -1,4 +1,4 @@
-use crate::TensorProfile;
+use crate::artifact_validation::TensorProfile;
 use crate::qwen3_5::Qwen3_5Config;
 use crate::qwen3_5::artifacts::tensor_spec::append_qwen3_5_quantized_affine_tensor_profiles;
 
