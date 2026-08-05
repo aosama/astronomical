@@ -29,7 +29,7 @@ fn should_describe_the_oq4e_mtp_fusion_and_expert_tensor_shapes() {
     assert_eq!(mtp_tensor_profiles.len(), 42);
     assert!(mtp_tensor_profiles.iter().any(|tensor_profile| {
         tensor_profile.name == "language_model.mtp.fc.weight"
-            && tensor_profile.dtype == TensorDtype::BFloat16
+            && tensor_profile.dtype == TensorDtype::ModelFloat
             && tensor_profile.shape == [2_048, 4_096]
     }));
     assert!(mtp_tensor_profiles.iter().any(|tensor_profile| {

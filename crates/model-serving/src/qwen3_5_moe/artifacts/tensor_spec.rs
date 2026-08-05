@@ -17,7 +17,7 @@ pub(crate) fn append_qwen3_5_moe_feed_forward_tensor_profiles(
     if router_quantization_profile.is_unquantized() {
         tensor_profiles.push(qwen3_5_tensor_profile(
             format!("{router_module_name}.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![qwen3_5_config.expert_count() as usize, hidden_size],
         ));
     } else {

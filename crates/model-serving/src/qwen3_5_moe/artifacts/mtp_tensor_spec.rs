@@ -48,7 +48,7 @@ pub(crate) fn append_qwen3_5_moe_mtp_tensor_profiles(
     let shared_expert_intermediate_size = qwen3_5_config.shared_expert_intermediate_size() as usize;
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{mtp_layer_prefix}.mlp.gate.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![expert_count, hidden_size],
     ));
     for (projection_name, output_dimension, input_dimension) in [
