@@ -89,3 +89,8 @@
 
 - In this code base, the user of the GPU should be adopted to the maximum extent possible, it has been observed that the more computations that can be offloaded to the GPU, the better the performance will be.
 - Do not assume that a certain GPU operation will be slower or will not yield more performance than the CPU.
+
+## Speculative Decoding Whether MTP or DFlash are First Class Citizens
+
+- The desired default behavior is that MTP or DFlash is enabled by default for models that support those.
+- There shouldnt be any defaults that disable MTP or Dflash or any type of speculative decoding for models that support those.
