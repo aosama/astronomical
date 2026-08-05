@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title description">
+  <title id="title">Astronomical</title>
+  <desc id="description">An orbital ring crossing a bright core</desc>
+  <rect width="64" height="64" rx="16" fill="#10120f"/>
+  <circle cx="32" cy="32" r="9" fill="#d8ff3e"/>
+  <ellipse cx="32" cy="32" rx="24" ry="11" fill="none" stroke="#f4f0e6" stroke-width="3" transform="rotate(-24 32 32)"/>
+  <circle cx="52" cy="22" r="3" fill="#ff6b35"/>
+</svg>
