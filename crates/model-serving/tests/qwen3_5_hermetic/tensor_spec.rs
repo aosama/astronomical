@@ -3,7 +3,7 @@ use astronomical_model_serving::{Qwen3_5Config, TensorDtype, qwen3_5_language_te
 use crate::common::qwen3_5_moe::certified_ornith_config_bytes;
 
 #[test]
-fn should_profile_a_log_for_bfloat16_or_float32_storage_when_decay_math_uses_float32() {
+fn should_profile_a_log_as_stored_model_float_when_decay_math_uses_float32() {
     let mut config_document =
         serde_json::from_slice::<serde_json::Value>(&certified_ornith_config_bytes())
             .expect("the certified config should parse as JSON");
@@ -20,6 +20,6 @@ fn should_profile_a_log_for_bfloat16_or_float32_storage_when_decay_math_uses_flo
         })
         .expect("the linear attention decay tensor should be profiled");
 
-    assert_eq!(a_log_tensor_profile.dtype, TensorDtype::BFloat16OrFloat32);
+    assert_eq!(a_log_tensor_profile.dtype, TensorDtype::ModelFloat);
     assert_eq!(a_log_tensor_profile.shape, [32]);
 }

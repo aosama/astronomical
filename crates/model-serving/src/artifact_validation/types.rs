@@ -10,10 +10,12 @@ pub struct RequiredFileProfile {
 /// Supported safetensors dtype names for certified tensor metadata.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TensorDtype {
+    /// Floating-point storage accepted by MLX affine scales and biases.
+    AffineQuantizationFloat,
+    /// Floating-point storage for model parameters retained without conversion.
+    ModelFloat,
     /// Brain floating point with 16-bit storage.
     BFloat16,
-    /// Either BF16 storage or F32 storage; runtime computation promotes to F32.
-    BFloat16OrFloat32,
     /// 32-bit IEEE floating point.
     Float32,
     /// Unsigned 32-bit integers used by MLX packed quantized weights.

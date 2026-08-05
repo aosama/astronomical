@@ -25,21 +25,6 @@ const PROJECTION_NAMES: &[&str] = &["gate_proj", "up_proj", "down_proj"];
 /// The three quantized parameter names for each projection.
 const PARAMETER_NAMES: &[&str] = &["weight", "scales", "biases"];
 
-/// Expected dtype for each quantized parameter.
-/// Weight tensors are packed U32, scales and biases are BF16.
-const EXPECTED_PARAMETER_DTYPES: &[(&str, SafetensorsDtype)] = &[
-    ("weight", SafetensorsDtype::Uint32),
-    ("scales", SafetensorsDtype::BFloat16),
-    ("biases", SafetensorsDtype::BFloat16),
-];
-
-fn expected_dtype_for_parameter(parameter_name: &str) -> Option<SafetensorsDtype> {
-    EXPECTED_PARAMETER_DTYPES
-        .iter()
-        .find(|(name, _)| *name == parameter_name)
-        .map(|(_, dtype)| *dtype)
-}
-
 /// Build startup-validated layer metadata by reading safetensors headers.
 ///
 /// `weight_map` maps tensor names (e.g. `language_model.model.layers.0.mlp.switch_mlp.gate_proj.weight`)
@@ -196,21 +181,30 @@ fn validate_quantized_tensor_source(
     source_file: &Path,
     source_file_size_bytes: u64,
 ) -> Result<QuantizedTensorSource, ExpertManifestError> {
-    let expected_dtype = if quantization_bits == 0 {
-        SafetensorsDtype::BFloat16
+    let expected_exact_dtype = if quantization_bits == 0 {
+        Some(SafetensorsDtype::BFloat16)
+    } else if parameter_name == "weight" {
+        Some(SafetensorsDtype::Uint32)
     } else {
-        expected_dtype_for_parameter(parameter_name).ok_or_else(|| {
-            ExpertManifestError::WrongDtype {
-                tensor_name: tensor_name.to_owned(),
-                expected_dtype: SafetensorsDtype::BFloat16,
-                actual_dtype: tensor_entry.dtype,
-            }
-        })?
+        None
     };
-    if tensor_entry.dtype != expected_dtype {
+    if let Some(expected_dtype) = expected_exact_dtype
+        && tensor_entry.dtype != expected_dtype
+    {
         return Err(ExpertManifestError::WrongDtype {
             tensor_name: tensor_name.to_owned(),
             expected_dtype,
+            actual_dtype: tensor_entry.dtype,
+        });
+    }
+    if expected_exact_dtype.is_none()
+        && !matches!(
+            tensor_entry.dtype,
+            SafetensorsDtype::Float16 | SafetensorsDtype::BFloat16 | SafetensorsDtype::Float32
+        )
+    {
+        return Err(ExpertManifestError::UnsupportedAffineParameterDtype {
+            tensor_name: tensor_name.to_owned(),
             actual_dtype: tensor_entry.dtype,
         });
     }

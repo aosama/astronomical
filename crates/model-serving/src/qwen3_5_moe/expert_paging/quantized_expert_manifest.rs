@@ -35,6 +35,13 @@ pub enum ExpertManifestError {
         expected_dtype: SafetensorsDtype,
         actual_dtype: SafetensorsDtype,
     },
+    #[error(
+        "quantized expert tensor {tensor_name:?} must use float16, bfloat16, or float32 but has {actual_dtype}"
+    )]
+    UnsupportedAffineParameterDtype {
+        tensor_name: String,
+        actual_dtype: SafetensorsDtype,
+    },
     #[error("quantized expert tensor {tensor_name:?} must have a non-empty rank-three shape")]
     InvalidShape { tensor_name: String },
     #[error("quantized projection {projection_name:?} scales and biases must share a shape")]
