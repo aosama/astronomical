@@ -6,7 +6,8 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::model::Qwen3_5Model;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 
-const PREFILL_ASYNC_SUBMISSION_LAYER_INTERVAL: usize = 8;
+// Bounded submissions overlap host graph construction without per-layer scheduler overhead.
+const FORWARD_ASYNC_SUBMISSION_LAYER_INTERVAL: usize = 3;
 
 /// Target-model graph outputs needed to seed MTP drafting from a verified target forward.
 pub struct Qwen3_5TargetForwardOutput {
@@ -239,8 +240,7 @@ impl Qwen3_5Model {
                 paged_prefill_execution_mode,
                 performance_attribution,
             )?;
-            if token_count > 1
-                && (layer_index + 1).is_multiple_of(PREFILL_ASYNC_SUBMISSION_LAYER_INTERVAL)
+            if (layer_index + 1).is_multiple_of(FORWARD_ASYNC_SUBMISSION_LAYER_INTERVAL)
                 && layer_index + 1 < decoder_layer_count
             {
                 self.runtime.async_eval_arrays(&[&hidden_states])?;

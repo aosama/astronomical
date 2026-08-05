@@ -2,8 +2,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, MtpRuntimeState,
-    RequestId,
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode,
+    MtpRuntimeState, RequestId,
 };
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Engine,
@@ -15,7 +15,7 @@ use super::IMAGE_PAD_TOKEN_ID;
 use super::engine_support::load_mtp_test_engine;
 
 const BENCHMARK_INPUT_TOKEN_COUNT: usize = 1_024;
-const BENCHMARK_OUTPUT_TOKEN_COUNT: u16 = 512;
+const BENCHMARK_OUTPUT_TOKEN_COUNT: u16 = 1_024;
 const BENCHMARK_SOURCE_TEXT: &str = include_str!(
     "../../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
@@ -29,6 +29,55 @@ async fn should_keep_representative_mtp_generation_faster_and_exact() {
     )
     .await
     .expect("the representative MTP release gate should finish within 115 seconds");
+}
+
+#[tokio::test]
+#[ignore = "loads the fully resident target model for representative decode measurement"]
+async fn should_measure_representative_fully_resident_target_only_decode() {
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        run_representative_fully_resident_target_only_decode(),
+    )
+    .await
+    .expect("representative fully resident decode should finish within 60 seconds");
+}
+
+async fn run_representative_fully_resident_target_only_decode() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+    let benchmark_prompt_cases = prepare_benchmark_prompt_cases(&model_directory);
+    eprintln!(
+        "[oq4e-resident-decode] status=start input_tokens={} output_tokens={} ETA_seconds=60",
+        BENCHMARK_INPUT_TOKEN_COUNT, BENCHMARK_OUTPUT_TOKEN_COUNT,
+    );
+    let (mut target_only_engine, _temporary_log_directory, _performance_attribution_log_path) =
+        load_mtp_test_engine(&model_directory, false).await;
+    target_only_engine
+        .load()
+        .await
+        .expect("the representative fully resident target-only engine should load");
+    target_only_engine
+        .disable_adaptive_ram_growth_memory_guard_for_tests()
+        .await
+        .expect("the representative resident benchmark should disable adaptive guarding");
+    let target_only_measurement = run_one_generation(
+        &mut target_only_engine,
+        RequestId::new(40_100),
+        &benchmark_prompt_cases[0],
+        BENCHMARK_OUTPUT_TOKEN_COUNT,
+    )
+    .await;
+    assert_eq!(
+        target_only_measurement.generated_token_ids.len(),
+        usize::from(BENCHMARK_OUTPUT_TOKEN_COUNT),
+        "the resident decode measurement must use the complete output budget"
+    );
+    eprintln!(
+        "[oq4e-resident-decode] status=success input_tokens={} output_tokens={} target_only_tok_per_second={:.2}",
+        BENCHMARK_INPUT_TOKEN_COUNT,
+        BENCHMARK_OUTPUT_TOKEN_COUNT,
+        target_only_measurement.tokens_per_second(),
+    );
 }
 
 async fn run_representative_mtp_release_gate() {
@@ -274,10 +323,15 @@ async fn run_one_generation(
         maximum_output_tokens,
     )
     .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID);
-    engine
+    let generation_start = engine
         .start_generation(inference_request)
         .await
         .expect("the representative benchmark request should start");
+    assert_eq!(
+        generation_start.expert_memory_mode(),
+        Some(ExpertMemoryMode::Resident),
+        "the representative benchmark must isolate fully resident generation"
+    );
 
     let mut measurement = BenchmarkMeasurement::default();
     let mut first_generated_token_at = None;
@@ -297,7 +351,7 @@ async fn run_one_generation(
                 measurement.generated_token_ids.push(token_id);
                 if measurement.generated_token_ids.len().is_multiple_of(16) {
                     eprintln!(
-                        "[oq4e-mtp-release] status=progress phase={} generated_tokens={}/{}",
+                        "[oq4e-generation-benchmark] status=progress phase={} generated_tokens={}/{}",
                         benchmark_prompt_case.phase_name,
                         measurement.generated_token_ids.len(),
                         maximum_output_tokens,
