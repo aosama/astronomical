@@ -102,7 +102,7 @@ struct OrbitalTelemetryPopover: View {
         total: Double(statusDocument.progressTotalTokenCount)
       ).tint(.cyan)
       metricRow("Progress", statusDocument.progressTitle)
-      metricRow("Elapsed", statusDocument.elapsedTimeTitle)
+      metricRow(statusDocument.elapsedTimeMetricTitle, statusDocument.elapsedTimeTitle)
       Divider()
       GPUUtilizationBar(
         gpuUtilizationPercentage: telemetryStore.systemTelemetrySnapshot.gpuUtilizationPercentage
