@@ -4,11 +4,8 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
   pull_request:
-    paths-ignore:
-      - '**/*.md'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,7 +15,77 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect-changes:
+    name: Classify changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code_changed: ${{ steps.classify.outputs.code_changed }}
+    steps:
+      - name: Check out source history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify code and static-only changes
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          printf '[ci-change-detection] status=start event=%s started_at=%s\n' "$EVENT_NAME" "$started_at"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            printf 'code_changed=true\n' >> "$GITHUB_OUTPUT"
+            printf '[ci-change-detection] status=complete classification=manual_run code_changed=true\n'
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_sha="$PULL_REQUEST_BASE_SHA"
+            head_sha="$PULL_REQUEST_HEAD_SHA"
+          else
+            base_sha="$PUSH_BEFORE_SHA"
+            head_sha="$CURRENT_SHA"
+          fi
+
+          if [ -z "$base_sha" ] || [ -z "$head_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
+            printf 'code_changed=true\n' >> "$GITHUB_OUTPUT"
+            printf '[ci-change-detection] status=complete classification=unknown_history code_changed=true\n'
+            exit 0
+          fi
+
+          changed_files_path="$(mktemp)"
+          trap 'rm -f "$changed_files_path"' EXIT
+          git diff --name-only "$base_sha" "$head_sha" > "$changed_files_path"
+          changed_file_count="$(wc -l < "$changed_files_path" | tr -d '[:space:]')"
+          code_changed=false
+
+          while IFS= read -r changed_path; do
+            case "$changed_path" in
+              site/*|*.md|.github/assets/*|.github/workflows/pages.yml)
+                ;;
+              *)
+                code_changed=true
+                break
+                ;;
+            esac
+          done < "$changed_files_path"
+
+          printf 'code_changed=%s\n' "$code_changed" >> "$GITHUB_OUTPUT"
+          printf '[ci-change-detection] status=complete classification=%s changed_files=%s\n' \
+            "$([ "$code_changed" = true ] && printf code_or_build || printf static_only)" \
+            "$changed_file_count"
+
   verify:
+    if: ${{ needs.detect-changes.outputs.code_changed == 'true' }}
+    needs: detect-changes
     name: 10-minute macOS hermetic verification
     runs-on: macos-26
     timeout-minutes: 10
