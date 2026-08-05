@@ -50,6 +50,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-experimental-aligned-expert-packs"
+version = "0.1.0"
+dependencies = [
+ "astronomical-config",
+ "astronomical-model-serving",
+ "astronomical-runtime-integration",
+ "fs4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "astronomical-inference-worker"
 version = "0.1.0"
 dependencies = [

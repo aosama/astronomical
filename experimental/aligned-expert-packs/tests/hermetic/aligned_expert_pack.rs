@@ -4,12 +4,14 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use astronomical_model_serving::{
+use astronomical_experimental_aligned_expert_packs::{
     ALIGNED_EXPERT_PACK_SEGMENT_ALIGNMENT_BYTES, AlignedExpertPackBuildRequest,
-    AlignedExpertPackError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
-    SafetensorsDtype, build_aligned_expert_pack, build_aligned_expert_pack_metal_io_descriptors,
-    read_aligned_expert_pack_header, validate_aligned_expert_pack_header,
-    validate_aligned_expert_pack_payload,
+    AlignedExpertPackError, AlignedExpertPackHeader, build_aligned_expert_pack,
+    build_aligned_expert_pack_metal_io_descriptors, read_aligned_expert_pack_header,
+    validate_aligned_expert_pack_header, validate_aligned_expert_pack_payload,
+};
+use astronomical_model_serving::{
+    QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
 
 #[test]
@@ -313,7 +315,7 @@ fn aligned_expert_pack_build_request(
 fn build_metal_io_ranges_for_selected_experts(
     selected_expert_ids: &[usize],
 ) -> (
-    astronomical_model_serving::AlignedExpertPackHeader,
+    AlignedExpertPackHeader,
     Vec<astronomical_runtime_integration::MlxMetalExpertPackLoadRange>,
 ) {
     let temporary_directory =

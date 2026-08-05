@@ -29,6 +29,9 @@ pub(crate) struct UserConfigFile {
     /// Enables bounded model-loading and request performance-attribution reports.
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     pub(crate) performance_attribution_enabled: Option<bool>,
+    /// Enables the SSD-backed persistent prompt and key-value cache.
+    #[serde(default, deserialize_with = "deserialize_present_boolean")]
+    pub(crate) persistent_prompt_cache_enabled: Option<bool>,
     /// Optional decimal SI GB ceiling for MLX memory. Omission selects the machine maximum.
     pub(crate) maximum_mlx_memory_gb: Option<u64>,
     /// Enables qualified Qwen multi-token prediction when the artifact supports it.
@@ -78,6 +81,7 @@ pub(crate) fn read_user_config_file(
             let first_run_config_bytes = serde_json::to_vec_pretty(&serde_json::json!({
                 "model_directories": [],
                 "mtp_enabled": true,
+                "persistent_prompt_cache_enabled": true,
                 "prefill_chunck_size_optimizer_enabled": true,
                 "prompt_cache_max_size_gb": DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
             }))

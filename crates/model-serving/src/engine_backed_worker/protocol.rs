@@ -54,7 +54,6 @@ where
             event_writer
                 .send_event(
                     &loaded_model.processor.ready_event(
-                        engine_load_result.expert_storage_format(),
                         engine_load_result.mtp_runtime_state(),
                         engine_load_result
                             .mtp_unavailable_reason()

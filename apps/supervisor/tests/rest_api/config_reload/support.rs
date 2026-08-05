@@ -51,6 +51,7 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         config_warning: None,
         prefill_chunck_sizing_policy: PrefillChunckSizingPolicy::Optimized,
         optimizer_state_directory: PathBuf::from("/tmp/astronomical-optimizer"),
+        persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(

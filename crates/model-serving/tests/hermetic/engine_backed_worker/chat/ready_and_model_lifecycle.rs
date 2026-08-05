@@ -1,35 +1,6 @@
 use super::*;
 
 #[tokio::test]
-async fn should_report_the_loaded_engines_astronomical_optimized_expert_storage_format() {
-    let engine_worker = EngineBackedWorker::new(
-        ScriptedChatProcessor::new(),
-        ScriptedChatEngine::new()
-            .with_expert_storage_format(ExpertStorageFormat::AstronomicalAligned),
-    );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
-
-    assert_eq!(
-        next_event(&mut supervisor_reader).await,
-        ready_event_with_expert_storage_format(ExpertStorageFormat::AstronomicalAligned)
-    );
-
-    close_worker_transport(
-        ProtocolWriter::new(supervisor_writer_transport),
-        worker_task,
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn should_report_the_loaded_engines_target_only_mtp_runtime_state() {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::new(),
@@ -47,11 +18,7 @@ async fn should_report_the_loaded_engines_target_only_mtp_runtime_state() {
 
     assert_eq!(
         next_event(&mut supervisor_reader).await,
-        ready_event_with_load_details(
-            ExpertStorageFormat::StandardSafetensors,
-            MtpRuntimeState::TargetOnly,
-            None,
-        )
+        ready_event_with_load_details(MtpRuntimeState::TargetOnly, None,)
     );
 
     close_worker_transport(

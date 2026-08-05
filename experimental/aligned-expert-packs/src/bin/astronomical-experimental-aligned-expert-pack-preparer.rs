@@ -6,16 +6,16 @@ use std::{
     process::ExitCode,
 };
 
-use astronomical_model_serving::{
+use astronomical_experimental_aligned_expert_packs::{
     AlignedExpertPackPreparationInspection, AlignedExpertPackPreparer,
 };
 
-const HELP: &str = "astronomical-model-preparer
+const HELP: &str = "astronomical-experimental-aligned-expert-pack-preparer
 
-Explicitly prepare aligned expert packs for one already-downloaded model.
+Explicitly prepare experimental aligned expert packs for one already-downloaded model.
 
 USAGE:
-    astronomical-model-preparer --model-directory PATH [--dry-run] [--yes] [--replace]
+    astronomical-experimental-aligned-expert-pack-preparer --model-directory PATH [--dry-run] [--yes] [--replace]
 
 OPTIONS:
     --model-directory PATH  Complete downloaded Qwen3.5-MoE model directory
@@ -38,7 +38,7 @@ fn main() -> ExitCode {
     match run(env::args_os().skip(1)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(command_error) => {
-            eprintln!("astronomical-model-preparer: {command_error}");
+            eprintln!("astronomical-experimental-aligned-expert-pack-preparer: {command_error}");
             ExitCode::from(command_error.exit_code())
         }
     }
@@ -110,7 +110,7 @@ fn run(arguments: impl Iterator<Item = OsString>) -> Result<(), CommandError> {
         preparation_report.elapsed.as_secs_f64(),
         preparation_report.final_revision_directory.display(),
     );
-    eprintln!("Reload the selected model before expecting Astronomical to use the prepared packs.");
+    eprintln!("Prepared packs remain experimental and are ignored by Astronomical production.");
     Ok(())
 }
 
@@ -231,7 +231,7 @@ enum CommandError {
         available_byte_count: u64,
     },
     Io(io::Error),
-    Preparation(astronomical_model_serving::AlignedExpertPackPreparationError),
+    Preparation(astronomical_experimental_aligned_expert_packs::AlignedExpertPackPreparationError),
 }
 
 impl CommandError {

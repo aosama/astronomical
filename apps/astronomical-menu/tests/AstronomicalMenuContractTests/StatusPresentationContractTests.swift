@@ -44,35 +44,6 @@ final class StatusPresentationContractTests: XCTestCase {
     )
   }
 
-  func test_should_name_the_astronomical_aligned_expert_format_as_astronomical_optimized() throws {
-    let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
-      from: Data(
-        #"{"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_storage_format":"astronomical_aligned"}"#.utf8)
-    )
-
-    XCTAssertEqual(statusDocument.expertStorageFormatTitle, "Astronomical Optimized")
-  }
-
-  func test_should_name_original_safetensors_expert_storage_as_standard() throws {
-    let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
-      from: Data(
-        #"{"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_storage_format":"standard_safetensors"}"#.utf8)
-    )
-
-    XCTAssertEqual(statusDocument.expertStorageFormatTitle, "Standard")
-  }
-
-  func test_should_show_expert_storage_as_not_loaded_without_a_ready_model() throws {
-    let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
-      from: Data(#"{"status":"ready","activity":"idle"}"#.utf8)
-    )
-
-    XCTAssertEqual(statusDocument.expertStorageFormatTitle, "Not loaded")
-  }
-
   func test_should_use_the_colorblind_safe_mlx_memory_palette() throws {
     let expectedColorComponents: [(Color, CGFloat, CGFloat, CGFloat)] = [
       (MlxMemoryPalette.experts, 10, 132, 255),

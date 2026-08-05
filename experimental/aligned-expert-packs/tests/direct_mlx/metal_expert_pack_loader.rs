@@ -7,7 +7,7 @@ use astronomical_runtime_integration::{
     MlxMetalExpertPackOutputTensor,
 };
 
-use crate::common::runtime_test_support::runtime;
+use super::runtime;
 
 #[test]
 fn should_record_metal_io_completion_metrics_without_an_explicit_wait() {

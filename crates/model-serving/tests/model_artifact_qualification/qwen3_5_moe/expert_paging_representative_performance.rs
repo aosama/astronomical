@@ -2,25 +2,17 @@
 
 use std::time::Instant;
 
-use astronomical_ipc_protocol::ExpertStorageFormat;
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5Model, RequestDecoderStateStack,
-};
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use astronomical_model_serving::{Qwen3_5Config, Qwen3_5Model, RequestDecoderStateStack};
 
 use super::expert_paging_decode::{
     bytes_to_gib, load_paged_qwen3_5_model_for_decode_probe,
     require_expert_paging_decode_completion,
 };
 use super::expert_paging_prefill_performance::prepare_reproduced_long_prompt_token_ids;
-use super::expert_paging_prefill_performance::prepare_reproduced_long_prompt_token_ids_for_model;
 
 pub(crate) const REPRESENTATIVE_INPUT_TOKEN_COUNT: usize = 1_024;
 pub(crate) const REPRESENTATIVE_OUTPUT_TOKEN_COUNT: u32 = 512;
 const OUTPUT_PROGRESS_INTERVAL_TOKEN_COUNT: u32 = 25;
-const OQ4E_MTP_MODEL_DIRECTORY_NAME: &str = "Qwen3.6-35B-A3B-oQ4e-mtp";
-const OQ4E_MTP_MODEL_ID: &str = "Jundot/Qwen3.6-35B-A3B-oQ4e-mtp";
-const REPRESENTATIVE_MLX_MEMORY_LIMIT_BYTES: usize = 10_000_000_000;
 const OUTPUT_TOKEN_ID_CHECKSUM_OFFSET: u64 = 1_469_598_103_934_665_603;
 const OUTPUT_TOKEN_ID_CHECKSUM_MULTIPLIER: u64 = 1_099_511_628_211;
 
@@ -31,17 +23,6 @@ async fn should_measure_1024_input_tokens_and_512_output_tokens() {
         run_representative_performance_probe(),
         "[paged-representative]",
         "the 1024-input-token and 512-output-token representative performance probe",
-    )
-    .await;
-}
-
-#[tokio::test]
-#[ignore = "loads oQ4e with a configured 10 GB MLX limit, 1024 input, and 512 output"]
-async fn should_measure_oq4e_aligned_paging_with_configured_ten_gb_mlx_limit() {
-    require_expert_paging_decode_completion(
-        run_oq4e_representative_performance_probe(),
-        "[oq4e-10gb-representative]",
-        "the oQ4e configured-10-GB 1024-input-token and 512-output-token performance probe",
     )
     .await;
 }
@@ -60,49 +41,6 @@ async fn run_representative_performance_probe() {
         &config,
         &prompt_token_ids,
         "[paged-representative]",
-        test_started_at,
-    );
-}
-
-async fn run_oq4e_representative_performance_probe() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let test_started_at = Instant::now();
-    let model_directory =
-        crate::common::configured_model_directory_by_id(OQ4E_MTP_MODEL_DIRECTORY_NAME)
-            .expect("the local oQ4e MTP model should be discoverable from configured roots");
-    let prompt_token_ids = prepare_reproduced_long_prompt_token_ids_for_model(
-        &model_directory,
-        OQ4E_MTP_MODEL_ID,
-        REPRESENTATIVE_INPUT_TOKEN_COUNT,
-        REPRESENTATIVE_OUTPUT_TOKEN_COUNT as u16,
-    );
-    eprintln!(
-        "[oq4e-10gb-representative] status=progress phase=artifact_validation memory_limit_bytes={REPRESENTATIVE_MLX_MEMORY_LIMIT_BYTES}"
-    );
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the local oQ4e MTP artifact should validate");
-    let qwen3_5_config = validated_artifact.config().clone();
-    let constrained_mlx_memory_limits = MlxMemoryLimits::new(
-        REPRESENTATIVE_MLX_MEMORY_LIMIT_BYTES,
-        REPRESENTATIVE_MLX_MEMORY_LIMIT_BYTES,
-    )
-    .expect("the representative 10 GB MLX limits should be valid");
-    let runtime = MlxRuntime::initialize(constrained_mlx_memory_limits)
-        .expect("the representative constrained MLX runtime should initialize");
-    eprintln!("[oq4e-10gb-representative] status=progress phase=model_load");
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-        .expect("the oQ4e model should load with demand paging and a configured 10 GB MLX limit");
-    assert_eq!(
-        qwen3_5_model.expert_storage_format(),
-        ExpertStorageFormat::AstronomicalAligned,
-        "the representative probe must exercise production aligned expert paging"
-    );
-    run_representative_performance_probe_for_loaded_model(
-        &qwen3_5_model,
-        &qwen3_5_config,
-        &prompt_token_ids,
-        "[oq4e-10gb-representative]",
         test_started_at,
     );
 }

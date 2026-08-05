@@ -47,8 +47,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     event_writer
                         .send_event(&WorkerEvent::ModelSwapped {
                             minimum_mlx_memory_ceiling_bytes: 3_000_000_000,
-                            expert_storage_format:
-                                astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
                             mtp_runtime_state: MtpRuntimeState::Disabled,
                             mtp_unavailable_reason: None,
                             model_id: "astronomical/requested-model".to_owned(),

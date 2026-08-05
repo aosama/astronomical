@@ -44,6 +44,8 @@ pub struct ResolvedRuntimeConfig {
     pub optimizer_state_directory: PathBuf,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
+    /// Whether the worker may read and write the persistent prompt cache.
+    pub persistent_prompt_cache_enabled: bool,
     /// Explicit user choice surfaced while Qwen MTP runtime support is parked.
     pub mtp_enabled: bool,
     /// Resolved SSD-backed prompt-cache policy (worker-startup field).
@@ -125,6 +127,7 @@ impl ResolvedRuntimeConfigResolver {
             prefill_chunck_sizing_policy: user_config.prefill_chunck_sizing_policy()?,
             optimizer_state_directory: user_config.optimizer_directory()?,
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
+            persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
             mtp_enabled: user_config.mtp_enabled(),
             prompt_cache_config,
             bind_address: supervisor_bind_address.to_string(),
@@ -145,6 +148,7 @@ impl ResolvedRuntimeConfig {
             global_prompt_cache_maximum_size_bytes: self
                 .prompt_cache_config
                 .global_prompt_cache_maximum_size_bytes(),
+            persistent_prompt_cache_enabled: self.persistent_prompt_cache_enabled,
             prefill_chunck_sizing_policy: match self.prefill_chunck_sizing_policy {
                 PrefillChunckSizingPolicy::Optimized => WorkerPrefillChunckSizingPolicy::Optimized,
                 PrefillChunckSizingPolicy::Fixed {
@@ -281,6 +285,10 @@ impl ConfigReloadDiff {
         }
         if current.performance_attribution_enabled != candidate.performance_attribution_enabled {
             worker_restart_reloaded_fields.push("performance_attribution_enabled".to_owned());
+            worker_restart_required = true;
+        }
+        if current.persistent_prompt_cache_enabled != candidate.persistent_prompt_cache_enabled {
+            worker_restart_reloaded_fields.push("persistent_prompt_cache_enabled".to_owned());
             worker_restart_required = true;
         }
         if current.mtp_enabled != candidate.mtp_enabled {

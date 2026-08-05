@@ -1,5 +1,7 @@
 //! Narrow unsafe ownership boundary around the official MLX C API.
 
+#[cfg(feature = "experimental-aligned-expert-packs")]
+mod experimental;
 #[cfg(feature = "mlx")]
 mod mlx_activation_operations;
 #[cfg(feature = "mlx")]
@@ -26,8 +28,6 @@ mod mlx_convolution_operations;
 mod mlx_creation_operations;
 #[cfg(feature = "mlx")]
 mod mlx_descriptor_file_reader;
-#[cfg(feature = "mlx")]
-mod mlx_metal_expert_pack_loader;
 #[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
 #[cfg(feature = "mlx")]
@@ -57,18 +57,18 @@ mod positional_file_read_metrics;
 #[cfg(feature = "mlx")]
 mod raw;
 
+#[cfg(feature = "experimental-aligned-expert-packs")]
+pub use experimental::{
+    MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics,
+    MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadMetricsSnapshot,
+    MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
+};
 #[cfg(feature = "mlx")]
 pub use mlx_array::{MlxArray, MlxDtype};
 #[cfg(feature = "mlx")]
 pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
 #[cfg(feature = "mlx")]
 pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
-#[cfg(feature = "mlx")]
-pub use mlx_metal_expert_pack_loader::{
-    MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics,
-    MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadMetricsSnapshot,
-    MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
-};
 #[cfg(feature = "mlx")]
 pub use mlx_metal_kernel::{MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
 #[cfg(feature = "mlx")]

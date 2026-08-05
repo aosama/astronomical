@@ -6,23 +6,17 @@ pub(crate) mod model;
 
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{
-    ALIGNED_EXPERT_PACK_SEGMENT_ALIGNMENT_BYTES, AlignedExpertPackBuildRequest,
-    AlignedExpertPackError, AlignedExpertPackHeader, AlignedExpertPackPreparationError,
-    AlignedExpertPackPreparationInspection, AlignedExpertPackPreparationProgress,
-    AlignedExpertPackPreparationReport, AlignedExpertPackPreparer,
-    AlignedExpertPackTensorDescriptor, ExpertManifestError, ExpertPager, ExpertPagingError,
-    ExpertWeightMemoryCache, ExpertWeightMemoryCacheRequestReport,
-    ExpertWeightMemoryCacheStatistics, LiveMetalBudget, MemoryBudgetError, MemoryBudgetSnapshot,
-    PagedExpertWeights, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
-    QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,
-    QuantizedTensorSource, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
-    TensorHeaderEntry, automatic_expert_weight_memory_cache_maximum_size_bytes,
-    build_aligned_expert_pack, build_aligned_expert_pack_metal_io_descriptors,
-    build_quantized_expert_layer_plan, build_quantized_expert_page_manifest_from_plan,
-    build_source_manifests, contiguous_selected_runs, load_quantized_expert_page,
-    parse_safetensors_header, read_aligned_expert_pack_header, validate_aligned_expert_pack_header,
-    validate_aligned_expert_pack_payload, validate_expert_ids, validate_quantization_contract,
-    validate_source_intervals, validate_virtual_intervals,
+    ExpertManifestError, ExpertPager, ExpertPagingError, ExpertWeightMemoryCache,
+    ExpertWeightMemoryCacheRequestReport, ExpertWeightMemoryCacheStatistics, LiveMetalBudget,
+    MemoryBudgetError, MemoryBudgetSnapshot, PagedExpertWeights, QuantizationMode,
+    QuantizedExpertLayerPlan, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
+    QuantizedExpertSourceInterval, QuantizedExpertTensorRange, QuantizedTensorSource,
+    SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError, TensorHeaderEntry,
+    automatic_expert_weight_memory_cache_maximum_size_bytes, build_quantized_expert_layer_plan,
+    build_quantized_expert_page_manifest_from_plan, build_source_manifests,
+    contiguous_selected_runs, load_quantized_expert_page, parse_safetensors_header,
+    validate_expert_ids, validate_quantization_contract, validate_source_intervals,
+    validate_virtual_intervals,
 };
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::feed_forward_weights::bind_qwen3_5_moe_feed_forward_weights;

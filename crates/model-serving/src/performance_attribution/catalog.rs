@@ -50,7 +50,6 @@ pub enum PerformanceOperation {
     MtpRejectedDraftReplaySynchronizationWait,
     PrefillStateEvaluationSynchronizationWait,
     ExpertBoundedSafetensorsLazyPageConstruction,
-    AlignedExpertPackMetalIoPageLoad,
     ExpertWeightMemoryCachePageAssemblyGraphConstruction,
     ExpertPagingDiagnosticLogging,
     DecodeAsyncEvaluationSubmission,
@@ -113,7 +112,6 @@ impl PerformanceOperation {
         Self::MtpRejectedDraftReplaySynchronizationWait,
         Self::PrefillStateEvaluationSynchronizationWait,
         Self::ExpertBoundedSafetensorsLazyPageConstruction,
-        Self::AlignedExpertPackMetalIoPageLoad,
         Self::ExpertWeightMemoryCachePageAssemblyGraphConstruction,
         Self::ExpertPagingDiagnosticLogging,
         Self::DecodeAsyncEvaluationSubmission,
@@ -209,7 +207,6 @@ impl PerformanceOperation {
             Self::ExpertBoundedSafetensorsLazyPageConstruction => {
                 "expert_bounded_safetensors_lazy_page_construction"
             }
-            Self::AlignedExpertPackMetalIoPageLoad => "aligned_expert_pack_metal_io_page_load",
             Self::ExpertWeightMemoryCachePageAssemblyGraphConstruction => {
                 "expert_weight_memory_cache_page_assembly_graph_construction"
             }
@@ -256,15 +253,6 @@ pub enum PerformanceCounter {
     ExpertWeightDiskPageLoadCount,
     ExpertWeightDiskBatchLoadCount,
     ExpertPageLogicalPayloadBytes,
-    AlignedExpertPackMetalIoPageLoadCount,
-    AlignedExpertPackMetalIoLogicalPayloadBytes,
-    AlignedExpertPackMetalIoRequestedByteCount,
-    AlignedExpertPackMetalIoCommandCount,
-    AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds,
-    AlignedExpertPackMetalIoCompletedLoadCount,
-    AlignedExpertPackMetalIoQueueElapsedNanoseconds,
-    AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds,
-    AlignedExpertPackMetalIoFailureCount,
     PositionalFileReadCallCount,
     PositionalFileReadByteCount,
     PositionalFileReadElapsedNanoseconds,
@@ -297,15 +285,6 @@ impl PerformanceCounter {
         Self::ExpertWeightDiskPageLoadCount,
         Self::ExpertWeightDiskBatchLoadCount,
         Self::ExpertPageLogicalPayloadBytes,
-        Self::AlignedExpertPackMetalIoPageLoadCount,
-        Self::AlignedExpertPackMetalIoLogicalPayloadBytes,
-        Self::AlignedExpertPackMetalIoRequestedByteCount,
-        Self::AlignedExpertPackMetalIoCommandCount,
-        Self::AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds,
-        Self::AlignedExpertPackMetalIoCompletedLoadCount,
-        Self::AlignedExpertPackMetalIoQueueElapsedNanoseconds,
-        Self::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds,
-        Self::AlignedExpertPackMetalIoFailureCount,
         Self::PositionalFileReadCallCount,
         Self::PositionalFileReadByteCount,
         Self::PositionalFileReadElapsedNanoseconds,
@@ -343,33 +322,6 @@ impl PerformanceCounter {
             Self::ExpertWeightDiskPageLoadCount => "expert_weight_disk_page_load_count",
             Self::ExpertWeightDiskBatchLoadCount => "expert_weight_disk_batch_load_count",
             Self::ExpertPageLogicalPayloadBytes => "expert_page_logical_payload_bytes",
-            Self::AlignedExpertPackMetalIoPageLoadCount => {
-                "aligned_expert_pack_metal_io_page_load_count"
-            }
-            Self::AlignedExpertPackMetalIoLogicalPayloadBytes => {
-                "aligned_expert_pack_metal_io_logical_payload_bytes"
-            }
-            Self::AlignedExpertPackMetalIoRequestedByteCount => {
-                "aligned_expert_pack_metal_io_requested_byte_count"
-            }
-            Self::AlignedExpertPackMetalIoCommandCount => {
-                "aligned_expert_pack_metal_io_command_count"
-            }
-            Self::AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds => {
-                "aligned_expert_pack_metal_io_host_encoding_elapsed_nanoseconds"
-            }
-            Self::AlignedExpertPackMetalIoCompletedLoadCount => {
-                "aligned_expert_pack_metal_io_completed_load_count"
-            }
-            Self::AlignedExpertPackMetalIoQueueElapsedNanoseconds => {
-                "aligned_expert_pack_metal_io_queue_elapsed_nanoseconds"
-            }
-            Self::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds => {
-                "aligned_expert_pack_metal_io_maximum_queue_elapsed_nanoseconds"
-            }
-            Self::AlignedExpertPackMetalIoFailureCount => {
-                "aligned_expert_pack_metal_io_failure_count"
-            }
             Self::PositionalFileReadCallCount => "positional_file_read_call_count",
             Self::PositionalFileReadByteCount => "positional_file_read_byte_count",
             Self::PositionalFileReadElapsedNanoseconds => {

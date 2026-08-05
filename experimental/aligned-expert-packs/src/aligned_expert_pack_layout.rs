@@ -1,10 +1,11 @@
 use std::{fs, time::UNIX_EPOCH};
 
-use super::aligned_expert_pack::{
+use astronomical_model_serving::{QuantizedExpertLayerPlan, QuantizedTensorSource};
+
+use crate::aligned_expert_pack::{
     ALIGNED_EXPERT_PACK_SEGMENT_ALIGNMENT_BYTES, AlignedExpertPackError,
     AlignedExpertPackTensorDescriptor,
 };
-use super::quantized_expert_manifest::QuantizedTensorSource;
 
 pub(super) fn descriptor_from_source(
     tensor_source: &QuantizedTensorSource,
@@ -96,7 +97,7 @@ fn source_file_modified_unix_nanoseconds(
 }
 
 pub(super) fn ordered_tensor_sources(
-    layer_plan: &super::quantized_expert_manifest::QuantizedExpertLayerPlan,
+    layer_plan: &QuantizedExpertLayerPlan,
 ) -> Result<Vec<&QuantizedTensorSource>, AlignedExpertPackError> {
     let mut ordered_tensor_sources = layer_plan.tensor_sources.iter().collect::<Vec<_>>();
     ordered_tensor_sources.sort_by_key(|tensor_source| {

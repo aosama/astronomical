@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ChatMessage,
-    ChatModelCapabilities, ExpertStorageFormat, MtpRuntimeState, WorkerEvent,
+    ChatModelCapabilities, MtpRuntimeState, WorkerEvent,
 };
 
 use crate::{
@@ -67,7 +67,6 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
 
     fn ready_event(
         &self,
-        expert_storage_format: ExpertStorageFormat,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
     ) -> WorkerEvent {
@@ -81,7 +80,6 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
                 max_output_tokens: self.max_output_tokens,
                 context_window: self.context_window,
             },
-            expert_storage_format,
             mtp_runtime_state,
             mtp_unavailable_reason,
         }

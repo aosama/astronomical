@@ -1,8 +1,8 @@
-use std::{error::Error, path::PathBuf};
+use std::path::PathBuf;
 
 use astronomical_config::{PrefillChunckSizingPolicy, PromptCacheConfig};
 use astronomical_ipc_protocol::{
-    ProtocolReader, ProtocolWriter, WorkerCommand, WorkerLogLevel, WorkerPrefillChunckSizingPolicy,
+    ProtocolReader, ProtocolWriter, WorkerCommand, WorkerPrefillChunckSizingPolicy,
     WorkerStartupConfiguration,
 };
 use astronomical_model_serving::{
@@ -12,8 +12,6 @@ use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PrefillChunckSizer,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{EnvFilter, fmt};
 
 const PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME: &str = "performance-attribution.jsonl";
 
@@ -23,6 +21,7 @@ pub use crate::worker_startup_gpu_memory::{
     parse_iogpu_wired_limit_setting, resolve_effective_mlx_memory_ceiling_bytes,
     sample_iogpu_wired_limit_bytes,
 };
+pub use crate::worker_startup_logging::{astronomical_log_rotation, initialize_tracing};
 
 /// Factory that creates a Qwen3.5 processor and engine when a REST request
 /// selects a model directory.
@@ -35,6 +34,7 @@ struct Qwen3_5ModelFactory {
     performance_attribution_log_path: PathBuf,
     prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
     mtp_enabled: bool,
+    persistent_prompt_cache_enabled: bool,
 }
 
 impl ModelFactory<Qwen3_5GenerationProcessor, Qwen3_5Engine> for Qwen3_5ModelFactory {
@@ -52,6 +52,7 @@ impl ModelFactory<Qwen3_5GenerationProcessor, Qwen3_5Engine> for Qwen3_5ModelFac
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let prefill_chunck_sizer_override = self.prefill_chunck_sizer_override.clone();
         let mtp_enabled = self.mtp_enabled;
+        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
         // Model initialization involves blocking I/O (artifact validation, tokenizer
         // loading) and must run off the async runtime.
         tokio::task::spawn_blocking(move || {
@@ -64,6 +65,7 @@ impl ModelFactory<Qwen3_5GenerationProcessor, Qwen3_5Engine> for Qwen3_5ModelFac
                 optimizer_state_directory,
                 max_output_tokens,
                 mtp_enabled,
+                persistent_prompt_cache_enabled,
                 performance_attribution_enabled,
                 performance_attribution_log_path,
             )
@@ -76,53 +78,6 @@ impl ModelFactory<Qwen3_5GenerationProcessor, Qwen3_5Engine> for Qwen3_5ModelFac
     fn update_mlx_memory_ceiling_bytes(&mut self, effective_mlx_memory_ceiling_bytes: u64) {
         self.effective_mlx_memory_ceiling_bytes =
             usize::try_from(effective_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
-    }
-}
-
-/// Returns the rolling policy shared by the worker process log.
-#[must_use]
-pub fn astronomical_log_rotation() -> tracing_appender::rolling::Rotation {
-    tracing_appender::rolling::Rotation::HOURLY
-}
-
-/// Initializes bounded worker diagnostics in the configured rolling log file.
-pub fn initialize_tracing(
-    worker_startup_configuration: &WorkerStartupConfiguration,
-) -> Result<WorkerGuard, Box<dyn Error + Send + Sync>> {
-    std::fs::create_dir_all(&worker_startup_configuration.logging_directory)?;
-    let file_appender = tracing_appender::rolling::Builder::new()
-        .rotation(astronomical_log_rotation())
-        .filename_prefix("worker")
-        .filename_suffix("log")
-        .max_log_files(worker_startup_configuration.retained_log_file_count)
-        .build(&worker_startup_configuration.logging_directory)?;
-    // Lossy delivery is intentional: inference must never block or accumulate
-    // an enormous queue merely because diagnostic storage is slow.
-    let (file_writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
-        .buffered_lines_limit(1_024)
-        .lossy(true)
-        .thread_name("astronomical-worker-log-writer")
-        .finish(file_appender);
-    fmt()
-        .with_env_filter(EnvFilter::new(worker_log_level_name(
-            worker_startup_configuration.logging_level,
-        )))
-        .with_ansi(false)
-        .with_thread_ids(true)
-        .with_thread_names(true)
-        .with_target(true)
-        .with_writer(file_writer)
-        .try_init()?;
-    Ok(guard)
-}
-
-fn worker_log_level_name(worker_log_level: WorkerLogLevel) -> &'static str {
-    match worker_log_level {
-        WorkerLogLevel::Error => "error",
-        WorkerLogLevel::Warn => "warn",
-        WorkerLogLevel::Info => "info",
-        WorkerLogLevel::Debug => "debug",
-        WorkerLogLevel::Trace => "trace",
     }
 }
 
@@ -235,6 +190,8 @@ where
         .logging_directory
         .join(PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME);
     let mtp_enabled = worker_startup_configuration.mtp_enabled;
+    let persistent_prompt_cache_enabled =
+        worker_startup_configuration.persistent_prompt_cache_enabled;
     let machine_mlx_memory_ceiling_bytes = sample_iogpu_wired_limit_bytes()
         .await
         .map_err(WorkerProcessError::Startup)?;
@@ -255,6 +212,7 @@ where
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
         mtp_enabled,
+        persistent_prompt_cache_enabled,
         "starting idle inference worker"
     );
     let model_factory = Qwen3_5ModelFactory {
@@ -266,6 +224,7 @@ where
         performance_attribution_log_path,
         prefill_chunck_sizer_override,
         mtp_enabled,
+        persistent_prompt_cache_enabled,
     };
     EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
         model_factory,
@@ -295,6 +254,7 @@ fn initialize_qwen3_5_model(
     optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
     mtp_enabled: bool,
+    persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
 ) -> Result<(Qwen3_5GenerationProcessor, Qwen3_5Engine), WorkerStartupError> {
@@ -377,8 +337,8 @@ fn initialize_qwen3_5_model(
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
         derive_mlx_memory_limits_from_gpu_wired_limit(effective_mlx_memory_ceiling_bytes);
     let per_model_prompt_cache_config = prompt_cache_config.for_model(&model_id, &model_revision);
-    let persistent_prompt_cache_disk_store_config =
-        Some(PersistentPromptCacheDiskStoreConfig::new(
+    let persistent_prompt_cache_disk_store_config = persistent_prompt_cache_enabled.then(|| {
+        PersistentPromptCacheDiskStoreConfig::new(
             per_model_prompt_cache_config
                 .active_model_prompt_cache_directory()
                 .clone(),
@@ -386,7 +346,8 @@ fn initialize_qwen3_5_model(
                 .global_prompt_cache_root_directory()
                 .clone(),
             per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
-        ));
+        )
+    });
     let prefill_chunck_sizer_result = match prefill_chunck_sizer_override {
         Some(prefill_chunck_sizer) => Ok(prefill_chunck_sizer),
         None => match prefill_chunck_sizing_policy {

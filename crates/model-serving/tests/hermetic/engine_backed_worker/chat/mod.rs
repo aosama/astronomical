@@ -7,7 +7,7 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatGenerationOutput, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
-    ChatToolChoice, ChatToolDefinition, ExpertMemoryMode, ExpertStorageFormat, MAX_IPC_FRAME_BYTES,
+    ChatToolChoice, ChatToolDefinition, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
     WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
 };
@@ -55,6 +55,5 @@ use scripted_chat_test_doubles::{
     TrackingChatEngine,
 };
 use support::{
-    chat_command, close_worker_transport, next_event, ready_event,
-    ready_event_with_expert_storage_format, ready_event_with_load_details,
+    chat_command, close_worker_transport, next_event, ready_event, ready_event_with_load_details,
 };

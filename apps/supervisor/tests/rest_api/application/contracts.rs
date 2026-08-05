@@ -1,7 +1,6 @@
 use astronomical_config::DiscoveredModel;
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationFailureReason, ExpertStorageFormat,
-    MtpRuntimeState,
+    ChatGenerationCompletionReason, ChatGenerationFailureReason, MtpRuntimeState,
 };
 use astronomical_supervisor::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerActivity, build_application,
@@ -267,8 +266,6 @@ async fn should_not_expose_the_removed_legacy_text_route() {
 async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worker() {
     let mut scripted_executor = ScriptedExecutor::ready(Vec::new());
     scripted_executor.health_snapshot.mlx_memory_ceiling_bytes = 40_000_000_000;
-    scripted_executor.health_snapshot.expert_storage_format =
-        Some(ExpertStorageFormat::AstronomicalAligned);
     let application = build_application_with_config_warning_and_discovered_models(
         scripted_executor,
         None,
@@ -302,10 +299,7 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
     assert_eq!(status_document["activity"], "idle");
     assert_eq!(status_document["mtp_enabled"], false);
     assert_eq!(status_document["ready_model_id"], MODEL_ID);
-    assert_eq!(
-        status_document["expert_storage_format"],
-        "astronomical_aligned"
-    );
+    assert!(status_document.get("expert_storage_format").is_none());
     assert_eq!(status_document["mtp_runtime_state"], "disabled");
     assert_eq!(
         status_document["mtp_unavailable_reason"],

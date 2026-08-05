@@ -35,9 +35,6 @@ pub enum ExpertPagingError {
 #[derive(Debug)]
 pub struct ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
-    pub(super) decoder_layer_plan_count: usize,
-    pub(super) aligned_expert_pack_layers:
-        Vec<Option<super::aligned_expert_pack_loader::AlignedExpertPackLayer>>,
     pub(super) memory_budget: LiveMetalBudget,
 }
 
@@ -47,8 +44,6 @@ pub struct PagedExpertWeights {
     pub(crate) gate_projection: Qwen3_5AffineWeights,
     pub(crate) up_projection: Qwen3_5AffineWeights,
     pub(crate) down_projection: Qwen3_5AffineWeights,
-    pub(super) _metal_expert_pack_load_owner:
-        Option<astronomical_runtime_integration::MlxMetalExpertPackLoad>,
 }
 
 impl PagedExpertWeights {

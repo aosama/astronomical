@@ -29,7 +29,6 @@ Astronomical is not a generic server wrapped around an off-the-shelf model loop.
 | Optimization | What it does for the user |
 | --- | --- |
 | Automatic sparse-expert paging | Uses SSD capacity to reduce the amount of sparse expert weight data that must remain in model RAM. |
-| Astronomical Optimized expert storage | Packs expert tensors for validated, aligned, coalesced Metal input/output instead of issuing one storage operation for every small field. |
 | Adaptive memory admission | Projects context growth and observed transient work before allocation, then reclaims only the expert memory required for the next operation. |
 | Online prefill chunk optimization | Learns useful prompt-processing chunk sizes by context bucket instead of hardwiring one value for every model and Mac. |
 | Persistent prompt reuse | Restores validated prompt state, recurrent snapshots, and projected image embeddings from a bounded SSD store so repeated prefixes need less work. |
@@ -46,7 +45,6 @@ Low-memory operation should not silently make a model less accurate.
 - Astronomical does not add hidden quantization when memory pressure increases.
 - Expert paging preserves the artifact's declared data types and quantization parameters.
 - Persistent prompt state preserves the model execution state required for reuse.
-- Prepared expert packs are validated against source tensor bytes before publication and activated as one complete revision or not at all.
 - Unsupported architecture, precision, or artifact combinations fail validation instead of being guessed from a filename.
 
 ## Local, visible, and private
@@ -81,11 +79,12 @@ On first launch Astronomical creates ~/.astronomical/config.json. Add one or mor
     {
       "model_directories": ["/path/to/models"],
       "maximum_mlx_memory_gb": 16,
+      "persistent_prompt_cache_enabled": true,
       "prefill_chunck_size_optimizer_enabled": true,
       "prompt_cache_max_size_gb": 50
     }
 
-The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling.
+The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse.
 
 ## Build the app
 
@@ -107,12 +106,11 @@ Build and validate the optimized menu-bar application after configuring at least
 
 The signed local bundle is written to target/astronomical-macos-release/Astronomical.app.
 
-To build only the optimized daemon, worker, and model preparer:
+To build only the optimized daemon and worker:
 
     CARGO_BUILD_JOBS="$(sysctl -n hw.logicalcpu)" cargo build --release \
       -p astronomical-inference-worker --bin astronomical-inference-worker \
-      -p astronomical-supervisor --bin astronomicald \
-      -p astronomical-model-serving --features direct-mlx --bin astronomical-model-preparer
+      -p astronomical-supervisor --bin astronomicald
 
 ## Connect locally
 

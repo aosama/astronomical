@@ -2,7 +2,9 @@
 
 set -eu
 
-readonly NATIVE_BUILD_DIRECTORY="target/native-metal-expert-loader-tests"
+REPOSITORY_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
+readonly REPOSITORY_ROOT
+readonly NATIVE_BUILD_DIRECTORY="${REPOSITORY_ROOT}/target/experimental-native-metal-expert-loader-tests"
 readonly NATIVE_EXECUTABLE_PATH="${NATIVE_BUILD_DIRECTORY}/bin/astronomical_metal_expert_loader_native_tests"
 readonly NATIVE_TEST_TIMEOUT_SECONDS=120
 
@@ -62,7 +64,7 @@ parse_arguments() {
         return
     fi
 
-    print_error "usage: scripts/test-native-metal-expert-loader.sh contracts"
+    print_error "usage: experimental/aligned-expert-packs/scripts/test-experimental-native-metal-loader.sh contracts"
     exit 2
 }
 
@@ -79,9 +81,10 @@ main() {
     fi
 
     run_step configure cmake \
-        -S "crates/runtime-integration/native" \
+        -S "${REPOSITORY_ROOT}/crates/runtime-integration/native" \
         -B "${NATIVE_BUILD_DIRECTORY}" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS=ON \
         "-DCMAKE_C_COMPILER_LAUNCHER=${compiler_launcher_path}" \
         "-DCMAKE_CXX_COMPILER_LAUNCHER=${compiler_launcher_path}"
     run_step build cmake \
