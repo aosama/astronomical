@@ -67,7 +67,7 @@
 - Compare independently assembled bfloat16 inference paths with one representable logit-step tolerance plus identical greedy-token checks. Requiring bit-identical logits can force unnecessary 32-bit floating-point work despite equivalent model decisions.
 - Shapeless compilation does not make input-derived static constants dynamic. Use rank-zero broadcast constants; an input-shaped zero froze gated-delta decay to the first prefill length and broke later tail chunks.
 - Submit dependent prefill graphs asynchronously in bounded layer groups. This overlaps Rust graph construction with graphics-processor evaluation without synchronizing every layer.
-- Treat mamba_ssm_dtype: float32 as a decay-computation contract, not a disk-storage contract. Qwen3.6 artifacts can store A_log as BF16 or F32; validate either representation and promote it inside the decay graph so BF16 storage does not weaken F32 arithmetic or inflate resident weights.
+- Treat mamba_ssm_dtype: float32 as a decay-computation contract, not a disk-storage contract. Qwen3.5-family artifacts can store A_log and other model parameters as FP16, BF16, or FP32 independently from activation dtype. Retain source storage without conversion and promote only the decay operation that requires FP32 arithmetic; eager whole-model promotion increases residency and changes the artifact’s precision contract.
 - Keep OptiQ metadata validation aligned with MLX affine quantization: bit widths 2, 3, 4, 5, 6, and 8 and group sizes 32, 64, and 128 are supported. Metadata may include embedding and output-head measurements; when present, verify them against config instead of rejecting them as unexpected.
 
 ## Cache types are different

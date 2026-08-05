@@ -10,10 +10,15 @@ pub(super) fn validate_bound_tensor(
     bound_tensor: &MlxArray,
 ) -> Result<(), Qwen3_5ExecutionError> {
     let tensor_dtype_matches_profile = match tensor_profile.dtype {
+        TensorDtype::AffineQuantizationFloat => matches!(
+            bound_tensor.dtype(),
+            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
+        ),
+        TensorDtype::ModelFloat => matches!(
+            bound_tensor.dtype(),
+            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
+        ),
         TensorDtype::BFloat16 => bound_tensor.dtype() == MlxDtype::BFloat16,
-        TensorDtype::BFloat16OrFloat32 => {
-            matches!(bound_tensor.dtype(), MlxDtype::BFloat16 | MlxDtype::Float32)
-        }
         TensorDtype::Float32 => bound_tensor.dtype() == MlxDtype::Float32,
         TensorDtype::UInt32 => bound_tensor.dtype() == MlxDtype::UInt32,
     };

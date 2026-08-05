@@ -35,7 +35,7 @@ pub fn qwen3_5_language_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<T
     }
     tensor_profiles.push(qwen3_5_tensor_profile(
         "language_model.model.norm.weight".to_owned(),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
     append_qwen3_5_quantized_affine_tensor_profiles(
@@ -102,7 +102,7 @@ fn append_qwen3_5_decoder_layer_tensor_profiles(
     let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}");
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{layer_prefix}.input_layernorm.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
     if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
@@ -125,7 +125,7 @@ fn append_qwen3_5_decoder_layer_tensor_profiles(
     }
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{layer_prefix}.post_attention_layernorm.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
     match qwen3_5_config.feed_forward_architecture() {
@@ -176,7 +176,7 @@ fn append_qwen3_5_full_attention_tensor_profiles(
     for normalization_name in ["q_norm", "k_norm"] {
         tensor_profiles.push(qwen3_5_tensor_profile(
             format!("{layer_prefix}.self_attn.{normalization_name}.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             vec![head_dimension],
         ));
     }
@@ -198,7 +198,7 @@ fn append_qwen3_5_linear_attention_tensor_profiles(
     let linear_attention_prefix = format!("{layer_prefix}.linear_attn");
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{linear_attention_prefix}.conv1d.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![
             convolution_dimension,
             qwen3_5_config.linear_convolution_kernel_dimension() as usize,
@@ -227,17 +227,17 @@ fn append_qwen3_5_linear_attention_tensor_profiles(
     }
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{linear_attention_prefix}.dt_bias"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![linear_value_head_count],
     ));
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{linear_attention_prefix}.A_log"),
-        TensorDtype::BFloat16OrFloat32,
+        TensorDtype::ModelFloat,
         vec![linear_value_head_count],
     ));
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{linear_attention_prefix}.norm.weight"),
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         vec![linear_value_head_dimension],
     ));
 }
@@ -254,7 +254,7 @@ pub(crate) fn append_qwen3_5_quantized_affine_tensor_profiles(
         native_bfloat16_weight_shape.push(input_dimension);
         tensor_profiles.push(qwen3_5_tensor_profile(
             format!("{tensor_prefix}.weight"),
-            TensorDtype::BFloat16,
+            TensorDtype::ModelFloat,
             native_bfloat16_weight_shape,
         ));
         return;
@@ -272,12 +272,12 @@ pub(crate) fn append_qwen3_5_quantized_affine_tensor_profiles(
     ));
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{tensor_prefix}.scales"),
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         scale_shape.clone(),
     ));
     tensor_profiles.push(qwen3_5_tensor_profile(
         format!("{tensor_prefix}.biases"),
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         scale_shape,
     ));
 }

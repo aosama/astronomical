@@ -58,16 +58,19 @@ fn should_reject_a_profiled_tensor_with_the_wrong_dtype_using_partial_profiles()
 }
 
 #[test]
-fn should_accept_bfloat16_and_float32_for_a_flexible_tensor_profile() {
-    for (tensor_dtype, tensor_payload_bytes) in [("BF16", &[0_u8; 8][..]), ("F32", &[0_u8; 16][..])]
-    {
+fn should_accept_every_mlx_affine_parameter_float_dtype() {
+    for (tensor_dtype, tensor_payload_bytes) in [
+        ("F16", &[0_u8; 8][..]),
+        ("BF16", &[0_u8; 8][..]),
+        ("F32", &[0_u8; 16][..]),
+    ] {
         let profiled_tensor = TensorProfile {
-            name: "language_model.A_log".to_owned(),
-            dtype: TensorDtype::BFloat16OrFloat32,
+            name: "language_model.projection.scales".to_owned(),
+            dtype: TensorDtype::AffineQuantizationFloat,
             shape: vec![2, 2],
         };
         let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
-            "language_model.A_log",
+            "language_model.projection.scales",
             tensor_dtype,
             "[2,2]",
             tensor_payload_bytes,
@@ -81,35 +84,43 @@ fn should_accept_bfloat16_and_float32_for_a_flexible_tensor_profile() {
             &HashSet::new(),
         )
         .unwrap_or_else(|validation_error| {
-            panic!("{tensor_dtype} should satisfy the flexible tensor profile: {validation_error}")
+            panic!(
+                "{tensor_dtype} should satisfy the MLX affine parameter profile: {validation_error}"
+            )
         });
     }
 }
 
 #[test]
-fn should_reject_float16_for_a_bfloat16_or_float32_tensor_profile() {
-    let profiled_tensor = TensorProfile {
-        name: "language_model.A_log".to_owned(),
-        dtype: TensorDtype::BFloat16OrFloat32,
-        shape: vec![2, 2],
-    };
-    let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
-        "language_model.A_log",
-        "F16",
-        "[2,2]",
-        &[0_u8; 8],
-    )]);
+fn should_accept_every_supported_stored_model_float_dtype_without_conversion() {
+    for (tensor_dtype, tensor_payload_bytes) in [
+        ("F16", &[0_u8; 8][..]),
+        ("BF16", &[0_u8; 8][..]),
+        ("F32", &[0_u8; 16][..]),
+    ] {
+        let profiled_tensor = TensorProfile {
+            name: "language_model.normalization.weight".to_owned(),
+            dtype: TensorDtype::ModelFloat,
+            shape: vec![2, 2],
+        };
+        let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
+            "language_model.normalization.weight",
+            tensor_dtype,
+            "[2,2]",
+            tensor_payload_bytes,
+        )]);
 
-    let validation_error = validate_bounded_safetensors_with_partial_profiles(
-        &file_from_bytes(&weights_bytes),
-        weights_bytes.len() as u64,
-        "model.safetensors",
-        &[profiled_tensor],
-        &HashSet::new(),
-    )
-    .expect_err("float16 must not satisfy a BF16-or-F32 tensor profile");
-
-    assert!(validation_error.to_string().contains("dtype"));
+        validate_bounded_safetensors_with_partial_profiles(
+            &file_from_bytes(&weights_bytes),
+            weights_bytes.len() as u64,
+            "model.safetensors",
+            &[profiled_tensor],
+            &HashSet::new(),
+        )
+        .unwrap_or_else(|validation_error| {
+            panic!("{tensor_dtype} should remain a valid stored model float: {validation_error}")
+        });
+    }
 }
 
 #[test]

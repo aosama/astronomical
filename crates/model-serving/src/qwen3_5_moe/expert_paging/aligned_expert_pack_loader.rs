@@ -298,7 +298,9 @@ fn tensor_source<'plan>(
 fn mlx_dtype(dtype: SafetensorsDtype) -> Result<MlxDtype, ExpertPagingError> {
     match dtype {
         SafetensorsDtype::Uint32 => Ok(MlxDtype::UInt32),
+        SafetensorsDtype::Float16 => Ok(MlxDtype::Float16),
         SafetensorsDtype::BFloat16 => Ok(MlxDtype::BFloat16),
+        SafetensorsDtype::Float32 => Ok(MlxDtype::Float32),
         unsupported_dtype => Err(runtime_description(format!(
             "aligned expert loading does not support {unsupported_dtype}"
         ))),

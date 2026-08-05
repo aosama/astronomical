@@ -465,8 +465,13 @@ fn validate_tensor_dtype(
     file_name: &str,
 ) -> Result<(), ArtifactValidationError> {
     let tensor_dtype_matches_profile = match tensor_profile.dtype {
+        TensorDtype::AffineQuantizationFloat => {
+            matches!(tensor_view.dtype.as_str(), "F16" | "BF16" | "F32")
+        }
+        TensorDtype::ModelFloat => {
+            matches!(tensor_view.dtype.as_str(), "F16" | "BF16" | "F32")
+        }
         TensorDtype::BFloat16 => tensor_view.dtype == "BF16",
-        TensorDtype::BFloat16OrFloat32 => matches!(tensor_view.dtype.as_str(), "BF16" | "F32"),
         TensorDtype::Float32 => tensor_view.dtype == "F32",
         TensorDtype::UInt32 => tensor_view.dtype == "U32",
     };

@@ -25,13 +25,13 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.embed_tokens.scales",
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         &[248_320, 32],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.linear_attn.conv1d.weight",
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         &[8_192, 4, 1],
     );
     assert_tensor(
@@ -43,31 +43,31 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.linear_attn.in_proj_z.scales",
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         &[4_096, 32],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.linear_attn.in_proj_b.biases",
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         &[32, 32],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.linear_attn.A_log",
-        TensorDtype::BFloat16OrFloat32,
+        TensorDtype::ModelFloat,
         &[32],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.linear_attn.dt_bias",
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         &[32],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.linear_attn.norm.weight",
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         &[128],
     );
     assert_tensor(
@@ -85,7 +85,7 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.mlp.switch_mlp.down_proj.scales",
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         &[256, 2_048, 8],
     );
     assert_tensor(
@@ -115,31 +115,31 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.3.self_attn.o_proj.scales",
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         &[2_048, 64],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.3.self_attn.q_norm.weight",
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         &[256],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.39.self_attn.k_proj.biases",
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         &[512, 32],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.norm.weight",
-        TensorDtype::BFloat16,
+        TensorDtype::ModelFloat,
         &[2_048],
     );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.lm_head.biases",
-        TensorDtype::BFloat16,
+        TensorDtype::AffineQuantizationFloat,
         &[248_320, 32],
     );
     assert_eq!(count_tensors_in_layer(&tensor_profiles, 0), 45);
