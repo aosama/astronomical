@@ -66,7 +66,7 @@
 - Materialize model-invariant scalar arrays once at model load instead of recreating and casting them in every forward pass.
 - Compare independently assembled bfloat16 inference paths with one representable logit-step tolerance plus identical greedy-token checks. Requiring bit-identical logits can force unnecessary 32-bit floating-point work despite equivalent model decisions.
 - Shapeless compilation does not make input-derived static constants dynamic. Use rank-zero broadcast constants; an input-shaped zero froze gated-delta decay to the first prefill length and broke later tail chunks.
-- Submit dependent prefill graphs asynchronously in bounded layer groups. This overlaps Rust graph construction with graphics-processor evaluation without synchronizing every layer.
+- Submit dependent forward graphs asynchronously in bounded layer groups for prompt processing and one-token generation. This overlaps Rust graph construction with graphics-processor evaluation without synchronizing every layer; measure the interval because excessive submissions add scheduler overhead.
 - Treat mamba_ssm_dtype: float32 as a decay-computation contract, not a disk-storage contract. Qwen3.5-family artifacts can store A_log and other model parameters as FP16, BF16, or FP32 independently from activation dtype. Retain source storage without conversion and promote only the decay operation that requires FP32 arithmetic; eager whole-model promotion increases residency and changes the artifact’s precision contract.
 - Keep OptiQ metadata validation aligned with MLX affine quantization: bit widths 2, 3, 4, 5, 6, and 8 and group sizes 32, 64, and 128 are supported. Metadata may include embedding and output-head measurements; when present, verify them against config instead of rejecting them as unexpected.
 
@@ -190,7 +190,7 @@
 - Gate previous-token expert prefetch by measured useful versus wasted payload. Partial route overlap can still amplify reads substantially even when adjacent tokens share several experts.
 - Distinguish fixed layer-order weight prefetch from route-aware expert paging. Layer order can stage a complete sparse-expert layer while earlier layers compute, but it cannot reveal later router selections. At low routing density, staging the complete layer transfers mostly unused expert payload; keep direct route-driven reads unless a benchmark proves that the transfer is hidden and the larger retained payload is safe.
 - Tensor-major aligned expert packs preserve both source and destination contiguity for adjacent sorted expert IDs. Emit one direct Metal input/output range per adjacent expert run and tensor, rather than one range per expert. For a three-tensor native BF16 layer, loading all 256 experts becomes three commands rather than 768 with no extra payload bytes.
-- Treat one-layer range and command measurements as diagnostics only. Qualify an expert-paging performance change through the production path with 1,024 input tokens, 512 generated tokens, the intended memory ceiling, output parity, and peak memory evidence.
+- Treat one-layer range and command measurements as diagnostics only. Qualify an expert-paging performance change through the production path with 1,024 input tokens, 1,024 generated tokens, the intended memory ceiling, output parity, and peak memory evidence.
 - Compare prompt-processing throughput only at equivalent expert residency. A compact mixed-bit checkpoint can retain every sparse expert layer under the live MLX ceiling while an 8-bit variant pages missing layers from storage during each prefill; that is a different execution path, not an architecture-level prefill advantage.
 - Native multi-token prediction prepares predictor history during prefill and accelerates only accepted greedy decode drafts. Do not treat its presence as evidence of faster prompt processing.
 
@@ -206,7 +206,7 @@
 - Project predictor history updates in their real forward boundaries. Combining two sequential one-token updates into one two-token estimate can undercount slab growth when the first update fills the current capacity and the second allocates a complete growth step.
 - Keep the MTP history entry created from the confirmed current token when its draft is rejected. Only the draft is unconfirmed; rolling back the predictor entry discards committed history and misaligns later proposals.
 - Qualify MTP with representative output lengths. A short all-accepted sample can hide later rejection-state defects, two-token target-forward numerical drift, and acceptance rates too low to repay proposal and verification work.
-- Use approximately 1,000 input tokens and at least 512 generated tokens for model-generation throughput claims. Shorter probes may diagnose mechanics but are not performance evidence.
+- Use approximately 1,000 input tokens and 1,000 generated tokens for model-generation throughput claims. Shorter probes may diagnose mechanics but are not performance evidence.
 - Treat exact greedy parity and throughput as independent release gates. Mathematically equivalent two-token verification can use different multi-token kernels and accumulate a different decoder state from repeated one-token decode, so verification alone does not prove exact production parity.
 - Prefill MTP history with each target hidden row paired to the following prompt token. Starting prediction with empty history discards the prompt context that trained the prediction head.
 - Roll append-only attention state back by moving its logical frontier. Retaining complete key/value slabs for every MTP checkpoint creates context-sized copy-on-write work; only overwritten recurrent and convolution state needs tensor snapshots.
@@ -233,7 +233,7 @@
 - Start steady-state generation timing after the first output token. A cumulative clock that includes prompt processing creates artificial acceleration as more output tokens amortize prefill.
 - The first layer pass mixes page faults, kernel compilation, and execution. Repeat with warm weights and pipelines before judging steady state.
 - Mutate one reference behavior at a time. This identified expert sorting and Metal dispatch without guessing.
-- Use 1,024 input tokens and 512 output tokens for representative generation measurements. Keep shorter probes only as development diagnostics.
+- Use 1,024 input tokens and 1,024 output tokens for representative generation measurements. Keep shorter probes only as development diagnostics.
 
 ## C++ and Rust build boundary
 

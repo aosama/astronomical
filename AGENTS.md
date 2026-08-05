@@ -83,7 +83,7 @@
 
 - This codebase needs to be performance optimized, to achieve that, all our code, regardless which part, needs to have performance logging and attribution that can be switched on and off through config parameter. The performance logging needs to capture start time and end time of each operation. this will allow us to ATTRIBUTE performance issues to specific code parts. Without attribution we will be guessing why we are observing a slow down, which is a bad state to be in, hence it is imperative that when you are editing code or refactoring or creating new code that they follow a unified performance logging and attribution pattern.
 - The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging and finally token generation. In short any and all operations invovled in actually serving a model request to the end user.
-- The minimum representative performane test needs to intake 1K tokens and output 512 tokens with a plus or minus 15% allowance. Anything below that is not a representative measurement at all.
+- The minimum representative performane test needs to intake 1K tokens and output 1K tokens with a plus or minus 15% allowance. Anything below that is not a representative measurement at all.
 
 ## Maximize the Use of the GPU versus CPU
 
