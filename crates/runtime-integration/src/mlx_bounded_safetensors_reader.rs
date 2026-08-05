@@ -4,70 +4,15 @@ use std::{
     os::unix::fs::FileExt,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
-    time::Instant,
 };
 
-use crate::{MlxRuntimeError, mlx_safetensors::BoundedReadInterval, raw};
+use crate::{
+    MlxRuntimeError, PositionalFileReadMetrics, mlx_safetensors::BoundedReadInterval, raw,
+};
 
 const BOUNDED_READER_LABEL: &[u8] = b"bounded multi-range expert page reader\0";
-
-/// Lock-free aggregate of exact positional SSD reads performed by lazy expert pages.
-#[derive(Debug, Default)]
-pub struct ExpertSsdReadMetrics {
-    read_call_count: AtomicU64,
-    read_byte_count: AtomicU64,
-    total_read_elapsed_nanoseconds: AtomicU64,
-    maximum_read_elapsed_nanoseconds: AtomicU64,
-    read_failure_count: AtomicU64,
-}
-
-/// Immutable SSD-read counters captured without synchronizing MLX execution.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ExpertSsdReadMetricsSnapshot {
-    pub read_call_count: u64,
-    pub read_byte_count: u64,
-    pub total_read_elapsed_nanoseconds: u64,
-    pub maximum_read_elapsed_nanoseconds: u64,
-    pub read_failure_count: u64,
-}
-
-impl ExpertSsdReadMetrics {
-    #[must_use]
-    pub fn snapshot(&self) -> ExpertSsdReadMetricsSnapshot {
-        ExpertSsdReadMetricsSnapshot {
-            read_call_count: self.read_call_count.load(Ordering::Relaxed),
-            read_byte_count: self.read_byte_count.load(Ordering::Relaxed),
-            total_read_elapsed_nanoseconds: self
-                .total_read_elapsed_nanoseconds
-                .load(Ordering::Relaxed),
-            maximum_read_elapsed_nanoseconds: self
-                .maximum_read_elapsed_nanoseconds
-                .load(Ordering::Relaxed),
-            read_failure_count: self.read_failure_count.load(Ordering::Relaxed),
-        }
-    }
-
-    fn record_read(&self, byte_count: usize, started_at: Instant, read_succeeded: bool) {
-        let elapsed_nanoseconds =
-            u64::try_from(started_at.elapsed().as_nanos()).unwrap_or(u64::MAX);
-        self.read_call_count.fetch_add(1, Ordering::Relaxed);
-        if read_succeeded {
-            self.read_byte_count.fetch_add(
-                u64::try_from(byte_count).unwrap_or(u64::MAX),
-                Ordering::Relaxed,
-            );
-        }
-        self.total_read_elapsed_nanoseconds
-            .fetch_add(elapsed_nanoseconds, Ordering::Relaxed);
-        self.maximum_read_elapsed_nanoseconds
-            .fetch_max(elapsed_nanoseconds, Ordering::Relaxed);
-        if !read_succeeded {
-            self.read_failure_count.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-}
 
 /// Internal state for the bounded multi-range reader.
 pub(super) struct BoundedMultiRangeReaderState {
@@ -77,7 +22,7 @@ pub(super) struct BoundedMultiRangeReaderState {
     total_payload_bytes: u64,
     cursor: Mutex<BoundedReaderCursor>,
     is_good: AtomicBool,
-    expert_ssd_read_metrics: Option<Arc<ExpertSsdReadMetrics>>,
+    expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 }
 
 struct BoundedReaderCursor {
@@ -90,7 +35,7 @@ impl BoundedMultiRangeReaderState {
         synthetic_header_bytes: Vec<u8>,
         intervals: Vec<BoundedReadInterval>,
         total_payload_bytes: u64,
-        expert_ssd_read_metrics: Option<Arc<ExpertSsdReadMetrics>>,
+        expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Self, MlxRuntimeError> {
         let mut intervals_sorted_by_source = intervals.clone();
         intervals_sorted_by_source.sort_by_key(|interval| interval.source_file_offset);
@@ -136,7 +81,7 @@ impl BoundedMultiRangeReaderState {
             total_payload_bytes,
             cursor: Mutex::new(BoundedReaderCursor { position_bytes: 0 }),
             is_good: AtomicBool::new(true),
-            expert_ssd_read_metrics,
+            expert_file_read_metrics,
         })
     }
 
@@ -425,27 +370,21 @@ fn read_payload_at_offset(
         let bytes_from_interval = bytes_remaining.min(bytes_available_in_interval);
         let source_offset = interval.source_file_offset + offset_within_interval;
         let destination_end = current_destination_offset + bytes_from_interval;
-        let read_started_at = reader_state
-            .expert_ssd_read_metrics
-            .as_ref()
-            .map(|_| Instant::now());
-        let read_succeeded = reader_state
-            .source_file
-            .read_exact_at(
-                &mut destination[current_destination_offset..destination_end],
-                source_offset,
-            )
-            .is_ok();
-        if let (Some(expert_ssd_read_metrics), Some(read_started_at)) = (
-            reader_state.expert_ssd_read_metrics.as_ref(),
-            read_started_at,
-        ) {
-            expert_ssd_read_metrics.record_read(
-                bytes_from_interval,
-                read_started_at,
-                read_succeeded,
-            );
-        }
+        let mut read_operation = || {
+            reader_state
+                .source_file
+                .read_exact_at(
+                    &mut destination[current_destination_offset..destination_end],
+                    source_offset,
+                )
+                .is_ok()
+        };
+        let read_succeeded = match reader_state.expert_file_read_metrics.as_ref() {
+            Some(expert_file_read_metrics) => {
+                expert_file_read_metrics.measure_read(bytes_from_interval, read_operation)
+            }
+            None => read_operation(),
+        };
         if !read_succeeded {
             reader_state.is_good.store(false, Ordering::Release);
             return;

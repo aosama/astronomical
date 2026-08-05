@@ -9,7 +9,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use astronomical_runtime_integration::{ExpertSsdReadMetrics, MlxArray};
+use astronomical_runtime_integration::{MlxArray, PositionalFileReadMetrics};
 
 use super::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
@@ -28,14 +28,14 @@ use super::quantized_expert_manifest::{
 pub fn load_quantized_expert_page(
     runtime: &astronomical_runtime_integration::MlxRuntime,
     page_manifest: &QuantizedExpertPageManifest,
-    expert_ssd_read_metrics: Option<Arc<ExpertSsdReadMetrics>>,
+    expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 ) -> Result<HashMap<String, MlxArray>, ExpertManifestError> {
     let mut loaded_tensors: HashMap<String, MlxArray> = HashMap::new();
     for source_manifest in &page_manifest.source_manifests {
         let shard_tensors = load_shard_manifest(
             runtime,
             source_manifest,
-            expert_ssd_read_metrics.as_ref().map(Arc::clone),
+            expert_file_read_metrics.as_ref().map(Arc::clone),
         )?;
         for (tensor_name, array) in shard_tensors {
             if loaded_tensors.contains_key(&tensor_name) {
@@ -53,7 +53,7 @@ pub fn load_quantized_expert_page(
 fn load_shard_manifest(
     runtime: &astronomical_runtime_integration::MlxRuntime,
     source_manifest: &QuantizedExpertShardManifest,
-    expert_ssd_read_metrics: Option<Arc<ExpertSsdReadMetrics>>,
+    expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 ) -> Result<HashMap<String, MlxArray>, ExpertManifestError> {
     let synthetic_header_bytes = source_manifest.rebased_safetensors_header()?;
     let source_file = std::fs::File::open(&source_manifest.source_file).map_err(|source| {
@@ -81,7 +81,7 @@ fn load_shard_manifest(
             synthetic_header_bytes,
             intervals,
             source_manifest.payload_byte_count,
-            expert_ssd_read_metrics,
+            expert_file_read_metrics,
         )
         .map_err(|source| ExpertManifestError::ReaderError {
             description: source.to_string(),

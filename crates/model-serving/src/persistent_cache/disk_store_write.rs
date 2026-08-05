@@ -104,8 +104,10 @@ impl PersistentPromptCacheDiskStore {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<PersistentPromptCacheSerializationOutcome, PersistentPromptCacheDiskStoreError>
     {
-        let estimated_kv_block_bytes = estimate_file_bytes(kv_block_tensors);
-        let estimated_recurrent_snapshot_bytes = estimate_file_bytes(recurrent_snapshot_tensors);
+        let estimated_kv_block_bytes =
+            estimated_serialized_safetensors_file_byte_count(kv_block_tensors);
+        let estimated_recurrent_snapshot_bytes =
+            estimated_serialized_safetensors_file_byte_count(recurrent_snapshot_tensors);
         let estimated_save_bytes =
             estimated_kv_block_bytes.saturating_add(estimated_recurrent_snapshot_bytes);
         if estimated_save_bytes > self.global_prompt_cache_maximum_size_bytes {
@@ -328,10 +330,12 @@ impl PersistentPromptCacheDiskStore {
     }
 }
 
-fn estimate_file_bytes(tensors: &HashMap<String, MlxArray>) -> u64 {
-    let tensor_bytes: u64 = tensors
+pub(super) fn estimated_serialized_safetensors_file_byte_count(
+    tensors: &HashMap<String, MlxArray>,
+) -> u64 {
+    let tensor_payload_byte_count = tensors
         .values()
         .map(|tensor| u64::try_from(tensor.byte_count()).unwrap_or(u64::MAX))
-        .sum();
-    tensor_bytes.saturating_add(16 * 1024)
+        .fold(0_u64, u64::saturating_add);
+    tensor_payload_byte_count.saturating_add(16 * 1024)
 }

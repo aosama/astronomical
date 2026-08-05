@@ -1,23 +1,18 @@
-use std::{
-    ffi::{CString, c_char, c_int, c_void},
-    fs::File,
-    os::unix::fs::FileExt,
-    sync::{Arc, Mutex},
-};
+use std::{ffi::CString, fs::File, sync::Arc};
 
 use crate::{
     MlxRuntimeError,
     mlx_array::MlxArray,
     mlx_bounded_safetensors_reader::{
-        BoundedMultiRangeReaderState, ExpertSsdReadMetrics, OwnedBoundedMultiRangeReader,
+        BoundedMultiRangeReaderState, OwnedBoundedMultiRangeReader,
         OwnedBoundedMultiRangeReaderHolder,
     },
+    mlx_descriptor_file_reader::OwnedFileReader,
     mlx_runtime::check_status,
     mlx_stream::MlxStream,
+    positional_file_read_metrics::PositionalFileReadMetrics,
     raw,
 };
-
-const READER_LABEL: &[u8] = b"validated descriptor-backed weights\0";
 
 /// One virtual interval mapping payload offsets to source file reads.
 #[derive(Clone, Debug)]
@@ -47,14 +42,14 @@ pub(crate) fn load_safetensors_from_bounded_ranges(
     intervals: Vec<BoundedReadInterval>,
     total_payload_bytes: u64,
     stream: &MlxStream,
-    expert_ssd_read_metrics: Option<Arc<ExpertSsdReadMetrics>>,
+    expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 ) -> Result<SafetensorsLoadResult, MlxRuntimeError> {
     let reader_state = BoundedMultiRangeReaderState::new(
         source_file,
         synthetic_header_bytes,
         intervals,
         total_payload_bytes,
-        expert_ssd_read_metrics,
+        expert_file_read_metrics,
     )?;
     let reader = OwnedBoundedMultiRangeReader::new(reader_state)?;
     let mut tensor_map = OwnedTensorMap::new()?;
@@ -129,8 +124,11 @@ pub struct MlxSafetensors {
 }
 
 impl MlxSafetensors {
-    pub(crate) fn load(weights_file: File) -> Result<Self, MlxRuntimeError> {
-        let reader = OwnedFileReader::new(weights_file)?;
+    pub(crate) fn load(
+        weights_file: File,
+        positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
+    ) -> Result<Self, MlxRuntimeError> {
+        let reader = OwnedFileReader::new(weights_file, positional_file_read_metrics)?;
         let stream = MlxStream::default_cpu()?;
         let mut tensor_map = OwnedTensorMap::new()?;
         let mut metadata_map = OwnedMetadataMap::new()?;
@@ -224,238 +222,6 @@ impl Drop for OwnedMetadataMap {
             raw::mlx_map_string_to_string_free(self.0);
         }
     }
-}
-
-#[derive(Debug)]
-struct OwnedFileReader(raw::mlx_io_reader);
-
-impl OwnedFileReader {
-    fn new(weights_file: File) -> Result<Self, MlxRuntimeError> {
-        let descriptor = Box::into_raw(Box::new(Mutex::new(FileReaderState::new(weights_file))))
-            .cast::<c_void>();
-        let reader_vtable = raw::mlx_io_vtable {
-            is_open: Some(reader_is_open),
-            good: Some(reader_is_good),
-            tell: Some(reader_tell),
-            seek: Some(reader_seek),
-            read: Some(reader_read),
-            read_at_offset: Some(reader_read_at_offset),
-            write: Some(reader_write_is_unsupported),
-            label: Some(reader_label),
-            free: Some(reader_free),
-        };
-        // SAFETY: `descriptor` points to an owned boxed reader state and every
-        // callback matches the official C ABI. On success MLX owns descriptor
-        // cleanup through the vtable.
-        let raw_reader = unsafe { raw::mlx_io_reader_new(descriptor, reader_vtable) };
-        if raw_reader.ctx.is_null() {
-            // SAFETY: In the pinned MLX C constructor, ownership transfers only
-            // after both holder allocations succeed. A null handle therefore
-            // leaves the original descriptor with this caller.
-            unsafe {
-                drop(Box::from_raw(descriptor.cast::<Mutex<FileReaderState>>()));
-            }
-            return Err(empty_handle_error("allocate an MLX descriptor reader"));
-        }
-        Ok(Self(raw_reader))
-    }
-}
-
-impl Drop for OwnedFileReader {
-    fn drop(&mut self) {
-        // SAFETY: This owner releases the MLX reader exactly once. MLX retains
-        // callback state until all lazy arrays release their shared reader.
-        unsafe {
-            raw::mlx_io_reader_free(self.0);
-        }
-    }
-}
-
-#[derive(Debug)]
-struct FileReaderState {
-    file: File,
-    position_bytes: u64,
-    is_good: bool,
-}
-
-impl FileReaderState {
-    fn new(file: File) -> Self {
-        Self {
-            file,
-            position_bytes: 0,
-            is_good: true,
-        }
-    }
-}
-
-unsafe extern "C" fn reader_is_open(descriptor: *mut c_void) -> bool {
-    !descriptor.is_null()
-}
-
-unsafe extern "C" fn reader_is_good(descriptor: *mut c_void) -> bool {
-    // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-    unsafe { with_reader_state(descriptor, |reader_state| reader_state.is_good) }.unwrap_or(false)
-}
-
-unsafe extern "C" fn reader_tell(descriptor: *mut c_void) -> usize {
-    // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-    unsafe {
-        with_reader_state(descriptor, |reader_state| {
-            usize::try_from(reader_state.position_bytes).ok()
-        })
-    }
-    .flatten()
-    .unwrap_or(0)
-}
-
-unsafe extern "C" fn reader_seek(descriptor: *mut c_void, offset: i64, whence: c_int) {
-    // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-    unsafe {
-        with_reader_state(descriptor, |reader_state| {
-            let base_position_bytes = match whence {
-                libc::SEEK_SET => 0_i128,
-                libc::SEEK_CUR => i128::from(reader_state.position_bytes),
-                libc::SEEK_END => match reader_state.file.metadata() {
-                    Ok(metadata) => i128::from(metadata.len()),
-                    Err(_) => {
-                        reader_state.is_good = false;
-                        return;
-                    }
-                },
-                _ => {
-                    reader_state.is_good = false;
-                    return;
-                }
-            };
-            let requested_position_bytes = base_position_bytes + i128::from(offset);
-            match u64::try_from(requested_position_bytes) {
-                Ok(position_bytes) => reader_state.position_bytes = position_bytes,
-                Err(_) => reader_state.is_good = false,
-            }
-        });
-    }
-}
-
-unsafe extern "C" fn reader_read(
-    descriptor: *mut c_void,
-    destination: *mut c_char,
-    byte_count: usize,
-) {
-    // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-    unsafe {
-        with_reader_state(descriptor, |reader_state| {
-            if read_exact_at(
-                &reader_state.file,
-                destination,
-                byte_count,
-                reader_state.position_bytes,
-            )
-            .is_err()
-            {
-                reader_state.is_good = false;
-                return;
-            }
-            let Ok(consumed_byte_count) = u64::try_from(byte_count) else {
-                reader_state.is_good = false;
-                return;
-            };
-            match reader_state.position_bytes.checked_add(consumed_byte_count) {
-                Some(position_bytes) => reader_state.position_bytes = position_bytes,
-                None => reader_state.is_good = false,
-            }
-        });
-    }
-}
-
-unsafe extern "C" fn reader_read_at_offset(
-    descriptor: *mut c_void,
-    destination: *mut c_char,
-    byte_count: usize,
-    offset_bytes: usize,
-) {
-    let Ok(offset_bytes) = u64::try_from(offset_bytes) else {
-        // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-        unsafe {
-            with_reader_state(descriptor, |reader_state| {
-                reader_state.is_good = false;
-            });
-        }
-        return;
-    };
-    // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-    unsafe {
-        with_reader_state(descriptor, |reader_state| {
-            if read_exact_at(&reader_state.file, destination, byte_count, offset_bytes).is_err() {
-                reader_state.is_good = false;
-            }
-        });
-    }
-}
-
-unsafe extern "C" fn reader_write_is_unsupported(
-    descriptor: *mut c_void,
-    _source: *const c_char,
-    _byte_count: usize,
-) {
-    // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-    unsafe {
-        with_reader_state(descriptor, |reader_state| {
-            reader_state.is_good = false;
-        });
-    }
-}
-
-unsafe extern "C" fn reader_label(_descriptor: *mut c_void) -> *const c_char {
-    READER_LABEL.as_ptr().cast::<c_char>()
-}
-
-unsafe extern "C" fn reader_free(descriptor: *mut c_void) {
-    if descriptor.is_null() {
-        return;
-    }
-    // SAFETY: `descriptor` originated from `Box::into_raw` in the constructor,
-    // and MLX invokes this callback exactly once when its final reader dies.
-    unsafe {
-        drop(Box::from_raw(descriptor.cast::<Mutex<FileReaderState>>()));
-    }
-}
-
-unsafe fn with_reader_state<Output>(
-    descriptor: *mut c_void,
-    operation: impl FnOnce(&mut FileReaderState) -> Output,
-) -> Option<Output> {
-    if descriptor.is_null() {
-        return None;
-    }
-    // SAFETY: MLX retains the boxed mutex until the final reader release, and
-    // no callback can execute after `reader_free` destroys the descriptor.
-    let reader_mutex = unsafe { &*descriptor.cast::<Mutex<FileReaderState>>() };
-    let mut reader_state = reader_mutex
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    Some(operation(&mut reader_state))
-}
-
-fn read_exact_at(
-    file: &File,
-    destination: *mut c_char,
-    byte_count: usize,
-    offset_bytes: u64,
-) -> std::io::Result<()> {
-    if byte_count == 0 {
-        return Ok(());
-    }
-    if destination.is_null() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "MLX reader supplied a null destination",
-        ));
-    }
-    // SAFETY: MLX supplies writable storage for exactly `byte_count` bytes and
-    // does not retain this temporary Rust slice after the callback returns.
-    let destination_bytes =
-        unsafe { std::slice::from_raw_parts_mut(destination.cast::<u8>(), byte_count) };
-    file.read_exact_at(destination_bytes, offset_bytes)
 }
 
 fn empty_handle_error(operation: &'static str) -> MlxRuntimeError {

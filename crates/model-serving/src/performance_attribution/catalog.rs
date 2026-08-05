@@ -258,11 +258,19 @@ pub enum PerformanceCounter {
     ExpertPageLogicalPayloadBytes,
     AlignedExpertPackMetalIoPageLoadCount,
     AlignedExpertPackMetalIoLogicalPayloadBytes,
-    ExpertSsdReadCallCount,
-    ExpertSsdReadByteCount,
-    ExpertSsdReadElapsedNanoseconds,
-    ExpertSsdReadMaximumElapsedNanoseconds,
-    ExpertSsdReadFailureCount,
+    AlignedExpertPackMetalIoRequestedByteCount,
+    AlignedExpertPackMetalIoCommandCount,
+    AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds,
+    AlignedExpertPackMetalIoCompletedLoadCount,
+    AlignedExpertPackMetalIoQueueElapsedNanoseconds,
+    AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds,
+    AlignedExpertPackMetalIoFailureCount,
+    PositionalFileReadCallCount,
+    PositionalFileReadByteCount,
+    PositionalFileReadElapsedNanoseconds,
+    PositionalFileReadMaximumElapsedNanoseconds,
+    PositionalFileReadMaximumConcurrentCount,
+    PositionalFileReadFailureCount,
     ExpertRoutePredictedExpertCount,
     ExpertRouteMatchedExpertCount,
     ExpertRouteCompletelyMatchedLayerCount,
@@ -291,11 +299,19 @@ impl PerformanceCounter {
         Self::ExpertPageLogicalPayloadBytes,
         Self::AlignedExpertPackMetalIoPageLoadCount,
         Self::AlignedExpertPackMetalIoLogicalPayloadBytes,
-        Self::ExpertSsdReadCallCount,
-        Self::ExpertSsdReadByteCount,
-        Self::ExpertSsdReadElapsedNanoseconds,
-        Self::ExpertSsdReadMaximumElapsedNanoseconds,
-        Self::ExpertSsdReadFailureCount,
+        Self::AlignedExpertPackMetalIoRequestedByteCount,
+        Self::AlignedExpertPackMetalIoCommandCount,
+        Self::AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds,
+        Self::AlignedExpertPackMetalIoCompletedLoadCount,
+        Self::AlignedExpertPackMetalIoQueueElapsedNanoseconds,
+        Self::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds,
+        Self::AlignedExpertPackMetalIoFailureCount,
+        Self::PositionalFileReadCallCount,
+        Self::PositionalFileReadByteCount,
+        Self::PositionalFileReadElapsedNanoseconds,
+        Self::PositionalFileReadMaximumElapsedNanoseconds,
+        Self::PositionalFileReadMaximumConcurrentCount,
+        Self::PositionalFileReadFailureCount,
         Self::ExpertRoutePredictedExpertCount,
         Self::ExpertRouteMatchedExpertCount,
         Self::ExpertRouteCompletelyMatchedLayerCount,
@@ -333,13 +349,39 @@ impl PerformanceCounter {
             Self::AlignedExpertPackMetalIoLogicalPayloadBytes => {
                 "aligned_expert_pack_metal_io_logical_payload_bytes"
             }
-            Self::ExpertSsdReadCallCount => "expert_ssd_read_call_count",
-            Self::ExpertSsdReadByteCount => "expert_ssd_read_byte_count",
-            Self::ExpertSsdReadElapsedNanoseconds => "expert_ssd_read_elapsed_nanoseconds",
-            Self::ExpertSsdReadMaximumElapsedNanoseconds => {
-                "expert_ssd_read_maximum_elapsed_nanoseconds"
+            Self::AlignedExpertPackMetalIoRequestedByteCount => {
+                "aligned_expert_pack_metal_io_requested_byte_count"
             }
-            Self::ExpertSsdReadFailureCount => "expert_ssd_read_failure_count",
+            Self::AlignedExpertPackMetalIoCommandCount => {
+                "aligned_expert_pack_metal_io_command_count"
+            }
+            Self::AlignedExpertPackMetalIoHostEncodingElapsedNanoseconds => {
+                "aligned_expert_pack_metal_io_host_encoding_elapsed_nanoseconds"
+            }
+            Self::AlignedExpertPackMetalIoCompletedLoadCount => {
+                "aligned_expert_pack_metal_io_completed_load_count"
+            }
+            Self::AlignedExpertPackMetalIoQueueElapsedNanoseconds => {
+                "aligned_expert_pack_metal_io_queue_elapsed_nanoseconds"
+            }
+            Self::AlignedExpertPackMetalIoMaximumQueueElapsedNanoseconds => {
+                "aligned_expert_pack_metal_io_maximum_queue_elapsed_nanoseconds"
+            }
+            Self::AlignedExpertPackMetalIoFailureCount => {
+                "aligned_expert_pack_metal_io_failure_count"
+            }
+            Self::PositionalFileReadCallCount => "positional_file_read_call_count",
+            Self::PositionalFileReadByteCount => "positional_file_read_byte_count",
+            Self::PositionalFileReadElapsedNanoseconds => {
+                "positional_file_read_elapsed_nanoseconds"
+            }
+            Self::PositionalFileReadMaximumElapsedNanoseconds => {
+                "positional_file_read_maximum_elapsed_nanoseconds"
+            }
+            Self::PositionalFileReadMaximumConcurrentCount => {
+                "positional_file_read_maximum_concurrent_count"
+            }
+            Self::PositionalFileReadFailureCount => "positional_file_read_failure_count",
             Self::ExpertRoutePredictedExpertCount => "expert_route_predicted_expert_count",
             Self::ExpertRouteMatchedExpertCount => "expert_route_matched_expert_count",
             Self::ExpertRouteCompletelyMatchedLayerCount => {

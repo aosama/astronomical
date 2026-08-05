@@ -160,7 +160,11 @@ class CompleteTransactionOwner {
           load_ranges.size(),
           gpu_stream_,
           output_arrays_.data(),
-          &load_handle_);
+          &load_handle_,
+          nullptr,
+          nullptr,
+          nullptr,
+          nullptr);
     }
     require_condition(
         submission_status == 0 && load_handle_ != nullptr,

@@ -135,7 +135,7 @@ impl PersistentPromptCacheDiskStore {
             );
         }
         let loaded_safetensors = runtime
-            .load_safetensors(visual_embedding_file)
+            .load_safetensors(visual_embedding_file, None)
             .map_err(|source| PersistentPromptCacheDiskStoreError::LoadSafetensors { source })?;
         let visual_embedding_tensor = loaded_safetensors
             .tensor("visual_embeddings")

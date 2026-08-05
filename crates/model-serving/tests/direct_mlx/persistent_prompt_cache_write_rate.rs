@@ -1,14 +1,82 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use std::sync::Arc;
 
 use astronomical_model_serving::{
-    PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheWriteQueue, PersistentPromptCacheWriteRateLimiter,
+    PerformanceAttribution, PerformanceOperation, PersistentPromptCacheDiskStore,
+    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheWriteQueue,
+    PersistentPromptCacheWriteQueueOutcome, PersistentPromptCacheWriteRateLimiter,
     persistent_prompt_cache_write_queue_can_accept,
 };
+use astronomical_runtime_integration::MlxDtype;
 
 use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+
+use super::persistent_prompt_cache_disk_store_support::{
+    open_persistent_prompt_cache_disk_store, persistent_prompt_cache_block_key_for_seed,
+    runtime_with_shared_limits,
+};
+
+const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const OVERSIZED_QUEUE_CAPTURE_ELEMENT_COUNT: i32 = 70_000_000;
+
+#[tokio::test]
+async fn should_reject_an_oversized_queue_capture_before_mlx_serialization() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = runtime_with_shared_limits();
+    let persistent_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create a prompt-cache directory");
+    let persistent_prompt_cache = Arc::new(
+        open_persistent_prompt_cache_disk_store(
+            &persistent_prompt_cache_directory,
+            LARGE_CACHE_LIMIT_BYTES,
+        )
+        .expect("the persistent prompt cache should open an empty directory"),
+    );
+    let write_queue = PersistentPromptCacheWriteQueue::new(persistent_prompt_cache, None)
+        .expect("the test should start the bounded writer queue");
+    let oversized_kv_block_tensors = HashMap::from([(
+        "layer.0.full_attention.key".to_owned(),
+        runtime
+            .zeros(&[OVERSIZED_QUEUE_CAPTURE_ELEMENT_COUNT], MlxDtype::BFloat16)
+            .expect("the test should construct a lazy oversized KV tensor"),
+    )]);
+    let oversized_recurrent_snapshot_tensors = HashMap::from([(
+        "layer.0.linear_attention.recurrent_state".to_owned(),
+        runtime
+            .zeros(&[OVERSIZED_QUEUE_CAPTURE_ELEMENT_COUNT], MlxDtype::BFloat16)
+            .expect("the test should construct a lazy oversized recurrent tensor"),
+    )]);
+    let mut performance_attribution = PerformanceAttribution::enabled();
+
+    let write_queue_outcome = write_queue
+        .serialize_and_enqueue(
+            &runtime,
+            &persistent_prompt_cache_block_key_for_seed(0),
+            None,
+            &oversized_kv_block_tensors,
+            &oversized_recurrent_snapshot_tensors,
+            &mut performance_attribution,
+        )
+        .expect("the oversized capture should be rejected without serialization");
+
+    assert_eq!(
+        write_queue_outcome,
+        PersistentPromptCacheWriteQueueOutcome::DroppedBecauseQueueIsFull
+    );
+    assert_eq!(
+        performance_attribution
+            .operation_measurement(PerformanceOperation::PersistentPromptCacheKvBlockSerialization),
+        None
+    );
+    assert_eq!(
+        performance_attribution.operation_measurement(
+            PerformanceOperation::PersistentPromptCacheRecurrentSnapshotSerialization
+        ),
+        None
+    );
+}
 
 #[test]
 fn should_convert_decimal_megabytes_per_second_to_bytes_per_second() {

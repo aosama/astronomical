@@ -1,15 +1,19 @@
 use std::fs::File;
 
 use crate::{
-    BoundedReadInterval, ExpertSsdReadMetrics, MlxRuntime, MlxRuntimeError, MlxSafetensors,
+    BoundedReadInterval, MlxRuntime, MlxRuntimeError, MlxSafetensors, PositionalFileReadMetrics,
     SafetensorsLoadResult, mlx_stream::MlxStream,
 };
 
 impl MlxRuntime {
     /// Loads a safetensors map from the caller's retained read-only file
     /// descriptor without reopening any mutable path identity.
-    pub fn load_safetensors(&self, weights_file: File) -> Result<MlxSafetensors, MlxRuntimeError> {
-        MlxSafetensors::load(weights_file)
+    pub fn load_safetensors(
+        &self,
+        weights_file: File,
+        positional_file_read_metrics: Option<std::sync::Arc<PositionalFileReadMetrics>>,
+    ) -> Result<MlxSafetensors, MlxRuntimeError> {
+        MlxSafetensors::load(weights_file, positional_file_read_metrics)
     }
 
     /// Loads safetensors tensors from bounded multi-range reads on a source file.
@@ -22,7 +26,7 @@ impl MlxRuntime {
         synthetic_header_bytes: Vec<u8>,
         intervals: Vec<BoundedReadInterval>,
         total_payload_bytes: u64,
-        expert_ssd_read_metrics: Option<std::sync::Arc<ExpertSsdReadMetrics>>,
+        expert_file_read_metrics: Option<std::sync::Arc<PositionalFileReadMetrics>>,
     ) -> Result<SafetensorsLoadResult, MlxRuntimeError> {
         let stream = MlxStream::default_cpu()?;
         crate::mlx_safetensors::load_safetensors_from_bounded_ranges(
@@ -31,7 +35,7 @@ impl MlxRuntime {
             intervals,
             total_payload_bytes,
             &stream,
-            expert_ssd_read_metrics,
+            expert_file_read_metrics,
         )
     }
 
