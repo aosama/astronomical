@@ -8,16 +8,26 @@ pub(super) fn forward_state_arrays<'state>(
     output: &'state MlxArray,
     request_decoder_state: &'state RequestDecoderStateStack,
 ) -> Result<Vec<&'state MlxArray>, Qwen3_5ExecutionError> {
-    let mut evaluation_arrays = decoder_state_arrays(request_decoder_state)?;
-    evaluation_arrays.insert(0, output);
-    Ok(evaluation_arrays)
+    collect_evaluation_arrays(Some(output), request_decoder_state, false)
 }
 
 pub(super) fn decoder_state_arrays(
     request_decoder_state: &RequestDecoderStateStack,
 ) -> Result<Vec<&MlxArray>, Qwen3_5ExecutionError> {
+    collect_evaluation_arrays(None, request_decoder_state, true)
+}
+
+fn collect_evaluation_arrays<'state>(
+    output: Option<&'state MlxArray>,
+    request_decoder_state: &'state RequestDecoderStateStack,
+    include_forward_reachable_state_arrays: bool,
+) -> Result<Vec<&'state MlxArray>, Qwen3_5ExecutionError> {
+    // Forward outputs already reach attention storage and the recurrent kernel's sibling state.
+    // Convolution state branches from its input, so it always remains an explicit evaluation root.
     let decoder_layer_count = request_decoder_state.layer_count();
-    let mut evaluation_arrays = Vec::with_capacity(decoder_layer_count * 2);
+    let mut evaluation_arrays =
+        Vec::with_capacity(decoder_layer_count * 2 + usize::from(output.is_some()));
+    evaluation_arrays.extend(output);
     for layer_index in 0..decoder_layer_count {
         match request_decoder_state.layer(layer_index) {
             Some(DecoderCacheState::Composite {
@@ -37,7 +47,9 @@ pub(super) fn decoder_state_arrays(
                     )
                 })?;
                 evaluation_arrays.push(convolution);
-                evaluation_arrays.push(recurrent);
+                if include_forward_reachable_state_arrays {
+                    evaluation_arrays.push(recurrent);
+                }
             }
             Some(DecoderCacheState::AppendOnlyAttention { attention })
                 if attention.keys_state().is_some() && attention.values_state().is_some() =>
@@ -54,8 +66,10 @@ pub(super) fn decoder_state_arrays(
                         "model forward did not populate the attention value state array",
                     )
                 })?;
-                evaluation_arrays.push(attention_keys);
-                evaluation_arrays.push(attention_values);
+                if include_forward_reachable_state_arrays {
+                    evaluation_arrays.push(attention_keys);
+                    evaluation_arrays.push(attention_values);
+                }
             }
             _ => {
                 return Err(invalid_request_decoder_state(
