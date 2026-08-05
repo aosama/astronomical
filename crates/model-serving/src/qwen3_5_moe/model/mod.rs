@@ -3,8 +3,6 @@ mod expert_memory_mode;
 #[cfg(feature = "direct-mlx")]
 mod expert_retention_memory_pressure;
 #[cfg(feature = "direct-mlx")]
-mod expert_storage_format;
-#[cfg(feature = "direct-mlx")]
 pub(crate) mod feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
 mod output_combination;

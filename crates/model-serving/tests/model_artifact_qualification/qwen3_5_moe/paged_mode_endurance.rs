@@ -115,7 +115,8 @@ async fn run_sustained_paged_mode_endurance_regression() {
             "Qwen3.6-35B-A3B-8bit",
             SUSTAINED_ENDURANCE_INPUT_TOKEN_COUNT,
             SUSTAINED_ENDURANCE_REQUESTED_OUTPUT_TOKEN_COUNT,
-        );
+        )
+        .expect("the sustained endurance prompt should prepare at the exact requested length");
     let (mut qwen3_5_engine, _temporary_log_directory, performance_attribution_log_path) =
         create_automatic_residency_endurance_engine(&model_directory).await;
 

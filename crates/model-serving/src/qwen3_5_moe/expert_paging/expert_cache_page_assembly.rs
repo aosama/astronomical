@@ -49,7 +49,6 @@ impl ExpertWeightMemoryCache {
                 &down_projections,
                 "down projection",
             )?,
-            _metal_expert_pack_load_owner: None,
         })
     }
 }

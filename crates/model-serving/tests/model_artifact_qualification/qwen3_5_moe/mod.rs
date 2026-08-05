@@ -1,14 +1,12 @@
 #[cfg(feature = "direct-mlx")]
 mod aligned_expert_pack;
-#[cfg(feature = "direct-mlx")]
-mod aligned_expert_pack_oq4e_range_benchmark;
-#[cfg(feature = "direct-mlx")]
-mod aligned_expert_pack_projection;
 mod artifact;
 #[cfg(feature = "direct-mlx")]
 mod automatic_residency_endurance;
 mod config;
 mod engine;
+#[cfg(feature = "direct-mlx")]
+mod exact_model_prompt;
 mod expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_paging_decode;
@@ -80,8 +78,6 @@ async fn construct_model_artifact_expert_pager(
         .collect();
     let expert_pager = ExpertPager::new(
         model_directory,
-        validated_artifact.model_id(),
-        validated_artifact.revision(),
         &weight_map,
         &config,
         configured_mlx_memory_cap_bytes,

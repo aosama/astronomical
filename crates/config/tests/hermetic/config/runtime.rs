@@ -102,6 +102,12 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
             .and_then(serde_json::Value::as_bool),
         Some(true)
     );
+    assert_eq!(
+        generated_config_json
+            .get("persistent_prompt_cache_enabled")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
     assert!(astronomical_config.mtp_enabled());
     assert_eq!(
         astronomical_config

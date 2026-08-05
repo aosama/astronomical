@@ -51,7 +51,6 @@ pub(super) fn build_prefixed_paged_expert_weights(
         gate_projection,
         up_projection,
         down_projection,
-        _metal_expert_pack_load_owner: None,
     })
 }
 

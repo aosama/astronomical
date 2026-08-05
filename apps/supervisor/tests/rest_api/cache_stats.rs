@@ -37,7 +37,6 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
         MtpRuntimeState::Disabled,
         None,
     );
@@ -204,7 +203,6 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
         MtpRuntimeState::Disabled,
         None,
     );

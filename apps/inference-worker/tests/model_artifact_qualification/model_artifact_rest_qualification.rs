@@ -116,7 +116,7 @@ pub(super) async fn run_model_artifact_request_e2e_for_model(
     request_body: String,
 ) {
     let model_artifact_rest_server =
-        launch_model_artifact_rest_server_for_model(model_id, model_directory, None).await;
+        launch_model_artifact_rest_server_for_model(model_id, model_directory, None, None).await;
     let chat_response = run_model_artifact_request_and_return_response_with_server(
         model_artifact_rest_server,
         request_kind,
@@ -147,6 +147,7 @@ async fn run_deployed_rest_surface_litmus() {
     let model_artifact_rest_server = launch_model_artifact_rest_server_for_model(
         &deployment_litmus_model_id,
         selected_deployment_litmus_model.model_directory,
+        None,
         None,
     )
     .await;
@@ -203,13 +204,15 @@ async fn run_deployed_rest_surface_litmus() {
 async fn launch_model_artifact_rest_server() -> ModelArtifactRestServer {
     let configured_model_directory =
         crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
-    launch_model_artifact_rest_server_for_model(MODEL_ID, configured_model_directory, None).await
+    launch_model_artifact_rest_server_for_model(MODEL_ID, configured_model_directory, None, None)
+        .await
 }
 
 pub(super) async fn launch_model_artifact_rest_server_for_model(
     model_id: &str,
     model_directory: PathBuf,
     isolated_worker_home_directory: Option<&Path>,
+    performance_log_directory: Option<&Path>,
 ) -> ModelArtifactRestServer {
     let production_worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
@@ -228,10 +231,12 @@ pub(super) async fn launch_model_artifact_rest_server_for_model(
         .expect("the deployment litmus worker configuration should resolve");
     let deployment_litmus_log_directory =
         tempfile::tempdir().expect("the deployment litmus log directory should be created");
+    let performance_log_directory =
+        performance_log_directory.unwrap_or_else(|| deployment_litmus_log_directory.path());
     let worker_handle = WorkerHandle::launch_with_startup_configuration(
         &production_worker_executable_path,
         Duration::from_secs(60),
-        GenerationPerformanceLog::open(deployment_litmus_log_directory.path())
+        GenerationPerformanceLog::open(performance_log_directory)
             .expect("the deployment litmus performance log should open"),
         single_model_directories(model_id, &model_directory),
         20_480,

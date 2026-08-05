@@ -1,6 +1,5 @@
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
-use super::super::aligned_expert_pack_loader::load_selected_experts_from_aligned_pack_with_performance_attribution;
 use super::super::bounded_expert_reader::load_quantized_expert_page;
 use super::super::expert_cache::ExpertWeightMemoryCache;
 use super::super::memory_budget::MemoryBudgetSnapshot;
@@ -97,40 +96,24 @@ impl ExpertPager {
                 },
             )?;
         }
-        let aligned_expert_pack_layer = self
-            .aligned_expert_pack_layers
-            .get(layer_index)
-            .and_then(Option::as_ref);
-        let paged_expert_weights =
-            if let Some(aligned_expert_pack_layer) = aligned_expert_pack_layer {
-                load_selected_experts_from_aligned_pack_with_performance_attribution(
-                    runtime,
-                    aligned_expert_pack_layer,
-                    layer_plan,
-                    selected_expert_ids,
-                    page_manifest.payload_byte_count,
-                    performance_attribution,
-                )?
-            } else {
-                performance_attribution
-                    .measure_operation(
-                        PerformanceOperation::ExpertBoundedSafetensorsLazyPageConstruction,
-                        |performance_attribution| {
-                            let mut loaded_tensors = load_quantized_expert_page(
-                                runtime,
-                                &page_manifest,
-                                performance_attribution.positional_file_read_metrics(),
-                            )
-                            .map_err(|load_error| ExpertPagingError::Runtime {
-                                description: load_error.to_string(),
-                            })?;
-                            build_paged_expert_weights(&mut loaded_tensors, layer_plan)
-                        },
+        let paged_expert_weights = performance_attribution
+            .measure_operation(
+                PerformanceOperation::ExpertBoundedSafetensorsLazyPageConstruction,
+                |performance_attribution| {
+                    let mut loaded_tensors = load_quantized_expert_page(
+                        runtime,
+                        &page_manifest,
+                        performance_attribution.positional_file_read_metrics(),
                     )
-                    .map_err(|error| ExpertPagingError::Runtime {
-                        description: error.to_string(),
-                    })?
-            };
+                    .map_err(|load_error| ExpertPagingError::Runtime {
+                        description: load_error.to_string(),
+                    })?;
+                    build_paged_expert_weights(&mut loaded_tensors, layer_plan)
+                },
+            )
+            .map_err(|error| ExpertPagingError::Runtime {
+                description: error.to_string(),
+            })?;
         performance_attribution.record_counter(
             PerformanceCounter::ExpertPageLogicalPayloadBytes,
             page_manifest.payload_byte_count,

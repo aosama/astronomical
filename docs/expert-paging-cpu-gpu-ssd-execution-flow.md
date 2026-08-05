@@ -6,7 +6,6 @@ This document records the verified Qwen3.5 and Qwen3.6 mixture-of-experts paging
 
 - CPU means Rust or C++ code executing on a host thread.
 - GPU means an MLX primitive encoded for the Metal graphics-processor stream and executed by the Apple graphics processor.
-- SSD and Metal I/O means a Metal I/O command reads file ranges into Metal buffers. The CPU constructs and submits the command; the CPU does not copy the payload bytes through a Rust buffer.
 - SSD and MLX I/O worker means an MLX lazy Load primitive performs bounded positional file reads through MLX input/output workers when the graph is evaluated.
 - Graph construction on the CPU creates lazy MLX arrays. It does not prove that the represented arithmetic has executed.
 - A synchronous MLX evaluation wait includes host dependency traversal and submission plus waiting for required device work. It does not identify one graphics-processor kernel as the elapsed-time owner.
@@ -103,31 +102,12 @@ This document records the verified Qwen3.5 and Qwen3.6 mixture-of-experts paging
         |      MLX memory budget. If necessary, reconciles retained        |
         |      expert pages before admitting the temporary page.          |
         |                                                                 |
-        |      If the layer has a validated aligned expert pack:          |
-        |      - computes source file offsets                              |
-        |      - computes destination tensor offsets                       |
-        |      - computes exact byte counts                                |
-        |      - merges adjacent sorted expert IDs into one range per tensor |
-        |      - allocates MLX-owned Metal destination buffers              |
-        |      - calls astronomical_metal_expert_loader_start              |
+        |      Constructs lazy bounded safetensors Load arrays backed by   |
+        |      exact source intervals from the selected-page manifest.     |
+        |      The arrays remain lazy until dependent graph evaluation.    |
         |                                                                 v
-        | CPU: Native Metal I/O command encoding                           |
-        |      - opens an MTL::IOFileHandle                                |
-        |      - obtains an MTL::IOCommandBuffer                           |
-        |      - encodes MTL::IOCommandBuffer::loadBuffer for each range   |
-        |      - encodes a completion-event signal                         |
-        |      - commits the Metal I/O command buffer                      |
-        |      - makes the target GPU stream wait on that event            |
-        |                                                                 v
-        | File storage and Metal I/O subsystem                             |
-        |      Reads exact ranges from the aligned expert-pack file.       |
-        |      Transfers those bytes into MLX-owned MTL::Buffer objects.   |
-        |      Signals the completion event.                               |
-        |                                                                 |
-        |      If no aligned pack is active, the direct path instead       |
-        |      constructs lazy bounded safetensors Load arrays, whose      |
-        |      positional file reads occur on MLX I/O workers during       |
-        |      later graph evaluation.                                     |
+        | SSD and MLX I/O workers: During later MLX evaluation, perform    |
+        |      bounded positional reads for the selected expert ranges.    |
         |                                                                 |
         +-----------------------------------------------------------------+
         |
@@ -152,7 +132,6 @@ This document records the verified Qwen3.5 and Qwen3.6 mixture-of-experts paging
         v
     GPU: Apple graphics processor
         |
-        | The Metal compute stream waits for any required Metal I/O event.
         | Executes take_axis to remap each global expert assignment to its
         | compact page slot without constructing remapped assignments in Rust.
         | No second selected-index synchronization or assignment-sized host
@@ -180,15 +159,7 @@ The policy does not read expert payload bytes and does not execute mixture-of-ex
 
 ## File-read locations
 
-There are two distinct file-read mechanisms.
-
-### Aligned expert-pack Metal I/O
-
-The CPU calculates exact ranges and submits MTL::IOCommandBuffer::loadBuffer commands. Adjacent sorted expert IDs share one range per tensor; scattered IDs remain separate so no unselected gap is read. Metal I/O transfers file bytes into MLX-owned Metal buffers. The target GPU compute stream waits on the Metal I/O completion event before consuming those buffers. There is no intermediate Rust payload-byte copy.
-
-### Bounded safetensors MLX loading
-
-The CPU constructs lazy MLX Load arrays backed by bounded positional readers. Host positional reads occur later on MLX input/output workers when evaluation requires the arrays. The operating-system page cache may satisfy them, so these timings do not prove physical solid-state-drive service. This is the fallback when no aligned pack is active and is also used by the retained one-expert population path.
+Production has one expert file-read mechanism. The CPU constructs lazy MLX Load arrays backed by bounded positional readers over standard safetensors shards. Host positional reads occur later on MLX input/output workers when evaluation requires the arrays. The operating-system page cache may satisfy them, so these timings do not prove physical solid-state-drive service. Temporary pages and retained one-expert population use the same mechanism.
 
 ## Attribution interpretation
 
@@ -201,8 +172,6 @@ The selected_expert_id_evaluation_synchronization_wait operation wraps the synch
 
 It does not include the separately measured host copy of evaluated selected IDs. It also does not prove how much of the wait belongs to any individual graphics-processor kernel.
 
-The aligned_expert_pack_metal_io_page_load operation wraps aligned-page construction and Metal I/O submission. The native loader records completion separately, and the GPU dependency is enforced by a shared event. Do not interpret the operation name alone as pure physical SSD service time.
-
 ## Verified source map
 
 - Router graph and complete-layer branch: crates/model-serving/src/qwen3_5_moe/model/paged_moe_forward.rs, lines 47-94.
@@ -213,10 +182,9 @@ The aligned_expert_pack_metal_io_page_load operation wraps aligned-page construc
 - One-expert lookup, protection, eviction, loading, and assembly: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/memory_cache.rs, lines 39-262.
 - Global partial-page eviction: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_cache_eviction.rs, lines 4-64.
 - Same-layer deterministic oldest-unselected eviction: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_cache.rs, lines 258-287.
-- Direct-page memory admission and aligned-versus-safetensors branch: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/direct_page.rs, lines 38-138.
-- Aligned range calculation, adjacent-run coalescing, and runtime call: crates/model-serving/src/qwen3_5_moe/expert_paging/aligned_expert_pack_loader.rs, lines 100-247.
-- Rust-to-native Metal I/O boundary: crates/runtime-integration/src/mlx_metal_expert_pack_loader.rs, lines 153-253.
-- Native Metal I/O file handle, loadBuffer commands, completion event, commit, and GPU-stream wait: crates/runtime-integration/native/astronomical_metal_expert_loader.cpp, lines 238-339.
+- Direct-page memory admission and bounded safetensors loading: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/direct_page.rs, lines 37-122.
+- Bounded expert-page reader and exact source-interval mapping: crates/model-serving/src/qwen3_5_moe/expert_paging/bounded_expert_reader.rs, lines 18-101.
+- Runtime bounded safetensors loading boundary: crates/runtime-integration/src/mlx_runtime/safetensors.rs and crates/runtime-integration/src/mlx_safetensors.rs.
 - Rust synchronous MLX-C evaluation call: crates/runtime-integration/src/mlx_array.rs, lines 217-223.
 - MLX-C array evaluation boundary: mlx-c/mlx/c/array.cpp, lines 348-355 in the pinned upstream source.
 - MLX dependency traversal and synchronous wait: mlx/mlx/transforms.cpp, lines 80-350 in the pinned upstream source.

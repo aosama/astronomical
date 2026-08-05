@@ -18,7 +18,7 @@ pub(super) fn selected_expert_ids(
 ) -> Vec<usize> {
     assert!(
         selected_expert_count > 0 && selected_expert_count <= expert_capacity,
-        "selected expert count must fit the configured Ornith expert capacity"
+        "selected expert count must fit the configured expert capacity"
     );
     if selected_expert_count == 1 {
         return vec![expert_capacity / 2];

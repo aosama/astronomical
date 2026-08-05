@@ -30,8 +30,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         .unwrap_or_else(|_| DEFAULT_READY_MODEL_ID.to_owned());
     event_writer
         .send_event(&WorkerEvent::Ready {
-            expert_storage_format:
-                astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             model_id: ready_model_id,

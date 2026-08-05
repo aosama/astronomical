@@ -147,6 +147,7 @@ impl MlxArray {
         Self { raw_array }
     }
 
+    #[cfg(feature = "experimental-aligned-expert-packs")]
     pub(crate) fn from_populated_owned_raw(raw_array: raw::mlx_array) -> Self {
         debug_assert!(!raw_array.ctx.is_null());
         Self { raw_array }

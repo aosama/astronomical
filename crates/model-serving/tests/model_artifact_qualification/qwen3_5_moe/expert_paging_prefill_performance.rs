@@ -2,14 +2,9 @@
 
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-};
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5PromptRenderer,
-    Qwen3_5Tokenizer,
-};
+use astronomical_model_serving::Qwen3_5MoEPagedPrefillExecutionMode;
 
+pub(crate) use super::exact_model_prompt::prepare_reproduced_long_prompt_token_ids_for_model;
 use super::expert_paging_prefill::{
     maximum_absolute_difference, prefill_tokens_per_second, prepare_reproduced_prompt_token_ids,
     require_prefill_comparison_completion, run_prefill_snapshot,
@@ -151,80 +146,5 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids(
         prompt_token_count,
         maximum_output_token_count,
     )
-}
-
-pub(crate) fn prepare_reproduced_long_prompt_token_ids_for_model(
-    model_directory: &std::path::Path,
-    model_id: &str,
-    prompt_token_count: usize,
-    maximum_output_token_count: u16,
-) -> Vec<u32> {
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(model_directory, 20_480)
-        .expect("the selected Qwen3.5 artifact should validate before tokenizer loading");
-    let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-        .expect("the selected Qwen3.5 tokenizer should load from validated model metadata");
-    let mut deterministic_prompt_text = format!(
-        "Write a detailed technical report of at least {maximum_output_token_count} tokens that synthesizes the following benchmark context without omitting operational constraints. "
-    );
-    // Scale source material with the requested token count so this shared helper
-    // can construct exact long-context endurance prompts without a fixed ceiling.
-    let deterministic_long_prompt_segment_count = prompt_token_count.div_ceil(16);
-    for prompt_segment_index in 0..deterministic_long_prompt_segment_count {
-        deterministic_prompt_text.push_str(&format!(
-            "Segment {prompt_segment_index:04}: Measure production paged mixture-of-experts prompt processing on Apple silicon with direct layer expert pages, dense-or-compact page selection, exact routed-index copying, memory-budget fallback, and reproducible throughput evidence. "
-        ));
-    }
-    let chat_generation_command = ChatGenerationCommand {
-        request_id: RequestId::new(9_048),
-        model: model_id.to_owned(),
-        messages: vec![ChatMessage::User {
-            content: deterministic_prompt_text,
-            images: Vec::new(),
-        }],
-        tools: Vec::new(),
-        tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: maximum_output_token_count,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            seed: None,
-            thinking_budget: None,
-        },
-    };
-    // The oversized source text is trimmed below to the requested exact context.
-    // Render and tokenize it directly because prepare_chat validates the pre-trim
-    // context and would reject the 100K helper's intentionally oversized source.
-    let rendered_prompt = Qwen3_5PromptRenderer::render(
-        &chat_generation_command.messages,
-        &chat_generation_command.tools,
-        true,
-        &[],
-    )
-    .expect("the reproduced long chat prompt should render");
-    let mut prepared_prompt_token_ids = tokenizer
-        .encode_prompt(&rendered_prompt)
-        .expect("the reproduced long chat prompt should tokenize");
-    assert!(
-        prepared_prompt_token_ids.len() >= prompt_token_count,
-        "the deterministic prompt should prepare at least {prompt_token_count} tokens, prepared_token_count={}",
-        prepared_prompt_token_ids.len()
-    );
-    let chat_template_suffix_start_index = prepared_prompt_token_ids
-        .iter()
-        .rposition(|token_id| *token_id == tokenizer.im_end_token_id())
-        .expect("the prepared chat prompt should contain the final user-message terminator");
-    let chat_template_suffix_token_ids =
-        prepared_prompt_token_ids.split_off(chat_template_suffix_start_index);
-    let retained_prompt_prefix_token_count = prompt_token_count
-        .checked_sub(chat_template_suffix_token_ids.len())
-        .expect("the requested prompt length should fit the chat-template suffix");
-    prepared_prompt_token_ids.truncate(retained_prompt_prefix_token_count);
-    prepared_prompt_token_ids.extend(chat_template_suffix_token_ids);
-    assert_eq!(
-        prepared_prompt_token_ids.len(),
-        prompt_token_count,
-        "the deterministic prompt should preserve its chat suffix at the exact requested length"
-    );
-    prepared_prompt_token_ids
+    .expect("the reproduced Ornith prompt should prepare at the exact requested length")
 }

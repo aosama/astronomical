@@ -25,17 +25,10 @@ pub(super) fn chat_command(request_number: u64, seed: u64) -> ChatGenerationComm
 }
 
 pub(super) fn ready_event() -> WorkerEvent {
-    ready_event_with_expert_storage_format(ExpertStorageFormat::StandardSafetensors)
-}
-
-pub(super) fn ready_event_with_expert_storage_format(
-    expert_storage_format: ExpertStorageFormat,
-) -> WorkerEvent {
-    ready_event_with_load_details(expert_storage_format, MtpRuntimeState::Disabled, None)
+    ready_event_with_load_details(MtpRuntimeState::Disabled, None)
 }
 
 pub(super) fn ready_event_with_load_details(
-    expert_storage_format: ExpertStorageFormat,
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
 ) -> WorkerEvent {
@@ -49,7 +42,6 @@ pub(super) fn ready_event_with_load_details(
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        expert_storage_format,
         mtp_runtime_state,
         mtp_unavailable_reason,
     }

@@ -33,9 +33,6 @@ pub(super) struct EnabledPerformanceAttribution {
     #[cfg(feature = "direct-mlx")]
     pub(super) positional_file_read_metrics:
         Arc<astronomical_runtime_integration::PositionalFileReadMetrics>,
-    #[cfg(feature = "direct-mlx")]
-    pub(super) metal_expert_pack_load_metrics:
-        Arc<astronomical_runtime_integration::MlxMetalExpertPackLoadMetricsAccumulator>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -70,10 +67,6 @@ impl PerformanceAttribution {
                 #[cfg(feature = "direct-mlx")]
                 positional_file_read_metrics: Arc::new(
                     astronomical_runtime_integration::PositionalFileReadMetrics::default(),
-                ),
-                #[cfg(feature = "direct-mlx")]
-                metal_expert_pack_load_metrics: Arc::new(
-                    astronomical_runtime_integration::MlxMetalExpertPackLoadMetricsAccumulator::default(),
                 ),
             })),
         }
@@ -140,18 +133,6 @@ impl PerformanceAttribution {
             .as_ref()
             .map(|enabled_attribution| {
                 Arc::clone(&enabled_attribution.positional_file_read_metrics)
-            })
-    }
-
-    #[cfg(feature = "direct-mlx")]
-    pub(crate) fn metal_expert_pack_load_metrics(
-        &self,
-    ) -> Option<Arc<astronomical_runtime_integration::MlxMetalExpertPackLoadMetricsAccumulator>>
-    {
-        self.enabled_attribution
-            .as_ref()
-            .map(|enabled_attribution| {
-                Arc::clone(&enabled_attribution.metal_expert_pack_load_metrics)
             })
     }
 

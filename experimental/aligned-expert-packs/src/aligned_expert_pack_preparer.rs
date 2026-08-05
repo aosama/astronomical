@@ -9,17 +9,14 @@ use std::{
 
 use thiserror::Error;
 
-use super::{
-    aligned_expert_pack::{
-        AlignedExpertPackBuildRequest, AlignedExpertPackError, build_aligned_expert_pack,
-        read_aligned_expert_pack_header, validate_aligned_expert_pack_header,
-    },
-    quantized_expert_layer_plan::build_quantized_expert_layer_plan,
-    quantized_expert_manifest::QuantizedExpertLayerPlan,
-    quantized_expert_manifest::{ExpertManifestError, QuantizationMode},
+use astronomical_model_serving::{
+    ExpertManifestError, ModelWeightStorage, QuantizationMode, QuantizedExpertLayerPlan,
+    Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, build_quantized_expert_layer_plan,
 };
-use crate::qwen3_5::{
-    ModelWeightStorage, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
+
+use crate::aligned_expert_pack::{
+    AlignedExpertPackBuildRequest, AlignedExpertPackError, build_aligned_expert_pack,
+    read_aligned_expert_pack_header, validate_aligned_expert_pack_header,
 };
 
 const ALIGNED_EXPERT_PACK_ROOT_DIRECTORY_NAME: &str = ".astronomical-aligned-expert-packs";
@@ -212,7 +209,7 @@ impl AlignedExpertPackPreparer {
             if staged_pack_path.exists() {
                 fs::remove_file(&staged_pack_path)?;
             }
-            let planned_header = super::aligned_expert_pack::plan_aligned_expert_pack_header(
+            let planned_header = crate::aligned_expert_pack::plan_aligned_expert_pack_header(
                 &AlignedExpertPackBuildRequest {
                     model_id: &self.model_id,
                     model_revision: &self.model_revision,
@@ -286,7 +283,7 @@ impl AlignedExpertPackPreparer {
         let mut total_pack_byte_count = 0_u64;
         let mut remaining_pack_byte_count = 0_u64;
         for (layer_index, layer_plan) in self.layer_plans.iter().enumerate() {
-            let planned_header = super::aligned_expert_pack::plan_aligned_expert_pack_header(
+            let planned_header = crate::aligned_expert_pack::plan_aligned_expert_pack_header(
                 &AlignedExpertPackBuildRequest {
                     model_id: &self.model_id,
                     model_revision: &self.model_revision,
@@ -342,7 +339,7 @@ impl AlignedExpertPackPreparer {
                 &self.model_revision,
                 layer_index,
             )?;
-            super::aligned_expert_pack::validate_aligned_expert_pack_payload(
+            crate::aligned_expert_pack::validate_aligned_expert_pack_payload(
                 &pack_path,
                 &pack_header,
                 layer_plan,
@@ -360,7 +357,7 @@ impl AlignedExpertPackPreparer {
         layer_plan: &QuantizedExpertLayerPlan,
         layer_index: usize,
     ) -> Result<
-        super::aligned_expert_pack::AlignedExpertPackHeader,
+        crate::aligned_expert_pack::AlignedExpertPackHeader,
         AlignedExpertPackPreparationError,
     > {
         let pack_header = read_aligned_expert_pack_header(pack_path)?;
@@ -372,7 +369,7 @@ impl AlignedExpertPackPreparer {
             &self.model_revision,
             layer_index,
         )?;
-        super::aligned_expert_pack::validate_aligned_expert_pack_payload(
+        crate::aligned_expert_pack::validate_aligned_expert_pack_payload(
             pack_path,
             &pack_header,
             layer_plan,

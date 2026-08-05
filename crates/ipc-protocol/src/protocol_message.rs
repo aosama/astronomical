@@ -39,16 +39,6 @@ pub enum ExpertMemoryMode {
     Paged,
 }
 
-/// Expert-weight file layout used by the loaded model.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ExpertStorageFormat {
-    /// Experts load from the model's original safetensors shards.
-    StandardSafetensors,
-    /// Experts load from Astronomical's tensor-major aligned packs.
-    AstronomicalAligned,
-}
-
 /// Runtime execution state of native multi-token prediction (MTP).
 ///
 /// Disabled: the user preference is false.
@@ -121,6 +111,7 @@ pub enum WorkerPrefillChunckSizingPolicy {
 pub struct WorkerStartupConfiguration {
     pub global_prompt_cache_root_directory: PathBuf,
     pub global_prompt_cache_maximum_size_bytes: u64,
+    pub persistent_prompt_cache_enabled: bool,
     pub prefill_chunck_sizing_policy: WorkerPrefillChunckSizingPolicy,
     pub optimizer_state_directory: Option<PathBuf>,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
@@ -211,7 +202,6 @@ pub enum WorkerEvent {
     Ready {
         model_id: String,
         capabilities: ChatModelCapabilities,
-        expert_storage_format: ExpertStorageFormat,
         /// Actual MTP runtime state reported by the worker after model load.
         mtp_runtime_state: MtpRuntimeState,
         /// Present when MTP is unavailable despite the preference being enabled.
@@ -267,7 +257,6 @@ pub enum WorkerEvent {
     ModelSwapped {
         model_id: String,
         capabilities: ChatModelCapabilities,
-        expert_storage_format: ExpertStorageFormat,
         /// Safe idle lower bound for the newly loaded model.
         minimum_mlx_memory_ceiling_bytes: u64,
         /// Actual MTP runtime state reported by the worker after the swap.

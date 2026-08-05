@@ -40,7 +40,6 @@ impl ScriptedExecutor {
                     max_output_tokens: 20_480,
                     context_window: 262_144,
                 },
-                astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
                 MtpRuntimeState::Disabled,
                 None,
             ),

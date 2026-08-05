@@ -137,6 +137,14 @@ impl AstronomicalConfig {
         ))
     }
 
+    /// Returns whether the SSD-backed prompt cache is enabled.
+    #[must_use]
+    pub fn persistent_prompt_cache_enabled(&self) -> bool {
+        self.user_config_file
+            .persistent_prompt_cache_enabled
+            .unwrap_or(true)
+    }
+
     /// Resolves bounded hourly file logging for the supervisor or worker.
     pub fn logging(&self) -> Result<LoggingConfig, AstronomicalConfigError> {
         let home_directory = self

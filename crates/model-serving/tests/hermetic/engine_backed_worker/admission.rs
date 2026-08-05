@@ -3,8 +3,8 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    ExpertStorageFormat, MAX_IPC_FRAME_BYTES, MtpRuntimeState, ProtocolReader, ProtocolWriter,
-    RequestId, WorkerCommand, WorkerEvent,
+    MAX_IPC_FRAME_BYTES, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand,
+    WorkerEvent,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
@@ -228,7 +228,6 @@ impl ModelGenerationProcessor for PassthroughProcessor {
 
     fn ready_event(
         &self,
-        expert_storage_format: ExpertStorageFormat,
         _mtp_runtime_state: MtpRuntimeState,
         _mtp_unavailable_reason: Option<String>,
     ) -> WorkerEvent {
@@ -242,7 +241,6 @@ impl ModelGenerationProcessor for PassthroughProcessor {
                 max_output_tokens: 20_480,
                 context_window: 262_144,
             },
-            expert_storage_format,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
         }
@@ -287,7 +285,6 @@ impl ModelGenerationProcessor for FeedbackProcessor {
 
     fn ready_event(
         &self,
-        expert_storage_format: ExpertStorageFormat,
         _mtp_runtime_state: MtpRuntimeState,
         _mtp_unavailable_reason: Option<String>,
     ) -> WorkerEvent {
@@ -301,7 +298,6 @@ impl ModelGenerationProcessor for FeedbackProcessor {
                 max_output_tokens: 20_480,
                 context_window: 262_144,
             },
-            expert_storage_format,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
         }
@@ -350,9 +346,7 @@ impl InferenceEngine for RejectingEngine {
     type Request = TestInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Ok(EngineLoadResult::new(
-            ExpertStorageFormat::StandardSafetensors,
-        ))
+        Ok(EngineLoadResult::new())
     }
 
     async fn start_generation(
@@ -391,9 +385,7 @@ impl InferenceEngine for GrowthRejectingEngine {
     type Request = TestInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Ok(EngineLoadResult::new(
-            ExpertStorageFormat::StandardSafetensors,
-        ))
+        Ok(EngineLoadResult::new())
     }
 
     async fn start_generation(
@@ -432,9 +424,7 @@ impl InferenceEngine for FeedbackGrowthRejectingEngine {
     type Request = TestInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Ok(EngineLoadResult::new(
-            ExpertStorageFormat::StandardSafetensors,
-        ))
+        Ok(EngineLoadResult::new())
     }
 
     async fn start_generation(

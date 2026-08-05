@@ -3,7 +3,7 @@ use std::{
     os::unix::fs::FileExt,
 };
 
-use astronomical_model_serving::{
+use astronomical_experimental_aligned_expert_packs::{
     AlignedExpertPackBuildRequest, AlignedExpertPackPreparationError, AlignedExpertPackPreparer,
     build_aligned_expert_pack, read_aligned_expert_pack_header,
     validate_aligned_expert_pack_payload,

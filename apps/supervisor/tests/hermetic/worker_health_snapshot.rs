@@ -117,7 +117,6 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
         astronomical_supervisor::WorkerHealthSnapshot::ready_with_model(
             "first-model".to_owned(),
             capabilities.clone(),
-            astronomical_ipc_protocol::ExpertStorageFormat::StandardSafetensors,
             MtpRuntimeState::Disabled,
             None,
         );
@@ -130,7 +129,6 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
         astronomical_supervisor::WorkerHealthSnapshot::ready_with_replacement_model(
             "second-model".to_owned(),
             capabilities,
-            astronomical_ipc_protocol::ExpertStorageFormat::AstronomicalAligned,
             3_000,
             MtpRuntimeState::Disabled,
             None,
@@ -141,10 +139,6 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
     assert_eq!(
         replacement_health_snapshot.minimum_mlx_memory_ceiling_bytes,
         3_000
-    );
-    assert_eq!(
-        replacement_health_snapshot.expert_storage_format,
-        Some(astronomical_ipc_protocol::ExpertStorageFormat::AstronomicalAligned)
     );
     assert_eq!(
         replacement_health_snapshot.serving_session,

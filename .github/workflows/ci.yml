@@ -109,6 +109,8 @@ jobs:
             ~/Library/Caches/Astronomical/sccache
             ~/Library/Caches/Astronomical/native-dependencies
           key: ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'third-party/native-dependency-manifest.cmake', 'third-party/pins/**', 'third-party/patches/**', 'crates/runtime-integration/build.rs', 'crates/runtime-integration/native/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-rust-
       - name: Install Rust compiler cache
         run: |
           case "$(brew tap)" in
