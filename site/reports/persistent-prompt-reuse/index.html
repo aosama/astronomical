@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Persistent prompt reuse with MTP | Astronomical Report R–002</title>
+    <meta name="description" content="How Astronomical restored 2,048 repeated prompt tokens from persistent state while preserving generated-token parity on a Qwen3.6 MTP artifact.">
+    <meta name="theme-color" content="#d8ff3e">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="A repeated prefix skipped 2,048 prompt tokens">
+    <meta property="og:description" content="Persistent prompt reuse qualified on a Qwen3.6 MTP artifact without restoring incompatible speculative state.">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="../../assets/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="../../styles.css">
+    <link rel="stylesheet" href="../../report.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../index.html" aria-label="Astronomical home">
+        <img src="../../assets/mark.svg" alt="" width="36" height="36">
+        <span>Astronomical</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="../../index.html#reports">Reports</a>
+        <a href="../../index.html#method">Method</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
+    </header>
+
+    <main id="main" class="report-page report-page-acid">
+      <header class="report-hero shell">
+        <div class="report-meta">
+          <span>FIELD REPORT R–002</span>
+          <span>5 AUGUST 2026</span>
+          <span class="verdict verdict-verified"><i></i> Qualified</span>
+        </div>
+        <p class="eyebrow">Prompt reuse / Persistent state</p>
+        <h1>A repeated prefix skipped <em>2,048 prompt tokens.</em></h1>
+        <p class="report-lead">Astronomical restored one complete prompt-state block on the second request while preserving generated-token parity on a Qwen3.6 model artifact with multi-token prediction weights.</p>
+      </header>
+
+      <section class="report-stat-band report-stat-band-acid" aria-label="Qualification results">
+        <div><strong>1</strong><span>first-request miss</span></div>
+        <div><strong>1</strong><span>repeat-request hit</span></div>
+        <div><strong>2,048</strong><span>prompt tokens restored</span></div>
+        <div><strong>Equal</strong><span>greedy generated tokens</span></div>
+      </section>
+
+      <div class="report-body shell">
+        <aside class="report-toc" aria-label="Report contents">
+          <span>IN THIS REPORT</span>
+          <a href="#problem">The repeated work</a>
+          <a href="#qualification">Qualification</a>
+          <a href="#mtp">MTP boundary</a>
+          <a href="#meaning">What it means</a>
+        </aside>
+
+        <article class="report-prose">
+          <section id="problem">
+            <p class="section-index">01 / The repeated work</p>
+            <h2>Long shared prefixes should not be processed from zero every time.</h2>
+            <p>Tool definitions, system instructions, repository context, and conversation history often repeat between requests. Astronomical records exact decoder state at fixed 2,048-token boundaries in a bounded persistent store. A matching future prefix can resume from that state instead of replaying every earlier token.</p>
+          </section>
+
+          <section id="qualification">
+            <p class="section-index">02 / Qualification</p>
+            <h2>Miss once. Publish state. Hit on the identical request.</h2>
+            <div class="request-sequence" aria-label="Two-request prompt reuse sequence">
+              <div class="request-block">
+                <span>REQUEST 01</span>
+                <strong>Cold prefill</strong>
+                <p>Lookup misses. The model processes the prompt and publishes one complete state block.</p>
+                <b>MISS</b>
+              </div>
+              <div class="sequence-arrow" aria-hidden="true">→</div>
+              <div class="request-block request-block-hit">
+                <span>REQUEST 02</span>
+                <strong>Restored prefix</strong>
+                <p>The identical prefix matches. One block returns directly to live decoder state.</p>
+                <b>2,048 SAVED</b>
+              </div>
+            </div>
+            <p>The qualification compares cold and restored greedy output token IDs, not only a hit counter. This guards against a fast restore that resumes from the wrong model state.</p>
+          </section>
+
+          <section id="mtp">
+            <p class="section-index">03 / The MTP boundary</p>
+            <h2>Persistent target state and speculative state are not interchangeable.</h2>
+            <p>The current persistent format stores target decoder state. It does not store the shifted request history used by multi-token prediction. Restoring target state into an active speculative request would therefore combine incompatible histories.</p>
+            <p>Astronomical resolves this without disabling reuse: when persistent prompt storage is available, the request uses target-only execution. When it is unavailable, an eligible greedy request can use multi-token prediction normally.</p>
+            <div class="principle-callout"><span>INVARIANT</span><p>Never trade correct model state for speculative speed. Reuse the compatible target path instead.</p></div>
+          </section>
+
+          <section id="meaning">
+            <p class="section-index">04 / What it means</p>
+            <h2>The cache behavior is proven. Universal speedup is not.</h2>
+            <p>The result proves persistent publication, lookup, state restoration, and output parity through the real supervisor and worker path. The amount of wall-clock acceleration depends on prompt length, model, memory ceiling, existing operating-system file pages, and storage.</p>
+            <p>A representative public performance claim still requires approximately 1,000 generated tokens and explicit cold/warm methodology. This report therefore publishes tokens avoided, not a universal percentage speedup.</p>
+          </section>
+
+          <section class="share-card share-card-acid">
+            <span>SHARE THE RESULT</span>
+            <p>Astronomical restored 2,048 repeated Qwen3.6 prompt tokens from persistent model state on the second request, with identical greedy output. Measured work avoided, without a hidden precision change.</p>
+            <a class="button button-dark" href="https://twitter.com/intent/tweet?text=Astronomical%20restored%202%2C048%20repeated%20Qwen3.6%20prompt%20tokens%20from%20persistent%20model%20state%20on%20the%20second%20request%2C%20with%20identical%20greedy%20output.%20Measured%20work%20avoided%2C%20without%20a%20hidden%20precision%20change.&url=https%3A%2F%2Faosama.github.io%2Fastronomical%2Freports%2Fpersistent-prompt-reuse%2F">Post on X <span aria-hidden="true">↗</span></a>
+          </section>
+
+          <footer class="report-sources">
+            <h2>Sources and limits</h2>
+            <p>The result comes from the ignored Qwen3.6 persistent-prompt qualification and the real supervisor cache-statistics end-to-end test. The tested contract is one miss, one published state block, one hit, at least 2,048 tokens restored, and equal greedy output.</p>
+            <a href="https://github.com/aosama/astronomical/tree/main/crates/model-serving/tests/persistent_prompt_cache_qualification">Inspect the qualification <span aria-hidden="true">↗</span></a>
+          </footer>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand" href="../../index.html"><img src="../../assets/mark.svg" alt="" width="30" height="30"><span>Astronomical</span></a>
+      <p>Local language and vision model serving for Apple silicon.</p>
+      <div><a href="../../index.html#reports">All reports</a><a href="https://github.com/aosama/astronomical">GitHub</a></div>
+    </footer>
+  </body>
+</html>
