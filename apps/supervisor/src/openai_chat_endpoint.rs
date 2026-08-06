@@ -184,6 +184,22 @@ pub(crate) async fn create_chat_completion(
             )
                 .into_response();
         }
+        Err(GenerationStartError::RequestTooLarge {
+            actual_ipc_message_bytes,
+            maximum_ipc_message_bytes,
+        }) => {
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                Json(OpenAiErrorResponse::invalid_request(
+                    format!(
+                        "the request expands to {actual_ipc_message_bytes} bytes for local processing, exceeding the {maximum_ipc_message_bytes}-byte limit; reduce image sizes or conversation history"
+                    ),
+                    None,
+                    Some("request_too_large"),
+                )),
+            )
+                .into_response();
+        }
         Err(GenerationStartError::WorkerUnavailable) => return worker_unavailable_response(),
     };
     let created_at_unix_seconds = match SystemTime::now().duration_since(UNIX_EPOCH) {

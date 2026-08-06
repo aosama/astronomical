@@ -19,7 +19,7 @@ use crate::qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights;
 
 const MTP_NORMALIZATION_REPAIR_MARGIN: f32 = 0.4;
 
-/// Resident weights for Qwen's one-layer oQ4e multi-token prediction head.
+/// Resident weights for the supported one-layer Qwen multi-token prediction head.
 #[derive(Debug)]
 pub(super) struct Qwen3_5MtpWeights {
     pub(super) pre_fc_normalization_embedding_weight: MlxArray,
@@ -27,6 +27,9 @@ pub(super) struct Qwen3_5MtpWeights {
     pub(super) fusion_projection: Qwen3_5AffineWeights,
     pub(super) decoder_layer_weights: Qwen3_5DecoderLayerWeights,
     pub(super) final_normalization_weight: MlxArray,
+    /// Owners for MTP tensors stored outside target-language shards.
+    #[allow(dead_code)]
+    mtp_only_shards: Vec<MlxSafetensors>,
     tensor_count: usize,
 }
 
@@ -35,6 +38,7 @@ impl Qwen3_5MtpWeights {
         qwen3_5_config: &Qwen3_5Config,
         shard_index: &Qwen3_5ShardIndex,
         model_shards: &[MlxSafetensors],
+        mtp_only_shards: Vec<MlxSafetensors>,
     ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
         let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(qwen3_5_config);
         if mtp_tensor_profiles.is_empty() || shard_index.mtp_tensor_count() == 0 {
@@ -56,21 +60,28 @@ impl Qwen3_5MtpWeights {
                 .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
                     tensor_name: tensor_profile.name.clone(),
                 })?;
-            let shard_position = shard_index
+            let target_shard_position = shard_index
                 .model_shard_file_names()
                 .iter()
-                .position(|model_shard_file_name| model_shard_file_name == shard_file_name)
-                .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "MTP tensor resolves outside loaded model shards",
-                })?;
-            let model_shard = model_shards.get(shard_position).ok_or_else(|| {
-                Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "MTP model shard is missing",
-                }
+                .position(|model_shard_file_name| model_shard_file_name == shard_file_name);
+            let mtp_tensor_owner = if let Some(target_shard_position) = target_shard_position {
+                model_shards.get(target_shard_position)
+            } else {
+                shard_index
+                    .mtp_only_shard_file_names()
+                    .iter()
+                    .position(|mtp_only_shard_file_name| {
+                        mtp_only_shard_file_name == shard_file_name
+                    })
+                    .and_then(|mtp_only_shard_position| {
+                        mtp_only_shards.get(mtp_only_shard_position)
+                    })
+            }
+            .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_profile.name.clone(),
+                description: "MTP tensor resolves outside loaded target and MTP-only shards",
             })?;
-            let bound_tensor = model_shard.tensor(&tensor_profile.name)?;
+            let bound_tensor = mtp_tensor_owner.tensor(&tensor_profile.name)?;
             validate_bound_tensor(tensor_profile, &bound_tensor)?;
             validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
             bound_mtp_tensors.insert(tensor_profile.name.clone(), bound_tensor);
@@ -138,6 +149,7 @@ impl Qwen3_5MtpWeights {
             fusion_projection,
             decoder_layer_weights,
             final_normalization_weight,
+            mtp_only_shards,
             tensor_count: resident_mtp_tensor_profiles.len(),
         }))
     }

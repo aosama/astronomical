@@ -67,7 +67,7 @@ fn should_parse_an_oq6e_sparse_quantization_config_with_mixed_group_sizes() {
 }
 
 #[test]
-fn should_resolve_unquantized_gates_from_shard_index_when_scales_are_absent() {
+fn should_resolve_unquantized_modules_from_shard_index_when_scales_are_absent() {
     let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
         .expect("the certified test config should decode as JSON");
     let mut quantization = json!({"group_size": 64, "bits": 6, "mode": "affine"});
@@ -91,7 +91,7 @@ fn should_resolve_unquantized_gates_from_shard_index_when_scales_are_absent() {
         .insert("language_model.model.layers.0.mlp.switch_mlp.gate_proj.weight".to_owned());
     shard_tensor_names
         .insert("language_model.model.layers.0.mlp.switch_mlp.gate_proj.scales".to_owned());
-    config.resolve_unquantized_gates_from_shard_index(&shard_tensor_names);
+    config.resolve_unquantized_modules_from_shard_index(&shard_tensor_names);
 
     let gate_after =
         config.quantization_profile_for_module("language_model.model.layers.0.mlp.gate");
@@ -111,10 +111,29 @@ fn should_not_resolve_gates_as_unquantized_when_scales_are_present() {
     shard_tensor_names.insert("language_model.model.layers.0.mlp.gate.weight".to_owned());
     shard_tensor_names.insert("language_model.model.layers.0.mlp.gate.scales".to_owned());
     shard_tensor_names.insert("language_model.model.layers.0.mlp.gate.biases".to_owned());
-    config.resolve_unquantized_gates_from_shard_index(&shard_tensor_names);
+    config.resolve_unquantized_modules_from_shard_index(&shard_tensor_names);
 
     let gate_profile =
         config.quantization_profile_for_module("language_model.model.layers.0.mlp.gate");
     assert!(!gate_profile.is_unquantized());
     assert_eq!(gate_profile.bits, 4);
+}
+
+#[test]
+fn should_not_hide_missing_scales_when_affine_biases_are_present() {
+    let config_bytes = certified_optiq_ornith_config_bytes();
+    let mut config =
+        Qwen3_5Config::from_json_bytes(&config_bytes).expect("the oQ4 config should parse");
+    let shard_tensor_names = [
+        "language_model.model.layers.0.mlp.gate.weight".to_owned(),
+        "language_model.model.layers.0.mlp.gate.biases".to_owned(),
+    ]
+    .into_iter()
+    .collect();
+
+    config.resolve_unquantized_modules_from_shard_index(&shard_tensor_names);
+
+    let gate_profile =
+        config.quantization_profile_for_module("language_model.model.layers.0.mlp.gate");
+    assert!(!gate_profile.is_unquantized());
 }

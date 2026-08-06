@@ -6,8 +6,6 @@ use thiserror::Error;
 
 use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
 
-const VISION_SIDECAR_FILE_NAME: &str = "optiq/optiq_vision.safetensors";
-
 /// One supported Qwen3.5-family model discovered by recursive directory scanning.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiscoveredModel {
@@ -249,54 +247,33 @@ fn try_discover_model_with_id(
     // Vision tensors can be embedded in language shards or stored in a required
     // sidecar. The optional MTP sidecar may be absent.
     let index_path = model_directory.join("model.safetensors.index.json");
-    let (has_embedded_vision_tensors, has_vision_sidecar_file) = if let Ok(index_bytes) =
-        fs::read(&index_path)
+    let has_vision = if let Ok(index_bytes) = fs::read(&index_path)
         && let Ok(index_document) = serde_json::from_slice::<serde_json::Value>(&index_bytes)
         && let Some(weight_map) = index_document
             .get("weight_map")
             .and_then(|weight_map| weight_map.as_object())
     {
-        let mut shard_file_names: HashSet<String> = HashSet::new();
-        for tensor_shard_file_name in weight_map.values() {
+        let mut shard_file_names = HashSet::new();
+        let mut required_shard_file_names = HashSet::new();
+        for (tensor_name, tensor_shard_file_name) in weight_map {
             if let Some(tensor_shard_file_name) = tensor_shard_file_name.as_str() {
                 shard_file_names.insert(tensor_shard_file_name.to_owned());
+                if !contains_mtp_component(tensor_name) {
+                    required_shard_file_names.insert(tensor_shard_file_name.to_owned());
+                }
             }
         }
         for shard_file_name in &shard_file_names {
             let shard_path = model_directory.join(shard_file_name);
-            if !shard_path.is_file() {
-                if is_optional_qwen3_5_sidecar_file_name(shard_file_name) {
-                    continue;
-                }
+            if !shard_path.is_file() && required_shard_file_names.contains(shard_file_name) {
                 return None;
             }
         }
-        let has_embedded_vision_tensors =
-            weight_map
-                .iter()
-                .any(|(tensor_name, tensor_shard_file_name)| {
-                    tensor_name.starts_with("vision_tower.")
-                        && tensor_shard_file_name
-                            .as_str()
-                            .is_some_and(|shard_file_name| {
-                                shard_file_name != VISION_SIDECAR_FILE_NAME
-                            })
-                });
-        let has_vision_sidecar_file =
-            weight_map
-                .iter()
-                .any(|(tensor_name, tensor_shard_file_name)| {
-                    tensor_name.starts_with("vision_tower.")
-                        && tensor_shard_file_name
-                            .as_str()
-                            .is_some_and(|shard_file_name| {
-                                shard_file_name == VISION_SIDECAR_FILE_NAME
-                                    && model_directory.join(shard_file_name).is_file()
-                            })
-                });
-        (has_embedded_vision_tensors, has_vision_sidecar_file)
+        weight_map
+            .keys()
+            .any(|tensor_name| tensor_name.starts_with("vision_tower."))
     } else {
-        (false, false)
+        false
     };
     let model_size_bytes = measure_model_safetensors_bytes(model_directory)?;
 
@@ -315,8 +292,6 @@ fn try_discover_model_with_id(
     let context_window = max_position_embeddings;
     let max_input_tokens = context_window.saturating_sub(max_output_tokens);
 
-    let has_vision = has_embedded_vision_tensors || has_vision_sidecar_file;
-
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
         revision,
@@ -329,8 +304,10 @@ fn try_discover_model_with_id(
     })
 }
 
-fn is_optional_qwen3_5_sidecar_file_name(shard_file_name: &str) -> bool {
-    shard_file_name == "optiq/mtp.safetensors"
+fn contains_mtp_component(tensor_name: &str) -> bool {
+    tensor_name
+        .split('.')
+        .any(|tensor_name_component| tensor_name_component == "mtp")
 }
 
 fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {

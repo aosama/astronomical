@@ -70,7 +70,13 @@ pub enum ChatGenerationStreamErrorCode {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GenerationStartError {
     CapacityUnavailable,
-    ModelLoadFailed { model_load_failure_reason: String },
+    ModelLoadFailed {
+        model_load_failure_reason: String,
+    },
+    RequestTooLarge {
+        actual_ipc_message_bytes: usize,
+        maximum_ipc_message_bytes: usize,
+    },
     WorkerUnavailable,
 }
 

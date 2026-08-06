@@ -15,7 +15,7 @@ use super::{
     qwen3_5_resident_language_tensor_profiles,
 };
 
-/// Strict typed ownership for the five executable Qwen3.5 language shards.
+/// Strict typed ownership for the indexed executable Qwen3.5 language shards.
 #[derive(Debug)]
 pub struct Qwen3_5Weights {
     pub(super) embedding_weights: Qwen3_5AffineWeights,

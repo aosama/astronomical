@@ -21,6 +21,10 @@ pub fn certified_ornith_vision_config() -> Qwen3_5VisionConfig {
         .expect("the certified Ornith vision config should parse")
 }
 
+pub fn certified_ornith_image_processor() -> Qwen3_5ImageProcessor {
+    Qwen3_5ImageProcessor::from_vision_config(&certified_ornith_vision_config())
+}
+
 #[cfg(feature = "direct-mlx")]
 pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelContract {
     PersistentPromptCacheModelContract::new(
