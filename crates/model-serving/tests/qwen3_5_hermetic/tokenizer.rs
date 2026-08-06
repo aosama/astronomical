@@ -1,6 +1,8 @@
 use astronomical_model_serving::{
-    Qwen3_5ImageProcessor, Qwen3_5Tokenizer, Qwen3_5TokenizerError, validate_context_token_count,
+    Qwen3_5Tokenizer, Qwen3_5TokenizerError, validate_context_token_count,
 };
+
+use crate::common::qwen3_5_moe::certified_ornith_image_processor;
 
 const ORNITH_VOCABULARY_SIZE: u32 = 248_320;
 const ORNITH_MAXIMUM_POSITION_COUNT: u32 = 262_144;
@@ -11,7 +13,7 @@ fn should_discover_special_token_ids_from_tokenizer_json() {
         &ornith_tokenizer_json_bytes(248_056),
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq(),
+        certified_ornith_image_processor(),
     )
     .expect("the synthetic tokenizer should discover every special token ID");
 
@@ -29,7 +31,7 @@ fn should_reject_a_tokenizer_missing_a_required_special_token() {
         &ornith_tokenizer_json_bytes_missing_image_pad(),
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq(),
+        certified_ornith_image_processor(),
     )
     .expect_err("the tokenizer should reject a missing special token");
 

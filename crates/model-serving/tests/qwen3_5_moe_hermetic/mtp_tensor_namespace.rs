@@ -1,5 +1,5 @@
 use astronomical_model_serving::{
-    Qwen3_5Config, TensorDtype, qwen3_5_mtp_tensor_profiles, qwen3_5_quantized_mtp_tensor_names,
+    Qwen3_5Config, TensorDtype, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
 };
 
 use crate::common::qwen3_5_moe::certified_optiq_ornith_config_bytes;
@@ -8,7 +8,7 @@ use crate::common::qwen3_5_moe::certified_optiq_ornith_config_bytes;
 fn should_build_the_complete_one_layer_qwen_quantized_mtp_tensor_namespace() {
     let optiq_config = Qwen3_5Config::from_json_bytes(&certified_optiq_ornith_config_bytes())
         .expect("the OptiQ configuration should parse");
-    let expected_tensor_names = qwen3_5_quantized_mtp_tensor_names(&optiq_config);
+    let expected_tensor_names = qwen3_5_mtp_tensor_names(&optiq_config);
 
     assert_eq!(expected_tensor_names.len(), 42);
     assert!(expected_tensor_names.contains("language_model.mtp.fc.weight"));
@@ -52,4 +52,33 @@ fn should_describe_the_oq4e_mtp_fusion_and_expert_tensor_shapes() {
             && tensor_profile.dtype == TensorDtype::UInt32
             && tensor_profile.shape == [256, 512, 256]
     }));
+}
+
+#[test]
+fn should_describe_an_index_resolved_native_mtp_projection_without_affine_companions() {
+    let mut optiq_config = Qwen3_5Config::from_json_bytes(&certified_optiq_ornith_config_bytes())
+        .expect("the OptiQ configuration should parse");
+    let native_mtp_module_name = "language_model.mtp.layers.0.self_attn.q_proj";
+    let shard_tensor_names = [format!("{native_mtp_module_name}.weight")]
+        .into_iter()
+        .collect();
+
+    optiq_config.resolve_unquantized_modules_from_shard_index(&shard_tensor_names);
+
+    let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&optiq_config);
+    assert!(mtp_tensor_profiles.iter().any(|tensor_profile| {
+        tensor_profile.name == format!("{native_mtp_module_name}.weight")
+            && tensor_profile.dtype == TensorDtype::ModelFloat
+            && tensor_profile.shape == [8_192, 2_048]
+    }));
+    assert!(
+        !mtp_tensor_profiles
+            .iter()
+            .any(|tensor_profile| tensor_profile.name == format!("{native_mtp_module_name}.scales"))
+    );
+    assert!(
+        !mtp_tensor_profiles
+            .iter()
+            .any(|tensor_profile| tensor_profile.name == format!("{native_mtp_module_name}.biases"))
+    );
 }

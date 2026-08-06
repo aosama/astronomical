@@ -75,6 +75,29 @@ fn should_parse_a_native_bfloat16_config_without_quantization_metadata() {
 }
 
 #[test]
+fn should_parse_a_config_with_only_one_quantization_document() {
+    let mut single_quantization_document =
+        serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
+            .expect("the certified Ornith config should decode as JSON");
+    single_quantization_document
+        .as_object_mut()
+        .expect("the certified Ornith config should be a JSON object")
+        .remove("quantization_config");
+    let single_quantization_bytes = serde_json::to_vec(&single_quantization_document)
+        .expect("the single quantization config should serialize");
+
+    let parsed_config = Qwen3_5Config::from_json_bytes(&single_quantization_bytes)
+        .expect("one valid quantization document should be sufficient");
+
+    assert_eq!(
+        parsed_config.model_weight_storage(),
+        ModelWeightStorage::AffineQuantized
+    );
+    assert_eq!(parsed_config.default_quantization_bits(), 6);
+    assert_eq!(parsed_config.default_quantization_group_size(), 64);
+}
+
+#[test]
 fn should_estimate_long_context_memory_from_full_attention_key_value_state_only() {
     let ornith_config = Qwen3_5Config::from_json_bytes(&certified_ornith_config_bytes())
         .expect("the certified Ornith core config should parse");

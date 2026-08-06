@@ -14,7 +14,7 @@ pub(crate) const LANGUAGE_SHARD_FILE_NAMES: [&str; 5] = [
     "model-00004-of-00005.safetensors",
     "model-00005-of-00005.safetensors",
 ];
-const VISION_SIDECAR_FILE_NAME: &str = "optiq/optiq_vision.safetensors";
+const VISION_SIDECAR_FILE_NAME: &str = "vision/weights.safetensors";
 
 pub(crate) fn certified_test_index_bytes() -> Vec<u8> {
     let language_tensor_profiles = certified_qwen3_5_language_tensor_profiles();

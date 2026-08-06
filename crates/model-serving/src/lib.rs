@@ -90,11 +90,10 @@ pub use qwen3_5::{
     Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
     ValidatedQwen3_5Artifact, discover_sampler_config, discover_token_ids,
     plan_qwen3_5_visual_embedding_suffix, qwen3_5_decoder_cache_layout,
-    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_profiles,
-    qwen3_5_quantized_mtp_tensor_names, qwen3_5_request_enables_thinking,
-    qwen3_5_resident_language_tensor_profiles, qwen3_5_vision_tensor_profiles,
-    resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
-    validate_context_token_count,
+    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
+    qwen3_5_request_enables_thinking, qwen3_5_resident_language_tensor_profiles,
+    qwen3_5_vision_tensor_profiles, resolve_sampling_seed, translate_qwen3_5_preparation_error,
+    translate_request_output_error, validate_context_token_count,
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{
@@ -148,27 +147,5 @@ pub fn validate_bounded_safetensors_with_partial_profiles(
         weights_file_name,
         profiled_tensor_profiles,
         accepted_extra_tensor_names,
-    )
-}
-
-/// Validates a safetensors shard where profiled tensors have strict dtype/shape checks
-/// and ALL other tensors in the shard are accepted without profiling.
-///
-/// Used for models with embedded vision tensors where the shard contains both
-/// language tensors (which have profiles) and vision tensors (which are accepted
-/// as-is). Unlike the partial-profiles variant, this does not require an explicit
-/// set of accepted extra tensor names and does not require all profiled tensors
-/// to be present in every shard.
-pub fn validate_bounded_safetensors_with_permissive_extras(
-    weights_file: &std::fs::File,
-    file_size_bytes: u64,
-    weights_file_name: &str,
-    profiled_tensor_profiles: &[TensorProfile],
-) -> Result<artifact_validation::PartialProfileMetadata, ArtifactValidationError> {
-    artifact_validation::validate_bounded_safetensors_with_permissive_extras(
-        weights_file,
-        file_size_bytes,
-        weights_file_name,
-        profiled_tensor_profiles,
     )
 }

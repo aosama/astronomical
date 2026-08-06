@@ -415,9 +415,5 @@ pub fn qwen3_5_mtp_runtime_state_after_load(
             Qwen3_5MtpRuntimeState::Unavailable,
             Some(Qwen3_5MtpUnavailableReason::NoCompatibleHead.to_string()),
         ),
-        Qwen3_5MtpArtifactCapability::InvalidMtp { reason } => (
-            Qwen3_5MtpRuntimeState::Unavailable,
-            Some(format!("invalid MTP inventory: {reason}")),
-        ),
     }
 }

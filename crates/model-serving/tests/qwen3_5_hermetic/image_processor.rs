@@ -1,14 +1,15 @@
 use std::io::Cursor;
 
-use astronomical_model_serving::{Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessor};
+use astronomical_model_serving::{Qwen3_5ImageDimensions, Qwen3_5ImageGrid};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
 use sha2::{Digest, Sha256};
 
 use crate::common::SYNTHETIC_RED_PNG_BYTES;
+use crate::common::qwen3_5_moe::certified_ornith_image_processor;
 
 #[test]
 fn should_preprocess_the_synthetic_red_fixture_into_vision_patches() {
-    let image_processor = Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq();
+    let image_processor = certified_ornith_image_processor();
     let decoded_red_image = image::load_from_memory(SYNTHETIC_RED_PNG_BYTES)
         .expect("the synthetic red fixture should decode")
         .to_rgba8();
@@ -40,7 +41,7 @@ fn should_preprocess_the_synthetic_red_fixture_into_vision_patches() {
 
 #[test]
 fn should_plan_ornith_image_resize_dimensions_from_pixel_budget_and_patch_factor() {
-    let image_processor = Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq();
+    let image_processor = certified_ornith_image_processor();
 
     assert_eq!(
         image_processor
@@ -64,7 +65,7 @@ fn should_plan_ornith_image_resize_dimensions_from_pixel_budget_and_patch_factor
 
 #[test]
 fn should_preprocess_the_openai_data_uri_one_pixel_png_fixture() {
-    let image_processor = Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq();
+    let image_processor = certified_ornith_image_processor();
 
     let processed_image = image_processor
         .process_image_bytes(SYNTHETIC_RED_PNG_BYTES)
@@ -77,7 +78,7 @@ fn should_preprocess_the_openai_data_uri_one_pixel_png_fixture() {
 
 #[test]
 fn should_normalize_white_image_pixels_to_one() {
-    let image_processor = Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq();
+    let image_processor = certified_ornith_image_processor();
     let encoded_white_png_bytes = encode_solid_rgb_png([255, 255, 255], 256, 256);
 
     let processed_image = image_processor
@@ -97,7 +98,7 @@ fn should_normalize_white_image_pixels_to_one() {
 
 #[test]
 fn should_hash_the_exact_encoded_image_bytes() {
-    let image_processor = Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq();
+    let image_processor = certified_ornith_image_processor();
     let encoded_png_bytes = encode_solid_rgb_png([128, 64, 32], 32, 32);
     let mut byte_distinct_png_bytes = encoded_png_bytes.clone();
     byte_distinct_png_bytes.push(0);

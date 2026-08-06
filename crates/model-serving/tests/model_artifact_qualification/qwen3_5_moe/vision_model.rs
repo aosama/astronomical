@@ -1,8 +1,6 @@
 use std::io::Cursor;
 
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ImageProcessor, Qwen3_5VisionModel,
-};
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5VisionModel};
 use astronomical_runtime_integration::{MlxDtype, MlxRuntime};
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 
@@ -22,7 +20,7 @@ async fn should_project_one_minimum_sized_image_into_text_embedding_width() {
         .expect("the vision sidecar should load")
         .expect("the pinned Ornith artifact should include a vision sidecar");
     let encoded_image_bytes = one_pixel_png();
-    let processed_image = Qwen3_5ImageProcessor::qwen3_5_moe_35b_optiq()
+    let processed_image = crate::common::qwen3_5_moe::certified_ornith_image_processor()
         .process_image_bytes(&encoded_image_bytes)
         .expect("the one-pixel image should expand to the minimum supported grid");
 
@@ -42,14 +40,16 @@ async fn should_project_one_minimum_sized_image_into_text_embedding_width() {
         .expect("the first visual embedding prefix should be sliceable")
         .to_vec_f32()
         .expect("the first visual embedding prefix should copy to Rust");
+    // These values cover the dynamic MLX-VLM rotary graph under Astronomical's
+    // Metal JIT kernels rather than the generic Python-wheel metallib.
     let expected_first_visual_embedding_values = [
-        -0.015_991_21,
+        -0.016_479_492,
         -0.046_630_86,
-        -0.005_340_576,
-        0.030_029_297,
-        0.015_991_21,
-        -0.043_212_89,
-        -0.047_607_42,
+        -0.004_211_426,
+        0.029_541_016,
+        0.016_723_633,
+        -0.041_748_047,
+        -0.045_898_438,
         -0.066_406_25,
     ];
     for (actual_embedding_component, expected_embedding_component) in first_visual_embedding_values
@@ -58,7 +58,7 @@ async fn should_project_one_minimum_sized_image_into_text_embedding_width() {
     {
         assert!(
             (actual_embedding_component - expected_embedding_component).abs() <= 1e-3,
-            "visual embedding component {actual_embedding_component} differs from the certified Qwen3.5 vision value {expected_embedding_component}"
+            "visual embedding component {actual_embedding_component} differs from the validated Qwen3.5 vision value {expected_embedding_component}"
         );
     }
     let embedding_sums_by_dimension = runtime
@@ -69,7 +69,7 @@ async fn should_project_one_minimum_sized_image_into_text_embedding_width() {
         .expect("visual embeddings should sum across hidden dimensions")
         .to_vec_f32()
         .expect("the complete embedding sum should copy to Rust");
-    assert!((complete_embedding_sum[0] - 81.267_91).abs() <= 0.01);
+    assert!((complete_embedding_sum[0] - 81.996_956).abs() <= 0.01);
 }
 
 fn one_pixel_png() -> Vec<u8> {

@@ -183,6 +183,24 @@ impl Qwen3_5VisionFields {
                 description: "vision_config numeric fields must be positive",
             });
         }
+        if !self.hidden_size.is_multiple_of(self.num_heads) {
+            return Err(Qwen3_5ConfigError::InvalidConfigValue {
+                description: "vision_config.hidden_size must divide evenly by num_heads",
+            });
+        }
+        let head_dimension = self.hidden_size / self.num_heads;
+        if !head_dimension.is_multiple_of(4) {
+            return Err(Qwen3_5ConfigError::InvalidConfigValue {
+                description: "vision attention head dimension must divide evenly across two rotary axes",
+            });
+        }
+        if self.hidden_act != "gelu_pytorch_tanh" {
+            return Err(Qwen3_5ConfigError::UnexpectedStringValue {
+                field_name: "vision_config.hidden_act",
+                expected_value: "gelu_pytorch_tanh",
+                actual_value: self.hidden_act.clone(),
+            });
+        }
         Ok(())
     }
 }

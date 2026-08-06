@@ -27,7 +27,8 @@ pub(crate) const fn is_mlx_affine_quantization_group_size_supported(group_size: 
 ///
 /// A profile with `bits = 0` indicates an unquantized module stored as
 /// bfloat16 (no scales/biases tensors on disk). This is used for the
-/// MoE router gate in some models (e.g., oQ6e where the gate is unquantized).
+/// Some artifacts use this for native floating-point modules inside an otherwise
+/// affine-quantized model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OptiQQuantizationProfile {
     pub bits: u32,

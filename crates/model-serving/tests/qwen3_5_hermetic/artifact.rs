@@ -10,7 +10,7 @@ use crate::common::qwen3_5_moe::certified_qwen3_5_language_tensor_profiles;
 const VISION_ONLY_MODEL_SHARD_FILE_NAME: &str = "model-vision-only.safetensors";
 
 #[test]
-fn should_exclude_the_fixed_vision_sidecar_from_the_executable_model_shard_inventory() {
+fn should_exclude_a_nested_vision_sidecar_from_the_executable_model_shard_inventory() {
     let language_tensor_profiles = certified_qwen3_5_language_tensor_profiles();
     let index_bytes = certified_test_index_bytes();
 
@@ -30,7 +30,7 @@ fn should_exclude_the_fixed_vision_sidecar_from_the_executable_model_shard_inven
 }
 
 #[test]
-fn should_include_a_vision_only_model_shard_in_the_loaded_shard_inventory() {
+fn should_classify_a_root_vision_only_file_by_tensor_role_instead_of_filename() {
     let language_tensor_profiles = certified_qwen3_5_language_tensor_profiles();
     let mut index_document =
         serde_json::from_slice::<serde_json::Value>(&certified_test_index_bytes())
@@ -51,10 +51,14 @@ fn should_include_a_vision_only_model_shard_in_the_loaded_shard_inventory() {
         .expect("the vision-only shard inventory should parse");
 
     assert!(
-        shard_index
+        !shard_index
             .model_shard_file_names()
             .iter()
             .any(|shard_file_name| shard_file_name == VISION_ONLY_MODEL_SHARD_FILE_NAME)
+    );
+    assert_eq!(
+        shard_index.vision_sidecar_file_names(),
+        &[VISION_ONLY_MODEL_SHARD_FILE_NAME]
     );
 }
 

@@ -22,6 +22,8 @@ pub struct Qwen3_5ShardIndex {
     vision_tensor_name_to_shard_file_name: BTreeMap<String, String>,
     total_payload_bytes: u64,
     model_shard_file_names: Vec<String>,
+    vision_sidecar_file_names: Vec<String>,
+    mtp_only_shard_file_names: Vec<String>,
 }
 
 impl Qwen3_5ShardIndex {
@@ -41,13 +43,16 @@ impl Qwen3_5ShardIndex {
             .map_err(Qwen3_5ArtifactError::DeserializeIndex)?;
         let total_payload_bytes = index_document.metadata.total_size;
         // Collect actual model shard file names from the index rather than
-        // hardcoding them. The index is authoritative for language and embedded
-        // vision tensors; the fixed OptiQ sidecar is loaded separately.
+        // hardcoding names. The index remains authoritative for logical tensor
+        // ownership; physical duplicate tensors are handled during validation.
         let mut language_tensor_names = BTreeSet::new();
         let mut language_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut mtp_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut vision_tensor_name_to_shard_file_name = BTreeMap::new();
-        let mut model_shard_file_names = BTreeSet::new();
+        let mut language_shard_file_names = BTreeSet::new();
+        let mut mtp_shard_file_names = BTreeSet::new();
+        let mut language_or_mtp_shard_file_names = BTreeSet::new();
+        let mut vision_shard_file_names = BTreeSet::new();
         for (tensor_name, shard_file_name) in &index_document.weight_map {
             validate_tensor_name(tensor_name)?;
             if tensor_name.starts_with("language_model.") {
@@ -55,22 +60,23 @@ impl Qwen3_5ShardIndex {
                     // Qwen3.6 oQ artifacts embed the optional MTP head in the
                     // same shards as the autoregressive trunk. The head has its
                     // own strict profile and is not part of the trunk inventory.
-                    model_shard_file_names.insert(shard_file_name.clone());
+                    mtp_shard_file_names.insert(shard_file_name.clone());
+                    language_or_mtp_shard_file_names.insert(shard_file_name.clone());
                     mtp_tensor_name_to_shard_file_name
                         .insert(tensor_name.clone(), shard_file_name.clone());
                     continue;
                 }
-                model_shard_file_names.insert(shard_file_name.clone());
+                language_shard_file_names.insert(shard_file_name.clone());
+                language_or_mtp_shard_file_names.insert(shard_file_name.clone());
                 language_tensor_names.insert(tensor_name.as_str());
                 language_tensor_name_to_shard_file_name
                     .insert(tensor_name.clone(), shard_file_name.clone());
             } else if tensor_name.starts_with("vision_tower.") {
                 // Embedded vision tensors may share language shards or occupy
-                // dedicated model shards. The fixed OptiQ sidecar remains a
-                // separately validated load path.
-                if shard_file_name != "optiq/optiq_vision.safetensors" {
-                    model_shard_file_names.insert(shard_file_name.clone());
-                }
+                // dedicated vision files. A file containing only vision tensors
+                // is loaded through the separate vision-tower path, regardless
+                // of its filename.
+                vision_shard_file_names.insert(shard_file_name.clone());
                 vision_tensor_name_to_shard_file_name
                     .insert(tensor_name.clone(), shard_file_name.clone());
             }
@@ -78,13 +84,25 @@ impl Qwen3_5ShardIndex {
         }
         validate_language_tensor_names(&language_tensor_names, language_tensor_profiles)?;
 
-        let model_shard_file_names = model_shard_file_names.into_iter().collect::<Vec<_>>();
+        let vision_only_shard_file_names = vision_shard_file_names
+            .difference(&language_or_mtp_shard_file_names)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let vision_sidecar_file_names =
+            vision_only_shard_file_names.into_iter().collect::<Vec<_>>();
+        let mtp_only_shard_file_names = mtp_shard_file_names
+            .difference(&language_shard_file_names)
+            .cloned()
+            .collect::<Vec<_>>();
+        let model_shard_file_names = language_shard_file_names.into_iter().collect::<Vec<_>>();
         Ok(Self {
             tensor_name_to_shard_file_name: language_tensor_name_to_shard_file_name,
             mtp_tensor_name_to_shard_file_name,
             vision_tensor_name_to_shard_file_name,
             total_payload_bytes,
             model_shard_file_names,
+            vision_sidecar_file_names,
+            mtp_only_shard_file_names,
         })
     }
 
@@ -124,13 +142,64 @@ impl Qwen3_5ShardIndex {
         &self.vision_tensor_name_to_shard_file_name
     }
 
+    /// Returns vision tensor names that belong to one indexed file.
+    #[must_use]
+    pub fn vision_tensor_names_for_shard(&self, shard_file_name: &str) -> Vec<&str> {
+        self.vision_tensor_name_to_shard_file_name
+            .iter()
+            .filter_map(|(tensor_name, tensor_shard_file_name)| {
+                (tensor_shard_file_name == shard_file_name).then_some(tensor_name.as_str())
+            })
+            .collect()
+    }
+
     /// Returns executable model shard file names in sorted order.
     ///
-    /// Includes language and embedded-vision files but excludes the fixed OptiQ
-    /// vision sidecar, which is loaded separately.
+    /// Includes target-language files and language files with embedded vision.
+    /// MTP-only files are retained separately so target-only loading does not map them.
     #[must_use]
     pub fn model_shard_file_names(&self) -> &[String] {
         &self.model_shard_file_names
+    }
+
+    /// Returns vision-only files that are loaded separately from language shards.
+    #[must_use]
+    pub fn vision_sidecar_file_names(&self) -> &[String] {
+        &self.vision_sidecar_file_names
+    }
+
+    /// Returns MTP-only files that may be absent without blocking target serving.
+    #[must_use]
+    pub fn mtp_only_shard_file_names(&self) -> &[String] {
+        &self.mtp_only_shard_file_names
+    }
+
+    /// Returns whether the indexed file contains only optional MTP tensors.
+    #[must_use]
+    pub fn is_mtp_only_shard_file(&self, shard_file_name: &str) -> bool {
+        self.mtp_only_shard_file_names
+            .iter()
+            .any(|indexed_file_name| indexed_file_name == shard_file_name)
+    }
+
+    /// Removes an absent optional MTP file and its logical tensor ownership.
+    pub fn omit_optional_mtp_shard_file(&mut self, shard_file_name: &str) -> bool {
+        if !self.is_mtp_only_shard_file(shard_file_name) {
+            return false;
+        }
+        self.mtp_tensor_name_to_shard_file_name
+            .retain(|_, indexed_shard_file_name| indexed_shard_file_name != shard_file_name);
+        self.mtp_only_shard_file_names
+            .retain(|indexed_file_name| indexed_file_name != shard_file_name);
+        true
+    }
+
+    /// Returns whether the indexed file is a separately loaded vision file.
+    #[must_use]
+    pub fn is_vision_sidecar_file(&self, shard_file_name: &str) -> bool {
+        self.vision_sidecar_file_names
+            .iter()
+            .any(|indexed_file_name| indexed_file_name == shard_file_name)
     }
 
     /// Returns the mapping from language tensor names to their containing shard
@@ -193,9 +262,9 @@ impl Qwen3_5ShardIndex {
     /// Extracts the set of language tensor names from the safetensors index JSON
     /// without performing any validation against tensor profiles.
     ///
-    /// This is used to determine which modules are quantized vs. unquantized by
-    /// checking for the presence of `.scales` tensors, before the full validation
-    /// pass that requires complete tensor profiles.
+    /// This is used to determine which target and MTP modules are quantized vs.
+    /// unquantized by checking for affine companion tensors before the full
+    /// validation pass that requires complete tensor profiles.
     pub fn extract_language_tensor_names_from_json(
         index_bytes: &[u8],
     ) -> Result<BTreeSet<String>, Qwen3_5ArtifactError> {

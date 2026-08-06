@@ -48,6 +48,21 @@ async fn should_return_too_many_requests_when_generation_capacity_is_active() {
 }
 
 #[tokio::test]
+async fn should_return_payload_too_large_when_a_responses_request_exceeds_the_ipc_frame() {
+    let application = build_application(ScriptedResponsesExecutor::with_start_error(
+        GenerationStartError::RequestTooLarge {
+            actual_ipc_message_bytes: 33_554_433,
+            maximum_ipc_message_bytes: 33_554_432,
+        },
+    ));
+
+    let http_response = post_response(application, false).await;
+
+    assert_eq!(http_response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_error_code(http_response, "request_too_large").await;
+}
+
+#[tokio::test]
 async fn should_explain_why_the_requested_responses_model_could_not_be_loaded() {
     let application = build_application(ScriptedResponsesExecutor::with_start_error(
         GenerationStartError::ModelLoadFailed {

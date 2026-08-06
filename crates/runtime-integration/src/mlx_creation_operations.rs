@@ -45,6 +45,28 @@ impl MlxRuntime {
         })
     }
 
+    /// Creates a float32 half-open range with an explicit stride.
+    pub fn arange_f32(
+        &self,
+        start: f64,
+        stop: f64,
+        stride: f64,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        self.output_array("create an MLX float32 range", |output_array, stream| {
+            // SAFETY: Scalar arguments are copied and output is uniquely writable.
+            unsafe {
+                raw::mlx_arange(
+                    output_array,
+                    start,
+                    stop,
+                    stride,
+                    MlxDtype::Float32.to_raw(),
+                    stream,
+                )
+            }
+        })
+    }
+
     /// Creates a zero-filled MLX array with a validated static shape.
     pub fn zeros(&self, shape: &[i32], dtype: MlxDtype) -> Result<MlxArray, MlxRuntimeError> {
         validate_creation_shape(shape)?;

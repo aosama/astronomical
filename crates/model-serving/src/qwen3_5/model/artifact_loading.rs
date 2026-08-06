@@ -56,9 +56,8 @@ impl Qwen3_5Model {
 
     /// Binds the complete validated language artifact and optional vision tower.
     ///
-    /// For models with a separate vision sidecar (oQ4), vision weights are loaded
-    /// from the sidecar file. For models with embedded vision (oQ6e), vision
-    /// weights are extracted from the indexed model shards with the language model.
+    /// Separate indexed vision files are loaded through the visual owner. Embedded
+    /// vision weights are extracted from indexed language model shards.
     ///
     /// Every sparse model constructs an `ExpertPager` at startup for prefill and
     /// decode. The `model_directory` must point to the directory containing the
@@ -93,11 +92,19 @@ impl Qwen3_5Model {
         } else {
             None
         };
-        let model_shards = performance_attribution.measure_operation(
+        let should_load_mtp_only_shards =
+            bind_mtp_weights && mtp_artifact_capability.is_mtp_capable();
+        let mtp_only_shard_files = if should_load_mtp_only_shards {
+            validated_artifact.take_mtp_only_shard_files()?
+        } else {
+            Vec::new()
+        };
+        let (model_shards, mtp_only_shards) = performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
             |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
                 let model_shard_files = validated_artifact.into_shard_files()?;
                 let mut model_shards = Vec::with_capacity(model_shard_files.len());
+                let mut mtp_only_shards = Vec::with_capacity(mtp_only_shard_files.len());
                 let positional_file_read_metrics =
                     performance_attribution.positional_file_read_metrics();
                 for model_shard_file in model_shard_files {
@@ -110,7 +117,17 @@ impl Qwen3_5Model {
                         )?,
                     );
                 }
-                Ok(model_shards)
+                for mtp_only_shard_file in mtp_only_shard_files {
+                    mtp_only_shards.push(
+                        runtime.load_safetensors(
+                            mtp_only_shard_file.into_file(),
+                            positional_file_read_metrics
+                                .as_ref()
+                                .map(std::sync::Arc::clone),
+                        )?,
+                    );
+                }
+                Ok((model_shards, mtp_only_shards))
             },
         )?;
         let (weights, vision_model, mtp_weights) = performance_attribution.measure_operation(
@@ -142,6 +159,7 @@ impl Qwen3_5Model {
                     &config,
                     &shard_index,
                     weights.model_shards(),
+                    mtp_only_shards,
                     &weights,
                     &runtime,
                 );
@@ -229,22 +247,24 @@ fn bind_optional_mtp_weights(
     qwen3_5_config: &Qwen3_5Config,
     shard_index: &Qwen3_5ShardIndex,
     model_shards: &[MlxSafetensors],
+    mtp_only_shards: Vec<MlxSafetensors>,
     target_weights: &Qwen3_5Weights,
     runtime: &MlxRuntime,
 ) -> Option<Qwen3_5MtpWeights> {
     if !bind_mtp_weights || !mtp_artifact_capability.is_mtp_capable() {
         return None;
     }
-    let mut mtp_weights = match Qwen3_5MtpWeights::bind(qwen3_5_config, shard_index, model_shards) {
-        Ok(mtp_weights) => mtp_weights,
-        Err(mtp_weight_binding_error) => {
-            tracing::warn!(
-                error = %mtp_weight_binding_error,
-                "optional MTP weight binding failed; serving target-only"
-            );
-            None
-        }
-    };
+    let mut mtp_weights =
+        match Qwen3_5MtpWeights::bind(qwen3_5_config, shard_index, model_shards, mtp_only_shards) {
+            Ok(mtp_weights) => mtp_weights,
+            Err(mtp_weight_binding_error) => {
+                tracing::warn!(
+                    error = %mtp_weight_binding_error,
+                    "optional MTP weight binding failed; serving target-only"
+                );
+                None
+            }
+        };
     if let Some(bound_mtp_weights) = mtp_weights.as_mut()
         && let Err(mtp_normalization_repair_error) =
             bound_mtp_weights.repair_raw_normalization_weights(runtime, target_weights)
