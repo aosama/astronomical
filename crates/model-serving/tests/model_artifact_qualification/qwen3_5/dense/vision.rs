@@ -1,7 +1,7 @@
 use std::io::Cursor;
 use std::time::Duration;
 
-use astronomical_config::{AstronomicalConfig, discover_qwen3_5_models};
+use astronomical_config::{AstronomicalConfig, discover_models};
 use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture, Qwen3_5ImageProcessor, Qwen3_5Model,
     ValidatedQwen3_5Artifact,
@@ -79,7 +79,7 @@ fn configured_dense_qwen3_5_vision_artifact()
     let astronomical_config = AstronomicalConfig::load_from_default_location()
         .expect("the standard Astronomical configuration should load for model qualification");
     let maximum_output_tokens = astronomical_config.max_output_tokens();
-    let configured_model_directory_scans = discover_qwen3_5_models(
+    let configured_model_directory_scans = discover_models(
         astronomical_config.model_directories(),
         maximum_output_tokens,
     )

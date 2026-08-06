@@ -5,14 +5,14 @@ use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::super::expert_paging::expert_pager::PagedExpertWeights;
-use super::super::expert_paging::quantized_expert_manifest::QuantizedExpertPageManifest;
+use super::super::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination::combine_sparse_and_shared_experts;
 use super::routing::{
     MINIMUM_SORTED_EXPERT_ASSIGNMENTS, qwen3_5_moe_sort_expert_assignments,
     qwen3_5_moe_sorted_expert_weighted_sum,
 };
+use crate::expert_paging::QuantizedExpertPageManifest;
 
 const REMAP_EXPERT_PAGE_SLOTS_OPERATION: &str = "remap Qwen3.5-MoE expert page slots";
 
@@ -23,7 +23,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        paged_expert_weights: &PagedExpertWeights,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
         page_manifest: &QuantizedExpertPageManifest,
         selected_indices: &MlxArray,
         sorted_unique_expert_ids: &[usize],
@@ -50,7 +50,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        paged_expert_weights: &PagedExpertWeights,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
@@ -156,7 +156,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        complete_layer_expert_weights: &PagedExpertWeights,
+        complete_layer_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
@@ -182,7 +182,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        paged_expert_weights: &PagedExpertWeights,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
         page_manifest: &QuantizedExpertPageManifest,
         selected_indices: &MlxArray,
         sorted_unique_expert_ids: &[usize],

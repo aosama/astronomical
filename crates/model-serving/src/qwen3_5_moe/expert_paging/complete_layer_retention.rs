@@ -2,13 +2,15 @@
 
 use astronomical_runtime_integration::MlxRuntime;
 
+use crate::expert_paging::{
+    ExpertWeightMemoryCache, MemoryBudgetSnapshot, QuantizedExpertLayerPlan,
+    build_quantized_expert_page_manifest_from_plan,
+};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::expert_pager::{ExpertPager, ExpertPagingError};
-use super::memory_budget::MemoryBudgetSnapshot;
-use super::quantized_expert_manifest::build_quantized_expert_page_manifest_from_plan;
+use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
 
-impl ExpertPager {
+impl Qwen3_5ExpertPager {
     pub(crate) fn minimum_decode_route_payload_byte_count_by_layer(
         &self,
         experts_per_token: u32,
@@ -33,7 +35,9 @@ impl ExpertPager {
     pub(crate) fn prewarm_complete_layers_with_performance_attribution(
         &self,
         runtime: &MlxRuntime,
-        expert_weight_memory_cache: &std::cell::RefCell<super::ExpertWeightMemoryCache>,
+        expert_weight_memory_cache: &std::cell::RefCell<
+            ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>,
+        >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), ExpertPagingError> {
         for layer_index in 0..self.layer_plans.len() {
@@ -178,7 +182,7 @@ impl ExpertPager {
 }
 
 pub(super) fn complete_layer_expert_payload_byte_count(
-    layer_plan: &super::quantized_expert_manifest::QuantizedExpertLayerPlan,
+    layer_plan: &QuantizedExpertLayerPlan,
     layer_index: usize,
 ) -> Result<u64, ExpertPagingError> {
     layer_plan.tensor_sources.iter().try_fold(

@@ -13,7 +13,6 @@ use crate::{
     GenerationPerformanceRecord, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
     generation_performance_log::unix_epoch_millis,
-    worker::ActiveGeneration,
     worker_health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot,
         publish_active_request_progress, publish_activity, publish_expert_memory_mode,
@@ -21,6 +20,7 @@ use crate::{
         publish_mlx_memory_limit_rejection, publish_persistent_prompt_cache_stats,
         record_serving_session,
     },
+    worker_loop_types::ActiveGeneration,
 };
 
 pub(super) fn handle_worker_event(

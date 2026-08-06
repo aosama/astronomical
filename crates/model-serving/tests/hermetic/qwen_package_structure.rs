@@ -34,6 +34,31 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
         );
     }
 
+    let qwen_expert_paging_source_directory = sparse_qwen_source_directory.join("expert_paging");
+    for required_qwen_expert_paging_package_name in ["expert_pager"] {
+        assert!(
+            qwen_expert_paging_source_directory
+                .join(required_qwen_expert_paging_package_name)
+                .is_dir(),
+            "Qwen expert-paging package {required_qwen_expert_paging_package_name} must exist"
+        );
+    }
+    for required_qwen_expert_paging_source_file_name in [
+        "mod.rs",
+        "complete_layer_retention.rs",
+        "expert_cache_page_assembly.rs",
+        "expert_pager_construction.rs",
+        "paged_expert_weights.rs",
+        "quantized_expert_layer_plan.rs",
+    ] {
+        assert!(
+            qwen_expert_paging_source_directory
+                .join(required_qwen_expert_paging_source_file_name)
+                .is_file(),
+            "Qwen expert-paging source must remain family-owned: {required_qwen_expert_paging_source_file_name}"
+        );
+    }
+
     for shared_only_qwen_package_name in [
         "configuration",
         "decoder",
@@ -54,6 +79,27 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
         !shared_qwen_source_directory.join("expert_paging").exists(),
         "Shared Qwen package must not own sparse expert paging"
     );
+
+    for shared_expert_paging_source_name in [
+        "bounded_expert_reader.rs",
+        "expert_cache.rs",
+        "expert_cache_capacity.rs",
+        "expert_cache_eviction.rs",
+        "expert_cache_pressure.rs",
+        "expert_cache_statistics.rs",
+        "memory_budget.rs",
+        "quantized_expert_manifest.rs",
+        "quantized_expert_validation.rs",
+        "safetensors_header.rs",
+        "source_manifests.rs",
+    ] {
+        assert!(
+            !qwen_expert_paging_source_directory
+                .join(shared_expert_paging_source_name)
+                .exists(),
+            "shared expert-paging source must not remain under Qwen ownership: {shared_expert_paging_source_name}"
+        );
+    }
 
     let model_memory_admission_source = std::fs::read_to_string(
         shared_qwen_source_directory

@@ -17,7 +17,8 @@ pub use maximum_mlx_memory::{
     maximum_mlx_memory_gb_to_bytes, restore_config_file, write_maximum_mlx_memory_gb,
 };
 pub use model_discovery::{
-    DiscoveredModel, DiscoveredModelError, ModelDiscoveryDirectoryScan, discover_qwen3_5_models,
+    DiscoveredModel, DiscoveredModelError, ModelDiscoveryDirectoryScan, ModelFamily,
+    ModelFamilyClassificationError, classify_model_directory, discover_models,
 };
 pub use model_identity::{decode_huggingface_cache_directory_name, resolve_model_id};
 pub use prompt_cache_config::PromptCacheConfig;
@@ -80,7 +81,7 @@ impl AstronomicalConfig {
         model_id: &str,
     ) -> Result<Option<PathBuf>, DiscoveredModelError> {
         let configured_model_directory_scans =
-            discover_qwen3_5_models(self.model_directories(), self.max_output_tokens())?;
+            discover_models(self.model_directories(), self.max_output_tokens())?;
         Ok(configured_model_directory_scans
             .into_iter()
             .flat_map(|configured_model_directory_scan| {

@@ -48,6 +48,35 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
             "model_swap.rs",
         ],
     );
+    assert_source_directory_contains_files(
+        &model_serving_source_directory,
+        "expert_paging",
+        &[
+            "mod.rs",
+            "bounded_expert_reader.rs",
+            "expert_cache.rs",
+            "expert_cache_capacity.rs",
+            "expert_cache_eviction.rs",
+            "expert_cache_pressure.rs",
+            "expert_cache_statistics.rs",
+            "memory_budget.rs",
+            "quantized_expert_manifest.rs",
+            "quantized_expert_validation.rs",
+            "safetensors_header.rs",
+            "source_manifests.rs",
+        ],
+    );
+    assert_source_directory_contains_files(
+        &model_serving_source_directory,
+        "model_family_runtime",
+        &[
+            "mod.rs",
+            "inference_engine.rs",
+            "processor.rs",
+            "request.rs",
+            "output.rs",
+        ],
+    );
 
     for retired_flat_source_file_name in [
         "adaptive_ram_growth_guard.rs",
@@ -83,6 +112,33 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
                 .join(intentional_root_source_file_name)
                 .is_file(),
             "intentional model-serving root source file must remain: {intentional_root_source_file_name}"
+        );
+    }
+
+    let shared_expert_paging_source_directory =
+        model_serving_source_directory.join("expert_paging");
+    for shared_expert_paging_source_file_name in [
+        "mod.rs",
+        "bounded_expert_reader.rs",
+        "expert_cache.rs",
+        "expert_cache_capacity.rs",
+        "expert_cache_eviction.rs",
+        "expert_cache_pressure.rs",
+        "expert_cache_statistics.rs",
+        "memory_budget.rs",
+        "quantized_expert_manifest.rs",
+        "quantized_expert_validation.rs",
+        "safetensors_header.rs",
+        "source_manifests.rs",
+    ] {
+        let shared_expert_paging_source = std::fs::read_to_string(
+            shared_expert_paging_source_directory.join(shared_expert_paging_source_file_name),
+        )
+        .expect("shared expert-paging source must be readable");
+        assert!(
+            !shared_expert_paging_source.contains("qwen3_5")
+                && !shared_expert_paging_source.contains("deepseek_v4"),
+            "shared expert-paging source must not depend on a concrete model family: {shared_expert_paging_source_file_name}"
         );
     }
 }

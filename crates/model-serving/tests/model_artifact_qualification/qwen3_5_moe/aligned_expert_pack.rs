@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_model_serving::{ExpertPager, Qwen3_5ArtifactValidator};
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5ExpertPager};
 use astronomical_runtime_integration::MlxRuntime;
 
 #[tokio::test]
@@ -30,7 +30,7 @@ async fn should_ignore_existing_experimental_aligned_packs_during_standard_exper
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
     let runtime = MlxRuntime::initialize(mlx_memory_limits)
         .expect("the direct MLX runtime should initialize for standard expert paging");
-    let expert_pager = ExpertPager::new(
+    let expert_pager = Qwen3_5ExpertPager::new(
         model_directory,
         &language_tensor_name_to_shard_file_name,
         &qwen3_5_config,

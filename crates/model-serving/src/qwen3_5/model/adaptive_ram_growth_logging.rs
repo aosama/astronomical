@@ -1,5 +1,5 @@
 use crate::AdaptiveRamGrowthProjection;
-use crate::qwen3_5_moe::ExpertWeightMemoryCacheStatistics;
+use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
 
 pub(crate) fn log_adaptive_ram_growth_pressure(
     adaptive_ram_growth_projection: &AdaptiveRamGrowthProjection,

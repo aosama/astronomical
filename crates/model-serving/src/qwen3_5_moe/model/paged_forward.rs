@@ -11,7 +11,7 @@ use astronomical_runtime_integration::MlxArray;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::super::expert_paging::expert_pager::{ExpertPager, ExpertPagingError};
+use super::super::expert_paging::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::feed_forward_weights::{Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights};
 use super::routing::qwen3_5_moe_route_experts;
@@ -31,7 +31,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &ExpertPager,
+        expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
         should_use_compiled_elementwise_graphs: bool,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
@@ -155,7 +155,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &ExpertPager,
+        expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
         route_token_count: i32,
         selected_indices: &MlxArray,
@@ -221,7 +221,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &ExpertPager,
+        expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
@@ -412,7 +412,7 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &ExpertPager,
+        expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,

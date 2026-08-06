@@ -7,9 +7,10 @@ use astronomical_runtime_integration::{
     MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime, MlxSafetensors,
 };
 
+use crate::expert_paging::ExpertWeightMemoryCache;
 use crate::qwen3_5::Qwen3_5MtpArtifactCapability;
 use crate::qwen3_5_moe::{
-    ExpertPager, ExpertWeightMemoryCache, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -59,7 +60,7 @@ impl Qwen3_5Model {
     /// Separate indexed vision files are loaded through the visual owner. Embedded
     /// vision weights are extracted from indexed language model shards.
     ///
-    /// Every sparse model constructs an `ExpertPager` at startup for prefill and
+    /// Every sparse model constructs a Qwen3_5ExpertPager at startup for prefill and
     /// decode. The `model_directory` must point to the directory containing the
     /// safetensors shard files so the pager can build bounded byte-range plans
     /// without loading expert payloads.
@@ -181,7 +182,7 @@ impl Qwen3_5Model {
                     let expert_pager = performance_attribution.measure_operation(
                         PerformanceOperation::ExpertPagerPlanConstruction,
                         |_performance_attribution| {
-                            ExpertPager::new(
+                            Qwen3_5ExpertPager::new(
                                 model_directory.to_path_buf(),
                                 &tensor_name_to_shard_file_name,
                                 &config,
@@ -195,11 +196,12 @@ impl Qwen3_5Model {
                             config.experts_per_token(),
                         )?;
                     let expert_layer_count = minimum_decode_route_payload_byte_count_by_layer.len();
-                    let expert_weight_memory_cache =
-                        std::cell::RefCell::new(ExpertWeightMemoryCache::new(
+                    let expert_weight_memory_cache = std::cell::RefCell::new(
+                        ExpertWeightMemoryCache::<Qwen3_5PagedExpertWeights>::new(
                             expert_layer_count,
                             minimum_decode_route_payload_byte_count_by_layer,
-                        ));
+                        ),
+                    );
                     let sorted_expert_weighted_sum_kernel =
                         qwen3_5_moe_sorted_expert_weighted_sum_kernel()?;
                     (

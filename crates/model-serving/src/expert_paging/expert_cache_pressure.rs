@@ -2,7 +2,10 @@
 
 use super::ExpertWeightMemoryCache;
 
-impl ExpertWeightMemoryCache {
+impl<ExpertPage> ExpertWeightMemoryCache<ExpertPage>
+where
+    ExpertPage: super::ExpertWeightPage,
+{
     /// Applies a request-scoped ceiling without discarding retained experts that
     /// still fit beside the request's dynamic memory.
     pub fn limit_retention_for_request_memory_pressure(
