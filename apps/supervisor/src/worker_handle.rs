@@ -15,7 +15,8 @@ use crate::{
 use astronomical_ipc_protocol::{ChatGenerationCommand, WorkerStartupConfiguration};
 use tokio::sync::{Semaphore, mpsc, oneshot};
 
-use crate::worker::{WorkerLoopCommand, run_worker};
+use crate::worker::run_worker;
+use crate::worker_loop_types::WorkerLoopCommand;
 use crate::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 
 const WORKER_COMMAND_CAPACITY: usize = 8;

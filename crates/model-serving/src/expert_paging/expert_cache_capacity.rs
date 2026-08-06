@@ -2,7 +2,10 @@
 
 use super::expert_cache::ExpertWeightMemoryCache;
 
-impl ExpertWeightMemoryCache {
+impl<ExpertPage> ExpertWeightMemoryCache<ExpertPage>
+where
+    ExpertPage: super::ExpertWeightPage,
+{
     pub(super) fn current_hybrid_retention_payload_byte_count(&self) -> Option<u64> {
         let paged_layer_route_floor_bytes =
             self.paged_layer_decode_route_floor_payload_byte_count_excluding(None);

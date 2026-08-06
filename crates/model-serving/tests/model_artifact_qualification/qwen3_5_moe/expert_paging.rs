@@ -7,7 +7,8 @@ use std::future::Future;
 use std::time::{Duration, Instant};
 
 use astronomical_model_serving::{
-    ExpertWeightMemoryCache, Qwen3_5ArtifactValidator, Qwen3_5Model, RequestDecoderStateStack,
+    Qwen3_5ArtifactValidator, Qwen3_5ExpertWeightMemoryCache, Qwen3_5Model,
+    RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::{MissedTickBehavior, interval, sleep};
@@ -16,7 +17,7 @@ const EXPERT_PAGING_TEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 use super::super::qwen3_5::SAY_HI_PROMPT_TOKEN_IDS;
 
-/// Constructs an ExpertPager from the real Ornith model artifact and verifies
+/// Constructs a Qwen3_5ExpertPager from the real Ornith model artifact and verifies
 /// that layer plans are built correctly for all 40 MoE layers.
 #[tokio::test]
 #[ignore = "loads the complete pinned Ornith artifact for expert paging integration"]
@@ -30,7 +31,7 @@ async fn should_construct_expert_pager_and_build_layer_plans() {
     assert_eq!(
         layer_count,
         config.layer_count() as usize,
-        "ExpertPager should have one layer plan per MoE layer"
+        "Qwen3_5ExpertPager should have one layer plan per MoE layer"
     );
 }
 
@@ -100,7 +101,7 @@ async fn should_map_non_contiguous_expert_selections_to_correct_page_slots() {
 /// Lowest-level performance-design proof for expert paging cache behavior.
 ///
 /// This intentionally avoids the supervisor, worker process, macOS app, REST API,
-/// and shell scripts. It constructs only the real `ExpertPager`, then asks for the
+/// and shell scripts. It constructs only the real Qwen3_5ExpertPager, then asks for the
 /// same single expert twice. The first request must load from SSD; the second
 /// request must hit the in-memory expert cache and perform zero disk page loads.
 #[tokio::test]
@@ -267,7 +268,7 @@ async fn run_selected_experts_cache_proof(
     let (runtime, _config, expert_pager) =
         super::construct_model_artifact_expert_pager("[expert-cache-proof]").await;
 
-    let mut expert_weight_memory_cache = ExpertWeightMemoryCache::new(
+    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(
         expert_pager.layer_count(),
         vec![0; expert_pager.layer_count()],
     );

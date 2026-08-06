@@ -40,6 +40,7 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
     let mut discovered_models = vec![
         DiscoveredModel {
             model_id: "larger-model".to_owned(),
+            model_family: astronomical_config::ModelFamily::Qwen3_5,
             revision: "larger-revision".to_owned(),
             model_directory: "/models/larger-model".into(),
             context_window: 262_144,
@@ -50,6 +51,7 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
         },
         DiscoveredModel {
             model_id: "same-size-z-model".to_owned(),
+            model_family: astronomical_config::ModelFamily::Qwen3_5,
             revision: "same-size-z-revision".to_owned(),
             model_directory: "/models/same-size-z-model".into(),
             context_window: 262_144,
@@ -60,6 +62,7 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
         },
         DiscoveredModel {
             model_id: "same-size-a-model".to_owned(),
+            model_family: astronomical_config::ModelFamily::Qwen3_5,
             revision: "same-size-a-revision".to_owned(),
             model_directory: "/models/same-size-a-model".into(),
             context_window: 262_144,

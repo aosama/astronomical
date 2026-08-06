@@ -5,11 +5,11 @@ use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use tokio::time::timeout;
 
 use crate::chat_generation_executor::try_send_stream_event;
-use crate::worker::ActiveGeneration;
 use crate::worker_health::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
     publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
 };
+use crate::worker_loop_types::ActiveGeneration;
 use crate::{
     ChatGenerationStreamErrorCode, ChatGenerationStreamEvent, WorkerActivity, WorkerControlError,
     WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,

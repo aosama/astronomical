@@ -3,35 +3,36 @@
 
 use std::collections::HashMap;
 
+use super::ExpertWeightPage;
 use super::expert_cache_statistics::{
     ExpertWeightMemoryCacheStatistics, paged_expert_payload_byte_count,
 };
-use super::expert_pager::PagedExpertWeights;
 use super::memory_budget::{
     MemoryBudgetSnapshot, automatic_expert_weight_memory_cache_maximum_size_bytes,
 };
 
 /// Complete one-expert weights retained for reuse by later decode tokens.
 #[derive(Debug)]
-pub(crate) struct CachedExpertWeights {
-    pub(crate) paged_expert_weights: PagedExpertWeights,
+pub(crate) struct CachedExpertWeights<ExpertPage> {
+    pub(crate) paged_expert_weights: ExpertPage,
     pub(super) resident_payload_byte_count: u64,
     pub(super) last_access_sequence_number: u64,
 }
 
 /// One complete layer page retained in its original global-expert order.
 #[derive(Debug)]
-pub(super) struct CachedCompleteLayerExpertWeights {
-    pub(super) paged_expert_weights: PagedExpertWeights,
+pub(super) struct CachedCompleteLayerExpertWeights<ExpertPage> {
+    pub(super) paged_expert_weights: ExpertPage,
     pub(super) resident_payload_byte_count: u64,
     pub(super) last_access_sequence_number: u64,
 }
 
 /// Budgets complete layers and model-derived decode-route floors within one ceiling.
 #[derive(Debug)]
-pub struct ExpertWeightMemoryCache {
-    pub(super) cached_experts_by_layer: Vec<HashMap<usize, CachedExpertWeights>>,
-    pub(super) complete_layer_expert_weights: Vec<Option<CachedCompleteLayerExpertWeights>>,
+pub struct ExpertWeightMemoryCache<ExpertPage> {
+    pub(super) cached_experts_by_layer: Vec<HashMap<usize, CachedExpertWeights<ExpertPage>>>,
+    pub(super) complete_layer_expert_weights:
+        Vec<Option<CachedCompleteLayerExpertWeights<ExpertPage>>>,
     pub(super) minimum_decode_route_payload_byte_count_by_layer: Vec<u64>,
     pub(super) resident_payload_byte_count_by_layer: Vec<u64>,
     pub(super) resident_payload_byte_count: u64,
@@ -46,7 +47,10 @@ pub struct ExpertWeightMemoryCache {
     disk_batch_load_count: u64,
 }
 
-impl ExpertWeightMemoryCache {
+impl<ExpertPage> ExpertWeightMemoryCache<ExpertPage>
+where
+    ExpertPage: ExpertWeightPage,
+{
     /// Returns whether every decoder layer retains one complete sparse-expert page.
     #[must_use]
     pub fn has_complete_expert_layers_for_every_decoder_layer(&self) -> bool {
@@ -104,10 +108,7 @@ impl ExpertWeightMemoryCache {
         true
     }
 
-    pub(crate) fn record_complete_layer_hit(
-        &mut self,
-        layer_index: usize,
-    ) -> Option<&PagedExpertWeights> {
+    pub(crate) fn record_complete_layer_hit(&mut self, layer_index: usize) -> Option<&ExpertPage> {
         let cached_complete_layer = self
             .complete_layer_expert_weights
             .get_mut(layer_index)
@@ -187,7 +188,7 @@ impl ExpertWeightMemoryCache {
         &self,
         layer_index: usize,
         expert_id: usize,
-    ) -> Option<&CachedExpertWeights> {
+    ) -> Option<&CachedExpertWeights<ExpertPage>> {
         self.cached_experts_by_layer
             .get(layer_index)
             .and_then(|cached_experts| cached_experts.get(&expert_id))
@@ -262,7 +263,7 @@ impl ExpertWeightMemoryCache {
         &mut self,
         layer_index: usize,
         expert_id: usize,
-        paged_expert_weights: PagedExpertWeights,
+        paged_expert_weights: ExpertPage,
     ) {
         let resident_payload_byte_count = paged_expert_payload_byte_count(&paged_expert_weights);
         // Insertion counts as access so the next turnover keeps this expert.
@@ -298,7 +299,7 @@ impl ExpertWeightMemoryCache {
     pub(crate) fn remember_complete_layer_expert_weights(
         &mut self,
         layer_index: usize,
-        paged_expert_weights: PagedExpertWeights,
+        paged_expert_weights: ExpertPage,
     ) {
         let resident_payload_byte_count = paged_expert_payload_byte_count(&paged_expert_weights);
         self.next_access_sequence_number = self.next_access_sequence_number.saturating_add(1);

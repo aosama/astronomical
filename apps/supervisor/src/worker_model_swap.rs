@@ -3,9 +3,9 @@ use std::sync::{Arc, RwLock};
 use astronomical_ipc_protocol::WorkerEvent;
 use tokio::time::Instant;
 
-use crate::worker::ActiveGeneration;
 use crate::worker_event_handler::{handle_worker_event, protocol_violation};
 use crate::worker_health::publish_health;
+use crate::worker_loop_types::ActiveGeneration;
 use crate::{GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot, WorkerProcess};
 
 /// Result of waiting for a worker model-swap acknowledgement.

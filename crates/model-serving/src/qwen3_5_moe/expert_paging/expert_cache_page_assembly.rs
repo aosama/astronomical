@@ -2,17 +2,17 @@
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
-use super::expert_cache::ExpertWeightMemoryCache;
-use super::expert_pager::{ExpertPagingError, PagedExpertWeights};
+use super::expert_pager::{ExpertPagingError, Qwen3_5PagedExpertWeights};
+use crate::expert_paging::ExpertWeightMemoryCache;
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
-impl ExpertWeightMemoryCache {
+impl ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights> {
     pub(crate) fn assemble_selected_experts(
         &self,
         runtime: &MlxRuntime,
         layer_index: usize,
         selected_expert_ids: &[usize],
-    ) -> Result<PagedExpertWeights, ExpertPagingError> {
+    ) -> Result<Qwen3_5PagedExpertWeights, ExpertPagingError> {
         let Some(&first_selected_expert_id) = selected_expert_ids.first() else {
             return Err(ExpertPagingError::Runtime {
                 description: "cannot assemble an empty selected expert page".to_owned(),
@@ -33,7 +33,7 @@ impl ExpertWeightMemoryCache {
             down_projections.push(&cached_expert.paged_expert_weights.down_projection);
         }
 
-        Ok(PagedExpertWeights {
+        Ok(Qwen3_5PagedExpertWeights {
             gate_projection: concatenate_affine_projections(
                 runtime,
                 &gate_projections,

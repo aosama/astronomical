@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::{AstronomicalConfig, discover_qwen3_5_models};
+use astronomical_config::{AstronomicalConfig, ModelFamily};
 
 use crate::hermetic::write_config;
 
@@ -77,11 +77,11 @@ fn write_separate_vision_model_files(model_directory: &Path) {
     .expect("vision sidecar index should be written");
 }
 
-fn discover_models(
+fn discover_configured_models(
     temporary_directory: &tempfile::TempDir,
 ) -> Vec<astronomical_config::ModelDiscoveryDirectoryScan> {
     let configured_model_directories = vec![temporary_directory.path().to_path_buf()];
-    discover_qwen3_5_models(&configured_model_directories, 20_480)
+    astronomical_config::discover_models(&configured_model_directories, 20_480)
         .expect("model discovery should complete")
 }
 
@@ -98,7 +98,7 @@ fn should_discover_supported_text_and_vision_models() {
     write_required_model_files(&vision_model_directory);
     write_embedded_vision_model_files(&vision_model_directory);
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
 
     assert_eq!(directory_scans.len(), 1);
     assert_eq!(directory_scans[0].discovered_models.len(), 2);
@@ -141,7 +141,7 @@ fn should_discover_a_dense_qwen3_5_model_as_text_only_despite_vision_metadata() 
     fs::write(dense_model_directory.join("optiq/mtp.safetensors"), [])
         .expect("optional MTP sidecar should be written");
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .iter()
@@ -167,7 +167,7 @@ fn should_allow_a_missing_mtp_only_file_with_an_arbitrary_name() {
     )
     .expect("model index should be written");
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
 
     assert_eq!(directory_scans[0].discovered_models.len(), 1);
 }
@@ -182,7 +182,7 @@ fn should_discover_a_dense_qwen3_5_model_with_embedded_vision_as_image_capable()
     write_dense_qwen3_5_vision_model_files(&dense_model_directory);
     write_embedded_vision_model_files(&dense_model_directory);
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .iter()
@@ -203,7 +203,7 @@ fn should_discover_a_dense_qwen3_5_model_with_a_vision_sidecar_as_image_capable(
     write_dense_qwen3_5_vision_model_files(&dense_model_directory);
     write_separate_vision_model_files(&dense_model_directory);
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .iter()
@@ -226,7 +226,7 @@ fn should_skip_a_dense_qwen3_5_model_with_an_indexed_but_missing_vision_sidecar(
     fs::remove_file(dense_model_directory.join("optiq/optiq_vision.safetensors"))
         .expect("vision sidecar should be removed");
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
 
     assert!(directory_scans[0].discovered_models.is_empty());
 }
@@ -242,7 +242,28 @@ fn should_skip_unsupported_and_incomplete_model_directories() {
     write_required_model_files(&unsupported_model_directory);
     write_minimal_model_config(&incomplete_model_directory, "qwen3_5_moe", 262_144);
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
+
+    assert!(directory_scans[0].discovered_models.is_empty());
+}
+
+#[test]
+fn should_classify_deepseek_v4_without_discovering_it_as_executable() {
+    assert_eq!(
+        ModelFamily::from_model_type(Some("deepseek_v4")),
+        Some(ModelFamily::DeepSeekV4)
+    );
+
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let deepseek_model_directory = temporary_directory.path().join("DeepSeek-V4-Flash-0731");
+    fs::create_dir_all(&deepseek_model_directory)
+        .expect("DeepSeek model directory should be created");
+    write_minimal_model_config(&deepseek_model_directory, "deepseek_v4", 262_144);
+    write_required_model_files(&deepseek_model_directory);
+
+    let directory_scans =
+        astronomical_config::discover_models(&[temporary_directory.path().to_path_buf()], 20_480)
+            .expect("model discovery should complete");
 
     assert!(directory_scans[0].discovered_models.is_empty());
 }
@@ -273,7 +294,7 @@ fn should_measure_unique_model_shard_bytes_during_discovery() {
     )
     .expect("safetensors index should be written");
 
-    let directory_scans = discover_models(&temporary_directory);
+    let directory_scans = discover_configured_models(&temporary_directory);
 
     assert_eq!(
         directory_scans[0].discovered_models[0].model_size_bytes,

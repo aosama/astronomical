@@ -12,11 +12,11 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use super::quantized_expert_layer_plan::build_source_manifests;
 use super::quantized_expert_validation::{
     validate_expert_ids, validate_source_intervals, validate_virtual_intervals,
 };
 use super::safetensors_header::{SafetensorsDtype, SafetensorsHeaderError};
+use super::source_manifests::build_source_manifests;
 
 /// Typed failures during manifest construction and validation.
 #[derive(Debug, Error)]

@@ -1,4 +1,5 @@
 mod artifact;
+mod artifact_helpers;
 mod mtp_artifact_capability;
 pub(crate) mod mtp_tensor_namespace;
 mod shard_index;
