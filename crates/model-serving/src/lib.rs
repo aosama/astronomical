@@ -2,9 +2,13 @@
 
 mod artifact_validation;
 mod decoder_cache;
+mod deepseek_v4;
 mod engine_backed_worker;
+#[cfg(feature = "direct-mlx")]
+mod expert_paging;
 mod inference_engine;
 mod memory;
+mod model_family_runtime;
 mod model_generation_processor;
 mod performance_attribution;
 mod persistent_cache;
@@ -30,7 +34,23 @@ pub use decoder_cache::{
     DecoderCacheLayout, DecoderCacheLayoutError, DecoderCachePersistedTensorLayout,
     DecoderCacheTensorDtype, DecoderCacheTensorLayout,
 };
+pub use deepseek_v4::{
+    DeepSeekV4UnavailableGenerationProcessor, DeepSeekV4UnavailableInferenceEngine,
+    DeepSeekV4UnavailableInferenceRequest, DeepSeekV4UnavailableRequestOutput,
+    deepseek_v4_unavailable_reason,
+};
 pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
+#[cfg(feature = "direct-mlx")]
+pub use expert_paging::{
+    ExpertManifestError, ExpertWeightMemoryCache, ExpertWeightMemoryCacheRequestReport,
+    ExpertWeightMemoryCacheStatistics, ExpertWeightPage, LiveMetalBudget, MemoryBudgetError,
+    MemoryBudgetSnapshot, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
+    QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,
+    QuantizedTensorSource, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
+    TensorHeaderEntry, automatic_expert_weight_memory_cache_maximum_size_bytes,
+    build_quantized_expert_page_manifest_from_plan, parse_safetensors_header, validate_expert_ids,
+    validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
+};
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngine, InferenceEngineError, MlxInferenceEngine, MlxInferenceExecution,
@@ -40,6 +60,11 @@ pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
     AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection, MlxActiveMemoryBreakdown,
     MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+};
+#[cfg(feature = "direct-mlx")]
+pub use model_family_runtime::ModelFamilyInferenceEngine;
+pub use model_family_runtime::{
+    ModelFamilyGenerationProcessor, ModelFamilyInferenceRequest, ModelFamilyRequestOutput,
 };
 pub use model_generation_processor::{
     MalformedModelOutputDiagnostic, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
@@ -112,21 +137,13 @@ pub use qwen3_5::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_moe::{
-    ExpertManifestError, ExpertPager, ExpertPagingError, ExpertWeightMemoryCache,
-    ExpertWeightMemoryCacheRequestReport, ExpertWeightMemoryCacheStatistics, LiveMetalBudget,
-    MemoryBudgetError, MemoryBudgetSnapshot, PagedExpertWeights, QuantizationMode,
-    QuantizedExpertLayerPlan, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
-    QuantizedExpertSourceInterval, QuantizedExpertTensorRange, QuantizedTensorSource,
-    Qwen3_5MoEPagedPrefillExecutionMode, SafetensorsDtype, SafetensorsHeader,
-    SafetensorsHeaderError, TensorHeaderEntry,
-    automatic_expert_weight_memory_cache_maximum_size_bytes, build_quantized_expert_layer_plan,
-    build_quantized_expert_page_manifest_from_plan, build_source_manifests,
-    contiguous_selected_runs, load_quantized_expert_page, parse_safetensors_header,
+    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertWeightMemoryCache,
+    Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5PagedExpertWeights,
+    build_quantized_expert_layer_plan, build_source_manifests, contiguous_selected_runs,
     qwen3_5_moe_combine_experts, qwen3_5_moe_remap_expert_page_slots,
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
-    qwen3_5_moe_sorted_expert_weighted_sum_kernel, validate_expert_ids,
-    validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
+    qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
 pub use qwen3_5_moe::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION};
 

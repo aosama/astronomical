@@ -45,9 +45,9 @@ async fn construct_model_artifact_expert_pager(
 ) -> (
     astronomical_runtime_integration::MlxRuntime,
     astronomical_model_serving::Qwen3_5Config,
-    astronomical_model_serving::ExpertPager,
+    astronomical_model_serving::Qwen3_5ExpertPager,
 ) {
-    use astronomical_model_serving::{ExpertPager, Qwen3_5ArtifactValidator};
+    use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5ExpertPager};
     use astronomical_runtime_integration::MlxRuntime;
 
     eprintln!("{progress_log_prefix} status=progress phase=artifact_validation");
@@ -76,14 +76,14 @@ async fn construct_model_artifact_expert_pager(
         .iter()
         .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
         .collect();
-    let expert_pager = ExpertPager::new(
+    let expert_pager = Qwen3_5ExpertPager::new(
         model_directory,
         &weight_map,
         &config,
         configured_mlx_memory_cap_bytes,
         false,
     )
-    .expect("ExpertPager should construct from the Ornith model-artifact directory");
+    .expect("Qwen3_5ExpertPager should construct from the Ornith model-artifact directory");
 
     (runtime, config, expert_pager)
 }

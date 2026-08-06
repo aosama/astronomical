@@ -3,10 +3,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ProtocolError, RequestId, WorkerStartupConfiguration,
-};
-use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
+use astronomical_ipc_protocol::ProtocolError;
+use tokio::sync::mpsc;
 use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
 
 use crate::worker_memory_limit::{
@@ -14,9 +12,9 @@ use crate::worker_memory_limit::{
 };
 use crate::worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap};
 use crate::{
-    ChatGenerationStreamErrorCode, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
-    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
+    ChatGenerationStreamErrorCode, GenerationPerformanceLog, GenerationStartError, WorkerActivity,
+    WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
+    WorkerTerminationOutcome,
     chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect},
     worker_containment::{
         cancel_active_generation, close_worker_if_running, contain_worker_failure,
@@ -27,46 +25,8 @@ use crate::{
         clear_active_request_progress, publish_activity, publish_health,
         publish_pending_mlx_memory_ceiling,
     },
+    worker_loop_types::{ActiveGeneration, WorkerLoopCommand},
 };
-
-pub(crate) enum WorkerLoopCommand {
-    Generate {
-        active_generation_permit: OwnedSemaphorePermit,
-        generation_command: ChatGenerationCommand,
-        start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
-        stream_event_sender: mpsc::Sender<ChatGenerationStreamEvent>,
-    },
-    Shutdown {
-        shutdown_sender: oneshot::Sender<Result<WorkerTerminationOutcome, WorkerControlError>>,
-    },
-    RestartWorker {
-        worker_executable_path: PathBuf,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
-        worker_startup_configuration: Option<WorkerStartupConfiguration>,
-        restart_sender: oneshot::Sender<Result<(), WorkerControlError>>,
-    },
-    UpdateMlxMemoryLimit {
-        effective_mlx_memory_ceiling_bytes: u64,
-        update_sender: oneshot::Sender<Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>>,
-    },
-}
-
-pub(super) struct ActiveGeneration {
-    _active_generation_permit: OwnedSemaphorePermit,
-    pub(super) generated_token_count: u16,
-    pub(super) generation_started_at: Option<Instant>,
-    pub(super) latest_generation_progress_token_count: u16,
-    pub(super) max_output_tokens: u16,
-    pub(super) next_sequence_number: u16,
-    pub(super) next_tool_call_index: u16,
-    pub(super) request_started_at: Instant,
-    pub(super) prefill_elapsed_millis: u64,
-    pub(super) last_mlx_peak_memory_bytes: Option<u64>,
-    pub(super) last_mlx_active_memory_bytes: Option<u64>,
-    pub(super) request_id: RequestId,
-    pub(super) stream_event_sender: mpsc::Sender<ChatGenerationStreamEvent>,
-}
 
 // Keeping process-loop dependencies explicit is clearer than hiding them in a context object.
 #[allow(clippy::too_many_arguments)]

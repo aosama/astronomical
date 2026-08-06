@@ -10,11 +10,11 @@ use crate::{
 
 use super::super::text::sampler::build_qwen3_5_sampled_token;
 use super::{fatal_engine_error, qwen3_5_runtime_error};
+use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
 use crate::qwen3_5::{
     Qwen3_5Model, Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint,
     RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
 };
-use crate::qwen3_5_moe::ExpertWeightMemoryCacheStatistics;
 
 pub(super) struct AcceptedMtpDraftRollback {
     pub(super) request_decoder_state_checkpoint: crate::RequestDecoderStateStackCheckpoint,

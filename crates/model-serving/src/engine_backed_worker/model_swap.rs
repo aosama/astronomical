@@ -58,8 +58,7 @@ where
                     "model engine load failed after swap creation"
                 );
                 WorkerRuntimeError::ModelSwapFailed {
-                    model_load_failure_reason: "Qwen3.5-MoE engine initialization failed"
-                        .to_owned(),
+                    model_load_failure_reason: "model engine initialization failed".to_owned(),
                 }
             })?;
         let minimum_mlx_memory_ceiling_bytes =

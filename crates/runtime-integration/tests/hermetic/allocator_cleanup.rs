@@ -3,7 +3,7 @@ const MLX_RUNTIME_MEMORY_POLICY_SOURCE: &str =
 const QWEN_MEMORY_ADMISSION_SOURCE: &str =
     include_str!("../../../model-serving/src/qwen3_5/inference_execution/memory_admission.rs");
 const EXPERT_PAGING_MEMORY_BUDGET_SOURCE: &str =
-    include_str!("../../../model-serving/src/qwen3_5_moe/expert_paging/memory_budget.rs");
+    include_str!("../../../model-serving/src/expert_paging/memory_budget.rs");
 const QWEN_PREFILL_ADVANCE_SOURCE: &str =
     include_str!("../../../model-serving/src/qwen3_5/inference_execution/prefill_advance.rs");
 const QWEN_ADVANCE_GENERATION_SOURCE: &str =

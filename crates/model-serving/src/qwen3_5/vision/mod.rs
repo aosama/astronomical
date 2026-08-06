@@ -13,6 +13,8 @@ mod vision_weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod visual_embedding_injection;
 mod visual_embeddings;
+#[cfg(feature = "direct-mlx")]
+mod visual_embeddings_runtime;
 
 pub use image_processor::{
     Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,

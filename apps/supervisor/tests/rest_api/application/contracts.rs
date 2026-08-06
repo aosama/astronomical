@@ -271,6 +271,7 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         None,
         vec![DiscoveredModel {
             model_id: MODEL_ID.to_owned(),
+            model_family: astronomical_config::ModelFamily::Qwen3_5,
             revision: "test".to_owned(),
             model_directory: "/models/test".into(),
             context_window: 262_144,

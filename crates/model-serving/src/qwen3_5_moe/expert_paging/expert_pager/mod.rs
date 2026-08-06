@@ -6,9 +6,10 @@ mod memory_cache;
 
 use thiserror::Error;
 
-use super::memory_budget::{LiveMetalBudget, MemoryBudgetError, MemoryBudgetSnapshot};
-use super::quantized_expert_manifest::{ExpertManifestError, QuantizedExpertLayerPlan};
-use super::safetensors_header::SafetensorsHeaderError;
+use crate::expert_paging::{
+    ExpertManifestError, ExpertWeightPage, LiveMetalBudget, MemoryBudgetError,
+    MemoryBudgetSnapshot, QuantizedExpertLayerPlan, SafetensorsHeaderError,
+};
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
 /// Typed failures during expert paging operations.
@@ -33,20 +34,20 @@ pub enum ExpertPagingError {
 
 /// Startup-validated sparse-expert page plans and live memory budget.
 #[derive(Debug)]
-pub struct ExpertPager {
+pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
     pub(super) memory_budget: LiveMetalBudget,
 }
 
 /// Quantized affine weights loaded for selected experts in one layer.
 #[derive(Debug)]
-pub struct PagedExpertWeights {
+pub struct Qwen3_5PagedExpertWeights {
     pub(crate) gate_projection: Qwen3_5AffineWeights,
     pub(crate) up_projection: Qwen3_5AffineWeights,
     pub(crate) down_projection: Qwen3_5AffineWeights,
 }
 
-impl PagedExpertWeights {
+impl Qwen3_5PagedExpertWeights {
     pub(crate) fn append_array_references<'weights>(
         &'weights self,
         expert_weight_arrays: &mut Vec<&'weights astronomical_runtime_integration::MlxArray>,
@@ -60,7 +61,16 @@ impl PagedExpertWeights {
     }
 }
 
-impl ExpertPager {
+impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
+    fn resident_payload_byte_count(&self) -> u64 {
+        self.gate_projection
+            .payload_byte_count()
+            .saturating_add(self.up_projection.payload_byte_count())
+            .saturating_add(self.down_projection.payload_byte_count())
+    }
+}
+
+impl Qwen3_5ExpertPager {
     pub(crate) fn update_configured_mlx_memory_ceiling_bytes(
         &mut self,
         configured_mlx_memory_ceiling_bytes: u64,

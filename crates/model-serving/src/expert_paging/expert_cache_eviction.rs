@@ -1,6 +1,9 @@
 use super::expert_cache::ExpertWeightMemoryCache;
 
-impl ExpertWeightMemoryCache {
+impl<ExpertPage> ExpertWeightMemoryCache<ExpertPage>
+where
+    ExpertPage: super::ExpertWeightPage,
+{
     pub(super) fn evict_oldest_unprotected_partial_experts_to_fit_global_maximum(
         &mut self,
         protected_layer_index: Option<usize>,

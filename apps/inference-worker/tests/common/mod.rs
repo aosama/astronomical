@@ -28,6 +28,7 @@ pub(crate) fn discovered_model_artifact(
     const CONTEXT_WINDOW: u32 = 262_144;
     astronomical_config::DiscoveredModel {
         model_id: model_id.to_owned(),
+        model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "local-model-artifact-test".to_owned(),
         model_directory: model_directory.to_path_buf(),
         context_window: CONTEXT_WINDOW,
@@ -43,7 +44,7 @@ pub(crate) fn discovered_model_artifact(
 pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::DiscoveredModel> {
     let astronomical_config = astronomical_config::AstronomicalConfig::load_from_default_location()
         .expect("the standard Astronomical configuration should load for model qualification");
-    astronomical_config::discover_qwen3_5_models(
+    astronomical_config::discover_models(
         astronomical_config.model_directories(),
         astronomical_config.max_output_tokens(),
     )

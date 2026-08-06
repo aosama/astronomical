@@ -1,21 +1,21 @@
 use crate::PerformanceAttribution;
 
-use super::super::expert_cache::ExpertWeightMemoryCache;
-use super::super::expert_cache_statistics::ExpertWeightMemoryCacheRequestReport;
-use super::super::quantized_expert_manifest::QuantizedExpertPageManifest;
-use super::{ExpertPager, ExpertPagingError, PagedExpertWeights};
+use super::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
+use crate::expert_paging::{
+    ExpertWeightMemoryCache, ExpertWeightMemoryCacheRequestReport, QuantizedExpertPageManifest,
+};
 
-impl ExpertPager {
+impl Qwen3_5ExpertPager {
     pub(super) fn load_selected_experts_while_bypassing_memory_cache(
         &self,
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,
         selected_expert_ids: &[usize],
-        expert_weight_memory_cache: &mut ExpertWeightMemoryCache,
+        expert_weight_memory_cache: &mut ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<
         (
-            PagedExpertWeights,
+            Qwen3_5PagedExpertWeights,
             QuantizedExpertPageManifest,
             ExpertWeightMemoryCacheRequestReport,
         ),

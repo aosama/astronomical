@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use astronomical_model_serving::{
-    ExpertWeightMemoryCache, ExpertWeightMemoryCacheStatistics, Qwen3_5ArtifactValidator,
+    ExpertWeightMemoryCacheStatistics, Qwen3_5ArtifactValidator, Qwen3_5ExpertWeightMemoryCache,
     Qwen3_5Model, RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::MlxRuntime;
@@ -13,9 +13,9 @@ const EXPERT_WEIGHT_MEMORY_CACHE_EVICTION_TEST_TIMEOUT: Duration = Duration::fro
 fn create_expert_weight_memory_cache_with_maximum(
     expert_layer_count: usize,
     maximum_resident_payload_bytes: u64,
-) -> ExpertWeightMemoryCache {
+) -> Qwen3_5ExpertWeightMemoryCache {
     let mut expert_weight_memory_cache =
-        ExpertWeightMemoryCache::new(expert_layer_count, vec![0; expert_layer_count]);
+        Qwen3_5ExpertWeightMemoryCache::new(expert_layer_count, vec![0; expert_layer_count]);
     expert_weight_memory_cache
         .update_maximum_resident_payload_byte_count(maximum_resident_payload_bytes);
     expert_weight_memory_cache

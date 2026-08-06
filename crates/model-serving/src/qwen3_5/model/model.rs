@@ -6,9 +6,9 @@ use astronomical_runtime_integration::{
 
 use std::cell::RefCell;
 
+use crate::expert_paging::{ExpertWeightMemoryCache, ExpertWeightMemoryCacheStatistics};
 use crate::qwen3_5_moe::{
-    ExpertPager, ExpertWeightMemoryCache, ExpertWeightMemoryCacheStatistics,
-    Qwen3_5MoEPagedPrefillExecutionMode,
+    Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5PagedExpertWeights,
 };
 use crate::{DecoderCacheLayout, DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 
@@ -34,8 +34,9 @@ pub struct Qwen3_5Model {
     pub(super) mtp_weights: Option<Qwen3_5MtpWeights>,
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
-    pub(crate) expert_pager: Option<ExpertPager>,
-    pub(crate) expert_weight_memory_cache: Option<RefCell<ExpertWeightMemoryCache>>,
+    pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
+    pub(crate) expert_weight_memory_cache:
+        Option<RefCell<ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>>>,
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
@@ -66,7 +67,8 @@ impl Qwen3_5Model {
 
     pub(crate) fn sparse_expert_weight_memory_cache(
         &self,
-    ) -> Result<&RefCell<ExpertWeightMemoryCache>, Qwen3_5ExecutionError> {
+    ) -> Result<&RefCell<ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>>, Qwen3_5ExecutionError>
+    {
         self.expert_weight_memory_cache
             .as_ref()
             .ok_or(Qwen3_5ExecutionError::InvalidInput {

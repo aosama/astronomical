@@ -209,6 +209,7 @@ async fn should_fail_closed_when_discovered_model_capabilities_are_invalid() {
 fn discovered_model_with_vision_support(has_vision: bool) -> DiscoveredModel {
     DiscoveredModel {
         model_id: DISCOVERED_VISION_MODEL_ID.to_owned(),
+        model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/astronomical-discovered-vision-model"),
         context_window: 262_144,

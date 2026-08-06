@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, DiscoveredModel, DiscoveredModelError, LogLevel,
-    LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, discover_qwen3_5_models,
+    LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, discover_models,
 };
 use astronomical_ipc_protocol::{
     WorkerLogLevel, WorkerPrefillChunckSizingPolicy, WorkerStartupConfiguration,
@@ -95,11 +95,10 @@ impl ResolvedRuntimeConfigResolver {
         let supervisor_bind_address = user_config.supervisor_bind_address()?;
         let configured_model_directories = user_config.model_directories().to_vec();
         let max_output_tokens = user_config.max_output_tokens();
-        let discovered_models =
-            discover_qwen3_5_models(&configured_model_directories, max_output_tokens)?
-                .into_iter()
-                .flat_map(|directory_scan| directory_scan.discovered_models)
-                .collect::<Vec<_>>();
+        let discovered_models = discover_models(&configured_model_directories, max_output_tokens)?
+            .into_iter()
+            .flat_map(|directory_scan| directory_scan.discovered_models)
+            .collect::<Vec<_>>();
         let model_directories = Arc::new(
             discovered_models
                 .iter()

@@ -1,4 +1,4 @@
-use astronomical_model_serving::{ExpertWeightMemoryCache, MemoryBudgetSnapshot};
+use astronomical_model_serving::{MemoryBudgetSnapshot, Qwen3_5ExpertWeightMemoryCache};
 
 #[test]
 fn should_preserve_one_decode_route_for_every_layer_left_paged_by_complete_layer_admission() {
@@ -53,7 +53,7 @@ fn should_preserve_each_remaining_layers_exact_decode_route_payload() {
 
 #[test]
 fn should_reconcile_retention_before_a_temporary_page_uses_the_configured_mlx_ceiling() {
-    let mut expert_weight_memory_cache = ExpertWeightMemoryCache::new(40, vec![0; 40]);
+    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(40, vec![0; 40]);
     let memory_budget_snapshot = MemoryBudgetSnapshot {
         stage: "temporary_expert_page_after_retained_request".to_owned(),
         active_bytes: 18_862_497_618,
@@ -81,7 +81,7 @@ fn should_reconcile_retention_before_a_temporary_page_uses_the_configured_mlx_ce
 
 #[test]
 fn should_prevent_expert_repopulation_until_request_memory_pressure_ends() {
-    let mut expert_weight_memory_cache = ExpertWeightMemoryCache::new(40, vec![0; 40]);
+    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(40, vec![0; 40]);
 
     expert_weight_memory_cache.limit_retention_for_request_memory_pressure(0);
     expert_weight_memory_cache.update_maximum_resident_payload_byte_count(8_000_000_000);
@@ -110,7 +110,7 @@ fn should_prevent_expert_repopulation_until_request_memory_pressure_ends() {
 
 #[test]
 fn should_preserve_a_partial_retention_ceiling_during_request_memory_pressure() {
-    let mut expert_weight_memory_cache = ExpertWeightMemoryCache::new(40, vec![0; 40]);
+    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(40, vec![0; 40]);
 
     expert_weight_memory_cache.limit_retention_for_request_memory_pressure(3_000_000_000);
     expert_weight_memory_cache.update_maximum_resident_payload_byte_count(8_000_000_000);
@@ -136,7 +136,7 @@ fn should_preserve_a_partial_retention_ceiling_during_request_memory_pressure() 
 
 #[test]
 fn should_only_tighten_repeated_request_memory_pressure_ceilings() {
-    let mut expert_weight_memory_cache = ExpertWeightMemoryCache::new(40, vec![0; 40]);
+    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(40, vec![0; 40]);
 
     expert_weight_memory_cache.limit_retention_for_request_memory_pressure(3_000_000_000);
     expert_weight_memory_cache.limit_retention_for_request_memory_pressure(5_000_000_000);
@@ -152,7 +152,7 @@ fn should_only_tighten_repeated_request_memory_pressure_ceilings() {
 
 #[test]
 fn should_freeze_missing_complete_layer_growth_during_soft_request_pressure() {
-    let mut expert_weight_memory_cache = ExpertWeightMemoryCache::new(40, vec![0; 40]);
+    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(40, vec![0; 40]);
     let artificial_low_memory_barrier_bytes = 0;
     let recovered_live_memory_barrier_bytes = 8_000_000_000;
     let missing_complete_layer_payload_bytes = 1_000_000_000;
@@ -201,8 +201,8 @@ fn expert_weight_memory_cache_with_maximum(
     layer_count: usize,
     minimum_decode_route_payload_byte_count_by_layer: Vec<u64>,
     maximum_resident_payload_byte_count: u64,
-) -> ExpertWeightMemoryCache {
-    let mut expert_weight_memory_cache = ExpertWeightMemoryCache::new(
+) -> Qwen3_5ExpertWeightMemoryCache {
+    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(
         layer_count,
         minimum_decode_route_payload_byte_count_by_layer,
     );

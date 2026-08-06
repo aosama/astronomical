@@ -26,6 +26,7 @@ mod worker_control_error;
 mod worker_event_handler;
 mod worker_handle;
 mod worker_health;
+mod worker_loop_types;
 mod worker_memory_limit;
 mod worker_model_swap;
 mod worker_process;

@@ -3,10 +3,13 @@
 #[cfg(feature = "direct-mlx")]
 mod append_only_attention_state;
 #[cfg(feature = "direct-mlx")]
+mod append_only_attention_state_operations;
+#[cfg(feature = "direct-mlx")]
 mod convolution_state;
 #[cfg(feature = "direct-mlx")]
 mod gated_delta_recurrent_state;
 mod layout;
+mod layout_error;
 #[cfg(feature = "direct-mlx")]
 mod live_state;
 
@@ -23,9 +26,10 @@ pub use gated_delta_recurrent_state::{
 };
 pub use layout::{
     DEFAULT_APPEND_ONLY_ATTENTION_CAPACITY_GROWTH_TOKENS, DecoderCacheLayerLayout,
-    DecoderCacheLayout, DecoderCacheLayoutError, DecoderCachePersistedTensorLayout,
-    DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+    DecoderCacheLayout, DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype,
+    DecoderCacheTensorLayout,
 };
+pub use layout_error::DecoderCacheLayoutError;
 #[cfg(feature = "direct-mlx")]
 pub use live_state::{
     DecoderCacheState, DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint,

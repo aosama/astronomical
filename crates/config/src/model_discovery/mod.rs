@@ -4,7 +4,13 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
+use self::model_family::classify_model_family;
 use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
+
+mod model_family;
+mod qwen3_5;
+
+pub use model_family::{ModelFamily, ModelFamilyClassificationError, classify_model_directory};
 
 /// One supported Qwen3.5-family model discovered by recursive directory scanning.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,6 +19,8 @@ pub struct DiscoveredModel {
     /// For HuggingFace cache entries, this is derived from the decoded `org/repo` path
     /// with the org prefix stripped (e.g. "Ornith-1.0-35B-6bit" from "mlx-community/Ornith-1.0-35B-6bit").
     pub model_id: String,
+    /// The architecture family recognized from config.json.
+    pub model_family: ModelFamily,
     /// SHA-256 hash of config.json bytes (12 hex chars).
     pub revision: String,
     /// Absolute path to the model directory containing config.json, tokenizer.json, etc.
@@ -82,7 +90,7 @@ pub struct ModelDiscoveryDirectoryScan {
 ///
 /// Scan errors for individual directories are logged and skipped — the
 /// function returns all successfully discovered models.
-pub fn discover_qwen3_5_models(
+pub fn discover_models(
     model_directories: &[PathBuf],
     max_output_tokens: u32,
 ) -> Result<Vec<ModelDiscoveryDirectoryScan>, DiscoveredModelError> {
@@ -236,9 +244,9 @@ fn try_discover_model_with_id(
 
     // Check model_type compatibility.
     let model_type = config_value.get("model_type").and_then(|v| v.as_str());
-    match model_type {
-        Some("qwen3_5") | Some("qwen3_5_moe") | Some("qwen3_5_moe_vision") => {}
-        _ => return None,
+    let model_family = classify_model_family(model_type)?;
+    if !matches!(model_family, ModelFamily::Qwen3_5) {
+        return None;
     }
 
     // Verify that all shard files referenced in the safetensors index actually
@@ -294,6 +302,7 @@ fn try_discover_model_with_id(
 
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
+        model_family,
         revision,
         model_directory: model_directory.to_path_buf(),
         context_window,

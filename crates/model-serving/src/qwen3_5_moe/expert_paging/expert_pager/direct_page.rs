@@ -1,15 +1,13 @@
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
-use super::super::bounded_expert_reader::load_quantized_expert_page;
-use super::super::expert_cache::ExpertWeightMemoryCache;
-use super::super::memory_budget::MemoryBudgetSnapshot;
 use super::super::paged_expert_weights::build_paged_expert_weights;
-use super::super::quantized_expert_manifest::{
-    QuantizedExpertPageManifest, build_quantized_expert_page_manifest_from_plan,
+use super::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
+use crate::expert_paging::{
+    ExpertWeightMemoryCache, MemoryBudgetSnapshot, QuantizedExpertPageManifest,
+    build_quantized_expert_page_manifest_from_plan, load_quantized_expert_page,
 };
-use super::{ExpertPager, ExpertPagingError, PagedExpertWeights};
 
-impl ExpertPager {
+impl Qwen3_5ExpertPager {
     /// Loads a sorted, unique expert selection after fail-closed Metal admission.
     pub fn load_selected_experts(
         &self,
@@ -18,7 +16,7 @@ impl ExpertPager {
         selected_expert_ids: &[usize],
     ) -> Result<
         (
-            PagedExpertWeights,
+            Qwen3_5PagedExpertWeights,
             QuantizedExpertPageManifest,
             MemoryBudgetSnapshot,
         ),
@@ -39,11 +37,13 @@ impl ExpertPager {
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,
         selected_expert_ids: &[usize],
-        mut expert_weight_memory_cache: Option<&mut ExpertWeightMemoryCache>,
+        mut expert_weight_memory_cache: Option<
+            &mut ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>,
+        >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<
         (
-            PagedExpertWeights,
+            Qwen3_5PagedExpertWeights,
             QuantizedExpertPageManifest,
             MemoryBudgetSnapshot,
         ),

@@ -1,6 +1,6 @@
 # Expert Paging CPU, GPU, and SSD Execution Flow
 
-This document records the verified Qwen3.5 and Qwen3.6 mixture-of-experts paging path. It distinguishes host control work, graphics-processor execution, solid-state-drive reads, and expert-weight memory-cache least-recently-used policy. Every placement below is derived from the cited implementation; timing attribution alone is not used to infer where work executes.
+This document records the verified Qwen3.5 and Qwen3.6 mixture-of-experts paging path. Shared storage geometry, bounded loading, memory budgets, retention, and cache accounting now live in expert_paging; Qwen layer plans, quantization interpretation, page assembly, routing, and pager coordination remain under qwen3_5_moe. It distinguishes host control work, graphics-processor execution, solid-state-drive reads, and expert-weight memory-cache least-recently-used policy. Every placement below is derived from the cited implementation; timing attribution alone is not used to infer where work executes.
 
 ## Label contract
 
@@ -177,13 +177,14 @@ It does not include the separately measured host copy of evaluated selected IDs.
 - Router graph and complete-layer branch: crates/model-serving/src/qwen3_5_moe/model/paged_moe_forward.rs, lines 47-94.
 - Selected-ID evaluation, host copy, sorting, and deduplication: crates/model-serving/src/qwen3_5_moe/model/paged_moe_execution.rs, lines 217-243.
 - Router operations: crates/model-serving/src/qwen3_5_moe/model/moe.rs, lines 35-67.
-- Complete-layer and one-expert access sequence updates: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_cache.rs, lines 90-117.
-- Complete-layer admission and partial route-floor allocation: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_cache_capacity.rs.
+- Complete-layer and one-expert access sequence updates: crates/model-serving/src/expert_paging/expert_cache.rs, lines 90-117.
+- Complete-layer admission and partial route-floor allocation: crates/model-serving/src/expert_paging/expert_cache_capacity.rs.
 - One-expert lookup, protection, eviction, loading, and assembly: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/memory_cache.rs, lines 39-262.
-- Global partial-page eviction: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_cache_eviction.rs, lines 4-64.
-- Same-layer deterministic oldest-unselected eviction: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_cache.rs, lines 258-287.
-- Direct-page memory admission and bounded safetensors loading: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/direct_page.rs, lines 37-122.
-- Bounded expert-page reader and exact source-interval mapping: crates/model-serving/src/qwen3_5_moe/expert_paging/bounded_expert_reader.rs, lines 18-101.
+- Global partial-page eviction: crates/model-serving/src/expert_paging/expert_cache_eviction.rs, lines 4-64.
+- Same-layer deterministic oldest-unselected eviction: crates/model-serving/src/expert_paging/expert_cache.rs, lines 258-287.
+- Direct-page memory admission and Qwen page assembly: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/direct_page.rs, lines 37-122.
+- Bounded expert-page reader and exact source-interval mapping: crates/model-serving/src/expert_paging/bounded_expert_reader.rs, lines 18-101.
+- Shared manifest and contiguous source-run construction: crates/model-serving/src/expert_paging/source_manifests.rs.
 - Runtime bounded safetensors loading boundary: crates/runtime-integration/src/mlx_runtime/safetensors.rs and crates/runtime-integration/src/mlx_safetensors.rs.
 - Rust synchronous MLX-C evaluation call: crates/runtime-integration/src/mlx_array.rs, lines 217-223.
 - MLX-C array evaluation boundary: mlx-c/mlx/c/array.cpp, lines 348-355 in the pinned upstream source.
