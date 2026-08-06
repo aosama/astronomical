@@ -122,8 +122,8 @@ async fn should_load_top_8_experts_once_then_hit_memory_cache_without_second_dis
 ///
 /// This still avoids REST, the supervisor, the worker process, the macOS app,
 /// and shell scripts. It runs the same prompt twice through the loaded model.
-/// The first paged decode may load experts from SSD; the second identical decode
-/// should reuse the model-owned expert cache and add zero disk page loads.
+/// The first pass may retain complete layers or individual expert pages; the
+/// second identical pass should reuse that model-owned memory and add no disk loads.
 #[tokio::test]
 #[ignore = "loads the full Ornith model and proves direct paged decode reuses expert cache"]
 async fn should_reuse_expert_memory_cache_across_direct_paged_decodes() {
@@ -171,15 +171,16 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
         .expect("first direct paged decode should complete");
     let after_first_decode_statistics = qwen3_5_model.expert_weight_memory_cache_statistics();
     eprintln!(
-        "[direct-cache-proof] status=progress phase=first_decode_done cache_entries={} disk_page_loads={} cache_hits={} cache_misses={}",
+        "[direct-cache-proof] status=progress phase=first_decode_done cache_entries={} disk_page_loads={} partial_page_hits={} complete_layer_hits={} cache_misses={}",
         after_first_decode_statistics.entry_count,
         after_first_decode_statistics.disk_page_load_count,
         after_first_decode_statistics.cache_hit_count,
+        after_first_decode_statistics.complete_layer_hit_count,
         after_first_decode_statistics.cache_miss_count
     );
     assert!(
-        after_first_decode_statistics.disk_page_load_count > 0,
-        "first paged decode should populate the expert cache from disk"
+        after_first_decode_statistics.entry_count > initial_cache_statistics.entry_count,
+        "first paged pass should retain complete layers or individual expert pages"
     );
 
     eprintln!("[direct-cache-proof] status=progress phase=second_identical_decode");
@@ -187,10 +188,11 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
         .expect("second direct paged decode should complete");
     let after_second_decode_statistics = qwen3_5_model.expert_weight_memory_cache_statistics();
     eprintln!(
-        "[direct-cache-proof] status=progress phase=second_decode_done cache_entries={} disk_page_loads={} cache_hits={} cache_misses={}",
+        "[direct-cache-proof] status=progress phase=second_decode_done cache_entries={} disk_page_loads={} partial_page_hits={} complete_layer_hits={} cache_misses={}",
         after_second_decode_statistics.entry_count,
         after_second_decode_statistics.disk_page_load_count,
         after_second_decode_statistics.cache_hit_count,
+        after_second_decode_statistics.complete_layer_hit_count,
         after_second_decode_statistics.cache_miss_count
     );
     assert_eq!(
@@ -198,10 +200,15 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
         after_first_decode_statistics.disk_page_load_count,
         "second identical paged decode should not add disk page loads"
     );
+    let first_pass_reuse_hit_count = after_first_decode_statistics
+        .cache_hit_count
+        .saturating_add(after_first_decode_statistics.complete_layer_hit_count);
+    let second_pass_reuse_hit_count = after_second_decode_statistics
+        .cache_hit_count
+        .saturating_add(after_second_decode_statistics.complete_layer_hit_count);
     assert!(
-        after_second_decode_statistics.cache_hit_count
-            > after_first_decode_statistics.cache_hit_count,
-        "second identical paged decode should add expert cache hits"
+        second_pass_reuse_hit_count > first_pass_reuse_hit_count,
+        "second identical paged pass should add individual-expert or complete-layer reuse hits"
     );
     eprintln!(
         "[direct-cache-proof] status=success elapsed_seconds={:.2}",

@@ -23,7 +23,7 @@ use super::{
 
 const LAYER_NORM_EPSILON: f32 = 1e-6;
 
-/// Resident Qwen3.5 vision configuration and sidecar weights.
+/// Resident Qwen3.5 vision configuration and indexed visual weights.
 #[derive(Debug)]
 pub struct Qwen3_5VisionModel {
     config: Qwen3_5VisionConfig,
@@ -40,7 +40,7 @@ impl Qwen3_5VisionModel {
             0
         }
     }
-    /// Loads vision weights from a separate sidecar file (oQ4 model).
+    /// Loads vision weights from indexed separate visual files.
     /// Returns None when visual weights are embedded or absent.
     pub fn load_from_sidecar(
         runtime: &MlxRuntime,

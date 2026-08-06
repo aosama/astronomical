@@ -120,6 +120,8 @@ fn should_round_trip_one_chat_command_with_a_user_message_image() {
 
     let serialized_json = serde_json::to_string(&chat_generation_command)
         .expect("the chat command with one image should serialize");
+    assert!(serialized_json.contains(r#""decoded_bytes":"iVBORw==""#));
+    assert!(!serialized_json.contains(r#""decoded_bytes":["#));
     let deserialized_command: ChatGenerationCommand = serde_json::from_str(&serialized_json)
         .expect("the chat command with one image should round-trip");
     assert_eq!(deserialized_command, chat_generation_command);

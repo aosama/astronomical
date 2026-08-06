@@ -71,6 +71,9 @@ async fn should_queue_second_request_until_first_completes() {
                 "the already loaded test model should not fail to load: {model_load_failure_reason}"
             );
         }
+        Err(GenerationStartError::RequestTooLarge { .. }) => {
+            panic!("the minimal queued request should fit the IPC frame");
+        }
         Err(GenerationStartError::WorkerUnavailable) => {
             panic!("worker should be available, got WorkerUnavailable");
         }
@@ -252,6 +255,9 @@ async fn should_release_queue_slot_when_queued_request_is_dropped() {
             panic!(
                 "the already loaded test model should not fail to load: {model_load_failure_reason}"
             );
+        }
+        Ok(Err(GenerationStartError::RequestTooLarge { .. })) => {
+            panic!("the minimal queued request should fit the IPC frame");
         }
         Ok(Err(GenerationStartError::WorkerUnavailable)) => {
             panic!("worker should not be unavailable");

@@ -62,7 +62,35 @@ pub struct ChatImageInput {
     /// The MIME type parsed from the source data URI, e.g. `image/png`.
     pub mime_type: String,
     /// The raw decoded image file bytes (PNG/JPEG/WebP payload before pixel decoding).
+    #[serde(with = "base64_image_file_bytes")]
     pub decoded_bytes: Vec<u8>,
+}
+
+mod base64_image_file_bytes {
+    use base64::prelude::{BASE64_STANDARD, Engine as _};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<SerializerType>(
+        decoded_image_file_bytes: &[u8],
+        serializer: SerializerType,
+    ) -> Result<SerializerType::Ok, SerializerType::Error>
+    where
+        SerializerType: Serializer,
+    {
+        serializer.serialize_str(&BASE64_STANDARD.encode(decoded_image_file_bytes))
+    }
+
+    pub fn deserialize<'de, DeserializerType>(
+        deserializer: DeserializerType,
+    ) -> Result<Vec<u8>, DeserializerType::Error>
+    where
+        DeserializerType: Deserializer<'de>,
+    {
+        let encoded_image_file_bytes = String::deserialize(deserializer)?;
+        BASE64_STANDARD
+            .decode(encoded_image_file_bytes)
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 /// One assistant function call retained in conversation history.

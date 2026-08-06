@@ -15,8 +15,8 @@ mod vision;
 pub use artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
     Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
-    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_profiles,
-    qwen3_5_quantized_mtp_tensor_names, qwen3_5_resident_language_tensor_profiles,
+    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
+    qwen3_5_resident_language_tensor_profiles,
 };
 pub use configuration::{
     ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,

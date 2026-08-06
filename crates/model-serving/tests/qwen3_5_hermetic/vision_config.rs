@@ -64,6 +64,28 @@ fn should_accept_an_ornith_vision_config_with_a_different_patch_size() {
 }
 
 #[test]
+fn should_reject_a_vision_hidden_size_that_cannot_form_equal_attention_heads() {
+    let config_bytes =
+        CERTIFIED_VISION_CONFIG_JSON.replace("\"hidden_size\": 1152", "\"hidden_size\": 1153");
+
+    let vision_config = Qwen3_5VisionConfig::from_json_bytes(config_bytes.as_bytes());
+
+    assert!(vision_config.is_err());
+}
+
+#[test]
+fn should_reject_a_vision_activation_outside_the_qwen3_5_execution_graph() {
+    let config_bytes = CERTIFIED_VISION_CONFIG_JSON.replace(
+        "\"hidden_act\": \"gelu_pytorch_tanh\"",
+        "\"hidden_act\": \"silu\"",
+    );
+
+    let vision_config = Qwen3_5VisionConfig::from_json_bytes(config_bytes.as_bytes());
+
+    assert!(vision_config.is_err());
+}
+
+#[test]
 fn should_reject_an_ornith_vision_config_with_the_wrong_model_type() {
     let config_bytes = CERTIFIED_VISION_CONFIG_JSON.replace(
         "\"model_type\": \"qwen3_5_moe_vision\"",

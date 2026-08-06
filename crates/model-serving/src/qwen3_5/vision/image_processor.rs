@@ -108,23 +108,6 @@ impl Qwen3_5ImageProcessor {
         }
     }
 
-    /// Return the processor settings shipped with `mlx-community/Ornith-1.0-35B-OptiQ-4bit`.
-    ///
-    /// Deprecated: use `from_vision_config` instead. Kept for backward compatibility
-    /// with tests that don't have a vision config available.
-    pub fn qwen3_5_moe_35b_optiq() -> Self {
-        Self {
-            patch_size_pixels: 16,
-            temporal_patch_size: 2,
-            spatial_merge_size: 2,
-            minimum_image_pixels: 65_536,
-            maximum_image_pixels: 16_777_216,
-            image_mean_by_channel: [0.5, 0.5, 0.5],
-            image_std_by_channel: [0.5, 0.5, 0.5],
-            rescale_factor: 1.0 / 255.0,
-        }
-    }
-
     /// Decode image bytes and produce flattened Qwen3VL patch rows.
     pub fn process_image_bytes(
         &self,

@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use super::{Qwen3_5Config, Qwen3_5ShardIndex, qwen3_5_quantized_mtp_tensor_names};
+use super::{Qwen3_5Config, Qwen3_5ShardIndex, qwen3_5_mtp_tensor_names};
 
 /// Data-driven MTP capability discovered from the validated artifact inventory.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,8 +13,6 @@ pub enum Qwen3_5MtpArtifactCapability {
         supported_mtp_draft_depth: usize,
         mtp_tensor_count: usize,
     },
-    /// The artifact advertises MTP tensors, but the inventory is not usable.
-    InvalidMtp { reason: String },
 }
 
 impl Qwen3_5MtpArtifactCapability {
@@ -35,22 +33,32 @@ impl Qwen3_5MtpArtifactCapability {
         if actual_mtp_tensor_names.is_empty() {
             return Self::TargetOnly;
         }
-        let expected_mtp_tensor_names = qwen3_5_quantized_mtp_tensor_names(qwen3_5_config);
+        if qwen3_5_config.mtp_layer_count() != Self::DISCOVERED_SUPPORTED_MTP_LAYER_COUNT as u32 {
+            // The current executor is depth-one. Keep a valid target model
+            // usable when a future artifact contains a different predictor
+            // depth instead of treating that optional package as corruption.
+            return Self::TargetOnly;
+        }
+        let expected_mtp_tensor_names = qwen3_5_mtp_tensor_names(qwen3_5_config);
         if let Some(unexpected_tensor_name) = actual_mtp_tensor_names
             .difference(&expected_mtp_tensor_names)
             .next()
         {
-            return Self::InvalidMtp {
-                reason: format!("unexpected MTP tensor {unexpected_tensor_name}"),
-            };
+            tracing::debug!(
+                tensor_name = %unexpected_tensor_name,
+                "ignoring an optional MTP inventory that is outside the supported depth-one graph"
+            );
+            return Self::TargetOnly;
         }
         if let Some(missing_tensor_name) = expected_mtp_tensor_names
             .difference(&actual_mtp_tensor_names)
             .next()
         {
-            return Self::InvalidMtp {
-                reason: format!("missing MTP tensor {missing_tensor_name}"),
-            };
+            tracing::debug!(
+                tensor_name = %missing_tensor_name,
+                "ignoring an incomplete optional MTP inventory"
+            );
+            return Self::TargetOnly;
         }
         Self::MtpCapable {
             discovered_mtp_layer_count: Self::DISCOVERED_SUPPORTED_MTP_LAYER_COUNT,
@@ -62,13 +70,5 @@ impl Qwen3_5MtpArtifactCapability {
     #[must_use]
     pub const fn is_mtp_capable(&self) -> bool {
         matches!(self, Self::MtpCapable { .. })
-    }
-
-    #[must_use]
-    pub fn invalid_mtp_reason(&self) -> Option<&str> {
-        match self {
-            Self::InvalidMtp { reason } => Some(reason.as_str()),
-            _ => None,
-        }
     }
 }

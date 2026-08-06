@@ -31,6 +31,32 @@ fn should_validate_profiled_tensors_and_accepted_extras_with_partial_profiles() 
 }
 
 #[test]
+fn should_allow_a_recognized_unowned_tensor_to_be_absent_from_a_shard() {
+    let profiled_tensor = TensorProfile {
+        name: "language_model.weight".to_owned(),
+        dtype: TensorDtype::Float32,
+        shape: vec![2, 2],
+    };
+    let recognized_tensor_names: HashSet<&str> =
+        ["language_model.mtp.fc.weight"].into_iter().collect();
+    let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
+        "language_model.weight",
+        "F32",
+        "[2,2]",
+        &[0_u8; 16],
+    )]);
+
+    validate_bounded_safetensors_with_partial_profiles(
+        &file_from_bytes(&weights_bytes),
+        weights_bytes.len() as u64,
+        "model-00008-of-00008.safetensors",
+        &[profiled_tensor],
+        &recognized_tensor_names,
+    )
+    .expect("a recognized tensor owned by another shard must remain optional here");
+}
+
+#[test]
 fn should_reject_a_profiled_tensor_with_the_wrong_dtype_using_partial_profiles() {
     let profiled_tensor = TensorProfile {
         name: "language_model.weight".to_owned(),

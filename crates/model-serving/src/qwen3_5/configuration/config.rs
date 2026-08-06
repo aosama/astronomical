@@ -4,7 +4,7 @@ use super::config_document::{Qwen3_5ConfigDocument, Qwen3_5TextConfig};
 use super::config_validation::{
     QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError, validate_exact_boolean, validate_exact_value,
 };
-use super::quantizations::optiq::{OptiQQuantizationProfile, QuantizationConfigSource};
+use super::quantizations::optiq::OptiQQuantizationProfile;
 
 const EXPECTED_MOE_ARCHITECTURE: &str = "Qwen3_5MoeForConditionalGeneration";
 const EXPECTED_DENSE_ARCHITECTURE: &str = "Qwen3_5ForConditionalGeneration";
@@ -133,15 +133,21 @@ impl Qwen3_5Config {
                 0,
                 0,
             ),
-            (Some(quantization), Some(quantization_config)) => {
+            (quantization, quantization_config) => {
+                if let (Some(quantization), Some(quantization_config)) =
+                    (quantization, quantization_config)
+                    && quantization != quantization_config
+                {
+                    return Err(Qwen3_5ConfigError::QuantizationCopiesDiffer);
+                }
+                let quantization = quantization.or(quantization_config).ok_or(
+                    Qwen3_5ConfigError::InvalidConfigValueDynamic {
+                        description: "quantization configuration is missing".to_owned(),
+                    },
+                )?;
                 let quantized_module_profiles = quantization
                     .validate(&config_document.text_config, feed_forward_architecture)?;
                 let mtp_quantized_module_profiles = quantization.mtp_quantized_module_profiles();
-                quantization_config
-                    .validate(&config_document.text_config, feed_forward_architecture)?;
-                if quantization != quantization_config {
-                    return Err(Qwen3_5ConfigError::QuantizationCopiesDiffer);
-                }
                 (
                     quantized_module_profiles,
                     mtp_quantized_module_profiles,
@@ -149,12 +155,6 @@ impl Qwen3_5Config {
                     quantization.default_bits(),
                     quantization.default_group_size(),
                 )
-            }
-            _ => {
-                return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
-                        description: "quantization and quantization_config must both be present or both be absent"
-                            .to_owned(),
-                    });
             }
         };
         Ok(Self {
@@ -221,32 +221,34 @@ impl Qwen3_5Config {
         self.default_quantization_bits
     }
 
-    /// Marks any MoE router gate module as unquantized (bfloat16) when its `.scales`
-    /// tensor is absent from the safetensors index. This handles models like oQ6e where
-    /// the config default implies quantization for the gate, but the actual weights are
-    /// plain bfloat16 with no scales or biases.
+    /// Resolves modules stored as native floating-point when both affine companion
+    /// tensors are absent from the safetensors index. This handles mixed storage
+    /// artifacts whose default quantization profile does not describe every module,
+    /// including optional MTP modules.
     ///
     /// The `shard_tensor_names` parameter should contain all tensor names from the
     /// safetensors index (the weight_map keys).
-    pub fn resolve_unquantized_gates_from_shard_index(
+    pub fn resolve_unquantized_modules_from_shard_index(
         &mut self,
         shard_tensor_names: &std::collections::BTreeSet<String>,
     ) {
-        match self.feed_forward_architecture {
-            Qwen3_5FeedForwardArchitecture::Dense => return,
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {}
-        }
-        let layer_count = self.text_config.layer_count() as usize;
-        for decoder_layer_index in 0..layer_count {
-            let gate_scales_name =
-                format!("language_model.model.layers.{decoder_layer_index}.mlp.gate.scales");
-            if !shard_tensor_names.contains(&gate_scales_name) {
-                // The gate has no .scales tensor in the shard index, meaning it's
-                // stored as plain bfloat16 without quantization scales/biases.
-                let gate_module_name =
-                    format!("language_model.model.layers.{decoder_layer_index}.mlp.gate");
+        let native_module_names = shard_tensor_names
+            .iter()
+            .filter_map(|tensor_name| tensor_name.strip_suffix(".weight"))
+            .filter(|module_name| {
+                !shard_tensor_names.contains(&format!("{module_name}.scales"))
+                    && !shard_tensor_names.contains(&format!("{module_name}.biases"))
+            })
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        for native_module_name in native_module_names {
+            let native_quantization_profile = OptiQQuantizationProfile::unquantized();
+            if native_module_name.starts_with("language_model.mtp.") {
+                self.mtp_quantized_module_profiles
+                    .insert(native_module_name, native_quantization_profile);
+            } else {
                 self.quantized_module_profiles
-                    .insert(gate_module_name, OptiQQuantizationProfile::unquantized());
+                    .insert(native_module_name, native_quantization_profile);
             }
         }
     }

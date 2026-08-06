@@ -1,8 +1,8 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
-    ChatToolChoice, RequestId,
+    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatImageInput,
+    ChatMessage, ChatToolChoice, MAX_IPC_FRAME_BYTES, RequestId,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
@@ -246,6 +246,68 @@ async fn should_remain_available_after_the_first_requested_model_fails_to_load()
         .shutdown()
         .await
         .expect("the recovered idle worker should shut down");
+}
+
+#[tokio::test]
+async fn should_reject_an_oversized_generation_command_without_terminating_the_loaded_worker() {
+    let worker_executable_path = PathBuf::from(
+        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+            .expect("Cargo should provide the idle worker fixture path"),
+    );
+    let temporary_log_directory =
+        tempfile::tempdir().expect("test performance log directory should be created");
+    let performance_log = GenerationPerformanceLog::open(temporary_log_directory.path())
+        .expect("test performance log should be created");
+    let requested_model_id = "astronomical/requested-model";
+    let worker_handle = WorkerHandle::launch(
+        worker_executable_path,
+        Duration::from_secs(1),
+        performance_log,
+        Arc::new(HashMap::from([(
+            requested_model_id.to_owned(),
+            PathBuf::from("/models/requested-model"),
+        )])),
+        DEFAULT_MAX_OUTPUT_TOKENS,
+    )
+    .await
+    .expect("the idle worker should launch");
+    wait_for_idle_worker(&worker_handle).await;
+
+    let mut oversized_generation_command = chat_command(requested_model_id.to_owned());
+    oversized_generation_command.messages = vec![ChatMessage::User {
+        content: "Describe this image.".to_owned(),
+        images: vec![ChatImageInput {
+            mime_type: "image/png".to_owned(),
+            decoded_bytes: vec![0; MAX_IPC_FRAME_BYTES * 3 / 4],
+        }],
+    }];
+
+    let oversized_generation_outcome = worker_handle
+        .start_chat_generation(oversized_generation_command)
+        .await;
+
+    assert!(matches!(
+        oversized_generation_outcome,
+        Err(GenerationStartError::RequestTooLarge {
+            actual_ipc_message_bytes,
+            maximum_ipc_message_bytes: MAX_IPC_FRAME_BYTES,
+        }) if actual_ipc_message_bytes > MAX_IPC_FRAME_BYTES
+    ));
+    let mut followup_generation_events = worker_handle
+        .start_chat_generation(chat_command(requested_model_id.to_owned()))
+        .await
+        .expect("the loaded worker should remain available after rejecting the oversized request");
+    assert!(matches!(
+        followup_generation_events.recv().await,
+        Some(ChatGenerationStreamEvent::Completed {
+            reason: ChatGenerationCompletionReason::EndOfSequence,
+            ..
+        })
+    ));
+    worker_handle
+        .shutdown()
+        .await
+        .expect("the reusable worker should shut down");
 }
 
 #[tokio::test]

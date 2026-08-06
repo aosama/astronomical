@@ -6,8 +6,8 @@ mod types;
 mod validated_artifact;
 
 pub(crate) use bounded_safetensors::{
-    PartialProfileMetadata, validate_bounded_safetensors_with_partial_profiles,
-    validate_bounded_safetensors_with_permissive_extras,
+    PartialProfileMetadata, validate_bounded_safetensors_with_indexed_profiles,
+    validate_bounded_safetensors_with_partial_profiles,
 };
 pub use error::ArtifactValidationError;
 #[doc(hidden)]
