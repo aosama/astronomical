@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatGenerationCommand, RequestId, WorkerStartupConfiguration};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ProtocolError, RequestId, WorkerStartupConfiguration,
+};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
 
@@ -246,16 +248,41 @@ pub(crate) async fn run_worker(
                         let max_output_tokens = generation_command.settings.max_output_tokens;
                         tracing::info!(request_id = request_id.value(), max_output_tokens,
                             "starting worker generation");
-                        if let Err(start_error) = worker_process.start_generation(generation_command).await {
-                            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-                            contain_worker_failure(
-                                &mut worker_process,
-                                &health_snapshot,
-                                &mut active_generation,
-                                start_error,
-                            ).await;
-                            is_ready = false;
-                            continue;
+                        match worker_process.start_generation(generation_command).await {
+                            Ok(()) => {}
+                            Err(WorkerControlError::Protocol(
+                                ProtocolError::OutgoingMessageTooLarge {
+                                    actual_message_bytes: actual_ipc_message_bytes,
+                                    maximum_message_bytes: maximum_ipc_message_bytes,
+                                },
+                            )) => {
+                                tracing::warn!(
+                                    request_id = request_id.value(),
+                                    actual_ipc_message_bytes,
+                                    maximum_ipc_message_bytes,
+                                    "rejected generation command that exceeds the IPC frame limit"
+                                );
+                                let _send_outcome = start_sender.send(Err(
+                                    GenerationStartError::RequestTooLarge {
+                                        actual_ipc_message_bytes,
+                                        maximum_ipc_message_bytes,
+                                    },
+                                ));
+                                continue;
+                            }
+                            Err(start_error) => {
+                                let _send_outcome = start_sender
+                                    .send(Err(GenerationStartError::WorkerUnavailable));
+                                contain_worker_failure(
+                                    &mut worker_process,
+                                    &health_snapshot,
+                                    &mut active_generation,
+                                    start_error,
+                                )
+                                .await;
+                                is_ready = false;
+                                continue;
+                            }
                         }
                         active_generation = Some(ActiveGeneration {
                             _active_generation_permit: active_generation_permit,

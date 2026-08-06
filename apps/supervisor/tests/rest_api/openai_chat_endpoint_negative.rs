@@ -59,6 +59,24 @@ async fn should_return_service_unavailable_when_openai_chat_worker_is_unavailabl
 }
 
 #[tokio::test]
+async fn should_return_payload_too_large_when_openai_chat_exceeds_the_ipc_frame() {
+    let response_text = post_chat_and_read_body(
+        ReadyChatFailureExecutor {
+            chat_start_error: GenerationStartError::RequestTooLarge {
+                actual_ipc_message_bytes: 33_554_433,
+                maximum_ipc_message_bytes: 33_554_432,
+            },
+        },
+        r#"{"model":"astronomical/negative-chat-test-worker","messages":[{"role":"user","content":"describe the image"}],"stream":true}"#,
+        StatusCode::PAYLOAD_TOO_LARGE,
+    )
+    .await;
+
+    assert!(response_text.contains(r#""code":"request_too_large""#));
+    assert!(response_text.contains("reduce image sizes or conversation history"));
+}
+
+#[tokio::test]
 async fn should_explain_why_the_requested_chat_model_could_not_be_loaded() {
     let response_text = post_chat_and_read_body(
         ReadyChatFailureExecutor {

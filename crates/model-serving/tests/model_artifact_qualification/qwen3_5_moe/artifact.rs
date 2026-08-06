@@ -27,7 +27,8 @@ fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let text_artifact_directory = tempfile::tempdir()
         .expect("the qualification test should create a temporary text artifact directory");
-    // Link all files from the model directory except the vision sidecar.
+    // Link all files from the model directory except the vision sidecar and
+    // materialize an index that no longer assigns tensors to the omitted file.
     for directory_entry in fs::read_dir(&model_directory)
         .expect("the test should read the model directory")
         .filter_map(Result::ok)
@@ -45,6 +46,23 @@ fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
             continue;
         }
         let target_path = text_artifact_directory.path().join(&*file_name_str);
+        if file_name_str == "model.safetensors.index.json" {
+            let mut index_document = serde_json::from_slice::<serde_json::Value>(
+                &fs::read(&entry_path).expect("the test should read the source shard index"),
+            )
+            .expect("the source shard index should parse");
+            index_document["weight_map"]
+                .as_object_mut()
+                .expect("the source shard index should contain a weight map")
+                .retain(|tensor_name, _| !tensor_name.starts_with("vision_tower."));
+            fs::write(
+                &target_path,
+                serde_json::to_vec(&index_document)
+                    .expect("the text-only shard index should serialize"),
+            )
+            .expect("the test should write the text-only shard index");
+            continue;
+        }
         link_or_copy_file(&entry_path, &target_path);
     }
 
@@ -104,8 +122,10 @@ fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
 
     // The vision sidecar should be present in the validated artifact.
     assert!(
-        validated_artifact.take_vision_sidecar_file().is_ok(),
-        "the vision sidecar should be available for transfer"
+        !validated_artifact
+            .take_vision_sidecar_files()
+            .expect("the vision sidecars should be available for transfer")
+            .is_empty()
     );
 }
 

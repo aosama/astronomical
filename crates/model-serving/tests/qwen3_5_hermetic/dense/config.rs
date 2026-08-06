@@ -32,7 +32,7 @@ fn should_not_add_sparse_router_gate_profiles_when_resolving_a_dense_model() {
     let mut dense_config = Qwen3_5Config::from_json_bytes(&dense_config_bytes)
         .expect("the dense test config should parse");
 
-    dense_config.resolve_unquantized_gates_from_shard_index(&BTreeSet::new());
+    dense_config.resolve_unquantized_modules_from_shard_index(&BTreeSet::new());
 
     assert!(
         !dense_config

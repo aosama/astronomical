@@ -8,27 +8,26 @@ use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact, qwen3_5_vision_tens
 
 /// Strict tensor binding for the Qwen3.5 vision tower.
 ///
-/// For oQ4, vision tensors come from a separate sidecar file, and
-/// `vision_sidecar` holds the owning `MlxSafetensors` to keep the
+/// Vision tensors may come from one or more separate files, and
+/// `vision_sidecars` holds their owning `MlxSafetensors` values to keep the
 /// memory-mapped data alive.
 ///
 /// For embedded vision, `Qwen3_5Weights::model_shards` keeps the source
 /// maps alive instead.
-/// In this case `vision_sidecar` is `None`.
+/// In this case `vision_sidecars` is empty.
 #[derive(Debug)]
 pub struct Qwen3_5VisionWeights {
     bound_tensors: HashMap<String, MlxArray>,
-    /// The safetensors source that owns the memory-mapped data backing the
-    /// bound tensors. Present for sidecar models (oQ4). `None` for embedded-vision
-    /// models where the model shards in `Qwen3_5Weights` keep
-    /// the data alive.
+    /// The safetensors sources that own the memory-mapped data backing the
+    /// bound tensors. Empty for embedded-vision models where the model shards
+    /// in `Qwen3_5Weights` keep the data alive.
     #[allow(dead_code)]
-    vision_sidecar: Option<MlxSafetensors>,
+    vision_sidecars: Vec<MlxSafetensors>,
     total_payload_bytes: u64,
 }
 
 impl Qwen3_5VisionWeights {
-    /// Loads vision weights from a separate sidecar file (oQ4 model).
+    /// Loads vision weights from indexed separate vision files.
     /// Returns None when visual weights are embedded or absent.
     pub fn load_from_sidecar(
         runtime: &MlxRuntime,
@@ -41,15 +40,43 @@ impl Qwen3_5VisionWeights {
                     description: "validated visual sidecar has no vision configuration",
                 })?;
         let vision_tensor_profiles = qwen3_5_vision_tensor_profiles(vision_config);
-        let Some(vision_sidecar_file) = validated_artifact.take_vision_sidecar_file()? else {
+        let vision_sidecar_files = validated_artifact.take_vision_sidecar_files()?;
+        if vision_sidecar_files.is_empty() {
             // The artifact either embeds visual weights or has none.
             return Ok(None);
-        };
-        let vision_sidecar = runtime.load_safetensors(vision_sidecar_file.into_file(), None)?;
+        }
+        let vision_sidecar_file_names = validated_artifact
+            .shard_index()
+            .vision_sidecar_file_names()
+            .to_vec();
+        let mut vision_sidecars = Vec::with_capacity(vision_sidecar_files.len());
+        for vision_sidecar_file in vision_sidecar_files {
+            vision_sidecars.push(runtime.load_safetensors(vision_sidecar_file.into_file(), None)?);
+        }
 
         let mut bound_tensors = HashMap::with_capacity(vision_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;
         for tensor_profile in &vision_tensor_profiles {
+            let vision_sidecar_file_name = validated_artifact
+                .shard_index()
+                .vision_tensor_name_to_shard_file_name()
+                .get(&tensor_profile.name)
+                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                    tensor_name: tensor_profile.name.clone(),
+                })?;
+            let vision_sidecar_index = vision_sidecar_file_names
+                .iter()
+                .position(|indexed_file_name| indexed_file_name == vision_sidecar_file_name)
+                .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+                    tensor_name: tensor_profile.name.clone(),
+                    description: "vision tensor resolves outside loaded sidecar files",
+                })?;
+            let vision_sidecar = vision_sidecars.get(vision_sidecar_index).ok_or_else(|| {
+                Qwen3_5ExecutionError::InvalidTensor {
+                    tensor_name: tensor_profile.name.clone(),
+                    description: "vision sidecar file is missing",
+                }
+            })?;
             let tensor = vision_sidecar.tensor(&tensor_profile.name)?;
             validate_bound_vision_tensor(tensor_profile, &tensor)?;
             let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
@@ -77,7 +104,7 @@ impl Qwen3_5VisionWeights {
 
         Ok(Some(Self {
             bound_tensors,
-            vision_sidecar: Some(vision_sidecar),
+            vision_sidecars,
             total_payload_bytes: actual_payload_bytes,
         }))
     }
@@ -137,7 +164,7 @@ impl Qwen3_5VisionWeights {
 
         Ok(Self {
             bound_tensors,
-            vision_sidecar: None,
+            vision_sidecars: Vec::new(),
             total_payload_bytes: actual_payload_bytes,
         })
     }

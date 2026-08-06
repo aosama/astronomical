@@ -47,45 +47,50 @@ pub fn validate_bounded_safetensors_with_partial_profiles(
     profiled_tensor_profiles: &[TensorProfile],
     accepted_extra_tensor_names: &HashSet<&str>,
 ) -> Result<PartialProfileMetadata, ArtifactValidationError> {
-    let mut expected_tensor_names = profiled_tensor_profiles
+    let required_tensor_names = profiled_tensor_profiles
         .iter()
         .map(|tensor_profile| tensor_profile.name.as_str())
         .collect::<HashSet<_>>();
-    expected_tensor_names.extend(accepted_extra_tensor_names.iter().copied());
     let bounded_metadata = validate_bounded_safetensors_internal(
         weights_file,
         file_size_bytes,
         weights_file_name,
-        &expected_tensor_names,
+        &required_tensor_names,
+        accepted_extra_tensor_names,
         profiled_tensor_profiles,
+        &[],
     )?;
 
     Ok(PartialProfileMetadata {
         total_payload_bytes: bounded_metadata.total_payload_bytes,
     })
 }
-
-/// Validates a safetensors shard where profiled tensors have strict dtype/shape checks
-/// and ALL other tensors in the shard are accepted without profiling.
-///
-/// This is used for models with embedded vision tensors where the vision tensors
-/// are distributed across language shards but don't have language profiles.
-/// Unlike `validate_bounded_safetensors_with_partial_profiles`, this function
-/// does NOT require an explicit set of accepted extra tensor names — any tensor
-/// in the shard that is not in `profiled_tensor_profiles` is accepted as-is.
-/// It also does NOT require all profiled tensors to be present in the shard,
-/// since profiled tensors may be distributed across different shards.
-pub fn validate_bounded_safetensors_with_permissive_extras(
+/// Validates indexed tensor ownership while checking recognized physical duplicates.
+pub(crate) fn validate_bounded_safetensors_with_indexed_profiles(
     weights_file: &File,
     file_size_bytes: u64,
     weights_file_name: &str,
-    profiled_tensor_profiles: &[TensorProfile],
+    required_tensor_profiles: &[TensorProfile],
+    recognized_tensor_profiles: &[TensorProfile],
+    recognized_tensor_names: &HashSet<&str>,
 ) -> Result<PartialProfileMetadata, ArtifactValidationError> {
-    let bounded_metadata = validate_bounded_safetensors_internal_permissive(
+    let required_tensor_names = required_tensor_profiles
+        .iter()
+        .map(|tensor_profile| tensor_profile.name.as_str())
+        .collect::<HashSet<_>>();
+    let mut recognized_profile_names = recognized_tensor_profiles
+        .iter()
+        .map(|tensor_profile| tensor_profile.name.as_str())
+        .collect::<HashSet<_>>();
+    recognized_profile_names.extend(recognized_tensor_names.iter().copied());
+    let bounded_metadata = validate_bounded_safetensors_internal(
         weights_file,
         file_size_bytes,
         weights_file_name,
-        profiled_tensor_profiles,
+        &required_tensor_names,
+        &recognized_profile_names,
+        required_tensor_profiles,
+        recognized_tensor_profiles,
     )?;
 
     Ok(PartialProfileMetadata {
@@ -97,15 +102,19 @@ fn validate_bounded_safetensors_internal(
     weights_file: &File,
     file_size_bytes: u64,
     weights_file_name: &str,
-    expected_tensor_names: &HashSet<&str>,
-    tensor_profiles: &[TensorProfile],
+    required_tensor_names: &HashSet<&str>,
+    accepted_extra_tensor_names: &HashSet<&str>,
+    required_tensor_profiles: &[TensorProfile],
+    recognized_tensor_profiles: &[TensorProfile],
 ) -> Result<BoundedSafetensorsMetadata, ArtifactValidationError> {
     let artifact_safetensors_header =
         read_artifact_safetensors_header(weights_file, file_size_bytes, weights_file_name)?;
     let bounded_metadata = validate_all_tensors(
         &artifact_safetensors_header.tensors,
-        expected_tensor_names,
-        tensor_profiles,
+        required_tensor_names,
+        accepted_extra_tensor_names,
+        required_tensor_profiles,
+        recognized_tensor_profiles,
         artifact_safetensors_header.data_section_start_bytes,
         file_size_bytes,
         weights_file_name,
@@ -194,38 +203,6 @@ fn validate_tensor_data_consistency(
     Ok(())
 }
 
-fn validate_bounded_safetensors_internal_permissive(
-    weights_file: &File,
-    file_size_bytes: u64,
-    weights_file_name: &str,
-    tensor_profiles: &[TensorProfile],
-) -> Result<BoundedSafetensorsMetadata, ArtifactValidationError> {
-    let artifact_safetensors_header =
-        read_artifact_safetensors_header(weights_file, file_size_bytes, weights_file_name)?;
-    let bounded_metadata = validate_tensors_permissive(
-        &artifact_safetensors_header.tensors,
-        tensor_profiles,
-        artifact_safetensors_header.data_section_start_bytes,
-        file_size_bytes,
-        weights_file_name,
-    )?;
-    let actual_payload_bytes = file_size_bytes
-        .checked_sub(artifact_safetensors_header.data_section_start_bytes)
-        .ok_or(ArtifactValidationError::TruncatedSafetensorsFile {
-            file_name: weights_file_name.to_owned(),
-            expected_minimum_bytes: artifact_safetensors_header.data_section_start_bytes,
-            actual_file_size_bytes: file_size_bytes,
-        })?;
-    if bounded_metadata.total_payload_bytes != actual_payload_bytes {
-        return Err(ArtifactValidationError::SafetensorsPayloadLengthMismatch {
-            file_name: weights_file_name.to_owned(),
-            declared_payload_bytes: bounded_metadata.total_payload_bytes,
-            actual_payload_bytes,
-        });
-    }
-    Ok(bounded_metadata)
-}
-
 fn read_artifact_safetensors_header(
     weights_file: &File,
     file_size_bytes: u64,
@@ -306,65 +283,12 @@ fn artifact_safetensors_header_error(
     }
 }
 
-/// Validates tensors in a permissive mode: all tensors in the shard header are
-/// accepted (no "unexpected tensor" check), and only profiled tensors that are
-/// actually present in the shard are validated. This is used for models with
-/// embedded vision tensors where the language shard also contains vision tensors
-/// that are not in the language tensor profiles.
-fn validate_tensors_permissive(
-    safetensors_tensors: &HashMap<String, SafetensorsTensorView>,
-    tensor_profiles: &[TensorProfile],
-    data_section_start: u64,
-    file_size_bytes: u64,
-    weights_file_name: &str,
-) -> Result<BoundedSafetensorsMetadata, ArtifactValidationError> {
-    validate_tensor_data_consistency(safetensors_tensors, weights_file_name)?;
-
-    // Validate offsets for ALL tensors in the header, but only dtype/shape
-    // for tensors that have profiles.
-    for (tensor_name, tensor_view) in safetensors_tensors {
-        validate_tensor_offsets(
-            tensor_name,
-            tensor_view,
-            data_section_start,
-            file_size_bytes,
-            weights_file_name,
-        )?;
-    }
-
-    // Validate dtype and shape only for profiled tensors present in this shard.
-    for tensor_profile in tensor_profiles {
-        let Some(tensor_view) = safetensors_tensors.get(&tensor_profile.name) else {
-            // This profiled tensor is not in this shard — it's in another shard.
-            // This is expected for multi-shard models.
-            continue;
-        };
-        validate_tensor_dtype(tensor_profile, tensor_view, weights_file_name)?;
-        validate_tensor_shape(tensor_profile, tensor_view)?;
-    }
-
-    let total_payload_bytes =
-        safetensors_tensors
-            .values()
-            .try_fold(0_u64, |total_payload_bytes, tensor_view| {
-                let tensor_data_bytes = tensor_view
-                    .data_end_offset()
-                    .checked_sub(tensor_view.data_start_offset())
-                    .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
-                total_payload_bytes
-                    .checked_add(tensor_data_bytes)
-                    .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)
-            })?;
-
-    Ok(BoundedSafetensorsMetadata {
-        total_payload_bytes,
-    })
-}
-
 fn validate_all_tensors(
     safetensors_tensors: &HashMap<String, SafetensorsTensorView>,
-    expected_tensor_names: &HashSet<&str>,
-    tensor_profiles: &[TensorProfile],
+    required_tensor_names: &HashSet<&str>,
+    accepted_extra_tensor_names: &HashSet<&str>,
+    required_tensor_profiles: &[TensorProfile],
+    recognized_tensor_profiles: &[TensorProfile],
     data_section_start: u64,
     file_size_bytes: u64,
     weights_file_name: &str,
@@ -372,7 +296,9 @@ fn validate_all_tensors(
     validate_tensor_data_consistency(safetensors_tensors, weights_file_name)?;
 
     for (tensor_name, tensor_view) in safetensors_tensors {
-        if !expected_tensor_names.contains(tensor_name.as_str()) {
+        if !required_tensor_names.contains(tensor_name.as_str())
+            && !accepted_extra_tensor_names.contains(tensor_name.as_str())
+        {
             return Err(ArtifactValidationError::UnexpectedTensor {
                 tensor_name: tensor_name.clone(),
             });
@@ -386,7 +312,7 @@ fn validate_all_tensors(
         )?;
     }
 
-    if let Some(missing_tensor_name) = expected_tensor_names
+    if let Some(missing_tensor_name) = required_tensor_names
         .iter()
         .find(|tensor_name| !safetensors_tensors.contains_key(**tensor_name))
     {
@@ -396,13 +322,20 @@ fn validate_all_tensors(
         });
     }
 
-    for tensor_profile in tensor_profiles {
+    for tensor_profile in required_tensor_profiles {
         let tensor_view = safetensors_tensors
             .get(&tensor_profile.name)
             .ok_or_else(|| ArtifactValidationError::TensorMissing {
                 tensor_name: tensor_profile.name.clone(),
                 file_name: weights_file_name.to_owned(),
             })?;
+        validate_tensor_dtype(tensor_profile, tensor_view, weights_file_name)?;
+        validate_tensor_shape(tensor_profile, tensor_view)?;
+    }
+    for tensor_profile in recognized_tensor_profiles {
+        let Some(tensor_view) = safetensors_tensors.get(&tensor_profile.name) else {
+            continue;
+        };
         validate_tensor_dtype(tensor_profile, tensor_view, weights_file_name)?;
         validate_tensor_shape(tensor_profile, tensor_view)?;
     }

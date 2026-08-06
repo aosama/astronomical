@@ -45,6 +45,7 @@
 - MLX source uses nax as an internal label for those Metal 4 kernels.
 - Enabling just-in-time Metal compilation lets MLX inspect the operating system and Apple graphics-processor generation, then select the fast kernels or a compatible fallback.
 - Read CMake branches and preprocessor definitions. A build flag can silently change runtime dispatch while preserving correct output.
+- Identical Float32 power graphs can round differently under a generic precompiled Metal library and hardware-selected just-in-time Metal kernels. Generate exact numerical qualification values with the production Metal path, and verify graph parity separately instead of importing Python-wheel values into a just-in-time runtime.
 - First-use compilation can make a correct fast path appear slow. MLX stores compiled Metal pipelines in the system cache and reuses them across processes and reboots.
 - Kernel name, source, template values, compile options, and target architecture affect cache identity.
 - Report cold and warm kernel-cache results separately.
@@ -72,6 +73,11 @@
 - Give MLX evaluation only independently branching graph roots. State arrays already reachable from the requested output, including sibling outputs of one primitive, are evaluated and detached during the same dependency traversal; listing them again adds host traversal work. Keep explicit roots for state that branches away from the output graph.
 - Treat mamba_ssm_dtype: float32 as a decay-computation contract, not a disk-storage contract. Qwen3.5-family artifacts can store A_log and other model parameters as FP16, BF16, or FP32 independently from activation dtype. Retain source storage without conversion and promote only the decay operation that requires FP32 arithmetic; eager whole-model promotion increases residency and changes the artifact’s precision contract.
 - Keep OptiQ metadata validation aligned with MLX affine quantization: bit widths 2, 3, 4, 5, 6, and 8 and group sizes 32, 64, and 128 are supported. Metadata may include embedding and output-head measurements; when present, verify them against config instead of rejecting them as unexpected.
+
+## Binary inter-process communication
+
+- JavaScript Object Notation integer arrays are unsuitable for binary image payloads because decimal text and separators multiply transfer size and serialization work. Keep byte buffers internally and use standard padded base64 only at the inter-process communication boundary.
+- Enforce frame limits after serialization. Reject an oversized generation command as a request-scoped error while preserving the loaded worker; retain worker containment for transport failures, timeouts, and malformed protocol traffic.
 
 ## Cache types are different
 

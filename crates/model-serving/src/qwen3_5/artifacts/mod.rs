@@ -16,7 +16,7 @@ pub use artifact::{
     Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, ValidatedQwen3_5Artifact,
 };
 pub use mtp_artifact_capability::Qwen3_5MtpArtifactCapability;
-pub use mtp_tensor_namespace::{qwen3_5_mtp_tensor_profiles, qwen3_5_quantized_mtp_tensor_names};
+pub use mtp_tensor_namespace::{qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles};
 pub use shard_index::{MAXIMUM_INDEX_BYTES, Qwen3_5ArtifactError, Qwen3_5ShardIndex};
 pub use tensor_spec::{
     qwen3_5_language_tensor_profiles, qwen3_5_resident_language_tensor_profiles,

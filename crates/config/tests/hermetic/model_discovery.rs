@@ -153,6 +153,26 @@ fn should_discover_a_dense_qwen3_5_model_as_text_only_despite_vision_metadata() 
 }
 
 #[test]
+fn should_allow_a_missing_mtp_only_file_with_an_arbitrary_name() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("MoeQwen3_5-4bit");
+    fs::create_dir_all(&model_directory).expect("model directory should be created");
+    write_minimal_model_config(&model_directory, "qwen3_5_moe", 131_072);
+    fs::write(model_directory.join("tokenizer.json"), "{}").expect("tokenizer should be written");
+    fs::write(model_directory.join("model-00001.safetensors"), [])
+        .expect("target model shard should be written");
+    fs::write(
+        model_directory.join("model.safetensors.index.json"),
+        r#"{"metadata":{"total_size":0},"weight_map":{"language_model.model.embed_tokens.weight":"model-00001.safetensors","language_model.mtp.fc.weight":"predictor-weights.safetensors"}}"#,
+    )
+    .expect("model index should be written");
+
+    let directory_scans = discover_models(&temporary_directory);
+
+    assert_eq!(directory_scans[0].discovered_models.len(), 1);
+}
+
+#[test]
 fn should_discover_a_dense_qwen3_5_model_with_embedded_vision_as_image_capable() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let dense_model_directory = temporary_directory
