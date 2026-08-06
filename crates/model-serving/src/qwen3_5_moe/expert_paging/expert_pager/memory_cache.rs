@@ -1,26 +1,24 @@
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
-use super::super::bounded_expert_reader::load_quantized_expert_page;
-use super::super::expert_cache::ExpertWeightMemoryCache;
-use super::super::expert_cache_statistics::ExpertWeightMemoryCacheRequestReport;
 use super::super::paged_expert_weights::build_prefixed_paged_expert_weights;
-use super::super::quantized_expert_manifest::{
-    QuantizedExpertPageManifest, build_quantized_expert_cache_population_manifest_from_plan,
-    build_quantized_expert_page_manifest_from_plan,
+use super::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
+use crate::expert_paging::{
+    ExpertWeightMemoryCache, ExpertWeightMemoryCacheRequestReport, QuantizedExpertPageManifest,
+    build_quantized_expert_cache_population_manifest_from_plan,
+    build_quantized_expert_page_manifest_from_plan, load_quantized_expert_page,
 };
-use super::{ExpertPager, ExpertPagingError, PagedExpertWeights};
 
-impl ExpertPager {
+impl Qwen3_5ExpertPager {
     /// Loads and retains missing one-expert pages, then assembles the selection.
     pub fn load_selected_experts_through_memory_cache(
         &self,
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,
         selected_expert_ids: &[usize],
-        expert_weight_memory_cache: &mut ExpertWeightMemoryCache,
+        expert_weight_memory_cache: &mut ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>,
     ) -> Result<
         (
-            PagedExpertWeights,
+            Qwen3_5PagedExpertWeights,
             QuantizedExpertPageManifest,
             ExpertWeightMemoryCacheRequestReport,
         ),
@@ -41,11 +39,11 @@ impl ExpertPager {
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,
         selected_expert_ids: &[usize],
-        expert_weight_memory_cache: &mut ExpertWeightMemoryCache,
+        expert_weight_memory_cache: &mut ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<
         (
-            PagedExpertWeights,
+            Qwen3_5PagedExpertWeights,
             QuantizedExpertPageManifest,
             ExpertWeightMemoryCacheRequestReport,
         ),

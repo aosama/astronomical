@@ -247,6 +247,7 @@ fn ready_worker_health_snapshot() -> WorkerHealthSnapshot {
 fn discovered_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "requested-model".to_owned(),
+        model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from("/models/requested-model"),
         context_window: 2_048,

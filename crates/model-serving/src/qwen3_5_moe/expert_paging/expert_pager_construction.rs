@@ -4,13 +4,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::complete_layer_retention::complete_layer_expert_payload_byte_count;
-use super::expert_pager::{ExpertPager, ExpertPagingError};
-use super::memory_budget::LiveMetalBudget;
+use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
-use super::quantized_expert_manifest::QuantizationMode;
+use crate::expert_paging::{LiveMetalBudget, QuantizationMode};
 use crate::qwen3_5::{ModelWeightStorage, Qwen3_5Config};
 
-impl ExpertPager {
+impl Qwen3_5ExpertPager {
     /// Returns the number of MoE layers with validated layer plans.
     #[must_use]
     pub fn layer_count(&self) -> usize {

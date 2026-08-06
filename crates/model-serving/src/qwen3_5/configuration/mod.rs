@@ -1,4 +1,5 @@
 mod config;
+mod config_accessors;
 mod config_document;
 mod config_memory;
 pub(crate) mod config_validation;

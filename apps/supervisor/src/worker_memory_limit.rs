@@ -6,9 +6,9 @@ use std::{
 use astronomical_ipc_protocol::WorkerEvent;
 use tokio::time::{Instant, timeout};
 
-use crate::worker::ActiveGeneration;
 use crate::worker_containment::contain_worker_failure;
 use crate::worker_event_handler::handle_worker_event;
+use crate::worker_loop_types::ActiveGeneration;
 use crate::{GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot, WorkerProcess};
 
 /// Completion state returned by a live MLX memory-limit request.

@@ -4,14 +4,14 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::MlxArray;
 
-use super::expert_pager::{ExpertPagingError, PagedExpertWeights};
-use super::quantized_expert_manifest::QuantizedExpertLayerPlan;
+use super::expert_pager::{ExpertPagingError, Qwen3_5PagedExpertWeights};
+use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
 pub(super) fn build_paged_expert_weights(
     loaded_tensors: &mut HashMap<String, MlxArray>,
     layer_plan: &QuantizedExpertLayerPlan,
-) -> Result<PagedExpertWeights, ExpertPagingError> {
+) -> Result<Qwen3_5PagedExpertWeights, ExpertPagingError> {
     build_prefixed_paged_expert_weights(loaded_tensors, layer_plan, "")
 }
 
@@ -19,7 +19,7 @@ pub(super) fn build_prefixed_paged_expert_weights(
     loaded_tensors: &mut HashMap<String, MlxArray>,
     layer_plan: &QuantizedExpertLayerPlan,
     tensor_name_prefix: &str,
-) -> Result<PagedExpertWeights, ExpertPagingError> {
+) -> Result<Qwen3_5PagedExpertWeights, ExpertPagingError> {
     let gate_projection_profile = projection_quantization_profile(layer_plan, "gate_proj")?;
     let up_projection_profile = projection_quantization_profile(layer_plan, "up_proj")?;
     let down_projection_profile = projection_quantization_profile(layer_plan, "down_proj")?;
@@ -47,7 +47,7 @@ pub(super) fn build_prefixed_paged_expert_weights(
         down_projection_profile.quantization_bits,
         down_projection_profile.quantization_group_size,
     )?;
-    Ok(PagedExpertWeights {
+    Ok(Qwen3_5PagedExpertWeights {
         gate_projection,
         up_projection,
         down_projection,
@@ -89,7 +89,7 @@ fn take_affine_weights_from_tensors(
     let weight_tensor_name = short_tensor_name(tensor_name_prefix, projection_name, "weight");
     if matches!(
         layer_plan.quantization_mode,
-        super::quantized_expert_manifest::QuantizationMode::NativeBfloat16
+        QuantizationMode::NativeBfloat16
     ) {
         let weight = loaded_tensors.remove(&weight_tensor_name).ok_or_else(|| {
             ExpertPagingError::Runtime {

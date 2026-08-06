@@ -310,9 +310,9 @@ impl Qwen3_5EngineState {
 fn record_final_expert_weight_memory_cache_counters(
     performance_attribution: &mut PerformanceAttribution,
     expert_weight_memory_cache_statistics_at_request_start:
-        crate::qwen3_5_moe::ExpertWeightMemoryCacheStatistics,
+        crate::expert_paging::ExpertWeightMemoryCacheStatistics,
     expert_weight_memory_cache_statistics_at_request_end:
-        crate::qwen3_5_moe::ExpertWeightMemoryCacheStatistics,
+        crate::expert_paging::ExpertWeightMemoryCacheStatistics,
 ) {
     performance_attribution.record_counter(
         PerformanceCounter::ExpertWeightMemoryCacheHitCount,
