@@ -13,6 +13,7 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                     elapsed_millis: 400,
                     forward_prefill_chunck_elapsed_millis: 350,
                     completed_prefill_chunck_tokens: 2_048,
+                    prefill_optimizer_insight: None,
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         11_000,
                         12_000,
@@ -30,6 +31,7 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                     elapsed_millis: 600,
                     forward_prefill_chunck_elapsed_millis: 525,
                     completed_prefill_chunck_tokens: 2_048,
+                    prefill_optimizer_insight: None,
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         14_000,
                         15_000,
@@ -100,6 +102,7 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
             elapsed_millis,
             forward_prefill_chunck_elapsed_millis,
             completed_prefill_chunck_tokens,
+            prefill_optimizer_insight,
             mlx_memory_snapshot,
         } => {
             assert_eq!(request_id, RequestId::new(742));
@@ -108,6 +111,7 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
             assert_eq!(elapsed_millis, 400);
             assert_eq!(forward_prefill_chunck_elapsed_millis, Some(350));
             assert_eq!(completed_prefill_chunck_tokens, Some(2_048));
+            assert_eq!(prefill_optimizer_insight, None);
             assert_eq!(
                 mlx_memory_snapshot,
                 Some(WorkerMlxMemorySnapshot {
@@ -167,6 +171,7 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
                     elapsed_millis: 400,
                     forward_prefill_chunck_elapsed_millis: 350,
                     completed_prefill_chunck_tokens: 512,
+                    prefill_optimizer_insight: None,
                     mlx_memory_telemetry: None,
                     expert_memory_mode: None,
                 },

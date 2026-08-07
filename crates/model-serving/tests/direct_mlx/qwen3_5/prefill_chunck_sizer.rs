@@ -1,48 +1,50 @@
-use astronomical_model_serving::Qwen3_5PrefillChunckSizer;
+use astronomical_model_serving::{Qwen3_5PrefillChunckSizer, Qwen3_5PrefillExecutionContext};
 
 #[test]
-fn should_include_the_exact_validated_model_context_maximum_in_production_candidates() {
+fn should_use_only_configured_candidates_below_the_validated_model_context_maximum() {
     const VALIDATED_MODEL_MAXIMUM_POSITION_COUNT: u32 = 8_193;
-    let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::production(VALIDATED_MODEL_MAXIMUM_POSITION_COUNT)
-            .expect("the validated model context maximum should configure the optimizer");
+    let mut prefill_chunck_sizer = Qwen3_5PrefillChunckSizer::production(
+        VALIDATED_MODEL_MAXIMUM_POSITION_COUNT,
+        vec![1_024, 2_048, 4_096, 8_192, 16_384],
+    )
+    .expect("configured candidates below the model maximum should initialize");
 
     assert_eq!(
         prefill_chunck_sizer.prefill_chunck_tokens(),
         VALIDATED_MODEL_MAXIMUM_POSITION_COUNT as usize
     );
-    for _observation_round in 1..=3 {
-        prefill_chunck_sizer.start_prompt_processing_request(0);
-        let mut prefill_chunck_start = 0_usize;
-        for expected_prefill_chunck_tokens in [128, 256, 512, 1_024, 2_048, 4_096, 8_192, 8_193] {
-            let prefill_chunck_end =
-                prefill_chunck_sizer.next_prefill_chunck_end(prefill_chunck_start, 100_000);
-            assert_eq!(
-                prefill_chunck_end - prefill_chunck_start,
-                expected_prefill_chunck_tokens
-            );
-            prefill_chunck_sizer
-                .record_prefill_chunck_elapsed_millis(expected_prefill_chunck_tokens, 1_000);
-            prefill_chunck_start = prefill_chunck_end;
-        }
+    prefill_chunck_sizer.start_prompt_processing_request(0);
+    let mut prefill_chunck_start = 0_usize;
+    for expected_prefill_chunck_tokens in [8_192, 4_096, 2_048, 1_024] {
+        let prefill_chunck_end =
+            prefill_chunck_sizer.next_prefill_chunck_end(prefill_chunck_start, 100_000);
+        assert_eq!(
+            prefill_chunck_end - prefill_chunck_start,
+            expected_prefill_chunck_tokens
+        );
+        prefill_chunck_sizer
+            .record_prefill_chunck_elapsed_millis(expected_prefill_chunck_tokens, 1_000);
+        prefill_chunck_start = prefill_chunck_end;
     }
 }
 
 #[test]
-fn should_explore_128_through_4096_prefill_chunck_tokens_in_non_persisted_optimized_mode() {
-    let mut prefill_chunck_sizer = Qwen3_5PrefillChunckSizer::production(4_096)
-        .expect("the validated model context maximum should configure the optimizer");
+fn should_explore_configured_prefill_chunck_tokens_in_non_persisted_optimized_mode() {
+    let mut prefill_chunck_sizer =
+        Qwen3_5PrefillChunckSizer::production(4_096, vec![1_024, 2_048, 4_096])
+            .expect("configured optimizer candidates should initialize");
 
     assert_full_candidate_exploration_for_one_context(&mut prefill_chunck_sizer);
 }
 
 #[test]
-fn should_explore_128_through_4096_prefill_chunck_tokens_when_the_persisted_optimizer_is_enabled() {
+fn should_explore_configured_prefill_chunck_tokens_when_the_persisted_optimizer_is_enabled() {
     let optimizer_state_directory = tempfile::tempdir()
         .expect("the persisted optimizer test should create a temporary state directory");
     let mut prefill_chunck_sizer =
         Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state(
             4_096,
+            vec![1_024, 2_048, 4_096],
             optimizer_state_directory.path().to_path_buf(),
             "test-model".to_owned(),
             "test-revision".to_owned(),
@@ -54,32 +56,36 @@ fn should_explore_128_through_4096_prefill_chunck_tokens_when_the_persisted_opti
 fn assert_full_candidate_exploration_for_one_context(
     prefill_chunck_sizer: &mut Qwen3_5PrefillChunckSizer,
 ) {
-    for _observation_round in 1..=3 {
-        prefill_chunck_sizer.start_prompt_processing_request(0);
-        let mut prefill_chunck_start = 0_usize;
-        for expected_prefill_chunck_tokens in [128, 256, 512, 1_024, 2_048, 4_096] {
-            let prefill_chunck_end =
-                prefill_chunck_sizer.next_prefill_chunck_end(prefill_chunck_start, 100_000);
-            assert_eq!(
-                prefill_chunck_end - prefill_chunck_start,
-                expected_prefill_chunck_tokens
-            );
-            prefill_chunck_sizer
-                .record_prefill_chunck_elapsed_millis(expected_prefill_chunck_tokens, 1_000);
-            prefill_chunck_start = prefill_chunck_end;
-        }
+    prefill_chunck_sizer.start_prompt_processing_request(0);
+    let mut prefill_chunck_start = 0_usize;
+    for expected_prefill_chunck_tokens in [4_096, 2_048, 1_024] {
+        let prefill_chunck_end =
+            prefill_chunck_sizer.next_prefill_chunck_end(prefill_chunck_start, 100_000);
+        assert_eq!(
+            prefill_chunck_end - prefill_chunck_start,
+            expected_prefill_chunck_tokens
+        );
+        prefill_chunck_sizer
+            .record_prefill_chunck_elapsed_millis(expected_prefill_chunck_tokens, 1_000);
+        prefill_chunck_start = prefill_chunck_end;
     }
 }
 
 #[test]
 fn should_bound_each_prompt_processing_chunck_by_prefill_chunck_tokens_and_prompt_end() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(2_048)
-            .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            2_048,
+            vec![128, 256, 512, 1_024, 2_048],
+        )
+        .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
 
-    assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(0, 5_000), 128);
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end(0, 5_000),
+        2_048
+    );
     assert_eq!(
         prefill_chunck_sizer.next_prefill_chunck_end(4_096, 4_100),
         4_100
@@ -89,7 +95,7 @@ fn should_bound_each_prompt_processing_chunck_by_prefill_chunck_tokens_and_promp
 #[test]
 fn should_reject_zero_prefill_chunck_tokens() {
     let prefill_chunck_sizer_error =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(0)
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(0, vec![1_024])
             .expect_err("prefill_chunck_tokens must contain at least one token");
 
     assert_eq!(
@@ -101,96 +107,109 @@ fn should_reject_zero_prefill_chunck_tokens() {
 #[test]
 fn should_use_the_explicit_optimizer_prefill_chunck_tokens_maximum() {
     let prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(4_096)
-            .expect("maximum prefill_chunck_tokens should be valid");
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            4_096,
+            vec![1_024, 2_048, 4_096],
+        )
+        .expect("maximum prefill_chunck_tokens should be valid");
 
     assert_eq!(prefill_chunck_sizer.prefill_chunck_tokens(), 4_096);
 }
 
 #[test]
-fn should_interleave_candidates_before_any_candidate_reaches_three_observations() {
+fn should_explore_unobserved_candidates_from_largest_to_smallest() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(2_048)
-            .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            2_048,
+            vec![128, 256, 512, 1_024, 2_048],
+        )
+        .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
 
-    assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(0, 5_000), 128);
-    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(128, 1_000);
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end(0, 5_000),
+        2_048
+    );
+    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(2_048, 1_000);
     assert_eq!(
         prefill_chunck_sizer.active_prefill_chunck_tokens(),
-        128,
-        "the completed 128-token chunk should remain active until the next decision"
+        2_048,
+        "the completed 2,048-token chunk should remain active until the next decision"
     );
 
     assert_eq!(
-        prefill_chunck_sizer.next_prefill_chunck_end(128, 5_000),
-        384
+        prefill_chunck_sizer.next_prefill_chunck_end(2_048, 5_000),
+        3_072
     );
-    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(256, 1_000);
+    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(1_024, 1_000);
     assert_eq!(
         prefill_chunck_sizer.active_prefill_chunck_tokens(),
-        256,
-        "the completed 256-token chunk should remain active until the next decision"
+        1_024,
+        "the completed chunk should remain active until the next decision"
     );
 
     assert_eq!(
-        prefill_chunck_sizer.next_prefill_chunck_end(384, 5_000),
-        896,
-        "the first exploration round should continue with 512 tokens"
+        prefill_chunck_sizer.next_prefill_chunck_end(3_072, 5_000),
+        3_584,
+        "the next largest candidate that fits should be selected"
     );
 }
 
 #[test]
 fn should_not_consume_the_next_optimizer_decision_when_recording_a_completed_prefill_chunck() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(2_048)
-            .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            2_048,
+            vec![128, 256, 512, 1_024, 2_048],
+        )
+        .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
 
-    assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(0, 5_000), 128);
-    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(128, 1_000);
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end(0, 5_000),
+        2_048
+    );
+    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(2_048, 1_000);
     assert_eq!(
         prefill_chunck_sizer.active_prefill_chunck_tokens(),
-        128,
+        2_048,
         "recording a completed chunk should keep reporting the chunk that actually ran"
     );
 
     assert_eq!(
-        prefill_chunck_sizer.next_prefill_chunck_end(128, 5_000),
-        384
+        prefill_chunck_sizer.next_prefill_chunck_end(2_048, 5_000),
+        3_072
     );
-    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(256, 1_000);
+    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(1_024, 1_000);
     assert_eq!(
         prefill_chunck_sizer.active_prefill_chunck_tokens(),
-        256,
-        "recording the 256-token chunk should not pre-ask the optimizer"
+        1_024,
+        "recording the completed chunk should not pre-ask the optimizer"
     );
 
     assert_eq!(
-        prefill_chunck_sizer.next_prefill_chunck_end(384, 5_000),
-        896
+        prefill_chunck_sizer.next_prefill_chunck_end(3_072, 5_000),
+        3_584
     );
     prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(512, 1_000);
 
     assert_eq!(
         prefill_chunck_sizer.active_prefill_chunck_tokens(),
         512,
-        "recording the 512-token chunk should not consume the next decision"
-    );
-    assert_eq!(
-        prefill_chunck_sizer.next_prefill_chunck_end(896, 5_000),
-        1_920,
-        "the next real chunk should be the first 1,024-token exploration chunk"
+        "recording the completed chunk should not consume the next decision"
     );
 }
 
 #[test]
-fn should_ignore_final_partial_prefill_chuncks_when_optimizing_future_sizes() {
+fn should_retain_final_prompt_tail_transitions() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(2_048)
-            .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            2_048,
+            vec![128, 256, 512, 1_024, 2_048],
+        )
+        .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
     assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(0, 64), 64);
@@ -199,7 +218,105 @@ fn should_ignore_final_partial_prefill_chuncks_when_optimizing_future_sizes() {
     assert_eq!(
         prefill_chunck_sizer.active_prefill_chunck_tokens(),
         128,
-        "a partial chunk should not count as an observation"
+        "the minimum requested candidate remains active for a short prompt tail"
+    );
+}
+
+#[test]
+fn should_skip_exploration_candidates_larger_than_the_remaining_prompt() {
+    let mut prefill_chunck_sizer =
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            1_024,
+            vec![128, 256, 512, 1_024],
+        )
+        .expect("the optimizer maximum should be valid");
+
+    prefill_chunck_sizer.start_prompt_processing_request(0);
+    assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(0, 700), 512);
+    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(512, 100);
+    assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(512, 700), 640);
+    prefill_chunck_sizer.record_prefill_chunck_elapsed_millis(128, 100);
+
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end(640, 700),
+        700,
+        "the remaining prompt should execute as a minimum-candidate tail"
+    );
+}
+
+#[test]
+fn should_isolate_execution_modes_and_clear_first_after_restore() {
+    let mut prefill_chunck_sizer =
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            1_024,
+            vec![128, 256, 512, 1_024],
+        )
+        .expect("the optimizer maximum should be valid");
+    let text_execution_context = Qwen3_5PrefillExecutionContext::default();
+    let visual_execution_context = Qwen3_5PrefillExecutionContext::new(true, false, false, false);
+
+    prefill_chunck_sizer.start_prompt_processing_request(128);
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end_for_execution_context(
+            128,
+            10_000,
+            text_execution_context,
+        ),
+        1_152
+    );
+    prefill_chunck_sizer.record_prefill_chunck_transition(
+        1_024,
+        500,
+        false,
+        text_execution_context,
+    );
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end_for_execution_context(
+            1_152,
+            10_000,
+            text_execution_context,
+        ),
+        2_176,
+        "the first-after-restore context should not reuse first-chunk evidence"
+    );
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end_for_execution_context(
+            1_152,
+            10_000,
+            visual_execution_context,
+        ),
+        2_176,
+        "visual prefill should not reuse text observations"
+    );
+}
+
+#[test]
+fn should_enter_a_capacity_reduced_context_after_an_admission_retry() {
+    let mut prefill_chunck_sizer =
+        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
+            1_024,
+            vec![128, 256, 512, 1_024],
+        )
+        .expect("the optimizer maximum should be valid");
+    let execution_context = Qwen3_5PrefillExecutionContext::default();
+    prefill_chunck_sizer.start_prompt_processing_request(0);
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end_for_execution_context(
+            0,
+            10_000,
+            execution_context,
+        ),
+        1_024
+    );
+    prefill_chunck_sizer.record_prefill_chunck_transition(512, 2_000, true, execution_context);
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end_for_execution_context(
+            512,
+            10_000,
+            execution_context,
+        ),
+        1_536,
+        "capacity-reduced execution should begin independent largest-first discovery"
     );
 }
 

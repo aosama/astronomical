@@ -18,6 +18,7 @@ mod openai_responses_assembly;
 mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
+mod prefill_optimizer_observability;
 mod shutdown_control;
 mod system_telemetry;
 mod worker;

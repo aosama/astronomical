@@ -1,6 +1,64 @@
 # shellcheck shell=sh
+# shellcheck disable=SC2154
 # Runtime checks sourced by validate-astronomical-app.sh after it defines shared
 # configuration, cleanup state, and progress-reporting helpers.
+
+# Refuses to replace a reachable daemon until its active request finishes.
+wait_for_running_daemon_idle_before_replacement() {
+    running_daemon_pids="$(pgrep -x "astronomicald" 2>/dev/null || true)"
+    if [ -z "${running_daemon_pids:-}" ]; then
+        printf '%s step=wait-for-running-daemon-idle status=skipped reason=no-running-daemon\n' \
+            "$(date '+%Y-%m-%dT%H:%M:%S%z')"
+        return 0
+    fi
+
+    running_daemon_health="$(curl --silent --connect-timeout 1 --max-time 2 "${SUPERVISOR_BASE_URL}/health" 2>/dev/null || true)"
+    if [ "$running_daemon_health" != "ok" ]; then
+        printf '%s step=wait-for-running-daemon-idle status=skipped reason=daemon-unreachable\n' \
+            "$(date '+%Y-%m-%dT%H:%M:%S%z')"
+        return 0
+    fi
+
+    printf '%s step=wait-for-running-daemon-idle status=start timeout_seconds=%s poll_interval=%ss\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$RUNNING_DAEMON_IDLE_TIMEOUT_SECONDS" "$POLL_INTERVAL_SECONDS"
+    waited_seconds=0
+    while [ "$waited_seconds" -lt "$RUNNING_DAEMON_IDLE_TIMEOUT_SECONDS" ]; do
+        running_status_response="$(curl --silent --connect-timeout 2 --max-time 5 "${SUPERVISOR_BASE_URL}/v1/status" 2>/dev/null || true)"
+        running_activity="$(printf '%s' "$running_status_response" | jq -r '.activity // empty' 2>/dev/null || true)"
+        if [ "$running_activity" = "idle" ]; then
+            printf '%s step=wait-for-running-daemon-idle status=success elapsed_seconds=%s\n' \
+                "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$waited_seconds"
+            return 0
+        fi
+        printf '  [%ss/%ss] waiting for active request activity=%s\n' \
+            "$waited_seconds" "$RUNNING_DAEMON_IDLE_TIMEOUT_SECONDS" "${running_activity:-unknown}"
+        sleep "$POLL_INTERVAL_SECONDS"
+        waited_seconds=$((waited_seconds + POLL_INTERVAL_SECONDS))
+    done
+
+    print_error "refusing to replace a daemon that remained active for ${RUNNING_DAEMON_IDLE_TIMEOUT_SECONDS}s"
+    return 1
+}
+
+launch_bundled_daemon() {
+    start_step "launch-daemon"
+    "$daemon_executable" </dev/null >/dev/null 2>&1 &
+    LAUNCHED_DAEMON_PID=$!
+    printf '  launched daemon PID=%s with worker=%s\n' "$LAUNCHED_DAEMON_PID" "$worker_executable"
+    sleep 2
+
+    if ! kill -0 "$LAUNCHED_DAEMON_PID" 2>/dev/null; then
+        quick_status="$(curl --silent --connect-timeout 1 --max-time 2 "${SUPERVISOR_BASE_URL}/health" 2>/dev/null || true)"
+        if [ "$quick_status" != "ok" ]; then
+            print_error "daemon process exited immediately; check logs in ~/.astronomical/logs/"
+            finish_step "launch-daemon" "failed"
+            return 1
+        fi
+    fi
+
+    finish_step "launch-daemon" "success"
+    return 0
+}
 
 # Polls /v1/status while reporting state transitions and bounded diagnostics.
 wait_for_daemon_ready() {

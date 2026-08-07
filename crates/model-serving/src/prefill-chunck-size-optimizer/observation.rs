@@ -3,33 +3,21 @@
 pub struct PrefillChunckSizeOptimizerObservation {
     actual_prefill_chunck_tokens: usize,
     elapsed_millis: u64,
-    is_full_candidate_prefill_chunck: bool,
+    next_prompt_processing_context: super::PrefillChunckSizeOptimizerContext,
 }
 
 impl PrefillChunckSizeOptimizerObservation {
-    /// Records a full chunk that used the complete candidate prefill_chunck_tokens count.
+    /// Records one completed requested-action transition.
     #[must_use]
-    pub const fn full_prefill_chunck(
+    pub const fn transition(
         actual_prefill_chunck_tokens: usize,
         elapsed_millis: u64,
+        next_prompt_processing_context: super::PrefillChunckSizeOptimizerContext,
     ) -> Self {
         Self {
             actual_prefill_chunck_tokens,
             elapsed_millis,
-            is_full_candidate_prefill_chunck: true,
-        }
-    }
-
-    /// Records a final prompt tail that did not use the complete candidate size.
-    #[must_use]
-    pub const fn partial_prefill_chunck(
-        actual_prefill_chunck_tokens: usize,
-        elapsed_millis: u64,
-    ) -> Self {
-        Self {
-            actual_prefill_chunck_tokens,
-            elapsed_millis,
-            is_full_candidate_prefill_chunck: false,
+            next_prompt_processing_context,
         }
     }
 
@@ -44,7 +32,7 @@ impl PrefillChunckSizeOptimizerObservation {
     }
 
     #[must_use]
-    pub const fn is_full_candidate_prefill_chunck(self) -> bool {
-        self.is_full_candidate_prefill_chunck
+    pub const fn next_prompt_processing_context(self) -> super::PrefillChunckSizeOptimizerContext {
+        self.next_prompt_processing_context
     }
 }

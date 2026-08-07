@@ -25,7 +25,8 @@ pub use artifact_validation::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use decoder_cache::{
-    ConvolutionState, DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, DecoderCacheState,
+    ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate,
+    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, DecoderCacheState,
     DecoderCacheStateAllocationCheckpoint, FullAttentionKeyValueState,
     FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
 };
@@ -54,7 +55,8 @@ pub use expert_paging::{
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngine, InferenceEngineError, MlxInferenceEngine, MlxInferenceExecution,
-    PreparedInferenceRequest,
+    PrefillChunckOptimizerCandidateInsight, PrefillChunckOptimizerContextInsight,
+    PrefillChunckOptimizerInsight, PreparedInferenceRequest,
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
@@ -85,7 +87,8 @@ pub use persistent_cache::{
     PersistentPromptCacheModelContract, PersistentPromptCachePrefixLookup,
     PersistentPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
     PersistentVisualEmbeddingFileHeader, PersistentVisualEmbeddingKey,
-    PersistentVisualEmbeddingModelContract, persistent_prompt_cache_aligned_prefill_end,
+    PersistentVisualEmbeddingModelContract,
+    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
     persistent_prompt_cache_recurrent_snapshot_is_common_prefix_checkpoint,
     persistent_prompt_cache_save_admission,
 };
@@ -97,6 +100,7 @@ pub use persistent_cache::{
     build_persistent_prompt_cache_stats_event, persistent_prompt_cache_write_queue_can_accept,
 };
 pub use prefill_chunck_size_optimizer::{
+    PrefillChunckOptimizerCandidateEvidence, PrefillChunckOptimizerContextEvidence,
     PrefillChunckSizeOptimizer, PrefillChunckSizeOptimizerContext,
     PrefillChunckSizeOptimizerDecision, PrefillChunckSizeOptimizerDecisionReason,
     PrefillChunckSizeOptimizerError, PrefillChunckSizeOptimizerObservation,
@@ -122,16 +126,21 @@ pub use qwen3_5::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{
-    Qwen3_5Engine, Qwen3_5ExecutionError, Qwen3_5Model, Qwen3_5MtpForwardOutput,
-    Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint, Qwen3_5MtpRuntimeState,
-    Qwen3_5PrefillChunckSizer, Qwen3_5PrefillChunckSizerError, Qwen3_5TargetForwardOutput,
+    Qwen3_5Engine, Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
+    Qwen3_5MtpForwardOutput, Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint,
+    Qwen3_5MtpRuntimeState, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5PrefillChunckSizer,
+    Qwen3_5PrefillChunckSizerError, Qwen3_5PrefillExecutionContext, Qwen3_5TargetForwardOutput,
     Qwen3_5VisionModel, Qwen3_5VisionWeights, Qwen3_5Weights, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
     combined_target_and_mtp_persistent_growth_bytes,
     context_memory_admission_projected_active_memory_bytes,
-    persistent_prompt_cache_restore_temporary_workspace_bytes, qwen3_5_apply_top_p_mask,
-    qwen3_5_depth_one_mtp_window_fits, qwen3_5_full_attention_step, qwen3_5_gated_delta_kernel,
-    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_step, qwen3_5_inject_visual_embeddings,
+    persistent_prompt_cache_restore_temporary_workspace_bytes,
+    persistent_prompt_cache_write_outcome_advances_parent_chain, qwen3_5_apply_top_p_mask,
+    qwen3_5_depth_one_mtp_window_fits, qwen3_5_full_attention_step,
+    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
+    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+    qwen3_5_gated_delta_step, qwen3_5_inject_visual_embeddings,
     qwen3_5_mtp_runtime_state_after_load, qwen3_5_mtp_verification_may_cross_thinking_budget,
     safe_minimum_mlx_memory_ceiling_bytes,
 };

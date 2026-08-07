@@ -1,99 +1,86 @@
 use super::*;
 
 #[test]
-fn should_explore_each_candidate_until_it_has_three_observations() {
+fn should_explore_largest_eligible_unobserved_candidate_first() {
     let mut prefill_chunck_size_optimizer = three_candidate_optimizer();
     let prompt_processing_context = PrefillChunckSizeOptimizerContext::new(7);
 
-    record_full_observations(
-        &mut prefill_chunck_size_optimizer,
-        prompt_processing_context,
-        256,
-        &[1_000, 1_000],
-    );
+    let first_decision = prefill_chunck_size_optimizer
+        .ask_with_maximum_prefill_chunck_tokens(prompt_processing_context, 700);
+    assert_eq!(first_decision.candidate_prefill_chunck_tokens, 512);
     assert_eq!(
-        ask_candidate_prefill_chunck_tokens(
-            &mut prefill_chunck_size_optimizer,
-            prompt_processing_context
-        ),
-        256,
-        "256 should still be explored until it reaches three trusted observations"
-    );
-    record_full_observations(
-        &mut prefill_chunck_size_optimizer,
-        prompt_processing_context,
-        256,
-        &[1_000],
+        first_decision.reason,
+        PrefillChunckSizeOptimizerDecisionReason::InitialExploration
     );
 
-    assert_eq!(
-        ask_candidate_prefill_chunck_tokens(
-            &mut prefill_chunck_size_optimizer,
-            prompt_processing_context
-        ),
+    record_transition_observation(
+        &mut prefill_chunck_size_optimizer,
+        prompt_processing_context,
         512,
-        "after 256 reaches three observations the next untested candidate should be explored"
+        512,
+        400,
+        prompt_processing_context,
+    );
+
+    let second_decision = prefill_chunck_size_optimizer
+        .ask_with_maximum_prefill_chunck_tokens(prompt_processing_context, 700);
+    assert_eq!(second_decision.candidate_prefill_chunck_tokens, 256);
+    assert_eq!(
+        second_decision.reason,
+        PrefillChunckSizeOptimizerDecisionReason::InitialExploration
     );
 }
 
 #[test]
-fn should_interleave_candidate_exploration_until_all_candidates_are_trusted() {
+fn should_not_treat_an_ineligible_candidate_as_missing_evidence() {
     let mut prefill_chunck_size_optimizer = three_candidate_optimizer();
     let prompt_processing_context = PrefillChunckSizeOptimizerContext::new(11);
-    let expected_candidate_sequence = [256, 512, 1_024, 256, 512, 1_024, 256, 512, 1_024];
 
-    for expected_candidate_prefill_chunck_tokens in expected_candidate_sequence {
-        let selected_candidate_prefill_chunck_tokens = ask_candidate_prefill_chunck_tokens(
-            &mut prefill_chunck_size_optimizer,
-            prompt_processing_context,
-        );
-        assert_eq!(
-            selected_candidate_prefill_chunck_tokens,
-            expected_candidate_prefill_chunck_tokens
-        );
-        record_full_observations(
-            &mut prefill_chunck_size_optimizer,
-            prompt_processing_context,
-            selected_candidate_prefill_chunck_tokens,
-            &[1_000],
-        );
-    }
+    record_self_transition_observations(
+        &mut prefill_chunck_size_optimizer,
+        prompt_processing_context,
+        256,
+        &[300],
+    );
+    record_self_transition_observations(
+        &mut prefill_chunck_size_optimizer,
+        prompt_processing_context,
+        512,
+        &[400],
+    );
+
+    let decision = prefill_chunck_size_optimizer
+        .ask_with_maximum_prefill_chunck_tokens(prompt_processing_context, 700);
+    assert_eq!(
+        decision.reason,
+        PrefillChunckSizeOptimizerDecisionReason::CumulativeLatencyPlanning
+    );
 }
 
 #[test]
-fn should_not_trust_a_candidate_with_fewer_than_three_observations() {
+fn should_probe_an_eligible_candidate_after_its_observation_becomes_stale() {
     let mut prefill_chunck_size_optimizer = three_candidate_optimizer();
     let prompt_processing_context = PrefillChunckSizeOptimizerContext::new(13);
-
-    record_full_observations(
-        &mut prefill_chunck_size_optimizer,
-        prompt_processing_context,
-        256,
-        &[100],
-    );
-    assert_eq!(
-        ask_candidate_prefill_chunck_tokens(
+    for candidate_prefill_chunck_tokens in [256, 512, 1_024] {
+        record_self_transition_observations(
             &mut prefill_chunck_size_optimizer,
-            prompt_processing_context
-        ),
-        256,
-        "a candidate with fewer than three observations should still be explored, not skipped"
-    );
-}
+            prompt_processing_context,
+            candidate_prefill_chunck_tokens,
+            &[candidate_prefill_chunck_tokens as u64],
+        );
+    }
 
-#[test]
-fn should_report_exploration_reason_before_trust() {
-    let mut prefill_chunck_size_optimizer = three_candidate_optimizer();
-    let prompt_processing_context = PrefillChunckSizeOptimizerContext::new(53);
+    let mut observed_stale_probe = false;
+    for _decision_index in 0..20 {
+        let decision = prefill_chunck_size_optimizer.ask(prompt_processing_context);
+        if decision.reason == PrefillChunckSizeOptimizerDecisionReason::StaleObservationProbe {
+            observed_stale_probe = true;
+            break;
+        }
+    }
 
-    let (candidate_prefill_chunck_tokens, reason) = ask_decision(
-        &mut prefill_chunck_size_optimizer,
-        prompt_processing_context,
-    );
-    assert_eq!(candidate_prefill_chunck_tokens, 256);
-    assert_eq!(
-        reason,
-        PrefillChunckSizeOptimizerDecisionReason::Exploration,
-        "untested candidates should report exploration"
+    assert!(
+        observed_stale_probe,
+        "an eligible candidate should be probed after five times the candidate count decisions"
     );
 }

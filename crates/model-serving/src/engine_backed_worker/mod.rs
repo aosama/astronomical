@@ -19,6 +19,7 @@ mod idle_command;
 mod memory_limit;
 mod model_swap;
 mod output;
+mod prefill_optimizer_insight;
 mod protocol;
 mod support;
 

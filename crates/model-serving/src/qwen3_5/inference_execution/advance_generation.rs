@@ -133,6 +133,7 @@ impl Qwen3_5EngineState {
                         &mut active_request.performance_attribution,
                         &active_request.request_decoder_state,
                         0,
+                        0,
                     )?;
                 let first_generated_token = if active_request.mtp_request_state.is_some() {
                     let target_forward_output = model
@@ -180,6 +181,7 @@ impl Qwen3_5EngineState {
                     true,
                     model,
                     active_memory_bytes_before_growth,
+                    0,
                     &mut active_request.performance_attribution,
                 )?;
                 first_generated_token
@@ -248,6 +250,7 @@ impl Qwen3_5EngineState {
                     &mut active_request.performance_attribution,
                     &active_request.request_decoder_state,
                     mtp_full_attention_growth_bytes,
+                    0,
                 )?;
             active_request
                 .performance_attribution
@@ -280,6 +283,7 @@ impl Qwen3_5EngineState {
                                 true,
                                 model,
                                 active_memory_bytes_before_growth,
+                                0,
                                 &mut active_request.performance_attribution,
                             )?;
                             return Err(target_verification_error);
@@ -297,6 +301,7 @@ impl Qwen3_5EngineState {
                     true,
                     model,
                     active_memory_bytes_before_growth,
+                    0,
                     &mut active_request.performance_attribution,
                 )?;
                 let generated_token_emission = self.build_generated_token_emission(
@@ -322,6 +327,7 @@ impl Qwen3_5EngineState {
                 true,
                 model,
                 active_memory_bytes_before_growth,
+                0,
                 &mut active_request.performance_attribution,
             )?;
         }
@@ -335,6 +341,7 @@ impl Qwen3_5EngineState {
             adaptive_ram_growth_context,
             &mut active_request.performance_attribution,
             &active_request.request_decoder_state,
+            0,
             0,
         )?;
         let next_generated_token = if active_request.mtp_request_state.is_some() {
@@ -385,6 +392,7 @@ impl Qwen3_5EngineState {
             true,
             model,
             active_memory_bytes_before_growth,
+            0,
             &mut active_request.performance_attribution,
         )?;
 

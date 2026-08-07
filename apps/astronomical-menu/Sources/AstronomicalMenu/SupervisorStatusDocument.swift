@@ -174,7 +174,9 @@ struct SupervisorStatusDocument: Codable, Equatable {
 
   var isActive: Bool { activity == "prompt_processing" || activity == "generating" }
   var currentRate: Double? {
-    guard let progress, progress.elapsedMilliseconds > 0 else { return nil }
+    guard let progress, progress.processedTokens > 0, progress.elapsedMilliseconds > 0 else {
+      return nil
+    }
     return Double(progress.processedTokens) / (Double(progress.elapsedMilliseconds) / 1_000)
   }
   var menuBarTitle: String {
@@ -185,7 +187,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
       : "PP \(Int(currentRate.rounded())) tok/s"
   }
   var flightTitle: String {
-    guard let currentRate else { return "Standing by" }
+    guard let currentRate else { return isActive ? phaseTitle : "Standing by" }
     return activity == "generating"
       ? String(format: "Generating · %.1f tok/s", currentRate)
       : "Prompt processing · \(Int(currentRate.rounded())) tok/s"

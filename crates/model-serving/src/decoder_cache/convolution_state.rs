@@ -20,6 +20,12 @@ pub struct ConvolutionStateCheckpoint {
     state: Option<MlxArray>,
 }
 
+/// One convolution update with exact rolling-state views at requested boundaries.
+pub struct ConvolutionStateBoundaryCheckpointUpdate {
+    pub convolution_input: MlxArray,
+    pub boundary_convolution_states: Vec<MlxArray>,
+}
+
 impl ConvolutionState {
     /// Creates empty convolution state without allocating MLX arrays.
     ///
@@ -66,6 +72,39 @@ impl ConvolutionState {
         mixed_queries_keys_values: &MlxArray,
         token_count: i32,
     ) -> Result<MlxArray, MlxRuntimeError> {
+        Ok(self
+            .update_internal(runtime, mixed_queries_keys_values, token_count, &[])?
+            .convolution_input)
+    }
+
+    /// Updates final state and returns exact rolling-state views at local token boundaries.
+    pub fn update_with_boundary_checkpoints(
+        &mut self,
+        runtime: &MlxRuntime,
+        mixed_queries_keys_values: &MlxArray,
+        token_count: i32,
+        completed_prefill_chunck_tokens: &[i32],
+    ) -> Result<ConvolutionStateBoundaryCheckpointUpdate, MlxRuntimeError> {
+        if completed_prefill_chunck_tokens.is_empty() {
+            return Err(convolution_error(
+                "boundary checkpoint positions must not be empty".to_owned(),
+            ));
+        }
+        self.update_internal(
+            runtime,
+            mixed_queries_keys_values,
+            token_count,
+            completed_prefill_chunck_tokens,
+        )
+    }
+
+    fn update_internal(
+        &mut self,
+        runtime: &MlxRuntime,
+        mixed_queries_keys_values: &MlxArray,
+        token_count: i32,
+        completed_prefill_chunck_tokens: &[i32],
+    ) -> Result<ConvolutionStateBoundaryCheckpointUpdate, MlxRuntimeError> {
         let input_shape = mixed_queries_keys_values.shape();
         let expected_input_shape = [1, token_count, self.linear_convolution_dimension];
         if token_count <= 0 || input_shape != expected_input_shape {
@@ -75,6 +114,18 @@ impl ConvolutionState {
             )));
         }
         let rolling_buffer_tokens = self.linear_convolution_kernel_dimension.saturating_sub(1);
+        let mut previous_completed_prefill_chunck_tokens = 0;
+        for current_completed_prefill_chunck_tokens in completed_prefill_chunck_tokens {
+            if *current_completed_prefill_chunck_tokens <= previous_completed_prefill_chunck_tokens
+                || *current_completed_prefill_chunck_tokens >= token_count
+            {
+                return Err(convolution_error(
+                    "boundary checkpoint positions must be positive, strictly increasing, and less than token_count"
+                        .to_owned(),
+                ));
+            }
+            previous_completed_prefill_chunck_tokens = *current_completed_prefill_chunck_tokens;
+        }
         if self.state.as_ref().is_some_and(|state| {
             state.shape() != [1, rolling_buffer_tokens, self.linear_convolution_dimension]
         }) {
@@ -100,6 +151,21 @@ impl ConvolutionState {
         let convolution_input =
             runtime.concatenate_axis(&[initial_state, mixed_queries_keys_values], 1)?;
 
+        let mut boundary_convolution_states =
+            Vec::with_capacity(completed_prefill_chunck_tokens.len());
+        for current_completed_prefill_chunck_tokens in completed_prefill_chunck_tokens {
+            boundary_convolution_states.push(runtime.slice(
+                &convolution_input,
+                &[0, *current_completed_prefill_chunck_tokens, 0],
+                &[
+                    1,
+                    current_completed_prefill_chunck_tokens + rolling_buffer_tokens,
+                    self.linear_convolution_dimension,
+                ],
+                &[1, 1, 1],
+            )?);
+        }
+
         let next_state = runtime.slice(
             &convolution_input,
             &[0, token_count, 0],
@@ -111,7 +177,10 @@ impl ConvolutionState {
             &[1, 1, 1],
         )?;
         self.state = Some(next_state);
-        Ok(convolution_input)
+        Ok(ConvolutionStateBoundaryCheckpointUpdate {
+            convolution_input,
+            boundary_convolution_states,
+        })
     }
 
     /// Read-only access to the current rolling buffer. Used by the SSD

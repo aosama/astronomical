@@ -47,6 +47,7 @@ impl Qwen3_5EngineState {
         performance_attribution: &mut PerformanceAttribution,
         request_decoder_state: &RequestDecoderStateStack,
         mtp_full_attention_growth_bytes: usize,
+        exact_temporary_workspace_bytes: usize,
     ) -> Result<usize, AdaptiveRamGrowthMemoryAdmissionError> {
         if !self.adaptive_ram_growth_guard_enabled {
             return Ok(usize::MAX);
@@ -58,6 +59,7 @@ impl Qwen3_5EngineState {
                     adaptive_ram_growth_context,
                     request_decoder_state,
                     mtp_full_attention_growth_bytes,
+                    exact_temporary_workspace_bytes,
                 )
             },
         )
@@ -69,6 +71,7 @@ impl Qwen3_5EngineState {
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         request_decoder_state: &RequestDecoderStateStack,
         mtp_full_attention_growth_bytes: usize,
+        exact_temporary_workspace_bytes: usize,
     ) -> Result<usize, AdaptiveRamGrowthMemoryAdmissionError> {
         let model = self
             .model
@@ -94,6 +97,7 @@ impl Qwen3_5EngineState {
                 adaptive_ram_growth_context,
                 memory_snapshot_before_growth.active_memory_bytes(),
                 exact_persistent_growth_bytes,
+                exact_temporary_workspace_bytes,
             )
             .map_err(|adaptive_ram_growth_projection_error| {
                 tracing::warn!(
@@ -175,6 +179,7 @@ impl Qwen3_5EngineState {
                     adaptive_ram_growth_context,
                     memory_snapshot_after_reclamation.active_memory_bytes(),
                     exact_persistent_growth_bytes,
+                    exact_temporary_workspace_bytes,
                 )
                 .map_err(|adaptive_ram_growth_projection_error| {
                     tracing::warn!(
@@ -281,6 +286,7 @@ pub(super) fn collect_completed_forward_memory_snapshot(
     should_retain_adaptive_ram_growth_observation: bool,
     model: &Qwen3_5Model,
     active_memory_bytes_before_growth: usize,
+    exact_temporary_workspace_bytes: usize,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<MlxMemorySnapshot>, InferenceEngineError> {
     let memory_snapshot_after_growth = performance_attribution.measure_operation(
@@ -301,6 +307,7 @@ pub(super) fn collect_completed_forward_memory_snapshot(
         active_memory_bytes_before_growth,
         memory_snapshot_after_growth.active_memory_bytes(),
         memory_snapshot_after_growth.peak_memory_bytes(),
+        exact_temporary_workspace_bytes,
     );
     Ok(Some(memory_snapshot_after_growth))
 }
@@ -312,6 +319,7 @@ pub(super) fn record_completed_adaptive_ram_growth(
     should_retain_adaptive_ram_growth_observation: bool,
     model: &Qwen3_5Model,
     active_memory_bytes_before_growth: usize,
+    exact_temporary_workspace_bytes: usize,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(), InferenceEngineError> {
     if active_memory_bytes_before_growth == usize::MAX {
@@ -323,6 +331,7 @@ pub(super) fn record_completed_adaptive_ram_growth(
         should_retain_adaptive_ram_growth_observation,
         model,
         active_memory_bytes_before_growth,
+        exact_temporary_workspace_bytes,
         performance_attribution,
     )?;
     Ok(())

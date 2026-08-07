@@ -129,7 +129,9 @@ async fn should_update_status_config_warning_after_successful_reload() {
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
         config_warning: Some("ignored fixed prefill setting".to_owned()),
-        prefill_chunck_sizing_policy: astronomical_config::PrefillChunckSizingPolicy::Optimized,
+        prefill_chunck_sizing_policy: astronomical_config::PrefillChunckSizingPolicy::Optimized {
+            optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
+        },
         optimizer_state_directory: config_home_directory
             .join(".astronomical")
             .join("optimizer"),

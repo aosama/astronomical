@@ -6,6 +6,7 @@ use astronomical_ipc_protocol::{
 use tokio::io::AsyncWrite;
 
 use super::fatal::report_fatal_engine_error;
+use super::prefill_optimizer_insight::to_worker_prefill_optimizer_insight;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{GeneratedToken, InferenceEngine, InferenceEngineError};
@@ -218,6 +219,7 @@ where
                 elapsed_millis,
                 forward_prefill_chunck_elapsed_millis,
                 completed_prefill_chunck_tokens,
+                prefill_optimizer_insight,
                 mlx_memory_telemetry,
                 expert_memory_mode,
             } => {
@@ -260,6 +262,9 @@ where
                             forward_prefill_chunck_elapsed_millis,
                         ),
                         completed_prefill_chunck_tokens: Some(completed_prefill_chunck_tokens),
+                        prefill_optimizer_insight: prefill_optimizer_insight
+                            .map(to_worker_prefill_optimizer_insight)
+                            .transpose()?,
                         mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
                             astronomical_ipc_protocol::WorkerMlxMemorySnapshot {
                                 source: MlxMemorySnapshotSource::Prefill,

@@ -5,6 +5,7 @@ use crate::{
     openai_chat_endpoint,
     openai_models_endpoint::{list_models, retrieve_model},
     openai_responses_endpoint,
+    prefill_optimizer_observability::prefill_optimizer_status_document,
     system_telemetry::system_telemetry_routes,
 };
 use astronomical_config::DiscoveredModel;
@@ -303,6 +304,15 @@ async fn status_check(State(application_state): State<ApplicationState>) -> Resp
         "average_prefill_tok_per_second": worker_health_snapshot.serving_session.average_prefill_tok_per_second,
         "average_generation_tok_per_second": worker_health_snapshot.serving_session.average_generation_tok_per_second,
     });
+    let live_prefill_chunck_sizing_policy = application_state
+        .reloadable_config
+        .as_ref()
+        .and_then(|reloadable_config| reloadable_config.read().ok())
+        .map(|resolved_config| resolved_config.prefill_chunck_sizing_policy.clone());
+    status_json["prefill_optimizer"] = prefill_optimizer_status_document(
+        live_prefill_chunck_sizing_policy.as_ref(),
+        &worker_health_snapshot.prefill_optimizer_insights,
+    );
     let persistent_prompt_cache_summary = crate::PersistentPromptCacheSummary::from_worker_event(
         worker_health_snapshot
             .persistent_prompt_cache_stats
@@ -320,13 +330,17 @@ async fn status_check(State(application_state): State<ApplicationState>) -> Resp
                 processed_tokens,
                 total_tokens,
                 elapsed_millis,
+                request_started_at,
                 completed_prefill_chunck_tokens,
             } => {
+                let live_elapsed_millis = elapsed_millis.max(
+                    u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                );
                 status_json["progress"] = serde_json::json!({
                     "phase": "prefill",
                     "processed_tokens": processed_tokens,
                     "total_tokens": total_tokens,
-                    "elapsed_ms": elapsed_millis,
+                    "elapsed_ms": live_elapsed_millis,
                 });
                 if let Some(completed_prefill_chunck_tokens) = completed_prefill_chunck_tokens {
                     status_json["progress"]["completed_prefill_chunck_tokens"] =

@@ -78,6 +78,7 @@ impl PersistentPromptCacheDiskStoreConfig {
 
 /// Persistent, descriptor-backed SSD cache for Qwen3.5-MoE prompt-cache files.
 pub struct PersistentPromptCacheDiskStore {
+    active_model_prompt_cache_directory: PathBuf,
     pub(super) kv_blocks_directory: PathBuf,
     pub(super) recurrent_snapshots_directory: PathBuf,
     pub(crate) visual_embeddings_directory: PathBuf,
@@ -146,6 +147,7 @@ impl PersistentPromptCacheDiskStore {
             },
         )?;
         let disk_store = Self {
+            active_model_prompt_cache_directory: persistent_prompt_cache_directory,
             kv_blocks_directory,
             recurrent_snapshots_directory,
             visual_embeddings_directory,
@@ -178,16 +180,24 @@ impl PersistentPromptCacheDiskStore {
     }
 
     pub fn has_kv_block(&self, block_hash: &[u8; 32]) -> bool {
-        self.lock_tracked_files().has_kv_block(block_hash)
+        self.tracked_file_still_exists(
+            PersistentPromptCacheFileKind::SequenceStateBlock,
+            block_hash,
+        )
     }
 
     pub fn has_recurrent_snapshot(&self, block_hash: &[u8; 32]) -> bool {
-        self.lock_tracked_files().has_recurrent_snapshot(block_hash)
+        self.tracked_file_still_exists(
+            PersistentPromptCacheFileKind::BoundaryStateSnapshot,
+            block_hash,
+        )
     }
 
     pub fn has_visual_embedding(&self, visual_embedding_hash: &[u8; 32]) -> bool {
-        self.lock_tracked_files()
-            .has_visual_embedding(visual_embedding_hash)
+        self.tracked_file_still_exists(
+            PersistentPromptCacheFileKind::VisualEmbedding,
+            visual_embedding_hash,
+        )
     }
 
     pub fn total_size_bytes(&self) -> u64 {
@@ -210,6 +220,48 @@ impl PersistentPromptCacheDiskStore {
         self.write_operations
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn tracked_file_still_exists(
+        &self,
+        persistent_prompt_cache_file_kind: PersistentPromptCacheFileKind,
+        persistent_prompt_cache_file_hash: &[u8; 32],
+    ) -> bool {
+        let tracked_file_path = self
+            .lock_tracked_files()
+            .file(
+                persistent_prompt_cache_file_kind,
+                persistent_prompt_cache_file_hash,
+            )
+            .map(|tracked_file| tracked_file.file_path.clone());
+        let Some(tracked_file_path) = tracked_file_path else {
+            return false;
+        };
+        match std::fs::symlink_metadata(&tracked_file_path) {
+            Ok(_) => true,
+            Err(metadata_error) if metadata_error.kind() == std::io::ErrorKind::NotFound => {
+                self.untrack_file_and_subtract_global_accounting(
+                    persistent_prompt_cache_file_kind,
+                    *persistent_prompt_cache_file_hash,
+                );
+                false
+            }
+            Err(_) => true,
+        }
+    }
+
+    pub(crate) fn prepare_active_model_storage_directories(
+        &self,
+    ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        prepare_prompt_cache_directory_tree(
+            &self.global_prompt_cache_root_directory,
+            &self.active_model_prompt_cache_directory,
+            &[
+                &self.kv_blocks_directory,
+                &self.recurrent_snapshots_directory,
+                &self.visual_embeddings_directory,
+            ],
+        )
     }
 
     pub fn load_kv_block(

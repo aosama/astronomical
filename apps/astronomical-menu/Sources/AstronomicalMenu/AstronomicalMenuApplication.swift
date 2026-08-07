@@ -33,6 +33,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
     popover.contentViewController = NSHostingController(
       rootView: OrbitalTelemetryPopover(
         telemetryStore: telemetryStore,
+        openObservatory: { [weak self] in self?.openObservatory() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
         revealConfiguration: revealConfiguration,
@@ -101,10 +102,29 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
     }
   }
 
+  private func openObservatory() {
+    do {
+      let observatoryURL = try localSupervisorEndpointURL(path: "/")
+      guard NSWorkspace.shared.open(observatoryURL) else {
+        throw ObservatoryLaunchError.defaultBrowserUnavailable
+      }
+    } catch {
+      NSApp.presentError(error)
+    }
+  }
+
   private func revealConfiguration() {
     let configurationURL = FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent(".astronomical/config.json")
     NSWorkspace.shared.activateFileViewerSelecting([configurationURL])
+  }
+}
+
+private enum ObservatoryLaunchError: LocalizedError {
+  case defaultBrowserUnavailable
+
+  var errorDescription: String? {
+    "The Observatory could not be opened in the default browser"
   }
 }
 
