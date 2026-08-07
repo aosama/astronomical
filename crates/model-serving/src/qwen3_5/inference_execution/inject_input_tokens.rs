@@ -88,6 +88,7 @@ impl Qwen3_5EngineState {
                     &mut active_request.performance_attribution,
                     &active_request.request_decoder_state,
                     0,
+                    0,
                 )?;
             model
                 .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
@@ -105,6 +106,7 @@ impl Qwen3_5EngineState {
                 true,
                 model,
                 active_memory_bytes_before_rollback_replay,
+                0,
                 &mut active_request.performance_attribution,
             )?;
         }
@@ -161,11 +163,22 @@ impl Qwen3_5EngineState {
                 }
                 None => 0,
             };
+            let injected_prefill_execution_context =
+                super::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
+                    false,
+                    active_request.mtp_request_state.is_some(),
+                    model.sparse_experts_are_paged(),
+                    self.persistent_prompt_cache.is_some()
+                        && active_request.can_use_persistent_prompt_cache
+                        && !active_request.persistent_prompt_cache_capture_has_stopped
+                        && active_request.mtp_request_state.is_none(),
+                );
             let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
                 feedback_prefix_token_ids.len(),
                 self.prefill_chunck_sizer
                     .prompt_processing_context_identifier(
                         active_request.next_position_tokens as usize,
+                        injected_prefill_execution_context,
                     ),
                 false,
                 active_request.mtp_request_state.is_some(),
@@ -177,6 +190,7 @@ impl Qwen3_5EngineState {
                     &mut active_request.performance_attribution,
                     &active_request.request_decoder_state,
                     mtp_full_attention_growth_bytes,
+                    0,
                 )?;
             if should_reseed_mtp_after_injection {
                 let target_prefill_output = model
@@ -225,6 +239,7 @@ impl Qwen3_5EngineState {
                 false,
                 model,
                 active_memory_bytes_before_growth,
+                0,
                 &mut active_request.performance_attribution,
             )?;
         }
@@ -238,6 +253,7 @@ impl Qwen3_5EngineState {
             adaptive_ram_growth_context,
             &mut active_request.performance_attribution,
             &active_request.request_decoder_state,
+            0,
             0,
         )?;
         let (feedback_logits, mtp_target_hidden_states) = if should_reseed_mtp_after_injection {
@@ -291,6 +307,7 @@ impl Qwen3_5EngineState {
             true,
             model,
             active_memory_bytes_before_growth,
+            0,
             &mut active_request.performance_attribution,
         )?;
         active_request.pending_generated_token = Some(next_generated_token);

@@ -1,71 +1,25 @@
-use astronomical_model_serving::{
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, persistent_prompt_cache_aligned_prefill_end,
-};
+use astronomical_model_serving::persistent_prompt_cache_boundary_completed_prefill_chunck_tokens;
 
 #[test]
-fn should_stop_cold_prefill_at_first_persistent_prompt_cache_block_boundary() {
-    let prefill_chunck_start = 0;
-    let candidate_prefill_chunck_end = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 8;
-    let final_prompt_index = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 20;
-
-    let aligned_prefill_chunck_end = persistent_prompt_cache_aligned_prefill_end(
-        prefill_chunck_start,
-        candidate_prefill_chunck_end,
-        final_prompt_index,
-    );
-
-    assert_eq!(
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
-        aligned_prefill_chunck_end
-    );
-}
-
-#[test]
-fn should_stop_restored_prefill_at_next_persistent_prompt_cache_block_boundary() {
-    let prefill_chunck_start = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 8;
-    let candidate_prefill_chunck_end =
-        prefill_chunck_start + PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 8;
-    let final_prompt_index = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 20;
-
-    let aligned_prefill_chunck_end = persistent_prompt_cache_aligned_prefill_end(
-        prefill_chunck_start,
-        candidate_prefill_chunck_end,
-        final_prompt_index,
-    );
-
-    assert_eq!(
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 9,
-        aligned_prefill_chunck_end
-    );
-}
-
-#[test]
-fn should_keep_short_prefill_chunck_that_ends_before_the_next_cache_boundary() {
-    let prefill_chunck_start = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 8;
-    let candidate_prefill_chunck_end = prefill_chunck_start + 128;
-    let final_prompt_index = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 20;
-
-    let aligned_prefill_chunck_end = persistent_prompt_cache_aligned_prefill_end(
-        prefill_chunck_start,
-        candidate_prefill_chunck_end,
-        final_prompt_index,
-    );
-
-    assert_eq!(candidate_prefill_chunck_end, aligned_prefill_chunck_end);
-}
-
-#[test]
-fn should_not_cross_the_final_prompt_index_to_reach_a_cache_boundary() {
-    let prefill_chunck_start = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 8;
-    let candidate_prefill_chunck_end =
-        prefill_chunck_start + PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 8;
-    let final_prompt_index = prefill_chunck_start + 127;
-
-    let aligned_prefill_chunck_end = persistent_prompt_cache_aligned_prefill_end(
-        prefill_chunck_start,
-        candidate_prefill_chunck_end,
-        final_prompt_index,
-    );
-
-    assert_eq!(final_prompt_index, aligned_prefill_chunck_end);
+fn should_report_every_persistent_prompt_cache_boundary_crossed_by_one_prefill_chunck() {
+    for (prefill_chunck_start, prefill_chunck_end, expected_completed_prefill_chunck_tokens) in [
+        (0, 128, Vec::new()),
+        (0, 2_048, vec![2_048]),
+        (0, 4_096, vec![2_048, 4_096]),
+        (128, 4_096, vec![1_920, 3_968]),
+        (22_528, 26_624, vec![2_048, 4_096]),
+        (22_528, 25_000, vec![2_048]),
+        (2_048, 2_048, Vec::new()),
+        (4_096, 2_048, Vec::new()),
+        (usize::MAX - 1_024, usize::MAX, Vec::new()),
+    ] {
+        assert_eq!(
+            expected_completed_prefill_chunck_tokens,
+            persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
+                prefill_chunck_start,
+                prefill_chunck_end,
+            ),
+            "unexpected local boundary counts for [{prefill_chunck_start}, {prefill_chunck_end})"
+        );
+    }
 }

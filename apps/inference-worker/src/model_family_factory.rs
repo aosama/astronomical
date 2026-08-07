@@ -34,7 +34,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let model_directory_path = PathBuf::from(model_directory);
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let prompt_cache_config = self.prompt_cache_config.clone();
-        let prefill_chunck_sizing_policy = self.prefill_chunck_sizing_policy;
+        let prefill_chunck_sizing_policy = self.prefill_chunck_sizing_policy.clone();
         let optimizer_state_directory = self.optimizer_state_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();

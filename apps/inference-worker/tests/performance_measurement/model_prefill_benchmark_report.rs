@@ -12,7 +12,7 @@ pub(super) struct PrefillChunckMeasurement {
     pub(super) start_token: u32,
     pub(super) end_token: u32,
     pub(super) actual_prefill_chunck_tokens: u32,
-    pub(super) selected_prefill_chunck_tokens: u32,
+    pub(super) reported_completed_prefill_chunck_tokens: u32,
     pub(super) elapsed_millis: u64,
     pub(super) forward_prefill_chunck_elapsed_millis: u64,
     pub(super) mlx_active_memory_bytes: u64,
@@ -117,7 +117,7 @@ impl PrefillMeasurementAccumulator {
         mlx_peak_memory_bytes: Option<u64>,
     ) {
         let (
-            Some(selected_prefill_chunck_tokens),
+            Some(reported_completed_prefill_chunck_tokens),
             Some(forward_prefill_chunck_elapsed_millis),
             Some(mlx_active_memory_bytes),
             Some(mlx_allocator_cache_memory_bytes),
@@ -144,7 +144,7 @@ impl PrefillMeasurementAccumulator {
             start_token: self.previous_cumulative_processed_tokens,
             end_token: cumulative_processed_tokens,
             actual_prefill_chunck_tokens,
-            selected_prefill_chunck_tokens,
+            reported_completed_prefill_chunck_tokens,
             elapsed_millis,
             forward_prefill_chunck_elapsed_millis,
             mlx_active_memory_bytes,
@@ -157,6 +157,10 @@ impl PrefillMeasurementAccumulator {
 
     pub(super) fn chuncks(&self) -> &[PrefillChunckMeasurement] {
         &self.chuncks
+    }
+
+    pub(super) const fn cumulative_elapsed_millis(&self) -> u64 {
+        self.previous_cumulative_elapsed_millis
     }
 }
 
@@ -198,10 +202,10 @@ pub(super) fn build_prefill_benchmark_report(
         .iter()
         .map(PrefillChunckMeasurement::tokens_per_second)
         .collect::<Vec<_>>();
-    let mut selected_chunck_histogram = BTreeMap::<u32, usize>::new();
+    let mut completed_chunck_histogram = BTreeMap::<u32, usize>::new();
     for chunck_measurement in prefill_measurements.chuncks() {
-        *selected_chunck_histogram
-            .entry(chunck_measurement.selected_prefill_chunck_tokens)
+        *completed_chunck_histogram
+            .entry(chunck_measurement.reported_completed_prefill_chunck_tokens)
             .or_default() += 1;
     }
     let chunck_reports = prefill_measurements
@@ -217,7 +221,7 @@ pub(super) fn build_prefill_benchmark_report(
                 "mlx_active_memory_bytes": chunck_measurement.mlx_active_memory_bytes,
                 "mlx_allocator_cache_memory_bytes": chunck_measurement.mlx_allocator_cache_memory_bytes,
                 "mlx_peak_memory_bytes": chunck_measurement.mlx_peak_memory_bytes,
-                "selected_prefill_chunck_tokens": chunck_measurement.selected_prefill_chunck_tokens,
+                "reported_completed_prefill_chunck_tokens": chunck_measurement.reported_completed_prefill_chunck_tokens,
                 "sequence_number": chunck_measurement.sequence_number,
                 "start_token": chunck_measurement.start_token,
                 "tokens_per_second": chunck_measurement.tokens_per_second(),
@@ -259,7 +263,7 @@ pub(super) fn build_prefill_benchmark_report(
         "prompt_processing_seconds": prompt_processing_seconds,
         "prompt_processing_tokens_per_second": target_prompt_tokens as f64 / prompt_processing_seconds,
         "prompt_tokens": target_prompt_tokens,
-        "selected_chunck_histogram": selected_chunck_histogram,
+        "completed_chunck_histogram": completed_chunck_histogram,
         "total_request_seconds": total_request_seconds,
         "typed_output_event_sha256": typed_output_event_digest,
         "worker_startup_seconds": worker_startup_seconds,

@@ -269,22 +269,61 @@ impl DecoderCacheLayout {
         self.sequence_tensor_count
     }
 
-    /// Returns the number of tensors persisted in one complete boundary snapshot.
     #[must_use]
     pub const fn boundary_tensor_count(&self) -> usize {
         self.boundary_tensor_count
     }
 
-    /// Returns tensor contracts written to every sequence-state block.
     #[must_use]
     pub fn sequence_tensor_layouts(&self) -> Vec<DecoderCachePersistedTensorLayout> {
         self.persisted_tensor_layouts(true)
     }
 
-    /// Returns tensor contracts written to one complete boundary-state snapshot.
     #[must_use]
     pub fn boundary_tensor_layouts(&self) -> Vec<DecoderCachePersistedTensorLayout> {
         self.persisted_tensor_layouts(false)
+    }
+
+    /// Returns payload bytes for one complete boundary snapshot.
+    pub fn boundary_snapshot_payload_byte_count(&self) -> Result<usize, DecoderCacheLayoutError> {
+        self.boundary_tensor_layouts().iter().try_fold(
+            0_usize,
+            |boundary_payload_bytes, persisted_tensor_layout| {
+                boundary_payload_bytes
+                    .checked_add(
+                        persisted_tensor_layout
+                            .tensor_layout()
+                            .fixed_payload_byte_count()?,
+                    )
+                    .ok_or(DecoderCacheLayoutError::BoundarySnapshotPayloadByteCountOverflow)
+            },
+        )
+    }
+    /// Returns payload bytes for one persistent sequence block and boundary snapshot.
+    pub fn persistent_prompt_cache_block_payload_byte_count(
+        &self,
+        block_token_count: usize,
+    ) -> Result<usize, DecoderCacheLayoutError> {
+        let sequence_payload_bytes = self.sequence_tensor_layouts().iter().try_fold(
+            0_usize,
+            |sequence_payload_bytes, persisted_tensor_layout| {
+                let block_payload_bytes = persisted_tensor_layout
+                    .tensor_layout()
+                    .sequence_payload_byte_count_per_token()?
+                    .checked_mul(block_token_count)
+                    .ok_or(
+                        DecoderCacheLayoutError::PersistentPromptCacheBlockPayloadByteCountOverflow,
+                    )?;
+                sequence_payload_bytes
+                    .checked_add(block_payload_bytes)
+                    .ok_or(
+                        DecoderCacheLayoutError::PersistentPromptCacheBlockPayloadByteCountOverflow,
+                    )
+            },
+        )?;
+        sequence_payload_bytes
+            .checked_add(self.boundary_snapshot_payload_byte_count()?)
+            .ok_or(DecoderCacheLayoutError::PersistentPromptCacheBlockPayloadByteCountOverflow)
     }
 
     fn persisted_tensor_layouts(

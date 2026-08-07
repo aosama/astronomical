@@ -394,6 +394,7 @@ impl Qwen3_5EngineState {
                 verified_mtp_generated_token_ids: std::collections::VecDeque::new(),
                 accepted_mtp_draft_rollback: None,
                 force_next_mtp_draft_rejection_for_tests: false,
+                force_next_prefill_capacity_rejection_for_tests: false,
             });
             Ok(EngineGenerationStart::with_expert_memory_mode(
                 persistent_prompt_cache_token_count,

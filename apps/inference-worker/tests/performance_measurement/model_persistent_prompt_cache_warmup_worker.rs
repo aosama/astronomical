@@ -20,7 +20,7 @@ use super::model_process_metrics::{
     WorkerPhysicalFootprint, find_worker_process_id, measure_worker_physical_footprint,
 };
 
-pub(super) const MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+pub(super) const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 pub(super) const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 const READY_ATTEMPT_LIMIT: u8 = 70;
 

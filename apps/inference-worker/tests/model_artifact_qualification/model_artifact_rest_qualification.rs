@@ -26,7 +26,7 @@ use super::model_artifact_rest_transport::{
 };
 
 pub(super) const E2E_TIMEOUT: Duration = Duration::from_secs(115);
-const MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const READY_ATTEMPT_LIMIT: u8 = 70;
 // The litmus checks Responses completion and worker reuse, not long output volume.
 const DEPLOYMENT_LITMUS_RESPONSES_MAX_OUTPUT_TOKENS: u32 = 512;

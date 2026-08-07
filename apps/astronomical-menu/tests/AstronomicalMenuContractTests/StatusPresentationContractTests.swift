@@ -266,6 +266,7 @@ final class StatusPresentationContractTests: XCTestCase {
       statusDocument.elapsedTimeTitle,
       "0.2 s / Calculating"
     )
+    XCTAssertEqual(statusDocument.flightTitle, "Prompt processing")
   }
 
   func test_should_use_plain_language_for_prompt_processing_rate() throws {

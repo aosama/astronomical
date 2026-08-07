@@ -41,6 +41,12 @@ fn should_accept_a_mixed_architecture_neutral_decoder_cache_layout() {
     assert_eq!(decoder_cache_layout.boundary_tensor_count(), 2);
     assert_eq!(
         decoder_cache_layout
+            .boundary_snapshot_payload_byte_count()
+            .expect("fixed boundary tensor payload bytes should fit usize"),
+        176
+    );
+    assert_eq!(
+        decoder_cache_layout
             .sequence_tensor_layouts()
             .into_iter()
             .map(|tensor_layout| tensor_layout.persistent_tensor_name())

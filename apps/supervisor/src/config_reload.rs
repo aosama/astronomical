@@ -17,8 +17,6 @@ use astronomical_ipc_protocol::{
 };
 use thiserror::Error;
 
-const IGNORED_FIXED_PREFILL_CHUNCK_TOKENS_WARNING: &str = "found fixed_prefill_chunck_tokens defined while prefill_chunck_size_optimizer_enabled = true, will ignore fixed_prefill_chunck_token value";
-
 /// Immutable snapshot of every resolved runtime value the supervisor needs
 /// to decide whether a config reload requires a worker restart, a full REST
 /// API restart, or only an in-place update.
@@ -122,7 +120,11 @@ impl ResolvedRuntimeConfigResolver {
             maximum_mlx_memory_bytes: user_config.maximum_mlx_memory_bytes()?,
             config_warning: user_config
                 .ignored_fixed_prefill_chunck_tokens()
-                .map(|_| IGNORED_FIXED_PREFILL_CHUNCK_TOKENS_WARNING.to_owned()),
+                .map(|ignored_fixed_prefill_chunck_tokens| {
+                    format!(
+                        "Adaptive prefill optimizer is active. The configured fixed prefill fallback of {ignored_fixed_prefill_chunck_tokens} tokens is ignored."
+                    )
+                }),
             prefill_chunck_sizing_policy: user_config.prefill_chunck_sizing_policy()?,
             optimizer_state_directory: user_config.optimizer_directory()?,
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
@@ -148,12 +150,17 @@ impl ResolvedRuntimeConfig {
                 .prompt_cache_config
                 .global_prompt_cache_maximum_size_bytes(),
             persistent_prompt_cache_enabled: self.persistent_prompt_cache_enabled,
-            prefill_chunck_sizing_policy: match self.prefill_chunck_sizing_policy {
-                PrefillChunckSizingPolicy::Optimized => WorkerPrefillChunckSizingPolicy::Optimized,
+            prefill_chunck_sizing_policy: match &self.prefill_chunck_sizing_policy {
+                PrefillChunckSizingPolicy::Optimized {
+                    optimizer_prefill_chunck_token_candidates,
+                } => WorkerPrefillChunckSizingPolicy::Optimized {
+                    optimizer_prefill_chunck_token_candidates:
+                        optimizer_prefill_chunck_token_candidates.clone(),
+                },
                 PrefillChunckSizingPolicy::Fixed {
                     fixed_prefill_chunck_tokens,
                 } => WorkerPrefillChunckSizingPolicy::Fixed {
-                    fixed_prefill_chunck_tokens,
+                    fixed_prefill_chunck_tokens: *fixed_prefill_chunck_tokens,
                 },
             },
             optimizer_state_directory: Some(self.optimizer_state_directory.clone()),

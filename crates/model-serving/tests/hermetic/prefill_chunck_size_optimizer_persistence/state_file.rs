@@ -1,10 +1,9 @@
 use std::fs;
 
 use super::support::{
-    DEFAULT_CANDIDATES, DRIFT_TRIGGER_FACTOR, OPTIMIZER_STATE_FILE_NAME,
-    SLIDING_WINDOW_OBSERVATION_COUNT, TRUSTED_OBSERVATION_COUNT, context_at_bucket,
-    create_optimizer_with_default_candidates, explore_all_candidates, load_expect_some,
-    temporary_directory,
+    DEFAULT_CANDIDATES, OPTIMIZER_STATE_FILE_NAME, SLIDING_WINDOW_OBSERVATION_COUNT,
+    context_at_bucket, create_optimizer_with_default_candidates, load_expect_some,
+    observe_all_candidates, temporary_directory,
 };
 
 #[test]
@@ -49,7 +48,7 @@ fn should_update_persisted_file_after_each_save() {
         .expect("first save should succeed");
 
     // Add observations and save again
-    explore_all_candidates(&mut optimizer, context, 1000);
+    observe_all_candidates(&mut optimizer, context, 1000);
     optimizer
         .save_to_directory(&optimizer_directory, "test-model", "rev-1")
         .expect("second save should succeed");
@@ -60,9 +59,7 @@ fn should_update_persisted_file_after_each_save() {
         "test-model",
         "rev-1",
         &DEFAULT_CANDIDATES,
-        TRUSTED_OBSERVATION_COUNT,
         SLIDING_WINDOW_OBSERVATION_COUNT,
-        DRIFT_TRIGGER_FACTOR,
     );
 
     let original_decision = optimizer.ask(context);
@@ -81,7 +78,7 @@ fn should_write_valid_json_that_can_be_parsed_independently() {
     let mut optimizer = create_optimizer_with_default_candidates();
 
     let context = context_at_bucket(0);
-    explore_all_candidates(&mut optimizer, context, 1500);
+    observe_all_candidates(&mut optimizer, context, 1500);
 
     optimizer
         .save_to_directory(&optimizer_directory, "test-model", "rev-1")
@@ -95,8 +92,8 @@ fn should_write_valid_json_that_can_be_parsed_independently() {
     let parsed_state_file_json: serde_json::Value =
         serde_json::from_str(&state_file_content).expect("saved file should be valid JSON");
     assert_eq!(
-        parsed_state_file_json["format_version"], 3,
-        "format version 3 should invalidate observations from the pre-NAX attention policy"
+        parsed_state_file_json["format_version"], 4,
+        "format version 4 should invalidate the retired median-throughput policy"
     );
     assert_eq!(
         parsed_state_file_json["model_id"], "test-model",
@@ -107,7 +104,7 @@ fn should_write_valid_json_that_can_be_parsed_independently() {
         "model_revision should match"
     );
     assert!(
-        parsed_state_file_json["context_buckets"].is_object(),
-        "context_buckets should be a JSON object"
+        parsed_state_file_json["context_buckets"].is_array(),
+        "context_buckets should be a JSON array"
     );
 }

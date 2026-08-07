@@ -1,10 +1,9 @@
+use astronomical_ipc_protocol::{
+    ChatGenerationCompletionReason, ChatGenerationOutput, WorkerEvent,
+};
 use std::{
     sync::{Arc, RwLock},
     time::Duration,
-};
-
-use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationOutput, WorkerEvent,
 };
 use tokio::time::Instant;
 
@@ -13,6 +12,7 @@ use crate::{
     GenerationPerformanceRecord, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
     generation_performance_log::unix_epoch_millis,
+    prefill_optimizer_observability::record_prefill_optimizer_insight,
     worker_health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot,
         publish_active_request_progress, publish_activity, publish_expert_memory_mode,
@@ -259,6 +259,7 @@ pub(super) fn handle_worker_event(
             elapsed_millis,
             forward_prefill_chunck_elapsed_millis,
             completed_prefill_chunck_tokens,
+            prefill_optimizer_insight,
             mlx_memory_snapshot,
         } => {
             if let Some(active_request) = active_generation.as_mut()
@@ -296,10 +297,14 @@ pub(super) fn handle_worker_event(
                     ActiveRequestProgress::Prefill {
                         processed_tokens,
                         total_tokens,
+                        request_started_at: active_request.request_started_at,
                         elapsed_millis,
                         completed_prefill_chunck_tokens,
                     },
                 );
+                if let Some(prefill_optimizer_insight) = prefill_optimizer_insight {
+                    record_prefill_optimizer_insight(health_snapshot, prefill_optimizer_insight);
+                }
             }
         }
         WorkerEvent::GenerationProgress {

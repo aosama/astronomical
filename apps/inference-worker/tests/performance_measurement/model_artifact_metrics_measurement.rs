@@ -21,7 +21,7 @@ const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 const DOCUMENT_WORD_COUNT: usize = 5_000;
 const FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS: u32 = 8_192;
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
-const MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");

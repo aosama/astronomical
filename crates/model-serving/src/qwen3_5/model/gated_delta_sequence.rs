@@ -4,6 +4,8 @@ use astronomical_runtime_integration::{
 };
 
 const GATED_DELTA_SEQUENCE_OPERATION: &str = "apply fused Qwen3.5 gated-delta sequence";
+const CHECKPOINT_SETUP_MARKER: &str = "/* ASTRONOMICAL_CHECKPOINT_SETUP */";
+const CHECKPOINT_WRITE_MARKER: &str = "/* ASTRONOMICAL_CHECKPOINT_WRITE */";
 const GATED_DELTA_KERNEL_SOURCE: &str = r#"
     constexpr int time_block_size = sizeof(InT) == 4 ? 16 : 32;
     constexpr int value_row_block_size = 32;
@@ -47,6 +49,7 @@ const GATED_DELTA_KERNEL_SOURCE: &str = r#"
         ((size_t)batch_index * token_count * Hv + value_head_index) * Dv +
         first_value_row;
 
+    /* ASTRONOMICAL_CHECKPOINT_SETUP */
     for (int first_token = 0; first_token < token_count;
          first_token += time_block_size) {
         auto tokens_in_block = min(time_block_size, token_count - first_token);
@@ -118,6 +121,7 @@ const GATED_DELTA_KERNEL_SOURCE: &str = r#"
                 output_fragments += state_fragment[fragment_index] *
                     float4(query_vectors[fragment_index]);
             }
+            /* ASTRONOMICAL_CHECKPOINT_WRITE */
             float output_value = output_fragments.x + output_fragments.y +
                 output_fragments.z + output_fragments.w;
             output_value += simd_shuffle_down(output_value, 4);
@@ -143,6 +147,7 @@ const GATED_DELTA_KERNEL_SOURCE: &str = r#"
 
 /// Builds the fused Qwen3.5 gated-delta sequence kernel.
 pub fn qwen3_5_gated_delta_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
+    let ordinary_kernel_source = gated_delta_kernel_source("", "");
     MlxMetalKernel::new(
         "astronomical_qwen3_5_gated_delta_sequence",
         &[
@@ -155,8 +160,17 @@ pub fn qwen3_5_gated_delta_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
             "token_count",
         ],
         &["outputs", "next_recurrent_state"],
-        GATED_DELTA_KERNEL_SOURCE,
+        &ordinary_kernel_source,
     )
+}
+
+pub(super) fn gated_delta_kernel_source(
+    checkpoint_setup_source: &str,
+    checkpoint_write_source: &str,
+) -> String {
+    GATED_DELTA_KERNEL_SOURCE
+        .replace(CHECKPOINT_SETUP_MARKER, checkpoint_setup_source)
+        .replace(CHECKPOINT_WRITE_MARKER, checkpoint_write_source)
 }
 
 /// Applies fused Qwen3.5 gated-delta recurrence across one prompt/decode sequence.
@@ -221,7 +235,7 @@ pub fn qwen3_5_gated_delta_sequence(
     Ok((sequence_outputs, next_recurrent_state))
 }
 
-fn template_arguments(
+pub(super) fn template_arguments(
     sequence_shape: GatedDeltaSequenceShape,
     input_dtype: MlxDtype,
     state_dtype: MlxDtype,
@@ -255,16 +269,16 @@ fn template_arguments(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct GatedDeltaSequenceShape {
-    batch_size: i32,
-    token_count: i32,
-    key_head_count: i32,
-    value_head_count: i32,
-    key_head_dimension: i32,
-    value_head_dimension: i32,
+pub(super) struct GatedDeltaSequenceShape {
+    pub(super) batch_size: i32,
+    pub(super) token_count: i32,
+    pub(super) key_head_count: i32,
+    pub(super) value_head_count: i32,
+    pub(super) key_head_dimension: i32,
+    pub(super) value_head_dimension: i32,
 }
 
-fn validate_gated_delta_sequence_shapes(
+pub(super) fn validate_gated_delta_sequence_shapes(
     queries: &MlxArray,
     keys: &MlxArray,
     values: &MlxArray,
@@ -362,7 +376,7 @@ fn is_supported_activation_dtype(dtype: MlxDtype) -> bool {
     )
 }
 
-fn gated_delta_sequence_error(description: &'static str) -> MlxRuntimeError {
+pub(super) fn gated_delta_sequence_error(description: &'static str) -> MlxRuntimeError {
     MlxRuntimeError::RuntimeOperation {
         operation: GATED_DELTA_SEQUENCE_OPERATION,
         description: description.to_owned(),

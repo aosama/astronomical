@@ -4,6 +4,8 @@ use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatModelCapabilities, ExpertMemoryMode, MlxMemorySnapshotSource, MtpRuntimeState,
     ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
+    WorkerPrefillOptimizerCandidateEvidence, WorkerPrefillOptimizerContext,
+    WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
 };
 
 const READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
@@ -223,6 +225,34 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 elapsed_millis: 1_500,
                                 forward_prefill_chunck_elapsed_millis: Some(1_400),
                                 completed_prefill_chunck_tokens: Some(2_048),
+                                prefill_optimizer_insight: Some(WorkerPrefillOptimizerInsight {
+                                    requested_prefill_chunck_tokens: 4_096,
+                                    actual_prefill_chunck_tokens: 2_048,
+                                    elapsed_millis: 1_500,
+                                    decision_reason:
+                                        WorkerPrefillOptimizerDecisionReason::InitialExploration,
+                                    has_observed_prefill_capacity_constraint: true,
+                                    has_observations_for_every_candidate: false,
+                                    context: WorkerPrefillOptimizerContext {
+                                        prompt_position_tokens: 0,
+                                        has_restored_prefix: false,
+                                        is_first_chunck_after_restore: false,
+                                        has_visual_embeddings: false,
+                                        is_mtp_active: false,
+                                        are_sparse_experts_paged: true,
+                                        is_prompt_cache_capture_eligible: true,
+                                        has_prior_capacity_reduction: false,
+                                    },
+                                    candidate_evidence: vec![
+                                        WorkerPrefillOptimizerCandidateEvidence {
+                                            candidate_prefill_chunck_tokens: 4_096,
+                                            observation_count: 1,
+                                            average_actual_prefill_chunck_tokens: 2_048,
+                                            average_elapsed_millis: 1_500,
+                                            decisions_since_last_observation: Some(0),
+                                        },
+                                    ],
+                                }),
                                 mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                                     source: MlxMemorySnapshotSource::Prefill,
                                     active_memory_bytes: 11_000,

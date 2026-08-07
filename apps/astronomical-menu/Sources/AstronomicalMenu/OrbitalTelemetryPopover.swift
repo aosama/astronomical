@@ -60,6 +60,7 @@ enum MlxMemoryLegendItem: Equatable {
 struct OrbitalTelemetryPopover: View {
   @Environment(\.colorScheme) private var colorScheme
   @ObservedObject var telemetryStore: TelemetryStore
+  let openObservatory: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
   let revealConfiguration: () -> Void
@@ -128,6 +129,12 @@ struct OrbitalTelemetryPopover: View {
           .accessibilityLabel("Server control: \(controlActionFeedback.message)")
       }
       Divider()
+      Button(action: openObservatory) {
+        Label("Open Observatory", systemImage: "safari")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(.cyan)
       HStack {
         Button("Reload config", action: reloadConfiguration)
         Button("Restart server", action: restartServer)

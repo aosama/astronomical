@@ -23,6 +23,7 @@ set -eu
 
 SUPERVISOR_BASE_URL=""
 readonly DAEMON_STARTUP_TIMEOUT_SECONDS=120
+readonly RUNNING_DAEMON_IDLE_TIMEOUT_SECONDS=120
 readonly CHAT_COMPLETION_TIMEOUT_SECONDS=120
 readonly CHAT_MAX_TOKENS=512
 readonly GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS=10
@@ -404,48 +405,30 @@ main() {
     printf '%s\n' "══════════════════════════════════════════════════════════════"
     printf '%s\n' ""
 
-    # ── Step 1/9: Terminate any stale Astronomical menu ──────────────────
+    # Do not interrupt a request already being served by the installed app.
+    if ! wait_for_running_daemon_idle_before_replacement; then
+        exit 1
+    fi
+
+    # ── Terminate any stale Astronomical menu ────────────────────────────
 
     if ! terminate_running_menu; then
         print_error "failed to terminate stale menu"
         exit 1
     fi
 
-    # ── Step 2/9: Terminate any running Astronomical daemon ──────────────
+    # ── Terminate any running Astronomical daemon ────────────────────────
 
     if ! terminate_running_daemon; then
         print_error "failed to terminate running daemon"
         exit 1
     fi
 
-    # ── Step 3/9: Launch the freshly built daemon ────────────────────────
+    # ── Launch the freshly built validation daemon ───────────────────────
 
-    start_step "launch-daemon"
-
-    # Launch the daemon in the background. Redirect stdin/stdout/stderr to
-    # /dev/null so the daemon does not hold the script's file descriptors
-    # open — otherwise the script cannot exit until the daemon is killed.
-    # The daemon writes its own logs to ~/.astronomical/logs/.
-    "$daemon_executable" </dev/null >/dev/null 2>&1 &
-    LAUNCHED_DAEMON_PID=$!
-
-    printf '  launched daemon PID=%s with worker=%s\n' "$LAUNCHED_DAEMON_PID" "$worker_executable"
-
-    # Give it a moment before we start polling.
-    sleep 2
-
-    # Quick sanity: did the daemon process survive the first 2 seconds?
-    if ! kill -0 "$LAUNCHED_DAEMON_PID" 2>/dev/null; then
-        # The process may have forked; check if something is listening instead.
-        quick_status="$(curl --silent --connect-timeout 1 --max-time 2 "${SUPERVISOR_BASE_URL}/health" 2>/dev/null || true)"
-        if [ "$quick_status" != "ok" ]; then
-            print_error "daemon process exited immediately — check logs in ~/.astronomical/logs/"
-            finish_step "launch-daemon" "failed"
-            exit 1
-        fi
+    if ! launch_bundled_daemon; then
+        exit 1
     fi
-
-    finish_step "launch-daemon" "success"
 
     # ── Step 4/9: Wait for the daemon to become ready ────────────────────
 
@@ -481,11 +464,23 @@ main() {
         exit 1
     fi
 
-    # Leave the daemon running for interactive use. Clear the PID so the
-    # cleanup trap does not terminate it.
+    # Validation requests must not pollute the interactive session counters.
+    if ! terminate_running_daemon; then
+        print_error "failed to terminate validation daemon"
+        exit 1
+    fi
     LAUNCHED_DAEMON_PID=""
 
-    # ── Step 9/9: Launch and validate the user-visible menu bar app ───────
+    if ! launch_bundled_daemon; then
+        exit 1
+    fi
+    if ! wait_for_daemon_ready; then
+        print_error "clean interactive daemon did not become ready"
+        exit 1
+    fi
+    LAUNCHED_DAEMON_PID=""
+
+    # ── Launch and validate the user-visible menu bar app ────────────────
 
     start_step "launch-menu"
     printf '  launching menu bar app...\n'

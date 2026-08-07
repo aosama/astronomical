@@ -108,6 +108,10 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
             .and_then(serde_json::Value::as_bool),
         Some(true)
     );
+    assert_eq!(
+        generated_config_json.get("optimizer_prefill_chunck_token_candidates"),
+        Some(&serde_json::json!([1_024, 2_048, 4_096, 8_192]))
+    );
     assert!(astronomical_config.mtp_enabled());
     assert_eq!(
         astronomical_config

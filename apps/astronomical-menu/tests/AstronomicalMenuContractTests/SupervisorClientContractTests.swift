@@ -4,6 +4,14 @@ import XCTest
 @testable import AstronomicalMenu
 
 final class SupervisorClientContractTests: XCTestCase {
+  func test_should_build_observatory_and_status_urls_from_the_same_local_supervisor_origin() throws {
+    let observatoryURL = try localSupervisorEndpointURL(path: "/")
+    let statusURL = try localSupervisorEndpointURL(path: "/v1/status")
+
+    XCTAssertEqual(observatoryURL.absoluteString, "http://127.0.0.1:6732/")
+    XCTAssertEqual(statusURL.absoluteString, "http://127.0.0.1:6732/v1/status")
+  }
+
   func test_should_accept_a_worker_restart_configuration_reload_response() async throws {
     StubSupervisorURLProtocol.responseConfiguration = .init(
       statusCode: 202,

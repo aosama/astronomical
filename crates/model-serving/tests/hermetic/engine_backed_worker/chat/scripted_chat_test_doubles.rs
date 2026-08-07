@@ -275,6 +275,7 @@ pub(super) struct ScriptedChatEngine {
     cancelled_generation_finalization: GenerationFinalization,
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
+    active_generation_prompt_cache_stats: Option<WorkerEvent>,
 }
 
 impl ScriptedChatEngine {
@@ -319,6 +320,7 @@ impl ScriptedChatEngine {
             cancelled_generation_finalization: GenerationFinalization::default(),
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            active_generation_prompt_cache_stats: None,
         }
     }
 
@@ -334,6 +336,7 @@ impl ScriptedChatEngine {
             cancelled_generation_finalization: GenerationFinalization::default(),
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            active_generation_prompt_cache_stats: None,
         }
     }
 
@@ -375,6 +378,14 @@ impl ScriptedChatEngine {
 
     pub(super) fn cancellation_count(&self) -> Arc<AtomicUsize> {
         Arc::clone(&self.cancellation_count)
+    }
+
+    pub(super) fn with_active_generation_prompt_cache_stats(
+        mut self,
+        active_generation_prompt_cache_stats: WorkerEvent,
+    ) -> Self {
+        self.active_generation_prompt_cache_stats = Some(active_generation_prompt_cache_stats);
+        self
     }
 }
 
@@ -423,7 +434,7 @@ impl InferenceEngine for ScriptedChatEngine {
         let generated_token = self
             .generated_tokens
             .get(self.next_token_index)
-            .copied()
+            .cloned()
             .unwrap_or(GeneratedToken::EndOfSequence);
         self.next_token_index += 1;
         if matches!(
@@ -465,6 +476,15 @@ impl InferenceEngine for ScriptedChatEngine {
             ExpertMemoryMode::Resident,
             None,
         ))
+    }
+
+    async fn collect_persistent_prompt_cache_stats(
+        &self,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        Ok(self
+            .is_active
+            .then(|| self.active_generation_prompt_cache_stats.clone())
+            .flatten())
     }
 }
 

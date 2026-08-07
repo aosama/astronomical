@@ -29,6 +29,7 @@ mod generation_lifecycle;
 mod memory_breakdown;
 mod model_visible_correction;
 mod prefill_progress;
+mod prompt_cache_stats;
 mod ready_and_model_lifecycle;
 mod scripted_chat_test_doubles;
 mod support;
