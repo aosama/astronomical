@@ -1,6 +1,6 @@
 //! Embedded single-page admin console served by the supervisor.
 //!
-//! The Observatory console is a fixed bundle of six files (HTML, four JS, CSS)
+//! The Observatory console is a fixed bundle of seven files (HTML, five JS, CSS)
 //! included directly into the `astronomicald` binary through `include_str!`
 //! so the supervisor has no filesystem dependency and no separate frontend
 //! build step. The assets live at `apps/supervisor/console/` and are reached
@@ -10,6 +10,7 @@ use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
 const INDEX_HTML: &str = include_str!("../console/index.html");
 const CONSOLE_JS: &str = include_str!("../console/console.js");
+const OVERVIEW_COMPACT_JS: &str = include_str!("../console/overview-compact.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../console/memory-control.js");
 const OPTIMIZER_JS: &str = include_str!("../console/optimizer.js");
 const PLAYGROUND_JS: &str = include_str!("../console/playground.js");
@@ -29,12 +30,11 @@ where
         .route("/", get(console_index))
         .route("/overview", get(console_index))
         .route("/chat", get(console_index))
-        .route("/memory", get(console_index))
-        .route("/cache", get(console_index))
         .route("/optimizer", get(console_index))
         .route("/model", get(console_index))
         .route("/settings", get(console_index))
         .route("/console.js", get(console_script))
+        .route("/overview-compact.js", get(overview_compact_script))
         .route("/memory-control.js", get(memory_control_script))
         .route("/optimizer.js", get(optimizer_script))
         .route("/playground.js", get(playground_script))
@@ -51,6 +51,10 @@ pub(crate) async fn console_index() -> Response {
 /// framework, no build step).
 pub(crate) async fn console_script() -> Response {
     embedded_text_response(CONSOLE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn overview_compact_script() -> Response {
+    embedded_text_response(OVERVIEW_COMPACT_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn memory_control_script() -> Response {

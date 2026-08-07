@@ -1,10 +1,10 @@
 #![allow(unsafe_code)]
 
-//! Local macOS system telemetry for the Observatory web console.
+//! Local macOS system telemetry exposed by the supervisor.
 //!
 //! The Swift menu bar app samples GPU utilization directly from IOKit. A
-//! browser cannot call IOKit, so the supervisor exposes the same measurement
-//! through `GET /v1/system/telemetry`. This module owns the crate's only FFI
+//! local API client can request the same measurement through
+//! `GET /v1/system/telemetry`. This module owns the crate's only FFI
 //! block; all other supervisor modules retain `deny(unsafe_code)`.
 //!
 //! The sampling logic mirrors `SystemTelemetrySampler.swift`: iterate
