@@ -15,6 +15,8 @@ const EXPECTED_OVERVIEW_REGION_MARKER: &str =
 const EXPECTED_OPTIMIZER_DESTINATION_MARKER: &str = "data-observatory-destination=\"optimizer\"";
 const EXPECTED_OPTIMIZER_REGION_MARKER: &str =
     "data-observatory-view=\"optimizer\" aria-labelledby=\"optimizer-title\"";
+const EXPECTED_COMPACT_OVERVIEW_MARKER: &str =
+    "id=\"compact-memory-panel\" class=\"overview-summary-section compact-memory-panel\"";
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_index_html_at_root() {
@@ -54,15 +56,7 @@ async fn should_serve_the_embedded_observatory_index_html_at_root() {
 
 #[tokio::test]
 async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
-    for observatory_path in [
-        "/overview",
-        "/chat",
-        "/memory",
-        "/cache",
-        "/optimizer",
-        "/model",
-        "/settings",
-    ] {
+    for observatory_path in ["/overview", "/chat", "/optimizer", "/model", "/settings"] {
         let application = build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
@@ -87,6 +81,28 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
                     .to_str()
                     .is_ok_and(|content_type| content_type.starts_with("text/html"))),
             "deep-link response should be HTML for {observatory_path}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_not_serve_removed_memory_and_cache_destinations() {
+    for removed_observatory_path in ["/memory", "/cache"] {
+        let application = build_application(ScriptedExecutor::ready(Vec::new()));
+        let response = application
+            .oneshot(
+                Request::builder()
+                    .uri(removed_observatory_path)
+                    .body(Body::empty())
+                    .expect("the removed Observatory destination request should be valid"),
+            )
+            .await
+            .expect("the application should return an HTTP response");
+
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "path: {removed_observatory_path}"
         );
     }
 }
@@ -165,6 +181,10 @@ async fn should_expose_named_observatory_navigation_and_overview_region() {
         shell_text.contains(EXPECTED_OPTIMIZER_REGION_MARKER),
         "the Observatory must expose a labelled Optimizer region"
     );
+    assert!(
+        shell_text.contains(EXPECTED_COMPACT_OVERVIEW_MARKER),
+        "the Overview must expose its compact MLX memory panel"
+    );
 }
 
 #[tokio::test]
@@ -199,6 +219,36 @@ async fn should_serve_the_embedded_observatory_javascript_with_correct_content_t
         !response_body.is_empty(),
         "the console script should not be empty"
     );
+}
+
+#[tokio::test]
+async fn should_serve_the_embedded_compact_overview_javascript() {
+    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/overview-compact.js")
+                .body(Body::empty())
+                .expect("the compact overview request should be valid"),
+        )
+        .await
+        .expect("the application should return the compact overview script");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .is_some_and(|content_type| content_type
+                .to_str()
+                .is_ok_and(|content_type| content_type.starts_with("application/javascript")))
+    );
+    let response_body = to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .expect("the compact overview script body should be readable");
+    let script_text = String::from_utf8(response_body.to_vec())
+        .expect("the compact overview script should be UTF-8");
+    assert!(script_text.contains("reconciledMlxMemorySegmentBytes"));
 }
 
 #[tokio::test]

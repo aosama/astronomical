@@ -22,8 +22,6 @@
             <nav class="observatory-navigation" aria-label="Observatory sections">
                 <button class="navigation-button" type="button" data-observatory-destination="overview" aria-controls="overview-view" aria-current="page">Overview</button>
                 <button class="navigation-button" type="button" data-observatory-destination="chat" aria-controls="chat-view">Chat</button>
-                <button class="navigation-button" type="button" data-observatory-destination="memory" aria-controls="memory-view">Memory</button>
-                <button class="navigation-button" type="button" data-observatory-destination="cache" aria-controls="cache-view">Cache</button>
                 <button class="navigation-button" type="button" data-observatory-destination="optimizer" aria-controls="optimizer-view">Optimizer</button>
                 <button class="navigation-button" type="button" data-observatory-destination="model" aria-controls="model-view">Model</button>
                 <button class="navigation-button" type="button" data-observatory-destination="settings" aria-controls="settings-view">Settings</button>
@@ -44,9 +42,12 @@
 
             <main class="observatory-main">
                 <section id="overview-view" class="observatory-view" data-observatory-view="overview" aria-labelledby="overview-title">
-                    <div class="view-heading">
-                        <div><p class="eyebrow">Live operations</p><h2 id="overview-title">Overview</h2></div>
-                        <p>Current request activity and this serving session at a glance.</p>
+                    <div class="view-heading overview-heading">
+                        <div>
+                            <p class="eyebrow">Live operations</p>
+                            <h2 id="overview-title">Overview</h2>
+                            <p class="overview-intro">Request flow, serving performance, memory pressure, and prompt reuse.</p>
+                        </div>
                     </div>
                     <div class="overview-grid">
                         <section id="now-strip" class="panel now-strip">
@@ -60,25 +61,62 @@
                                 <span id="phase-elapsed" class="phase-stat-value">— ms</span>
                             </div>
                         </section>
-                        <section id="gpu-panel" class="panel gpu-panel">
-                            <div class="panel-heading-row"><h3>Graphics processor</h3><span id="gpu-percentage" class="metric-value">Unavailable</span></div>
-                            <div class="gpu-bar"><div id="gpu-fill" class="gpu-fill"></div></div>
-                            <p class="panel-note">Live Apple graphics processor utilization</p>
-                        </section>
-                        <section id="session-panel" class="panel session-panel">
-                            <div class="panel-heading-row"><h3>Serving session</h3><span id="session-requests" class="metric-value">0 requests</span></div>
-                            <div class="session-row">
-                                <span class="metric-label">Average generation</span>
-                                <span id="session-avg-gen" class="metric-value">0 tok/s</span>
+                        <section class="panel overview-summary">
+                            <div class="overview-summary-heading">
+                                <div>
+                                    <p class="eyebrow">Since launch</p>
+                                    <h3>Serving session</h3>
+                                </div>
+                                <span id="session-requests" class="metric-value">0 requests</span>
                             </div>
-                            <div class="session-row">
-                                <span class="metric-label">Prompt reuse</span>
-                                <span id="session-reuse-pct" class="metric-value">Not measured</span>
-                            </div>
-                            <div class="reuse-bar"><div id="reuse-fill" class="reuse-fill"></div></div>
-                            <div class="session-row session-breakdown-row">
-                                <span class="metric-label">Session prompts</span>
-                                <span id="session-reuse-breakdown" class="metric-value">No completed prompts</span>
+                            <div class="overview-summary-grid">
+                                <section id="session-panel" class="overview-summary-section session-panel">
+                                    <h4>Performance</h4>
+                                    <div class="session-row">
+                                        <span class="metric-label">Average generation</span>
+                                        <span id="session-avg-gen" class="metric-value">0 tok/s</span>
+                                    </div>
+                                    <div class="session-row">
+                                        <span class="metric-label">Prompt reuse</span>
+                                        <span id="session-reuse-pct" class="metric-value">Not measured</span>
+                                    </div>
+                                    <div class="reuse-bar"><div id="reuse-fill" class="reuse-fill"></div></div>
+                                    <div class="session-row session-breakdown-row">
+                                        <span class="metric-label">Session prompts</span>
+                                        <span id="session-reuse-breakdown" class="metric-value">No completed prompts</span>
+                                    </div>
+                                </section>
+                                <section id="compact-memory-panel" class="overview-summary-section compact-memory-panel">
+                                    <div class="panel-heading-row">
+                                        <h4>MLX memory</h4>
+                                        <span id="compact-memory-total" class="metric-value compact-memory-total">0 GB</span>
+                                    </div>
+                                    <div class="compact-memory-bar" id="compact-memory-bar">
+                                        <div class="mlx-segment mlx-segment-experts" id="compact-mem-seg-experts"></div>
+                                        <div class="mlx-segment mlx-segment-model-core" id="compact-mem-seg-model-core"></div>
+                                        <div class="mlx-segment mlx-segment-context-state" id="compact-mem-seg-context-state"></div>
+                                        <div class="mlx-segment mlx-segment-runtime-work" id="compact-mem-seg-runtime-work"></div>
+                                        <div class="mlx-segment mlx-segment-available" id="compact-mem-seg-available"></div>
+                                    </div>
+                                    <div class="compact-memory-ceiling">
+                                        <span class="compact-memory-ceiling-label">ceiling</span>
+                                        <span id="compact-memory-ceiling" class="metric-value compact-memory-ceiling-value">/ 0 GB</span>
+                                    </div>
+                                </section>
+                                <section id="compact-cache-panel" class="overview-summary-section compact-cache-panel">
+                                    <div class="panel-heading-row">
+                                        <h4>Prompt cache</h4>
+                                        <span id="compact-cache-hit-rate" class="metric-value compact-cache-hit-rate">0.0%</span>
+                                    </div>
+                                    <div class="compact-cache-top">
+                                        <svg id="compact-cache-sparkline" class="compact-cache-sparkline" viewBox="0 0 120 24" width="120" height="24" aria-hidden="true"><polyline id="compact-cache-sparkline-line" points="" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        <span id="compact-cache-tokens-saved" class="compact-cache-stat">0 tokens saved</span>
+                                    </div>
+                                    <div class="compact-cache-disk-bar">
+                                        <div id="compact-cache-disk-fill" class="compact-cache-disk-fill"></div>
+                                        <span id="compact-cache-disk-label" class="compact-cache-disk-label">0 GB / 0 GB</span>
+                                    </div>
+                                </section>
                             </div>
                         </section>
                     </div>
@@ -115,68 +153,6 @@
                                 <details class="raw-stream-wrapper"><summary>Raw stream</summary><pre id="raw-stream" class="raw-stream"></pre></details>
                             </aside>
                         </div>
-                    </section>
-                </section>
-
-                <section id="memory-view" class="observatory-view" data-observatory-view="memory" aria-labelledby="memory-title" hidden>
-                    <div class="view-heading">
-                        <div><p class="eyebrow">Unified memory</p><h2 id="memory-title">Memory</h2></div>
-                        <p>Latest MLX ownership estimate against this Mac's configured ceiling.</p>
-                    </div>
-                    <section id="mlx-memory-panel" class="panel mlx-memory-panel">
-                        <div class="mlx-headline">
-                            <span id="mlx-active" class="big-number">0 GB</span>
-                            <span class="big-number-label">active</span>
-                            <span id="mlx-ceiling" class="mlx-ceiling-value">/ 0 GB</span>
-                        </div>
-                        <div id="mlx-source" class="mlx-source-label">Not measured</div>
-                        <div class="mlx-bar" id="mlx-bar">
-                            <div class="mlx-segment mlx-segment-experts" id="mlx-seg-experts"></div>
-                            <div class="mlx-segment mlx-segment-model-core" id="mlx-seg-model-core"></div>
-                            <div class="mlx-segment mlx-segment-context-state" id="mlx-seg-context-state"></div>
-                            <div class="mlx-segment mlx-segment-runtime-work" id="mlx-seg-runtime-work"></div>
-                            <div class="mlx-segment mlx-segment-available" id="mlx-seg-available"></div>
-                        </div>
-                        <div class="mlx-legend">
-                            <div class="mlx-legend-row" data-segment="experts"><span class="mlx-swatch mlx-sw-experts"></span><span class="mlx-legend-label">Experts</span><button class="mlx-info-btn" type="button" aria-label="Explain Experts">i</button><span class="mlx-legend-value" id="mlx-val-experts">0 GB</span></div>
-                            <div class="mlx-legend-row" data-segment="model-core"><span class="mlx-swatch mlx-sw-model-core"></span><span class="mlx-legend-label">Model core</span><button class="mlx-info-btn" type="button" aria-label="Explain Model core">i</button><span class="mlx-legend-value" id="mlx-val-model-core">0 GB</span></div>
-                            <div class="mlx-legend-row" data-segment="context-state"><span class="mlx-swatch mlx-sw-context-state"></span><span class="mlx-legend-label">Live context state</span><button class="mlx-info-btn" type="button" aria-label="Explain Live context state">i</button><span class="mlx-legend-value" id="mlx-val-context-state">0 GB</span></div>
-                            <div class="mlx-legend-row" data-segment="runtime-work"><span class="mlx-swatch mlx-sw-runtime-work"></span><span class="mlx-legend-label">Runtime work</span><button class="mlx-info-btn" type="button" aria-label="Explain Runtime work">i</button><span class="mlx-legend-value" id="mlx-val-runtime-work">0 GB</span></div>
-                            <div class="mlx-legend-row" data-segment="available"><span class="mlx-swatch mlx-sw-available"></span><span class="mlx-legend-label">Nominal MLX headroom</span><button class="mlx-info-btn" type="button" aria-label="Explain Nominal MLX headroom">i</button><span class="mlx-legend-value" id="mlx-val-available">0 GB</span></div>
-                        </div>
-                    </section>
-                </section>
-
-                <section id="cache-view" class="observatory-view" data-observatory-view="cache" aria-labelledby="cache-title" hidden>
-                    <div class="view-heading">
-                        <div><p class="eyebrow">SSD reuse</p><h2 id="cache-title">Cache</h2></div>
-                        <p>Persistent prompt state retained locally for faster repeated work.</p>
-                    </div>
-                    <section id="cache-panel" class="panel cache-panel">
-                        <div class="cache-headline">
-                            <span id="cache-hit-rate" class="big-number">0.0%</span>
-                            <span class="big-number-label">hit rate</span>
-                            <svg id="cache-sparkline" class="cache-sparkline" viewBox="0 0 120 24" width="120" height="24" aria-hidden="true"><polyline id="cache-sparkline-line" points="" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <div class="cache-stats-grid">
-                            <div class="cache-stat"><span id="cache-tokens-saved" class="cache-stat-value">0</span><span class="cache-stat-label">tokens saved</span></div>
-                            <div class="cache-stat"><span id="cache-hits" class="cache-stat-value">0</span><span class="cache-stat-label">hits</span></div>
-                            <div class="cache-stat"><span id="cache-misses" class="cache-stat-value">0</span><span class="cache-stat-label">misses</span></div>
-                            <div class="cache-stat"><span id="cache-snapshots" class="cache-stat-value">0</span><span class="cache-stat-label">recurrent snapshots</span></div>
-                            <div class="cache-stat"><span id="cache-blocks" class="cache-stat-value">0</span><span class="cache-stat-label">KV blocks</span></div>
-                        </div>
-                        <div class="cache-disk-bar">
-                            <div id="cache-disk-fill" class="cache-disk-fill"></div>
-                            <span id="cache-disk-label" class="cache-disk-label">0 GB / 0 GB</span>
-                        </div>
-                        <details class="cache-advanced"><summary>Advanced counters</summary>
-                            <div class="cache-advanced-grid">
-                                <div><span id="cache-visual-embeddings" class="cache-stat-value">0</span><span class="cache-stat-label">visual embeddings</span></div>
-                                <div><span id="cache-visual-hits" class="cache-stat-value">0</span><span class="cache-stat-label">visual hits</span></div>
-                                <div><span id="cache-visual-misses" class="cache-stat-value">0</span><span class="cache-stat-label">visual misses</span></div>
-                                <div><span id="cache-visual-size" class="cache-stat-value">0 GB</span><span class="cache-stat-label">visual cache size</span></div>
-                            </div>
-                        </details>
                     </section>
                 </section>
 
@@ -279,6 +255,7 @@
     <script src="/memory-control.js" defer></script>
     <script src="/optimizer.js" defer></script>
     <script src="/console.js" defer></script>
+    <script src="/overview-compact.js" defer></script>
     <script src="/playground.js" defer></script>
 </body>
 </html>
