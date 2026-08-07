@@ -122,6 +122,11 @@ async fn should_replace_prefill_memory_with_finalized_residency_memory() {
         worker_health_snapshot.expert_memory_mode,
         Some(ExpertMemoryMode::Resident)
     );
+    assert_eq!(worker_health_snapshot.prefill_optimizer_insights.len(), 1);
+    assert_eq!(
+        worker_health_snapshot.prefill_optimizer_insights[0].requested_prefill_chunck_tokens,
+        4_096
+    );
     worker_executor
         .shutdown()
         .await

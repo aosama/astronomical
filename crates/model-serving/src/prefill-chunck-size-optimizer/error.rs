@@ -8,8 +8,6 @@ pub enum PrefillChunckSizeOptimizerError {
     NoCandidatePrefillChunckTokens,
     #[error("candidate prefill_chunck_tokens values must be positive")]
     CandidatePrefillChunckTokensMustBePositive,
-    #[error("drift trigger factor must be at least two")]
-    DriftTriggerFactorMustBeAtLeastTwo,
     #[error(
         "candidate prefill_chunck_tokens value {candidate_prefill_chunck_tokens} was not registered"
     )]
@@ -18,6 +16,8 @@ pub enum PrefillChunckSizeOptimizerError {
     },
     #[error("observed prefill chunk elapsed milliseconds must be positive")]
     ObservationElapsedMillisMustBePositive,
+    #[error("observed prefill chunk token advancement must be positive")]
+    ObservationPrefillChunckTokensMustBePositive,
     #[error("failed to create optimizer state directory {directory}")]
     OptimizerStateDirectoryCreationFailed {
         directory: PathBuf,

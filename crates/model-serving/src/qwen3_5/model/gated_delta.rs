@@ -2,10 +2,12 @@ use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntim
 
 use super::Qwen3_5ExecutionError;
 use super::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
+use super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints;
 use super::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 use super::model::Qwen3_5Model;
 use super::tensor_slicing::slice_last_dimension;
 use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
+use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
 const GATED_DELTA_STEP_OPERATION: &str = "apply one Qwen3.5 gated-delta recurrent step";
 
@@ -145,9 +147,13 @@ impl Qwen3_5Model {
         &self,
         hidden_states: &MlxArray,
         token_count: i32,
+        decoder_layer_index: usize,
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
         convolution_state: &mut ConvolutionState,
         recurrent_state: &mut GatedDeltaRecurrentState,
+        mut boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let linear_key_head_count = self.config.linear_key_head_count() as i32;
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
@@ -181,8 +187,29 @@ impl Qwen3_5Model {
             hidden_states,
             &linear_attention_weights.decay_interval_projection,
         )?;
-        let convolution_input =
-            convolution_state.update(&self.runtime, &mixed_queries_keys_values, token_count)?;
+        let completed_prefill_chunck_tokens = boundary_checkpoint_collector
+            .as_ref()
+            .map(|collector| collector.completed_prefill_chunck_tokens().to_vec());
+        let (convolution_input, boundary_convolution_states) = match completed_prefill_chunck_tokens
+            .as_deref()
+        {
+            Some(completed_prefill_chunck_tokens) => {
+                let checkpoint_update = convolution_state.update_with_boundary_checkpoints(
+                    &self.runtime,
+                    &mixed_queries_keys_values,
+                    token_count,
+                    completed_prefill_chunck_tokens,
+                )?;
+                (
+                    checkpoint_update.convolution_input,
+                    checkpoint_update.boundary_convolution_states,
+                )
+            }
+            None => (
+                convolution_state.update(&self.runtime, &mixed_queries_keys_values, token_count)?,
+                Vec::new(),
+            ),
+        };
         let convolution_output = self.runtime.conv1d(
             &convolution_input,
             &linear_attention_weights.convolution_weight,
@@ -257,16 +284,54 @@ impl Qwen3_5Model {
             self.runtime.exp(&self.runtime.negative(&decay_products)?)?
         };
         let current_recurrent_state = recurrent_state.current_or_zero(&self.runtime)?;
-        let (recurrent_output, next_recurrent_state) = qwen3_5_gated_delta_sequence(
-            &self.runtime,
-            &self.gated_delta_kernel,
-            &queries,
-            &keys,
-            &values,
-            &decays,
-            &update_rates,
-            &current_recurrent_state,
-        )?;
+        let (recurrent_output, next_recurrent_state, boundary_recurrent_states) =
+            match completed_prefill_chunck_tokens.as_deref() {
+                Some(completed_prefill_chunck_tokens) => {
+                    let checkpoint_interval_token_count = boundary_checkpoint_collector
+                        .as_ref()
+                        .map(|collector| collector.checkpoint_interval_token_count())
+                        .ok_or_else(|| {
+                            gated_delta_error("gated-delta checkpoint collector disappeared")
+                        })?;
+                    let checkpoint_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
+                        &self.runtime,
+                        &self.gated_delta_checkpoint_kernel,
+                        &queries,
+                        &keys,
+                        &values,
+                        &decays,
+                        &update_rates,
+                        &current_recurrent_state,
+                        completed_prefill_chunck_tokens,
+                        checkpoint_interval_token_count,
+                    )?;
+                    (
+                        checkpoint_result.sequence_outputs,
+                        checkpoint_result.next_recurrent_state,
+                        checkpoint_result.recurrent_boundary_states,
+                    )
+                }
+                None => {
+                    let (recurrent_output, next_recurrent_state) = qwen3_5_gated_delta_sequence(
+                        &self.runtime,
+                        &self.gated_delta_kernel,
+                        &queries,
+                        &keys,
+                        &values,
+                        &decays,
+                        &update_rates,
+                        &current_recurrent_state,
+                    )?;
+                    (recurrent_output, next_recurrent_state, Vec::new())
+                }
+            };
+        if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector.as_deref_mut() {
+            boundary_checkpoint_collector.record_linear_attention_layer(
+                decoder_layer_index,
+                boundary_convolution_states,
+                boundary_recurrent_states,
+            )?;
+        }
         let normalized_output = self.runtime.rms_norm(
             &recurrent_output,
             &linear_attention_weights.normalization_weight,

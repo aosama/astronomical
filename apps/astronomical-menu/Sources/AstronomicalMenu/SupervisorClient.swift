@@ -4,6 +4,13 @@ private let supervisorPort = 6732
 private let maximumSupervisorResponseByteCount = 1_048_576
 private let maximumMlxMemoryUpdateTimeoutSeconds: TimeInterval = 120
 
+func localSupervisorEndpointURL(path: String) throws -> URL {
+  guard let endpointURL = URL(string: "http://127.0.0.1:\(supervisorPort)\(path)") else {
+    throw SupervisorClientError.invalidEndpoint
+  }
+  return endpointURL
+}
+
 protocol SupervisorClient: Sendable {
   func fetchStatus() async throws -> SupervisorStatusDocument
   func reloadConfiguration() async throws -> String
@@ -59,9 +66,7 @@ struct LocalSupervisorClient: SupervisorClient {
     acceptedStatusCodes: Set<Int>,
     timeoutInterval: TimeInterval = 2
   ) async throws -> Data {
-    guard let endpointURL = URL(string: "http://127.0.0.1:\(supervisorPort)\(path)") else {
-      throw SupervisorClientError.invalidEndpoint
-    }
+    let endpointURL = try localSupervisorEndpointURL(path: path)
     var supervisorRequest = URLRequest(url: endpointURL)
     supervisorRequest.httpMethod = method
     supervisorRequest.httpBody = requestBody

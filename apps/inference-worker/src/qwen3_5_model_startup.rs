@@ -125,16 +125,22 @@ pub(crate) fn initialize_qwen3_5_model(
             } => Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(
                 fixed_prefill_chunck_tokens,
             ),
-            PrefillChunckSizingPolicy::Optimized => match optimizer_state_directory {
+            PrefillChunckSizingPolicy::Optimized {
+                optimizer_prefill_chunck_token_candidates,
+            } => match optimizer_state_directory {
                 Some(optimizer_directory) => {
                     Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state(
                         maximum_prefill_chunck_tokens,
+                        optimizer_prefill_chunck_token_candidates,
                         optimizer_directory,
                         model_id,
                         model_revision,
                     )
                 }
-                None => Qwen3_5PrefillChunckSizer::production(maximum_prefill_chunck_tokens),
+                None => Qwen3_5PrefillChunckSizer::production(
+                    maximum_prefill_chunck_tokens,
+                    optimizer_prefill_chunck_token_candidates,
+                ),
             },
         },
     };

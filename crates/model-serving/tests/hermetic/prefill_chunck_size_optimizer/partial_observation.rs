@@ -1,48 +1,71 @@
 use super::*;
 
 #[test]
-fn should_ignore_partial_prefill_chuncks_when_learning_candidate_quality() {
+fn should_retain_a_memory_reduced_transition_under_the_requested_action() {
     let mut prefill_chunck_size_optimizer = three_candidate_optimizer();
-    let prompt_processing_context = PrefillChunckSizeOptimizerContext::new(47);
+    let unconstrained_context = PrefillChunckSizeOptimizerContext::new(47);
+    let capacity_reduced_context = PrefillChunckSizeOptimizerContext::new(48);
 
-    // Trust all candidates so exploitation can pick the best.
-    // 256 at 2000ms is slow (throughput ~128 t/s).
-    record_full_observations(
+    record_self_transition_observations(
+        &mut prefill_chunck_size_optimizer,
+        unconstrained_context,
+        256,
+        &[300],
+    );
+    record_self_transition_observations(
+        &mut prefill_chunck_size_optimizer,
+        unconstrained_context,
+        512,
+        &[450],
+    );
+    record_transition_observation(
+        &mut prefill_chunck_size_optimizer,
+        unconstrained_context,
+        1_024,
+        512,
+        2_000,
+        capacity_reduced_context,
+    );
+
+    let decision = prefill_chunck_size_optimizer
+        .ask_with_maximum_prefill_chunck_tokens(unconstrained_context, 1_024);
+    assert_eq!(decision.candidate_prefill_chunck_tokens, 512);
+}
+
+#[test]
+fn should_retain_a_prompt_tail_transition() {
+    let mut prefill_chunck_size_optimizer = three_candidate_optimizer();
+    let prompt_processing_context = PrefillChunckSizeOptimizerContext::new(49);
+
+    record_transition_observation(
         &mut prefill_chunck_size_optimizer,
         prompt_processing_context,
         256,
-        &[2_000, 2_000, 2_000],
-    );
-    // 512 at 600ms is fast (throughput ~853 t/s).
-    record_full_observations(
-        &mut prefill_chunck_size_optimizer,
+        64,
+        80,
         prompt_processing_context,
-        512,
-        &[600, 600, 600],
-    );
-    // 1024 at 11_000ms is very slow (throughput ~93 t/s) — but this is before the partial.
-    record_full_observations(
-        &mut prefill_chunck_size_optimizer,
-        prompt_processing_context,
-        1_024,
-        &[11_000, 11_000, 11_000],
     );
 
-    // Partial chunks must not count toward trust or quality.
-    prefill_chunck_size_optimizer
+    let decision = prefill_chunck_size_optimizer
+        .ask_with_maximum_prefill_chunck_tokens(prompt_processing_context, 64);
+    assert_eq!(decision.candidate_prefill_chunck_tokens, 256);
+    assert_eq!(
+        decision.reason,
+        PrefillChunckSizeOptimizerDecisionReason::Fallback
+    );
+}
+
+#[test]
+fn should_reject_a_transition_without_token_advancement() {
+    let mut prefill_chunck_size_optimizer = three_candidate_optimizer();
+    let prompt_processing_context = PrefillChunckSizeOptimizerContext::new(51);
+
+    let transition_error = prefill_chunck_size_optimizer
         .tell(
             prompt_processing_context,
-            1_024,
-            PrefillChunckSizeOptimizerObservation::partial_prefill_chunck(4, 100),
+            256,
+            PrefillChunckSizeOptimizerObservation::transition(0, 100, prompt_processing_context),
         )
-        .expect("partial observation should be accepted but ignored");
-
-    assert_eq!(
-        ask_candidate_prefill_chunck_tokens(
-            &mut prefill_chunck_size_optimizer,
-            prompt_processing_context
-        ),
-        512,
-        "partial chunks should not pollute candidate quality learning"
-    );
+        .expect_err("zero token advancement must be rejected");
+    assert!(transition_error.to_string().contains("must be positive"));
 }

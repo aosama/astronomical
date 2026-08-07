@@ -108,7 +108,11 @@ where
 {
     let prefill_chunck_sizing_policy =
         match worker_startup_configuration.prefill_chunck_sizing_policy {
-            WorkerPrefillChunckSizingPolicy::Optimized => PrefillChunckSizingPolicy::Optimized,
+            WorkerPrefillChunckSizingPolicy::Optimized {
+                optimizer_prefill_chunck_token_candidates,
+            } => PrefillChunckSizingPolicy::Optimized {
+                optimizer_prefill_chunck_token_candidates,
+            },
             WorkerPrefillChunckSizingPolicy::Fixed {
                 fixed_prefill_chunck_tokens,
             } => PrefillChunckSizingPolicy::Fixed {

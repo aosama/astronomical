@@ -1,9 +1,13 @@
 mod allocation_checkpoint;
 mod context_memory_admission;
+mod convolution_state;
 mod error_logging;
 mod full_attention;
 mod gated_delta;
+mod gated_delta_checkpoints;
 mod mtp_runtime;
+mod persistent_prompt_cache_boundary_checkpoint;
+mod persistent_prompt_cache_capture;
 mod prefill_chunck_sizer;
 mod quantized_matmul_partition_parity;
 mod request_decoder_state;

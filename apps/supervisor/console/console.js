@@ -10,6 +10,23 @@ const SERVER_SHUTDOWN_URL = "/v1/control/shutdown";
 const POLL_INTERVAL_MILLIS = 1000;
 const SPARKLINE_BUFFER_SIZE = 60;
 
+const OBSERVATORY_PATH_MAP = {
+    overview: "/overview",
+    chat: "/chat",
+    memory: "/memory",
+    cache: "/cache",
+    optimizer: "/optimizer",
+    model: "/model",
+    settings: "/settings"
+};
+
+const OBSERVATORY_PATH_TO_DESTINATION_MAP = Object.fromEntries(
+    Object.entries(OBSERVATORY_PATH_MAP).map(([destination, path]) => [path, destination])
+);
+
+const OBSERVATORY_DEFAULT_DESTINATION = "overview";
+const OBSERVATORY_DEFAULT_PATH = "/overview";
+
 const MLX_MEMORY_EXPLANATIONS = {
     experts: "Sparse MoE weights currently resident in MLX, including loaded expert pages.",
     "model-core": "Always-resident non-expert weights, including embeddings, attention, and vision weights.",
@@ -23,6 +40,7 @@ const sparklineHitRateBuffer = [];
 
 document.addEventListener("DOMContentLoaded", () => {
     console.log("observatory boot");
+    wireObservatoryNavigation();
     pollStatus();
     pollCacheStats();
     pollModels();
@@ -37,6 +55,56 @@ document.addEventListener("DOMContentLoaded", () => {
     wireMemoryLimitControl();
 });
 
+function wireObservatoryNavigation() {
+    const navigationButtons = Array.from(
+        document.querySelectorAll("[data-observatory-destination]")
+    );
+    const observatoryViews = Array.from(document.querySelectorAll("[data-observatory-view]"));
+    const activateCurrentObservatoryPath = () => {
+        const currentObservatoryPath = window.location.pathname;
+        const matchedDestination = OBSERVATORY_PATH_TO_DESTINATION_MAP[currentObservatoryPath]
+            || OBSERVATORY_DEFAULT_DESTINATION;
+        activateObservatoryView(matchedDestination, navigationButtons, observatoryViews, false);
+        if (!OBSERVATORY_PATH_TO_DESTINATION_MAP[currentObservatoryPath]) {
+            history.replaceState(null, "", OBSERVATORY_DEFAULT_PATH);
+        }
+    };
+    navigationButtons.forEach((navigationButton) => {
+        navigationButton.addEventListener("click", () => {
+            activateObservatoryView(
+                navigationButton.dataset.observatoryDestination,
+                navigationButtons,
+                observatoryViews,
+                /* updateHistory */ true
+            );
+        });
+    });
+    window.addEventListener("popstate", activateCurrentObservatoryPath);
+    activateCurrentObservatoryPath();
+}
+
+function activateObservatoryView(requestedViewIdentifier, navigationButtons, observatoryViews, updateHistory) {
+    const requestedViewExists = observatoryViews.some(
+        (observatoryView) => observatoryView.dataset.observatoryView === requestedViewIdentifier
+    );
+    const activeViewIdentifier = requestedViewExists ? requestedViewIdentifier : "overview";
+    observatoryViews.forEach((observatoryView) => {
+        observatoryView.hidden = observatoryView.dataset.observatoryView !== activeViewIdentifier;
+    });
+    navigationButtons.forEach((navigationButton) => {
+        if (navigationButton.dataset.observatoryDestination === activeViewIdentifier) {
+            navigationButton.setAttribute("aria-current", "page");
+        } else {
+            navigationButton.removeAttribute("aria-current");
+        }
+    });
+    const targetPath = OBSERVATORY_PATH_MAP[activeViewIdentifier] || OBSERVATORY_DEFAULT_PATH;
+    if (updateHistory) {
+        history.pushState(null, "", targetPath);
+    }
+    return activeViewIdentifier;
+}
+
 async function pollStatus() {
     try {
         const response = await fetch(STATUS_URL);
@@ -49,6 +117,7 @@ async function pollStatus() {
         renderMemoryLimitControl(data);
         renderSession(data);
         renderAboutEnhanced(data);
+        renderPrefillOptimizer(data.prefill_optimizer);
     } catch (fetchError) {
         setStatusUnavailable();
     }
@@ -59,7 +128,7 @@ function setStatusUnavailable() {
     header.className = "status-header unavailable";
     document.getElementById("status-word").textContent = "Unavailable";
     document.getElementById("status-model-id").textContent = "No model loaded";
-    document.getElementById("config-warning-badge").hidden = true;
+    document.getElementById("optimizer-configuration-note").hidden = true;
     resetNowStrip();
 }
 
@@ -67,7 +136,7 @@ function renderStatusHeader(data) {
     const header = document.getElementById("status-header");
     const statusWord = document.getElementById("status-word");
     const modelIdLabel = document.getElementById("status-model-id");
-    const configWarningBadge = document.getElementById("config-warning-badge");
+    const optimizerConfigurationNote = document.getElementById("optimizer-configuration-note");
     const status = data.status || "unavailable";
     const activity = data.activity || "idle";
     const isActive = activity === "prompt_processing" || activity === "generating";
@@ -89,10 +158,10 @@ function renderStatusHeader(data) {
         modelIdLabel.textContent = "No model loaded";
     }
     if (data.config_warning) {
-        configWarningBadge.textContent = data.config_warning;
-        configWarningBadge.hidden = false;
+        optimizerConfigurationNote.textContent = data.config_warning;
+        optimizerConfigurationNote.hidden = false;
     } else {
-        configWarningBadge.hidden = true;
+        optimizerConfigurationNote.hidden = true;
     }
 }
 

@@ -125,3 +125,15 @@ pub enum MlxRuntimeError {
         description: String,
     },
 }
+
+impl MlxRuntimeError {
+    /// Returns whether Metal completed a command buffer after exhausting GPU memory.
+    #[must_use]
+    pub fn is_recoverable_graphics_processor_out_of_memory(&self) -> bool {
+        let Self::RuntimeOperation { description, .. } = self else {
+            return false;
+        };
+        description.contains("[METAL] Command buffer execution failed: Insufficient Memory")
+            && description.contains("kIOGPUCommandBufferCallbackErrorOutOfMemory")
+    }
+}

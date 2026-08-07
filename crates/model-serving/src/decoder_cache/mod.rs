@@ -19,7 +19,9 @@ pub use append_only_attention_state::{
     FullAttentionKeyValueStateAllocationCheckpoint,
 };
 #[cfg(feature = "direct-mlx")]
-pub use convolution_state::{ConvolutionState, ConvolutionStateCheckpoint};
+pub use convolution_state::{
+    ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, ConvolutionStateCheckpoint,
+};
 #[cfg(feature = "direct-mlx")]
 pub use gated_delta_recurrent_state::{
     GatedDeltaRecurrentState, GatedDeltaRecurrentStateCheckpoint,

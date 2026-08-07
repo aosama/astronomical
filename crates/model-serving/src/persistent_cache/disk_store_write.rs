@@ -21,6 +21,8 @@ use super::save_admission::{
     persistent_prompt_cache_save_admission,
 };
 
+pub(super) const ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES: u64 = 16 * 1024;
+
 pub(crate) struct PersistentPromptCacheSerializedBlock {
     pub(crate) persistent_prompt_cache_block_key: PersistentPromptCacheBlockKey,
     pub(crate) parent_persistent_prompt_cache_block_key: Option<PersistentPromptCacheBlockKey>,
@@ -122,6 +124,8 @@ impl PersistentPromptCacheDiskStore {
                     parent_persistent_prompt_cache_block_key.block_index(),
                 )
             });
+        let kv_block_already_exists =
+            self.has_kv_block(&persistent_prompt_cache_block_key.block_hash());
         let save_admission = {
             let tracked_files = self.lock_tracked_files();
             let reclaimable_parent_recurrent_snapshot_bytes =
@@ -143,7 +147,7 @@ impl PersistentPromptCacheDiskStore {
                 reclaimable_parent_recurrent_snapshot_bytes,
                 self.global_prompt_cache_maximum_size_bytes,
                 persistent_prompt_cache_block_key.block_index(),
-                tracked_files.has_kv_block(&persistent_prompt_cache_block_key.block_hash()),
+                kv_block_already_exists,
             )
         };
         if save_admission == PersistentPromptCacheBlockSaveAdmission::SkipBecauseCacheIsFull {
@@ -190,6 +194,7 @@ impl PersistentPromptCacheDiskStore {
         serialized_file_writer: &dyn PersistentPromptCacheSerializedFileWriter,
     ) -> Result<PersistentPromptCacheBlockSaveAdmission, PersistentPromptCacheDiskStoreError> {
         let _write_operation_guard = self.lock_write_operations();
+        self.prepare_active_model_storage_directories()?;
         let persistent_prompt_cache_block_key = &serialized_block.persistent_prompt_cache_block_key;
         let parent_persistent_prompt_cache_block_key = serialized_block
             .parent_persistent_prompt_cache_block_key
@@ -337,5 +342,5 @@ pub(super) fn estimated_serialized_safetensors_file_byte_count(
         .values()
         .map(|tensor| u64::try_from(tensor.byte_count()).unwrap_or(u64::MAX))
         .fold(0_u64, u64::saturating_add);
-    tensor_payload_byte_count.saturating_add(16 * 1024)
+    tensor_payload_byte_count.saturating_add(ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES)
 }

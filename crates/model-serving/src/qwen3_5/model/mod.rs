@@ -19,6 +19,8 @@ mod full_attention;
 #[cfg(feature = "direct-mlx")]
 mod gated_delta;
 #[cfg(feature = "direct-mlx")]
+mod gated_delta_boundary_checkpoints;
+#[cfg(feature = "direct-mlx")]
 mod gated_delta_sequence;
 #[cfg(feature = "direct-mlx")]
 mod live_memory_limit;
@@ -47,6 +49,11 @@ pub use forward_graph::Qwen3_5TargetForwardOutput;
 pub use full_attention::qwen3_5_full_attention_step;
 #[cfg(feature = "direct-mlx")]
 pub use gated_delta::qwen3_5_gated_delta_step;
+#[cfg(feature = "direct-mlx")]
+pub use gated_delta_boundary_checkpoints::{
+    Qwen3_5GatedDeltaBoundaryCheckpointResult, qwen3_5_gated_delta_checkpoint_kernel,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+};
 #[cfg(feature = "direct-mlx")]
 pub use gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 #[cfg(feature = "direct-mlx")]

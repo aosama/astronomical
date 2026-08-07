@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -15,12 +15,12 @@ use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::PersistentPromptCacheSerializedFileWriter;
 use super::disk_store_write::{
-    PersistentPromptCacheSerializationOutcome, PersistentPromptCacheSerializedBlock,
-    estimated_serialized_safetensors_file_byte_count,
+    ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES, PersistentPromptCacheSerializationOutcome,
+    PersistentPromptCacheSerializedBlock, estimated_serialized_safetensors_file_byte_count,
 };
 
 const MAXIMUM_PENDING_SERIALIZED_BYTES: u64 = 256_000_000;
-const PENDING_WRITE_CHANNEL_CAPACITY: usize = 2;
+const PENDING_WRITE_RENDEZVOUS_CAPACITY: usize = 0;
 const WRITE_SLICE_BYTES: usize = 64 * 1024;
 const WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -134,7 +134,7 @@ impl PersistentPromptCacheWriteQueue {
         ssd_write_rate_megabytes_per_second: Option<u64>,
     ) -> Result<Self, PersistentPromptCacheDiskStoreError> {
         let (serialized_block_sender, serialized_block_receiver) =
-            sync_channel(PENDING_WRITE_CHANNEL_CAPACITY);
+            sync_channel(PENDING_WRITE_RENDEZVOUS_CAPACITY);
         let (writer_completed_sender, writer_completed_receiver) = sync_channel(1);
         let pending_serialized_bytes = Arc::new(AtomicU64::new(0));
         let pending_block_hashes = Arc::new(Mutex::new(HashSet::new()));
@@ -233,9 +233,10 @@ impl PersistentPromptCacheWriteQueue {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(persistent_prompt_cache_block_hash);
-        match serialized_block_sender.try_send(*serialized_block) {
+        let writer_handoff_started_at = Instant::now();
+        match serialized_block_sender.send(*serialized_block) {
             Ok(()) => Ok(PersistentPromptCacheWriteQueueOutcome::Queued),
-            Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
+            Err(_) => {
                 subtract_pending_serialized_bytes(
                     &self.pending_serialized_bytes,
                     serialized_byte_count,
@@ -247,11 +248,66 @@ impl PersistentPromptCacheWriteQueue {
                 Ok(PersistentPromptCacheWriteQueueOutcome::DroppedBecauseQueueIsFull)
             }
         }
+        .inspect(|write_queue_outcome| {
+            tracing::info!(
+                block_index = persistent_prompt_cache_block_key.block_index(),
+                writer_handoff_elapsed_millis = writer_handoff_started_at.elapsed().as_millis(),
+                outcome = ?write_queue_outcome,
+                "persistent prompt-cache serialized block handoff completed"
+            );
+        })
+    }
+
+    #[must_use]
+    pub fn can_accept_projected_captures(
+        &self,
+        projected_single_capture_tensor_payload_bytes: usize,
+        projected_boundary_count: usize,
+    ) -> bool {
+        let projected_single_capture_tensor_payload_bytes =
+            u64::try_from(projected_single_capture_tensor_payload_bytes).unwrap_or(u64::MAX);
+        let projected_single_capture_serialized_bytes =
+            projected_single_capture_tensor_payload_bytes
+                .saturating_add(ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES.saturating_mul(2));
+        let projected_all_capture_serialized_bytes = u64::try_from(projected_boundary_count)
+            .unwrap_or(u64::MAX)
+            .saturating_mul(projected_single_capture_serialized_bytes);
+        !self.shutdown_requested.load(Ordering::Acquire)
+            && self
+                .serialized_block_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+            && persistent_prompt_cache_write_queue_can_accept(
+                self.pending_serialized_bytes.load(Ordering::Acquire),
+                projected_single_capture_serialized_bytes,
+            )
+            && self
+                .disk_store
+                .total_size_bytes()
+                .checked_add(projected_all_capture_serialized_bytes)
+                .is_some_and(|projected_total_size_bytes| {
+                    projected_total_size_bytes
+                        <= self.disk_store.global_prompt_cache_maximum_size_bytes
+                })
     }
 
     #[must_use]
     pub fn pending_serialized_bytes(&self) -> u64 {
         self.pending_serialized_bytes.load(Ordering::Acquire)
+    }
+
+    #[doc(hidden)]
+    pub fn disconnect_writer_for_tests(&mut self) {
+        self.serialized_block_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+    }
+
+    #[doc(hidden)]
+    pub fn request_writer_shutdown_for_tests(&self) {
+        self.shutdown_requested.store(true, Ordering::Release);
     }
 }
 

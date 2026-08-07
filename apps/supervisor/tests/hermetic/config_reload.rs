@@ -96,6 +96,23 @@ fn should_classify_max_output_tokens_change_as_worker_restart() {
 }
 
 #[test]
+fn should_restart_worker_when_optimizer_prefill_chunck_candidates_change() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.prefill_chunck_sizing_policy = PrefillChunckSizingPolicy::Optimized {
+        optimizer_prefill_chunck_token_candidates: vec![2_048, 4_096, 8_192],
+    };
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(
+        matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields.contains(&"prefill_chunck_sizing_policy".to_owned())),
+        "changing optimizer candidates must restart the worker, got {decision:?}"
+    );
+}
+
+#[test]
 fn should_classify_mtp_config_as_worker_restart() {
     let mut current = sample_resolved_config();
     current.mtp_enabled = false;
@@ -223,7 +240,9 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
         config_warning: None,
-        prefill_chunck_sizing_policy: PrefillChunckSizingPolicy::Optimized,
+        prefill_chunck_sizing_policy: PrefillChunckSizingPolicy::Optimized {
+            optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
+        },
         optimizer_state_directory: PathBuf::from("/tmp/astronomical-optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
@@ -327,6 +346,7 @@ fn should_resolve_reload_config_from_the_config_file() {
         &config_file_path,
         r#"{
             "prefill_chunck_size_optimizer_enabled": true,
+            "fixed_prefill_chunck_tokens": 4096,
             "supervisor": {
                 "bind_address": "127.0.0.1:6733"
             },
@@ -342,6 +362,12 @@ fn should_resolve_reload_config_from_the_config_file() {
     let resolved_config = resolver.load().expect("the reload config should resolve");
 
     assert_eq!(resolved_config.bind_address, "127.0.0.1:6733");
+    assert_eq!(
+        resolved_config.config_warning.as_deref(),
+        Some(
+            "Adaptive prefill optimizer is active. The configured fixed prefill fallback of 4096 tokens is ignored."
+        )
+    );
     assert_eq!(
         resolved_config.worker_executable_path,
         PathBuf::from("/fallback/worker")

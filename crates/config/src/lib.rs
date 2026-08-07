@@ -29,6 +29,8 @@ const CONFIG_DIRECTORY_NAME: &str = ".astronomical";
 const CONFIG_FILE_NAME: &str = "config.json";
 const DEFAULT_SUPERVISOR_BIND_ADDRESS: &str = "127.0.0.1:6732";
 pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
+pub const DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES: [u32; 4] =
+    [1_024, 2_048, 4_096, 8_192];
 const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_000_000_000;
 const DEFAULT_RETAINED_LOG_FILES: usize = 7;
 
@@ -98,6 +100,9 @@ impl AstronomicalConfig {
         resolve_prefill_chunck_sizing_policy(
             self.user_config_file.prefill_chunck_size_optimizer_enabled,
             self.user_config_file.fixed_prefill_chunck_tokens,
+            self.user_config_file
+                .optimizer_prefill_chunck_token_candidates
+                .as_deref(),
         )
     }
 
@@ -222,10 +227,13 @@ impl AstronomicalConfig {
 }
 
 /// Resolved Qwen3.5-MoE prompt-processing chunk selection at worker startup.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PrefillChunckSizingPolicy {
     /// Select chunk sizes online from measured context-specific observations.
-    Optimized,
+    Optimized {
+        /// Strictly increasing token counts the optimizer may request.
+        optimizer_prefill_chunck_token_candidates: Vec<u32>,
+    },
     /// Process each normal full chunk with one configured token count.
     Fixed {
         /// Required positive token count for each fixed prefill chunk.
@@ -236,6 +244,7 @@ pub enum PrefillChunckSizingPolicy {
 fn resolve_prefill_chunck_sizing_policy(
     configured_prefill_chunck_size_optimizer_enabled: Option<bool>,
     configured_fixed_prefill_chunck_tokens: Option<u32>,
+    configured_optimizer_prefill_chunck_token_candidates: Option<&[u32]>,
 ) -> Result<PrefillChunckSizingPolicy, AstronomicalConfigError> {
     let fixed_prefill_chunck_tokens = match configured_prefill_chunck_size_optimizer_enabled {
         Some(false) => configured_fixed_prefill_chunck_tokens.ok_or(
@@ -244,7 +253,12 @@ fn resolve_prefill_chunck_sizing_policy(
         Some(true) | None => {
             // Any configured fixed size is intentionally ignored in explicit
             // optimized mode. The menu bar surfaces that override separately.
-            return Ok(PrefillChunckSizingPolicy::Optimized);
+            return Ok(PrefillChunckSizingPolicy::Optimized {
+                optimizer_prefill_chunck_token_candidates:
+                    resolve_optimizer_prefill_chunck_token_candidates(
+                        configured_optimizer_prefill_chunck_token_candidates,
+                    )?,
+            });
         }
     };
     if fixed_prefill_chunck_tokens == 0 {
@@ -253,6 +267,31 @@ fn resolve_prefill_chunck_sizing_policy(
     Ok(PrefillChunckSizingPolicy::Fixed {
         fixed_prefill_chunck_tokens,
     })
+}
+
+fn resolve_optimizer_prefill_chunck_token_candidates(
+    configured_optimizer_prefill_chunck_token_candidates: Option<&[u32]>,
+) -> Result<Vec<u32>, AstronomicalConfigError> {
+    let optimizer_prefill_chunck_token_candidates =
+        configured_optimizer_prefill_chunck_token_candidates.map_or_else(
+            || DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES.to_vec(),
+            <[u32]>::to_vec,
+        );
+    if optimizer_prefill_chunck_token_candidates.is_empty() {
+        return Err(AstronomicalConfigError::OptimizerPrefillChunckTokenCandidatesMustNotBeEmpty);
+    }
+    if optimizer_prefill_chunck_token_candidates.contains(&0) {
+        return Err(AstronomicalConfigError::OptimizerPrefillChunckTokenCandidatesMustBePositive);
+    }
+    if optimizer_prefill_chunck_token_candidates
+        .windows(2)
+        .any(|adjacent_candidates| adjacent_candidates[0] >= adjacent_candidates[1])
+    {
+        return Err(
+            AstronomicalConfigError::OptimizerPrefillChunckTokenCandidatesMustBeStrictlyIncreasing,
+        );
+    }
+    Ok(optimizer_prefill_chunck_token_candidates)
 }
 
 /// Returns the `fixed_prefill_chunck_tokens` value the daemon ignores because the

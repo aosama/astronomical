@@ -25,23 +25,28 @@ pub use decoder::qwen3_5_decoder_cache_layout;
 #[cfg(feature = "direct-mlx")]
 pub use decoder::{
     Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint,
-    Qwen3_5MtpUnavailableReason, RequestDecoderStateStack,
+    Qwen3_5MtpUnavailableReason, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
 };
 #[cfg(feature = "direct-mlx")]
 pub use inference_execution::{
     Qwen3_5Engine, Qwen3_5MtpRuntimeState, Qwen3_5PrefillChunckSizer,
-    Qwen3_5PrefillChunckSizerError, qwen3_5_depth_one_mtp_window_fits,
+    Qwen3_5PrefillChunckSizerError, Qwen3_5PrefillExecutionContext,
+    persistent_prompt_cache_write_outcome_advances_parent_chain, qwen3_5_depth_one_mtp_window_fits,
     qwen3_5_mtp_runtime_state_after_load, qwen3_5_mtp_verification_may_cross_thinking_budget,
     safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{
-    Qwen3_5ExecutionError, Qwen3_5Model, Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput,
-    Qwen3_5Weights, combined_target_and_mtp_persistent_growth_bytes,
+    Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
+    Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput, Qwen3_5Weights,
+    combined_target_and_mtp_persistent_growth_bytes,
     context_memory_admission_projected_active_memory_bytes,
     persistent_prompt_cache_restore_temporary_workspace_bytes, qwen3_5_full_attention_step,
-    qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_step,
+    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
+    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+    qwen3_5_gated_delta_step,
 };
 pub use quantizations::optiq::{OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile};
 #[cfg(feature = "direct-mlx")]

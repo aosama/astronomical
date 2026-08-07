@@ -23,6 +23,7 @@ use super::{
     Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel, Qwen3_5Weights,
     RequestDecoderStateStack,
 };
+use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
 #[derive(Debug)]
@@ -38,6 +39,7 @@ pub struct Qwen3_5Model {
     pub(crate) expert_weight_memory_cache:
         Option<RefCell<ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>>>,
     pub(crate) gated_delta_kernel: MlxMetalKernel,
+    pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
@@ -291,6 +293,9 @@ impl Qwen3_5Model {
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut DecoderCacheState,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -313,9 +318,11 @@ impl Qwen3_5Model {
                     self.forward_linear_attention(
                         &normalized_input,
                         token_count,
+                        layer_index,
                         linear_attention_weights,
                         convolution,
                         recurrent,
+                        boundary_checkpoint_collector,
                     )
                 },
             ),

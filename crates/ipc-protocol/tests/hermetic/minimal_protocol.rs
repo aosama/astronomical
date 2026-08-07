@@ -5,7 +5,9 @@ use astronomical_ipc_protocol::{
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
     WorkerCommand, WorkerEvent, WorkerLogLevel, WorkerMlxMemorySnapshot,
-    WorkerPrefillChunckSizingPolicy, WorkerStartupConfiguration, decode_command,
+    WorkerPrefillChunckSizingPolicy, WorkerPrefillOptimizerCandidateEvidence,
+    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
+    WorkerPrefillOptimizerInsight, WorkerStartupConfiguration, decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -26,8 +28,8 @@ async fn should_round_trip_worker_startup_configuration() {
         global_prompt_cache_root_directory: PathBuf::from("/tmp/fictional-prompt-cache"),
         global_prompt_cache_maximum_size_bytes: 50_000_000_000,
         persistent_prompt_cache_enabled: false,
-        prefill_chunck_sizing_policy: WorkerPrefillChunckSizingPolicy::Fixed {
-            fixed_prefill_chunck_tokens: 2_048,
+        prefill_chunck_sizing_policy: WorkerPrefillChunckSizingPolicy::Optimized {
+            optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
         },
         optimizer_state_directory: None,
         configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
@@ -396,6 +398,31 @@ async fn should_round_trip_prefill_progress_event() {
         elapsed_millis: 1200,
         forward_prefill_chunck_elapsed_millis: Some(1_100),
         completed_prefill_chunck_tokens: Some(2048),
+        prefill_optimizer_insight: Some(WorkerPrefillOptimizerInsight {
+            requested_prefill_chunck_tokens: 4_096,
+            actual_prefill_chunck_tokens: 2_048,
+            elapsed_millis: 1_200,
+            decision_reason: WorkerPrefillOptimizerDecisionReason::CumulativeLatencyPlanning,
+            has_observed_prefill_capacity_constraint: true,
+            has_observations_for_every_candidate: true,
+            context: WorkerPrefillOptimizerContext {
+                prompt_position_tokens: 8_192,
+                has_restored_prefix: false,
+                is_first_chunck_after_restore: false,
+                has_visual_embeddings: false,
+                is_mtp_active: false,
+                are_sparse_experts_paged: true,
+                is_prompt_cache_capture_eligible: true,
+                has_prior_capacity_reduction: false,
+            },
+            candidate_evidence: vec![WorkerPrefillOptimizerCandidateEvidence {
+                candidate_prefill_chunck_tokens: 4_096,
+                observation_count: 3,
+                average_actual_prefill_chunck_tokens: 3_413,
+                average_elapsed_millis: 900,
+                decisions_since_last_observation: Some(0),
+            }],
+        }),
         mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
             source: MlxMemorySnapshotSource::Prefill,
             active_memory_bytes: 11_000,
@@ -434,6 +461,7 @@ async fn should_round_trip_prefill_progress_before_a_chunk_measurement() {
         elapsed_millis: 0,
         forward_prefill_chunck_elapsed_millis: None,
         completed_prefill_chunck_tokens: None,
+        prefill_optimizer_insight: None,
         mlx_memory_snapshot: None,
     };
 

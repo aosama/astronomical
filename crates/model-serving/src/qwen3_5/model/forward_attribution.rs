@@ -9,6 +9,15 @@ use super::forward_contract::{validate_forward_input, validate_generated_token_f
 use super::model::Qwen3_5Model;
 use super::visual_embedding_injection::qwen3_5_inject_visual_embeddings;
 use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
+use crate::qwen3_5::decoder::{
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+};
+
+pub(crate) struct Qwen3_5BoundaryCheckpointPrefillOutcome {
+    pub(crate) consumed_visual_embedding_count: usize,
+    pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+}
 
 impl Qwen3_5Model {
     // Visual-prefill inputs stay explicit rather than introducing a parameter facade.
@@ -21,6 +30,37 @@ impl Qwen3_5Model {
         starting_visual_embedding_index: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<usize, Qwen3_5ExecutionError> {
+        let consumed_visual_embedding_count = self.build_visual_prefill_graph(
+            chunk_token_ids,
+            starting_position_tokens,
+            visual_embeddings,
+            starting_visual_embedding_index,
+            request_decoder_state,
+            image_pad_token_id,
+            None,
+            performance_attribution,
+        )?;
+        self.evaluate_decoder_state_with_performance_attribution(
+            request_decoder_state,
+            performance_attribution,
+        )?;
+        Ok(consumed_visual_embedding_count)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_visual_prefill_graph(
+        &self,
+        chunk_token_ids: &[u32],
+        starting_position_tokens: u32,
+        visual_embeddings: &MlxArray,
+        starting_visual_embedding_index: usize,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        image_pad_token_id: u32,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<usize, Qwen3_5ExecutionError> {
         let token_count = validate_forward_input(
@@ -57,14 +97,51 @@ impl Qwen3_5Model {
             token_count,
             starting_position_tokens,
             request_decoder_state,
+            boundary_checkpoint_collector,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
             performance_attribution,
         )?);
-        self.evaluate_decoder_state_with_performance_attribution(
+        Ok(consumed_visual_embedding_count)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prefill_chunck_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
+        &self,
+        chunk_token_ids: &[u32],
+        starting_position_tokens: u32,
+        visual_embeddings: &MlxArray,
+        starting_visual_embedding_index: usize,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        image_pad_token_id: u32,
+        completed_prefill_chunck_tokens: Vec<usize>,
+        checkpoint_interval_token_count: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
+        let mut boundary_checkpoint_collector =
+            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+                completed_prefill_chunck_tokens,
+                self.decoder_cache_layout.boundary_tensor_count(),
+                checkpoint_interval_token_count,
+            )?;
+        let consumed_visual_embedding_count = self.build_visual_prefill_graph(
+            chunk_token_ids,
+            starting_position_tokens,
+            visual_embeddings,
+            starting_visual_embedding_index,
             request_decoder_state,
+            image_pad_token_id,
+            Some(&mut boundary_checkpoint_collector),
             performance_attribution,
         )?;
-        Ok(consumed_visual_embedding_count)
+        self.evaluate_decoder_state_and_boundary_checkpoints_with_performance_attribution(
+            request_decoder_state,
+            &boundary_checkpoint_collector,
+            performance_attribution,
+        )?;
+        Ok(Qwen3_5BoundaryCheckpointPrefillOutcome {
+            consumed_visual_embedding_count,
+            boundary_checkpoints: boundary_checkpoint_collector.complete()?,
+        })
     }
 
     pub(crate) fn prefill_chunck_with_performance_attribution(
@@ -84,6 +161,40 @@ impl Qwen3_5Model {
             request_decoder_state,
             performance_attribution,
         )
+    }
+
+    pub(crate) fn prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        completed_prefill_chunck_tokens: Vec<usize>,
+        checkpoint_interval_token_count: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
+        let mut boundary_checkpoint_collector =
+            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+                completed_prefill_chunck_tokens,
+                self.decoder_cache_layout.boundary_tensor_count(),
+                checkpoint_interval_token_count,
+            )?;
+        drop(self.build_target_forward_graph(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            Some(&mut boundary_checkpoint_collector),
+            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+            performance_attribution,
+        )?);
+        self.evaluate_decoder_state_and_boundary_checkpoints_with_performance_attribution(
+            request_decoder_state,
+            &boundary_checkpoint_collector,
+            performance_attribution,
+        )?;
+        Ok(Qwen3_5BoundaryCheckpointPrefillOutcome {
+            consumed_visual_embedding_count: 0,
+            boundary_checkpoints: boundary_checkpoint_collector.complete()?,
+        })
     }
 
     pub(crate) fn forward_chunk_with_performance_attribution(
@@ -147,6 +258,7 @@ impl Qwen3_5Model {
             token_ids,
             starting_position_tokens,
             request_decoder_state,
+            None,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
             performance_attribution,
         )?;
@@ -203,6 +315,7 @@ impl Qwen3_5Model {
             token_count,
             starting_position_tokens,
             request_decoder_state,
+            None,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDecodeVerification,
             performance_attribution,
             true,
@@ -287,6 +400,7 @@ impl Qwen3_5Model {
             1,
             starting_position_tokens,
             request_decoder_state,
+            None,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
             performance_attribution,
             false,

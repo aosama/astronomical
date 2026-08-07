@@ -11,6 +11,8 @@ mod model_prefill_benchmark_report;
 #[cfg(feature = "performance-measurement")]
 mod model_prefill_chunck_sweep;
 #[cfg(feature = "performance-measurement")]
+mod model_prefill_optimizer_candidate_observation;
+#[cfg(feature = "performance-measurement")]
 mod model_prefill_optimizer_comparison;
 #[cfg(feature = "performance-measurement")]
 mod model_prefill_qualification_cancellation;

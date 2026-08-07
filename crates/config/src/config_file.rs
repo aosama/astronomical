@@ -9,8 +9,8 @@ use serde::Deserialize;
 use super::logging_config::LogLevel;
 use super::{
     AstronomicalConfigError, CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME,
-    DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB, maximum_mlx_memory_gb_to_bytes,
-    parse_loopback_bind_address, prompt_cache_size_gb_to_bytes,
+    DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES, DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
+    maximum_mlx_memory_gb_to_bytes, parse_loopback_bind_address, prompt_cache_size_gb_to_bytes,
     resolve_prefill_chunck_sizing_policy,
 };
 
@@ -26,6 +26,7 @@ pub(crate) struct UserConfigFile {
     pub(crate) max_output_tokens: Option<u32>,
     pub(crate) prefill_chunck_size_optimizer_enabled: Option<bool>,
     pub(crate) fixed_prefill_chunck_tokens: Option<u32>,
+    pub(crate) optimizer_prefill_chunck_token_candidates: Option<Vec<u32>>,
     /// Enables bounded model-loading and request performance-attribution reports.
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     pub(crate) performance_attribution_enabled: Option<bool>,
@@ -83,6 +84,7 @@ pub(crate) fn read_user_config_file(
                 "mtp_enabled": true,
                 "persistent_prompt_cache_enabled": true,
                 "prefill_chunck_size_optimizer_enabled": true,
+                "optimizer_prefill_chunck_token_candidates": DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
                 "prompt_cache_max_size_gb": DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
             }))
             .map_err(|serialization_error| {
@@ -126,6 +128,9 @@ pub(crate) fn validate_user_config_file(
     resolve_prefill_chunck_sizing_policy(
         user_config_file.prefill_chunck_size_optimizer_enabled,
         user_config_file.fixed_prefill_chunck_tokens,
+        user_config_file
+            .optimizer_prefill_chunck_token_candidates
+            .as_deref(),
     )?;
     if let Some(maximum_mlx_memory_gb) = user_config_file.maximum_mlx_memory_gb {
         maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;

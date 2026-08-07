@@ -10,6 +10,7 @@ use tokio::time::{Instant, timeout};
 use super::model_prefill_benchmark_report::{
     PrefillMeasurementAccumulator, TypedOutputEventDigest, build_prefill_benchmark_report,
 };
+use super::model_prefill_optimizer_candidate_observation::assert_cumulative_latency_optimizer_evidence;
 use super::model_prefill_qualification_worker::{
     PREFILL_QUALIFICATION_MAXIMUM_OUTPUT_TOKENS, PREFILL_QUALIFICATION_MODEL_ID,
     build_prefill_qualification_prompt, configured_prefill_qualification_model_directory,
@@ -24,6 +25,7 @@ use super::model_process_metrics::{
 const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 const TARGET_PROMPT_TOKENS: usize = 90_000;
+const WARMUP_PROMPT_TOKENS: usize = 1_024;
 const WARM_REQUEST_MAXIMUM_OUTPUT_TOKENS: u16 = 1;
 
 #[derive(Clone, Copy, Debug)]
@@ -186,6 +188,8 @@ async fn run_prefill_benchmark(
     let configured_model_directory = configured_prefill_qualification_model_directory();
     let exact_prompt_content =
         build_prefill_qualification_prompt(&configured_model_directory, target_prompt_tokens);
+    let warmup_prompt_content =
+        build_prefill_qualification_prompt(&configured_model_directory, WARMUP_PROMPT_TOKENS);
     let prepared_prefill_qualification_worker = prepare_prefill_qualification_worker(
         &configured_model_directory,
         benchmark_mode.fixed_prefill_chunck_tokens(),
@@ -211,7 +215,7 @@ async fn run_prefill_benchmark(
     warm_prefill_qualification_worker(
         &worker_handle,
         benchmark_command(
-            exact_prompt_content.clone(),
+            format!("Warmup-only cache namespace.\n\n{warmup_prompt_content}"),
             WARM_REQUEST_MAXIMUM_OUTPUT_TOKENS,
         ),
         WARM_REQUEST_MAXIMUM_OUTPUT_TOKENS,
@@ -354,6 +358,9 @@ async fn run_prefill_benchmark(
         generated_token_count, PREFILL_QUALIFICATION_MAXIMUM_OUTPUT_TOKENS,
         "the benchmark must include the representative 512 generated tokens"
     );
+    if matches!(benchmark_mode, PrefillBenchmarkMode::Optimizer) {
+        assert_cumulative_latency_optimizer_evidence(&prefill_measurements);
+    }
     let prefill_memory_validation_error =
         prefill_memory_limit_validation_error(&prefill_measurements, maximum_mlx_memory_gb);
     let final_expert_memory_mode =
@@ -400,7 +407,7 @@ async fn run_prefill_benchmark(
     }
 }
 
-fn benchmark_command(
+pub(super) fn benchmark_command(
     exact_prompt_content: String,
     maximum_output_tokens: u16,
 ) -> ChatGenerationCommand {
@@ -448,4 +455,5 @@ fn benchmark_report_path() -> Option<PathBuf> {
 #[test]
 fn should_target_exactly_ninety_thousand_rendered_prompt_tokens() {
     assert_eq!(TARGET_PROMPT_TOKENS, 90_000);
+    assert!(WARMUP_PROMPT_TOKENS < FIXED_PREFILL_CHUNCK_TOKENS as usize);
 }
