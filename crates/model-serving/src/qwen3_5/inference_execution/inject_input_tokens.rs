@@ -1,6 +1,8 @@
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
+use crate::{
+    AdaptiveRamGrowthContext, InferenceEngineError, PerformanceCounter, PerformanceOperation,
+};
 
 use super::super::model::memory_admission::{
     invalid_request_error, validate_context_memory_admission,
@@ -73,42 +75,13 @@ impl Qwen3_5EngineState {
                 })?;
             active_request
                 .request_decoder_state
-                .restore_checkpoint(accepted_mtp_draft_rollback.request_decoder_state_checkpoint)
+                .restore_mtp_verified_prefix(
+                    accepted_mtp_draft_rollback.verified_prefix_position_tokens,
+                    accepted_mtp_draft_rollback.verified_prefix_boundary_checkpoint,
+                )
                 .map_err(super::qwen3_5_runtime_error)?;
             active_request.next_position_tokens =
-                accepted_mtp_draft_rollback.target_verify_start_position_tokens;
-            let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
-                1,
-                active_request.mtp_request_state.is_some(),
-                model.sparse_experts_are_paged(),
-            );
-            let active_memory_bytes_before_rollback_replay = self
-                .measure_adaptive_ram_growth_memory_admission(
-                    adaptive_ram_growth_context,
-                    &mut active_request.performance_attribution,
-                    &active_request.request_decoder_state,
-                    0,
-                    0,
-                )?;
-            model
-                .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
-                    &[accepted_mtp_draft_rollback.emitted_current_token_id],
-                    active_request.next_position_tokens,
-                    &mut active_request.request_decoder_state,
-                    &mut active_request.performance_attribution,
-                )
-                .map_err(InferenceEngineError::from)?;
-            active_request.advance_position(1)?;
-            record_completed_adaptive_ram_growth(
-                &mut self.adaptive_ram_growth_guard,
-                adaptive_ram_growth_context
-                    .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
-                true,
-                model,
-                active_memory_bytes_before_rollback_replay,
-                0,
-                &mut active_request.performance_attribution,
-            )?;
+                accepted_mtp_draft_rollback.verified_prefix_position_tokens;
         }
         let remaining_output_tokens = active_request
             .maximum_output_tokens
@@ -288,6 +261,11 @@ impl Qwen3_5EngineState {
         active_request.advance_position(1)?;
         let next_generated_token = active_request.build_generated_token(model, &feedback_logits)?;
         active_request.mtp_target_hidden_states = mtp_target_hidden_states;
+        if should_reseed_mtp_after_injection {
+            active_request
+                .performance_attribution
+                .record_counter(PerformanceCounter::MtpFeedbackHistoryReseedCount, 1);
+        }
         active_request
             .performance_attribution
             .measure_operation(

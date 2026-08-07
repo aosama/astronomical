@@ -15,6 +15,7 @@ mod prefill_chunck_sizer_configuration;
 mod prefill_execution_context;
 mod prefill_optimizer_insight;
 mod prompt_prefill;
+mod speculative_prefill;
 mod start_generation;
 mod test_controls;
 
@@ -36,6 +37,9 @@ use crate::{
 };
 
 use self::engine_request::Qwen3_5EngineRequest;
+pub(super) use self::speculative_prefill::{
+    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
+};
 use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
 

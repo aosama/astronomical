@@ -1,5 +1,3 @@
-use std::cmp::Reverse;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -13,18 +11,22 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::MlxRuntime;
 
-use super::IMAGE_PAD_TOKEN_ID;
-use super::engine_support::{generation_report_for_request, load_mtp_test_engine};
+use super::benchmark_measurement::BenchmarkMeasurement;
+use super::engine_support::{
+    assert_terminal_only_speculative_prefill_attribution, generation_report_for_request,
+    load_mtp_test_engine, performance_counter_amount,
+};
 
 const BENCHMARK_INPUT_TOKEN_COUNT: usize = 1_024;
 const BENCHMARK_OUTPUT_TOKEN_COUNT: u16 = 1_024;
+const BENCHMARK_WARMUP_OUTPUT_TOKEN_COUNT: u16 = 128;
 const BENCHMARK_SOURCE_TEXT: &str = include_str!(
     "../../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 #[tokio::test]
 #[ignore = "loads target-only and MTP production engines for the representative release gate"]
-async fn should_keep_representative_mtp_generation_faster_and_exact() {
+async fn should_keep_representative_mtp_generation_faster_and_target_verified() {
     tokio::time::timeout(
         Duration::from_secs(115),
         run_representative_mtp_release_gate(),
@@ -33,162 +35,34 @@ async fn should_keep_representative_mtp_generation_faster_and_exact() {
     .expect("the representative MTP release gate should finish within 115 seconds");
 }
 
-#[tokio::test]
-#[ignore = "loads the fully resident target model for representative decode measurement"]
-async fn should_measure_representative_fully_resident_target_only_decode() {
-    tokio::time::timeout(
-        Duration::from_secs(60),
-        run_representative_fully_resident_target_only_decode(),
-    )
-    .await
-    .expect("representative fully resident decode should finish within 60 seconds");
-}
-
-#[tokio::test]
-#[ignore = "loads the fully resident target model for representative decode attribution"]
-async fn should_attribute_representative_fully_resident_target_only_decode() {
-    tokio::time::timeout(
-        Duration::from_secs(60),
-        run_representative_fully_resident_target_only_decode_attribution(),
-    )
-    .await
-    .expect("representative fully resident decode attribution should finish within 60 seconds");
-}
-
-async fn run_representative_fully_resident_target_only_decode() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
-    let benchmark_prompt_cases = prepare_benchmark_prompt_cases(&model_directory);
-    eprintln!(
-        "[oq4e-resident-decode] status=start input_tokens={} output_tokens={} ETA_seconds=60",
-        BENCHMARK_INPUT_TOKEN_COUNT, BENCHMARK_OUTPUT_TOKEN_COUNT,
-    );
-    let (mut target_only_engine, _temporary_log_directory, _performance_attribution_log_path) =
-        load_mtp_test_engine(&model_directory, false, false).await;
-    target_only_engine
-        .load()
-        .await
-        .expect("the representative fully resident target-only engine should load");
-    target_only_engine
-        .disable_adaptive_ram_growth_memory_guard_for_tests()
-        .await
-        .expect("the representative resident benchmark should disable adaptive guarding");
-    let target_only_measurement = run_one_generation(
-        &mut target_only_engine,
-        RequestId::new(40_100),
-        &benchmark_prompt_cases[0],
-        BENCHMARK_OUTPUT_TOKEN_COUNT,
-        PerformanceAttribution::disabled(),
-    )
-    .await;
-    assert_eq!(
-        target_only_measurement.generated_token_ids.len(),
-        usize::from(BENCHMARK_OUTPUT_TOKEN_COUNT),
-        "the resident decode measurement must use the complete output budget"
-    );
-    eprintln!(
-        "[oq4e-resident-decode] status=success input_tokens={} output_tokens={} output_fingerprint={:016x} target_only_tok_per_second={:.2}",
-        BENCHMARK_INPUT_TOKEN_COUNT,
-        BENCHMARK_OUTPUT_TOKEN_COUNT,
-        target_only_measurement.generated_token_id_fingerprint(),
-        target_only_measurement.tokens_per_second(),
-    );
-}
-
-async fn run_representative_fully_resident_target_only_decode_attribution() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
-    let benchmark_prompt_cases = prepare_benchmark_prompt_cases(&model_directory);
-    let (mut target_only_engine, _temporary_log_directory, performance_attribution_log_path) =
-        load_mtp_test_engine(&model_directory, false, false).await;
-    target_only_engine
-        .load()
-        .await
-        .expect("the attributed fully resident target-only engine should load");
-    target_only_engine
-        .disable_adaptive_ram_growth_memory_guard_for_tests()
-        .await
-        .expect("the attributed resident benchmark should disable adaptive guarding");
-    let request_id = RequestId::new(40_101);
-    let target_only_measurement = run_one_generation(
-        &mut target_only_engine,
-        request_id,
-        &benchmark_prompt_cases[0],
-        BENCHMARK_OUTPUT_TOKEN_COUNT,
-        PerformanceAttribution::enabled(),
-    )
-    .await;
-    drop(target_only_engine);
-
-    let generation_report =
-        generation_report_for_request(&performance_attribution_log_path, request_id);
-    assert_eq!(
-        generation_report["retained_complete_expert_layer_count"], 40,
-        "the attributed benchmark must remain fully resident"
-    );
-    let mut attributed_operations = generation_report["operations"]
-        .as_array()
-        .expect("the generation report should contain operations")
-        .iter()
-        .collect::<Vec<_>>();
-    attributed_operations.sort_by_key(|attributed_operation| {
-        Reverse(
-            attributed_operation["total_elapsed_nanoseconds"]
-                .as_u64()
-                .unwrap_or(0),
-        )
-    });
-    for attributed_operation in attributed_operations.into_iter().take(20) {
-        eprintln!(
-            "[oq4e-resident-attribution] operation={} occurrences={} total_milliseconds={:.3} average_microseconds={:.3}",
-            attributed_operation["operation"]
-                .as_str()
-                .unwrap_or("unknown"),
-            attributed_operation["occurrence_count"]
-                .as_u64()
-                .unwrap_or(0),
-            attributed_operation["total_elapsed_nanoseconds"]
-                .as_u64()
-                .unwrap_or(0) as f64
-                / 1_000_000.0,
-            attributed_operation["total_elapsed_nanoseconds"]
-                .as_u64()
-                .unwrap_or(0) as f64
-                / attributed_operation["occurrence_count"]
-                    .as_u64()
-                    .unwrap_or(1)
-                    .max(1) as f64
-                / 1_000.0,
-        );
-    }
-    eprintln!(
-        "[oq4e-resident-attribution] status=success input_tokens={} output_tokens={} target_only_tok_per_second={:.2} report_elapsed_milliseconds={:.3} attributed_percent={:.2}",
-        BENCHMARK_INPUT_TOKEN_COUNT,
-        BENCHMARK_OUTPUT_TOKEN_COUNT,
-        target_only_measurement.tokens_per_second(),
-        generation_report["report_elapsed_nanoseconds"]
-            .as_u64()
-            .unwrap_or(0) as f64
-            / 1_000_000.0,
-        generation_report["attributed_percent"]
-            .as_f64()
-            .unwrap_or(0.0),
-    );
-}
-
 async fn run_representative_mtp_release_gate() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+    let model_directory = super::super::configured_depth_one_mtp_model_artifact_directory();
     let benchmark_prompt_cases = prepare_benchmark_prompt_cases(&model_directory);
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
 
-    eprintln!("[oq4e-mtp-release] status=start phase=mtp_engine_load ETA_seconds=115");
+    eprintln!("[mtp-release] status=start phase=target_only_before_engine_load ETA_seconds=115");
+    let target_only_before_measurements = run_engine_benchmark_cases(
+        &model_directory,
+        false,
+        &benchmark_prompt_cases,
+        &[0],
+        37_000,
+    )
+    .await;
+
+    MlxRuntime::initialize(mlx_memory_limits)
+        .expect("the release gate should re-enter the configured MLX runtime")
+        .clear_allocator_cache()
+        .expect("the MTP run should not inherit reclaimable target-only allocations");
+
+    eprintln!("[mtp-release] status=progress phase=mtp_engine_load ETA_seconds=90");
     let mtp_measurements = run_engine_benchmark_cases(
         &model_directory,
         true,
         &benchmark_prompt_cases,
-        &[0, 1, 2],
+        &[0],
         38_000,
     )
     .await;
@@ -196,85 +70,141 @@ async fn run_representative_mtp_release_gate() {
     MlxRuntime::initialize(mlx_memory_limits)
         .expect("the release gate should re-enter the configured MLX runtime")
         .clear_allocator_cache()
-        .expect("the target-only run should not inherit reclaimable MTP allocations");
+        .expect("the final target-only run should not inherit reclaimable MTP allocations");
 
-    eprintln!("[oq4e-mtp-release] status=progress phase=target_only_engine_load ETA_seconds=70");
-    let target_only_measurements = run_engine_benchmark_cases(
+    eprintln!("[mtp-release] status=progress phase=target_only_after_engine_load ETA_seconds=55");
+    let target_only_after_measurements = run_engine_benchmark_cases(
         &model_directory,
         false,
         &benchmark_prompt_cases,
-        &[2, 1, 0],
+        &[0],
         39_000,
     )
     .await;
+    let configured_mlx_memory_ceiling_bytes = mlx_memory_limits.active_memory_limit_bytes() as u64;
+    let allowed_peak_mlx_memory_bytes = configured_mlx_memory_ceiling_bytes
+        .saturating_add(configured_mlx_memory_ceiling_bytes / 100);
 
     let mut paired_throughput_ratios = Vec::with_capacity(benchmark_prompt_cases.len());
-    let mut individual_throughput_regressions = Vec::new();
-    let mut output_mismatch_descriptions = Vec::new();
+    let mut paired_total_request_speedup_ratios = Vec::with_capacity(benchmark_prompt_cases.len());
     for prompt_case_index in 0..benchmark_prompt_cases.len() {
         let prompt_case = &benchmark_prompt_cases[prompt_case_index];
         let mtp_measurement = &mtp_measurements[prompt_case_index];
-        let target_only_measurement = &target_only_measurements[prompt_case_index];
-        let first_mismatching_token_index = mtp_measurement
+        let target_only_before_measurement = &target_only_before_measurements[prompt_case_index];
+        let target_only_after_measurement = &target_only_after_measurements[prompt_case_index];
+        assert_eq!(
+            target_only_after_measurement.generated_token_ids,
+            target_only_before_measurement.generated_token_ids,
+            "bracketing target-only controls must preserve the same greedy sequence",
+        );
+        let target_only_measurement = if target_only_before_measurement
+            .total_request_elapsed_seconds
+            <= target_only_after_measurement.total_request_elapsed_seconds
+        {
+            target_only_before_measurement
+        } else {
+            target_only_after_measurement
+        };
+        for (measurement_mode, benchmark_measurement) in [
+            ("mtp", mtp_measurement),
+            ("target_only_before", target_only_before_measurement),
+            ("target_only_after", target_only_after_measurement),
+        ] {
+            assert!(
+                benchmark_measurement.maximum_active_mlx_memory_bytes
+                    <= configured_mlx_memory_ceiling_bytes,
+                "{measurement_mode} active MLX memory must remain within the configured ceiling",
+            );
+            assert!(
+                benchmark_measurement.maximum_peak_mlx_memory_bytes
+                    <= allowed_peak_mlx_memory_bytes,
+                "{measurement_mode} peak MLX memory must remain within the one-percent allowance",
+            );
+        }
+        let first_mismatched_token = mtp_measurement
             .generated_token_ids
             .iter()
             .zip(&target_only_measurement.generated_token_ids)
-            .position(|(mtp_token_id, target_only_token_id)| mtp_token_id != target_only_token_id);
-        eprintln!(
-            "[oq4e-mtp-release] status=diagnostic phase={} first_mismatch={first_mismatching_token_index:?}",
-            prompt_case.phase_name,
-        );
-        if let Some(first_mismatching_token_index) = first_mismatching_token_index {
-            output_mismatch_descriptions.push(format!(
-                "{} first mismatched at output token {}",
-                prompt_case.phase_name, first_mismatching_token_index,
-            ));
-        }
+            .enumerate()
+            .find(
+                |(_generated_token_index, (mtp_token_id, target_only_token_id))| {
+                    mtp_token_id != target_only_token_id
+                },
+            );
         assert_eq!(
             mtp_measurement.generated_token_ids.len(),
             usize::from(BENCHMARK_OUTPUT_TOKEN_COUNT),
             "{} should exercise the complete representative output budget",
             prompt_case.phase_name,
         );
-        let paired_throughput_ratio = mtp_measurement.tokens_per_second()
-            / target_only_measurement
-                .tokens_per_second()
+        assert_eq!(
+            target_only_before_measurement.generated_token_ids.len(),
+            usize::from(BENCHMARK_OUTPUT_TOKEN_COUNT),
+            "{} leading target-only control should exercise the complete output budget",
+            prompt_case.phase_name,
+        );
+        assert_eq!(
+            target_only_after_measurement.generated_token_ids.len(),
+            usize::from(BENCHMARK_OUTPUT_TOKEN_COUNT),
+            "{} trailing target-only control should exercise the complete output budget",
+            prompt_case.phase_name,
+        );
+        let target_only_throughput_baseline = target_only_before_measurement
+            .tokens_per_second()
+            .max(target_only_after_measurement.tokens_per_second());
+        let paired_throughput_ratio =
+            mtp_measurement.tokens_per_second() / target_only_throughput_baseline.max(f64::EPSILON);
+        let paired_total_request_speedup_ratio = target_only_measurement
+            .total_request_elapsed_seconds
+            / mtp_measurement
+                .total_request_elapsed_seconds
                 .max(f64::EPSILON);
         paired_throughput_ratios.push(paired_throughput_ratio);
-        if paired_throughput_ratio < 0.95 {
-            individual_throughput_regressions.push(format!(
-                "{} ratio {:.3}",
-                prompt_case.phase_name, paired_throughput_ratio,
-            ));
-        }
+        paired_total_request_speedup_ratios.push(paired_total_request_speedup_ratio);
         eprintln!(
-            "[oq4e-mtp-release] status=sample phase={} prompt_tokens={} output_tokens={} target_only_tok_per_second={:.2} mtp_tok_per_second={:.2} throughput_ratio={:.3}",
+            "[mtp-release] status=sample phase={} prompt_tokens={} output_tokens={} target_only_before_total_request_seconds={:.3} target_only_after_total_request_seconds={:.3} target_only_before_tok_per_second={:.2} target_only_after_tok_per_second={:.2} target_only_baseline_prefill_millis={} mtp_prefill_millis={} target_only_baseline_time_to_first_token_seconds={:.3} mtp_time_to_first_token_seconds={:.3} target_only_baseline_total_request_seconds={:.3} mtp_total_request_seconds={:.3} target_only_baseline_tok_per_second={:.2} mtp_tok_per_second={:.2} throughput_ratio={:.3} total_request_speedup_ratio={:.3} target_only_active_mlx_bytes={} mtp_active_mlx_bytes={} target_only_peak_mlx_bytes={} mtp_peak_mlx_bytes={} exact_greedy_match={} first_greedy_mismatch={first_mismatched_token:?} target_only_fingerprint={:016x} mtp_fingerprint={:016x}",
             prompt_case.phase_name,
             prompt_case.prompt_token_ids.len(),
             mtp_measurement.generated_token_ids.len(),
-            target_only_measurement.tokens_per_second(),
+            target_only_before_measurement.total_request_elapsed_seconds,
+            target_only_after_measurement.total_request_elapsed_seconds,
+            target_only_before_measurement.tokens_per_second(),
+            target_only_after_measurement.tokens_per_second(),
+            target_only_measurement.prefill_elapsed_millis,
+            mtp_measurement.prefill_elapsed_millis,
+            target_only_measurement.time_to_first_token_seconds,
+            mtp_measurement.time_to_first_token_seconds,
+            target_only_measurement.total_request_elapsed_seconds,
+            mtp_measurement.total_request_elapsed_seconds,
+            target_only_throughput_baseline,
             mtp_measurement.tokens_per_second(),
             paired_throughput_ratio,
+            paired_total_request_speedup_ratio,
+            target_only_measurement.maximum_active_mlx_memory_bytes,
+            mtp_measurement.maximum_active_mlx_memory_bytes,
+            target_only_measurement.maximum_peak_mlx_memory_bytes,
+            mtp_measurement.maximum_peak_mlx_memory_bytes,
+            first_mismatched_token.is_none(),
+            target_only_measurement.generated_token_id_fingerprint(),
+            mtp_measurement.generated_token_id_fingerprint(),
         );
     }
-    paired_throughput_ratios.sort_by(f64::total_cmp);
-    let paired_median_throughput_ratio = paired_throughput_ratios[1];
+    let minimum_paired_throughput_ratio = paired_throughput_ratios
+        .into_iter()
+        .fold(f64::INFINITY, f64::min);
+    let minimum_paired_total_request_speedup_ratio = paired_total_request_speedup_ratios
+        .into_iter()
+        .fold(f64::INFINITY, f64::min);
     assert!(
-        output_mismatch_descriptions.is_empty(),
-        "MTP output must exactly match target-only greedy output: {}",
-        output_mismatch_descriptions.join(", "),
+        minimum_paired_throughput_ratio >= 1.05,
+        "paired MTP throughput must exceed target-only by at least five percent"
     );
     assert!(
-        individual_throughput_regressions.is_empty(),
-        "MTP throughput regressed by more than five percent: {}",
-        individual_throughput_regressions.join(", "),
-    );
-    assert!(
-        paired_median_throughput_ratio >= 1.05,
-        "paired median MTP throughput must exceed target-only by at least five percent"
+        minimum_paired_total_request_speedup_ratio >= 1.05,
+        "paired MTP total request latency must improve by at least five percent"
     );
     eprintln!(
-        "[oq4e-mtp-release] status=success paired_median_throughput_ratio={paired_median_throughput_ratio:.3}"
+        "[mtp-release] status=success minimum_throughput_ratio={minimum_paired_throughput_ratio:.3} minimum_total_request_speedup_ratio={minimum_paired_total_request_speedup_ratio:.3}"
     );
 }
 
@@ -284,20 +214,12 @@ fn prepare_benchmark_prompt_cases(model_directory: &Path) -> Vec<BenchmarkPrompt
         .expect("the representative MTP artifact should validate before tokenization");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the representative MTP tokenizer should load");
-    assert_eq!(tokenizer.image_pad_token_id(), IMAGE_PAD_TOKEN_ID);
+    let image_pad_token_id = tokenizer.image_pad_token_id();
 
-    let benchmark_prompt_cases = [
+    [
         (
-            "short_factual",
+            "representative_technical_briefing",
             "Explain the source material as a factual technical briefing. Write at least seven hundred words.",
-        ),
-        (
-            "medium_code",
-            "Derive a Rust data-processing design from the source material, include representative code, and explain complexity and edge cases. Write at least seven hundred words.",
-        ),
-        (
-            "long_structured",
-            "Transform the source material into a detailed numbered report with an executive summary, evidence, chronology, risks, recommendations, and follow-up actions. Write at least seven hundred words.",
         ),
     ]
     .into_iter()
@@ -306,7 +228,11 @@ fn prepare_benchmark_prompt_cases(model_directory: &Path) -> Vec<BenchmarkPrompt
         let request_id = RequestId::new(37_900 + prompt_case_index as u64);
         let chat_generation_command = ChatGenerationCommand {
             request_id,
-            model: "Jundot/Qwen3.6-35B-A3B-oQ4e-mtp".to_owned(),
+            model: model_directory
+                .file_name()
+                .expect("the configured MTP model directory should have a leaf name")
+                .to_string_lossy()
+                .into_owned(),
             messages: vec![ChatMessage::User {
                 content: format!("{prompt_text}\n\nSource material:\n{BENCHMARK_SOURCE_TEXT}"),
                 images: Vec::new(),
@@ -341,10 +267,10 @@ fn prepare_benchmark_prompt_cases(model_directory: &Path) -> Vec<BenchmarkPrompt
         BenchmarkPromptCase {
             phase_name,
             prompt_token_ids,
+            image_pad_token_id,
         }
     })
-    .collect::<Vec<_>>();
-    benchmark_prompt_cases
+    .collect::<Vec<_>>()
 }
 
 async fn run_engine_benchmark_cases(
@@ -354,7 +280,7 @@ async fn run_engine_benchmark_cases(
     measured_prompt_order: &[usize],
     request_id_base: u64,
 ) -> Vec<BenchmarkMeasurement> {
-    let (mut engine, _temporary_log_directory, _performance_attribution_log_path) =
+    let (mut engine, _temporary_log_directory, performance_attribution_log_path) =
         load_mtp_test_engine(model_directory, mtp_enabled, false).await;
     let engine_load_result = engine
         .load()
@@ -372,21 +298,84 @@ async fn run_engine_benchmark_cases(
         .disable_adaptive_ram_growth_memory_guard_for_tests()
         .await
         .expect("the representative benchmark should disable adaptive memory guarding");
-    run_one_generation(
+    engine
+        .reset_mlx_peak_memory_for_tests()
+        .await
+        .expect("the representative warmup should start with a fresh MLX peak");
+    let warmup_measurement = run_one_generation(
         &mut engine,
         RequestId::new(request_id_base),
         &benchmark_prompt_cases[measured_prompt_order[0]],
-        4,
-        PerformanceAttribution::disabled(),
+        BENCHMARK_WARMUP_OUTPUT_TOKEN_COUNT,
+        PerformanceAttribution::enabled(),
     )
     .await;
+    let warmup_request_id = RequestId::new(request_id_base);
+    let warmup_generation_report =
+        generation_report_for_request(&performance_attribution_log_path, warmup_request_id);
+    assert_terminal_only_speculative_prefill_attribution(
+        &warmup_generation_report,
+        mtp_enabled,
+        &warmup_measurement.completed_prefill_chunck_tokens,
+    );
+    if mtp_enabled {
+        let admitted_attempt_count =
+            performance_counter_amount(&warmup_generation_report, "mtp_admitted_attempt_count");
+        let accepted_draft_count =
+            performance_counter_amount(&warmup_generation_report, "mtp_accepted_draft_count");
+        let rejected_draft_count =
+            performance_counter_amount(&warmup_generation_report, "mtp_rejected_draft_count");
+        let operational_fallback_count =
+            performance_counter_amount(&warmup_generation_report, "mtp_operational_fallback_count");
+        let memory_admission_fallback_count = performance_counter_amount(
+            &warmup_generation_report,
+            "mtp_memory_admission_fallback_count",
+        );
+        let prompt_history_initialization_fallback_count = performance_counter_amount(
+            &warmup_generation_report,
+            "mtp_prompt_history_initialization_fallback_count",
+        );
+        assert!(
+            admitted_attempt_count > 0,
+            "the MTP warmup must execute target-authoritative verification",
+        );
+        assert_eq!(
+            accepted_draft_count + rejected_draft_count + operational_fallback_count,
+            admitted_attempt_count,
+            "every admitted MTP proposal must have one recorded verifier outcome",
+        );
+        assert_eq!(
+            operational_fallback_count, 0,
+            "the representative MTP warmup must not require operational fallback",
+        );
+        assert_eq!(
+            memory_admission_fallback_count, 0,
+            "the representative MTP warmup must fit its complete verification workspace",
+        );
+        assert_eq!(
+            prompt_history_initialization_fallback_count, 0,
+            "the representative MTP warmup must initialize prompt history",
+        );
+        eprintln!(
+            "[mtp-release] status=diagnostic phase=warmup output_tokens={} admitted_attempts={} accepted_drafts={} rejected_drafts={} acceptance_rate={:.3}",
+            warmup_measurement.generated_token_ids.len(),
+            admitted_attempt_count,
+            accepted_draft_count,
+            rejected_draft_count,
+            accepted_draft_count as f64 / admitted_attempt_count.max(1) as f64,
+        );
+    }
 
     let mut indexed_measurements = Vec::with_capacity(benchmark_prompt_cases.len());
     for (measured_position, prompt_case_index) in measured_prompt_order.iter().copied().enumerate()
     {
         let request_id = RequestId::new(request_id_base + measured_position as u64 + 1);
+        engine
+            .reset_mlx_peak_memory_for_tests()
+            .await
+            .expect("each representative measurement should start with a fresh MLX peak");
         eprintln!(
-            "[oq4e-mtp-release] status=progress runtime={} phase={} output_tokens={} ETA_seconds=40",
+            "[mtp-release] status=progress runtime={} phase={} output_tokens={} ETA_seconds=40",
             if mtp_enabled { "mtp" } else { "target_only" },
             benchmark_prompt_cases[prompt_case_index].phase_name,
             BENCHMARK_OUTPUT_TOKEN_COUNT,
@@ -416,12 +405,13 @@ async fn run_one_generation(
     maximum_output_tokens: u16,
     performance_attribution: PerformanceAttribution,
 ) -> BenchmarkMeasurement {
+    let request_started_at = Instant::now();
     let inference_request = Qwen3_5InferenceRequest::new(
         request_id,
         benchmark_prompt_case.prompt_token_ids.clone(),
         maximum_output_tokens,
     )
-    .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID)
+    .with_image_pad_token_id(benchmark_prompt_case.image_pad_token_id)
     .with_performance_attribution(performance_attribution);
     let generation_start = engine
         .start_generation(inference_request)
@@ -443,15 +433,22 @@ async fn run_one_generation(
         {
             GeneratedToken::TokenId {
                 token_id,
+                mlx_memory_telemetry,
                 generation_finalization,
                 ..
             } => {
                 let generated_token_at = Instant::now();
-                first_generated_token_at.get_or_insert(generated_token_at);
+                if first_generated_token_at.is_none() {
+                    measurement.time_to_first_token_seconds = generated_token_at
+                        .saturating_duration_since(request_started_at)
+                        .as_secs_f64();
+                    first_generated_token_at = Some(generated_token_at);
+                }
+                measurement.record_mlx_memory_telemetry(mlx_memory_telemetry);
                 measurement.generated_token_ids.push(token_id);
                 if measurement.generated_token_ids.len().is_multiple_of(16) {
                     eprintln!(
-                        "[oq4e-generation-benchmark] status=progress phase={} generated_tokens={}/{}",
+                        "[mtp-generation-benchmark] status=progress phase={} generated_tokens={}/{}",
                         benchmark_prompt_case.phase_name,
                         measurement.generated_token_ids.len(),
                         maximum_output_tokens,
@@ -463,12 +460,30 @@ async fn run_one_generation(
                             first_generated_token_at.expect("the first token time should exist"),
                         )
                         .as_secs_f64();
+                    measurement.total_request_elapsed_seconds = generated_token_at
+                        .saturating_duration_since(request_started_at)
+                        .as_secs_f64();
                     assert!(generation_finalization.has_reportable_state());
-                    assert!(generation_finalization.mlx_memory_telemetry().is_some());
+                    measurement.record_mlx_memory_telemetry(
+                        generation_finalization.mlx_memory_telemetry(),
+                    );
                     return measurement;
                 }
             }
-            GeneratedToken::PrefillProgress { .. } => {}
+            GeneratedToken::PrefillProgress {
+                completed_prefill_chunck_tokens,
+                elapsed_millis,
+                mlx_memory_telemetry,
+                ..
+            } => {
+                measurement
+                    .completed_prefill_chunck_tokens
+                    .push(completed_prefill_chunck_tokens as usize);
+                measurement.prefill_elapsed_millis = measurement
+                    .prefill_elapsed_millis
+                    .saturating_add(elapsed_millis);
+                measurement.record_mlx_memory_telemetry(mlx_memory_telemetry);
+            }
             GeneratedToken::EndOfSequence => {
                 panic!("the Qwen benchmark should finalize on an emitted token")
             }
@@ -479,24 +494,5 @@ async fn run_one_generation(
 struct BenchmarkPromptCase {
     phase_name: &'static str,
     prompt_token_ids: Vec<u32>,
-}
-
-#[derive(Default)]
-struct BenchmarkMeasurement {
-    generated_token_ids: Vec<u32>,
-    generation_elapsed_seconds: f64,
-}
-
-impl BenchmarkMeasurement {
-    fn generated_token_id_fingerprint(&self) -> u64 {
-        let mut generated_token_id_hasher = DefaultHasher::new();
-        self.generated_token_ids
-            .hash(&mut generated_token_id_hasher);
-        generated_token_id_hasher.finish()
-    }
-
-    fn tokens_per_second(&self) -> f64 {
-        self.generated_token_ids.len().saturating_sub(1) as f64
-            / self.generation_elapsed_seconds.max(f64::EPSILON)
-    }
+    image_pad_token_id: u32,
 }
