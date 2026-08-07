@@ -5,6 +5,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_supervisor::{
     ActiveRequestProgress, WorkerActivity, WorkerHealthSnapshot, build_application,
+    parse_macos_memory_pressure_level,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -221,7 +222,7 @@ async fn should_zero_fill_cache_stats_when_no_worker_data_so_the_ui_never_sees_m
 }
 
 #[tokio::test]
-async fn should_expose_gpu_utilization_through_the_system_telemetry_endpoint() {
+async fn should_expose_gpu_utilization_and_memory_pressure_through_system_telemetry() {
     let application = build_application(ContractScriptedExecutor::ready(
         ready_health_snapshot_with_model(),
     ));
@@ -251,6 +252,37 @@ async fn should_expose_gpu_utilization_through_the_system_telemetry_endpoint() {
         assert!(
             (0.0..=100.0).contains(&gpu_percentage),
             "gpu_utilization_percentage must be in 0–100 range"
+        );
+    }
+    assert!(
+        telemetry_document["memory_pressure"].is_null()
+            || telemetry_document["memory_pressure"]
+                .as_str()
+                .is_some_and(|memory_pressure| {
+                    matches!(memory_pressure, "normal" | "warning" | "critical")
+                }),
+        "memory_pressure must be null, normal, warning, or critical"
+    );
+}
+
+#[test]
+fn should_parse_macos_memory_pressure_bitmasks_without_treating_unknown_values_as_normal() {
+    let memory_pressure_cases = [
+        ("1", Some("normal")),
+        ("2", Some("warning")),
+        ("4", Some("critical")),
+        ("6", Some("critical")),
+        ("3", Some("warning")),
+        ("0", None),
+        ("8", None),
+        ("not-a-pressure-level", None),
+    ];
+
+    for (sysctl_value_text, expected_memory_pressure_level) in memory_pressure_cases {
+        assert_eq!(
+            parse_macos_memory_pressure_level(sysctl_value_text),
+            expected_memory_pressure_level,
+            "unexpected pressure mapping for {sysctl_value_text}"
         );
     }
 }

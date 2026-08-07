@@ -28,4 +28,11 @@ final class SystemTelemetryPolicyTests: XCTestCase {
 
     XCTAssertEqual(agxTelemetry?.gpuUtilizationPercentage, 17)
   }
+
+  func test_should_keep_unavailable_system_telemetry_distinct_from_normal_pressure() {
+    XCTAssertEqual(
+      SystemTelemetrySnapshot.unavailable.memoryPressureTitle,
+      .unavailable
+    )
+  }
 }

@@ -4,6 +4,7 @@
 const STATUS_URL = "/v1/status";
 const MODELS_URL = "/v1/models";
 const CACHE_STATS_URL = "/v1/cache/stats";
+const SYSTEM_TELEMETRY_URL = "/v1/system/telemetry";
 const CONFIG_RELOAD_URL = "/v1/config/reload";
 const SERVER_SHUTDOWN_URL = "/v1/control/shutdown";
 const POLL_INTERVAL_MILLIS = 1000;
@@ -92,6 +93,7 @@ function activateObservatoryView(requestedViewIdentifier, navigationButtons, obs
 }
 
 async function pollStatus() {
+    void pollSystemTelemetry();
     try {
         const response = await fetch(STATUS_URL);
         if (!response.ok) { setStatusUnavailable(); return; }
@@ -106,6 +108,20 @@ async function pollStatus() {
         renderPrefillOptimizer(data.prefill_optimizer);
     } catch (fetchError) {
         setStatusUnavailable();
+    }
+}
+
+async function pollSystemTelemetry() {
+    try {
+        const response = await fetch(SYSTEM_TELEMETRY_URL);
+        if (!response.ok) {
+            renderCompactMemoryPressure(null);
+            return;
+        }
+        const telemetryDocument = await response.json();
+        renderCompactMemoryPressure(telemetryDocument.memory_pressure);
+    } catch (fetchError) {
+        renderCompactMemoryPressure(null);
     }
 }
 
