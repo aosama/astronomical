@@ -12,6 +12,8 @@ const playgroundScriptPath = path.join(__dirname, "playground.js");
 const playgroundScript = fs.readFileSync(playgroundScriptPath, "utf8");
 const optimizerScriptPath = path.join(__dirname, "optimizer.js");
 const optimizerScript = fs.readFileSync(optimizerScriptPath, "utf8");
+const overviewCompactScriptPath = path.join(__dirname, "overview-compact.js");
+const overviewCompactScript = fs.readFileSync(overviewCompactScriptPath, "utf8");
 
 function createConsoleContext() {
     const scriptContext = vm.createContext({
@@ -28,6 +30,7 @@ function createConsoleContext() {
     vm.runInContext(memoryControlScript, scriptContext, { filename: memoryControlScriptPath });
     vm.runInContext(optimizerScript, scriptContext, { filename: optimizerScriptPath });
     vm.runInContext(consoleScript, scriptContext, { filename: consoleScriptPath });
+    vm.runInContext(overviewCompactScript, scriptContext, { filename: overviewCompactScriptPath });
     vm.runInContext(playgroundScript, scriptContext, { filename: playgroundScriptPath });
     return scriptContext;
 }
@@ -67,17 +70,17 @@ test("defaults Observatory navigation to Overview", () => {
 
 test("moves Observatory visibility and current state to a selected destination", () => {
     const scriptContext = createConsoleContext();
-    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("memory")];
-    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("memory")];
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("model")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("model")];
     scriptContext.navigationButtons = navigationButtons;
     scriptContext.observatoryViews = observatoryViews;
 
     const activeViewIdentifier = vm.runInContext(
-        'activateObservatoryView("memory", navigationButtons, observatoryViews)',
+        'activateObservatoryView("model", navigationButtons, observatoryViews)',
         scriptContext
     );
 
-    assert.equal(activeViewIdentifier, "memory");
+    assert.equal(activeViewIdentifier, "model");
     assert.equal(navigationButtons[0].attributes["aria-current"], undefined);
     assert.equal(navigationButtons[1].attributes["aria-current"], "page");
     assert.equal(observatoryViews[0].hidden, true);
@@ -233,8 +236,8 @@ test("maps every observatory destination to a stable URL path", () => {
 
     assert.equal(pathMap.overview, "/overview");
     assert.equal(pathMap.chat, "/chat");
-    assert.equal(pathMap.memory, "/memory");
-    assert.equal(pathMap.cache, "/cache");
+    assert.equal(pathMap.memory, undefined);
+    assert.equal(pathMap.cache, undefined);
     assert.equal(pathMap.optimizer, "/optimizer");
     assert.equal(pathMap.model, "/model");
     assert.equal(pathMap.settings, "/settings");
@@ -247,8 +250,8 @@ test("maps every observatory URL path back to its destination", () => {
 
     assert.equal(reverseMap["/overview"], "overview");
     assert.equal(reverseMap["/chat"], "chat");
-    assert.equal(reverseMap["/memory"], "memory");
-    assert.equal(reverseMap["/cache"], "cache");
+    assert.equal(reverseMap["/memory"], undefined);
+    assert.equal(reverseMap["/cache"], undefined);
     assert.equal(reverseMap["/optimizer"], "optimizer");
     assert.equal(reverseMap["/model"], "model");
     assert.equal(reverseMap["/settings"], "settings");
@@ -294,6 +297,83 @@ test("identifies the fastest measured candidate for the latest context evidence"
     );
 
     assert.equal(fastestMeasuredCandidate.candidate_prefill_chunck_tokens, 4096);
+});
+
+test("clamps memory segments so they never exceed active memory", () => {
+    const scriptContext = createConsoleContext();
+    scriptContext.mlxMemorySnapshot = {
+        active_memory_bytes: 100,
+        expert_payload_bytes: 80,
+        model_core_payload_bytes: 40,
+        context_state_payload_bytes: 10
+    };
+    scriptContext.mlxMemoryCeilingBytes = 200;
+
+    const segmentBytes = vm.runInContext(
+        "reconciledMlxMemorySegmentBytes(mlxMemorySnapshot, mlxMemoryCeilingBytes)",
+        scriptContext
+    );
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(segmentBytes)),
+        {
+            activeMemoryBytes: 100,
+            expertBytes: 80,
+            modelCoreBytes: 20,
+            contextStateBytes: 0,
+            runtimeWorkBytes: 0,
+            availableBytes: 100
+        }
+    );
+});
+
+test("computes available bytes as ceiling minus active when nothing is clamped", () => {
+    const scriptContext = createConsoleContext();
+    scriptContext.mlxMemorySnapshot = {
+        active_memory_bytes: 40,
+        expert_payload_bytes: 30,
+        model_core_payload_bytes: 5,
+        context_state_payload_bytes: 2
+    };
+    scriptContext.mlxMemoryCeilingBytes = 200;
+
+    const segmentBytes = vm.runInContext(
+        "reconciledMlxMemorySegmentBytes(mlxMemorySnapshot, mlxMemoryCeilingBytes)",
+        scriptContext
+    );
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(segmentBytes)),
+        {
+            activeMemoryBytes: 40,
+            expertBytes: 30,
+            modelCoreBytes: 5,
+            contextStateBytes: 2,
+            runtimeWorkBytes: 3,
+            availableBytes: 160
+        }
+    );
+});
+
+test("reports a null memory snapshot as all zero segments with full available headroom", () => {
+    const scriptContext = createConsoleContext();
+
+    const segmentBytes = vm.runInContext(
+        "reconciledMlxMemorySegmentBytes(null, 200)",
+        scriptContext
+    );
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(segmentBytes)),
+        {
+            activeMemoryBytes: 0,
+            expertBytes: 0,
+            modelCoreBytes: 0,
+            contextStateBytes: 0,
+            runtimeWorkBytes: 0,
+            availableBytes: 200
+        }
+    );
 });
 
 test("returns null when no candidates have observations", () => {
