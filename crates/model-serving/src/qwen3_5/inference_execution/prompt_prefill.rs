@@ -5,14 +5,18 @@ use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::{
     AdaptiveRamGrowthContext, InferenceEngineError, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
-    PerformanceCounter, Qwen3_5ExecutionError, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
 };
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5PrefillRequestCheckpoint};
 use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{
+    Qwen3_5EngineState, Qwen3_5SpeculativePrefillChunckMode, fatal_engine_error,
+    qwen3_5_runtime_error, qwen3_5_speculative_prefill_chunck_mode,
+};
 
 pub(super) enum PromptPrefillChunckAttemptError {
     AdaptiveMemoryLimitExceeded {
@@ -37,6 +41,7 @@ pub(super) struct PromptPrefillChunckOutcome {
     pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     pub(super) exact_temporary_workspace_bytes: usize,
     pub(super) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(super) speculative_prefill_chunck_mode: Qwen3_5SpeculativePrefillChunckMode,
 }
 
 impl From<InferenceEngineError> for PromptPrefillChunckAttemptError {
@@ -71,6 +76,16 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let prefill_token_count = prefill_end - prefill_start;
+        let final_prompt_index = active_request
+            .input_token_ids
+            .len()
+            .checked_sub(1)
+            .ok_or_else(|| fatal_engine_error("generation prompt must not be empty"))?;
+        let speculative_prefill_chunck_mode = qwen3_5_speculative_prefill_chunck_mode(
+            active_request.mtp_request_state.is_some(),
+            prefill_end,
+            final_prompt_index,
+        );
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
             && !active_request.persistent_prompt_cache_capture_has_stopped
@@ -137,8 +152,13 @@ impl Qwen3_5EngineState {
             .performance_attribution
             .record_counter(PerformanceCounter::PrefillChunckCount, 1);
         let prefill_token_ids = &active_request.input_token_ids[prefill_start..prefill_end];
-        let mtp_full_attention_growth_bytes = match active_request.mtp_request_state.as_ref() {
-            Some(mtp_request_state) if active_request.visual_embeddings.is_none() => {
+        let mtp_full_attention_growth_bytes = match (
+            speculative_prefill_chunck_mode,
+            active_request.mtp_request_state.as_ref(),
+        ) {
+            (Qwen3_5SpeculativePrefillChunckMode::TerminalMtpCapture, Some(mtp_request_state))
+                if active_request.visual_embeddings.is_none() =>
+            {
                 let mtp_full_attention_bytes_per_layer_token = model
                     .config()
                     .full_attention_key_value_state_bytes_per_layer_token()
@@ -167,7 +187,11 @@ impl Qwen3_5EngineState {
                             && active_request.can_use_persistent_prompt_cache
                             && !active_request.persistent_prompt_cache_capture_has_stopped
                             && active_request.mtp_request_state.is_none(),
-                    ),
+                    )
+                    .with_target_only_mtp_prefix(matches!(
+                        speculative_prefill_chunck_mode,
+                        Qwen3_5SpeculativePrefillChunckMode::TargetOnlyMtpPrefix
+                    )),
                 ),
             active_request.visual_embeddings.is_some(),
             active_request.mtp_request_state.is_some(),
@@ -185,6 +209,7 @@ impl Qwen3_5EngineState {
             .map_err(qwen3_5_runtime_error)?;
         let forward_chunck_started_at = Instant::now();
         let mut boundary_checkpoints = Vec::new();
+        let mut terminal_mtp_history_token_count = 0;
         if let Some(visual_embeddings) = active_request.visual_embeddings.as_ref() {
             let visual_prefill_outcome = if intermediate_completed_prefill_chunck_tokens.is_empty()
             {
@@ -233,7 +258,10 @@ impl Qwen3_5EngineState {
                 };
             boundary_checkpoints = visual_boundary_checkpoints;
             active_request.consumed_visual_embedding_count += consumed_visual_embedding_count;
-        } else if active_request.mtp_request_state.is_some() {
+        } else if matches!(
+            speculative_prefill_chunck_mode,
+            Qwen3_5SpeculativePrefillChunckMode::TerminalMtpCapture
+        ) {
             let target_prefill_output = match model
                 .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
                     prefill_token_ids,
@@ -250,8 +278,19 @@ impl Qwen3_5EngineState {
                     ));
                 }
             };
-            let shifted_prompt_token_ids =
-                &active_request.input_token_ids[prefill_start + 1..prefill_end + 1];
+            let shifted_prompt_start = prefill_start
+                .checked_add(1)
+                .ok_or_else(|| fatal_engine_error("shifted MTP prompt start overflowed"))?;
+            let shifted_prompt_end = prefill_end
+                .checked_add(1)
+                .ok_or_else(|| fatal_engine_error("shifted MTP prompt end overflowed"))?;
+            let shifted_prompt_token_ids = active_request
+                .input_token_ids
+                .get(shifted_prompt_start..shifted_prompt_end)
+                .ok_or_else(|| fatal_engine_error("shifted MTP prompt range was invalid"))?;
+            let mtp_prefill_started_at = active_request
+                .performance_attribution
+                .begin_operation_span();
             let mtp_prefill_result = model
                 .prefill_mtp_history_from_token_ids_with_performance_attribution(
                     target_prefill_output.pre_final_normalization_hidden_states(),
@@ -262,14 +301,35 @@ impl Qwen3_5EngineState {
                         .ok_or_else(|| fatal_engine_error("MTP request state disappeared"))?,
                     &mut active_request.performance_attribution,
                 );
-            if let Err(mtp_prefill_error) = mtp_prefill_result {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    error = %mtp_prefill_error,
-                    "MTP prompt-history prefill failed; continuing target-only"
+            active_request
+                .performance_attribution
+                .complete_operation_span(
+                    PerformanceOperation::MtpPromptHistoryInitializationSpan,
+                    mtp_prefill_started_at,
                 );
-                active_request.mtp_request_state = None;
-                active_request.mtp_target_hidden_states = None;
+            match mtp_prefill_result {
+                Ok(()) => {
+                    terminal_mtp_history_token_count = shifted_prompt_token_ids.len();
+                }
+                Err(mtp_prefill_error) => {
+                    if !terminal_mtp_prefill_error_is_optional_fallback(&mtp_prefill_error) {
+                        return Err(prefill_execution_error(
+                            mtp_prefill_error,
+                            prefill_request_checkpoint,
+                        ));
+                    }
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        error = %mtp_prefill_error,
+                        "optional terminal MTP prompt-history initialization failed; continuing target-only"
+                    );
+                    active_request.mtp_request_state = None;
+                    active_request.mtp_target_hidden_states = None;
+                    active_request.performance_attribution.record_counter(
+                        PerformanceCounter::MtpPromptHistoryInitializationFallbackCount,
+                        1,
+                    );
+                }
             }
         } else {
             let text_prefill_outcome = if intermediate_completed_prefill_chunck_tokens.is_empty() {
@@ -329,6 +389,29 @@ impl Qwen3_5EngineState {
                 }
             }
         }
+        match speculative_prefill_chunck_mode {
+            Qwen3_5SpeculativePrefillChunckMode::TargetOnlyMtpPrefix => {
+                active_request.performance_attribution.record_counter(
+                    PerformanceCounter::SpeculativePrefillTargetOnlyPrefixChunckCount,
+                    1,
+                );
+                active_request.performance_attribution.record_counter(
+                    PerformanceCounter::SpeculativePrefillTargetOnlyPrefixTokenCount,
+                    u64::try_from(prefill_token_count).unwrap_or(u64::MAX),
+                );
+            }
+            Qwen3_5SpeculativePrefillChunckMode::TerminalMtpCapture => {
+                active_request.performance_attribution.record_counter(
+                    PerformanceCounter::SpeculativePrefillTerminalCaptureChunckCount,
+                    1,
+                );
+                active_request.performance_attribution.record_counter(
+                    PerformanceCounter::SpeculativePrefillTerminalMtpHistoryTokenCount,
+                    u64::try_from(terminal_mtp_history_token_count).unwrap_or(u64::MAX),
+                );
+            }
+            Qwen3_5SpeculativePrefillChunckMode::OrdinaryTarget => {}
+        }
         Ok(PromptPrefillChunckOutcome {
             active_memory_bytes_before_growth,
             forward_chunk_elapsed_millis: forward_chunck_started_at.elapsed().as_millis() as u64,
@@ -336,7 +419,32 @@ impl Qwen3_5EngineState {
                 .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
             exact_temporary_workspace_bytes,
             boundary_checkpoints,
+            speculative_prefill_chunck_mode,
         })
+    }
+}
+
+fn terminal_mtp_prefill_error_is_optional_fallback(
+    qwen3_5_execution_error: &Qwen3_5ExecutionError,
+) -> bool {
+    match qwen3_5_execution_error {
+        Qwen3_5ExecutionError::Runtime(mlx_runtime_error) => {
+            matches!(mlx_runtime_error, MlxRuntimeError::RuntimeOperation { .. })
+                && !mlx_runtime_error.is_recoverable_graphics_processor_out_of_memory()
+        }
+        Qwen3_5ExecutionError::ExpertPaging(_) => true,
+        Qwen3_5ExecutionError::Artifact(_)
+        | Qwen3_5ExecutionError::MissingTensor { .. }
+        | Qwen3_5ExecutionError::InvalidTensor { .. }
+        | Qwen3_5ExecutionError::MissingQuantization { .. }
+        | Qwen3_5ExecutionError::UnassignedTensor { .. }
+        | Qwen3_5ExecutionError::TypedTensorCountMismatch { .. }
+        | Qwen3_5ExecutionError::MissingDecoderLayerWeights { .. }
+        | Qwen3_5ExecutionError::TensorPayloadMismatch { .. }
+        | Qwen3_5ExecutionError::InvalidInput { .. }
+        | Qwen3_5ExecutionError::InvalidDecoderCacheLayout { .. }
+        | Qwen3_5ExecutionError::DecoderLayerCountMismatch { .. }
+        | Qwen3_5ExecutionError::InvalidRequestDecoderState { .. } => false,
     }
 }
 

@@ -230,22 +230,6 @@ impl Qwen3_5Model {
         )
     }
 
-    pub(crate) fn replay_rejected_mtp_draft_with_performance_attribution(
-        &self,
-        current_generated_token_id: u32,
-        starting_position_tokens: u32,
-        request_decoder_state: &mut RequestDecoderStateStack,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        self.forward_chunk_with_pre_final_normalization_hidden_states_and_synchronization_attribution(
-            &[current_generated_token_id],
-            starting_position_tokens,
-            request_decoder_state,
-            performance_attribution,
-            Some(PerformanceOperation::MtpRejectedDraftReplaySynchronizationWait),
-        )
-    }
-
     fn forward_chunk_with_pre_final_normalization_hidden_states_and_synchronization_attribution(
         &self,
         token_ids: &[u32],
@@ -284,13 +268,25 @@ impl Qwen3_5Model {
         Ok(target_forward_output)
     }
 
-    pub(crate) fn forward_chunk_with_all_position_logits_and_pre_final_normalization_hidden_states_and_performance_attribution(
+    pub(crate) fn forward_depth_one_mtp_verification_with_performance_attribution(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(Qwen3_5TargetForwardOutput, Vec<u32>), Qwen3_5ExecutionError> {
+    ) -> Result<
+        (
+            Qwen3_5TargetForwardOutput,
+            Vec<u32>,
+            Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+        ),
+        Qwen3_5ExecutionError,
+    > {
+        if token_ids.len() != 2 {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "depth-one MTP verification requires exactly two target tokens",
+            });
+        }
         let token_count = validate_forward_input(
             token_ids,
             starting_position_tokens,
@@ -310,12 +306,25 @@ impl Qwen3_5Model {
         let token_indices = self
             .runtime
             .array_from_i32(&signed_token_ids, &[1, token_count])?;
+        let recurrent_boundary_tensor_count = self.decoder_cache_layout.boundary_tensor_count();
+        let mut verified_prefix_boundary_checkpoint_collector =
+            if recurrent_boundary_tensor_count == 0 {
+                None
+            } else {
+                Some(
+                    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+                        vec![1],
+                        recurrent_boundary_tensor_count,
+                        1,
+                    )?,
+                )
+            };
         let target_forward_output = self.build_target_forward_graph_from_token_indices(
             &token_indices,
             token_count,
             starting_position_tokens,
             request_decoder_state,
-            None,
+            verified_prefix_boundary_checkpoint_collector.as_mut(),
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDecodeVerification,
             performance_attribution,
             true,
@@ -329,14 +338,53 @@ impl Qwen3_5Model {
         let target_verify_token_ids = performance_attribution.measure_operation(
             PerformanceOperation::MtpTargetVerificationSynchronizationWait,
             |_performance_attribution| -> Result<Vec<u32>, Qwen3_5ExecutionError> {
-                self.evaluate_forward_state(&target_verify_token_indices, request_decoder_state)?;
-                self.runtime.evaluate_arrays(&[
-                    target_forward_output.pre_final_normalization_hidden_states()
-                ])?;
+                let mut target_verification_evaluation_arrays =
+                    super::forward_contract::forward_state_arrays(
+                        &target_verify_token_indices,
+                        request_decoder_state,
+                    )?;
+                target_verification_evaluation_arrays
+                    .push(target_forward_output.pre_final_normalization_hidden_states());
+                if let Some(verified_prefix_boundary_checkpoint_collector) =
+                    verified_prefix_boundary_checkpoint_collector.as_ref()
+                {
+                    target_verification_evaluation_arrays
+                        .extend(verified_prefix_boundary_checkpoint_collector.evaluation_arrays());
+                }
+                self.runtime
+                    .evaluate_arrays(&target_verification_evaluation_arrays)?;
                 Ok(target_verify_token_indices.to_vec_u32()?)
             },
         )?;
-        Ok((target_forward_output, target_verify_token_ids))
+        let verified_prefix_boundary_checkpoint =
+            match verified_prefix_boundary_checkpoint_collector {
+                Some(verified_prefix_boundary_checkpoint_collector) => {
+                    let mut verified_prefix_boundary_checkpoints =
+                        verified_prefix_boundary_checkpoint_collector.complete()?;
+                    let verified_prefix_boundary_checkpoint =
+                        verified_prefix_boundary_checkpoints.pop().ok_or(
+                            Qwen3_5ExecutionError::InvalidInput {
+                                description:
+                                    "MTP target verification did not retain its first-row boundary",
+                            },
+                        )?;
+                    if !verified_prefix_boundary_checkpoints.is_empty() {
+                        return Err(Qwen3_5ExecutionError::InvalidInput {
+                            description: "MTP target verification retained unexpected extra boundaries",
+                        });
+                    }
+                    verified_prefix_boundary_checkpoint
+                }
+                None => Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
+                    completed_prefill_chunck_tokens: 1,
+                    recurrent_snapshot_tensors: std::collections::HashMap::new(),
+                },
+            };
+        Ok((
+            target_forward_output,
+            target_verify_token_ids,
+            verified_prefix_boundary_checkpoint,
+        ))
     }
 
     pub(crate) fn build_forward_chunk_with_performance_attribution(

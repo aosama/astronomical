@@ -2,10 +2,10 @@ use std::time::{Duration, Instant};
 
 use astronomical_model_serving::InferenceEngine;
 
-use super::engine_support::load_mtp_test_engine;
+use super::engine_support::{load_mtp_test_engine, performance_counter_amount};
 
 #[tokio::test]
-#[ignore = "loads the resident oQ4e target model and attributes positional file reads"]
+#[ignore = "loads the resident configured target model and attributes positional file reads"]
 async fn should_measure_resident_model_loading_positional_file_read_concurrency() {
     tokio::time::timeout(
         Duration::from_secs(60),
@@ -17,7 +17,7 @@ async fn should_measure_resident_model_loading_positional_file_read_concurrency(
 
 async fn run_resident_model_loading_positional_file_read_concurrency() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = super::super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+    let model_directory = super::super::configured_depth_one_mtp_model_artifact_directory();
     let (mut target_only_engine, _temporary_log_directory, performance_attribution_log_path) =
         load_mtp_test_engine(&model_directory, false, true).await;
 
@@ -41,13 +41,15 @@ async fn run_resident_model_loading_positional_file_read_concurrency() {
             performance_attribution_report["report_kind"] == "model_loading"
         })
         .expect("the attributed model load should write a model-loading report");
-    let read_call_count = counter_amount(&model_loading_report, "positional_file_read_call_count");
-    let read_byte_count = counter_amount(&model_loading_report, "positional_file_read_byte_count");
-    let maximum_concurrent_read_count = counter_amount(
+    let read_call_count =
+        performance_counter_amount(&model_loading_report, "positional_file_read_call_count");
+    let read_byte_count =
+        performance_counter_amount(&model_loading_report, "positional_file_read_byte_count");
+    let maximum_concurrent_read_count = performance_counter_amount(
         &model_loading_report,
         "positional_file_read_maximum_concurrent_count",
     );
-    let total_read_elapsed_nanoseconds = counter_amount(
+    let total_read_elapsed_nanoseconds = performance_counter_amount(
         &model_loading_report,
         "positional_file_read_elapsed_nanoseconds",
     );
@@ -68,17 +70,4 @@ async fn run_resident_model_loading_positional_file_read_concurrency() {
         read_byte_count > 0,
         "model loading should read tensor bytes"
     );
-}
-
-fn counter_amount(performance_attribution_report: &serde_json::Value, identifier: &str) -> u64 {
-    performance_attribution_report["counters"]
-        .as_array()
-        .and_then(|performance_counters| {
-            performance_counters.iter().find_map(|performance_counter| {
-                (performance_counter["counter"] == identifier)
-                    .then(|| performance_counter["amount"].as_u64())
-                    .flatten()
-            })
-        })
-        .unwrap_or(0)
 }

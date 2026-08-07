@@ -105,11 +105,18 @@ fn should_not_sample_disabled_adaptive_memory_for_unpublished_forwards() {
     let mtp_outcome_source =
         &QWEN_ADVANCE_GENERATION_SOURCE[mtp_outcome_start..target_only_decode_start];
     let successful_mtp_condition_position = mtp_outcome_source
-        .find("mtp_prefix_acceptance_outcome != MtpPrefixAcceptanceOutcome::OperationalFallback")
+        .find("if mtp_prefix_acceptance_outcome")
         .expect("MTP output must remain conditional on successful verification");
     let published_mtp_snapshot_position = mtp_outcome_source
         .find("collect_completed_forward_memory_snapshot(")
         .expect("successful MTP output must publish its completed-forward snapshot");
+    let successful_mtp_condition_source =
+        &mtp_outcome_source[successful_mtp_condition_position..published_mtp_snapshot_position];
+    assert!(
+        successful_mtp_condition_source
+            .contains("!= MtpPrefixAcceptanceOutcome::OperationalFallback"),
+        "MTP output must exclude operational fallback"
+    );
     assert!(
         successful_mtp_condition_position < published_mtp_snapshot_position,
         "MTP fallback must not collect a snapshot that target-only decode will replace"
