@@ -69,6 +69,7 @@ pub use openai_responses_translation::{
     OpenAiResponsesTranslationError, translate_openai_responses_request,
 };
 pub use shutdown_control::ShutdownController;
+pub use system_telemetry::parse_macos_memory_pressure_level;
 pub use worker_control_error::WorkerControlError;
 pub use worker_handle::{GenerationQueueDepth, WorkerHandle};
 pub use worker_health::{

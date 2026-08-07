@@ -5,6 +5,13 @@ import XCTest
 @testable import AstronomicalMenu
 
 final class StatusPresentationContractTests: XCTestCase {
+  func test_should_present_every_system_memory_pressure_state_with_explicit_text() {
+    XCTAssertEqual(SystemMemoryPressureTitle.normal.rawValue, "Normal")
+    XCTAssertEqual(SystemMemoryPressureTitle.warning.rawValue, "Warning")
+    XCTAssertEqual(SystemMemoryPressureTitle.critical.rawValue, "Critical")
+    XCTAssertEqual(SystemMemoryPressureTitle.unavailable.rawValue, "Unavailable")
+  }
+
   func test_should_show_effective_mtp_runtime_state_for_every_status() throws {
     let runtimeStateCases: [(runtimeState: String, readyModelJSON: String, expectedTitle: String)] = [
       ("active", #", "ready_model_id":"Ornith""#, "Active"),
