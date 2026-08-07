@@ -1,4 +1,8 @@
-use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState};
+use astronomical_ipc_protocol::{
+    ChatModelCapabilities, MtpRuntimeState, WorkerPrefillOptimizerCandidateEvidence,
+    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
+    WorkerPrefillOptimizerInsight,
+};
 use astronomical_supervisor::{
     ActiveRequestProgress, WorkerActivity, WorkerHealthSnapshot, build_application,
 };
@@ -6,6 +10,7 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
+use tokio::time::{Duration, Instant};
 use tower::ServiceExt;
 
 const OBSERVATORY_CONTRACT_MODEL_ID: &str = "astronomical/observatory-contract-model";
@@ -71,6 +76,7 @@ async fn should_expose_prefill_progress_with_processed_and_total_tokens_when_act
         processed_tokens: 1_024,
         total_tokens: 8_192,
         elapsed_millis: 800,
+        request_started_at: Instant::now(),
         completed_prefill_chunck_tokens: Some(1_024),
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
@@ -97,6 +103,43 @@ async fn should_expose_prefill_progress_with_processed_and_total_tokens_when_act
     assert_eq!(
         status_document["progress"]["completed_prefill_chunck_tokens"],
         1_024
+    );
+}
+
+#[tokio::test]
+async fn should_advance_live_prefill_elapsed_time_before_the_first_completed_forward() {
+    let mut health_snapshot = ready_health_snapshot_with_model();
+    health_snapshot.activity = WorkerActivity::PromptProcessing;
+    health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
+        processed_tokens: 0,
+        total_tokens: 8_192,
+        elapsed_millis: 0,
+        request_started_at: Instant::now() - Duration::from_millis(250),
+        completed_prefill_chunck_tokens: None,
+    });
+    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
+
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return a status response");
+    let response_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
+
+    assert_eq!(status_document["progress"]["processed_tokens"], 0);
+    assert!(
+        status_document["progress"]["elapsed_ms"]
+            .as_u64()
+            .unwrap_or(0)
+            >= 250
     );
 }
 
@@ -239,6 +282,71 @@ async fn should_expose_mlx_memory_snapshot_and_serving_session_in_status_for_the
     assert!(status_document["serving_session"]["completed_request_count"].is_u64());
     assert!(status_document["serving_session"]["total_prompt_token_count"].is_u64());
     assert!(status_document["serving_session"]["total_reused_prompt_token_count"].is_u64());
+}
+
+#[tokio::test]
+async fn should_expose_optimizer_evidence_without_claiming_global_convergence() {
+    let mut health_snapshot = ready_health_snapshot_with_model();
+    health_snapshot
+        .prefill_optimizer_insights
+        .push(WorkerPrefillOptimizerInsight {
+            requested_prefill_chunck_tokens: 4_096,
+            actual_prefill_chunck_tokens: 4_096,
+            elapsed_millis: 720,
+            decision_reason: WorkerPrefillOptimizerDecisionReason::CumulativeLatencyPlanning,
+            has_observed_prefill_capacity_constraint: false,
+            has_observations_for_every_candidate: true,
+            context: WorkerPrefillOptimizerContext {
+                prompt_position_tokens: 32_768,
+                has_restored_prefix: true,
+                is_first_chunck_after_restore: false,
+                has_visual_embeddings: false,
+                is_mtp_active: false,
+                are_sparse_experts_paged: false,
+                is_prompt_cache_capture_eligible: true,
+                has_prior_capacity_reduction: false,
+            },
+            candidate_evidence: vec![WorkerPrefillOptimizerCandidateEvidence {
+                candidate_prefill_chunck_tokens: 4_096,
+                observation_count: 5,
+                average_actual_prefill_chunck_tokens: 4_096,
+                average_elapsed_millis: 710,
+                decisions_since_last_observation: Some(0),
+            }],
+        });
+    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
+
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return a status response");
+    let response_body = to_bytes(response.into_body(), 32 * 1024)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
+
+    assert_eq!(status_document["prefill_optimizer"]["enabled"], true);
+    assert_eq!(
+        status_document["prefill_optimizer"]["latest_insight"]["requested_prefill_chunck_tokens"],
+        4_096
+    );
+    assert_eq!(
+        status_document["prefill_optimizer"]["recent_transitions"]
+            .as_array()
+            .map(Vec::len),
+        Some(1)
+    );
+    assert!(
+        status_document
+            .get("converged_prefill_chunck_tokens")
+            .is_none()
+    );
 }
 
 struct ContractScriptedExecutor {

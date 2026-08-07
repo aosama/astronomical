@@ -49,7 +49,9 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
         config_warning: None,
-        prefill_chunck_sizing_policy: PrefillChunckSizingPolicy::Optimized,
+        prefill_chunck_sizing_policy: PrefillChunckSizingPolicy::Optimized {
+            optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
+        },
         optimizer_state_directory: PathBuf::from("/tmp/astronomical-optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,

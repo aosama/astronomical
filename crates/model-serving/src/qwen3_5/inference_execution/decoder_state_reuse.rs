@@ -5,13 +5,11 @@ use crate::{
     PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
     PersistentPromptCachePrefixLookup,
 };
-use crate::{PersistentPromptCacheWriteQueue, PersistentPromptCacheWriteQueueOutcome};
 
+use super::super::RequestDecoderStateStack;
 use super::super::model::memory_admission::{
     persistent_prompt_cache_restore_temporary_workspace_bytes, validate_context_memory_admission,
 };
-use super::super::{Qwen3_5Model, RequestDecoderStateStack};
-use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 /// The cache-specific portion of a newly admitted request's starting state.
 ///
@@ -284,143 +282,6 @@ impl Qwen3_5EngineState {
             restored_token_count,
             last_restored_persistent_prompt_cache_block_key,
         })
-    }
-
-    pub(super) fn capture_persistent_prompt_cache_block(
-        &self,
-        persistent_prompt_cache: &PersistentPromptCacheDiskStore,
-        persistent_prompt_cache_write_queue: &PersistentPromptCacheWriteQueue,
-        model: &Qwen3_5Model,
-        active_request: &mut Qwen3_5EngineRequest,
-    ) {
-        if active_request.persistent_prompt_cache_capture_has_stopped {
-            return;
-        }
-        let position = active_request.next_position_tokens as usize;
-        let block_index = position / PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-        // The engine calls this only after a nonzero exact block boundary and
-        // before the prompt's final token. Therefore `block_index - 1` is safe
-        // and this snapshot represents a complete state boundary that can be
-        // restored without a one-token rollback.
-        let block_start = (block_index - 1) * PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-        let block_end = block_start + PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-        let block_tokens = &active_request.input_token_ids[block_start..block_end];
-        let persistent_prompt_cache_block_key =
-            match &active_request.last_restored_persistent_prompt_cache_block_key {
-                None => PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
-                    persistent_prompt_cache.model_contract.model_id(),
-                    persistent_prompt_cache.model_contract.model_revision(),
-                    block_tokens,
-                    &active_request.ordered_image_sha256_digests,
-                ),
-                Some(parent_persistent_prompt_cache_block_key) => {
-                    parent_persistent_prompt_cache_block_key.for_child_block(block_tokens)
-                }
-            };
-        let persistent_prompt_cache_block_key = match persistent_prompt_cache_block_key {
-            Ok(persistent_prompt_cache_block_key) => persistent_prompt_cache_block_key,
-            Err(error) => {
-                tracing::warn!(
-                    "Qwen3.5 persistent prompt-cache block identity construction failed: {error}"
-                );
-                return;
-            }
-        };
-        let kv_block_tensors = match active_request.measure_operation_with_request(
-            PerformanceOperation::PersistentPromptCacheStateExtraction,
-            |active_request| {
-                active_request
-                    .request_decoder_state
-                    .extract_persistent_prompt_cache_kv_block_tensors(
-                        model.runtime(),
-                        block_start,
-                        block_end,
-                    )
-            },
-        ) {
-            Ok(kv_block_tensors) => kv_block_tensors,
-            Err(error) => {
-                tracing::warn!("Qwen3.5 persistent prompt-cache KV extraction failed: {error}");
-                return;
-            }
-        };
-        let recurrent_snapshot_tensors = match active_request.measure_operation_with_request(
-            PerformanceOperation::PersistentPromptCacheStateExtraction,
-            |active_request| {
-                active_request
-                    .request_decoder_state
-                    .extract_persistent_prompt_cache_recurrent_snapshot_tensors()
-            },
-        ) {
-            Ok(recurrent_snapshot_tensors) => recurrent_snapshot_tensors,
-            Err(error) => {
-                tracing::warn!(
-                    "Qwen3.5 persistent prompt-cache recurrent snapshot extraction failed: {error}"
-                );
-                return;
-            }
-        };
-        // Capture is an opportunistic optimization. A serialization or disk
-        // failure must never fail an otherwise valid user generation; a later
-        // request simply receives less reuse and falls back to cold prefill.
-        let mut request_performance_attribution = std::mem::replace(
-            &mut active_request.performance_attribution,
-            PerformanceAttribution::disabled(),
-        );
-        let block_save_outcome = persistent_prompt_cache_write_queue.serialize_and_enqueue(
-            model.runtime(),
-            &persistent_prompt_cache_block_key,
-            active_request
-                .last_restored_persistent_prompt_cache_block_key
-                .as_ref(),
-            &kv_block_tensors,
-            &recurrent_snapshot_tensors,
-            &mut request_performance_attribution,
-        );
-        active_request.performance_attribution = request_performance_attribution;
-        let write_queue_outcome = match block_save_outcome {
-            Ok(write_queue_outcome) => write_queue_outcome,
-            Err(error) => {
-                tracing::warn!(
-                    block_index,
-                    block_start,
-                    block_end,
-                    "persistent prompt-cache block save failed: {error}"
-                );
-                return;
-            }
-        };
-        if write_queue_outcome == PersistentPromptCacheWriteQueueOutcome::SkipBecauseCacheIsFull {
-            active_request.persistent_prompt_cache_capture_has_stopped = true;
-            tracing::info!(
-                block_index,
-                block_start,
-                block_end,
-                block_token_count = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
-                "persistent prompt-cache block capture stopped because prefix capacity is full"
-            );
-            return;
-        }
-        if write_queue_outcome == PersistentPromptCacheWriteQueueOutcome::DroppedBecauseQueueIsFull
-        {
-            active_request.persistent_prompt_cache_capture_has_stopped = true;
-            tracing::info!(
-                block_index,
-                block_start,
-                block_end,
-                "persistent prompt-cache block capture stopped because the bounded writer queue is full"
-            );
-            return;
-        }
-        tracing::info!(
-            block_index,
-            block_start,
-            block_end,
-            block_token_count = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
-            "persistent prompt-cache block serialized and queued"
-        );
-        active_request.last_restored_persistent_prompt_cache_block_key =
-            Some(persistent_prompt_cache_block_key);
     }
 }
 

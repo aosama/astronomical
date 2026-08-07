@@ -14,7 +14,7 @@ use tokio::{
 use super::cache_stats_worker_launcher::create_cache_stats_worker_configuration;
 use crate::common::{discovered_model_artifact, single_model_directories};
 
-pub(super) const MODEL_ID: &str = "Qwen3.6-35B-A3B-oQ6e-mtp";
+pub(super) const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const PROGRESS_INTERVAL_SECONDS: u64 = 5;
 const STATUS_POLL_INTERVAL_MILLIS: u64 = 2_000;
@@ -29,7 +29,7 @@ mod scenario;
 use scenario::{run_cache_stats_e2e_with_timeout, two_thousand_word_case};
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the complete local Qwen3.6 model and exercises the persistent prompt cache end-to-end with a 2K-word prompt"]
+#[ignore = "loads Ornith and exercises the persistent prompt cache end-to-end with a 2K-word prompt"]
 async fn should_observe_a_cache_miss_then_a_cache_hit_with_2k_words() {
     run_cache_stats_e2e_with_timeout(two_thousand_word_case()).await;
 }

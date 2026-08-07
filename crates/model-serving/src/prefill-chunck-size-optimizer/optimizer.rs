@@ -1,60 +1,51 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use super::context_statistics::ContextCandidateStatistics;
+use super::episode_latency_planner::lowest_cumulative_latency_candidate_index;
 use super::{
+    PrefillChunckOptimizerCandidateEvidence, PrefillChunckOptimizerContextEvidence,
     PrefillChunckSizeOptimizerContext, PrefillChunckSizeOptimizerError,
     PrefillChunckSizeOptimizerObservation, persistence,
 };
 
-pub(crate) use super::context_statistics::ContextCandidateStatistics;
-
-const MINIMUM_TRUSTED_OBSERVATION_COUNT: usize = 1;
-const MINIMUM_DRIFT_TRIGGER_FACTOR: u64 = 2;
+const MINIMUM_SLIDING_WINDOW_OBSERVATION_COUNT: usize = 1;
+const STALE_OBSERVATION_WINDOW_MULTIPLIER: u64 = 5;
 
 /// Why the optimizer chose a particular candidate chunk size.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PrefillChunckSizeOptimizerDecisionReason {
-    /// Exploring an untested or under-tested candidate to gather observations.
-    Exploration,
-    /// Exploiting the trusted candidate with the highest median throughput.
-    Exploitation,
-    /// Re-exploring all candidates after detecting drift on the previous best.
-    ReExplorationAfterDrift,
-    /// Fallback: no trusted candidates and nothing left to explore.
+    /// Sampling the largest feasible requested action without evidence.
+    InitialExploration,
+    /// Refreshing the least recently observed feasible action.
+    StaleObservationProbe,
+    /// Minimizing predicted complete prompt-processing latency.
+    CumulativeLatencyPlanning,
+    /// The prompt tail is shorter than the smallest registered candidate.
     Fallback,
 }
 
 /// The candidate the optimizer chose and why.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PrefillChunckSizeOptimizerDecision {
-    /// The chosen `prefill_chunck_tokens` for the next chunk.
     pub candidate_prefill_chunck_tokens: usize,
-    /// Why this candidate was chosen.
     pub reason: PrefillChunckSizeOptimizerDecisionReason,
 }
 
-/// Online discrete optimizer for prompt pre-processing `prefill_chunck_tokens`.
-///
-/// Optimizes the highest median throughput per context bucket using a sliding
-/// window of recent full-chunk observations, exploring each candidate until it
-/// is trusted, then exploiting the best candidate until drift forces
-/// re-exploration.
+/// Tabular online optimizer for cumulative prompt-processing latency.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrefillChunckSizeOptimizer {
     candidate_prefill_chunck_tokens: Vec<usize>,
-    trusted_observation_count: usize,
     sliding_window_observation_count: usize,
-    drift_trigger_factor: u64,
+    decision_sequence: u64,
+    observation_sequence: u64,
     context_statistics: BTreeMap<PrefillChunckSizeOptimizerContext, ContextCandidateStatistics>,
 }
 
 impl PrefillChunckSizeOptimizer {
-    /// Creates an optimizer over positive discrete `prefill_chunck_tokens` candidates.
     pub fn new(
         mut candidate_prefill_chunck_tokens: Vec<usize>,
-        trusted_observation_count: usize,
         sliding_window_observation_count: usize,
-        drift_trigger_factor: u64,
     ) -> Result<Self, PrefillChunckSizeOptimizerError> {
         if candidate_prefill_chunck_tokens.is_empty() {
             return Err(PrefillChunckSizeOptimizerError::NoCandidatePrefillChunckTokens);
@@ -64,75 +55,111 @@ impl PrefillChunckSizeOptimizer {
                 PrefillChunckSizeOptimizerError::CandidatePrefillChunckTokensMustBePositive,
             );
         }
-        if drift_trigger_factor < MINIMUM_DRIFT_TRIGGER_FACTOR {
-            return Err(PrefillChunckSizeOptimizerError::DriftTriggerFactorMustBeAtLeastTwo);
-        }
-        let trusted_observation_count =
-            trusted_observation_count.max(MINIMUM_TRUSTED_OBSERVATION_COUNT);
-        let sliding_window_observation_count =
-            sliding_window_observation_count.max(trusted_observation_count);
         candidate_prefill_chunck_tokens.sort_unstable();
         candidate_prefill_chunck_tokens.dedup();
         Ok(Self {
             candidate_prefill_chunck_tokens,
-            trusted_observation_count,
-            sliding_window_observation_count,
-            drift_trigger_factor,
+            sliding_window_observation_count: sliding_window_observation_count
+                .max(MINIMUM_SLIDING_WINDOW_OBSERVATION_COUNT),
+            decision_sequence: 0,
+            observation_sequence: 0,
             context_statistics: BTreeMap::new(),
         })
     }
 
-    /// Picks the next candidate for a context bucket and explains why.
     #[must_use]
     pub fn ask(
         &mut self,
         prompt_processing_context: PrefillChunckSizeOptimizerContext,
     ) -> PrefillChunckSizeOptimizerDecision {
-        let candidate_count = self.candidate_prefill_chunck_tokens.len();
-        let context_candidate_statistics = self
-            .context_statistics
-            .entry(prompt_processing_context)
-            .or_insert_with(|| ContextCandidateStatistics::new(candidate_count));
-
-        if context_candidate_statistics.is_re_exploring {
-            let candidate_prefill_chunck_tokens = &self.candidate_prefill_chunck_tokens;
-            let chosen_prefill_chunck_tokens = context_candidate_statistics
-                .round_robin_next_candidate(candidate_prefill_chunck_tokens);
-            return PrefillChunckSizeOptimizerDecision {
-                candidate_prefill_chunck_tokens: chosen_prefill_chunck_tokens,
-                reason: PrefillChunckSizeOptimizerDecisionReason::ReExplorationAfterDrift,
-            };
-        }
-
-        if let Some(candidate_index) = context_candidate_statistics
-            .next_exploration_candidate_index(self.trusted_observation_count)
-        {
-            return PrefillChunckSizeOptimizerDecision {
-                candidate_prefill_chunck_tokens: self.candidate_prefill_chunck_tokens
-                    [candidate_index],
-                reason: PrefillChunckSizeOptimizerDecisionReason::Exploration,
-            };
-        }
-
-        if let Some(selected_candidate_index) = best_trusted_candidate_index(
-            &self.candidate_prefill_chunck_tokens,
-            context_candidate_statistics,
-            self.trusted_observation_count,
-        ) {
-            return PrefillChunckSizeOptimizerDecision {
-                candidate_prefill_chunck_tokens: self.candidate_prefill_chunck_tokens
-                    [selected_candidate_index],
-                reason: PrefillChunckSizeOptimizerDecisionReason::Exploitation,
-            };
-        }
-
-        PrefillChunckSizeOptimizerDecision {
-            candidate_prefill_chunck_tokens: self.candidate_prefill_chunck_tokens[0],
-            reason: PrefillChunckSizeOptimizerDecisionReason::Fallback,
-        }
+        let maximum_prefill_chunck_tokens = self
+            .candidate_prefill_chunck_tokens
+            .last()
+            .copied()
+            .unwrap_or(1);
+        self.ask_with_maximum_prefill_chunck_tokens(
+            prompt_processing_context,
+            maximum_prefill_chunck_tokens,
+        )
     }
 
-    /// Teaches the optimizer about one measured candidate outcome.
+    #[must_use]
+    pub fn ask_with_maximum_prefill_chunck_tokens(
+        &mut self,
+        prompt_processing_context: PrefillChunckSizeOptimizerContext,
+        maximum_prefill_chunck_tokens: usize,
+    ) -> PrefillChunckSizeOptimizerDecision {
+        self.decision_sequence = self.decision_sequence.saturating_add(1);
+        let eligible_candidate_count = self.candidate_prefill_chunck_tokens.partition_point(
+            |candidate_prefill_chunck_tokens| {
+                *candidate_prefill_chunck_tokens <= maximum_prefill_chunck_tokens
+            },
+        );
+        if eligible_candidate_count == 0 {
+            return PrefillChunckSizeOptimizerDecision {
+                candidate_prefill_chunck_tokens: self.candidate_prefill_chunck_tokens[0],
+                reason: PrefillChunckSizeOptimizerDecisionReason::Fallback,
+            };
+        }
+
+        if let Some(candidate_index) = (0..eligible_candidate_count).rev().find(|candidate_index| {
+            !self.has_observations_in_context_family(prompt_processing_context, *candidate_index)
+        }) {
+            return self.decision(
+                candidate_index,
+                PrefillChunckSizeOptimizerDecisionReason::InitialExploration,
+            );
+        }
+
+        let stale_after_decisions =
+            STALE_OBSERVATION_WINDOW_MULTIPLIER.saturating_mul(eligible_candidate_count as u64);
+        let stale_candidate_index = (0..eligible_candidate_count)
+            .filter_map(|candidate_index| {
+                self.last_observed_decision_sequence_in_context_family(
+                    prompt_processing_context,
+                    candidate_index,
+                )
+                .map(|last_observed_decision_sequence| {
+                    (candidate_index, last_observed_decision_sequence)
+                })
+            })
+            .filter(|(_, last_observed_decision_sequence)| {
+                self.decision_sequence
+                    .saturating_sub(*last_observed_decision_sequence)
+                    >= stale_after_decisions
+            })
+            .min_by_key(|(candidate_index, last_observed_decision_sequence)| {
+                (*last_observed_decision_sequence, *candidate_index)
+            })
+            .map(|(candidate_index, _)| candidate_index);
+        if let Some(candidate_index) = stale_candidate_index {
+            return self.decision(
+                candidate_index,
+                PrefillChunckSizeOptimizerDecisionReason::StaleObservationProbe,
+            );
+        }
+
+        let unknown_elapsed_millis_per_token = self
+            .maximum_observed_elapsed_millis_per_token(prompt_processing_context)
+            .max(1);
+        let selected_candidate_index = lowest_cumulative_latency_candidate_index(
+            &self.candidate_prefill_chunck_tokens,
+            maximum_prefill_chunck_tokens,
+            prompt_processing_context,
+            unknown_elapsed_millis_per_token,
+            &|future_prompt_processing_context, candidate_index| {
+                self.observations_for_context_or_family(
+                    future_prompt_processing_context,
+                    candidate_index,
+                )
+            },
+        );
+        self.decision(
+            selected_candidate_index,
+            PrefillChunckSizeOptimizerDecisionReason::CumulativeLatencyPlanning,
+        )
+    }
+
     pub fn tell(
         &mut self,
         prompt_processing_context: PrefillChunckSizeOptimizerContext,
@@ -140,95 +167,137 @@ impl PrefillChunckSizeOptimizer {
         prefill_chunck_observation: PrefillChunckSizeOptimizerObservation,
     ) -> Result<(), PrefillChunckSizeOptimizerError> {
         let candidate_index = self.candidate_index(candidate_prefill_chunck_tokens)?;
+        if prefill_chunck_observation.actual_prefill_chunck_tokens() == 0 {
+            return Err(
+                PrefillChunckSizeOptimizerError::ObservationPrefillChunckTokensMustBePositive,
+            );
+        }
         if prefill_chunck_observation.elapsed_millis() == 0 {
             return Err(PrefillChunckSizeOptimizerError::ObservationElapsedMillisMustBePositive);
         }
-        if !prefill_chunck_observation.is_full_candidate_prefill_chunck() {
-            return Ok(());
-        }
-        let context_candidate_statistics = self
-            .context_statistics
-            .entry(prompt_processing_context)
-            .or_insert_with(|| {
-                ContextCandidateStatistics::new(self.candidate_prefill_chunck_tokens.len())
-            });
+        self.observation_sequence = self.observation_sequence.saturating_add(1);
         let candidate_observation = CandidatePrefillChunckObservation {
             actual_prefill_chunck_tokens: prefill_chunck_observation.actual_prefill_chunck_tokens(),
             elapsed_millis: prefill_chunck_observation.elapsed_millis(),
+            next_prompt_processing_context: prefill_chunck_observation
+                .next_prompt_processing_context(),
+            observation_sequence: self.observation_sequence,
         };
-        let previous_best_candidate_index = best_trusted_candidate_index(
-            &self.candidate_prefill_chunck_tokens,
-            context_candidate_statistics,
-            self.trusted_observation_count,
-        );
-        let was_re_exploring = context_candidate_statistics.is_re_exploring;
-        context_candidate_statistics.candidate_statistics[candidate_index]
-            .record_observation(candidate_observation, self.sliding_window_observation_count);
-        if was_re_exploring {
-            context_candidate_statistics.advance_re_exploration();
-        } else if let Some(previous_best_candidate_index) = previous_best_candidate_index
-            && context_candidate_statistics.candidate_statistics[previous_best_candidate_index]
-                .latest_observation_drifted_above(self.drift_trigger_factor)
-        {
-            context_candidate_statistics
-                .begin_re_exploration(self.candidate_prefill_chunck_tokens.len());
-        }
+        self.context_statistics
+            .entry(prompt_processing_context)
+            .or_insert_with(|| {
+                ContextCandidateStatistics::new(self.candidate_prefill_chunck_tokens.len())
+            })
+            .candidate_statistics[candidate_index]
+            .record_observation(
+                candidate_observation,
+                self.sliding_window_observation_count,
+                self.decision_sequence,
+            );
         Ok(())
     }
 
-    /// Returns the sorted candidate set used by this optimizer.
     #[must_use]
     pub fn candidate_prefill_chunck_tokens(&self) -> &[usize] {
         &self.candidate_prefill_chunck_tokens
     }
 
-    /// Returns the trusted observation count threshold.
-    #[must_use]
-    pub fn trusted_observation_count(&self) -> usize {
-        self.trusted_observation_count
-    }
-
-    /// Returns the sliding window observation count.
     #[must_use]
     pub fn sliding_window_observation_count(&self) -> usize {
         self.sliding_window_observation_count
     }
 
-    /// Returns the drift trigger factor.
+    /// Summarizes the exact-or-family evidence used for decisions in one context.
     #[must_use]
-    pub fn drift_trigger_factor(&self) -> u64 {
-        self.drift_trigger_factor
+    pub fn context_evidence(
+        &self,
+        prompt_processing_context: PrefillChunckSizeOptimizerContext,
+    ) -> PrefillChunckOptimizerContextEvidence {
+        let candidate_evidence = self
+            .candidate_prefill_chunck_tokens
+            .iter()
+            .enumerate()
+            .map(|(candidate_index, candidate_prefill_chunck_tokens)| {
+                let candidate_observations = self
+                    .observations_for_context_or_family(prompt_processing_context, candidate_index);
+                let observation_count = candidate_observations.len();
+                let cumulative_actual_prefill_chunck_tokens = candidate_observations.iter().fold(
+                    0_u128,
+                    |cumulative_tokens, candidate_observation| {
+                        cumulative_tokens.saturating_add(
+                            candidate_observation.actual_prefill_chunck_tokens as u128,
+                        )
+                    },
+                );
+                let cumulative_elapsed_millis = candidate_observations.iter().fold(
+                    0_u128,
+                    |cumulative_millis, candidate_observation| {
+                        cumulative_millis
+                            .saturating_add(u128::from(candidate_observation.elapsed_millis))
+                    },
+                );
+                let average_denominator = (observation_count as u128).max(1);
+                PrefillChunckOptimizerCandidateEvidence {
+                    candidate_prefill_chunck_tokens: *candidate_prefill_chunck_tokens,
+                    observation_count,
+                    average_actual_prefill_chunck_tokens: usize::try_from(
+                        cumulative_actual_prefill_chunck_tokens / average_denominator,
+                    )
+                    .unwrap_or(usize::MAX),
+                    average_elapsed_millis: u64::try_from(
+                        cumulative_elapsed_millis / average_denominator,
+                    )
+                    .unwrap_or(u64::MAX),
+                    decisions_since_last_observation: self
+                        .last_observed_decision_sequence_in_context_family(
+                            prompt_processing_context,
+                            candidate_index,
+                        )
+                        .map(|last_observed_decision_sequence| {
+                            self.decision_sequence
+                                .saturating_sub(last_observed_decision_sequence)
+                        }),
+                }
+            })
+            .collect::<Vec<_>>();
+        PrefillChunckOptimizerContextEvidence {
+            has_observations_for_every_candidate: candidate_evidence
+                .iter()
+                .all(|candidate_evidence| candidate_evidence.observation_count > 0),
+            candidate_evidence,
+        }
     }
 
-    /// Returns the context statistics map.
-    #[must_use]
+    pub(crate) fn decision_sequence(&self) -> u64 {
+        self.decision_sequence
+    }
+
+    pub(crate) fn observation_sequence(&self) -> u64 {
+        self.observation_sequence
+    }
+
     pub(crate) fn context_statistics(
         &self,
     ) -> &BTreeMap<PrefillChunckSizeOptimizerContext, ContextCandidateStatistics> {
         &self.context_statistics
     }
 
-    /// Reconstructs an optimizer from persisted state. Used by the persistence
-    /// module to restore an optimizer from disk.
-    #[must_use]
     pub(crate) fn new_from_persisted_state(
         candidate_prefill_chunck_tokens: Vec<usize>,
-        trusted_observation_count: usize,
         sliding_window_observation_count: usize,
-        drift_trigger_factor: u64,
+        decision_sequence: u64,
+        observation_sequence: u64,
         context_statistics: BTreeMap<PrefillChunckSizeOptimizerContext, ContextCandidateStatistics>,
     ) -> Self {
         Self {
             candidate_prefill_chunck_tokens,
-            trusted_observation_count,
             sliding_window_observation_count,
-            drift_trigger_factor,
+            decision_sequence,
+            observation_sequence,
             context_statistics,
         }
     }
 
-    /// Persists the optimizer state to the given directory. The state file
-    /// is written atomically (temp file + rename) to avoid partial writes.
     pub fn save_to_directory(
         &self,
         optimizer_directory: &std::path::Path,
@@ -243,27 +312,31 @@ impl PrefillChunckSizeOptimizer {
         )
     }
 
-    /// Loads an optimizer from a state file. Returns `Ok(None)` if the file
-    /// doesn't exist, is corrupt, or doesn't match the current model or
-    /// configuration — the optimizer starts fresh in all such cases.
     pub fn load_from_path(
         state_file_path: PathBuf,
         model_id: String,
         model_revision: String,
         candidate_prefill_chunck_tokens: Vec<usize>,
-        trusted_observation_count: usize,
         sliding_window_observation_count: usize,
-        drift_trigger_factor: u64,
     ) -> Result<Option<Self>, PrefillChunckSizeOptimizerError> {
         persistence::load_optimizer_from_path(
             &state_file_path,
             &model_id,
             &model_revision,
             candidate_prefill_chunck_tokens,
-            trusted_observation_count,
             sliding_window_observation_count,
-            drift_trigger_factor,
         )
+    }
+
+    fn decision(
+        &self,
+        candidate_index: usize,
+        reason: PrefillChunckSizeOptimizerDecisionReason,
+    ) -> PrefillChunckSizeOptimizerDecision {
+        PrefillChunckSizeOptimizerDecision {
+            candidate_prefill_chunck_tokens: self.candidate_prefill_chunck_tokens[candidate_index],
+            reason,
+        }
     }
 
     fn candidate_index(
@@ -278,122 +351,92 @@ impl PrefillChunckSizeOptimizer {
                 }
             })
     }
-}
 
-fn best_trusted_candidate_index(
-    candidate_prefill_chunck_tokens: &[usize],
-    context_candidate_statistics: &ContextCandidateStatistics,
-    trusted_observation_count: usize,
-) -> Option<usize> {
-    let mut best_candidate_index: Option<usize> = None;
-    for candidate_index in 0..candidate_prefill_chunck_tokens.len() {
-        let candidate_statistics =
-            &context_candidate_statistics.candidate_statistics[candidate_index];
-        if !candidate_statistics.is_trusted(trusted_observation_count) {
-            continue;
-        }
-        match best_candidate_index {
-            None => best_candidate_index = Some(candidate_index),
-            Some(current_best_candidate_index) => {
-                if candidate_statistics.has_higher_median_throughput_than(
-                    &context_candidate_statistics.candidate_statistics
-                        [current_best_candidate_index],
-                ) {
-                    best_candidate_index = Some(candidate_index);
-                }
-            }
-        }
-    }
-    best_candidate_index
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct CandidatePrefillChunckStatistics {
-    pub(crate) observations: VecDeque<CandidatePrefillChunckObservation>,
-}
-
-impl CandidatePrefillChunckStatistics {
-    fn record_observation(
-        &mut self,
-        candidate_observation: CandidatePrefillChunckObservation,
-        sliding_window_observation_count: usize,
-    ) {
-        self.observations.push_back(candidate_observation);
-        while self.observations.len() > sliding_window_observation_count {
-            self.observations.pop_front();
-        }
-    }
-
-    pub(crate) fn is_trusted(&self, trusted_observation_count: usize) -> bool {
-        self.observations.len() >= trusted_observation_count
-    }
-
-    fn median_throughput_tokens_per_second(&self) -> Option<u128> {
-        if self.observations.is_empty() {
-            return None;
-        }
-        let mut throughputs: Vec<u128> = self
-            .observations
-            .iter()
-            .map(|candidate_observation| candidate_observation.throughput_tokens_per_second())
-            .collect();
-        throughputs.sort_unstable();
-        Some(median_u128_of_sorted(&throughputs))
-    }
-
-    fn latest_elapsed_millis(&self) -> Option<u64> {
-        self.observations
-            .back()
-            .map(|candidate_observation| candidate_observation.elapsed_millis)
-    }
-
-    fn median_elapsed_millis(&self) -> Option<u64> {
-        if self.observations.is_empty() {
-            return None;
-        }
-        let mut elapsed_millis_values: Vec<u64> = self
-            .observations
-            .iter()
-            .map(|candidate_observation| candidate_observation.elapsed_millis)
-            .collect();
-        elapsed_millis_values.sort_unstable();
-        let median = median_u64_of_sorted(&elapsed_millis_values);
-        Some(median)
-    }
-
-    /// Detects drift by comparing the latest observation's elapsed time against
-    /// the median. Uses elapsed_millis rather than throughput because observations
-    /// for the same candidate always have the same token count; within a candidate,
-    /// higher latency directly corresponds to lower throughput.
-    fn latest_observation_drifted_above(&self, drift_trigger_factor: u64) -> bool {
-        let Some(latest_elapsed_millis) = self.latest_elapsed_millis() else {
-            return false;
-        };
-        let Some(median_elapsed_millis) = self.median_elapsed_millis() else {
-            return false;
-        };
-        if median_elapsed_millis == 0 {
-            return false;
-        }
-        u128::from(latest_elapsed_millis)
-            > u128::from(median_elapsed_millis) * u128::from(drift_trigger_factor)
-    }
-
-    fn has_higher_median_throughput_than(
+    fn has_observations_in_context_family(
         &self,
-        other_candidate_statistics: &CandidatePrefillChunckStatistics,
+        prompt_processing_context: PrefillChunckSizeOptimizerContext,
+        candidate_index: usize,
     ) -> bool {
-        match (
-            self.median_throughput_tokens_per_second(),
-            other_candidate_statistics.median_throughput_tokens_per_second(),
-        ) {
-            (Some(self_median_throughput), Some(other_median_throughput)) => {
-                self_median_throughput > other_median_throughput
-            }
-            (Some(_), None) => true,
-            (None, Some(_)) => false,
-            (None, None) => false,
+        self.context_statistics
+            .iter()
+            .any(|(stored_context, statistics)| {
+                stored_context.fallback_context_identifier()
+                    == prompt_processing_context.fallback_context_identifier()
+                    && !statistics.candidate_statistics[candidate_index]
+                        .observations
+                        .is_empty()
+            })
+    }
+
+    fn last_observed_decision_sequence_in_context_family(
+        &self,
+        prompt_processing_context: PrefillChunckSizeOptimizerContext,
+        candidate_index: usize,
+    ) -> Option<u64> {
+        self.context_statistics
+            .iter()
+            .filter(|(stored_context, _)| {
+                stored_context.fallback_context_identifier()
+                    == prompt_processing_context.fallback_context_identifier()
+            })
+            .filter_map(|(_, statistics)| {
+                statistics.candidate_statistics[candidate_index].last_observed_decision_sequence
+            })
+            .max()
+    }
+
+    fn observations_for_context_or_family(
+        &self,
+        prompt_processing_context: PrefillChunckSizeOptimizerContext,
+        candidate_index: usize,
+    ) -> Vec<CandidatePrefillChunckObservation> {
+        if let Some(exact_statistics) = self.context_statistics.get(&prompt_processing_context)
+            && !exact_statistics.candidate_statistics[candidate_index]
+                .observations
+                .is_empty()
+        {
+            return exact_statistics.candidate_statistics[candidate_index]
+                .observations
+                .iter()
+                .copied()
+                .collect();
         }
+        let mut family_observations: Vec<CandidatePrefillChunckObservation> = self
+            .context_statistics
+            .iter()
+            .filter(|(stored_context, _)| {
+                stored_context.fallback_context_identifier()
+                    == prompt_processing_context.fallback_context_identifier()
+            })
+            .flat_map(|(_, statistics)| {
+                statistics.candidate_statistics[candidate_index]
+                    .observations
+                    .iter()
+                    .copied()
+            })
+            .collect();
+        family_observations.sort_unstable_by_key(|observation| observation.observation_sequence);
+        let retained_start = family_observations
+            .len()
+            .saturating_sub(self.sliding_window_observation_count);
+        family_observations.drain(0..retained_start);
+        family_observations
+    }
+
+    fn maximum_observed_elapsed_millis_per_token(
+        &self,
+        prompt_processing_context: PrefillChunckSizeOptimizerContext,
+    ) -> u128 {
+        (0..self.candidate_prefill_chunck_tokens.len())
+            .flat_map(|candidate_index| {
+                self.observations_for_context_or_family(prompt_processing_context, candidate_index)
+            })
+            .map(|observation| {
+                u128::from(observation.elapsed_millis)
+                    .div_ceil(observation.actual_prefill_chunck_tokens as u128)
+            })
+            .max()
+            .unwrap_or(1)
     }
 }
 
@@ -401,37 +444,6 @@ impl CandidatePrefillChunckStatistics {
 pub(crate) struct CandidatePrefillChunckObservation {
     pub(crate) actual_prefill_chunck_tokens: usize,
     pub(crate) elapsed_millis: u64,
-}
-
-impl CandidatePrefillChunckObservation {
-    fn throughput_tokens_per_second(self) -> u128 {
-        if self.elapsed_millis == 0 {
-            return 0;
-        }
-        u128::from(self.actual_prefill_chunck_tokens as u64) * 1_000
-            / u128::from(self.elapsed_millis)
-    }
-}
-
-fn median_u128_of_sorted(sorted_throughputs: &[u128]) -> u128 {
-    let observation_count = sorted_throughputs.len();
-    if observation_count % 2 == 1 {
-        sorted_throughputs[observation_count / 2]
-    } else {
-        (sorted_throughputs[observation_count / 2 - 1] + sorted_throughputs[observation_count / 2])
-            / 2
-    }
-}
-
-fn median_u64_of_sorted(sorted_elapsed_millis_values: &[u64]) -> u64 {
-    let observation_count = sorted_elapsed_millis_values.len();
-    if observation_count % 2 == 1 {
-        sorted_elapsed_millis_values[observation_count / 2]
-    } else {
-        (sorted_elapsed_millis_values[observation_count / 2 - 1] / 2)
-            + (sorted_elapsed_millis_values[observation_count / 2] / 2)
-            + ((sorted_elapsed_millis_values[observation_count / 2 - 1] % 2)
-                + (sorted_elapsed_millis_values[observation_count / 2] % 2))
-                / 2
-    }
+    pub(crate) next_prompt_processing_context: PrefillChunckSizeOptimizerContext,
+    pub(crate) observation_sequence: u64,
 }

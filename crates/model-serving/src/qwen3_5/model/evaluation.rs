@@ -3,6 +3,7 @@ use astronomical_runtime_integration::MlxArray;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5Model, RequestDecoderStateStack};
+use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
 impl Qwen3_5Model {
     /// Returns the highest-logit token ID for one final-position output.
@@ -48,8 +49,39 @@ impl Qwen3_5Model {
         request_decoder_state: &RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        let evaluation_arrays =
+        self.evaluate_decoder_state_and_optional_boundary_checkpoints_with_performance_attribution(
+            request_decoder_state,
+            None,
+            performance_attribution,
+        )
+    }
+
+    pub(crate) fn evaluate_decoder_state_and_boundary_checkpoints_with_performance_attribution(
+        &self,
+        request_decoder_state: &RequestDecoderStateStack,
+        boundary_checkpoint_collector: &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        self.evaluate_decoder_state_and_optional_boundary_checkpoints_with_performance_attribution(
+            request_decoder_state,
+            Some(boundary_checkpoint_collector),
+            performance_attribution,
+        )
+    }
+
+    fn evaluate_decoder_state_and_optional_boundary_checkpoints_with_performance_attribution(
+        &self,
+        request_decoder_state: &RequestDecoderStateStack,
+        boundary_checkpoint_collector: Option<
+            &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        let mut evaluation_arrays =
             super::forward_contract::decoder_state_arrays(request_decoder_state)?;
+        if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
+            evaluation_arrays.extend(boundary_checkpoint_collector.evaluation_arrays());
+        }
         performance_attribution.measure_operation(
             PerformanceOperation::PrefillStateEvaluationSynchronizationWait,
             |_performance_attribution| self.runtime.evaluate_arrays(&evaluation_arrays),

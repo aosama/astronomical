@@ -7,6 +7,88 @@ use astronomical_model_serving::{
 };
 
 use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::direct_mlx::persistent_prompt_cache_disk_store_support::{
+    persistent_prompt_cache_block_key_for_seed, runtime_with_shared_limits,
+    synthetic_kv_block_tensors, synthetic_recurrent_snapshot_tensors,
+};
+
+const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+
+#[tokio::test]
+async fn should_recreate_deleted_active_model_directories_before_replacement_write() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = runtime_with_shared_limits();
+    let global_prompt_cache_root_directory =
+        tempfile::tempdir().expect("the test should create a global prompt-cache root");
+    let active_model_prompt_cache_directory = global_prompt_cache_root_directory
+        .path()
+        .join("active-model")
+        .join("revision");
+    let persistent_prompt_cache = PersistentPromptCacheDiskStore::open(
+        PersistentPromptCacheDiskStoreConfig::new(
+            active_model_prompt_cache_directory.clone(),
+            global_prompt_cache_root_directory.path().to_path_buf(),
+            LARGE_CACHE_LIMIT_BYTES,
+        ),
+        persistent_prompt_cache_model_contract(),
+    )
+    .expect("the persistent prompt cache should open");
+    let persistent_prompt_cache_block_key = persistent_prompt_cache_block_key_for_seed(0);
+    let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
+    let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
+    persistent_prompt_cache
+        .save_kv_block_and_recurrent_snapshot(
+            &runtime,
+            &persistent_prompt_cache_block_key,
+            None,
+            &kv_block_tensors,
+            &recurrent_snapshot_tensors,
+        )
+        .expect("the initial split files should save");
+
+    fs::remove_dir_all(&active_model_prompt_cache_directory)
+        .expect("the test should remove the active model cache while it remains open");
+    let stale_lookup =
+        persistent_prompt_cache.load_kv_block(&runtime, &persistent_prompt_cache_block_key, None);
+    assert!(matches!(
+        stale_lookup,
+        Err(PersistentPromptCacheDiskStoreError::OpenBlockFile { .. })
+    ));
+    assert_eq!(persistent_prompt_cache.sequence_state_block_count(), 0);
+    assert!(
+        !persistent_prompt_cache
+            .has_recurrent_snapshot(&persistent_prompt_cache_block_key.block_hash()),
+        "missing recurrent snapshot files must not remain present in the live index"
+    );
+    assert_eq!(persistent_prompt_cache.boundary_state_snapshot_count(), 0);
+
+    persistent_prompt_cache
+        .save_kv_block_and_recurrent_snapshot(
+            &runtime,
+            &persistent_prompt_cache_block_key,
+            None,
+            &kv_block_tensors,
+            &recurrent_snapshot_tensors,
+        )
+        .expect("the replacement write should recreate deleted cache directories");
+
+    assert!(
+        active_model_prompt_cache_directory
+            .join("kv_blocks")
+            .is_dir()
+    );
+    assert!(
+        active_model_prompt_cache_directory
+            .join("recurrent_snapshots")
+            .is_dir()
+    );
+    assert!(
+        persistent_prompt_cache
+            .load_kv_block(&runtime, &persistent_prompt_cache_block_key, None)
+            .expect("the replacement KV block should load")
+            .is_some()
+    );
+}
 
 #[test]
 fn should_never_follow_a_global_prompt_cache_symlink_outside_the_root() {

@@ -5,6 +5,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::model::Qwen3_5Model;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
+use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
 // Bounded submissions overlap host graph construction without per-layer scheduler overhead.
 const FORWARD_ASYNC_SUBMISSION_LAYER_INTERVAL: usize = 3;
@@ -66,6 +67,7 @@ impl Qwen3_5Model {
             token_ids,
             starting_position_tokens,
             request_decoder_state,
+            None,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
             &mut disabled_performance_attribution,
         )?;
@@ -107,6 +109,7 @@ impl Qwen3_5Model {
                 token_count,
                 starting_position_tokens,
                 request_decoder_state,
+                None,
                 paged_prefill_execution_mode,
                 performance_attribution,
                 false,
@@ -119,6 +122,9 @@ impl Qwen3_5Model {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
@@ -146,6 +152,7 @@ impl Qwen3_5Model {
             token_count,
             starting_position_tokens,
             request_decoder_state,
+            boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
             false,
@@ -158,6 +165,9 @@ impl Qwen3_5Model {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
         should_retain_all_position_logits: bool,
@@ -168,6 +178,7 @@ impl Qwen3_5Model {
             token_count,
             starting_position_tokens,
             request_decoder_state,
+            boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
             should_retain_all_position_logits,
@@ -180,6 +191,9 @@ impl Qwen3_5Model {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -189,6 +203,7 @@ impl Qwen3_5Model {
                 token_count,
                 starting_position_tokens,
                 request_decoder_state,
+                boundary_checkpoint_collector,
                 paged_prefill_execution_mode,
                 performance_attribution,
                 false,
@@ -202,6 +217,9 @@ impl Qwen3_5Model {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
+        mut boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
         should_retain_all_position_logits: bool,
@@ -237,6 +255,7 @@ impl Qwen3_5Model {
                 layer_index,
                 decoder_layer_weights,
                 layer_model_state,
+                boundary_checkpoint_collector.as_deref_mut(),
                 paged_prefill_execution_mode,
                 performance_attribution,
             )?;

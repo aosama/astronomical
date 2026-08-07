@@ -212,6 +212,8 @@ impl Qwen3_5Model {
                 }
             };
         let gated_delta_kernel = super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?;
+        let gated_delta_checkpoint_kernel =
+            super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?;
         let compiled_swiglu = MlxCompiledSwiGlu::new()?;
         let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
         // Qwen3.5 config validation accepts BF16 activations only. Construct
@@ -234,6 +236,7 @@ impl Qwen3_5Model {
             expert_pager,
             expert_weight_memory_cache,
             gated_delta_kernel,
+            gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,
             compiled_swiglu,
             compiled_elementwise_graphs,

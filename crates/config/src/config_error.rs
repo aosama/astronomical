@@ -27,6 +27,12 @@ pub enum AstronomicalConfigError {
     FixedPrefillChunckTokensRequiredWhenOptimizerDisabled,
     #[error("fixed_prefill_chunck_tokens must be positive")]
     InvalidFixedPrefillChunckTokens,
+    #[error("optimizer_prefill_chunck_token_candidates must not be empty")]
+    OptimizerPrefillChunckTokenCandidatesMustNotBeEmpty,
+    #[error("optimizer_prefill_chunck_token_candidates must contain only positive values")]
+    OptimizerPrefillChunckTokenCandidatesMustBePositive,
+    #[error("optimizer_prefill_chunck_token_candidates must be strictly increasing")]
+    OptimizerPrefillChunckTokenCandidatesMustBeStrictlyIncreasing,
     #[error("failed to parse supervisor bind address '{raw_bind_address}'")]
     ParseBindAddress {
         raw_bind_address: String,

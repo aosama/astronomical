@@ -1,27 +1,39 @@
 use super::block_key::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
 
-/// Clips prompt-processing work so SSD prompt-cache capture observes every
-/// complete persistent prompt-cache block boundary.
-///
-/// `candidate_prefill_chunck_end` remains the adaptive chunker's requested end;
-/// this helper only prevents one model forward pass from crossing a cache
-/// boundary that cannot be reconstructed later for recurrent layers.
+/// Returns local completed-token counts for every persistent prompt-cache
+/// boundary crossed by one attempted prefill forward.
 #[must_use]
-pub fn persistent_prompt_cache_aligned_prefill_end(
+pub fn persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
     prefill_chunck_start: usize,
-    candidate_prefill_chunck_end: usize,
-    final_prompt_index: usize,
-) -> usize {
-    let bounded_candidate_prefill_chunck_end = candidate_prefill_chunck_end.min(final_prompt_index);
-    let next_persistent_prompt_cache_block_boundary =
-        next_persistent_prompt_cache_block_boundary(prefill_chunck_start);
-    bounded_candidate_prefill_chunck_end.min(next_persistent_prompt_cache_block_boundary)
-}
+    prefill_chunck_end: usize,
+) -> Vec<usize> {
+    if prefill_chunck_end <= prefill_chunck_start {
+        return Vec::new();
+    }
 
-fn next_persistent_prompt_cache_block_boundary(prefill_chunck_start: usize) -> usize {
     let completed_persistent_prompt_cache_block_count =
         prefill_chunck_start / PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-    completed_persistent_prompt_cache_block_count
-        .saturating_add(1)
-        .saturating_mul(PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+    let Some(mut absolute_persistent_prompt_cache_boundary) =
+        completed_persistent_prompt_cache_block_count
+            .checked_add(1)
+            .and_then(|next_persistent_prompt_cache_block_count| {
+                next_persistent_prompt_cache_block_count
+                    .checked_mul(PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+            })
+    else {
+        return Vec::new();
+    };
+    let mut completed_prefill_chunck_tokens = Vec::new();
+    while absolute_persistent_prompt_cache_boundary <= prefill_chunck_end {
+        completed_prefill_chunck_tokens
+            .push(absolute_persistent_prompt_cache_boundary - prefill_chunck_start);
+        let Some(next_absolute_persistent_prompt_cache_boundary) =
+            absolute_persistent_prompt_cache_boundary
+                .checked_add(PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+        else {
+            break;
+        };
+        absolute_persistent_prompt_cache_boundary = next_absolute_persistent_prompt_cache_boundary;
+    }
+    completed_prefill_chunck_tokens
 }

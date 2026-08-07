@@ -29,19 +29,6 @@ impl PersistentPromptCacheDiskStoreIndex {
         self.visual_embeddings.len()
     }
 
-    pub(super) fn has_kv_block(&self, kv_block_hash: &[u8; 32]) -> bool {
-        self.kv_blocks.contains_key(kv_block_hash)
-    }
-
-    pub(super) fn has_recurrent_snapshot(&self, recurrent_snapshot_hash: &[u8; 32]) -> bool {
-        self.recurrent_snapshots
-            .contains_key(recurrent_snapshot_hash)
-    }
-
-    pub(crate) fn has_visual_embedding(&self, visual_embedding_hash: &[u8; 32]) -> bool {
-        self.visual_embeddings.contains_key(visual_embedding_hash)
-    }
-
     pub(crate) fn file(
         &self,
         persistent_prompt_cache_file_kind: PersistentPromptCacheFileKind,

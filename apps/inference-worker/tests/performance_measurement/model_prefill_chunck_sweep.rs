@@ -10,7 +10,7 @@ use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use tokio::time::{Instant, timeout};
 
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
-const MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 const SWEEP_TIMEOUT: Duration = Duration::from_secs(115);

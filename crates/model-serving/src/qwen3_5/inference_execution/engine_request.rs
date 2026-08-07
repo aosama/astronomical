@@ -70,6 +70,7 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) verified_mtp_generated_token_ids: VecDeque<u32>,
     pub(super) accepted_mtp_draft_rollback: Option<AcceptedMtpDraftRollback>,
     pub(super) force_next_mtp_draft_rejection_for_tests: bool,
+    pub(super) force_next_prefill_capacity_rejection_for_tests: bool,
 }
 
 impl Qwen3_5EngineRequest {

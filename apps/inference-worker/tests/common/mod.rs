@@ -7,6 +7,10 @@ use std::{collections::HashMap, path::Path, path::PathBuf, sync::Arc};
 
 pub(crate) mod exact_model_prompt;
 
+#[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
+pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str =
+    astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID;
+
 #[allow(dead_code)] // Used only by feature-specific test binaries.
 pub(crate) fn single_model_directories(
     model_id: &str,

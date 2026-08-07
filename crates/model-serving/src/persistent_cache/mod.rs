@@ -50,7 +50,7 @@ pub use disk_store::{PersistentPromptCacheDiskStore, PersistentPromptCacheDiskSt
 #[cfg(feature = "direct-mlx")]
 pub use disk_store_error::PersistentPromptCacheDiskStoreError;
 pub use model_contract::PersistentPromptCacheModelContract;
-pub use prefill_boundary::persistent_prompt_cache_aligned_prefill_end;
+pub use prefill_boundary::persistent_prompt_cache_boundary_completed_prefill_chunck_tokens;
 pub use prefix_lookup::{
     PersistentPromptCacheLookupDiagnostics, PersistentPromptCacheMissReason,
     PersistentPromptCachePrefixLookup, PersistentPromptCachePrefixLookupResult,

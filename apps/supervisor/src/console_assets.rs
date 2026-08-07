@@ -1,6 +1,6 @@
 //! Embedded single-page admin console served by the supervisor.
 //!
-//! The Observatory console is a fixed bundle of five files (HTML, three JS, CSS)
+//! The Observatory console is a fixed bundle of six files (HTML, four JS, CSS)
 //! included directly into the `astronomicald` binary through `include_str!`
 //! so the supervisor has no filesystem dependency and no separate frontend
 //! build step. The assets live at `apps/supervisor/console/` and are reached
@@ -11,6 +11,7 @@ use axum::{Router, body::Body, http::header, response::Response, routing::get};
 const INDEX_HTML: &str = include_str!("../console/index.html");
 const CONSOLE_JS: &str = include_str!("../console/console.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../console/memory-control.js");
+const OPTIMIZER_JS: &str = include_str!("../console/optimizer.js");
 const PLAYGROUND_JS: &str = include_str!("../console/playground.js");
 const CONSOLE_CSS: &str = include_str!("../console/console.css");
 
@@ -26,8 +27,16 @@ where
 {
     Router::new()
         .route("/", get(console_index))
+        .route("/overview", get(console_index))
+        .route("/chat", get(console_index))
+        .route("/memory", get(console_index))
+        .route("/cache", get(console_index))
+        .route("/optimizer", get(console_index))
+        .route("/model", get(console_index))
+        .route("/settings", get(console_index))
         .route("/console.js", get(console_script))
         .route("/memory-control.js", get(memory_control_script))
+        .route("/optimizer.js", get(optimizer_script))
         .route("/playground.js", get(playground_script))
         .route("/console.css", get(console_stylesheet))
 }
@@ -46,6 +55,10 @@ pub(crate) async fn console_script() -> Response {
 
 pub(crate) async fn memory_control_script() -> Response {
     embedded_text_response(MEMORY_CONTROL_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn optimizer_script() -> Response {
+    embedded_text_response(OPTIMIZER_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn playground_script() -> Response {

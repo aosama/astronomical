@@ -86,6 +86,52 @@ pub struct WorkerMlxMemorySnapshot {
     pub context_state_payload_bytes: u64,
 }
 
+/// Why the worker's adaptive prefill optimizer requested one candidate.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerPrefillOptimizerDecisionReason {
+    InitialExploration,
+    StaleObservationProbe,
+    CumulativeLatencyPlanning,
+    Fallback,
+}
+
+/// Recent measured evidence for one configured prefill candidate.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerPrefillOptimizerCandidateEvidence {
+    pub candidate_prefill_chunck_tokens: u32,
+    pub observation_count: u32,
+    pub average_actual_prefill_chunck_tokens: u32,
+    pub average_elapsed_millis: u64,
+    pub decisions_since_last_observation: Option<u64>,
+}
+
+/// Human-readable execution context that isolates optimizer evidence.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerPrefillOptimizerContext {
+    pub prompt_position_tokens: u32,
+    pub has_restored_prefix: bool,
+    pub is_first_chunck_after_restore: bool,
+    pub has_visual_embeddings: bool,
+    pub is_mtp_active: bool,
+    pub are_sparse_experts_paged: bool,
+    pub is_prompt_cache_capture_eligible: bool,
+    pub has_prior_capacity_reduction: bool,
+}
+
+/// One optimizer decision, its measured outcome, and the evidence available afterward.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerPrefillOptimizerInsight {
+    pub requested_prefill_chunck_tokens: u32,
+    pub actual_prefill_chunck_tokens: u32,
+    pub elapsed_millis: u64,
+    pub decision_reason: WorkerPrefillOptimizerDecisionReason,
+    pub has_observed_prefill_capacity_constraint: bool,
+    pub has_observations_for_every_candidate: bool,
+    pub context: WorkerPrefillOptimizerContext,
+    pub candidate_evidence: Vec<WorkerPrefillOptimizerCandidateEvidence>,
+}
+
 /// Logging verbosity supplied by the supervisor when starting a worker.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -98,11 +144,15 @@ pub enum WorkerLogLevel {
 }
 
 /// Prompt-processing sizing policy supplied by the supervisor.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerPrefillChunckSizingPolicy {
-    Optimized,
-    Fixed { fixed_prefill_chunck_tokens: u32 },
+    Optimized {
+        optimizer_prefill_chunck_token_candidates: Vec<u32>,
+    },
+    Fixed {
+        fixed_prefill_chunck_tokens: u32,
+    },
 }
 
 /// Fully resolved worker-owned startup settings.
@@ -226,6 +276,8 @@ pub enum WorkerEvent {
         forward_prefill_chunck_elapsed_millis: Option<u64>,
         /// Present only after the engine completes and measures a prefill chunk.
         completed_prefill_chunck_tokens: Option<u32>,
+        /// Present after an optimized chunk; absent for initial and fixed-size progress.
+        prefill_optimizer_insight: Option<WorkerPrefillOptimizerInsight>,
         /// Present with completed chunks; worker-owned MLX allocator observation.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },

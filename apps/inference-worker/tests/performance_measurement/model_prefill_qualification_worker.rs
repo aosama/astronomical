@@ -17,7 +17,8 @@ use crate::common::exact_model_prompt::build_exact_model_prompt_content;
 use super::model_prefill_benchmark_report::PrefillMeasurementAccumulator;
 
 pub(super) const PREFILL_QUALIFICATION_MAXIMUM_OUTPUT_TOKENS: u16 = 512;
-pub(super) const PREFILL_QUALIFICATION_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+pub(super) const PREFILL_QUALIFICATION_MODEL_ID: &str =
+    crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const PREFILL_QUALIFICATION_SOURCE_DOCUMENT: &str =
     include_str!("../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 const EXPERT_MEMORY_MODE_READINESS_ATTEMPT_LIMIT: u8 = 70;
@@ -32,6 +33,13 @@ pub(super) struct PreparedPrefillQualificationWorker {
 impl PreparedPrefillQualificationWorker {
     pub(super) fn isolated_worker_home_directory(&self) -> &Path {
         self.isolated_worker_home.directory_path()
+    }
+
+    pub(super) fn optimizer_state_file_path(&self) -> PathBuf {
+        self.isolated_worker_home_directory()
+            .join(".astronomical")
+            .join("optimizer")
+            .join("prefill-chunck-size.json")
     }
 }
 
@@ -113,6 +121,9 @@ pub(super) fn prepare_prefill_qualification_worker(
     }
     if let Some(configured_maximum_mlx_memory_gb) = maximum_mlx_memory_gb {
         configuration_document["maximum_mlx_memory_gb"] = json!(configured_maximum_mlx_memory_gb);
+    }
+    if std::env::var_os("ASTRONOMICAL_PREFILL_QUALIFICATION_PERFORMANCE_ATTRIBUTION").is_some() {
+        configuration_document["performance_attribution_enabled"] = json!(true);
     }
     fs::write(
         configuration_directory.join("config.json"),

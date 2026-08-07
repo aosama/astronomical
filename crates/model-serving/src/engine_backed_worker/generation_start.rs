@@ -88,6 +88,8 @@ where
             }
         };
 
+        self.emit_persistent_prompt_cache_stats(event_writer)
+            .await?;
         let cached_prompt_token_count = generation_start.cached_token_count();
         let initial_expert_memory_mode = generation_start.expert_memory_mode();
         if let Some(expert_memory_mode) = initial_expert_memory_mode {
@@ -112,6 +114,7 @@ where
                     elapsed_millis: 0,
                     forward_prefill_chunck_elapsed_millis: None,
                     completed_prefill_chunck_tokens: None,
+                    prefill_optimizer_insight: None,
                     mlx_memory_snapshot: None,
                 })
                 .await?;

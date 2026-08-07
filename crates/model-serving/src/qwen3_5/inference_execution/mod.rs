@@ -8,8 +8,12 @@ mod memory_admission;
 mod memory_limit;
 mod model_loading;
 mod mtp_prefix_acceptance;
+mod persistent_prompt_cache_capture;
 mod prefill_advance;
 mod prefill_chunck_sizer;
+mod prefill_chunck_sizer_configuration;
+mod prefill_execution_context;
+mod prefill_optimizer_insight;
 mod prompt_prefill;
 mod start_generation;
 mod test_controls;
@@ -40,7 +44,10 @@ pub use generated_token_emission::{
 };
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use model_loading::qwen3_5_mtp_runtime_state_after_load;
-pub use prefill_chunck_sizer::{Qwen3_5PrefillChunckSizer, Qwen3_5PrefillChunckSizerError};
+pub use persistent_prompt_cache_capture::persistent_prompt_cache_write_outcome_advances_parent_chain;
+pub use prefill_chunck_sizer::Qwen3_5PrefillChunckSizer;
+pub use prefill_chunck_sizer_configuration::Qwen3_5PrefillChunckSizerError;
+pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
 
 /// Qwen3.5 inference engine backed by the architecture-neutral MLX owner driver.
 pub type Qwen3_5Engine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
@@ -271,6 +278,22 @@ pub enum Qwen3_5MtpRuntimeState {
 }
 
 impl Qwen3_5EngineState {
+    fn force_next_prefill_capacity_rejection_for_tests(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<(), InferenceEngineError> {
+        let active_request = self.active_request.as_mut().ok_or_else(|| {
+            fatal_engine_error("cannot force prefill rejection without an active request")
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot force prefill rejection for a different request",
+            ));
+        }
+        active_request.force_next_prefill_capacity_rejection_for_tests = true;
+        Ok(())
+    }
+
     fn collect_persistent_prompt_cache_stats(&self) -> Option<WorkerEvent> {
         let persistent_prompt_cache = self.persistent_prompt_cache.as_ref()?;
         let global_prompt_cache_maximum_size_bytes = self

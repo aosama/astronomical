@@ -2,7 +2,9 @@ use std::sync::{Arc, RwLock};
 
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, WorkerEvent, WorkerMlxMemorySnapshot,
+    WorkerPrefillOptimizerInsight,
 };
+use tokio::time::Instant;
 
 /// Coarse worker availability state exposed by the supervisor readiness endpoint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,6 +65,8 @@ pub enum ActiveRequestProgress {
     Prefill {
         processed_tokens: u32,
         total_tokens: u32,
+        /// Supervisor wall-clock origin used only for live status presentation.
+        request_started_at: Instant,
         elapsed_millis: u64,
         /// Present only after the engine completes and measures a prefill chunk.
         completed_prefill_chunck_tokens: Option<u32>,
@@ -223,6 +227,8 @@ pub struct WorkerHealthSnapshot {
     pub persistent_prompt_cache_stats: Option<WorkerEvent>,
     /// Latest worker-owned MLX allocator observation, regardless of request lifecycle phase.
     pub latest_mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    /// Bounded recent adaptive-prefill decisions for the Observatory.
+    pub prefill_optimizer_insights: Vec<WorkerPrefillOptimizerInsight>,
     /// Immutable maximum reported by the worker's macOS/MLX startup probe.
     pub machine_mlx_memory_ceiling_bytes: u64,
     /// Safe idle lower bound reported by the loaded model or idle worker.
@@ -255,6 +261,7 @@ impl WorkerHealthSnapshot {
             mtp_unavailable_reason,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
+            prefill_optimizer_insights: Vec::new(),
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
@@ -318,6 +325,7 @@ impl WorkerHealthSnapshot {
             mtp_unavailable_reason: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
+            prefill_optimizer_insights: Vec::new(),
             machine_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
             pending_mlx_memory_ceiling_bytes: None,
@@ -341,6 +349,7 @@ impl WorkerHealthSnapshot {
             mtp_unavailable_reason: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
+            prefill_optimizer_insights: Vec::new(),
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,

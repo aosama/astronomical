@@ -475,6 +475,7 @@ async fn should_report_completed_prefill_chunck_tokens_for_prompt_processing_pro
         processed_tokens: 0,
         total_tokens: 2_200,
         elapsed_millis: 0,
+        request_started_at: tokio::time::Instant::now(),
         completed_prefill_chunck_tokens: Some(2_048),
     });
     let application = build_application(executor);
@@ -510,6 +511,7 @@ async fn should_omit_completed_prefill_chunck_tokens_before_the_first_measuremen
         processed_tokens: 0,
         total_tokens: 2_200,
         elapsed_millis: 0,
+        request_started_at: tokio::time::Instant::now(),
         completed_prefill_chunck_tokens: None,
     });
     let application = build_application(executor);

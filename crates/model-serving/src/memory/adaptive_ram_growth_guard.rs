@@ -91,6 +91,7 @@ pub struct AdaptiveRamGrowthGuard {
 pub struct AdaptiveRamGrowthProjection {
     current_active_memory_bytes: usize,
     exact_persistent_growth_bytes: usize,
+    exact_temporary_workspace_bytes: usize,
     observed_transient_high_water_bytes: usize,
     stable_projected_bytes: usize,
     peak_projected_bytes: usize,
@@ -108,6 +109,11 @@ impl AdaptiveRamGrowthProjection {
     #[must_use]
     pub const fn exact_persistent_growth_bytes(&self) -> usize {
         self.exact_persistent_growth_bytes
+    }
+
+    #[must_use]
+    pub const fn exact_temporary_workspace_bytes(&self) -> usize {
+        self.exact_temporary_workspace_bytes
     }
 
     #[must_use]
@@ -240,6 +246,7 @@ impl AdaptiveRamGrowthGuard {
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         current_active_memory_bytes: usize,
         exact_persistent_growth_bytes: usize,
+        exact_temporary_workspace_bytes: usize,
     ) -> Result<AdaptiveRamGrowthProjection, AdaptiveRamGrowthGuardError> {
         let observed_transient_high_water_bytes = self
             .observed_transient_high_water_bytes_by_context
@@ -249,11 +256,14 @@ impl AdaptiveRamGrowthGuard {
         let stable_projected_bytes = current_active_memory_bytes
             .checked_add(exact_persistent_growth_bytes)
             .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
-        let peak_projected_bytes = stable_projected_bytes
+        let predicted_transient_bytes = exact_temporary_workspace_bytes
             .checked_add(observed_transient_high_water_bytes)
             .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
+        let peak_projected_bytes = stable_projected_bytes
+            .checked_add(predicted_transient_bytes)
+            .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
         let soft_recovery_projected_bytes = peak_projected_bytes
-            .checked_add(observed_transient_high_water_bytes)
+            .checked_add(predicted_transient_bytes)
             .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
         let transient_allowance_bytes = self.active_memory_limit_bytes / 100;
         let allowed_active_memory_bytes = self
@@ -263,6 +273,7 @@ impl AdaptiveRamGrowthGuard {
         Ok(AdaptiveRamGrowthProjection {
             current_active_memory_bytes,
             exact_persistent_growth_bytes,
+            exact_temporary_workspace_bytes,
             observed_transient_high_water_bytes,
             stable_projected_bytes,
             peak_projected_bytes,
@@ -280,14 +291,16 @@ impl AdaptiveRamGrowthGuard {
         active_memory_bytes_before_growth: usize,
         active_memory_bytes_after_growth: usize,
         peak_memory_bytes_during_growth: usize,
+        exact_temporary_workspace_bytes: usize,
     ) {
         if !should_retain_observation {
             return;
         }
         let stable_active_memory_bytes =
             active_memory_bytes_before_growth.max(active_memory_bytes_after_growth);
-        let observed_transient_growth_bytes =
-            peak_memory_bytes_during_growth.saturating_sub(stable_active_memory_bytes);
+        let observed_transient_growth_bytes = peak_memory_bytes_during_growth
+            .saturating_sub(stable_active_memory_bytes)
+            .saturating_sub(exact_temporary_workspace_bytes);
         self.observed_transient_high_water_bytes_by_context
             .entry(adaptive_ram_growth_context)
             .and_modify(|existing_observed_transient_high_water_bytes| {
