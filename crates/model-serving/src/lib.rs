@@ -36,8 +36,11 @@ pub use decoder_cache::{
     DecoderCacheTensorDtype, DecoderCacheTensorLayout,
 };
 pub use deepseek_v4::{
-    DeepSeekV4UnavailableGenerationProcessor, DeepSeekV4UnavailableInferenceEngine,
-    DeepSeekV4UnavailableInferenceRequest, DeepSeekV4UnavailableRequestOutput,
+    DeepSeekV4ArtifactValidationError, DeepSeekV4ArtifactValidator, DeepSeekV4ConfigError,
+    DeepSeekV4DsparkArtifactCapability, DeepSeekV4Flash0731Config, DeepSeekV4ShardIndex,
+    DeepSeekV4ShardIndexError, DeepSeekV4UnavailableGenerationProcessor,
+    DeepSeekV4UnavailableInferenceEngine, DeepSeekV4UnavailableInferenceRequest,
+    DeepSeekV4UnavailableRequestOutput, ValidatedDeepSeekV4Artifact,
     deepseek_v4_unavailable_reason,
 };
 pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};

@@ -65,6 +65,27 @@ pub fn validate_bounded_safetensors_with_partial_profiles(
         total_payload_bytes: bounded_metadata.total_payload_bytes,
     })
 }
+
+/// Validates that one indexed shard header contains exactly its assigned tensor names.
+pub(crate) fn validate_bounded_safetensors_with_exact_tensor_names(
+    weights_file: &File,
+    file_size_bytes: u64,
+    weights_file_name: &str,
+    indexed_tensor_names: &HashSet<&str>,
+) -> Result<PartialProfileMetadata, ArtifactValidationError> {
+    let bounded_metadata = validate_bounded_safetensors_internal(
+        weights_file,
+        file_size_bytes,
+        weights_file_name,
+        indexed_tensor_names,
+        indexed_tensor_names,
+        &[],
+        &[],
+    )?;
+    Ok(PartialProfileMetadata {
+        total_payload_bytes: bounded_metadata.total_payload_bytes,
+    })
+}
 /// Validates indexed tensor ownership while checking recognized physical duplicates.
 pub(crate) fn validate_bounded_safetensors_with_indexed_profiles(
     weights_file: &File,

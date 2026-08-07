@@ -1,11 +1,23 @@
 //! Structural placeholder for the future DeepSeek-V4 model family.
 
+mod artifact;
+mod config;
+mod shard_index;
+
 use astronomical_ipc_protocol::{ChatGenerationFailureReason, WorkerEvent};
 
 use crate::{
     ModelGeneratedTokenTranslation, ModelGenerationOutputError, ModelGenerationProcessor,
     PreparedInferenceRequest, PreparedModelGeneration,
 };
+
+pub use artifact::{
+    DeepSeekV4ArtifactValidationError, DeepSeekV4ArtifactValidator, ValidatedDeepSeekV4Artifact,
+};
+pub use config::{
+    DeepSeekV4ConfigError, DeepSeekV4DsparkArtifactCapability, DeepSeekV4Flash0731Config,
+};
+pub use shard_index::{DeepSeekV4ShardIndex, DeepSeekV4ShardIndexError};
 
 const DEEPSEEK_V4_UNAVAILABLE_REASON: &str =
     "DeepSeek-V4 model execution is not implemented in this build";

@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{FileExt, MetadataExt};
 
 use super::ArtifactValidationError;
 
@@ -93,6 +93,53 @@ impl ValidatedWeightsFile {
     pub const fn size_bytes(&self) -> u64 {
         self.size_bytes
     }
+}
+
+/// Reads a bounded structural file through its already-validated descriptor.
+pub(crate) fn read_validated_required_file_bytes(
+    validated_required_file: &ValidatedRequiredFile,
+    maximum_size_bytes: u64,
+) -> Result<Vec<u8>, ArtifactValidationError> {
+    if validated_required_file.size_bytes() > maximum_size_bytes {
+        return Err(ArtifactValidationError::CapturedRequiredFileTooLarge {
+            file_name: validated_required_file.file_name().to_owned(),
+            actual_size_bytes: validated_required_file.size_bytes(),
+            maximum_size_bytes,
+        });
+    }
+    let file_size = usize::try_from(validated_required_file.size_bytes()).map_err(|_| {
+        ArtifactValidationError::CapturedRequiredFileTooLarge {
+            file_name: validated_required_file.file_name().to_owned(),
+            actual_size_bytes: validated_required_file.size_bytes(),
+            maximum_size_bytes,
+        }
+    })?;
+    let mut file_bytes = vec![0_u8; file_size];
+    let mut completed_bytes = 0_usize;
+    while completed_bytes < file_bytes.len() {
+        let bytes_read = validated_required_file
+            .file()
+            .read_at(&mut file_bytes[completed_bytes..], completed_bytes as u64)
+            .map_err(
+                |source| ArtifactValidationError::ReadRequiredFileForStructuralValidation {
+                    file_name: validated_required_file.file_name().to_owned(),
+                    source,
+                },
+            )?;
+        if bytes_read == 0 {
+            return Err(
+                ArtifactValidationError::ReadRequiredFileForStructuralValidation {
+                    file_name: validated_required_file.file_name().to_owned(),
+                    source: std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "validated file ended before its inspected size",
+                    ),
+                },
+            );
+        }
+        completed_bytes += bytes_read;
+    }
+    Ok(file_bytes)
 }
 
 pub(crate) fn validated_file_identity(file_metadata: &fs::Metadata) -> ValidatedFileIdentity {
