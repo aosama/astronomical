@@ -3,7 +3,7 @@ use super::{
         Qwen3_5PrefillChunckSizerError, configured_candidate_prefill_chunck_tokens,
         maximum_prefill_chunck_tokens_from_u32,
     },
-    prefill_execution_context::Qwen3_5PrefillExecutionContext,
+    prefill_execution_context::{CAPACITY_REDUCED_CONTEXT_FLAG, Qwen3_5PrefillExecutionContext},
     prefill_optimizer_insight::prefill_optimizer_insight,
 };
 use crate::{
@@ -16,7 +16,6 @@ const SLIDING_WINDOW_OBSERVATION_COUNT: usize = 5;
 const PROMPT_POSITION_CONTEXT_BUCKET_TOKENS: usize = 32_768;
 const RESTORED_PREFIX_CONTEXT_FLAG: u64 = 1 << 32;
 const FIRST_CHUNCK_AFTER_RESTORE_CONTEXT_FLAG: u64 = 1 << 33;
-const CAPACITY_REDUCED_CONTEXT_FLAG: u64 = 1 << 38;
 
 /// Owns Qwen3.5 prompt-processing `prefill_chunck_tokens` selection and boundary calculation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -253,6 +252,17 @@ impl Qwen3_5PrefillChunckSizer {
             *pending_prefill_chunck_decision = None;
         }
         // The first optimized next_prefill_chunck_end call asks for an initial candidate.
+    }
+
+    pub(super) fn discard_pending_prefill_chunck_decision(&mut self) {
+        if let PrefillChunckSizingMode::Optimized {
+            pending_prefill_chunck_decision,
+            ..
+        } = &mut self.prefill_chunck_sizing_mode
+        {
+            *pending_prefill_chunck_decision = None;
+        }
+        self.latest_prefill_optimizer_insight = None;
     }
 
     /// Records a measured prompt-processing chunk for future optimizer choices.

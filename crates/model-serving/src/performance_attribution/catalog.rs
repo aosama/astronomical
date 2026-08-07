@@ -46,8 +46,9 @@ pub enum PerformanceOperation {
     TokenSamplingGraphConstruction,
     MtpHeadForwardGraphConstruction,
     MtpHeadStateEvaluationSynchronizationWait,
+    MtpPromptHistoryInitializationSpan,
     MtpTargetVerificationSynchronizationWait,
-    MtpRejectedDraftReplaySynchronizationWait,
+    MtpRejectedDraftStateRestoration,
     PrefillStateEvaluationSynchronizationWait,
     ExpertBoundedSafetensorsLazyPageConstruction,
     ExpertWeightMemoryCachePageAssemblyGraphConstruction,
@@ -108,8 +109,9 @@ impl PerformanceOperation {
         Self::TokenSamplingGraphConstruction,
         Self::MtpHeadForwardGraphConstruction,
         Self::MtpHeadStateEvaluationSynchronizationWait,
+        Self::MtpPromptHistoryInitializationSpan,
         Self::MtpTargetVerificationSynchronizationWait,
-        Self::MtpRejectedDraftReplaySynchronizationWait,
+        Self::MtpRejectedDraftStateRestoration,
         Self::PrefillStateEvaluationSynchronizationWait,
         Self::ExpertBoundedSafetensorsLazyPageConstruction,
         Self::ExpertWeightMemoryCachePageAssemblyGraphConstruction,
@@ -195,12 +197,11 @@ impl PerformanceOperation {
             Self::MtpHeadStateEvaluationSynchronizationWait => {
                 "mtp_head_state_evaluation_synchronization_wait"
             }
+            Self::MtpPromptHistoryInitializationSpan => "mtp_prompt_history_initialization_span",
             Self::MtpTargetVerificationSynchronizationWait => {
                 "mtp_target_verification_synchronization_wait"
             }
-            Self::MtpRejectedDraftReplaySynchronizationWait => {
-                "mtp_rejected_draft_replay_synchronization_wait"
-            }
+            Self::MtpRejectedDraftStateRestoration => "mtp_rejected_draft_state_restoration",
             Self::PrefillStateEvaluationSynchronizationWait => {
                 "prefill_state_evaluation_synchronization_wait"
             }
@@ -230,6 +231,7 @@ impl PerformanceOperation {
             self,
             Self::PromptPrefillAdvanceSpan
                 | Self::DecodeAdvanceSpan
+                | Self::MtpPromptHistoryInitializationSpan
                 | Self::AttentionForwardSpan
                 | Self::MlpForwardSpan
         )
@@ -263,7 +265,14 @@ pub enum PerformanceCounter {
     ExpertRouteMatchedExpertCount,
     ExpertRouteCompletelyMatchedLayerCount,
     ExpertRouteExaminedLayerCount,
+    MtpMemoryAdmissionFallbackCount,
     MtpAdmittedAttemptCount,
+    SpeculativePrefillTargetOnlyPrefixChunckCount,
+    SpeculativePrefillTargetOnlyPrefixTokenCount,
+    SpeculativePrefillTerminalCaptureChunckCount,
+    SpeculativePrefillTerminalMtpHistoryTokenCount,
+    MtpPromptHistoryInitializationFallbackCount,
+    MtpFeedbackHistoryReseedCount,
     MtpAcceptedDraftCount,
     MtpRejectedDraftCount,
     MtpOperationalFallbackCount,
@@ -295,7 +304,14 @@ impl PerformanceCounter {
         Self::ExpertRouteMatchedExpertCount,
         Self::ExpertRouteCompletelyMatchedLayerCount,
         Self::ExpertRouteExaminedLayerCount,
+        Self::MtpMemoryAdmissionFallbackCount,
         Self::MtpAdmittedAttemptCount,
+        Self::SpeculativePrefillTargetOnlyPrefixChunckCount,
+        Self::SpeculativePrefillTargetOnlyPrefixTokenCount,
+        Self::SpeculativePrefillTerminalCaptureChunckCount,
+        Self::SpeculativePrefillTerminalMtpHistoryTokenCount,
+        Self::MtpPromptHistoryInitializationFallbackCount,
+        Self::MtpFeedbackHistoryReseedCount,
         Self::MtpAcceptedDraftCount,
         Self::MtpRejectedDraftCount,
         Self::MtpOperationalFallbackCount,
@@ -340,7 +356,24 @@ impl PerformanceCounter {
                 "expert_route_completely_matched_layer_count"
             }
             Self::ExpertRouteExaminedLayerCount => "expert_route_examined_layer_count",
+            Self::MtpMemoryAdmissionFallbackCount => "mtp_memory_admission_fallback_count",
             Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
+            Self::SpeculativePrefillTargetOnlyPrefixChunckCount => {
+                "speculative_prefill_target_only_prefix_chunck_count"
+            }
+            Self::SpeculativePrefillTargetOnlyPrefixTokenCount => {
+                "speculative_prefill_target_only_prefix_token_count"
+            }
+            Self::SpeculativePrefillTerminalCaptureChunckCount => {
+                "speculative_prefill_terminal_capture_chunck_count"
+            }
+            Self::SpeculativePrefillTerminalMtpHistoryTokenCount => {
+                "speculative_prefill_terminal_mtp_history_token_count"
+            }
+            Self::MtpPromptHistoryInitializationFallbackCount => {
+                "mtp_prompt_history_initialization_fallback_count"
+            }
+            Self::MtpFeedbackHistoryReseedCount => "mtp_feedback_history_reseed_count",
             Self::MtpAcceptedDraftCount => "mtp_accepted_draft_count",
             Self::MtpRejectedDraftCount => "mtp_rejected_draft_count",
             Self::MtpOperationalFallbackCount => "mtp_operational_fallback_count",

@@ -7,13 +7,7 @@ use astronomical_runtime_integration::MlxRuntime;
 #[ignore = "loads a standard safetensors expert page beside existing experimental pack files"]
 async fn should_ignore_existing_experimental_aligned_packs_during_standard_expert_paging() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
-    assert!(
-        model_directory
-            .join(".astronomical-aligned-expert-packs")
-            .is_dir(),
-        "the qualification requires existing experimental files beside the production model"
-    );
+    let model_directory = configured_model_artifact_directory_with_experimental_aligned_packs();
 
     eprintln!("[standard-expert-paging] status=progress phase=artifact_validation");
     let validated_artifact = Qwen3_5ArtifactValidator::new()
@@ -47,4 +41,25 @@ async fn should_ignore_existing_experimental_aligned_packs_during_standard_exper
     assert_eq!(page_manifest.expert_ids, vec![0]);
     assert!(page_manifest.payload_byte_count > 0);
     eprintln!("[standard-expert-paging] status=success source=standard_safetensors");
+}
+
+fn configured_model_artifact_directory_with_experimental_aligned_packs() -> std::path::PathBuf {
+    use astronomical_config::{AstronomicalConfig, discover_models};
+
+    let astronomical_config = AstronomicalConfig::load_from_default_location()
+        .expect("the standard Astronomical configuration should load");
+    discover_models(
+        astronomical_config.model_directories(),
+        astronomical_config.max_output_tokens(),
+    )
+    .expect("configured model discovery should complete")
+    .into_iter()
+    .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
+    .map(|discovered_model| discovered_model.model_directory)
+    .find(|model_directory| {
+        model_directory
+            .join(".astronomical-aligned-expert-packs")
+            .is_dir()
+    })
+    .expect("a configured model should contain experimental aligned expert packs")
 }

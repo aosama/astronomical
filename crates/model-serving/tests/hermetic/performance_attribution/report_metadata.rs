@@ -67,6 +67,11 @@ fn should_exclude_outer_diagnostic_spans_from_attributed_elapsed_time() {
         std::time::Duration::from_secs(10),
     );
     performance_attribution.record_completed_operation(
+        PerformanceOperation::MtpPromptHistoryInitializationSpan,
+        std::time::Duration::ZERO,
+        std::time::Duration::from_secs(5),
+    );
+    performance_attribution.record_completed_operation(
         PerformanceOperation::PromptTokenization,
         std::time::Duration::ZERO,
         std::time::Duration::from_nanos(7),

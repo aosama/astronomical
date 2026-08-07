@@ -17,6 +17,7 @@ mod persistent_visual_embedding_suffix_plan;
 mod processor;
 mod prompt;
 mod sampling_seed;
+mod speculative_prefill;
 mod tensor_spec;
 mod tokenizer;
 mod vision_config;
