@@ -96,6 +96,38 @@ fn xyz_aquila_mini_optiq_four_bit_model_directory() -> std::path::PathBuf {
     crate::common::configured_model_artifact_directory_by_id("XYZ-Aquila-mini-OptiQ-4bit")
 }
 
-fn qwen3_6_35b_a3b_oq4e_mtp_model_directory() -> std::path::PathBuf {
-    crate::common::configured_model_artifact_directory_by_id("Qwen3.6-35B-A3B-oQ4e-mtp")
+fn configured_depth_one_mtp_model_artifact_directory() -> std::path::PathBuf {
+    use astronomical_config::{AstronomicalConfig, discover_models};
+    use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
+
+    let astronomical_config = AstronomicalConfig::load_from_default_location()
+        .expect("the standard Astronomical configuration should load for MTP qualification");
+    let mut discovered_models = discover_models(
+        astronomical_config.model_directories(),
+        astronomical_config.max_output_tokens(),
+    )
+    .expect("configured model discovery should complete for MTP qualification")
+    .into_iter()
+    .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
+    .collect::<Vec<_>>();
+    discovered_models
+        .sort_by(|left_model, right_model| left_model.model_id.cmp(&right_model.model_id));
+
+    discovered_models
+        .into_iter()
+        .find_map(|discovered_model| {
+            let validated_artifact = Qwen3_5ArtifactValidator::new()
+                .validate(&discovered_model.model_directory, 20_480)
+                .ok()?;
+            (validated_artifact.config().feed_forward_architecture()
+                == Qwen3_5FeedForwardArchitecture::MixtureOfExperts
+                && validated_artifact.config().mtp_layer_count() == 1
+                && validated_artifact
+                    .mtp_artifact_capability()
+                    .is_mtp_capable())
+            .then_some(discovered_model.model_directory)
+        })
+        .expect(
+            "model_directories should contain a complete supported depth-one mixture-of-experts MTP artifact",
+        )
 }

@@ -17,9 +17,9 @@ use crate::qwen3_5::{
 };
 
 pub(super) struct AcceptedMtpDraftRollback {
-    pub(super) request_decoder_state_checkpoint: crate::RequestDecoderStateStackCheckpoint,
-    pub(super) target_verify_start_position_tokens: u32,
-    pub(super) emitted_current_token_id: u32,
+    pub(super) verified_prefix_boundary_checkpoint:
+        crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    pub(super) verified_prefix_position_tokens: u32,
 }
 
 /// Retained request state needed to retry one rejected prompt-processing attempt.

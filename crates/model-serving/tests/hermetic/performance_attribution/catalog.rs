@@ -169,12 +169,16 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "mtp_head_state_evaluation_synchronization_wait",
         ),
         (
+            PerformanceOperation::MtpPromptHistoryInitializationSpan,
+            "mtp_prompt_history_initialization_span",
+        ),
+        (
             PerformanceOperation::MtpTargetVerificationSynchronizationWait,
             "mtp_target_verification_synchronization_wait",
         ),
         (
-            PerformanceOperation::MtpRejectedDraftReplaySynchronizationWait,
-            "mtp_rejected_draft_replay_synchronization_wait",
+            PerformanceOperation::MtpRejectedDraftStateRestoration,
+            "mtp_rejected_draft_state_restoration",
         ),
         (
             PerformanceOperation::PrefillStateEvaluationSynchronizationWait,
@@ -239,6 +243,14 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceCounter::PrefillChunckCount,
             "prefill_chunck_count",
+        ),
+        (
+            PerformanceCounter::PrefillCapacityRejectionCount,
+            "prefill_capacity_rejection_count",
+        ),
+        (
+            PerformanceCounter::PrefillCapacityRetryCount,
+            "prefill_capacity_retry_count",
         ),
         (
             PerformanceCounter::ExpertWeightMemoryCacheHitCount,
@@ -309,8 +321,36 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "expert_route_examined_layer_count",
         ),
         (
+            PerformanceCounter::MtpMemoryAdmissionFallbackCount,
+            "mtp_memory_admission_fallback_count",
+        ),
+        (
             PerformanceCounter::MtpAdmittedAttemptCount,
             "mtp_admitted_attempt_count",
+        ),
+        (
+            PerformanceCounter::SpeculativePrefillTargetOnlyPrefixChunckCount,
+            "speculative_prefill_target_only_prefix_chunck_count",
+        ),
+        (
+            PerformanceCounter::SpeculativePrefillTargetOnlyPrefixTokenCount,
+            "speculative_prefill_target_only_prefix_token_count",
+        ),
+        (
+            PerformanceCounter::SpeculativePrefillTerminalCaptureChunckCount,
+            "speculative_prefill_terminal_capture_chunck_count",
+        ),
+        (
+            PerformanceCounter::SpeculativePrefillTerminalMtpHistoryTokenCount,
+            "speculative_prefill_terminal_mtp_history_token_count",
+        ),
+        (
+            PerformanceCounter::MtpPromptHistoryInitializationFallbackCount,
+            "mtp_prompt_history_initialization_fallback_count",
+        ),
+        (
+            PerformanceCounter::MtpFeedbackHistoryReseedCount,
+            "mtp_feedback_history_reseed_count",
         ),
         (
             PerformanceCounter::MtpAcceptedDraftCount,

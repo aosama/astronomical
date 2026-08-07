@@ -10,7 +10,8 @@ use super::generated_token_emission::{
     synchronize_generated_token_id,
 };
 use super::memory_admission::{
-    collect_completed_forward_memory_snapshot, record_completed_adaptive_ram_growth,
+    AdaptiveRamGrowthMemoryAdmissionError, collect_completed_forward_memory_snapshot,
+    record_completed_adaptive_ram_growth,
 };
 use super::mtp_prefix_acceptance::{
     MtpPrefixAcceptanceOutcome, propose_depth_one_mtp_draft, record_mtp_outcome,
@@ -242,94 +243,129 @@ impl Qwen3_5EngineState {
                     &[1, 1],
                 )
                 .map_err(qwen3_5_runtime_error)?;
+            let target_verification_boundary_workspace_bytes = model
+                .decoder_cache_layout()
+                .boundary_snapshot_payload_byte_count()
+                .map_err(|decoder_cache_layout_error| {
+                    fatal_engine_error(format!(
+                        "failed to project MTP verifier-boundary workspace: {decoder_cache_layout_error}"
+                    ))
+                })?;
             let adaptive_ram_growth_context =
                 AdaptiveRamGrowthContext::decode(2, true, model.sparse_experts_are_paged());
-            let active_memory_bytes_before_growth = self
+            let active_memory_bytes_before_growth = match self
                 .measure_adaptive_ram_growth_memory_admission(
                     adaptive_ram_growth_context,
                     &mut active_request.performance_attribution,
                     &active_request.request_decoder_state,
                     mtp_full_attention_growth_bytes,
-                    0,
-                )?;
-            active_request
-                .performance_attribution
-                .record_counter(PerformanceCounter::MtpAdmittedAttemptCount, 1);
-            let proposed_mtp_draft_token_id = propose_depth_one_mtp_draft(
-                model,
-                active_request,
-                request_id,
-                &current_generated_token,
-            );
-            let mtp_prefix_acceptance_outcome = match proposed_mtp_draft_token_id {
-                Some(mtp_draft_token_id) => {
-                    match verify_depth_one_mtp_prefix_acceptance(
-                        model,
-                        active_request,
-                        request_id,
-                        current_generated_token_id,
-                        mtp_draft_token_id,
-                    ) {
-                        Ok(mtp_prefix_acceptance_outcome) => mtp_prefix_acceptance_outcome,
-                        Err(target_verification_error) => {
-                            active_request
-                                .performance_attribution
-                                .record_counter(PerformanceCounter::MtpOperationalFallbackCount, 1);
-                            record_completed_adaptive_ram_growth(
-                                &mut self.adaptive_ram_growth_guard,
-                                adaptive_ram_growth_context.with_sparse_experts_are_paged(
-                                    model.sparse_experts_are_paged(),
-                                ),
-                                true,
-                                model,
-                                active_memory_bytes_before_growth,
-                                0,
-                                &mut active_request.performance_attribution,
-                            )?;
-                            return Err(target_verification_error);
+                    target_verification_boundary_workspace_bytes,
+                ) {
+                Ok(active_memory_bytes_before_growth) => Some(active_memory_bytes_before_growth),
+                Err(AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }) => {
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        reason,
+                        "MTP verification memory admission fell back to target-only decode"
+                    );
+                    active_request.mtp_request_state = None;
+                    active_request.mtp_target_hidden_states = None;
+                    active_request
+                        .performance_attribution
+                        .record_counter(PerformanceCounter::MtpMemoryAdmissionFallbackCount, 1);
+                    None
+                }
+                Err(AdaptiveRamGrowthMemoryAdmissionError::Engine(memory_admission_error)) => {
+                    return Err(memory_admission_error);
+                }
+            };
+            if let Some(active_memory_bytes_before_growth) = active_memory_bytes_before_growth {
+                active_request
+                    .performance_attribution
+                    .record_counter(PerformanceCounter::MtpAdmittedAttemptCount, 1);
+                let proposed_mtp_draft_token_id = propose_depth_one_mtp_draft(
+                    model,
+                    active_request,
+                    request_id,
+                    &current_generated_token,
+                );
+                let target_verification_was_attempted = proposed_mtp_draft_token_id.is_some();
+                let mtp_prefix_acceptance_outcome = match proposed_mtp_draft_token_id {
+                    Some(mtp_draft_token_id) => {
+                        match verify_depth_one_mtp_prefix_acceptance(
+                            model,
+                            active_request,
+                            request_id,
+                            current_generated_token_id,
+                            mtp_draft_token_id,
+                        ) {
+                            Ok(mtp_prefix_acceptance_outcome) => mtp_prefix_acceptance_outcome,
+                            Err(target_verification_error) => {
+                                active_request.performance_attribution.record_counter(
+                                    PerformanceCounter::MtpOperationalFallbackCount,
+                                    1,
+                                );
+                                record_completed_adaptive_ram_growth(
+                                    &mut self.adaptive_ram_growth_guard,
+                                    adaptive_ram_growth_context.with_sparse_experts_are_paged(
+                                        model.sparse_experts_are_paged(),
+                                    ),
+                                    true,
+                                    model,
+                                    active_memory_bytes_before_growth,
+                                    target_verification_boundary_workspace_bytes,
+                                    &mut active_request.performance_attribution,
+                                )?;
+                                return Err(target_verification_error);
+                            }
                         }
                     }
+                    None => MtpPrefixAcceptanceOutcome::OperationalFallback,
+                };
+                record_mtp_outcome(active_request, mtp_prefix_acceptance_outcome);
+                if mtp_prefix_acceptance_outcome != MtpPrefixAcceptanceOutcome::OperationalFallback
+                {
+                    let mlx_memory_snapshot = collect_completed_forward_memory_snapshot(
+                        &mut self.adaptive_ram_growth_guard,
+                        adaptive_ram_growth_context
+                            .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
+                        true,
+                        model,
+                        active_memory_bytes_before_growth,
+                        target_verification_boundary_workspace_bytes,
+                        &mut active_request.performance_attribution,
+                    )?;
+                    let generated_token_emission = self.build_generated_token_emission(
+                        model,
+                        active_request,
+                        current_generated_token_id,
+                        mlx_memory_snapshot.as_ref(),
+                    )?;
+                    return if generated_token_emission.is_terminal {
+                        Ok(ActiveRequestAdvance::Complete(
+                            generated_token_emission.generated_token,
+                        ))
+                    } else {
+                        Ok(ActiveRequestAdvance::Continue(
+                            generated_token_emission.generated_token,
+                        ))
+                    };
                 }
-                None => MtpPrefixAcceptanceOutcome::OperationalFallback,
-            };
-            record_mtp_outcome(active_request, mtp_prefix_acceptance_outcome);
-            if mtp_prefix_acceptance_outcome != MtpPrefixAcceptanceOutcome::OperationalFallback {
-                let mlx_memory_snapshot = collect_completed_forward_memory_snapshot(
+                record_completed_adaptive_ram_growth(
                     &mut self.adaptive_ram_growth_guard,
                     adaptive_ram_growth_context
                         .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
                     true,
                     model,
                     active_memory_bytes_before_growth,
-                    0,
+                    if target_verification_was_attempted {
+                        target_verification_boundary_workspace_bytes
+                    } else {
+                        0
+                    },
                     &mut active_request.performance_attribution,
                 )?;
-                let generated_token_emission = self.build_generated_token_emission(
-                    model,
-                    active_request,
-                    current_generated_token_id,
-                    mlx_memory_snapshot.as_ref(),
-                )?;
-                return if generated_token_emission.is_terminal {
-                    Ok(ActiveRequestAdvance::Complete(
-                        generated_token_emission.generated_token,
-                    ))
-                } else {
-                    Ok(ActiveRequestAdvance::Continue(
-                        generated_token_emission.generated_token,
-                    ))
-                };
             }
-            record_completed_adaptive_ram_growth(
-                &mut self.adaptive_ram_growth_guard,
-                adaptive_ram_growth_context
-                    .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
-                true,
-                model,
-                active_memory_bytes_before_growth,
-                0,
-                &mut active_request.performance_attribution,
-            )?;
         }
 
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(

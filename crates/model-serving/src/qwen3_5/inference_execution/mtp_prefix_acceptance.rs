@@ -64,29 +64,29 @@ pub(super) fn verify_depth_one_mtp_prefix_acceptance(
         .checkpoint()
         .map_err(qwen3_5_runtime_error)?;
     let target_verify_start_position_tokens = active_request.next_position_tokens;
-    let (target_forward_output, target_verify_token_ids) = match model
-        .forward_chunk_with_all_position_logits_and_pre_final_normalization_hidden_states_and_performance_attribution(
+    let (target_forward_output, target_verify_token_ids, verified_prefix_boundary_checkpoint) =
+        match model.forward_depth_one_mtp_verification_with_performance_attribution(
             &[current_generated_token_id, draft_token_id],
             active_request.next_position_tokens,
             &mut active_request.request_decoder_state,
             &mut active_request.performance_attribution,
         ) {
-        Ok(target_verification_output) => target_verification_output,
-        Err(target_verify_error) => {
-            restore_target_state_after_mtp_failure(
-                active_request,
-                target_state_checkpoint,
-                target_verify_start_position_tokens,
-            )?;
-            tracing::warn!(
-                request_id = request_id.value(),
-                error = %target_verify_error,
-                "MTP target verification failed; continuing this request with target-only decode"
-            );
-            active_request.mtp_request_state = None;
-            return Ok(MtpPrefixAcceptanceOutcome::OperationalFallback);
-        }
-    };
+            Ok(target_verification_output) => target_verification_output,
+            Err(target_verify_error) => {
+                restore_target_state_after_mtp_failure(
+                    active_request,
+                    target_state_checkpoint,
+                    target_verify_start_position_tokens,
+                )?;
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    error = %target_verify_error,
+                    "MTP target verification failed; continuing this request with target-only decode"
+                );
+                active_request.mtp_request_state = None;
+                return Ok(MtpPrefixAcceptanceOutcome::OperationalFallback);
+            }
+        };
     active_request.advance_position(DEPTH_ONE_TARGET_VERIFY_TOKEN_COUNT)?;
 
     if target_verify_token_ids.len() != DEPTH_ONE_TARGET_VERIFY_TOKEN_COUNT {
@@ -107,11 +107,13 @@ pub(super) fn verify_depth_one_mtp_prefix_acceptance(
     let force_mtp_draft_rejection =
         std::mem::take(&mut active_request.force_next_mtp_draft_rejection_for_tests);
     let accepted_draft = !force_mtp_draft_rejection && target_verify_token_ids[0] == draft_token_id;
+    let verified_prefix_position_tokens = target_verify_start_position_tokens
+        .checked_add(1)
+        .ok_or_else(|| super::fatal_engine_error("MTP verified-prefix position overflowed"))?;
     if accepted_draft {
         active_request.accepted_mtp_draft_rollback = Some(AcceptedMtpDraftRollback {
-            request_decoder_state_checkpoint: target_state_checkpoint,
-            target_verify_start_position_tokens,
-            emitted_current_token_id: current_generated_token_id,
+            verified_prefix_boundary_checkpoint,
+            verified_prefix_position_tokens,
         });
         active_request
             .verified_mtp_generated_token_ids
@@ -122,71 +124,42 @@ pub(super) fn verify_depth_one_mtp_prefix_acceptance(
                 .array_from_u32(&[target_verify_token_ids[1]], &[1, 1])
                 .map_err(qwen3_5_runtime_error)?,
         );
-        let accepted_draft_history_result = target_forward_output
-            .pre_final_normalization_hidden_state_at(model.runtime(), 0)
-            .map_err(qwen3_5_runtime_error)
-            .and_then(|current_target_hidden_state| {
-                model
-                    .prefill_mtp_history_from_token_ids_with_performance_attribution(
-                        &current_target_hidden_state,
-                        &[draft_token_id],
-                        active_request.mtp_request_state.as_mut().ok_or_else(|| {
-                            super::fatal_engine_error(
-                                "accepted MTP draft lost its request-local history",
-                            )
-                        })?,
-                        &mut active_request.performance_attribution,
-                    )
-                    .map_err(InferenceEngineError::from)
-            });
-        if let Err(accepted_draft_history_error) = accepted_draft_history_result {
-            tracing::warn!(
-                request_id = request_id.value(),
-                error = %accepted_draft_history_error,
-                "MTP could not commit accepted draft history; continuing target-only"
-            );
-            active_request.mtp_request_state = None;
-            active_request.mtp_target_hidden_states = None;
-        } else {
-            active_request.mtp_target_hidden_states = match target_forward_output
-                .pre_final_normalization_hidden_state_at(model.runtime(), 1)
-            {
-                Ok(hidden_state) => Some(hidden_state),
-                Err(hidden_state_error) => {
-                    tracing::warn!(
-                        request_id = request_id.value(),
-                        error = %qwen3_5_runtime_error(hidden_state_error),
-                        "MTP accepted a draft but could not retain the next hidden-state seed; disabling MTP for this request"
-                    );
-                    active_request.mtp_request_state = None;
-                    None
-                }
-            };
-        }
+        active_request.mtp_target_hidden_states = match target_forward_output
+            .pre_final_normalization_hidden_state_at(model.runtime(), 1)
+        {
+            Ok(hidden_state) => Some(hidden_state),
+            Err(hidden_state_error) => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    error = %qwen3_5_runtime_error(hidden_state_error),
+                    "MTP accepted a draft but could not retain the next hidden-state seed; disabling MTP for this request"
+                );
+                active_request.mtp_request_state = None;
+                None
+            }
+        };
     } else {
-        restore_target_state_after_mtp_failure(
-            active_request,
-            target_state_checkpoint,
-            target_verify_start_position_tokens,
+        active_request.measure_operation_with_request(
+            crate::PerformanceOperation::MtpRejectedDraftStateRestoration,
+            |active_request| {
+                active_request
+                    .request_decoder_state
+                    .restore_mtp_verified_prefix(
+                        verified_prefix_position_tokens,
+                        verified_prefix_boundary_checkpoint,
+                    )
+                    .map_err(qwen3_5_runtime_error)
+            },
         )?;
-        let replayed_current_target_forward_output = model
-            .replay_rejected_mtp_draft_with_performance_attribution(
-                current_generated_token_id,
-                active_request.next_position_tokens,
-                &mut active_request.request_decoder_state,
-                &mut active_request.performance_attribution,
-            )
-            .map_err(InferenceEngineError::from)?;
-        active_request.advance_position(1)?;
+        active_request.next_position_tokens = verified_prefix_position_tokens;
         active_request.pending_generated_token = Some(
             model
                 .runtime()
                 .array_from_u32(&[target_verify_token_ids[0]], &[1, 1])
                 .map_err(qwen3_5_runtime_error)?,
         );
-        active_request.mtp_target_hidden_states = match replayed_current_target_forward_output
-            .pre_final_normalization_hidden_states()
-            .retain()
+        active_request.mtp_target_hidden_states = match target_forward_output
+            .pre_final_normalization_hidden_state_at(model.runtime(), 0)
         {
             Ok(hidden_state) => Some(hidden_state),
             Err(hidden_state_error) => {

@@ -34,7 +34,8 @@ impl Qwen3_5EngineState {
                 && active_request.can_use_persistent_prompt_cache
                 && !active_request.persistent_prompt_cache_capture_has_stopped
                 && active_request.mtp_request_state.is_none(),
-        );
+        )
+        .with_target_only_mtp_prefix(active_request.mtp_request_state.is_some());
         let candidate_prefill_chunck_end = self
             .prefill_chunck_sizer
             .next_prefill_chunck_end_for_execution_context(
@@ -220,6 +221,8 @@ impl Qwen3_5EngineState {
         let exact_temporary_workspace_bytes =
             prompt_prefill_chunck_outcome.exact_temporary_workspace_bytes;
         let boundary_checkpoints = prompt_prefill_chunck_outcome.boundary_checkpoints;
+        let speculative_prefill_chunck_mode =
+            prompt_prefill_chunck_outcome.speculative_prefill_chunck_mode;
         let prefill_token_count = prefill_end - prefill_start;
         let should_retain_adaptive_ram_growth_observation = requested_prefill_chunck_token_count
             == self.prefill_chunck_sizer.active_prefill_chunck_tokens();
@@ -273,13 +276,22 @@ impl Qwen3_5EngineState {
                 && active_request.can_use_persistent_prompt_cache
                 && !active_request.persistent_prompt_cache_capture_has_stopped
                 && active_request.mtp_request_state.is_none(),
-        );
-        self.prefill_chunck_sizer.record_prefill_chunck_transition(
-            prefill_token_count,
-            prefill_chunck_elapsed_millis,
-            has_observed_prefill_capacity_constraint,
-            next_prefill_execution_context,
-        );
+        )
+        .with_target_only_mtp_prefix(active_request.mtp_request_state.is_some());
+        if matches!(
+            speculative_prefill_chunck_mode,
+            super::Qwen3_5SpeculativePrefillChunckMode::TerminalMtpCapture
+        ) {
+            self.prefill_chunck_sizer
+                .discard_pending_prefill_chunck_decision();
+        } else {
+            self.prefill_chunck_sizer.record_prefill_chunck_transition(
+                prefill_token_count,
+                prefill_chunck_elapsed_millis,
+                has_observed_prefill_capacity_constraint,
+                next_prefill_execution_context,
+            );
+        }
         let prefill_optimizer_insight = self
             .prefill_chunck_sizer
             .take_latest_prefill_optimizer_insight();

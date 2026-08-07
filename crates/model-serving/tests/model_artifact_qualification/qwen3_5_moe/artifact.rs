@@ -287,30 +287,19 @@ fn should_validate_the_xyz_aquila_mini_optiq_four_bit_artifact() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Qwen3.6-35B-A3B-oQ4e-mtp"]
-fn should_validate_the_qwen3_6_35b_a3b_oq4e_mtp_artifact() {
-    const EXPECTED_MEASURED_PAYLOAD_BYTES: u64 = 21_612_530_528;
-    const EXPECTED_MODEL_ID: &str = "Qwen3.6-35B-A3B-oQ4e-mtp";
-
-    let model_directory = super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+#[ignore = "requires model_directories to discover a complete supported depth-one MTP artifact"]
+fn should_validate_a_configured_depth_one_mtp_artifact() {
+    let model_directory = super::configured_depth_one_mtp_model_artifact_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the complete Qwen3.6-35B-A3B-oQ4e-mtp artifact should validate");
+        .expect("the discovered depth-one MTP artifact should validate");
 
-    assert_eq!(validated_artifact.shard_count(), 5);
-    assert_eq!(validated_artifact.shard_index().mtp_tensor_count(), 42);
-    assert_eq!(validated_artifact.model_id(), EXPECTED_MODEL_ID);
-    assert_eq!(
-        validated_artifact.total_payload_bytes(),
-        EXPECTED_MEASURED_PAYLOAD_BYTES
+    assert!(
+        validated_artifact
+            .mtp_artifact_capability()
+            .is_mtp_capable(),
+        "qualification requires the complete supported MTP tensor inventory"
     );
     assert_eq!(validated_artifact.config().mtp_layer_count(), 1);
-    assert_eq!(validated_artifact.config().default_quantization_bits(), 4);
-    assert_eq!(
-        validated_artifact
-            .config()
-            .default_quantization_group_size(),
-        64
-    );
 }

@@ -218,22 +218,23 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
 }
 
 #[tokio::test]
-#[ignore = "loads the local Qwen3.6 oQ4e MTP checkpoint and verifies automatic full residency"]
+#[ignore = "loads a configured depth-one MTP checkpoint and verifies automatic full residency"]
 async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient() {
     timeout(Duration::from_secs(120), async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let model_directory = super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+        let model_directory = super::configured_depth_one_mtp_model_artifact_directory();
         assert!(
             model_directory.is_dir(),
-            "the local Qwen3.6 oQ4e MTP checkpoint must be available"
+            "the configured depth-one MTP checkpoint must be available"
         );
         eprintln!("[automatic-residency 0/4] status=progress phase=artifact_validation");
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
-            .expect("the local Qwen3.6 oQ4e MTP artifact should validate");
-        let think_end_token_id = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-            .expect("the tokenizer should expose validated control tokens")
-            .think_end_token_id();
+            .expect("the configured depth-one MTP artifact should validate");
+        let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
+            .expect("the tokenizer should expose validated control tokens");
+        let think_end_token_id = tokenizer.think_end_token_id();
+        let image_pad_token_id = tokenizer.image_pad_token_id();
         let mlx_memory_limits = crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
         let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
             validated_artifact,
@@ -266,7 +267,7 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
                     super::super::qwen3_5::SAY_HI_PROMPT_TOKEN_IDS.to_vec(),
                     2,
                 )
-                .with_image_pad_token_id(ORNITH_IMAGE_PAD_TOKEN_ID),
+                .with_image_pad_token_id(image_pad_token_id),
             )
             .await
             .expect("the resident model should accept a short request");
@@ -298,17 +299,18 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
 }
 
 #[tokio::test]
-#[ignore = "loads the local Qwen3.6 oQ4e model and exercises a live memory-limit increase during real prefill"]
+#[ignore = "loads a configured MTP model and exercises a live memory-limit increase during real prefill"]
 async fn should_use_the_raised_live_memory_limit_for_adaptive_expert_eviction() {
     timeout(Duration::from_secs(120), async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let model_directory = super::qwen3_6_35b_a3b_oq4e_mtp_model_directory();
+        let model_directory = super::configured_depth_one_mtp_model_artifact_directory();
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
-            .expect("the local Qwen3.6 oQ4e MTP artifact should validate");
-        let think_end_token_id = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-            .expect("the tokenizer should expose validated control tokens")
-            .think_end_token_id();
+            .expect("the configured depth-one MTP artifact should validate");
+        let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
+            .expect("the tokenizer should expose validated control tokens");
+        let think_end_token_id = tokenizer.think_end_token_id();
+        let image_pad_token_id = tokenizer.image_pad_token_id();
         let mut qwen3_5_engine =
             Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
                 validated_artifact,
@@ -331,7 +333,7 @@ async fn should_use_the_raised_live_memory_limit_for_adaptive_expert_eviction() 
         qwen3_5_engine
             .load()
             .await
-            .expect("the Qwen3.6 oQ4e model should load under the initial memory limit");
+            .expect("the configured MTP model should load under the initial memory limit");
         let calibration_request_id = RequestId::new(1_005);
         qwen3_5_engine
             .start_generation(
@@ -340,7 +342,7 @@ async fn should_use_the_raised_live_memory_limit_for_adaptive_expert_eviction() 
                     vec![198; LIVE_MEMORY_LIMIT_CALIBRATION_PROMPT_TOKEN_COUNT],
                     1,
                 )
-                .with_image_pad_token_id(ORNITH_IMAGE_PAD_TOKEN_ID),
+                .with_image_pad_token_id(image_pad_token_id),
             )
             .await
             .expect("the calibration request should be admitted");
@@ -364,7 +366,7 @@ async fn should_use_the_raised_live_memory_limit_for_adaptive_expert_eviction() 
                     vec![198; LIVE_MEMORY_LIMIT_REGRESSION_PROMPT_TOKEN_COUNT],
                     1,
                 )
-                .with_image_pad_token_id(ORNITH_IMAGE_PAD_TOKEN_ID),
+                .with_image_pad_token_id(image_pad_token_id),
             )
             .await
             .expect("the long request should fit after expert reclamation");
