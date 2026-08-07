@@ -326,6 +326,13 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 2px s
 .compact-memory-ceiling { margin-top: auto; display: flex; align-items: baseline; gap: 6px; }
 .compact-memory-ceiling-label { color: var(--text-dim); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
 .compact-memory-ceiling-value { font-size: 14px; }
+.compact-memory-pressure-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.compact-memory-pressure-label { color: var(--text-dim); font-size: 13px; }
+.compact-memory-pressure-state { font-family: var(--font-mono); font-size: 14px; font-weight: 600; }
+.compact-memory-pressure-state[data-pressure-state="normal"] { color: var(--ok); }
+.compact-memory-pressure-state[data-pressure-state="warning"] { color: var(--warn); }
+.compact-memory-pressure-state[data-pressure-state="critical"] { color: var(--bad); }
+.compact-memory-pressure-state[data-pressure-state="unavailable"] { color: var(--text-dim); }
 
 .compact-cache-hit-rate { font-size: 17px; font-weight: 600; }
 .compact-cache-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }

@@ -432,6 +432,24 @@ test("returns null for empty candidate evidence", () => {
     assert.equal(fastestMeasuredCandidate, null);
 });
 
+test("maps every macOS memory pressure state and unknown input to a safe presentation", () => {
+    const scriptContext = createConsoleContext();
+    const memoryPressureStatePresentations = vm.runInContext(
+        `["normal", "warning", "critical", null, "unexpected"].map(
+            (memoryPressureState) => memoryPressurePresentationForState(memoryPressureState)
+        )`,
+        scriptContext
+    );
+
+    assert.deepEqual(JSON.parse(JSON.stringify(memoryPressureStatePresentations)), [
+        { state: "normal", title: "Normal" },
+        { state: "warning", title: "Warning" },
+        { state: "critical", title: "Critical" },
+        { state: "unavailable", title: "Unavailable" },
+        { state: "unavailable", title: "Unavailable" }
+    ]);
+});
+
 test("does not declare one fastest candidate when measured throughput is tied", () => {
     const scriptContext = createConsoleContext();
     const candidateEvidence = [

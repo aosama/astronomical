@@ -59,6 +59,26 @@ function renderCompactMlxMemory(statusDocument) {
     );
 }
 
+function memoryPressurePresentationForState(memoryPressureState) {
+    switch (memoryPressureState) {
+    case "normal":
+        return { state: "normal", title: "Normal" };
+    case "warning":
+        return { state: "warning", title: "Warning" };
+    case "critical":
+        return { state: "critical", title: "Critical" };
+    default:
+        return { state: "unavailable", title: "Unavailable" };
+    }
+}
+
+function renderCompactMemoryPressure(memoryPressureState) {
+    const pressurePresentation = memoryPressurePresentationForState(memoryPressureState);
+    const pressureStateElement = document.getElementById("compact-memory-pressure-state");
+    pressureStateElement.textContent = pressurePresentation.title;
+    pressureStateElement.dataset.pressureState = pressurePresentation.state;
+}
+
 function setCompactMlxSegmentWidths(expertBytes, modelCoreBytes, contextStateBytes, runtimeWorkBytes, availableBytes, ceilingBytes) {
     setMlxSegmentWidth("compact-mem-seg-experts", expertBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-model-core", modelCoreBytes, ceilingBytes);

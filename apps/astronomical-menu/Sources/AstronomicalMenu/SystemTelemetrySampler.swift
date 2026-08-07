@@ -5,6 +5,7 @@ enum SystemMemoryPressureTitle: String {
   case normal = "Normal"
   case warning = "Warning"
   case critical = "Critical"
+  case unavailable = "Unavailable"
 }
 
 struct SystemTelemetrySnapshot {
@@ -13,7 +14,7 @@ struct SystemTelemetrySnapshot {
 
   static let unavailable = SystemTelemetrySnapshot(
     gpuUtilizationPercentage: nil,
-    memoryPressureTitle: .normal
+    memoryPressureTitle: .unavailable
   )
 }
 

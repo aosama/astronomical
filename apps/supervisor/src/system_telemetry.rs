@@ -11,12 +11,15 @@
 //! `AGXAccelerator` services, read `PerformanceStatistics`, and extract
 //! `Device Utilization %` as a 0–100 double.
 
+use std::time::Duration;
+
 use axum::{
     Json, Router,
     response::{IntoResponse, Response},
     routing::get,
 };
 use serde::Serialize;
+use tokio::{process::Command, time::timeout};
 
 // IOKit and CoreFoundation FFI types. These are opaque pointer types from the
 // C frameworks; in Rust they are represented as `*const c_void`.
@@ -34,6 +37,14 @@ const IO_MAIN_PORT_DEFAULT: MachPortT = 0;
 const K_CF_ENCODING_UTF8: u32 = 0x08000100;
 const K_CF_NUMBER_FLOAT64_TYPE: i32 = 13;
 const K_CF_NUMBER_SINT32_TYPE: i32 = 3;
+const MEMORY_PRESSURE_SYSCTL_KEY: &str = "kern.memorystatus_vm_pressure_level";
+const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
+const SYSCTL_SAMPLE_TIMEOUT: Duration = Duration::from_secs(2);
+const MEMORY_PRESSURE_NORMAL_BIT: u32 = 1;
+const MEMORY_PRESSURE_WARNING_BIT: u32 = 2;
+const MEMORY_PRESSURE_CRITICAL_BIT: u32 = 4;
+const MEMORY_PRESSURE_KNOWN_BITS: u32 =
+    MEMORY_PRESSURE_NORMAL_BIT | MEMORY_PRESSURE_WARNING_BIT | MEMORY_PRESSURE_CRITICAL_BIT;
 
 #[link(name = "IOKit", kind = "framework")]
 unsafe extern "C" {
@@ -77,10 +88,11 @@ unsafe extern "C" {
 #[derive(Serialize)]
 pub(crate) struct SystemTelemetryDocument {
     pub gpu_utilization_percentage: Option<f64>,
+    pub memory_pressure: Option<&'static str>,
 }
 
-/// `GET /v1/system/telemetry` — samples the local GPU utilization percentage
-/// from the first AGX accelerator's IOKit PerformanceStatistics.
+/// `GET /v1/system/telemetry` — samples local GPU utilization and macOS memory
+/// pressure without allowing either unavailable probe to fail the response.
 pub(crate) async fn sample_telemetry() -> Response {
     let gpu_utilization_percentage = match tokio::task::spawn_blocking(
         sample_gpu_utilization_percentage,
@@ -93,8 +105,10 @@ pub(crate) async fn sample_telemetry() -> Response {
             None
         }
     };
+    let memory_pressure = sample_memory_pressure_level().await;
     Json(SystemTelemetryDocument {
         gpu_utilization_percentage,
+        memory_pressure,
     })
     .into_response()
 }
@@ -106,6 +120,49 @@ where
     S: Clone + Send + Sync + 'static,
 {
     Router::new().route("/v1/system/telemetry", get(sample_telemetry))
+}
+
+/// Maps the macOS memory-pressure sysctl bitmask to the public telemetry state.
+/// Unknown and empty values remain unavailable instead of becoming Normal.
+pub fn parse_macos_memory_pressure_level(sysctl_value_text: &str) -> Option<&'static str> {
+    let memory_pressure_bitmask = sysctl_value_text.trim().parse::<u32>().ok()?;
+    if memory_pressure_bitmask == 0 || memory_pressure_bitmask & !MEMORY_PRESSURE_KNOWN_BITS != 0 {
+        return None;
+    }
+    if memory_pressure_bitmask & MEMORY_PRESSURE_CRITICAL_BIT != 0 {
+        return Some("critical");
+    }
+    if memory_pressure_bitmask & MEMORY_PRESSURE_WARNING_BIT != 0 {
+        return Some("warning");
+    }
+    if memory_pressure_bitmask & MEMORY_PRESSURE_NORMAL_BIT != 0 {
+        return Some("normal");
+    }
+    None
+}
+
+async fn sample_memory_pressure_level() -> Option<&'static str> {
+    let mut sysctl_command = Command::new(SYSCTL_EXECUTABLE_PATH);
+    sysctl_command
+        .arg("-n")
+        .arg(MEMORY_PRESSURE_SYSCTL_KEY)
+        .kill_on_drop(true);
+    let sysctl_output = match timeout(SYSCTL_SAMPLE_TIMEOUT, sysctl_command.output()).await {
+        Ok(Ok(sysctl_output)) => sysctl_output,
+        Ok(Err(sysctl_error)) => {
+            tracing::debug!(%sysctl_error, "macOS memory pressure probe failed");
+            return None;
+        }
+        Err(_) => {
+            tracing::debug!("macOS memory pressure probe timed out");
+            return None;
+        }
+    };
+    if !sysctl_output.status.success() {
+        tracing::debug!("macOS memory pressure probe returned a failure status");
+        return None;
+    }
+    parse_macos_memory_pressure_level(&String::from_utf8_lossy(&sysctl_output.stdout))
 }
 
 /// Reads the Apple GPU `Device Utilization %` from IOKit. Returns `None` when

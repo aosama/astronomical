@@ -17,6 +17,8 @@ const EXPECTED_OPTIMIZER_REGION_MARKER: &str =
     "data-observatory-view=\"optimizer\" aria-labelledby=\"optimizer-title\"";
 const EXPECTED_COMPACT_OVERVIEW_MARKER: &str =
     "id=\"compact-memory-panel\" class=\"overview-summary-section compact-memory-panel\"";
+const EXPECTED_MEMORY_PRESSURE_MARKER: &str =
+    "id=\"compact-memory-pressure-state\" class=\"compact-memory-pressure-state\"";
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_index_html_at_root() {
@@ -184,6 +186,14 @@ async fn should_expose_named_observatory_navigation_and_overview_region() {
     assert!(
         shell_text.contains(EXPECTED_COMPACT_OVERVIEW_MARKER),
         "the Overview must expose its compact MLX memory panel"
+    );
+    assert!(
+        shell_text.contains(EXPECTED_MEMORY_PRESSURE_MARKER),
+        "the Overview must expose its macOS memory pressure state"
+    );
+    assert!(
+        shell_text.contains(">Unavailable</span>"),
+        "the memory pressure state must fail closed to Unavailable"
     );
 }
 

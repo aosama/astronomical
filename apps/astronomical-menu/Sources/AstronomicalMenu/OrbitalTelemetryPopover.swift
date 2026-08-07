@@ -107,6 +107,9 @@ struct OrbitalTelemetryPopover: View {
       GPUUtilizationBar(
         gpuUtilizationPercentage: telemetryStore.systemTelemetrySnapshot.gpuUtilizationPercentage
       )
+      MemoryPressureIndicator(
+        memoryPressureTitle: telemetryStore.systemTelemetrySnapshot.memoryPressureTitle
+      )
       MlxMemoryBreakdownBar(
         activeByteCount: statusDocument.mlxMemoryActiveBytes,
         limitByteCount: statusDocument.mlxMemoryCeilingBytes,
@@ -329,6 +332,33 @@ struct GPUUtilizationBar: View {
       )
     }
     .accessibilityElement(children: .combine)
+  }
+}
+
+struct MemoryPressureIndicator: View {
+  let memoryPressureTitle: SystemMemoryPressureTitle
+
+  var body: some View {
+    HStack {
+      Text("Memory pressure").foregroundStyle(.secondary)
+      Spacer()
+      Text(memoryPressureTitle.rawValue)
+        .font(PopoverTypography.monospacedBody)
+        .foregroundStyle(memoryPressureTitle.tintColor)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("macOS memory pressure: \(memoryPressureTitle.rawValue)")
+  }
+}
+
+extension SystemMemoryPressureTitle {
+  var tintColor: Color {
+    switch self {
+    case .normal: return .green
+    case .warning: return .orange
+    case .critical: return .red
+    case .unavailable: return .secondary
+    }
   }
 }
 
