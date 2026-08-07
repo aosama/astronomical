@@ -26,7 +26,7 @@ impl Qwen3_5TargetForwardOutput {
 
     /// Returns float32 logits for every target input position when requested.
     #[must_use]
-    pub fn all_position_logits(&self) -> Option<&MlxArray> {
+    pub(crate) fn all_position_logits(&self) -> Option<&MlxArray> {
         self.all_position_logits.as_ref()
     }
 
@@ -75,23 +75,6 @@ impl Qwen3_5Model {
         self.runtime
             .evaluate_arrays(&[target_forward_output.pre_final_normalization_hidden_states()])?;
         Ok(target_forward_output)
-    }
-
-    /// Executes a target forward for MTP verification and retains logits for each input row.
-    pub fn forward_chunk_with_all_position_logits_and_pre_final_normalization_hidden_states(
-        &self,
-        token_ids: &[u32],
-        starting_position_tokens: u32,
-        request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
-        self.forward_chunk_with_all_position_logits_and_pre_final_normalization_hidden_states_and_performance_attribution(
-            token_ids,
-            starting_position_tokens,
-            request_decoder_state,
-            &mut disabled_performance_attribution,
-        )
-        .map(|(target_forward_output, _target_verify_token_ids)| target_forward_output)
     }
 
     pub(super) fn build_forward_graph(

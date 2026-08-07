@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use astronomical_ipc_protocol::RequestId;
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
+};
 use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
     PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine,
     Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
 };
-
-use super::IMAGE_PAD_TOKEN_ID;
 
 pub(super) async fn load_mtp_test_engine(
     model_directory: &Path,
@@ -16,7 +16,7 @@ pub(super) async fn load_mtp_test_engine(
 ) -> (Qwen3_5Engine, tempfile::TempDir, PathBuf) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
-        .expect("the local oQ4e MTP artifact should validate before engine loading");
+        .expect("the configured MTP artifact should validate before engine loading");
     let think_end_token_id = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the MTP tokenizer should expose validated control tokens")
         .think_end_token_id();
@@ -49,7 +49,7 @@ pub(super) async fn load_mtp_test_engine(
         },
         performance_attribution_log,
     )
-    .expect("the oQ4e MTP engine settings should be valid");
+    .expect("the configured MTP engine settings should be valid");
     (
         qwen3_5_engine,
         temporary_log_directory,
@@ -62,21 +62,22 @@ pub(super) async fn generate_with_mtp_engine(
     output_token_count: u16,
     force_next_mtp_draft_rejection: bool,
 ) -> (Vec<u32>, serde_json::Value) {
+    let configured_mtp_artifact_test_inputs = configured_mtp_artifact_test_inputs(model_directory);
     let (mut qwen3_5_engine, _temporary_log_directory, performance_attribution_log_path) =
         load_mtp_test_engine(model_directory, true, false).await;
     qwen3_5_engine
         .load()
         .await
-        .expect("the engine should materialize the oQ4e MTP model");
+        .expect("the engine should materialize the configured MTP model");
     let request_id = RequestId::new(36_001);
     qwen3_5_engine
         .start_generation(
             Qwen3_5InferenceRequest::new(
                 request_id,
-                super::super::super::qwen3_5::SAY_HI_PROMPT_TOKEN_IDS.to_vec(),
+                configured_mtp_artifact_test_inputs.short_prompt_token_ids,
                 output_token_count,
             )
-            .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID)
+            .with_image_pad_token_id(configured_mtp_artifact_test_inputs.image_pad_token_id)
             .with_performance_attribution(PerformanceAttribution::enabled()),
         )
         .await
@@ -95,7 +96,16 @@ pub(super) async fn generate_with_mtp_engine(
             .await
             .expect("each MTP engine boundary should advance the request")
         {
-            GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
+            GeneratedToken::TokenId {
+                token_id,
+                generation_finalization,
+                ..
+            } => {
+                generated_token_ids.push(token_id);
+                if generation_finalization.is_some() {
+                    break;
+                }
+            }
             GeneratedToken::PrefillProgress { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
@@ -106,6 +116,57 @@ pub(super) async fn generate_with_mtp_engine(
     let performance_attribution_json = serde_json::from_str(performance_attribution_jsonl.trim())
         .expect("the MTP attribution should be valid JSON");
     (generated_token_ids, performance_attribution_json)
+}
+
+pub(super) struct ConfiguredMtpArtifactTestInputs {
+    pub(super) short_prompt_token_ids: Vec<u32>,
+    pub(super) injected_feedback_token_ids: Vec<u32>,
+    pub(super) image_pad_token_id: u32,
+    pub(super) end_of_sequence_token_ids: Vec<u32>,
+}
+
+pub(super) fn configured_mtp_artifact_test_inputs(
+    model_directory: &Path,
+) -> ConfiguredMtpArtifactTestInputs {
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(model_directory, 20_480)
+        .expect("the configured MTP artifact should validate before preparing test input");
+    let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
+        .expect("the configured MTP tokenizer should prepare artifact-compatible test input");
+    let short_prompt_request = tokenizer
+        .prepare_chat(
+            &ChatGenerationCommand {
+                request_id: RequestId::new(36_000),
+                model: validated_artifact.model_id().to_owned(),
+                messages: vec![ChatMessage::User {
+                    content: "Say hi.".to_owned(),
+                    images: Vec::new(),
+                }],
+                tools: Vec::new(),
+                tool_choice: ChatToolChoice::None,
+                settings: ChatGenerationSettings {
+                    max_output_tokens: 128,
+                    temperature_thousandths: Some(0),
+                    top_p_thousandths: Some(1_000),
+                    seed: None,
+                    thinking_budget: None,
+                },
+            },
+            false,
+        )
+        .expect("the configured MTP tokenizer should prepare the short qualification prompt");
+    let injected_feedback_token_ids = tokenizer
+        .encode_model_visible_correction("Continue with the corrected context.", false)
+        .expect("the configured MTP tokenizer should encode injected model feedback");
+    ConfiguredMtpArtifactTestInputs {
+        short_prompt_token_ids: short_prompt_request.input_token_ids().to_vec(),
+        injected_feedback_token_ids,
+        image_pad_token_id: tokenizer.image_pad_token_id(),
+        end_of_sequence_token_ids: validated_artifact
+            .config()
+            .end_of_sequence_token_ids()
+            .to_vec(),
+    }
 }
 
 pub(super) fn performance_counter_amount(
@@ -121,6 +182,81 @@ pub(super) fn performance_counter_amount(
         })
         .and_then(|performance_counter| performance_counter["amount"].as_u64())
         .unwrap_or(0)
+}
+
+pub(super) fn performance_operation_occurrence_count(
+    performance_attribution_json: &serde_json::Value,
+    performance_operation_identifier: &str,
+) -> u64 {
+    performance_attribution_json["operations"]
+        .as_array()
+        .and_then(|performance_operations| {
+            performance_operations.iter().find(|performance_operation| {
+                performance_operation["operation"] == performance_operation_identifier
+            })
+        })
+        .and_then(|performance_operation| performance_operation["occurrence_count"].as_u64())
+        .unwrap_or(0)
+}
+
+pub(super) fn assert_terminal_only_speculative_prefill_attribution(
+    generation_report: &serde_json::Value,
+    mtp_enabled: bool,
+    completed_prefill_chunck_tokens: &[usize],
+) {
+    let counter_identifiers = [
+        "speculative_prefill_target_only_prefix_chunck_count",
+        "speculative_prefill_target_only_prefix_token_count",
+        "speculative_prefill_terminal_capture_chunck_count",
+        "speculative_prefill_terminal_mtp_history_token_count",
+    ];
+    if !mtp_enabled {
+        let serialized_counters = generation_report["counters"]
+            .as_array()
+            .expect("the target-only report should contain counters");
+        for counter_identifier in counter_identifiers {
+            assert!(
+                serialized_counters.iter().all(|serialized_counter| {
+                    serialized_counter["counter"] != counter_identifier
+                }),
+                "target-only generation must omit zero speculative-prefill counters",
+            );
+        }
+        assert_eq!(
+            performance_operation_occurrence_count(
+                generation_report,
+                "mtp_prompt_history_initialization_span",
+            ),
+            0,
+        );
+        return;
+    }
+
+    let (terminal_mtp_history_token_count, target_only_prefix_chuncks) =
+        completed_prefill_chunck_tokens
+            .split_last()
+            .expect("the representative prompt should complete at least one prefill chunk");
+    let target_only_prefix_token_count = target_only_prefix_chuncks.iter().sum::<usize>();
+    for (counter_identifier, expected_amount) in [
+        (counter_identifiers[0], target_only_prefix_chuncks.len()),
+        (counter_identifiers[1], target_only_prefix_token_count),
+        (counter_identifiers[2], 1),
+        (counter_identifiers[3], *terminal_mtp_history_token_count),
+    ] {
+        assert_eq!(
+            performance_counter_amount(generation_report, counter_identifier),
+            expected_amount as u64,
+            "the speculative-prefill counter must match completed production chunks",
+        );
+    }
+    assert_eq!(
+        performance_operation_occurrence_count(
+            generation_report,
+            "mtp_prompt_history_initialization_span",
+        ),
+        1,
+        "MTP prompt history must initialize exactly once regardless of prefix chunk count",
+    );
 }
 
 pub(super) fn generation_report_for_request(
