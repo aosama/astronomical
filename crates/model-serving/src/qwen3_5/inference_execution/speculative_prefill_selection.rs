@@ -17,7 +17,9 @@ impl std::fmt::Display for Qwen3_5SpeculativePrefillSelectionError {
                 "selection chunk token count must be positive"
             }
             Self::ImportanceScoreNotFinite => "importance scores must be finite",
-            Self::SelectionArithmeticOverflow => "speculative prefill selection arithmetic overflowed",
+            Self::SelectionArithmeticOverflow => {
+                "speculative prefill selection arithmetic overflowed"
+            }
         };
         formatter.write_str(description)
     }
@@ -49,163 +51,171 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     if importance_scores.iter().any(|score| !score.is_finite()) {
         return Err(Qwen3_5SpeculativePrefillSelectionError::ImportanceScoreNotFinite);
     }
-    let total_token_count = importance_scores.len();
-    let mandatory_trailing_token_count = mandatory_trailing_token_count.min(total_token_count);
-    let competing_token_count = total_token_count.saturating_sub(mandatory_trailing_token_count);
-    let chunk_count = competing_token_count.div_ceil(selection_chunck_token_count);
-    let mut chunk_averages = Vec::with_capacity(chunk_count);
-    for chunk_index in 0..chunk_count {
-        let chunk_start = chunk_index.saturating_mul(selection_chunck_token_count);
-        let chunk_end = chunk_start
-            .saturating_add(selection_chunck_token_count)
-            .min(competing_token_count);
-        if chunk_start >= chunk_end {
-            break;
-        }
-        let mut chunk_sum = 0.0_f64;
-        for score in &importance_scores[chunk_start..chunk_end] {
-            chunk_sum += f64::from(*score);
-        }
-        let chunk_average = chunk_sum / (chunk_end.saturating_sub(chunk_start)) as f64;
-        chunk_averages.push((chunk_average, chunk_index));
-    }
-    chunk_averages.sort_by(|left, right| {
-        right
-            .0
-            .partial_cmp(&left.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.1.cmp(&right.1))
-    });
-    let keep_chunk_count = chunk_averages
+
+    let chunk_count = importance_scores
         .len()
-        .saturating_mul(usize::try_from(keep_percentage).unwrap_or(usize::MAX))
-        .saturating_add(99)
-        .saturating_div(100);
-    let mut selected_positions = Vec::new();
-    for (_, chunk_index) in chunk_averages.iter().take(keep_chunk_count) {
-        let chunk_start = chunk_index.saturating_mul(selection_chunck_token_count);
+        .checked_add(selection_chunck_token_count - 1)
+        .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
+        / selection_chunck_token_count;
+    let retained_chunk_count =
+        usize::try_from((u128::from(chunk_count as u64) * u128::from(keep_percentage) + 99) / 100)
+            .map_err(|_| Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
+            .max(1)
+            .min(chunk_count);
+    let mandatory_trailing_chunk_count = if mandatory_trailing_token_count == 0 {
+        0
+    } else {
+        mandatory_trailing_token_count
+            .checked_add(selection_chunck_token_count - 1)
+            .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
+            / selection_chunck_token_count
+    }
+    .min(chunk_count);
+    let ranked_chunk_end = chunk_count - mandatory_trailing_chunk_count;
+    let ranked_chunk_budget = retained_chunk_count.saturating_sub(mandatory_trailing_chunk_count);
+
+    let mut ranked_chunks = Vec::with_capacity(ranked_chunk_end);
+    for chunk_index in 0..ranked_chunk_end {
+        let chunk_start = chunk_index
+            .checked_mul(selection_chunck_token_count)
+            .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?;
         let chunk_end = chunk_start
             .saturating_add(selection_chunck_token_count)
-            .min(competing_token_count);
-        for position in chunk_start..chunk_end {
-            if let Ok(position) = usize::try_from(position) {
-                selected_positions.push(position);
-            } else {
-                return Err(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow);
-            }
+            .min(importance_scores.len());
+        let chunk_score = importance_scores[chunk_start..chunk_end]
+            .iter()
+            .copied()
+            .sum::<f32>()
+            / (chunk_end - chunk_start) as f32;
+        if !chunk_score.is_finite() {
+            return Err(Qwen3_5SpeculativePrefillSelectionError::ImportanceScoreNotFinite);
         }
+        ranked_chunks.push((chunk_index, chunk_score));
     }
-    for offset in 0..mandatory_trailing_token_count {
-        let position = competing_token_count.saturating_add(offset);
-        if let Ok(position) = usize::try_from(position) {
-            selected_positions.push(position);
-        } else {
-            return Err(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow);
-        }
+    ranked_chunks.sort_by(|left_chunk, right_chunk| {
+        right_chunk
+            .1
+            .total_cmp(&left_chunk.1)
+            .then_with(|| left_chunk.0.cmp(&right_chunk.0))
+    });
+
+    let mut selected_chunk_indices = ranked_chunks
+        .into_iter()
+        .take(ranked_chunk_budget)
+        .map(|(chunk_index, _chunk_score)| chunk_index)
+        .collect::<Vec<_>>();
+    selected_chunk_indices.extend(ranked_chunk_end..chunk_count);
+    selected_chunk_indices.sort_unstable();
+
+    let mut selected_token_positions = Vec::new();
+    for chunk_index in selected_chunk_indices {
+        let chunk_start = chunk_index
+            .checked_mul(selection_chunck_token_count)
+            .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?;
+        let chunk_end = chunk_start
+            .saturating_add(selection_chunck_token_count)
+            .min(importance_scores.len());
+        selected_token_positions.extend(chunk_start..chunk_end);
     }
-    selected_positions.sort_unstable();
-    selected_positions.dedup();
-    Ok(selected_positions)
+    Ok(selected_token_positions)
 }
 
-/// Merges speculative-prefill selected positions with image-pad positions.
-///
-/// Image-pad positions are inserted at their original indices before the
-/// selected positions are adjusted to account for the visual embedding tokens.
+/// Retains every selectable image-pad location so sparse target prefill receives
+/// the complete ordered visual representation for each image.
 pub fn qwen3_5_merge_speculative_prefill_selection_with_image_pad_positions(
-    selected_token_positions: Vec<usize>,
-    image_pad_positions: &[usize],
-    visual_embedding_token_count: usize,
-) -> Vec<usize> {
-    if image_pad_positions.is_empty() || visual_embedding_token_count == 0 {
-        return selected_token_positions;
+    mut draft_selected_prompt_positions: Vec<usize>,
+    prompt_token_ids: &[u32],
+    selectable_prompt_start_position: usize,
+    selectable_prompt_end_position: usize,
+    image_pad_token_id: u32,
+) -> Result<Vec<usize>, Qwen3_5SpeculativePrefillSelectionError> {
+    if selectable_prompt_start_position > selectable_prompt_end_position
+        || selectable_prompt_end_position > prompt_token_ids.len()
+    {
+        return Err(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow);
     }
-    let mut merged_positions = Vec::with_capacity(
-        selected_token_positions
-            .len()
-            .saturating_add(image_pad_positions.len()),
-    );
-    for selected_position in selected_token_positions {
-        let mut adjusted_position = selected_position;
-        for image_pad_position in image_pad_positions {
-            if *image_pad_position <= selected_position {
-                adjusted_position = adjusted_position.saturating_add(visual_embedding_token_count);
-            } else {
-                break;
-            }
+    if draft_selected_prompt_positions
+        .iter()
+        .any(|draft_selected_prompt_position| {
+            *draft_selected_prompt_position >= selectable_prompt_end_position
+        })
+    {
+        return Err(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow);
+    }
+    for (prompt_token_position, prompt_token_id) in prompt_token_ids
+        .iter()
+        .enumerate()
+        .take(selectable_prompt_end_position)
+        .skip(selectable_prompt_start_position)
+    {
+        if *prompt_token_id == image_pad_token_id {
+            draft_selected_prompt_positions.push(prompt_token_position);
         }
-        merged_positions.push(adjusted_position);
     }
-    merged_positions.sort_unstable();
-    merged_positions.dedup();
-    merged_positions
+    draft_selected_prompt_positions.sort_unstable();
+    draft_selected_prompt_positions.dedup();
+    Ok(draft_selected_prompt_positions)
 }
 
-/// Filters selected token positions to those within a half-open range.
+/// Returns selected absolute prompt positions that belong to one prompt chunk.
+#[must_use]
 pub fn qwen3_5_selected_speculative_prefill_positions_for_range(
     selected_token_positions: &[usize],
-    range_start: usize,
-    range_end: usize,
+    prefill_start: usize,
+    prefill_end: usize,
 ) -> Vec<usize> {
-    selected_token_positions
-        .iter()
-        .copied()
-        .filter(|position| *position >= range_start && *position < range_end)
-        .collect()
+    if prefill_start >= prefill_end {
+        return Vec::new();
+    }
+    let first_selected_position = selected_token_positions
+        .partition_point(|selected_token_position| *selected_token_position < prefill_start);
+    let first_position_after_chunk = selected_token_positions
+        .partition_point(|selected_token_position| *selected_token_position < prefill_end);
+    selected_token_positions[first_selected_position..first_position_after_chunk].to_vec()
 }
 
-/// Computes the draft scoring token range and selectable importance score count.
-///
-/// Returns `None` when the scoring plan is invalid (empty range or zero scores).
+/// Plans complete-prompt draft scoring while reserving the final prompt token
+/// for the target model's generation-kickoff forward pass.
+#[must_use]
 pub fn qwen3_5_speculative_prefill_scoring_plan(
     scoring_start_position_tokens: usize,
     final_prompt_index: usize,
     prompt_token_count: usize,
 ) -> Option<(std::ops::Range<usize>, usize)> {
-    if scoring_start_position_tokens > prompt_token_count {
+    if final_prompt_index.checked_add(1)? != prompt_token_count
+        || scoring_start_position_tokens >= final_prompt_index
+    {
         return None;
     }
-    let draft_scoring_end_position_tokens = if final_prompt_index >= prompt_token_count {
-        prompt_token_count
-    } else {
-        final_prompt_index.saturating_add(1)
-    };
-    if draft_scoring_end_position_tokens <= scoring_start_position_tokens {
-        return None;
-    }
-    let selectable_importance_score_count =
-        draft_scoring_end_position_tokens.saturating_sub(scoring_start_position_tokens);
-    if selectable_importance_score_count == 0 {
-        return None;
-    }
+
     Some((
-        scoring_start_position_tokens..draft_scoring_end_position_tokens,
-        selectable_importance_score_count,
+        scoring_start_position_tokens..prompt_token_count,
+        final_prompt_index - scoring_start_position_tokens,
     ))
 }
 
-/// Computes the selectable importance score range from draft scoring outcomes.
-///
-/// Returns `None` when the range is invalid or exceeds the available scores.
+/// Maps the target's uncached selectable prompt range into the draft score
+/// vector, which can begin before the target's restored prefix.
+#[must_use]
 pub fn qwen3_5_speculative_prefill_selectable_importance_score_range(
-    draft_importance_score_start_position_tokens: usize,
+    draft_scoring_start_position_tokens: usize,
     scored_draft_prompt_token_count: usize,
-    scoring_start_position_tokens: usize,
+    target_selection_start_position_tokens: usize,
     selectable_importance_score_count: usize,
 ) -> Option<std::ops::Range<usize>> {
+    let target_selection_end_position_tokens =
+        target_selection_start_position_tokens.checked_add(selectable_importance_score_count)?;
     let draft_scoring_end_position_tokens =
-        draft_importance_score_start_position_tokens.saturating_add(scored_draft_prompt_token_count);
-    if scoring_start_position_tokens < draft_importance_score_start_position_tokens {
+        draft_scoring_start_position_tokens.checked_add(scored_draft_prompt_token_count)?;
+    if target_selection_start_position_tokens < draft_scoring_start_position_tokens
+        || target_selection_end_position_tokens > draft_scoring_end_position_tokens
+    {
         return None;
     }
-    if scoring_start_position_tokens >= draft_scoring_end_position_tokens {
-        return None;
-    }
-    let selectable_range_start =
-        scoring_start_position_tokens.saturating_sub(draft_importance_score_start_position_tokens);
-    let selectable_range_end = selectable_range_start.saturating_add(selectable_importance_score_count);
-    if selectable_range_end > scored_draft_prompt_token_count {
-        return None;
-    }
-    Some(selectable_range_start..selectable_range_end)
+
+    Some(
+        target_selection_start_position_tokens.checked_sub(draft_scoring_start_position_tokens)?
+            ..target_selection_end_position_tokens
+                .checked_sub(draft_scoring_start_position_tokens)?,
+    )
 }

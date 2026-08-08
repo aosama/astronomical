@@ -23,8 +23,14 @@ mod speculative_prefill_eligibility;
 mod speculative_prefill_gpu_input;
 mod speculative_prefill_memory_admission;
 mod speculative_prefill_model_loading;
+mod speculative_prefill_scoring;
+mod speculative_prefill_scoring_fallback;
+mod speculative_prefill_selection;
+mod speculative_prefill_selection_persistence;
+mod speculative_prefill_selection_reuse;
 mod speculative_prefill_store;
 mod speculative_prefill_target_cache;
+mod speculative_prefill_visual_embedding;
 mod start_generation;
 mod test_controls;
 
@@ -51,10 +57,11 @@ use crate::{
 
 use self::engine_request::Qwen3_5EngineRequest;
 pub use self::speculative_prefill::{
-    Qwen3_5SpeculativePrefillChunckMode, Qwen3_5SpeculativePrefillSelectionError,
-    qwen3_5_select_speculative_prefill_token_positions,
+    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
+};
+pub use self::speculative_prefill_selection::{
+    Qwen3_5SpeculativePrefillSelectionError, qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_selected_speculative_prefill_positions_for_range,
-    qwen3_5_speculative_prefill_chunck_mode,
 };
 use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
