@@ -78,23 +78,12 @@ fn advertised_models_for_application_state(
         let worker_health_snapshot = application_state
             .generation_executor
             .worker_health_snapshot();
-        let configured_target_model_id =
-            application_state.configured_speculative_prefill_target_model_id();
-        let can_advertise_ready_model =
-            configured_target_model_id
-                .as_deref()
-                .map_or(true, |configured_target_model_id| {
-                    worker_health_snapshot.ready_model_id.as_deref()
-                        == Some(configured_target_model_id)
-                });
         return match (
             worker_health_snapshot.status.is_ready(),
             worker_health_snapshot.ready_model_id,
             worker_health_snapshot.ready_model_capabilities,
         ) {
-            (true, Some(ready_model_id), Some(ready_model_capabilities))
-                if can_advertise_ready_model =>
-            {
+            (true, Some(ready_model_id), Some(ready_model_capabilities)) => {
                 Ok(vec![openai_model_from_ready_worker_capabilities(
                     ready_model_id,
                     model_advertisement_created_at_unix_seconds,
@@ -119,7 +108,7 @@ fn advertised_models_for_application_state(
 fn discovered_models_for_application_state(
     application_state: &ApplicationState,
 ) -> Vec<DiscoveredModel> {
-    let discovered_models = application_state
+    application_state
         .reloadable_config
         .as_ref()
         .and_then(|reloadable_config| {
@@ -128,16 +117,7 @@ fn discovered_models_for_application_state(
                 .ok()
                 .map(|resolved_runtime_config| resolved_runtime_config.discovered_models.clone())
         })
-        .unwrap_or_else(|| application_state.discovered_models.clone());
-    let Some(configured_target_model_id) =
-        application_state.configured_speculative_prefill_target_model_id()
-    else {
-        return discovered_models;
-    };
-    discovered_models
-        .into_iter()
-        .filter(|discovered_model| discovered_model.model_id == configured_target_model_id)
-        .collect()
+        .unwrap_or_else(|| application_state.discovered_models.clone())
 }
 
 fn openai_model_from_ready_worker_capabilities(

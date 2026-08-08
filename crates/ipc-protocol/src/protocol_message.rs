@@ -193,6 +193,16 @@ pub struct WorkerSpeculativePrefillConfiguration {
     pub importance_pooling_kernel_token_count: u32,
 }
 
+impl WorkerSpeculativePrefillConfiguration {
+    /// Returns this policy enabled only when the loaded model is its configured target.
+    pub fn for_loaded_model(&self, loaded_model_id: &str) -> Self {
+        let mut loaded_model_speculative_prefill_configuration = self.clone();
+        loaded_model_speculative_prefill_configuration.enabled =
+            self.enabled && self.target_model_id.as_deref() == Some(loaded_model_id);
+        loaded_model_speculative_prefill_configuration
+    }
+}
+
 /// Fully resolved worker-owned startup settings.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

@@ -69,6 +69,8 @@ pub(crate) fn initialize_qwen3_5_model(
         }
     };
     let artifact_model_id = validated_artifact.model_id().to_owned();
+    let loaded_model_speculative_prefill_configuration =
+        speculative_prefill.for_loaded_model(&artifact_model_id);
     let artifact_model_revision = validated_artifact.revision().to_owned();
     let artifact_payload_bytes = validated_artifact.total_payload_bytes();
     let artifact_shard_count = validated_artifact.shard_count();
@@ -174,7 +176,7 @@ pub(crate) fn initialize_qwen3_5_model(
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
         true,
         mtp_enabled,
-        speculative_prefill,
+        loaded_model_speculative_prefill_configuration,
         model_loading_performance_attribution,
         performance_attribution_log,
     )
