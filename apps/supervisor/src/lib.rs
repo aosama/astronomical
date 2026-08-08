@@ -19,7 +19,9 @@ mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
 mod prefill_optimizer_observability;
+mod serving_session_snapshot;
 mod shutdown_control;
+mod status_endpoint;
 mod system_telemetry;
 mod worker;
 mod worker_containment;
@@ -68,13 +70,14 @@ pub use openai_responses_stream::{
 pub use openai_responses_translation::{
     OpenAiResponsesTranslationError, translate_openai_responses_request,
 };
+pub use serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;
 pub use system_telemetry::parse_macos_memory_pressure_level;
 pub use worker_control_error::WorkerControlError;
 pub use worker_handle::{GenerationQueueDepth, WorkerHandle};
 pub use worker_health::{
-    ActiveRequestProgress, PersistentPromptCacheSummary, ServingSessionSnapshot, WorkerActivity,
-    WorkerHealthSnapshot, WorkerHealthStatus,
+    ActiveRequestProgress, PersistentPromptCacheSummary, WorkerActivity, WorkerHealthSnapshot,
+    WorkerHealthStatus,
 };
 pub use worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 pub use worker_process::{WorkerProcess, WorkerTerminationOutcome};

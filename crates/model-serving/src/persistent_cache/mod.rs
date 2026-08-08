@@ -22,6 +22,10 @@ pub(crate) mod disk_store_index;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod disk_store_scan;
 #[cfg(feature = "direct-mlx")]
+mod disk_store_speculative_prefill_selection;
+#[cfg(feature = "direct-mlx")]
+mod disk_store_speculative_prefill_target_state;
+#[cfg(feature = "direct-mlx")]
 mod disk_store_visual_embeddings;
 #[cfg(feature = "direct-mlx")]
 mod disk_store_write;
@@ -30,6 +34,8 @@ pub(crate) mod persistent_safetensors_header;
 mod prefill_boundary;
 mod prefix_lookup;
 mod save_admission;
+mod speculative_prefill_selection;
+mod speculative_prefill_target_state;
 mod visual_embedding_format;
 mod visual_embedding_key;
 mod visual_embedding_model_contract;
@@ -59,6 +65,17 @@ pub use save_admission::{
     PersistentPromptCacheBlockSaveAdmission,
     persistent_prompt_cache_recurrent_snapshot_is_common_prefix_checkpoint,
     persistent_prompt_cache_save_admission,
+};
+pub use speculative_prefill_selection::{
+    PERSISTENT_SPECULATIVE_PREFILL_SELECTION_FORMAT_VERSION,
+    PersistentSpeculativePrefillSelectionContract,
+};
+#[cfg(feature = "direct-mlx")]
+pub use speculative_prefill_target_state::RestoredSpeculativePrefillTargetState;
+pub use speculative_prefill_target_state::{
+    PERSISTENT_SPECULATIVE_PREFILL_TARGET_STATE_FORMAT_VERSION,
+    PersistentSpeculativePrefillTargetStateContract,
+    longest_reusable_speculative_prefill_target_prefix,
 };
 pub use visual_embedding_format::{
     PersistentVisualEmbeddingFileError, PersistentVisualEmbeddingFileHeader,

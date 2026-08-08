@@ -1,10 +1,10 @@
-use astronomical_runtime_integration::MlxArray;
+use astronomical_runtime_integration::{MlxArray, MlxDtype};
 
 use super::error::invalid_request_decoder_state;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::DecoderCacheState;
 
-pub(super) fn forward_state_arrays<'state>(
+pub(crate) fn forward_state_arrays<'state>(
     output: &'state MlxArray,
     request_decoder_state: &'state RequestDecoderStateStack,
 ) -> Result<Vec<&'state MlxArray>, Qwen3_5ExecutionError> {
@@ -108,9 +108,10 @@ pub(super) fn validate_generated_token_forward(
     Ok(())
 }
 
-pub(super) fn validate_forward_input(
+pub(crate) fn validate_forward_input(
     token_ids: &[u32],
     starting_position_tokens: u32,
+    token_position_offsets: Option<&MlxArray>,
     layer_model_state_count: usize,
     expected_decoder_layer_count: usize,
     vocabulary_size: u32,
@@ -139,7 +140,21 @@ pub(super) fn validate_forward_input(
         u32::try_from(token_ids.len()).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
             description: "forward chunk token count exceeds the u32 range",
         })?;
-    if starting_position_tokens
+    if let Some(token_position_offsets) = token_position_offsets {
+        let expected_position_shape =
+            [
+                i32::try_from(token_count).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "forward position count exceeds the MLX integer range",
+                })?,
+            ];
+        if token_position_offsets.shape() != expected_position_shape
+            || token_position_offsets.dtype() != MlxDtype::Int32
+        {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "token position offsets must be an int32 vector matching the forward token count",
+            });
+        }
+    } else if starting_position_tokens
         .checked_add(token_count)
         .is_none_or(|ending_position| ending_position > maximum_position_count)
     {

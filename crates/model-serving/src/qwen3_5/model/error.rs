@@ -55,6 +55,12 @@ pub enum Qwen3_5ExecutionError {
     },
     #[error("expert paging error: {0}")]
     ExpertPaging(#[from] crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError),
+    #[error("persistent prompt-cache disk-store error: {0}")]
+    PersistentPromptCache(#[from] crate::PersistentPromptCacheDiskStoreError),
+    #[error("persistent prompt-cache state bridge error: {0}")]
+    PersistentPromptCacheStateBridge(
+        #[from] crate::qwen3_5::decoder::PersistentPromptCacheStateBridgeError,
+    ),
 }
 
 pub(super) fn invalid_request_decoder_state(

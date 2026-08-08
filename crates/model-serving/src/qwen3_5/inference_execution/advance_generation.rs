@@ -2,22 +2,23 @@ use astronomical_ipc_protocol::RequestId;
 
 use crate::{
     AdaptiveRamGrowthContext, GeneratedToken, InferenceEngineError, PerformanceAttributionOutcome,
-    PerformanceCounter, PerformanceOperation,
+    PerformanceOperation,
 };
 
-use super::generated_token_emission::{
-    qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_verification_may_cross_thinking_budget,
-    synchronize_generated_token_id,
-};
+use super::generated_token_emission::synchronize_generated_token_id;
 use super::memory_admission::{
     AdaptiveRamGrowthMemoryAdmissionError, collect_completed_forward_memory_snapshot,
     record_completed_adaptive_ram_growth,
 };
-use super::mtp_prefix_acceptance::{
-    MtpPrefixAcceptanceOutcome, propose_depth_one_mtp_draft, record_mtp_outcome,
-    verify_depth_one_mtp_prefix_acceptance,
-};
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use crate::qwen3_5::multi_token_prediction::{
+    Qwen3_5PredictionAcceptanceOutcome, attempt_prediction_proposal_and_verification,
+    disable_prediction_after_memory_admission_failure,
+    forward_initial_target_token_with_prediction_state,
+    forward_next_target_token_with_prediction_state, prediction_verification_is_eligible,
+    projected_verification_window_memory_growth_bytes, take_queued_prediction_token,
+    verification_window_workspace_bytes,
+};
 impl Qwen3_5EngineState {
     pub(super) fn advance_generation(
         &mut self,
@@ -88,10 +89,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 
-        if let Some(verified_mtp_generated_token_id) =
-            active_request.verified_mtp_generated_token_ids.pop_front()
-        {
-            active_request.accepted_mtp_draft_rollback = None;
+        if let Some(queued_prediction_token_id) = take_queued_prediction_token(active_request) {
             let mlx_memory_snapshot = if !self.adaptive_ram_growth_guard_enabled {
                 None
             } else {
@@ -105,7 +103,7 @@ impl Qwen3_5EngineState {
             let generated_token_emission = self.build_generated_token_emission(
                 model,
                 active_request,
-                verified_mtp_generated_token_id,
+                queued_prediction_token_id,
                 mlx_memory_snapshot.as_ref(),
             )?;
             return if generated_token_emission.is_terminal {
@@ -125,7 +123,7 @@ impl Qwen3_5EngineState {
                 let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
                 let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
                     1,
-                    active_request.mtp_request_state.is_some(),
+                    active_request.has_optional_prediction_session(),
                     model.sparse_experts_are_paged(),
                 );
                 let active_memory_bytes_before_growth = self
@@ -136,21 +134,13 @@ impl Qwen3_5EngineState {
                         0,
                         0,
                     )?;
-                let first_generated_token = if active_request.mtp_request_state.is_some() {
-                    let target_forward_output = model
-                        .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
-                            &[final_prompt_token_id],
-                            active_request.next_position_tokens,
-                            &mut active_request.request_decoder_state,
-                            &mut active_request.performance_attribution,
-                        )
-                        .map_err(InferenceEngineError::from)?;
-                    active_request.advance_position(1)?;
-                    let first_generated_token = active_request
-                        .build_generated_token(model, target_forward_output.final_logits())?;
-                    active_request.mtp_target_hidden_states =
-                        Some(target_forward_output.into_pre_final_normalization_hidden_states());
-                    first_generated_token
+                let first_generated_token = if let Some(prediction_token) =
+                    forward_initial_target_token_with_prediction_state(
+                        model,
+                        active_request,
+                        final_prompt_token_id,
+                    )? {
+                    prediction_token
                 } else {
                     let final_prompt_logits = model
                         .build_forward_chunk_with_performance_attribution(
@@ -163,6 +153,7 @@ impl Qwen3_5EngineState {
                     active_request.advance_position(1)?;
                     active_request.build_generated_token(model, &final_prompt_logits)?
                 };
+                self.save_speculative_prefill_target_prefix(active_request);
                 active_request
                     .performance_attribution
                     .measure_operation(
@@ -213,164 +204,111 @@ impl Qwen3_5EngineState {
             ));
         }
 
-        if active_request.mtp_request_state.is_some()
-            && active_request.mtp_target_hidden_states.is_some()
-            && qwen3_5_depth_one_mtp_window_fits(
-                active_request.generated_token_count,
-                active_request.maximum_output_tokens,
-                active_request.next_position_tokens,
-                self.maximum_position_count,
-            )
-            && !qwen3_5_mtp_verification_may_cross_thinking_budget(
-                active_request.is_inside_thinking,
-                active_request.thinking_token_count,
-                active_request.thinking_budget,
-                2,
-            )
-        {
-            let mtp_full_attention_bytes_per_layer_token = model
-                .config()
-                .full_attention_key_value_state_bytes_per_layer_token()
-                .ok_or_else(|| {
-                    fatal_engine_error("MTP full-attention bytes per layer token overflowed")
-                })?;
-            let mtp_full_attention_growth_bytes = active_request
-                .mtp_request_state
-                .as_ref()
-                .ok_or_else(|| fatal_engine_error("active MTP request state disappeared"))?
-                .projected_sequential_capacity_growth_bytes(
-                    mtp_full_attention_bytes_per_layer_token,
-                    &[1, 1],
-                )
-                .map_err(qwen3_5_runtime_error)?;
-            let target_verification_boundary_workspace_bytes = model
-                .decoder_cache_layout()
-                .boundary_snapshot_payload_byte_count()
-                .map_err(|decoder_cache_layout_error| {
-                    fatal_engine_error(format!(
-                        "failed to project MTP verifier-boundary workspace: {decoder_cache_layout_error}"
-                    ))
-                })?;
+        if prediction_verification_is_eligible(active_request, self.maximum_position_count) {
+            let prediction_history_growth_bytes =
+                projected_verification_window_memory_growth_bytes(model, active_request)?;
+            let target_verification_boundary_workspace_bytes =
+                verification_window_workspace_bytes(model)?;
             let adaptive_ram_growth_context =
                 AdaptiveRamGrowthContext::decode(2, true, model.sparse_experts_are_paged());
-            let active_memory_bytes_before_growth = match self
-                .measure_adaptive_ram_growth_memory_admission(
-                    adaptive_ram_growth_context,
-                    &mut active_request.performance_attribution,
-                    &active_request.request_decoder_state,
-                    mtp_full_attention_growth_bytes,
-                    target_verification_boundary_workspace_bytes,
-                ) {
-                Ok(active_memory_bytes_before_growth) => Some(active_memory_bytes_before_growth),
+            let memory_admission_outcome = self.measure_adaptive_ram_growth_memory_admission(
+                adaptive_ram_growth_context,
+                &mut active_request.performance_attribution,
+                &active_request.request_decoder_state,
+                prediction_history_growth_bytes,
+                target_verification_boundary_workspace_bytes,
+            );
+            match memory_admission_outcome {
                 Err(AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }) => {
                     tracing::warn!(
                         request_id = request_id.value(),
                         reason,
-                        "MTP verification memory admission fell back to target-only decode"
+                        "prediction verification memory admission fell back to target-only decode"
                     );
-                    active_request.mtp_request_state = None;
-                    active_request.mtp_target_hidden_states = None;
-                    active_request
-                        .performance_attribution
-                        .record_counter(PerformanceCounter::MtpMemoryAdmissionFallbackCount, 1);
-                    None
+                    disable_prediction_after_memory_admission_failure(active_request);
                 }
                 Err(AdaptiveRamGrowthMemoryAdmissionError::Engine(memory_admission_error)) => {
                     return Err(memory_admission_error);
                 }
-            };
-            if let Some(active_memory_bytes_before_growth) = active_memory_bytes_before_growth {
-                active_request
-                    .performance_attribution
-                    .record_counter(PerformanceCounter::MtpAdmittedAttemptCount, 1);
-                let proposed_mtp_draft_token_id = propose_depth_one_mtp_draft(
-                    model,
-                    active_request,
-                    request_id,
-                    &current_generated_token,
-                );
-                let target_verification_was_attempted = proposed_mtp_draft_token_id.is_some();
-                let mtp_prefix_acceptance_outcome = match proposed_mtp_draft_token_id {
-                    Some(mtp_draft_token_id) => {
-                        match verify_depth_one_mtp_prefix_acceptance(
-                            model,
-                            active_request,
-                            request_id,
-                            current_generated_token_id,
-                            mtp_draft_token_id,
-                        ) {
-                            Ok(mtp_prefix_acceptance_outcome) => mtp_prefix_acceptance_outcome,
-                            Err(target_verification_error) => {
-                                active_request.performance_attribution.record_counter(
-                                    PerformanceCounter::MtpOperationalFallbackCount,
-                                    1,
-                                );
-                                record_completed_adaptive_ram_growth(
-                                    &mut self.adaptive_ram_growth_guard,
-                                    adaptive_ram_growth_context.with_sparse_experts_are_paged(
-                                        model.sparse_experts_are_paged(),
-                                    ),
-                                    true,
-                                    model,
-                                    active_memory_bytes_before_growth,
-                                    target_verification_boundary_workspace_bytes,
-                                    &mut active_request.performance_attribution,
-                                )?;
-                                return Err(target_verification_error);
-                            }
-                        }
-                    }
-                    None => MtpPrefixAcceptanceOutcome::OperationalFallback,
-                };
-                record_mtp_outcome(active_request, mtp_prefix_acceptance_outcome);
-                if mtp_prefix_acceptance_outcome != MtpPrefixAcceptanceOutcome::OperationalFallback
-                {
-                    let mlx_memory_snapshot = collect_completed_forward_memory_snapshot(
-                        &mut self.adaptive_ram_growth_guard,
-                        adaptive_ram_growth_context
-                            .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
-                        true,
-                        model,
-                        active_memory_bytes_before_growth,
-                        target_verification_boundary_workspace_bytes,
-                        &mut active_request.performance_attribution,
-                    )?;
-                    let generated_token_emission = self.build_generated_token_emission(
+                Ok(active_memory_bytes_before_growth) => {
+                    let prediction_attempt_outcome = attempt_prediction_proposal_and_verification(
                         model,
                         active_request,
+                        request_id,
+                        &current_generated_token,
                         current_generated_token_id,
-                        mlx_memory_snapshot.as_ref(),
-                    )?;
-                    return if generated_token_emission.is_terminal {
-                        Ok(ActiveRequestAdvance::Complete(
-                            generated_token_emission.generated_token,
-                        ))
-                    } else {
-                        Ok(ActiveRequestAdvance::Continue(
-                            generated_token_emission.generated_token,
-                        ))
-                    };
+                    );
+                    match prediction_attempt_outcome {
+                        Ok((prediction_acceptance_outcome, _target_verification_was_attempted))
+                            if prediction_acceptance_outcome
+                                != Qwen3_5PredictionAcceptanceOutcome::OperationalFallback =>
+                        {
+                            let mlx_memory_snapshot = collect_completed_forward_memory_snapshot(
+                                &mut self.adaptive_ram_growth_guard,
+                                adaptive_ram_growth_context.with_sparse_experts_are_paged(
+                                    model.sparse_experts_are_paged(),
+                                ),
+                                true,
+                                model,
+                                active_memory_bytes_before_growth,
+                                target_verification_boundary_workspace_bytes,
+                                &mut active_request.performance_attribution,
+                            )?;
+                            let generated_token_emission = self.build_generated_token_emission(
+                                model,
+                                active_request,
+                                current_generated_token_id,
+                                mlx_memory_snapshot.as_ref(),
+                            )?;
+                            return if generated_token_emission.is_terminal {
+                                Ok(ActiveRequestAdvance::Complete(
+                                    generated_token_emission.generated_token,
+                                ))
+                            } else {
+                                Ok(ActiveRequestAdvance::Continue(
+                                    generated_token_emission.generated_token,
+                                ))
+                            };
+                        }
+                        Ok((_prediction_acceptance_outcome, target_verification_was_attempted)) => {
+                            record_completed_adaptive_ram_growth(
+                                &mut self.adaptive_ram_growth_guard,
+                                adaptive_ram_growth_context.with_sparse_experts_are_paged(
+                                    model.sparse_experts_are_paged(),
+                                ),
+                                true,
+                                model,
+                                active_memory_bytes_before_growth,
+                                if target_verification_was_attempted {
+                                    target_verification_boundary_workspace_bytes
+                                } else {
+                                    0
+                                },
+                                &mut active_request.performance_attribution,
+                            )?;
+                        }
+                        Err(target_verification_error) => {
+                            record_completed_adaptive_ram_growth(
+                                &mut self.adaptive_ram_growth_guard,
+                                adaptive_ram_growth_context.with_sparse_experts_are_paged(
+                                    model.sparse_experts_are_paged(),
+                                ),
+                                true,
+                                model,
+                                active_memory_bytes_before_growth,
+                                target_verification_boundary_workspace_bytes,
+                                &mut active_request.performance_attribution,
+                            )?;
+                            return Err(target_verification_error);
+                        }
+                    }
                 }
-                record_completed_adaptive_ram_growth(
-                    &mut self.adaptive_ram_growth_guard,
-                    adaptive_ram_growth_context
-                        .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
-                    true,
-                    model,
-                    active_memory_bytes_before_growth,
-                    if target_verification_was_attempted {
-                        target_verification_boundary_workspace_bytes
-                    } else {
-                        0
-                    },
-                    &mut active_request.performance_attribution,
-                )?;
             }
         }
 
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
             1,
-            active_request.mtp_request_state.is_some(),
+            active_request.has_optional_prediction_session(),
             model.sparse_experts_are_paged(),
         );
         let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
@@ -380,23 +318,13 @@ impl Qwen3_5EngineState {
             0,
             0,
         )?;
-        let next_generated_token = if active_request.mtp_request_state.is_some() {
-            let target_forward_output = model
-                .generated_token_forward_with_pre_final_normalization_hidden_states_and_performance_attribution(
-                    &current_generated_token,
-                    active_request.next_position_tokens,
-                    &mut active_request.request_decoder_state,
-                    &mut active_request.performance_attribution,
-                )
-                .map_err(InferenceEngineError::from)?;
-            active_request.advance_position(1)?;
-            let next_generated_token = active_request
-                .build_generated_token(model, target_forward_output.final_logits())?;
-            if active_request.mtp_request_state.is_some() {
-                active_request.mtp_target_hidden_states =
-                    Some(target_forward_output.into_pre_final_normalization_hidden_states());
-            }
-            next_generated_token
+        let next_generated_token = if let Some(prediction_token) =
+            forward_next_target_token_with_prediction_state(
+                model,
+                active_request,
+                &current_generated_token,
+            )? {
+            prediction_token
         } else {
             let next_logits = model
                 .build_generated_token_forward_with_performance_attribution(

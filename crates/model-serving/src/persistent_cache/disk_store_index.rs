@@ -14,6 +14,8 @@ pub(crate) struct PersistentPromptCacheDiskStoreIndex {
     kv_blocks: HashMap<[u8; 32], TrackedPersistentPromptCacheFile>,
     recurrent_snapshots: HashMap<[u8; 32], TrackedPersistentPromptCacheFile>,
     visual_embeddings: HashMap<[u8; 32], TrackedPersistentPromptCacheFile>,
+    speculative_prefill_selections: HashMap<[u8; 32], TrackedPersistentPromptCacheFile>,
+    speculative_prefill_target_states: HashMap<[u8; 32], TrackedPersistentPromptCacheFile>,
 }
 
 impl PersistentPromptCacheDiskStoreIndex {
@@ -27,6 +29,10 @@ impl PersistentPromptCacheDiskStoreIndex {
 
     pub(super) fn visual_embedding_count(&self) -> usize {
         self.visual_embeddings.len()
+    }
+
+    pub(super) fn speculative_prefill_selection_count(&self) -> usize {
+        self.speculative_prefill_selections.len()
     }
 
     pub(crate) fn file(
@@ -43,6 +49,12 @@ impl PersistentPromptCacheDiskStoreIndex {
                 .get(persistent_prompt_cache_file_hash),
             PersistentPromptCacheFileKind::VisualEmbedding => self
                 .visual_embeddings
+                .get(persistent_prompt_cache_file_hash),
+            PersistentPromptCacheFileKind::SpeculativePrefillSelection => self
+                .speculative_prefill_selections
+                .get(persistent_prompt_cache_file_hash),
+            PersistentPromptCacheFileKind::SpeculativePrefillTargetState => self
+                .speculative_prefill_target_states
                 .get(persistent_prompt_cache_file_hash),
         }
     }
@@ -72,6 +84,18 @@ impl PersistentPromptCacheDiskStoreIndex {
                     tracked_persistent_prompt_cache_file,
                 );
             }
+            PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
+                self.speculative_prefill_selections.insert(
+                    persistent_prompt_cache_file_hash,
+                    tracked_persistent_prompt_cache_file,
+                );
+            }
+            PersistentPromptCacheFileKind::SpeculativePrefillTargetState => {
+                self.speculative_prefill_target_states.insert(
+                    persistent_prompt_cache_file_hash,
+                    tracked_persistent_prompt_cache_file,
+                );
+            }
         }
     }
 
@@ -90,6 +114,12 @@ impl PersistentPromptCacheDiskStoreIndex {
             PersistentPromptCacheFileKind::VisualEmbedding => self
                 .visual_embeddings
                 .remove(persistent_prompt_cache_file_hash),
+            PersistentPromptCacheFileKind::SpeculativePrefillSelection => self
+                .speculative_prefill_selections
+                .remove(persistent_prompt_cache_file_hash),
+            PersistentPromptCacheFileKind::SpeculativePrefillTargetState => self
+                .speculative_prefill_target_states
+                .remove(persistent_prompt_cache_file_hash),
         }
     }
 
@@ -99,6 +129,10 @@ impl PersistentPromptCacheDiskStoreIndex {
         self.recurrent_snapshots
             .retain(|_, tracked_file| !removed_file_paths.contains(&tracked_file.file_path));
         self.visual_embeddings
+            .retain(|_, tracked_file| !removed_file_paths.contains(&tracked_file.file_path));
+        self.speculative_prefill_selections
+            .retain(|_, tracked_file| !removed_file_paths.contains(&tracked_file.file_path));
+        self.speculative_prefill_target_states
             .retain(|_, tracked_file| !removed_file_paths.contains(&tracked_file.file_path));
     }
 

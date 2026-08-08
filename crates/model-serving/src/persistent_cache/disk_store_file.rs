@@ -17,6 +17,8 @@ pub(crate) enum PersistentPromptCacheFileKind {
     SequenceStateBlock,
     BoundaryStateSnapshot,
     VisualEmbedding,
+    SpeculativePrefillSelection,
+    SpeculativePrefillTargetState,
 }
 
 pub(crate) trait PersistentPromptCacheSerializedFileWriter: Send + Sync {
@@ -66,7 +68,7 @@ pub(super) fn serialize_safetensors_file(
         .map_err(|source| PersistentPromptCacheDiskStoreError::SaveSafetensors { source })
 }
 
-pub(super) fn save_serialized_safetensors_file(
+pub(crate) fn save_serialized_safetensors_file(
     directory: &Path,
     persistent_prompt_cache_file_hash: [u8; 32],
     serialized_safetensors_bytes: &[u8],
@@ -141,6 +143,28 @@ pub(super) fn validate_current_file_header(
             )?;
         }
         PersistentPromptCacheFileKind::VisualEmbedding => return Ok(()),
+        PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
+            super::speculative_prefill_selection::PersistentSpeculativePrefillSelectionFileHeader::read_model_bound_from_file(
+                file,
+                file_path,
+                persistent_prompt_cache_model_contract,
+            )
+            .map_err(|source| PersistentPromptCacheBlockError::InvalidModelSpecificArtifact {
+                persistent_prompt_cache_block_path: file_path.to_path_buf(),
+                description: source.to_string(),
+            })?;
+        }
+        PersistentPromptCacheFileKind::SpeculativePrefillTargetState => {
+            super::speculative_prefill_target_state::PersistentSpeculativePrefillTargetStateFileHeader::read_model_bound_from_file(
+                file,
+                file_path,
+                persistent_prompt_cache_model_contract,
+            )
+            .map_err(|description| PersistentPromptCacheBlockError::InvalidModelSpecificArtifact {
+                persistent_prompt_cache_block_path: file_path.to_path_buf(),
+                description,
+            })?;
+        }
     }
     Ok(())
 }
@@ -164,7 +188,9 @@ pub(super) fn expected_tensor_names(
                         .decoder_cache_layout()
                         .boundary_tensor_layouts()
                 }
-                PersistentPromptCacheFileKind::VisualEmbedding => Vec::new(),
+                PersistentPromptCacheFileKind::VisualEmbedding
+                | PersistentPromptCacheFileKind::SpeculativePrefillSelection
+                | PersistentPromptCacheFileKind::SpeculativePrefillTargetState => Vec::new(),
             };
             tensor_names.extend(
                 expected_tensor_layouts
@@ -173,6 +199,10 @@ pub(super) fn expected_tensor_names(
             );
         }
         PersistentPromptCacheFileKind::VisualEmbedding => {}
+        PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
+            tensor_names.push("selected_token_positions".to_owned());
+        }
+        PersistentPromptCacheFileKind::SpeculativePrefillTargetState => {}
     }
     tensor_names
 }

@@ -8,6 +8,7 @@ use super::model::Qwen3_5Model;
 use super::tensor_slicing::slice_last_dimension;
 use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 
 const GATED_DELTA_STEP_OPERATION: &str = "apply one Qwen3.5 gated-delta recurrent step";
 
@@ -143,7 +144,7 @@ fn gated_delta_error(description: &'static str) -> MlxRuntimeError {
 
 impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn forward_linear_attention(
+    pub(crate) fn forward_linear_attention(
         &self,
         hidden_states: &MlxArray,
         token_count: i32,
@@ -154,6 +155,7 @@ impl Qwen3_5Model {
         mut boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
+        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let linear_key_head_count = self.config.linear_key_head_count() as i32;
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
@@ -162,13 +164,15 @@ impl Qwen3_5Model {
         let linear_value_dimension = self.config.linear_value_dimension() as i32;
         let linear_convolution_dimension = self.config.linear_convolution_dimension() as i32;
         let rms_norm_epsilon = f32::from_bits(self.config.rms_norm_epsilon_bits());
-        let mixed_queries_keys_values = self.quantized_linear(
+        let mixed_queries_keys_values = self.quantized_linear_for_paged_prefill_execution_mode(
             hidden_states,
             &linear_attention_weights.input_queries_keys_values_projection,
+            paged_prefill_execution_mode,
         )?;
-        let output_gate = self.quantized_linear(
+        let output_gate = self.quantized_linear_for_paged_prefill_execution_mode(
             hidden_states,
             &linear_attention_weights.output_gate_projection,
+            paged_prefill_execution_mode,
         )?;
         let output_gate = self.runtime.reshape(
             &output_gate,
@@ -179,13 +183,15 @@ impl Qwen3_5Model {
                 linear_head_dimension,
             ],
         )?;
-        let update_logits = self.quantized_linear(
+        let update_logits = self.quantized_linear_for_paged_prefill_execution_mode(
             hidden_states,
             &linear_attention_weights.update_rate_projection,
+            paged_prefill_execution_mode,
         )?;
-        let decay_inputs = self.quantized_linear(
+        let decay_inputs = self.quantized_linear_for_paged_prefill_execution_mode(
             hidden_states,
             &linear_attention_weights.decay_interval_projection,
+            paged_prefill_execution_mode,
         )?;
         let completed_prefill_chunck_tokens = boundary_checkpoint_collector
             .as_ref()
@@ -346,6 +352,10 @@ impl Qwen3_5Model {
             .runtime
             .reshape(&gated_output, &[1, token_count, linear_value_dimension])?;
         recurrent_state.set_next(next_recurrent_state);
-        self.quantized_linear(&gated_output, &linear_attention_weights.output_projection)
+        self.quantized_linear_for_paged_prefill_execution_mode(
+            &gated_output,
+            &linear_attention_weights.output_projection,
+            paged_prefill_execution_mode,
+        )
     }
 }

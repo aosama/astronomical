@@ -13,6 +13,7 @@
 
 # Agent harness local state
 .opencode/
+AGENTS.override.md
 
 # Local UI screenshot captures
 ScreenShots/

@@ -14,6 +14,7 @@ pub(crate) fn validate_context_memory_admission(
     context_memory_reservation_bytes_per_token: usize,
     context_token_count_requiring_reservation: usize,
     temporary_workspace_reservation_bytes: usize,
+    additional_maximum_expert_page_reservation_bytes: usize,
 ) -> Result<(), InferenceEngineError> {
     let initial_memory_snapshot = model
         .runtime()
@@ -27,9 +28,12 @@ pub(crate) fn validate_context_memory_admission(
         .as_ref()
         .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes());
     let maximum_expert_page_reservation_bytes =
-        usize::try_from(maximum_expert_page_reservation_bytes).map_err(|_| {
-            invalid_request_error("maximum expert page reservation exceeds the platform range")
-        })?;
+        usize::try_from(maximum_expert_page_reservation_bytes)
+            .map_err(|_| {
+                invalid_request_error("maximum expert page reservation exceeds the platform range")
+            })?
+            .checked_add(additional_maximum_expert_page_reservation_bytes)
+            .ok_or_else(|| invalid_request_error("combined expert page reservation overflowed"))?;
     let initial_projected_active_memory_bytes =
         context_memory_admission_projected_active_memory_bytes(
             initial_memory_snapshot.active_memory_bytes(),
@@ -175,15 +179,15 @@ pub fn context_memory_admission_projected_active_memory_bytes(
         .checked_add(maximum_expert_page_reservation_bytes)
 }
 
-/// Combines exact target and MTP persistent growth without adding headroom.
+/// Combines exact target and additional persistent growth without adding headroom.
 #[must_use]
-pub fn combined_target_and_mtp_persistent_growth_bytes(
+pub fn combined_target_and_additional_persistent_growth_bytes(
     target_persistent_state_growth_bytes: usize,
-    mtp_full_attention_growth_bytes: usize,
+    additional_persistent_state_growth_bytes: usize,
 ) -> Result<usize, InferenceEngineError> {
     target_persistent_state_growth_bytes
-        .checked_add(mtp_full_attention_growth_bytes)
-        .ok_or_else(|| invalid_request_error("target and MTP persistent growth overflowed"))
+        .checked_add(additional_persistent_state_growth_bytes)
+        .ok_or_else(|| invalid_request_error("target and additional persistent growth overflowed"))
 }
 
 pub(crate) fn invalid_request_error(reason: impl Into<String>) -> InferenceEngineError {

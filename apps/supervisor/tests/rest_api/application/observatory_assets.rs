@@ -259,6 +259,7 @@ async fn should_serve_the_embedded_compact_overview_javascript() {
     let script_text = String::from_utf8(response_body.to_vec())
         .expect("the compact overview script should be UTF-8");
     assert!(script_text.contains("reconciledMlxMemorySegmentBytes"));
+    assert!(script_text.contains("renderSpeculativePrefillCacheEfficacy"));
 }
 
 #[tokio::test]

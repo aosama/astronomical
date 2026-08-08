@@ -426,7 +426,7 @@ impl Qwen3_5PrefillChunckSizer {
             is_first_chunck_after_restore: self.active_request_restored_token_count > 0
                 && !self.has_completed_prefill_chunck_in_active_request,
             has_visual_embeddings: prefill_execution_context.has_visual_embeddings(),
-            is_mtp_active: prefill_execution_context.is_mtp_active(),
+            is_mtp_active: prefill_execution_context.has_optional_prediction_session(),
             are_sparse_experts_paged: prefill_execution_context.are_sparse_experts_paged(),
             is_prompt_cache_capture_eligible: prefill_execution_context
                 .is_prompt_cache_capture_eligible(),

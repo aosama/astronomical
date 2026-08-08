@@ -1,10 +1,12 @@
 use std::sync::{Arc, RwLock};
 
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, WorkerEvent, WorkerMlxMemorySnapshot,
-    WorkerPrefillOptimizerInsight,
+    ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, SpeculativePrefillRuntimeState,
+    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerInsight, WorkerPromptWorkReuse,
 };
 use tokio::time::Instant;
+
+use super::serving_session_snapshot::ServingSessionSnapshot;
 
 /// Coarse worker availability state exposed by the supervisor readiness endpoint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -79,18 +81,6 @@ pub enum ActiveRequestProgress {
     },
 }
 
-/// Compact lifetime-of-daemon serving summary rendered by the menu application.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ServingSessionSnapshot {
-    pub completed_request_count: u64,
-    pub total_prompt_token_count: u64,
-    pub total_reused_prompt_token_count: u64,
-    pub average_prefill_tok_per_second: f64,
-    pub average_generation_tok_per_second: f64,
-    prefill_measurement_count: u64,
-    generation_measurement_count: u64,
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PersistentPromptCacheSummary {
     pub hits: u64,
@@ -153,57 +143,6 @@ impl PersistentPromptCacheSummary {
     }
 }
 
-impl ServingSessionSnapshot {
-    pub const fn empty() -> Self {
-        Self {
-            completed_request_count: 0,
-            total_prompt_token_count: 0,
-            total_reused_prompt_token_count: 0,
-            average_prefill_tok_per_second: 0.0,
-            average_generation_tok_per_second: 0.0,
-            prefill_measurement_count: 0,
-            generation_measurement_count: 0,
-        }
-    }
-
-    pub fn record_completed_request(
-        &mut self,
-        prompt_token_count: u32,
-        cached_token_count: u32,
-        prefill_tok_per_second: Option<f64>,
-        generation_tok_per_second: Option<f64>,
-    ) {
-        self.completed_request_count = self.completed_request_count.saturating_add(1);
-        self.total_prompt_token_count = self
-            .total_prompt_token_count
-            .saturating_add(u64::from(prompt_token_count));
-        self.total_reused_prompt_token_count = self
-            .total_reused_prompt_token_count
-            .saturating_add(u64::from(cached_token_count.min(prompt_token_count)));
-        if let Some(prefill_tok_per_second) = prefill_tok_per_second {
-            self.average_prefill_tok_per_second = rolling_average(
-                self.average_prefill_tok_per_second,
-                self.prefill_measurement_count,
-                prefill_tok_per_second,
-            );
-            self.prefill_measurement_count = self.prefill_measurement_count.saturating_add(1);
-        }
-        if let Some(generation_tok_per_second) = generation_tok_per_second {
-            self.average_generation_tok_per_second = rolling_average(
-                self.average_generation_tok_per_second,
-                self.generation_measurement_count,
-                generation_tok_per_second,
-            );
-            self.generation_measurement_count = self.generation_measurement_count.saturating_add(1);
-        }
-    }
-}
-
-fn rolling_average(current_average: f64, prior_count: u64, new_measurement: f64) -> f64 {
-    let prior_total = current_average * prior_count as f64;
-    (prior_total + new_measurement) / prior_count.saturating_add(1) as f64
-}
-
 /// Snapshot of the supervisor's current worker health assessment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkerHealthSnapshot {
@@ -223,6 +162,14 @@ pub struct WorkerHealthSnapshot {
     pub mtp_runtime_state: MtpRuntimeState,
     /// Concise reason when MTP runtime state is Unavailable.
     pub mtp_unavailable_reason: Option<String>,
+    /// Actual optional draft-assisted speculative-prefill runtime state.
+    pub speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+    /// Concise reason when speculative prefill is Unavailable.
+    pub speculative_prefill_unavailable_reason: Option<String>,
+    /// Configured draft model identity reported by the worker.
+    pub speculative_prefill_draft_model_id: Option<String>,
+    /// Validated resident draft revision reported by the worker.
+    pub speculative_prefill_draft_model_revision: Option<String>,
     /// Latest persistent prompt-cache observability stats from the worker.
     pub persistent_prompt_cache_stats: Option<WorkerEvent>,
     /// Latest worker-owned MLX allocator observation, regardless of request lifecycle phase.
@@ -259,6 +206,10 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             mtp_runtime_state,
             mtp_unavailable_reason,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             prefill_optimizer_insights: Vec::new(),
@@ -323,6 +274,10 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             prefill_optimizer_insights: Vec::new(),
@@ -347,6 +302,10 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             prefill_optimizer_insights: Vec::new(),
@@ -367,6 +326,21 @@ impl WorkerHealthSnapshot {
     #[must_use]
     pub fn mtp_unavailable_reason(&self) -> Option<&str> {
         self.mtp_unavailable_reason.as_deref()
+    }
+
+    /// Adds worker-reported optional draft-assisted speculative-prefill metadata.
+    pub fn with_speculative_prefill_runtime(
+        mut self,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        speculative_prefill_unavailable_reason: Option<String>,
+        speculative_prefill_draft_model_id: Option<String>,
+        speculative_prefill_draft_model_revision: Option<String>,
+    ) -> Self {
+        self.speculative_prefill_runtime_state = speculative_prefill_runtime_state;
+        self.speculative_prefill_unavailable_reason = speculative_prefill_unavailable_reason;
+        self.speculative_prefill_draft_model_id = speculative_prefill_draft_model_id;
+        self.speculative_prefill_draft_model_revision = speculative_prefill_draft_model_revision;
+        self
     }
 }
 
@@ -495,5 +469,16 @@ pub(crate) fn record_serving_session(
                 prefill_tok_per_second,
                 generation_tok_per_second,
             );
+    }
+}
+
+pub(crate) fn record_prompt_work_reuse(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    prompt_work_reuse: WorkerPromptWorkReuse,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot
+            .serving_session
+            .record_prompt_work_reuse(prompt_work_reuse);
     }
 }

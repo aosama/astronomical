@@ -18,7 +18,7 @@ use crate::{
         publish_active_request_progress, publish_activity, publish_expert_memory_mode,
         publish_health, publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
         publish_mlx_memory_limit_rejection, publish_persistent_prompt_cache_stats,
-        record_serving_session,
+        record_prompt_work_reuse, record_serving_session,
     },
     worker_loop_types::ActiveGeneration,
 };
@@ -40,6 +40,10 @@ pub(super) fn handle_worker_event(
             capabilities,
             mtp_runtime_state,
             mtp_unavailable_reason,
+            speculative_prefill_runtime_state,
+            speculative_prefill_unavailable_reason,
+            speculative_prefill_draft_model_id,
+            speculative_prefill_draft_model_revision,
         } => {
             if *is_ready || active_generation.is_some() {
                 return Err(protocol_violation("duplicate worker readiness"));
@@ -54,6 +58,12 @@ pub(super) fn handle_worker_event(
                     capabilities,
                     mtp_runtime_state,
                     mtp_unavailable_reason,
+                )
+                .with_speculative_prefill_runtime(
+                    speculative_prefill_runtime_state,
+                    speculative_prefill_unavailable_reason,
+                    speculative_prefill_draft_model_id,
+                    speculative_prefill_draft_model_revision,
                 ),
             );
         }
@@ -116,6 +126,10 @@ pub(super) fn handle_worker_event(
             minimum_mlx_memory_ceiling_bytes,
             mtp_runtime_state,
             mtp_unavailable_reason,
+            speculative_prefill_runtime_state,
+            speculative_prefill_unavailable_reason,
+            speculative_prefill_draft_model_id,
+            speculative_prefill_draft_model_revision,
         } => {
             if !*is_ready {
                 return Err(protocol_violation("model swapped before initial readiness"));
@@ -131,6 +145,12 @@ pub(super) fn handle_worker_event(
                         mtp_unavailable_reason,
                         &previous_health_snapshot,
                     )
+                    .with_speculative_prefill_runtime(
+                        speculative_prefill_runtime_state,
+                        speculative_prefill_unavailable_reason,
+                        speculative_prefill_draft_model_id,
+                        speculative_prefill_draft_model_revision,
+                    )
                 } else {
                     let mut replacement_health_snapshot = WorkerHealthSnapshot::ready_with_model(
                         model_id,
@@ -138,6 +158,13 @@ pub(super) fn handle_worker_event(
                         mtp_runtime_state,
                         mtp_unavailable_reason,
                     );
+                    replacement_health_snapshot = replacement_health_snapshot
+                        .with_speculative_prefill_runtime(
+                            speculative_prefill_runtime_state,
+                            speculative_prefill_unavailable_reason,
+                            speculative_prefill_draft_model_id,
+                            speculative_prefill_draft_model_revision,
+                        );
                     replacement_health_snapshot.minimum_mlx_memory_ceiling_bytes =
                         minimum_mlx_memory_ceiling_bytes;
                     replacement_health_snapshot
@@ -353,6 +380,20 @@ pub(super) fn handle_worker_event(
             if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
                 publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
             }
+        }
+        WorkerEvent::PromptWorkReuse {
+            request_id,
+            prompt_work_reuse,
+        } => {
+            let Some(active_request) = active_generation.as_ref() else {
+                return Err(protocol_violation(
+                    "prompt-work reuse without an active request",
+                ));
+            };
+            if request_id != active_request.request_id {
+                return Err(protocol_violation("prompt-work reuse request mismatch"));
+            }
+            record_prompt_work_reuse(health_snapshot, prompt_work_reuse);
         }
         WorkerEvent::Completed {
             request_id,

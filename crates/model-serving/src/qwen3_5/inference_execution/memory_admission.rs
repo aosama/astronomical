@@ -5,17 +5,18 @@ use crate::qwen3_5::decoder::RequestDecoderStateStack;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::qwen3_5::model::adaptive_ram_growth_logging::log_adaptive_ram_growth_pressure;
 use crate::qwen3_5::model::memory_admission::{
-    combined_target_and_mtp_persistent_growth_bytes, invalid_request_error,
+    combined_target_and_additional_persistent_growth_bytes, invalid_request_error,
+    validate_context_memory_admission,
 };
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, PerformanceAttribution,
-    PerformanceOperation,
+    PerformanceCounter, PerformanceOperation,
 };
 
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 
-pub(super) enum AdaptiveRamGrowthMemoryAdmissionError {
+pub(in crate::qwen3_5) enum AdaptiveRamGrowthMemoryAdmissionError {
     InsufficientCapacity { reason: String },
     Engine(InferenceEngineError),
 }
@@ -40,13 +41,51 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
 }
 
 impl Qwen3_5EngineState {
+    pub(super) fn validate_initial_generation_context_memory_admission(
+        &self,
+        total_context_tokens: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), InferenceEngineError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let target_expert_payload_bytes_before_context_admission = model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        let context_admission_outcome = performance_attribution.measure_operation(
+            PerformanceOperation::MemoryAdmissionSnapshot,
+            |_performance_attribution| {
+                validate_context_memory_admission(
+                    model,
+                    self.memory_limits,
+                    self.context_memory_reservation_bytes_per_token,
+                    total_context_tokens,
+                    0,
+                    self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
+                )
+            },
+        );
+        if self.speculative_prefill.enabled {
+            let target_expert_payload_bytes_after_context_admission = model
+                .expert_weight_memory_cache_statistics()
+                .resident_payload_byte_count;
+            performance_attribution.record_counter(
+                PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
+                target_expert_payload_bytes_before_context_admission
+                    .saturating_sub(target_expert_payload_bytes_after_context_admission),
+            );
+        }
+        context_admission_outcome
+    }
+
     /// Attributes adaptive admission, including any retained-expert reclamation.
-    pub(super) fn measure_adaptive_ram_growth_memory_admission(
+    pub(in crate::qwen3_5) fn measure_adaptive_ram_growth_memory_admission(
         &self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         performance_attribution: &mut PerformanceAttribution,
         request_decoder_state: &RequestDecoderStateStack,
-        mtp_full_attention_growth_bytes: usize,
+        additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
     ) -> Result<usize, AdaptiveRamGrowthMemoryAdmissionError> {
         if !self.adaptive_ram_growth_guard_enabled {
@@ -58,7 +97,7 @@ impl Qwen3_5EngineState {
                 self.begin_adaptive_ram_growth(
                     adaptive_ram_growth_context,
                     request_decoder_state,
-                    mtp_full_attention_growth_bytes,
+                    additional_persistent_state_growth_bytes,
                     exact_temporary_workspace_bytes,
                 )
             },
@@ -70,7 +109,7 @@ impl Qwen3_5EngineState {
         &self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         request_decoder_state: &RequestDecoderStateStack,
-        mtp_full_attention_growth_bytes: usize,
+        additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
     ) -> Result<usize, AdaptiveRamGrowthMemoryAdmissionError> {
         let model = self
@@ -83,9 +122,9 @@ impl Qwen3_5EngineState {
                 adaptive_ram_growth_context.forward_token_count(),
             )
             .map_err(qwen3_5_runtime_error)?;
-        let exact_persistent_growth_bytes = combined_target_and_mtp_persistent_growth_bytes(
+        let exact_persistent_growth_bytes = combined_target_and_additional_persistent_growth_bytes(
             target_persistent_state_growth_bytes,
-            mtp_full_attention_growth_bytes,
+            additional_persistent_state_growth_bytes,
         )?;
         let mut memory_snapshot_before_growth = model
             .runtime()
@@ -280,7 +319,7 @@ impl Qwen3_5EngineState {
 }
 
 /// Collects post-forward MLX telemetry and records adaptive learning when enabled.
-pub(super) fn collect_completed_forward_memory_snapshot(
+pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
     adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     should_retain_adaptive_ram_growth_observation: bool,
@@ -313,7 +352,7 @@ pub(super) fn collect_completed_forward_memory_snapshot(
 }
 
 /// Records adaptive learning without sampling when admission is disabled.
-pub(super) fn record_completed_adaptive_ram_growth(
+pub(in crate::qwen3_5) fn record_completed_adaptive_ram_growth(
     adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     should_retain_adaptive_ram_growth_observation: bool,

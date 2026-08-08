@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 /// One stable, domain-specific operation measured on a model-serving critical path.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(usize)]
@@ -43,6 +41,17 @@ pub enum PerformanceOperation {
     PagedMoeGraphConstruction,
     ResidentMoeGraphConstruction,
     FinalLogitsGraphConstruction,
+    SpeculativePrefillRequestScopedDraftLoad,
+    SpeculativePrefillRequestScopedDraftRelease,
+    SpeculativePrefillDraftScoring,
+    SpeculativePrefillDraftMemoryAdmission,
+    SpeculativePrefillDraftVisionEmbeddingGraphConstruction,
+    SpeculativePrefillDraftVisionEmbeddingEvaluationSynchronizationWait,
+    SpeculativePrefillSelection,
+    SpeculativePrefillSelectionDiskRead,
+    SpeculativePrefillSelectionDiskWrite,
+    SpeculativePrefillSparseInputAssembly,
+    SpeculativePrefillSparseTargetForward,
     TokenSamplingGraphConstruction,
     MtpHeadForwardGraphConstruction,
     MtpHeadStateEvaluationSynchronizationWait,
@@ -106,6 +115,17 @@ impl PerformanceOperation {
         Self::PagedMoeGraphConstruction,
         Self::ResidentMoeGraphConstruction,
         Self::FinalLogitsGraphConstruction,
+        Self::SpeculativePrefillRequestScopedDraftLoad,
+        Self::SpeculativePrefillRequestScopedDraftRelease,
+        Self::SpeculativePrefillDraftScoring,
+        Self::SpeculativePrefillDraftMemoryAdmission,
+        Self::SpeculativePrefillDraftVisionEmbeddingGraphConstruction,
+        Self::SpeculativePrefillDraftVisionEmbeddingEvaluationSynchronizationWait,
+        Self::SpeculativePrefillSelection,
+        Self::SpeculativePrefillSelectionDiskRead,
+        Self::SpeculativePrefillSelectionDiskWrite,
+        Self::SpeculativePrefillSparseInputAssembly,
+        Self::SpeculativePrefillSparseTargetForward,
         Self::TokenSamplingGraphConstruction,
         Self::MtpHeadForwardGraphConstruction,
         Self::MtpHeadStateEvaluationSynchronizationWait,
@@ -192,6 +212,33 @@ impl PerformanceOperation {
             Self::PagedMoeGraphConstruction => "paged_moe_graph_construction",
             Self::ResidentMoeGraphConstruction => "resident_moe_graph_construction",
             Self::FinalLogitsGraphConstruction => "final_logits_graph_construction",
+            Self::SpeculativePrefillRequestScopedDraftLoad => {
+                "speculative_prefill_request_scoped_draft_load"
+            }
+            Self::SpeculativePrefillRequestScopedDraftRelease => {
+                "speculative_prefill_request_scoped_draft_release"
+            }
+            Self::SpeculativePrefillDraftScoring => "speculative_prefill_draft_scoring",
+            Self::SpeculativePrefillDraftMemoryAdmission => {
+                "speculative_prefill_draft_memory_admission"
+            }
+            Self::SpeculativePrefillDraftVisionEmbeddingGraphConstruction => {
+                "speculative_prefill_draft_vision_embedding_graph_construction"
+            }
+            Self::SpeculativePrefillDraftVisionEmbeddingEvaluationSynchronizationWait => {
+                "speculative_prefill_draft_vision_embedding_evaluation_synchronization_wait"
+            }
+            Self::SpeculativePrefillSelection => "speculative_prefill_selection",
+            Self::SpeculativePrefillSelectionDiskRead => "speculative_prefill_selection_disk_read",
+            Self::SpeculativePrefillSelectionDiskWrite => {
+                "speculative_prefill_selection_disk_write"
+            }
+            Self::SpeculativePrefillSparseInputAssembly => {
+                "speculative_prefill_sparse_input_assembly"
+            }
+            Self::SpeculativePrefillSparseTargetForward => {
+                "speculative_prefill_sparse_target_forward"
+            }
             Self::TokenSamplingGraphConstruction => "token_sampling_graph_construction",
             Self::MtpHeadForwardGraphConstruction => "mtp_head_forward_graph_construction",
             Self::MtpHeadStateEvaluationSynchronizationWait => {
@@ -231,6 +278,8 @@ impl PerformanceOperation {
             self,
             Self::PromptPrefillAdvanceSpan
                 | Self::DecodeAdvanceSpan
+                | Self::SpeculativePrefillDraftScoring
+                | Self::SpeculativePrefillSparseTargetForward
                 | Self::MtpPromptHistoryInitializationSpan
                 | Self::AttentionForwardSpan
                 | Self::MlpForwardSpan
@@ -271,6 +320,23 @@ pub enum PerformanceCounter {
     SpeculativePrefillTargetOnlyPrefixTokenCount,
     SpeculativePrefillTerminalCaptureChunckCount,
     SpeculativePrefillTerminalMtpHistoryTokenCount,
+    SpeculativePrefillDraftScoringCount,
+    SpeculativePrefillDraftPrefixStoreHitCount,
+    SpeculativePrefillDraftPrefixStoreWriteCount,
+    SpeculativePrefillDraftPersistentPrefixHitCount,
+    SpeculativePrefillDraftPersistentPrefixRestoredTokenCount,
+    SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
+    SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes,
+    SpeculativePrefillSelectionStoreHitCount,
+    SpeculativePrefillSelectionPersistentHitCount,
+    SpeculativePrefillMandatoryVisualTokenCount,
+    SpeculativePrefillSelectedTokenCount,
+    SpeculativePrefillSparseTargetChunckCount,
+    SpeculativePrefillDraftScoredSuffixTokenCount,
+    SpeculativePrefillTargetPersistentStateWriteCount,
+    SpeculativePrefillTargetPersistentStateRestoredTokenCount,
+    SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
+    SpeculativePrefillFallbackCount,
     MtpPromptHistoryInitializationFallbackCount,
     MtpFeedbackHistoryReseedCount,
     MtpAcceptedDraftCount,
@@ -310,6 +376,23 @@ impl PerformanceCounter {
         Self::SpeculativePrefillTargetOnlyPrefixTokenCount,
         Self::SpeculativePrefillTerminalCaptureChunckCount,
         Self::SpeculativePrefillTerminalMtpHistoryTokenCount,
+        Self::SpeculativePrefillDraftScoringCount,
+        Self::SpeculativePrefillDraftPrefixStoreHitCount,
+        Self::SpeculativePrefillDraftPrefixStoreWriteCount,
+        Self::SpeculativePrefillDraftPersistentPrefixHitCount,
+        Self::SpeculativePrefillDraftPersistentPrefixRestoredTokenCount,
+        Self::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
+        Self::SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes,
+        Self::SpeculativePrefillSelectionStoreHitCount,
+        Self::SpeculativePrefillSelectionPersistentHitCount,
+        Self::SpeculativePrefillMandatoryVisualTokenCount,
+        Self::SpeculativePrefillSelectedTokenCount,
+        Self::SpeculativePrefillSparseTargetChunckCount,
+        Self::SpeculativePrefillDraftScoredSuffixTokenCount,
+        Self::SpeculativePrefillTargetPersistentStateWriteCount,
+        Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount,
+        Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
+        Self::SpeculativePrefillFallbackCount,
         Self::MtpPromptHistoryInitializationFallbackCount,
         Self::MtpFeedbackHistoryReseedCount,
         Self::MtpAcceptedDraftCount,
@@ -370,6 +453,53 @@ impl PerformanceCounter {
             Self::SpeculativePrefillTerminalMtpHistoryTokenCount => {
                 "speculative_prefill_terminal_mtp_history_token_count"
             }
+            Self::SpeculativePrefillDraftScoringCount => "speculative_prefill_draft_scoring_count",
+            Self::SpeculativePrefillDraftPrefixStoreHitCount => {
+                "speculative_prefill_draft_prefix_store_hit_count"
+            }
+            Self::SpeculativePrefillDraftPrefixStoreWriteCount => {
+                "speculative_prefill_draft_prefix_store_write_count"
+            }
+            Self::SpeculativePrefillDraftPersistentPrefixHitCount => {
+                "speculative_prefill_draft_persistent_prefix_hit_count"
+            }
+            Self::SpeculativePrefillDraftPersistentPrefixRestoredTokenCount => {
+                "speculative_prefill_draft_persistent_prefix_restored_token_count"
+            }
+            Self::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes => {
+                "speculative_prefill_context_target_expert_reclaimed_payload_bytes"
+            }
+            Self::SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes => {
+                "speculative_prefill_draft_target_expert_reclaimed_payload_bytes"
+            }
+            Self::SpeculativePrefillSelectionStoreHitCount => {
+                "speculative_prefill_selection_store_hit_count"
+            }
+            Self::SpeculativePrefillSelectionPersistentHitCount => {
+                "speculative_prefill_selection_persistent_hit_count"
+            }
+            Self::SpeculativePrefillMandatoryVisualTokenCount => {
+                "speculative_prefill_mandatory_visual_token_count"
+            }
+            Self::SpeculativePrefillSelectedTokenCount => {
+                "speculative_prefill_selected_token_count"
+            }
+            Self::SpeculativePrefillSparseTargetChunckCount => {
+                "speculative_prefill_sparse_target_chunck_count"
+            }
+            Self::SpeculativePrefillDraftScoredSuffixTokenCount => {
+                "speculative_prefill_draft_scored_suffix_token_count"
+            }
+            Self::SpeculativePrefillTargetPersistentStateWriteCount => {
+                "speculative_prefill_target_persistent_state_write_count"
+            }
+            Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount => {
+                "speculative_prefill_target_persistent_state_restored_token_count"
+            }
+            Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes => {
+                "speculative_prefill_target_expert_repopulated_payload_bytes"
+            }
+            Self::SpeculativePrefillFallbackCount => "speculative_prefill_fallback_count",
             Self::MtpPromptHistoryInitializationFallbackCount => {
                 "mtp_prompt_history_initialization_fallback_count"
             }
@@ -379,79 +509,4 @@ impl PerformanceCounter {
             Self::MtpOperationalFallbackCount => "mtp_operational_fallback_count",
         }
     }
-}
-
-/// Bounded aggregate for every occurrence of one operation in one report.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PerformanceOperationMeasurement {
-    pub(super) occurrence_count: u64,
-    pub(super) total_elapsed_nanoseconds: u64,
-    pub(super) minimum_elapsed_nanoseconds: u64,
-    pub(super) maximum_elapsed_nanoseconds: u64,
-    pub(super) first_started_offset_nanoseconds: u64,
-    pub(super) last_ended_offset_nanoseconds: u64,
-}
-
-impl PerformanceOperationMeasurement {
-    pub(super) const EMPTY: Self = Self {
-        occurrence_count: 0,
-        total_elapsed_nanoseconds: 0,
-        minimum_elapsed_nanoseconds: u64::MAX,
-        maximum_elapsed_nanoseconds: 0,
-        first_started_offset_nanoseconds: 0,
-        last_ended_offset_nanoseconds: 0,
-    };
-
-    #[must_use]
-    pub const fn occurrence_count(self) -> u64 {
-        self.occurrence_count
-    }
-
-    #[must_use]
-    pub const fn total_elapsed_nanoseconds(self) -> u64 {
-        self.total_elapsed_nanoseconds
-    }
-
-    #[must_use]
-    pub const fn minimum_elapsed_nanoseconds(self) -> u64 {
-        self.minimum_elapsed_nanoseconds
-    }
-
-    #[must_use]
-    pub const fn maximum_elapsed_nanoseconds(self) -> u64 {
-        self.maximum_elapsed_nanoseconds
-    }
-
-    #[must_use]
-    pub const fn first_started_offset_nanoseconds(self) -> u64 {
-        self.first_started_offset_nanoseconds
-    }
-
-    #[must_use]
-    pub const fn last_ended_offset_nanoseconds(self) -> u64 {
-        self.last_ended_offset_nanoseconds
-    }
-
-    pub(super) fn record(&mut self, started_offset: Duration, ended_offset: Duration) {
-        let started_offset_nanoseconds = duration_nanoseconds_saturating(started_offset);
-        let ended_offset_nanoseconds = duration_nanoseconds_saturating(ended_offset);
-        let elapsed_nanoseconds =
-            ended_offset_nanoseconds.saturating_sub(started_offset_nanoseconds);
-        if self.occurrence_count == 0 {
-            self.first_started_offset_nanoseconds = started_offset_nanoseconds;
-        }
-        self.occurrence_count = self.occurrence_count.saturating_add(1);
-        self.total_elapsed_nanoseconds = self
-            .total_elapsed_nanoseconds
-            .saturating_add(elapsed_nanoseconds);
-        self.minimum_elapsed_nanoseconds =
-            self.minimum_elapsed_nanoseconds.min(elapsed_nanoseconds);
-        self.maximum_elapsed_nanoseconds =
-            self.maximum_elapsed_nanoseconds.max(elapsed_nanoseconds);
-        self.last_ended_offset_nanoseconds = ended_offset_nanoseconds;
-    }
-}
-
-fn duration_nanoseconds_saturating(duration: Duration) -> u64 {
-    u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX)
 }

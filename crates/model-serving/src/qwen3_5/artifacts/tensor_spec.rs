@@ -38,13 +38,15 @@ pub fn qwen3_5_language_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<T
         TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
-    append_qwen3_5_quantized_affine_tensor_profiles(
-        &mut tensor_profiles,
-        "language_model.lm_head",
-        &[vocabulary_size],
-        hidden_size,
-        qwen3_5_config.quantization_profile_for_module("language_model.lm_head"),
-    );
+    if !qwen3_5_config.has_tied_embeddings() {
+        append_qwen3_5_quantized_affine_tensor_profiles(
+            &mut tensor_profiles,
+            "language_model.lm_head",
+            &[vocabulary_size],
+            hidden_size,
+            qwen3_5_config.quantization_profile_for_module("language_model.lm_head"),
+        );
+    }
     tensor_profiles
 }
 

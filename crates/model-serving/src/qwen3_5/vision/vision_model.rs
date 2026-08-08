@@ -32,6 +32,21 @@ pub struct Qwen3_5VisionModel {
 }
 
 impl Qwen3_5VisionModel {
+    /// Returns whether two vision towers consume the same processed Qwen3.5 image layout.
+    #[must_use]
+    pub(crate) fn accepts_processed_images_from(&self, other: &Self) -> bool {
+        self.config.in_channels() == other.config.in_channels()
+            && self.config.patch_size() == other.config.patch_size()
+            && self.config.temporal_patch_size() == other.config.temporal_patch_size()
+            && self.config.spatial_merge_size() == other.config.spatial_merge_size()
+    }
+
+    /// Returns the complete visual-weight payload needed when this tower first executes.
+    #[must_use]
+    pub(crate) const fn projected_payload_bytes(&self) -> u64 {
+        self.weights.total_payload_bytes()
+    }
+
     #[must_use]
     pub(in crate::qwen3_5) fn resident_payload_bytes(&self) -> u64 {
         if self.weights_have_been_used.get() {

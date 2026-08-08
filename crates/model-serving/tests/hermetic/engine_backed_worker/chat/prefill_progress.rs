@@ -25,6 +25,12 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                         },
                     )),
                     expert_memory_mode: None,
+                    prompt_work_reuse: WorkerPromptWorkReuse {
+                        target_eligible_token_count: 15,
+                        target_restored_token_count: 10,
+                        drafter_eligible_token_count: 15,
+                        drafter_restored_token_count: 10,
+                    },
                 },
                 GeneratedToken::PrefillProgress {
                     processed_token_count: 3,
@@ -39,6 +45,12 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                         MlxActiveMemoryBreakdown::default(),
                     )),
                     expert_memory_mode: None,
+                    prompt_work_reuse: WorkerPromptWorkReuse {
+                        target_eligible_token_count: 15,
+                        target_restored_token_count: 10,
+                        drafter_eligible_token_count: 15,
+                        drafter_restored_token_count: 10,
+                    },
                 },
                 GeneratedToken::TokenId {
                     token_id: 1,
@@ -147,6 +159,18 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
     }
     let _first_output_event = next_event(&mut supervisor_reader).await;
     let _second_output_event = next_event(&mut supervisor_reader).await;
+    assert_eq!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::PromptWorkReuse {
+            request_id: RequestId::new(742),
+            prompt_work_reuse: WorkerPromptWorkReuse {
+                target_eligible_token_count: 15,
+                target_restored_token_count: 10,
+                drafter_eligible_token_count: 15,
+                drafter_restored_token_count: 10,
+            },
+        }
+    );
     assert!(matches!(
         next_event(&mut supervisor_reader).await,
         WorkerEvent::Completed {
@@ -174,6 +198,7 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
                     prefill_optimizer_insight: None,
                     mlx_memory_telemetry: None,
                     expert_memory_mode: None,
+                    prompt_work_reuse: WorkerPromptWorkReuse::default(),
                 },
                 GeneratedToken::TokenId {
                     token_id: 1,

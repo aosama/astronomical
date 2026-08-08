@@ -1,5 +1,6 @@
 mod catalog;
 mod log;
+mod measurement_catalog;
 mod report;
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -7,8 +8,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(feature = "direct-mlx")]
 use std::sync::Arc;
 
-pub use catalog::{PerformanceCounter, PerformanceOperation, PerformanceOperationMeasurement};
+pub use catalog::{PerformanceCounter, PerformanceOperation};
 pub use log::PerformanceAttributionLog;
+pub use measurement_catalog::PerformanceOperationMeasurement;
 pub use report::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
     PerformanceAttributionOutcome, PerformanceAttributionReport,

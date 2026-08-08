@@ -19,7 +19,8 @@ use super::engine_support::{
 
 const BENCHMARK_INPUT_TOKEN_COUNT: usize = 1_024;
 const BENCHMARK_OUTPUT_TOKEN_COUNT: u16 = 1_024;
-const BENCHMARK_WARMUP_OUTPUT_TOKEN_COUNT: u16 = 128;
+const BENCHMARK_WARMUP_OUTPUT_TOKEN_COUNT: u16 = 32;
+const FOCUSED_PARITY_OUTPUT_TOKEN_COUNT: u16 = 64;
 const BENCHMARK_SOURCE_TEXT: &str = include_str!(
     "../../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
@@ -35,6 +36,50 @@ async fn should_keep_representative_mtp_generation_faster_and_target_verified() 
     .expect("the representative MTP release gate should finish within 115 seconds");
 }
 
+#[tokio::test]
+#[ignore = "loads target-only and MTP engines for focused representative greedy parity"]
+async fn should_preserve_focused_representative_greedy_parity_with_mtp() {
+    tokio::time::timeout(Duration::from_secs(115), async {
+        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+        let model_directory = super::super::configured_depth_one_mtp_model_artifact_directory();
+        let benchmark_prompt_cases = prepare_benchmark_prompt_cases(&model_directory);
+        let benchmark_prompt_case = &benchmark_prompt_cases[0];
+        eprintln!("[mtp-parity] status=start output_tokens=64 ETA_seconds=60");
+        let target_only_measurements = run_engine_benchmark_cases(
+            &model_directory,
+            false,
+            FOCUSED_PARITY_OUTPUT_TOKEN_COUNT,
+            &benchmark_prompt_cases,
+            &[0],
+            39_100,
+        )
+        .await;
+        let mtp_measurements = run_engine_benchmark_cases(
+            &model_directory,
+            true,
+            FOCUSED_PARITY_OUTPUT_TOKEN_COUNT,
+            &benchmark_prompt_cases,
+            &[0],
+            39_200,
+        )
+        .await;
+        let target_only_token_ids = &target_only_measurements[0].generated_token_ids;
+        let mtp_token_ids = &mtp_measurements[0].generated_token_ids;
+        assert_eq!(mtp_token_ids, target_only_token_ids);
+        assert_eq!(
+            mtp_token_ids.len(),
+            usize::from(FOCUSED_PARITY_OUTPUT_TOKEN_COUNT)
+        );
+        eprintln!(
+            "[mtp-parity] status=success phase={} output_tokens={}",
+            benchmark_prompt_case.phase_name,
+            mtp_token_ids.len()
+        );
+    })
+    .await
+    .expect("the focused representative MTP parity qualification should finish within 115 seconds");
+}
+
 async fn run_representative_mtp_release_gate() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = super::super::configured_depth_one_mtp_model_artifact_directory();
@@ -46,6 +91,7 @@ async fn run_representative_mtp_release_gate() {
     let target_only_before_measurements = run_engine_benchmark_cases(
         &model_directory,
         false,
+        BENCHMARK_OUTPUT_TOKEN_COUNT,
         &benchmark_prompt_cases,
         &[0],
         37_000,
@@ -61,6 +107,7 @@ async fn run_representative_mtp_release_gate() {
     let mtp_measurements = run_engine_benchmark_cases(
         &model_directory,
         true,
+        BENCHMARK_OUTPUT_TOKEN_COUNT,
         &benchmark_prompt_cases,
         &[0],
         38_000,
@@ -76,6 +123,7 @@ async fn run_representative_mtp_release_gate() {
     let target_only_after_measurements = run_engine_benchmark_cases(
         &model_directory,
         false,
+        BENCHMARK_OUTPUT_TOKEN_COUNT,
         &benchmark_prompt_cases,
         &[0],
         39_000,
@@ -131,6 +179,10 @@ async fn run_representative_mtp_release_gate() {
                     mtp_token_id != target_only_token_id
                 },
             );
+        assert_eq!(
+            first_mismatched_token, None,
+            "active MTP must preserve the target-only greedy sequence",
+        );
         assert_eq!(
             mtp_measurement.generated_token_ids.len(),
             usize::from(BENCHMARK_OUTPUT_TOKEN_COUNT),
@@ -276,6 +328,7 @@ fn prepare_benchmark_prompt_cases(model_directory: &Path) -> Vec<BenchmarkPrompt
 async fn run_engine_benchmark_cases(
     model_directory: &Path,
     mtp_enabled: bool,
+    measured_output_token_count: u16,
     benchmark_prompt_cases: &[BenchmarkPromptCase],
     measured_prompt_order: &[usize],
     request_id_base: u64,
@@ -378,13 +431,13 @@ async fn run_engine_benchmark_cases(
             "[mtp-release] status=progress runtime={} phase={} output_tokens={} ETA_seconds=40",
             if mtp_enabled { "mtp" } else { "target_only" },
             benchmark_prompt_cases[prompt_case_index].phase_name,
-            BENCHMARK_OUTPUT_TOKEN_COUNT,
+            measured_output_token_count,
         );
         let benchmark_measurement = run_one_generation(
             &mut engine,
             request_id,
             &benchmark_prompt_cases[prompt_case_index],
-            BENCHMARK_OUTPUT_TOKEN_COUNT,
+            measured_output_token_count,
             PerformanceAttribution::disabled(),
         )
         .await;

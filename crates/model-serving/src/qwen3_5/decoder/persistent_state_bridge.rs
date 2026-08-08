@@ -305,7 +305,7 @@ fn validate_persistent_prompt_cache_block_range(
     Ok(())
 }
 
-fn slice_full_attention_block(
+pub(super) fn slice_full_attention_block(
     runtime: &MlxRuntime,
     tensor: &MlxArray,
     layer_index: usize,
@@ -363,7 +363,7 @@ fn slice_full_attention_block(
         )
 }
 
-fn retain_layer_tensor(
+pub(super) fn retain_layer_tensor(
     layer_index: usize,
     tensor_role: &'static str,
     tensor: &MlxArray,
@@ -377,7 +377,7 @@ fn retain_layer_tensor(
     )
 }
 
-fn retain_block_tensor(
+pub(super) fn retain_block_tensor(
     layer_index: usize,
     tensor_name: &str,
     tensor: &MlxArray,
@@ -479,6 +479,14 @@ pub enum PersistentPromptCacheStateBridgeError {
         layer_index: usize,
         #[source]
         source: MlxRuntimeError,
+    },
+    #[error(
+        "restored sparse target state layer {layer_index} has {actual_token_count} rows; expected {expected_token_count}"
+    )]
+    InconsistentSpeculativePrefillTargetTokenCount {
+        layer_index: usize,
+        expected_token_count: usize,
+        actual_token_count: i32,
     },
     #[error("failed to materialize restored qwen3.5-moe persistent prompt-cache state")]
     EvaluateRestoredPersistentPromptCacheState(#[source] MlxRuntimeError),

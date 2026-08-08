@@ -37,6 +37,8 @@ mod mlx_quantized_operations;
 #[cfg(feature = "mlx")]
 mod mlx_random_operations;
 #[cfg(feature = "mlx")]
+mod mlx_rope_operations;
+#[cfg(feature = "mlx")]
 mod mlx_runtime;
 #[cfg(feature = "mlx")]
 mod mlx_runtime_device_info;

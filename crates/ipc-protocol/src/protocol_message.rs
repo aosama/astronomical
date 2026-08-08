@@ -29,6 +29,15 @@ impl RequestId {
     }
 }
 
+/// Per-request model-row work that was eligible for and restored from reusable prompt state.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerPromptWorkReuse {
+    pub target_eligible_token_count: u64,
+    pub target_restored_token_count: u64,
+    pub drafter_eligible_token_count: u64,
+    pub drafter_restored_token_count: u64,
+}
+
 /// Current sparse-expert weight residency exposed by the local worker.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -53,6 +62,19 @@ pub enum MtpRuntimeState {
     Disabled,
     TargetOnly,
     Active,
+    Unavailable,
+}
+
+/// Runtime execution state of optional draft-assisted speculative prefill.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeculativePrefillRuntimeState {
+    /// The user preference is disabled.
+    #[default]
+    Disabled,
+    /// A validated resident draft model is available for scoring.
+    Active,
+    /// The preference is enabled but the draft model could not be used.
     Unavailable,
 }
 
@@ -155,6 +177,22 @@ pub enum WorkerPrefillChunckSizingPolicy {
     },
 }
 
+/// Resolved optional draft-assisted speculative-prefill settings supplied to the worker.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerSpeculativePrefillConfiguration {
+    pub enabled: bool,
+    pub target_model_id: Option<String>,
+    pub draft_model_id: Option<String>,
+    pub draft_model_directory: Option<PathBuf>,
+    pub minimum_prompt_tokens: u32,
+    pub keep_percentage: u32,
+    pub selection_chunck_token_count: u32,
+    pub mandatory_trailing_token_count: u32,
+    pub lookahead_token_count: u32,
+    pub importance_pooling_kernel_token_count: u32,
+}
+
 /// Fully resolved worker-owned startup settings.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -166,6 +204,7 @@ pub struct WorkerStartupConfiguration {
     pub optimizer_state_directory: Option<PathBuf>,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub mtp_enabled: bool,
+    pub speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub performance_attribution_enabled: bool,
     pub logging_directory: PathBuf,
     pub logging_level: WorkerLogLevel,
@@ -256,6 +295,14 @@ pub enum WorkerEvent {
         mtp_runtime_state: MtpRuntimeState,
         /// Present when MTP is unavailable despite the preference being enabled.
         mtp_unavailable_reason: Option<String>,
+        /// Actual optional speculative-prefill state reported after model load.
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        /// Present when speculative prefill is enabled but the draft model is unavailable.
+        speculative_prefill_unavailable_reason: Option<String>,
+        /// Configured draft model identity when speculative prefill is enabled.
+        speculative_prefill_draft_model_id: Option<String>,
+        /// Validated resident draft revision when speculative prefill is active.
+        speculative_prefill_draft_model_revision: Option<String>,
     },
     /// Delivers one or more ordered model outputs in a single frame.
     Output {
@@ -290,6 +337,11 @@ pub enum WorkerEvent {
         /// Present when generation advanced without public model output.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
+    /// Reports model-row work avoided through exact or SpecPrefill-specific reusable state.
+    PromptWorkReuse {
+        request_id: RequestId,
+        prompt_work_reuse: WorkerPromptWorkReuse,
+    },
     /// Reports normal completion, including cancellation.
     Completed {
         request_id: RequestId,
@@ -315,6 +367,14 @@ pub enum WorkerEvent {
         mtp_runtime_state: MtpRuntimeState,
         /// Present when MTP is unavailable despite the preference being enabled.
         mtp_unavailable_reason: Option<String>,
+        /// Actual optional speculative-prefill state reported after the swap.
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        /// Present when speculative prefill is enabled but the draft model is unavailable.
+        speculative_prefill_unavailable_reason: Option<String>,
+        /// Configured draft model identity when speculative prefill is enabled.
+        speculative_prefill_draft_model_id: Option<String>,
+        /// Validated resident draft revision when speculative prefill is active.
+        speculative_prefill_draft_model_revision: Option<String>,
     },
     /// Reports that a model swap failed while the worker process remained responsive.
     ModelSwapFailed {

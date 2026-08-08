@@ -101,7 +101,7 @@ async fn run_compact_multi_token_forward_comparison() {
         "compact_multi_token_prompt_prepared",
         "automatic_compact_diagnostic",
         "automatic_standard_reference",
-        Some(Qwen3_5MoEPagedPrefillExecutionMode::CompactMultiTokenDiagnostic),
+        Some(Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic),
         MAXIMUM_EXPECTED_AUTOMATIC_PREFILL_ABSOLUTE_LOGIT_DELTA,
     )
     .await;

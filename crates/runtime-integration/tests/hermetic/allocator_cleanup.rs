@@ -6,6 +6,8 @@ const EXPERT_PAGING_MEMORY_BUDGET_SOURCE: &str =
     include_str!("../../../model-serving/src/expert_paging/memory_budget.rs");
 const QWEN_PREFILL_ADVANCE_SOURCE: &str =
     include_str!("../../../model-serving/src/qwen3_5/inference_execution/prefill_advance.rs");
+const QWEN_MTP_DECODE_SOURCE: &str =
+    include_str!("../../../model-serving/src/qwen3_5/multi_token_prediction/decode.rs");
 const QWEN_ADVANCE_GENERATION_SOURCE: &str =
     include_str!("../../../model-serving/src/qwen3_5/inference_execution/advance_generation.rs");
 const QWEN_INJECT_INPUT_TOKENS_SOURCE: &str =
@@ -95,35 +97,77 @@ fn should_not_sample_disabled_adaptive_memory_for_unpublished_forwards() {
         "feedback forwards must not perform fallible system sampling only to discard it"
     );
 
-    let mtp_outcome_start = QWEN_ADVANCE_GENERATION_SOURCE
+    let mtp_attempt_definition_start = QWEN_MTP_DECODE_SOURCE
+        .find("fn attempt_prediction_proposal_and_verification")
+        .expect("multi-token prediction module must expose MTP proposal and verification flow");
+    let mtp_outcome_recording_call = QWEN_MTP_DECODE_SOURCE[mtp_attempt_definition_start..]
         .find("record_mtp_outcome(active_request")
-        .expect("generation advance must record the MTP verification outcome");
-    let target_only_decode_start = QWEN_ADVANCE_GENERATION_SOURCE[mtp_outcome_start..]
+        .map(|relative_recording_start| mtp_attempt_definition_start + relative_recording_start)
+        .expect("MTP attempts must record acceptance outcomes");
+    let mtp_attempt_source =
+        &QWEN_MTP_DECODE_SOURCE[mtp_attempt_definition_start..mtp_outcome_recording_call];
+    assert!(
+        mtp_attempt_source.contains("Qwen3_5PredictionAcceptanceOutcome::OperationalFallback"),
+        "MTP outcome matching must classify operational fallback distinctly"
+    );
+
+    let mtp_prediction_attempt_start = QWEN_ADVANCE_GENERATION_SOURCE
+        .find("attempt_prediction_proposal_and_verification(")
+        .expect("generation advance must invoke MTP proposal and verification");
+    let mtp_match_start = QWEN_ADVANCE_GENERATION_SOURCE[mtp_prediction_attempt_start..]
+        .find("match prediction_attempt_outcome")
+        .map(|relative_match_start| mtp_prediction_attempt_start + relative_match_start)
+        .expect("generation advance must branch on prediction attempt outcomes");
+    let target_only_decode_measurement_start = QWEN_ADVANCE_GENERATION_SOURCE[mtp_match_start..]
         .find("let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(")
-        .map(|relative_decode_start| mtp_outcome_start + relative_decode_start)
+        .map(|relative_decode_start| mtp_match_start + relative_decode_start)
         .expect("generation advance must retain target-only decode fallback");
-    let mtp_outcome_source =
-        &QWEN_ADVANCE_GENERATION_SOURCE[mtp_outcome_start..target_only_decode_start];
-    let successful_mtp_condition_position = mtp_outcome_source
-        .find("if mtp_prefix_acceptance_outcome")
+    let mtp_match_source =
+        &QWEN_ADVANCE_GENERATION_SOURCE[mtp_match_start..target_only_decode_measurement_start];
+
+    let successful_mtp_condition_position = mtp_match_source
+        .find("if prediction_acceptance_outcome")
         .expect("MTP output must remain conditional on successful verification");
-    let published_mtp_snapshot_position = mtp_outcome_source
+    let successful_mtp_snapshot_position = mtp_match_source
         .find("collect_completed_forward_memory_snapshot(")
         .expect("successful MTP output must publish its completed-forward snapshot");
     let successful_mtp_condition_source =
-        &mtp_outcome_source[successful_mtp_condition_position..published_mtp_snapshot_position];
+        &mtp_match_source[successful_mtp_condition_position..successful_mtp_snapshot_position];
+    assert!(
+        successful_mtp_condition_source.contains("!="),
+        "MTP output must retain an acceptance check"
+    );
     assert!(
         successful_mtp_condition_source
-            .contains("!= MtpPrefixAcceptanceOutcome::OperationalFallback"),
+            .contains("Qwen3_5PredictionAcceptanceOutcome::OperationalFallback"),
         "MTP output must exclude operational fallback"
     );
     assert!(
-        successful_mtp_condition_position < published_mtp_snapshot_position,
+        successful_mtp_condition_position < successful_mtp_snapshot_position,
         "MTP fallback must not collect a snapshot that target-only decode will replace"
     );
+
+    let operational_fallback_decision_start = mtp_match_source
+        .find("Ok((_prediction_acceptance_outcome, target_verification_was_attempted)) =>")
+        .expect("MTP fallback must retain target-only decode branch");
+    let fallback_error_start = mtp_match_source
+        .find("Err(target_verification_error) =>")
+        .expect("MTP fallback and verification errors must be surfaced");
+    let target_only_fallback_branch =
+        &mtp_match_source[operational_fallback_decision_start..fallback_error_start];
     assert!(
-        mtp_outcome_source.contains("record_completed_adaptive_ram_growth("),
+        !target_only_fallback_branch.contains("collect_completed_forward_memory_snapshot("),
+        "target-only MTP fallback must not sample unpublished forwards before adaptive accounting"
+    );
+    assert!(
+        target_only_fallback_branch.contains("record_completed_adaptive_ram_growth("),
         "MTP fallback must retain adaptive learning when admission is enabled"
+    );
+
+    let verification_error_source = &mtp_match_source[fallback_error_start..];
+    assert!(
+        verification_error_source.contains("return Err(target_verification_error);"),
+        "target verification failures must continue through admission outcome recording"
     );
 }
 

@@ -1,6 +1,6 @@
 use astronomical_model_serving::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError,
-    combined_target_and_mtp_persistent_growth_bytes,
+    combined_target_and_additional_persistent_growth_bytes,
     context_memory_admission_projected_active_memory_bytes,
     persistent_prompt_cache_restore_temporary_workspace_bytes,
 };
@@ -10,7 +10,7 @@ fn should_charge_target_and_mtp_persistent_growth_in_one_admission_projection() 
     let target_persistent_state_growth_bytes = 10_485_760;
     let mtp_full_attention_growth_bytes = 262_144;
 
-    let combined_persistent_growth_bytes = combined_target_and_mtp_persistent_growth_bytes(
+    let combined_persistent_growth_bytes = combined_target_and_additional_persistent_growth_bytes(
         target_persistent_state_growth_bytes,
         mtp_full_attention_growth_bytes,
     );
@@ -36,9 +36,11 @@ fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_gr
             0,
         )
         .expect("the target-only projection should not overflow");
-    let combined_growth_bytes =
-        combined_target_and_mtp_persistent_growth_bytes(target_persistent_state_growth_bytes, 1)
-            .expect("the combined growth should not overflow");
+    let combined_growth_bytes = combined_target_and_additional_persistent_growth_bytes(
+        target_persistent_state_growth_bytes,
+        1,
+    )
+    .expect("the combined growth should not overflow");
     let combined_projection = adaptive_ram_growth_guard
         .project_growth_for_context(
             AdaptiveRamGrowthContext::decode(1, false, false),
@@ -55,13 +57,13 @@ fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_gr
 
 #[test]
 fn should_reject_target_and_mtp_growth_overflow_with_a_typed_invalid_request() {
-    let growth_rejection = combined_target_and_mtp_persistent_growth_bytes(usize::MAX, 1)
+    let growth_rejection = combined_target_and_additional_persistent_growth_bytes(usize::MAX, 1)
         .expect_err("overflowing target and MTP growth must be rejected");
 
     assert!(matches!(
         growth_rejection,
         InferenceEngineError::InvalidRequest { reason }
-            if reason == "target and MTP persistent growth overflowed"
+            if reason == "target and additional persistent growth overflowed"
     ));
 }
 

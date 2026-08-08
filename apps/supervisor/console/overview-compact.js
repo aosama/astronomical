@@ -88,12 +88,15 @@ function setCompactMlxSegmentWidths(expertBytes, modelCoreBytes, contextStateByt
 }
 
 function renderCompactCachePanel(cacheStatsDocument) {
-    const hitRate = cacheStatsDocument.persistent_prompt_cache_hit_rate || 0;
+    renderSpeculativePrefillCacheEfficacy(cacheStatsDocument);
+    const cacheEfficacyDocument = cacheStatsDocument.speculative_prefill_cache_efficacy || {};
+    const combinedCacheEfficacy = cacheEfficacyDocument.combined || {};
+    const hitRate = combinedCacheEfficacy.reuse_rate || 0;
     document.getElementById("compact-cache-hit-rate").textContent =
         (hitRate * 100).toFixed(1) + "%";
-    const savedPromptTokenCount = cacheStatsDocument.persistent_prompt_cache_tokens_saved || 0;
+    const savedPromptTokenCount = combinedCacheEfficacy.restored_token_count || 0;
     document.getElementById("compact-cache-tokens-saved").textContent =
-        savedPromptTokenCount.toLocaleString() + " tokens saved";
+        savedPromptTokenCount.toLocaleString() + " model rows reused";
     const persistentPromptCacheTotalSizeBytes =
         cacheStatsDocument.persistent_prompt_cache_total_size_bytes || 0;
     const persistentPromptCacheMaximumSizeBytes =
@@ -106,4 +109,20 @@ function renderCompactCachePanel(cacheStatsDocument) {
     document.getElementById("compact-cache-disk-label").textContent =
         formatGigabytes(persistentPromptCacheTotalSizeBytes) + " / " +
         formatGigabytes(persistentPromptCacheMaximumSizeBytes);
+}
+
+function renderSpeculativePrefillCacheEfficacy(cacheStatsDocument) {
+    const cacheEfficacyDocument = cacheStatsDocument.speculative_prefill_cache_efficacy || {};
+    renderModelCacheEfficacy("compact-cache-target-efficacy", cacheEfficacyDocument.target);
+    renderModelCacheEfficacy("compact-cache-drafter-efficacy", cacheEfficacyDocument.drafter);
+}
+
+function renderModelCacheEfficacy(elementIdentifier, modelCacheEfficacy) {
+    const boundedModelCacheEfficacy = modelCacheEfficacy || {};
+    const reuseRate = boundedModelCacheEfficacy.reuse_rate || 0;
+    const restoredTokenCount = boundedModelCacheEfficacy.restored_token_count || 0;
+    const eligibleTokenCount = boundedModelCacheEfficacy.eligible_token_count || 0;
+    document.getElementById(elementIdentifier).textContent =
+        (reuseRate * 100).toFixed(1) + "% · " +
+        restoredTokenCount.toLocaleString() + " / " + eligibleTokenCount.toLocaleString();
 }

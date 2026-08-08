@@ -1,13 +1,13 @@
 mod advance_generation;
 mod decoder_state_reuse;
-mod engine_request;
-mod generated_token_emission;
+pub(crate) mod engine_request;
+pub(in crate::qwen3_5) mod generated_token_emission;
 mod generation_finalization;
 mod inject_input_tokens;
-mod memory_admission;
+pub(in crate::qwen3_5) mod memory_admission;
 mod memory_limit;
 mod model_loading;
-mod mtp_prefix_acceptance;
+mod model_loading_finalization;
 mod persistent_prompt_cache_capture;
 mod prefill_advance;
 mod prefill_chunck_sizer;
@@ -15,14 +15,27 @@ mod prefill_chunck_sizer_configuration;
 mod prefill_execution_context;
 mod prefill_optimizer_insight;
 mod prompt_prefill;
+mod prompt_prefill_counters;
+mod prompt_prefill_errors;
 mod speculative_prefill;
+mod speculative_prefill_draft_cache;
+mod speculative_prefill_eligibility;
+mod speculative_prefill_gpu_input;
+mod speculative_prefill_memory_admission;
+mod speculative_prefill_model_loading;
+mod speculative_prefill_store;
+mod speculative_prefill_target_cache;
 mod start_generation;
 mod test_controls;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{RequestId, WorkerEvent};
+use astronomical_ipc_protocol::{
+    RequestId, SpeculativePrefillRuntimeState, WorkerEvent, WorkerSpeculativePrefillConfiguration,
+};
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::{
@@ -37,17 +50,21 @@ use crate::{
 };
 
 use self::engine_request::Qwen3_5EngineRequest;
-pub(super) use self::speculative_prefill::{
-    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
+pub use self::speculative_prefill::{
+    Qwen3_5SpeculativePrefillChunckMode, Qwen3_5SpeculativePrefillSelectionError,
+    qwen3_5_select_speculative_prefill_token_positions,
+    qwen3_5_selected_speculative_prefill_positions_for_range,
+    qwen3_5_speculative_prefill_chunck_mode,
 };
 use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
 
-pub use generated_token_emission::{
+pub use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRuntimeState;
+pub use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_runtime_state_after_load;
+pub use crate::qwen3_5::multi_token_prediction::{
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_verification_may_cross_thinking_budget,
 };
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
-pub use model_loading::qwen3_5_mtp_runtime_state_after_load;
 pub use persistent_prompt_cache_capture::persistent_prompt_cache_write_outcome_advances_parent_chain;
 pub use prefill_chunck_sizer::Qwen3_5PrefillChunckSizer;
 pub use prefill_chunck_sizer_configuration::Qwen3_5PrefillChunckSizerError;
@@ -108,6 +125,51 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+        Self::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+            validated_artifact,
+            active_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            persistent_prompt_cache_disk_store_config,
+            prefill_chunck_sizer,
+            think_end_token_id,
+            model_directory,
+            full_attention_kv_state_growth_tokens,
+            adaptive_ram_growth_guard_enabled,
+            mtp_enabled,
+            WorkerSpeculativePrefillConfiguration {
+                enabled: false,
+                target_model_id: None,
+                draft_model_id: None,
+                draft_model_directory: None,
+                minimum_prompt_tokens: 8_192,
+                keep_percentage: 20,
+                selection_chunck_token_count: 32,
+                mandatory_trailing_token_count: 512,
+                lookahead_token_count: 8,
+                importance_pooling_kernel_token_count: 13,
+            },
+            model_loading_performance_attribution,
+            performance_attribution_log,
+        )
+    }
+
+    /// Starts the owner thread with optional draft-assisted speculative prefill.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+        validated_artifact: ValidatedQwen3_5Artifact,
+        active_memory_limit_bytes: usize,
+        allocator_cache_memory_limit_bytes: usize,
+        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+        prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+        think_end_token_id: u32,
+        model_directory: PathBuf,
+        full_attention_kv_state_growth_tokens: i32,
+        adaptive_ram_growth_guard_enabled: bool,
+        mtp_enabled: bool,
+        speculative_prefill: WorkerSpeculativePrefillConfiguration,
+        model_loading_performance_attribution: PerformanceAttribution,
+        performance_attribution_log: PerformanceAttributionLog,
+    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
         let end_of_sequence_token_ids = validated_artifact
             .config()
             .end_of_sequence_token_ids()
@@ -129,6 +191,11 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
                     "failed to configure adaptive RAM growth: {adaptive_ram_growth_guard_error}"
                 ))
             })?;
+        let initial_speculative_prefill_runtime_state = if speculative_prefill.enabled {
+            SpeculativePrefillRuntimeState::Unavailable
+        } else {
+            SpeculativePrefillRuntimeState::Disabled
+        };
         MlxInferenceEngine::new(move || Qwen3_5InferenceExecution {
             active_request: None,
             adaptive_ram_growth_guard,
@@ -143,24 +210,36 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             model_directory,
             model_id: None,
             model_revision: None,
+            speculative_prefill_draft_model_revision: None,
+            speculative_prefill_draft_is_available: false,
+            speculative_prefill_draft_supports_processed_visual_images: false,
+            speculative_prefill_token_identifier_mapping_digest: None,
             model_loading_performance_attribution: Some(model_loading_performance_attribution),
             performance_attribution_log,
             maximum_position_count,
             model: None,
+            speculative_prefill_draft_model: None,
+            speculative_prefill_selection_store: RefCell::new(HashMap::new()),
+            speculative_prefill_draft_prefix_store: RefCell::new(HashMap::new()),
             persistent_prompt_cache_model_contract: None,
             persistent_visual_embedding_model_contract: None,
             persistent_prompt_cache: None,
             persistent_prompt_cache_write_queue: None,
+            speculative_prefill_draft_persistent_prompt_cache: None,
+            speculative_prefill_draft_persistent_prompt_cache_write_queue: None,
             prefill_chunck_sizer,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
             mtp_enabled,
+            speculative_prefill,
             mtp_runtime_state: if mtp_enabled {
                 Qwen3_5MtpRuntimeState::Unavailable
             } else {
                 Qwen3_5MtpRuntimeState::Disabled
             },
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: initial_speculative_prefill_runtime_state,
+            speculative_prefill_unavailable_reason: None,
         })
     }
 }
@@ -183,15 +262,41 @@ pub struct Qwen3_5InferenceExecution {
     model_directory: PathBuf,
     model_id: Option<String>,
     model_revision: Option<String>,
+    /// Revision of the resident draft model used to isolate draft state entries.
+    pub(super) speculative_prefill_draft_model_revision: Option<String>,
+    /// Startup validation outcome for the configured request-scoped draft model.
+    pub(super) speculative_prefill_draft_is_available: bool,
+    /// Whether the validated request-scoped draft accepts target-processed images.
+    pub(super) speculative_prefill_draft_supports_processed_visual_images: bool,
+    /// Canonical token-to-identifier mapping shared by target and draft artifacts.
+    pub(super) speculative_prefill_token_identifier_mapping_digest: Option<[u8; 32]>,
     model_loading_performance_attribution: Option<PerformanceAttribution>,
     performance_attribution_log: PerformanceAttributionLog,
     maximum_position_count: usize,
     pub(super) model: Option<Qwen3_5Model>,
+    /// Request-scoped draft model, present only while scoring an eligible prompt.
+    pub(super) speculative_prefill_draft_model: Option<Qwen3_5Model>,
+    /// Bounded worker-local selection store keyed by the exact draft-scored prompt.
+    pub(super) speculative_prefill_selection_store:
+        RefCell<HashMap<speculative_prefill_store::Qwen3_5SpeculativePrefillStoreKey, Vec<usize>>>,
+    /// Bounded worker-local draft decoder checkpoints isolated from target state.
+    pub(super) speculative_prefill_draft_prefix_store: RefCell<
+        HashMap<
+            speculative_prefill_store::Qwen3_5SpeculativePrefillStoreKey,
+            speculative_prefill_store::Qwen3_5SpeculativePrefillDraftPrefixStoreEntry,
+        >,
+    >,
     pub(crate) persistent_prompt_cache_model_contract: Option<PersistentPromptCacheModelContract>,
     pub(crate) persistent_visual_embedding_model_contract:
         Option<PersistentVisualEmbeddingModelContract>,
     pub(in super::super) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
     pub(in super::super) persistent_prompt_cache_write_queue:
+        Option<PersistentPromptCacheWriteQueue>,
+    /// SSD-backed dense decoder state owned by the configured SpecPrefill drafter.
+    pub(in super::super) speculative_prefill_draft_persistent_prompt_cache:
+        Option<Arc<PersistentPromptCacheDiskStore>>,
+    /// Bounded write-behind owner for the drafter's persistent decoder state.
+    pub(in super::super) speculative_prefill_draft_persistent_prompt_cache_write_queue:
         Option<PersistentPromptCacheWriteQueue>,
     prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
@@ -199,13 +304,19 @@ pub struct Qwen3_5InferenceExecution {
     /// User preference: whether MTP is enabled.
     /// Defaults to false until the worker passes the real config value.
     mtp_enabled: bool,
+    /// Resolved optional draft-assisted speculative-prefill configuration.
+    pub(super) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     /// Actual MTP runtime state after model loading.
     mtp_runtime_state: Qwen3_5MtpRuntimeState,
     /// Concise reason when MTP runtime state is Unavailable.
     mtp_unavailable_reason: Option<String>,
+    /// Actual optional draft-assisted speculative-prefill state after model loading.
+    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+    /// Concise reason when speculative prefill is Unavailable.
+    speculative_prefill_unavailable_reason: Option<String>,
 }
 
-pub(super) type Qwen3_5EngineState = Qwen3_5InferenceExecution;
+pub(in crate::qwen3_5) type Qwen3_5EngineState = Qwen3_5InferenceExecution;
 
 impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     type Request = Qwen3_5InferenceRequest;
@@ -265,22 +376,6 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     }
 }
 
-/// Runtime execution state of native MTP, distinct from the user preference.
-///
-/// Disabled: the user preference is false.
-/// TargetOnly: preference is true and the artifact has no compatible MTP inventory.
-/// Active: preference is true, the head is compatible, and native MTP decode
-/// is available.
-/// Unavailable: preference is true but the selected artifact has invalid MTP
-/// inventory or MTP head initialization failed.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Qwen3_5MtpRuntimeState {
-    Disabled,
-    TargetOnly,
-    Active,
-    Unavailable,
-}
-
 impl Qwen3_5EngineState {
     fn force_next_prefill_capacity_rejection_for_tests(
         &mut self,
@@ -295,6 +390,24 @@ impl Qwen3_5EngineState {
             ));
         }
         active_request.force_next_prefill_capacity_rejection_for_tests = true;
+        Ok(())
+    }
+
+    fn force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<(), InferenceEngineError> {
+        let active_request = self.active_request.as_mut().ok_or_else(|| {
+            fatal_engine_error(
+                "cannot force speculative-prefill draft-prefix restore failure without an active request",
+            )
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot force speculative-prefill draft-prefix restore failure for a different request",
+            ));
+        }
+        active_request.force_next_speculative_prefill_draft_prefix_restore_failure_for_tests = true;
         Ok(())
     }
 
@@ -347,8 +460,15 @@ impl Qwen3_5EngineState {
                 "cannot force MTP rejection for a different request",
             ));
         }
-        active_request.force_next_mtp_draft_rejection_for_tests = true;
-        Ok(())
+        if let Some(optional_prediction_session) = active_request.optional_prediction_session_mut()
+        {
+            optional_prediction_session.force_next_draft_rejection_for_tests();
+            Ok(())
+        } else {
+            Err(fatal_engine_error(
+                "cannot force MTP rejection for a target-only request",
+            ))
+        }
     }
 }
 

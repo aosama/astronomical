@@ -12,4 +12,5 @@ mod prefill_chunck_sizer;
 mod quantized_matmul_partition_parity;
 mod request_decoder_state;
 mod sampler;
+mod speculative_prefill;
 mod visual_embedding_injection;

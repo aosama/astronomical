@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxArray;
+use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
 
 use crate::qwen3_5::dense::mlp::Qwen3_5DenseMlpWeights;
 use crate::qwen3_5_moe::model::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
@@ -26,6 +26,27 @@ pub(crate) enum Qwen3_5AffineWeights {
 }
 
 impl Qwen3_5AffineWeights {
+    pub(crate) fn retained_reference(&self) -> Result<Self, MlxRuntimeError> {
+        match self {
+            Self::NativeBfloat16 { weight } => Ok(Self::NativeBfloat16 {
+                weight: weight.retain()?,
+            }),
+            Self::Quantized {
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                quantization_bits,
+                quantization_group_size,
+            } => Ok(Self::Quantized {
+                packed_weight: packed_weight.retain()?,
+                quantization_scales: quantization_scales.retain()?,
+                quantization_biases: quantization_biases.retain()?,
+                quantization_bits: *quantization_bits,
+                quantization_group_size: *quantization_group_size,
+            }),
+        }
+    }
+
     pub(crate) fn payload_byte_count(&self) -> u64 {
         match self {
             Self::NativeBfloat16 { weight } => weight.byte_count() as u64,
@@ -76,7 +97,7 @@ pub(crate) struct Qwen3_5LinearAttentionWeights {
 }
 
 impl Qwen3_5LinearAttentionWeights {
-    pub(super) fn append_array_references<'weights>(
+    pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,
     ) {
@@ -106,7 +127,7 @@ pub(crate) struct Qwen3_5FullAttentionWeights {
 }
 
 impl Qwen3_5FullAttentionWeights {
-    pub(super) fn append_array_references<'weights>(
+    pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,
     ) {
@@ -127,7 +148,7 @@ pub(crate) enum Qwen3_5AttentionWeights {
 }
 
 impl Qwen3_5AttentionWeights {
-    pub(super) fn append_array_references<'weights>(
+    pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,
     ) {
@@ -150,7 +171,7 @@ pub(crate) enum Qwen3_5DecoderFeedForwardWeights {
 }
 
 impl Qwen3_5DecoderFeedForwardWeights {
-    pub(super) fn append_array_references<'weights>(
+    pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,
     ) {
@@ -173,7 +194,7 @@ pub(crate) struct Qwen3_5DecoderLayerWeights {
 }
 
 impl Qwen3_5DecoderLayerWeights {
-    pub(super) fn append_array_references<'weights>(
+    pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,
     ) {
