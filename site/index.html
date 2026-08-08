@@ -64,8 +64,29 @@
         <div class="fact"><strong>2,048</strong><span>tokens per reuse block</span></div>
       </section>
 
+      <section class="residency shell" aria-labelledby="residency-title">
+        <div class="residency-intro">
+          <p class="section-index">02 / Automatic expert residency</p>
+          <h2 id="residency-title">Fully in memory when it fits.<br><em>Paged when the request needs room.</em></h2>
+        </div>
+        <div class="residency-flow" aria-label="Automatic transition from resident expert layers to paged experts">
+          <article class="residency-state residency-state-resident">
+            <span>When capacity allows</span>
+            <strong>Fully in memory</strong>
+            <p>Complete sparse-expert layers stay resident for the lowest-latency path.</p>
+          </article>
+          <div class="residency-arrow" aria-hidden="true">→</div>
+          <article class="residency-state residency-state-paged">
+            <span>When the request needs room</span>
+            <strong>RAM + SSD streaming</strong>
+            <p>Complete layers make room and Astronomical pages only router-selected experts from solid-state storage.</p>
+          </article>
+        </div>
+        <p class="residency-note"><strong>One memory ceiling. No manual mode switch.</strong> The same loaded model adapts to live context and runtime memory needs, then restores complete expert layers when capacity returns.</p>
+      </section>
+
       <section class="manifesto shell" aria-labelledby="manifesto-title">
-        <p class="section-index">01 / The premise</p>
+        <p class="section-index">03 / The premise</p>
         <div>
           <h2 id="manifesto-title">Bigger local models should not require every weight to occupy memory at once.</h2>
           <p>A mixture-of-experts model uses a small subset of its experts for each token. Astronomical follows that structure: keep useful weights close, stream selected experts when needed, and make every memory decision against one explicit ceiling.</p>
@@ -75,7 +96,7 @@
       <section class="reports shell" id="reports" aria-labelledby="reports-title">
         <div class="section-heading">
           <div>
-            <p class="section-index">02 / Field reports</p>
+            <p class="section-index">04 / Field reports</p>
             <h2 id="reports-title">Claims need receipts.</h2>
           </div>
           <p>Each report labels architecture facts, qualification evidence, and unresolved questions separately.</p>
@@ -109,7 +130,7 @@
       <section class="systems shell" aria-labelledby="systems-title">
         <div class="section-heading">
           <div>
-            <p class="section-index">03 / One system</p>
+            <p class="section-index">05 / One system</p>
             <h2 id="systems-title">Optimize the whole path.</h2>
           </div>
         </div>
@@ -124,7 +145,7 @@
 
       <section class="method shell" id="method" aria-labelledby="method-title">
         <div class="method-intro">
-          <p class="section-index">04 / Evidence standard</p>
+          <p class="section-index">06 / Evidence standard</p>
           <h2 id="method-title">Fast is a measurement,<br>not an adjective.</h2>
         </div>
         <ol class="method-list">
