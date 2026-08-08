@@ -99,14 +99,6 @@ impl ApplicationState {
             .collect();
         let resolved_model_id =
             astronomical_config::resolve_model_id(requested_model_id, &known_model_ids);
-        if self
-            .configured_speculative_prefill_target_model_id()
-            .is_some_and(|configured_target_model_id| {
-                configured_target_model_id != resolved_model_id
-            })
-        {
-            return None;
-        }
         let is_ready_model = ready_model_id == Some(resolved_model_id);
         let is_discovered_model = self
             .discovered_models

@@ -179,7 +179,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
 }
 
 #[tokio::test]
-async fn should_reject_rest_model_override_when_speculative_prefill_target_is_bound() {
+async fn should_keep_all_discovered_models_listed_and_routable_with_speculative_prefill() {
     const CONFIGURED_TARGET_MODEL_ID: &str = "astronomical/application-test-model";
     const UNCONFIGURED_MODEL_ID: &str = "astronomical/another-test-model";
 
@@ -227,9 +227,25 @@ async fn should_reject_rest_model_override_when_speculative_prefill_target_is_bo
     let model_list_text = String::from_utf8(model_list_body.to_vec())
         .expect("the model-list response should be UTF-8");
     assert!(model_list_text.contains(CONFIGURED_TARGET_MODEL_ID));
-    assert!(!model_list_text.contains(UNCONFIGURED_MODEL_ID));
+    assert!(model_list_text.contains(UNCONFIGURED_MODEL_ID));
 
-    let override_response = application
+    let configured_target_response = application
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(format!(
+                    r#"{{"model":"{CONFIGURED_TARGET_MODEL_ID}","messages":[{{"role":"user","content":"hello"}}],"stream":true}}"#
+                )))
+                .expect("the configured-target request should be well formed"),
+        )
+        .await
+        .expect("the configured-target request should receive a response");
+    assert_eq!(configured_target_response.status(), StatusCode::OK);
+
+    let ordinary_model_response = application
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -238,23 +254,21 @@ async fn should_reject_rest_model_override_when_speculative_prefill_target_is_bo
                 .body(Body::from(format!(
                     r#"{{"model":"{UNCONFIGURED_MODEL_ID}","messages":[{{"role":"user","content":"hello"}}],"stream":true}}"#
                 )))
-                .expect("the model-override request should be well formed"),
+                .expect("the ordinary-model request should be well formed"),
         )
         .await
-        .expect("the model-override request should receive a response");
-    assert_eq!(override_response.status(), StatusCode::BAD_REQUEST);
-    let override_body = to_bytes(override_response.into_body(), 8 * 1024)
-        .await
-        .expect("the model-override response should be readable");
-    let override_body_text =
-        String::from_utf8(override_body.to_vec()).expect("the error response should be UTF-8");
-    assert!(override_body_text.contains(r#""code":"model_not_found""#));
-    assert!(
-        received_generation_commands
-            .lock()
-            .expect("the scripted command log should not be poisoned")
-            .is_empty()
+        .expect("the ordinary-model request should receive a response");
+    assert_eq!(ordinary_model_response.status(), StatusCode::OK);
+
+    let received_generation_commands = received_generation_commands
+        .lock()
+        .expect("the scripted command log should not be poisoned");
+    assert_eq!(received_generation_commands.len(), 2);
+    assert_eq!(
+        received_generation_commands[0].model,
+        CONFIGURED_TARGET_MODEL_ID
     );
+    assert_eq!(received_generation_commands[1].model, UNCONFIGURED_MODEL_ID);
 }
 
 fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel {
