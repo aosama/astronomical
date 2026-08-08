@@ -169,6 +169,12 @@ impl Qwen3_5InferenceRequest {
         &self.processed_visual_images
     }
 
+    /// Transfers processed images into request-owned inference state without copying pixels.
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn take_processed_visual_images(&mut self) -> Vec<Qwen3_5ProcessedImage> {
+        std::mem::take(&mut self.processed_visual_images)
+    }
+
     /// Returns the tokenizer-validated image-pad token identifier, if attached.
     #[must_use]
     pub const fn image_pad_token_id(&self) -> Option<u32> {

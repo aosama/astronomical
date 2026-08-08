@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use astronomical_config::resolve_model_id;
 use astronomical_ipc_protocol::{ChatGenerationCommand, ChatMessage};
+use sha2::{Digest, Sha256};
 use tokenizers::Tokenizer;
 
 use crate::{PerformanceAttribution, PerformanceOperation, Qwen3_5InferenceRequest};
@@ -26,6 +27,32 @@ pub struct Qwen3_5Tokenizer {
 }
 
 impl Qwen3_5Tokenizer {
+    /// Digests the canonical token-to-identifier mapping while ignoring JSON
+    /// formatting and tokenizer metadata unused by draft-model execution.
+    pub fn token_identifier_mapping_digest(
+        tokenizer_bytes: &[u8],
+    ) -> Result<[u8; 32], Qwen3_5TokenizerError> {
+        let tokenizer = Tokenizer::from_bytes(tokenizer_bytes)
+            .map_err(|source| Qwen3_5TokenizerError::LoadTokenizer { source })?;
+        let mut token_identifier_entries =
+            tokenizer.get_vocab(true).into_iter().collect::<Vec<_>>();
+        token_identifier_entries.sort_unstable_by(
+            |(left_token_content, left_token_identifier),
+             (right_token_content, right_token_identifier)| {
+                left_token_content
+                    .cmp(right_token_content)
+                    .then_with(|| left_token_identifier.cmp(right_token_identifier))
+            },
+        );
+        let mut token_identifier_mapping_hasher = Sha256::new();
+        for (token_content, token_identifier) in token_identifier_entries {
+            token_identifier_mapping_hasher.update((token_content.len() as u128).to_le_bytes());
+            token_identifier_mapping_hasher.update(token_content.as_bytes());
+            token_identifier_mapping_hasher.update(token_identifier.to_le_bytes());
+        }
+        Ok(token_identifier_mapping_hasher.finalize().into())
+    }
+
     /// Loads and certifies tokenizer JSON bytes retained by artifact validation.
     pub fn from_json_bytes(
         tokenizer_bytes: &[u8],

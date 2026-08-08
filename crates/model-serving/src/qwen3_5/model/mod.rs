@@ -3,6 +3,8 @@ pub(crate) mod adaptive_ram_growth_logging;
 #[cfg(feature = "direct-mlx")]
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
+mod attention_execution;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_weights;
 #[cfg(feature = "direct-mlx")]
 mod error;
@@ -31,18 +33,28 @@ mod memory_breakdown;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
 #[cfg(feature = "direct-mlx")]
-mod mtp;
+mod speculative_prefill;
 #[cfg(feature = "direct-mlx")]
-mod mtp_forward;
+mod speculative_prefill_attention_capture;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_selection;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_sparse_target;
+#[cfg(feature = "direct-mlx")]
+mod target_verification_quantized_linear;
 #[cfg(feature = "direct-mlx")]
 mod tensor_slicing;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod weights;
 #[cfg(feature = "direct-mlx")]
-mod weights_validation;
+pub(crate) mod weights_validation;
 
 #[cfg(feature = "direct-mlx")]
+pub use super::multi_token_prediction::Qwen3_5MtpForwardOutput;
+#[cfg(feature = "direct-mlx")]
 pub use error::Qwen3_5ExecutionError;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use forward_contract::{forward_state_arrays, validate_forward_input};
 #[cfg(feature = "direct-mlx")]
 pub use forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
@@ -58,14 +70,18 @@ pub use gated_delta_boundary_checkpoints::{
 pub use gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 #[cfg(feature = "direct-mlx")]
 pub use memory_admission::{
-    combined_target_and_mtp_persistent_growth_bytes,
+    combined_target_and_additional_persistent_growth_bytes,
     context_memory_admission_projected_active_memory_bytes,
     persistent_prompt_cache_restore_temporary_workspace_bytes,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
-pub use mtp_forward::Qwen3_5MtpForwardOutput;
+pub(crate) use speculative_prefill::Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock;
+#[cfg(feature = "direct-mlx")]
+pub use speculative_prefill_attention_capture::qwen3_5_aggregate_speculative_prefill_attention_weights;
+#[cfg(feature = "direct-mlx")]
+pub use speculative_prefill_selection::qwen3_5_select_speculative_prefill_token_positions_on_gpu;
 #[cfg(feature = "direct-mlx")]
 pub use weights::Qwen3_5Weights;
 
@@ -79,3 +95,5 @@ pub(crate) use super::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchitect
 pub(crate) use super::decoder::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use super::vision::{Qwen3_5VisionModel, visual_embedding_injection};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use speculative_prefill_attention_capture::Qwen3_5AttentionCapture;

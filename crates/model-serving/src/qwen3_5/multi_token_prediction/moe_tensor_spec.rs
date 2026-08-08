@@ -1,7 +1,8 @@
 use crate::qwen3_5::Qwen3_5Config;
-use crate::qwen3_5::artifacts::mtp_tensor_namespace::append_qwen3_5_mtp_affine_tensor_profiles;
-use crate::qwen3_5::artifacts::tensor_spec::qwen3_5_tensor_profile;
 use crate::{TensorDtype, TensorProfile};
+
+use super::tensor_namespace::append_qwen3_5_mtp_affine_tensor_profiles;
+use crate::qwen3_5::artifacts::tensor_spec::qwen3_5_tensor_profile;
 
 pub(crate) fn append_qwen3_5_moe_mtp_tensor_profiles(
     mtp_tensor_profiles: &mut Vec<TensorProfile>,

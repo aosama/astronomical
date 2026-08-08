@@ -1,0 +1,224 @@
+use astronomical_runtime_integration::{MlxArray, MlxDtype};
+
+use crate::{
+    PerformanceAttribution, PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError,
+    RequestDecoderStateStack,
+};
+
+use super::{Qwen3_5EngineRequest, Qwen3_5EngineState};
+
+pub(super) struct RestoredSpeculativePrefillTargetPrefix {
+    pub(super) prompt_prefix_token_count: usize,
+    pub(super) selected_target_token_positions: MlxArray,
+}
+
+impl Qwen3_5EngineState {
+    pub(super) fn clear_failed_speculative_prefill_target_restore(
+        &self,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), astronomical_runtime_integration::MlxRuntimeError> {
+        let Some(target_model) = self.model.as_ref() else {
+            return Ok(());
+        };
+        performance_attribution.measure_operation(
+            PerformanceOperation::MlxAllocatorCacheCleanup,
+            |_performance_attribution| {
+                target_model
+                    .runtime()
+                    .synchronize_gpu_stream_and_clear_allocator_cache()
+            },
+        )
+    }
+
+    pub(super) fn restore_longest_speculative_prefill_target_prefix(
+        &self,
+        prompt_token_ids: &[u32],
+        ordered_image_sha256_digests: &[[u8; 32]],
+        existing_restored_prompt_token_count: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<
+        Option<(
+            RequestDecoderStateStack,
+            RestoredSpeculativePrefillTargetPrefix,
+        )>,
+        Qwen3_5ExecutionError,
+    > {
+        let Some(target_state_contract) = self.speculative_prefill_target_state_contract() else {
+            return Ok(None);
+        };
+        let Some(target_persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() else {
+            return Ok(None);
+        };
+        let target_model = self
+            .model
+            .as_ref()
+            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                description: "target model is unavailable during speculative-prefill state restore",
+            })?;
+        let restored_target_state = performance_attribution.measure_operation(
+            PerformanceOperation::PersistentPromptCachePrefixLookup,
+            |performance_attribution| {
+                target_persistent_prompt_cache.load_longest_speculative_prefill_target_state(
+                    target_model.runtime(),
+                    &target_state_contract,
+                    prompt_token_ids,
+                    ordered_image_sha256_digests,
+                    performance_attribution.positional_file_read_metrics(),
+                )
+            },
+        )?;
+        let Some(restored_target_state) = restored_target_state else {
+            return Ok(None);
+        };
+        let (prompt_prefix_token_count, selected_target_token_positions, decoder_state_tensors) =
+            restored_target_state.into_parts();
+        if prompt_prefix_token_count <= existing_restored_prompt_token_count
+            || selected_target_token_positions.dtype() != MlxDtype::UInt32
+            || selected_target_token_positions.shape().len() != 1
+        {
+            return Ok(None);
+        }
+        let mut restored_request_decoder_state =
+            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
+                target_model.decoder_cache_layout(),
+                self.full_attention_kv_state_growth_tokens,
+            )?;
+        performance_attribution.measure_operation(
+            PerformanceOperation::PersistentPromptCacheStateReconstruction,
+            |_performance_attribution| {
+                restored_request_decoder_state.restore_speculative_prefill_target_state_tensors(
+                    &decoder_state_tensors,
+                    selected_target_token_positions.shape()[0].max(0) as usize,
+                )
+            },
+        )?;
+        performance_attribution.measure_operation(
+            PerformanceOperation::PersistentPromptCacheStateMaterializationSynchronizationWait,
+            |_performance_attribution| {
+                restored_request_decoder_state
+                    .materialize_restored_persistent_prompt_cache_state(target_model.runtime())
+            },
+        )?;
+        performance_attribution.record_counter(
+            PerformanceCounter::SpeculativePrefillTargetPersistentStateRestoredTokenCount,
+            selected_target_token_positions.shape()[0].max(0) as u64,
+        );
+        Ok(Some((
+            restored_request_decoder_state,
+            RestoredSpeculativePrefillTargetPrefix {
+                prompt_prefix_token_count,
+                selected_target_token_positions,
+            },
+        )))
+    }
+
+    pub(super) fn save_speculative_prefill_target_prefix(
+        &self,
+        active_request: &mut Qwen3_5EngineRequest,
+    ) {
+        if !active_request.should_use_speculative_prefill {
+            return;
+        }
+        let Some(target_state_contract) = self.speculative_prefill_target_state_contract() else {
+            return;
+        };
+        let (Some(target_persistent_prompt_cache), Some(target_model)) =
+            (self.persistent_prompt_cache.as_ref(), self.model.as_ref())
+        else {
+            return;
+        };
+        let save_outcome = active_request.measure_operation_with_request(
+            PerformanceOperation::PersistentPromptCacheStateExtraction,
+            |active_request| -> Result<(), Qwen3_5ExecutionError> {
+                let decoder_state_tensors = active_request
+                    .request_decoder_state
+                    .extract_speculative_prefill_target_state_tensors(target_model.runtime())?;
+                let selected_target_token_positions = self
+                    .complete_speculative_prefill_target_position_tensor(
+                        target_model,
+                        active_request,
+                    )?;
+                let named_decoder_state_tensors = decoder_state_tensors
+                    .iter()
+                    .map(|(tensor_name, target_state_tensor)| {
+                        (tensor_name.as_str(), target_state_tensor)
+                    })
+                    .collect::<Vec<_>>();
+                target_persistent_prompt_cache.save_speculative_prefill_target_state(
+                    target_model.runtime(),
+                    &target_state_contract,
+                    &active_request.input_token_ids,
+                    &active_request.ordered_image_sha256_digests,
+                    &selected_target_token_positions,
+                    &named_decoder_state_tensors,
+                )?;
+                Ok(())
+            },
+        );
+        match save_outcome {
+            Ok(()) => active_request.performance_attribution.record_counter(
+                PerformanceCounter::SpeculativePrefillTargetPersistentStateWriteCount,
+                1,
+            ),
+            Err(target_state_save_error) => tracing::warn!(
+                request_id = active_request.request_id.value(),
+                error = %target_state_save_error,
+                "failed to persist reusable speculative-prefill target state"
+            ),
+        }
+    }
+
+    fn complete_speculative_prefill_target_position_tensor(
+        &self,
+        target_model: &crate::Qwen3_5Model,
+        active_request: &Qwen3_5EngineRequest,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let final_prompt_position = active_request.input_token_ids.len().saturating_sub(1);
+        let current_selected_positions = active_request
+            .speculative_prefill_selected_token_positions
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|selected_prompt_position| {
+                u32::try_from(*selected_prompt_position).map_err(|_| {
+                    Qwen3_5ExecutionError::InvalidInput {
+                        description: "selected target prompt position exceeds u32",
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let current_selected_position_tensor = target_model.runtime().array_from_u32(
+            &current_selected_positions,
+            &[
+                i32::try_from(current_selected_positions.len()).map_err(|_| {
+                    Qwen3_5ExecutionError::InvalidInput {
+                        description: "selected target row count exceeds i32",
+                    }
+                })?,
+            ],
+        )?;
+        let final_prompt_position_tensor = target_model.runtime().array_from_u32(
+            &[u32::try_from(final_prompt_position).map_err(|_| {
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "final prompt position exceeds u32",
+                }
+            })?],
+            &[1],
+        )?;
+        let mut selected_position_tensors = Vec::with_capacity(3);
+        if let Some(restored_target_positions) = active_request
+            .speculative_prefill_restored_target_token_positions
+            .as_ref()
+        {
+            selected_position_tensors.push(restored_target_positions);
+        }
+        if !current_selected_positions.is_empty() {
+            selected_position_tensors.push(&current_selected_position_tensor);
+        }
+        selected_position_tensors.push(&final_prompt_position_tensor);
+        target_model
+            .runtime()
+            .concatenate_axis(&selected_position_tensors, 0)
+            .map_err(Qwen3_5ExecutionError::from)
+    }
+}

@@ -39,9 +39,27 @@ pub(crate) struct UserConfigFile {
     /// Defaults to enabled when omitted.
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     pub(crate) mtp_enabled: Option<bool>,
+    /// Optional draft-assisted sparse prompt-prefill policy.
+    #[serde(default)]
+    pub(crate) speculative_prefill: SpeculativePrefillConfigFile,
     pub(crate) supervisor: Option<SupervisorConfigFile>,
     pub(crate) prompt_cache_max_size_gb: Option<u64>,
     pub(crate) logging: Option<LoggingConfigFile>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SpeculativePrefillConfigFile {
+    #[serde(default, deserialize_with = "deserialize_present_boolean")]
+    pub(crate) enabled: Option<bool>,
+    pub(crate) target_model_id: Option<String>,
+    pub(crate) draft_model_id: Option<String>,
+    pub(crate) minimum_prompt_tokens: Option<u32>,
+    pub(crate) keep_percentage: Option<u32>,
+    pub(crate) selection_chunck_token_count: Option<u32>,
+    pub(crate) mandatory_trailing_token_count: Option<u32>,
+    pub(crate) lookahead_token_count: Option<u32>,
+    pub(crate) importance_pooling_kernel_token_count: Option<u32>,
 }
 
 fn deserialize_present_boolean<'de, Deserializer>(
@@ -131,6 +149,9 @@ pub(crate) fn validate_user_config_file(
         user_config_file
             .optimizer_prefill_chunck_token_candidates
             .as_deref(),
+    )?;
+    super::speculative_prefill_config::resolve_speculative_prefill_config(
+        &user_config_file.speculative_prefill,
     )?;
     if let Some(maximum_mlx_memory_gb) = user_config_file.maximum_mlx_memory_gb {
         maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;

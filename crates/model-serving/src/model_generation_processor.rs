@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, MtpRuntimeState,
-    WorkerEvent,
+    SpeculativePrefillRuntimeState, WorkerEvent,
 };
 use serde::Serialize;
 
@@ -18,6 +18,10 @@ pub trait ModelGenerationProcessor {
         &self,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        speculative_prefill_unavailable_reason: Option<String>,
+        speculative_prefill_draft_model_id: Option<String>,
+        speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent;
 
     /// Prepares one independently validated structured-chat request.

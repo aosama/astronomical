@@ -49,6 +49,16 @@ impl MlxMetalKernel {
         output_names: &[&str],
         kernel_source: &str,
     ) -> Result<Self, MlxRuntimeError> {
+        Self::new_with_header(kernel_name, input_names, output_names, "", kernel_source)
+    }
+
+    pub fn new_with_header(
+        kernel_name: &str,
+        input_names: &[&str],
+        output_names: &[&str],
+        kernel_header: &str,
+        kernel_source: &str,
+    ) -> Result<Self, MlxRuntimeError> {
         const OPERATION: &str = "create an MLX custom Metal kernel";
         if input_names.is_empty() || output_names.is_empty() {
             return Err(MlxRuntimeError::RuntimeOperation {
@@ -59,7 +69,7 @@ impl MlxMetalKernel {
         }
         let kernel_name = c_string(kernel_name, OPERATION, "kernel name")?;
         let kernel_source = c_string(kernel_source, OPERATION, "kernel source")?;
-        let empty_header = c_string("", OPERATION, "kernel header")?;
+        let kernel_header = c_string(kernel_header, OPERATION, "kernel header")?;
         let input_name_vector = MlxStringVector::new(input_names, OPERATION)?;
         let output_name_vector = MlxStringVector::new(output_names, OPERATION)?;
         // SAFETY: C strings and vectors stay live through this copying constructor;
@@ -70,7 +80,7 @@ impl MlxMetalKernel {
                 input_name_vector.raw(),
                 output_name_vector.raw(),
                 kernel_source.as_ptr(),
-                empty_header.as_ptr(),
+                kernel_header.as_ptr(),
                 true,
                 false,
             )

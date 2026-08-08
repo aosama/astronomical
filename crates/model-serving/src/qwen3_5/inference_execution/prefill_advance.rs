@@ -7,7 +7,7 @@ use crate::{GeneratedToken, InferenceEngineError, PerformanceCounter, Performanc
 use super::super::model::memory_admission::invalid_request_error;
 use super::memory_admission::collect_completed_forward_memory_snapshot;
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
-use super::prompt_prefill::PromptPrefillChunckAttemptError;
+use super::prompt_prefill_errors::PromptPrefillChunckAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
@@ -28,14 +28,15 @@ impl Qwen3_5EngineState {
         let prefill_start = active_request.prefill_cursor;
         let prefill_execution_context = Qwen3_5PrefillExecutionContext::new(
             active_request.visual_embeddings.is_some(),
-            active_request.mtp_request_state.is_some(),
+            active_request.has_optional_prediction_session(),
             model.sparse_experts_are_paged(),
             self.persistent_prompt_cache.is_some()
                 && active_request.can_use_persistent_prompt_cache
                 && !active_request.persistent_prompt_cache_capture_has_stopped
-                && active_request.mtp_request_state.is_none(),
+                && !active_request.has_optional_prediction_session(),
         )
-        .with_target_only_mtp_prefix(active_request.mtp_request_state.is_some());
+        .with_target_only_prefix(active_request.has_optional_prediction_session())
+        .with_speculative_prefill_sparse_target(active_request.should_use_speculative_prefill);
         let candidate_prefill_chunck_end = self
             .prefill_chunck_sizer
             .next_prefill_chunck_end_for_execution_context(
@@ -120,6 +121,9 @@ impl Qwen3_5EngineState {
                         .runtime()
                         .memory_snapshot()
                         .map_err(qwen3_5_runtime_error)?;
+                    let target_expert_payload_bytes_before_reclamation = model
+                        .expert_weight_memory_cache_statistics()
+                        .resident_payload_byte_count;
                     let native_capacity_deficit_bytes = active_memory_bytes
                         .saturating_add(attempted_allocation_bytes)
                         .saturating_sub(allowed_active_memory_bytes);
@@ -139,6 +143,17 @@ impl Qwen3_5EngineState {
                                 memory_snapshot_after_expert_reclamation.active_memory_bytes()
                             },
                         );
+                    if active_request.should_use_speculative_prefill {
+                        let target_expert_payload_bytes_after_reclamation = model
+                            .expert_weight_memory_cache_statistics()
+                            .resident_payload_byte_count;
+                        active_request.performance_attribution.record_counter(
+                            PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
+                            target_expert_payload_bytes_before_reclamation.saturating_sub(
+                                target_expert_payload_bytes_after_reclamation,
+                            ),
+                        );
+                    }
                     let should_retry_same_prefill_chunck =
                         !has_retried_current_prefill_chunck_after_reclamation
                             && active_memory_bytes_after_expert_reclamation
@@ -270,17 +285,18 @@ impl Qwen3_5EngineState {
         let prefill_chunck_elapsed_millis = forward_chunk_started_at.elapsed().as_millis() as u64;
         let next_prefill_execution_context = Qwen3_5PrefillExecutionContext::new(
             active_request.visual_embeddings.is_some(),
-            active_request.mtp_request_state.is_some(),
+            active_request.has_optional_prediction_session(),
             model.sparse_experts_are_paged(),
             self.persistent_prompt_cache.is_some()
                 && active_request.can_use_persistent_prompt_cache
                 && !active_request.persistent_prompt_cache_capture_has_stopped
-                && active_request.mtp_request_state.is_none(),
+                && !active_request.has_optional_prediction_session(),
         )
-        .with_target_only_mtp_prefix(active_request.mtp_request_state.is_some());
+        .with_target_only_prefix(active_request.has_optional_prediction_session())
+        .with_speculative_prefill_sparse_target(active_request.should_use_speculative_prefill);
         if matches!(
             speculative_prefill_chunck_mode,
-            super::Qwen3_5SpeculativePrefillChunckMode::TerminalMtpCapture
+            super::Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
         ) {
             self.prefill_chunck_sizer
                 .discard_pending_prefill_chunck_decision();
@@ -334,14 +350,16 @@ impl Qwen3_5EngineState {
                             )?,
                             model.active_memory_breakdown(
                                 &active_request.request_decoder_state,
-                                active_request.mtp_request_state.as_ref(),
+                                active_request.additional_context_state_payload_bytes(),
                                 active_memory_bytes,
+                                self.speculative_prefill_draft_model_payload_bytes(),
                             ),
                         ),
                     )
                 })
                 .transpose()?,
             expert_memory_mode: Some(model.expert_memory_mode()),
+            prompt_work_reuse: active_request.prompt_work_reuse,
         }))
     }
 }

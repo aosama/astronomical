@@ -203,21 +203,17 @@ fn should_parse_config_when_top_level_partial_rotary_factor_is_absent_but_rope_p
 }
 
 #[test]
-fn should_reject_an_ornith_config_with_tied_embeddings() {
+fn should_accept_an_ornith_config_with_tied_embeddings() {
     let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
         .expect("the certified test config should decode as JSON");
     config_value["tie_word_embeddings"] = json!(true);
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");
 
-    assert!(matches!(
-        Qwen3_5Config::from_json_bytes(&config_bytes),
-        Err(Qwen3_5ConfigError::UnexpectedBooleanValue {
-            field_name: "tie_word_embeddings",
-            expected_value: false,
-            actual_value: true,
-        })
-    ));
+    let parsed_config = Qwen3_5Config::from_json_bytes(&config_bytes)
+        .expect("the tied-embedding Ornith config should parse");
+
+    assert!(parsed_config.has_tied_embeddings());
 }
 
 #[test]

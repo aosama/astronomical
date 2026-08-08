@@ -156,6 +156,7 @@ where
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
         mtp_enabled,
+        speculative_prefill = ?worker_startup_configuration.speculative_prefill,
         persistent_prompt_cache_enabled,
         "starting idle inference worker"
     );
@@ -168,6 +169,7 @@ where
         performance_attribution_log_path,
         prefill_chunck_sizer_override,
         mtp_enabled,
+        speculative_prefill: worker_startup_configuration.speculative_prefill.clone(),
         persistent_prompt_cache_enabled,
     };
     let engine_worker: EngineBackedWorker<

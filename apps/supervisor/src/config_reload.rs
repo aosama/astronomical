@@ -10,10 +10,12 @@ use std::sync::Arc;
 
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, DiscoveredModel, DiscoveredModelError, LogLevel,
-    LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, discover_models,
+    LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, SpeculativePrefillConfig,
+    discover_models,
 };
 use astronomical_ipc_protocol::{
-    WorkerLogLevel, WorkerPrefillChunckSizingPolicy, WorkerStartupConfiguration,
+    WorkerLogLevel, WorkerPrefillChunckSizingPolicy, WorkerSpeculativePrefillConfiguration,
+    WorkerStartupConfiguration,
 };
 use thiserror::Error;
 
@@ -46,6 +48,10 @@ pub struct ResolvedRuntimeConfig {
     pub persistent_prompt_cache_enabled: bool,
     /// Explicit user choice surfaced while Qwen MTP runtime support is parked.
     pub mtp_enabled: bool,
+    /// Optional draft-assisted sparse prompt-prefill policy.
+    pub speculative_prefill: SpeculativePrefillConfig,
+    /// Discovered draft artifact directory resolved from speculative_prefill.draft_model_id.
+    pub speculative_prefill_draft_model_directory: Option<PathBuf>,
     /// Resolved SSD-backed prompt-cache policy (worker-startup field).
     pub prompt_cache_config: PromptCacheConfig,
     /// Resolved supervisor bind address (REST API restart required to change).
@@ -110,6 +116,16 @@ impl ResolvedRuntimeConfigResolver {
         );
         let prompt_cache_config = user_config.prompt_cache()?;
         let logging_config = user_config.logging()?;
+        let speculative_prefill = user_config.speculative_prefill()?;
+        validate_speculative_prefill_target_model_is_discovered(
+            &speculative_prefill,
+            &discovered_models,
+        )?;
+        let speculative_prefill_draft_model_directory =
+            resolve_speculative_prefill_draft_model_directory(
+                &speculative_prefill,
+                &discovered_models,
+            )?;
 
         Ok(ResolvedRuntimeConfig {
             worker_executable_path: self.fallback_worker_executable_path.clone(),
@@ -130,6 +146,8 @@ impl ResolvedRuntimeConfigResolver {
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
             mtp_enabled: user_config.mtp_enabled(),
+            speculative_prefill,
+            speculative_prefill_draft_model_directory,
             prompt_cache_config,
             bind_address: supervisor_bind_address.to_string(),
             logging_config,
@@ -166,6 +184,10 @@ impl ResolvedRuntimeConfig {
             optimizer_state_directory: Some(self.optimizer_state_directory.clone()),
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             mtp_enabled: self.mtp_enabled,
+            speculative_prefill: worker_speculative_prefill_configuration(
+                &self.speculative_prefill,
+                self.speculative_prefill_draft_model_directory.clone(),
+            ),
             performance_attribution_enabled: self.performance_attribution_enabled,
             logging_directory: self.logging_config.directory().to_path_buf(),
             logging_level: match self.logging_config.level() {
@@ -187,6 +209,14 @@ pub enum ResolvedRuntimeConfigError {
     Configuration(#[from] AstronomicalConfigError),
     #[error("failed to discover configured models")]
     ModelDiscovery(#[from] DiscoveredModelError),
+    #[error(
+        "speculative prefill draft model '{draft_model_id}' was not found in configured model directories"
+    )]
+    SpeculativePrefillDraftModelNotDiscovered { draft_model_id: String },
+    #[error(
+        "speculative prefill target model '{target_model_id}' was not found in configured model directories"
+    )]
+    SpeculativePrefillTargetModelNotDiscovered { target_model_id: String },
 }
 
 /// Result of comparing the current resolved config with a candidate.
@@ -301,6 +331,16 @@ impl ConfigReloadDiff {
             worker_restart_reloaded_fields.push("mtp_enabled".to_owned());
             worker_restart_required = true;
         }
+        if current.speculative_prefill != candidate.speculative_prefill {
+            worker_restart_reloaded_fields.push("speculative_prefill".to_owned());
+            worker_restart_required = true;
+        }
+        if current.speculative_prefill_draft_model_directory
+            != candidate.speculative_prefill_draft_model_directory
+        {
+            worker_restart_reloaded_fields.push("speculative_prefill_draft_model".to_owned());
+            worker_restart_required = true;
+        }
         if current.prompt_cache_config != candidate.prompt_cache_config {
             worker_restart_reloaded_fields.push("prompt_cache".to_owned());
             worker_restart_required = true;
@@ -333,4 +373,68 @@ impl ConfigReloadDiff {
             discovered_model_count,
         }
     }
+}
+
+fn worker_speculative_prefill_configuration(
+    speculative_prefill_config: &SpeculativePrefillConfig,
+    draft_model_directory: Option<PathBuf>,
+) -> WorkerSpeculativePrefillConfiguration {
+    WorkerSpeculativePrefillConfiguration {
+        enabled: speculative_prefill_config.is_enabled(),
+        target_model_id: speculative_prefill_config
+            .target_model_id()
+            .map(str::to_owned),
+        draft_model_id: speculative_prefill_config
+            .draft_model_id()
+            .map(str::to_owned),
+        draft_model_directory,
+        minimum_prompt_tokens: speculative_prefill_config.minimum_prompt_tokens(),
+        keep_percentage: speculative_prefill_config.keep_percentage(),
+        selection_chunck_token_count: speculative_prefill_config.selection_chunck_token_count(),
+        mandatory_trailing_token_count: speculative_prefill_config.mandatory_trailing_token_count(),
+        lookahead_token_count: speculative_prefill_config.lookahead_token_count(),
+        importance_pooling_kernel_token_count: speculative_prefill_config
+            .importance_pooling_kernel_token_count(),
+    }
+}
+
+fn validate_speculative_prefill_target_model_is_discovered(
+    speculative_prefill_config: &SpeculativePrefillConfig,
+    discovered_models: &[DiscoveredModel],
+) -> Result<(), ResolvedRuntimeConfigError> {
+    if !speculative_prefill_config.is_enabled() {
+        return Ok(());
+    }
+    let Some(target_model_id) = speculative_prefill_config.target_model_id() else {
+        return Ok(());
+    };
+    if discovered_models
+        .iter()
+        .any(|discovered_model| discovered_model.model_id == target_model_id)
+    {
+        return Ok(());
+    }
+    Err(
+        ResolvedRuntimeConfigError::SpeculativePrefillTargetModelNotDiscovered {
+            target_model_id: target_model_id.to_owned(),
+        },
+    )
+}
+
+fn resolve_speculative_prefill_draft_model_directory(
+    speculative_prefill_config: &SpeculativePrefillConfig,
+    discovered_models: &[DiscoveredModel],
+) -> Result<Option<PathBuf>, ResolvedRuntimeConfigError> {
+    let Some(draft_model_id) = speculative_prefill_config.draft_model_id() else {
+        return Ok(None);
+    };
+    discovered_models
+        .iter()
+        .find(|discovered_model| discovered_model.model_id == draft_model_id)
+        .map(|discovered_model| Some(discovered_model.model_directory.clone()))
+        .ok_or_else(
+            || ResolvedRuntimeConfigError::SpeculativePrefillDraftModelNotDiscovered {
+                draft_model_id: draft_model_id.to_owned(),
+            },
+        )
 }

@@ -3,8 +3,10 @@ use std::fs;
 use astronomical_model_serving::Qwen3_5ArtifactValidator;
 #[cfg(feature = "direct-mlx")]
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
+    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5Engine,
+    Qwen3_5FeedForwardArchitecture, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    Qwen3_5Tokenizer,
 };
 
 /// Links or copies a regular file from source to target, falling back to copy
@@ -302,4 +304,180 @@ fn should_validate_a_configured_depth_one_mtp_artifact() {
         "qualification requires the complete supported MTP tensor inventory"
     );
     assert_eq!(validated_artifact.config().mtp_layer_count(), 1);
+}
+
+#[cfg(feature = "direct-mlx")]
+#[tokio::test]
+#[ignore = "loads the configured target and smallest compatible SpecPrefill draft artifacts"]
+async fn should_load_the_configured_ornith_target_with_a_compatible_speculative_prefill_draft() {
+    use std::time::Duration;
+
+    use astronomical_ipc_protocol::{
+        RequestId, SpeculativePrefillRuntimeState, WorkerSpeculativePrefillConfiguration,
+    };
+    use tokio::time::timeout;
+
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let target_model_directory_path = crate::common::configured_ornith_model_artifact_directory();
+    let (draft_model_directory_path, configured_draft_model_id) =
+        super::configured_speculative_prefill_draft_model_artifact(&target_model_directory_path);
+    eprintln!(
+        "[speculative-prefill-artifact] status=progress phase=draft_selected draft_model_id={configured_draft_model_id}"
+    );
+
+    eprintln!("[speculative-prefill-artifact] status=progress phase=artifact_validation");
+    let validated_target_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&target_model_directory_path, 20_480)
+        .expect("the configured Ornith target artifact should validate");
+    let validated_draft_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&draft_model_directory_path, 20_480)
+        .expect("the configured Ornith draft artifact should validate");
+    assert_eq!(
+        Qwen3_5Tokenizer::token_identifier_mapping_digest(
+            validated_target_artifact
+                .tokenizer_bytes()
+                .expect("the target should retain tokenizer bytes"),
+        )
+        .expect("the target tokenizer mapping should digest"),
+        Qwen3_5Tokenizer::token_identifier_mapping_digest(
+            validated_draft_artifact
+                .tokenizer_bytes()
+                .expect("the draft should retain tokenizer bytes"),
+        )
+        .expect("the draft tokenizer mapping should digest"),
+        "the target and draft must share one token-to-identifier mapping"
+    );
+    assert_eq!(
+        validated_draft_artifact
+            .config()
+            .feed_forward_architecture(),
+        Qwen3_5FeedForwardArchitecture::Dense
+    );
+    let draft_model_revision = validated_draft_artifact.revision().to_owned();
+    let target_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_target_artifact)
+        .expect("the configured Ornith target tokenizer should initialize");
+    let target_think_end_token_id = target_tokenizer.think_end_token_id();
+    let target_image_pad_token_id = target_tokenizer.image_pad_token_id();
+    let mlx_memory_limits =
+        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+    let performance_attribution_directory = tempfile::tempdir()
+        .expect("the qualification should create a performance-attribution directory");
+    let performance_attribution_log_path = performance_attribution_directory
+        .path()
+        .join("performance-attribution.jsonl");
+    let target_model_id = validated_target_artifact.model_id().to_owned();
+    let speculative_prefill_configuration = WorkerSpeculativePrefillConfiguration {
+        enabled: true,
+        target_model_id: Some(target_model_id),
+        draft_model_id: Some(configured_draft_model_id.clone()),
+        draft_model_directory: Some(draft_model_directory_path.clone()),
+        minimum_prompt_tokens: 8,
+        keep_percentage: 50,
+        selection_chunck_token_count: 4,
+        mandatory_trailing_token_count: 4,
+        lookahead_token_count: 2,
+        importance_pooling_kernel_token_count: 3,
+    };
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+        validated_target_artifact,
+        mlx_memory_limits.active_memory_limit_bytes(),
+        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        None,
+        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
+            .expect("the qualification prefill chunk size should be valid"),
+        target_think_end_token_id,
+        target_model_directory_path,
+        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        true,
+        true,
+        speculative_prefill_configuration,
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionLog::open(&performance_attribution_log_path, true)
+            .expect("the qualification performance-attribution log should open"),
+    )
+    .expect("the target and draft engine settings should be valid");
+
+    timeout(Duration::from_secs(115), async {
+        eprintln!("[speculative-prefill-artifact] status=progress phase=model_load");
+        let engine_load_result = qwen3_5_engine
+            .load()
+            .await
+            .expect("the target and compatible draft language model should load together");
+        assert_eq!(
+            engine_load_result.speculative_prefill_runtime_state(),
+            SpeculativePrefillRuntimeState::Active
+        );
+        assert_eq!(
+            engine_load_result.speculative_prefill_draft_model_id(),
+            Some(configured_draft_model_id.as_str())
+        );
+        assert_eq!(
+            engine_load_result.speculative_prefill_draft_model_revision(),
+            Some(draft_model_revision.as_str())
+        );
+
+        eprintln!("[speculative-prefill-artifact] status=progress phase=speculative_generation");
+        let request_id = RequestId::new(95_001);
+        qwen3_5_engine
+            .start_generation(
+                Qwen3_5InferenceRequest::new(request_id, std::iter::repeat_n(846, 32).collect(), 1)
+                    .with_image_pad_token_id(target_image_pad_token_id)
+                    .with_performance_attribution(PerformanceAttribution::enabled()),
+            )
+            .await
+            .expect("the target should accept a short speculative-prefill request");
+        qwen3_5_engine
+            .force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(request_id)
+            .await
+            .expect("the qualification should arm one draft-prefix cache miss");
+        let mut maximum_active_memory_bytes = 0_u64;
+        let mut maximum_peak_memory_bytes = 0_u64;
+        loop {
+            let generated_token = qwen3_5_engine
+                .decode_next_token(request_id)
+                .await
+                .expect("the target and draft should advance the request");
+            let memory_telemetry = match &generated_token {
+                GeneratedToken::TokenId {
+                    mlx_memory_telemetry,
+                    ..
+                }
+                | GeneratedToken::PrefillProgress {
+                    mlx_memory_telemetry,
+                    ..
+                } => mlx_memory_telemetry.as_ref(),
+                GeneratedToken::EndOfSequence => None,
+            };
+            if let Some(memory_telemetry) = memory_telemetry {
+                maximum_active_memory_bytes =
+                    maximum_active_memory_bytes.max(memory_telemetry.active_memory_bytes);
+                maximum_peak_memory_bytes =
+                    maximum_peak_memory_bytes.max(memory_telemetry.peak_memory_bytes);
+            }
+            if matches!(
+                generated_token,
+                GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence
+            ) {
+                break;
+            }
+        }
+        let configured_memory_limit_bytes = mlx_memory_limits.active_memory_limit_bytes() as u64;
+        assert!(maximum_active_memory_bytes <= configured_memory_limit_bytes);
+        assert!(
+            maximum_peak_memory_bytes
+                <= configured_memory_limit_bytes + configured_memory_limit_bytes / 100
+        );
+        let performance_attribution_reports = fs::read_to_string(&performance_attribution_log_path)
+            .expect("the qualification should write performance-attribution reports");
+        let generation_report = performance_attribution_reports
+            .lines()
+            .find(|report_line| report_line.contains("\"report_kind\":\"generation\""))
+            .expect("the qualification should write a generation report");
+        assert!(generation_report.contains("speculative_prefill_sparse_target_forward"));
+        assert!(generation_report.contains("speculative_prefill_selected_token_count"));
+        assert!(!generation_report.contains("speculative_prefill_fallback_count"));
+        eprintln!("[speculative-prefill-artifact] status=complete");
+    })
+    .await
+    .expect("target and draft qualification must finish within 115 seconds");
 }

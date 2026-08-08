@@ -32,6 +32,24 @@ pub(super) fn ready_event_with_load_details(
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
 ) -> WorkerEvent {
+    ready_event_with_speculative_prefill_load_details(
+        mtp_runtime_state,
+        mtp_unavailable_reason,
+        SpeculativePrefillRuntimeState::Disabled,
+        None,
+        None,
+        None,
+    )
+}
+
+pub(super) fn ready_event_with_speculative_prefill_load_details(
+    mtp_runtime_state: MtpRuntimeState,
+    mtp_unavailable_reason: Option<String>,
+    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+    speculative_prefill_unavailable_reason: Option<String>,
+    speculative_prefill_draft_model_id: Option<String>,
+    speculative_prefill_draft_model_revision: Option<String>,
+) -> WorkerEvent {
     WorkerEvent::Ready {
         model_id: "example/scripted-chat".to_owned(),
         capabilities: ChatModelCapabilities {
@@ -44,6 +62,10 @@ pub(super) fn ready_event_with_load_details(
         },
         mtp_runtime_state,
         mtp_unavailable_reason,
+        speculative_prefill_runtime_state,
+        speculative_prefill_unavailable_reason,
+        speculative_prefill_draft_model_id,
+        speculative_prefill_draft_model_revision,
     }
 }
 

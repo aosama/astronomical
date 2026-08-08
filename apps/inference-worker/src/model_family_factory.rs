@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use astronomical_config::{
     ModelFamily, PrefillChunckSizingPolicy, PromptCacheConfig, classify_model_directory,
 };
+use astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration;
 use astronomical_model_serving::{
     ModelFactory, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
     Qwen3_5PrefillChunckSizer, deepseek_v4_unavailable_reason,
@@ -20,6 +21,7 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) performance_attribution_log_path: PathBuf,
     pub(crate) prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
     pub(crate) mtp_enabled: bool,
+    pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub(crate) persistent_prompt_cache_enabled: bool,
 }
 
@@ -40,6 +42,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let prefill_chunck_sizer_override = self.prefill_chunck_sizer_override.clone();
         let mtp_enabled = self.mtp_enabled;
+        let speculative_prefill = self.speculative_prefill.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
 
         tokio::task::spawn_blocking(move || {
@@ -56,6 +59,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         optimizer_state_directory,
                         max_output_tokens,
                         mtp_enabled,
+                        speculative_prefill,
                         persistent_prompt_cache_enabled,
                         performance_attribution_enabled,
                         performance_attribution_log_path,

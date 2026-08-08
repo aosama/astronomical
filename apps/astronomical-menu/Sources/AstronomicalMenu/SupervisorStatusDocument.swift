@@ -45,6 +45,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
     let completedRequestCount: UInt64
     let totalPromptTokenCount: UInt64
     let totalReusedPromptTokenCount: UInt64
+    let targetPromptWorkTokenCount: UInt64
+    let targetReusedPromptWorkTokenCount: UInt64
+    let drafterPromptWorkTokenCount: UInt64
+    let drafterReusedPromptWorkTokenCount: UInt64
     let averagePrefillTokensPerSecond: Double
     let averageGenerationTokensPerSecond: Double
 
@@ -52,6 +56,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
       completedRequestCount: 0,
       totalPromptTokenCount: 0,
       totalReusedPromptTokenCount: 0,
+      targetPromptWorkTokenCount: 0,
+      targetReusedPromptWorkTokenCount: 0,
+      drafterPromptWorkTokenCount: 0,
+      drafterReusedPromptWorkTokenCount: 0,
       averagePrefillTokensPerSecond: 0,
       averageGenerationTokensPerSecond: 0
     )
@@ -60,8 +68,47 @@ struct SupervisorStatusDocument: Codable, Equatable {
       case completedRequestCount = "completed_request_count"
       case totalPromptTokenCount = "total_prompt_token_count"
       case totalReusedPromptTokenCount = "total_reused_prompt_token_count"
+      case targetPromptWorkTokenCount = "target_prompt_work_token_count"
+      case targetReusedPromptWorkTokenCount = "target_reused_prompt_work_token_count"
+      case drafterPromptWorkTokenCount = "drafter_prompt_work_token_count"
+      case drafterReusedPromptWorkTokenCount = "drafter_reused_prompt_work_token_count"
       case averagePrefillTokensPerSecond = "average_prefill_tok_per_second"
       case averageGenerationTokensPerSecond = "average_generation_tok_per_second"
+    }
+
+    init(
+      completedRequestCount: UInt64,
+      totalPromptTokenCount: UInt64,
+      totalReusedPromptTokenCount: UInt64,
+      targetPromptWorkTokenCount: UInt64,
+      targetReusedPromptWorkTokenCount: UInt64,
+      drafterPromptWorkTokenCount: UInt64,
+      drafterReusedPromptWorkTokenCount: UInt64,
+      averagePrefillTokensPerSecond: Double,
+      averageGenerationTokensPerSecond: Double
+    ) {
+      self.completedRequestCount = completedRequestCount
+      self.totalPromptTokenCount = totalPromptTokenCount
+      self.totalReusedPromptTokenCount = totalReusedPromptTokenCount
+      self.targetPromptWorkTokenCount = targetPromptWorkTokenCount
+      self.targetReusedPromptWorkTokenCount = targetReusedPromptWorkTokenCount
+      self.drafterPromptWorkTokenCount = drafterPromptWorkTokenCount
+      self.drafterReusedPromptWorkTokenCount = drafterReusedPromptWorkTokenCount
+      self.averagePrefillTokensPerSecond = averagePrefillTokensPerSecond
+      self.averageGenerationTokensPerSecond = averageGenerationTokensPerSecond
+    }
+
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      completedRequestCount = try container.decodeIfPresent(UInt64.self, forKey: .completedRequestCount) ?? 0
+      totalPromptTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .totalPromptTokenCount) ?? 0
+      totalReusedPromptTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .totalReusedPromptTokenCount) ?? 0
+      targetPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .targetPromptWorkTokenCount) ?? 0
+      targetReusedPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .targetReusedPromptWorkTokenCount) ?? 0
+      drafterPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .drafterPromptWorkTokenCount) ?? 0
+      drafterReusedPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .drafterReusedPromptWorkTokenCount) ?? 0
+      averagePrefillTokensPerSecond = try container.decodeIfPresent(Double.self, forKey: .averagePrefillTokensPerSecond) ?? 0
+      averageGenerationTokensPerSecond = try container.decodeIfPresent(Double.self, forKey: .averageGenerationTokensPerSecond) ?? 0
     }
   }
 
@@ -296,10 +343,20 @@ struct SupervisorStatusDocument: Codable, Equatable {
       reusedPromptTokenCount: UInt64, newPromptTokenCount: UInt64
     )?
   {
-    let promptTokenCount = servingSession.totalPromptTokenCount
+    let combinedPromptWorkTokenCount = servingSession.targetPromptWorkTokenCount.saturatingAdding(
+      servingSession.drafterPromptWorkTokenCount
+    )
+    let combinedReusedPromptWorkTokenCount = servingSession.targetReusedPromptWorkTokenCount.saturatingAdding(
+      servingSession.drafterReusedPromptWorkTokenCount
+    )
+    let promptTokenCount = combinedPromptWorkTokenCount > 0
+      ? combinedPromptWorkTokenCount
+      : servingSession.totalPromptTokenCount
     guard promptTokenCount > 0 else { return nil }
     let reusedPromptTokenCount = min(
-      servingSession.totalReusedPromptTokenCount,
+      combinedPromptWorkTokenCount > 0
+        ? combinedReusedPromptWorkTokenCount
+        : servingSession.totalReusedPromptTokenCount,
       promptTokenCount
     )
     let newPromptTokenCount = promptTokenCount - reusedPromptTokenCount
@@ -309,13 +366,14 @@ struct SupervisorStatusDocument: Codable, Equatable {
     guard let sessionPromptReuse else { return "Not measured" }
     return promptReusePercentageText(
       reusedPromptTokenCount: sessionPromptReuse.reusedPromptTokenCount,
-      totalPromptTokenCount: servingSession.totalPromptTokenCount
+      totalPromptTokenCount: sessionPromptReuse.reusedPromptTokenCount
+        + sessionPromptReuse.newPromptTokenCount
     )
   }
   var sessionPromptReuseFraction: Double {
     guard let sessionPromptReuse else { return 0 }
     return Double(sessionPromptReuse.reusedPromptTokenCount)
-      / Double(servingSession.totalPromptTokenCount)
+      / Double(sessionPromptReuse.reusedPromptTokenCount + sessionPromptReuse.newPromptTokenCount)
   }
   var sessionPromptReuseBreakdownTitle: String {
     guard let sessionPromptReuse else { return "No completed prompts" }
@@ -325,6 +383,11 @@ struct SupervisorStatusDocument: Codable, Equatable {
 }
 
 extension UInt64 {
+  fileprivate func saturatingAdding(_ tokenCount: UInt64) -> UInt64 {
+    let (summedTokenCount, didOverflow) = addingReportingOverflow(tokenCount)
+    return didOverflow ? UInt64.max : summedTokenCount
+  }
+
   fileprivate func saturatingSubtracting(_ byteCount: UInt64) -> UInt64 {
     self >= byteCount ? self - byteCount : 0
   }

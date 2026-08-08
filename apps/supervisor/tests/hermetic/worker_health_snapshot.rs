@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState};
+use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState, WorkerPromptWorkReuse};
 use astronomical_supervisor::{ChatGenerationExecutor, ServingSessionSnapshot, WorkerHealthStatus};
 use tokio::time::{Instant, sleep, timeout};
 
@@ -85,6 +85,12 @@ fn should_average_only_requests_that_report_each_throughput_measurement() {
 
     serving_session_snapshot.record_completed_request(1_000, 100, Some(10.0), None);
     serving_session_snapshot.record_completed_request(2_000, 200, None, Some(20.0));
+    serving_session_snapshot.record_prompt_work_reuse(WorkerPromptWorkReuse {
+        target_eligible_token_count: 10_000,
+        target_restored_token_count: 8_000,
+        drafter_eligible_token_count: 50_000,
+        drafter_restored_token_count: 40_000,
+    });
     serving_session_snapshot.record_completed_request(3_000, 300, Some(30.0), Some(40.0));
 
     assert_eq!(serving_session_snapshot.completed_request_count, 3);
@@ -100,6 +106,22 @@ fn should_average_only_requests_that_report_each_throughput_measurement() {
     assert_eq!(
         serving_session_snapshot.average_generation_tok_per_second,
         30.0
+    );
+    assert_eq!(
+        serving_session_snapshot.target_prompt_work_token_count,
+        10_000
+    );
+    assert_eq!(
+        serving_session_snapshot.target_reused_prompt_work_token_count,
+        8_000
+    );
+    assert_eq!(
+        serving_session_snapshot.drafter_prompt_work_token_count,
+        50_000
+    );
+    assert_eq!(
+        serving_session_snapshot.drafter_reused_prompt_work_token_count,
+        40_000
     );
 }
 

@@ -1,4 +1,6 @@
-use astronomical_model_serving::qwen3_5_full_attention_step;
+use astronomical_model_serving::{
+    Qwen3_5MoEPagedPrefillExecutionMode, qwen3_5_full_attention_step,
+};
 use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
@@ -38,6 +40,7 @@ async fn should_apply_one_cached_grouped_query_attention_step_with_output_gating
         &active_values,
         &output_gate,
         2.0_f32.sqrt().recip(),
+        Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
     )
     .expect("the full-attention step should build a valid graph");
 
@@ -83,6 +86,7 @@ async fn should_apply_causal_attention_across_multiple_prefill_tokens() {
         &active_values,
         &output_gate,
         2.0_f32.sqrt().recip(),
+        Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
     )
     .expect("the causal full-attention step should build a valid graph");
 

@@ -171,11 +171,35 @@ impl PersistentPromptCachePrefixLookup {
         persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
         persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
     ) -> PersistentPromptCachePrefixLookupResult {
-        Self::for_prompt_with_image_digests(
+        Self::for_prompt_with_image_digests_and_boundary_policy(
             model_id,
             model_revision,
             prompt_tokens,
             &[],
+            false,
+            persistent_prompt_cache_kv_block_exists,
+            persistent_prompt_cache_recurrent_snapshot_exists,
+        )
+    }
+
+    /// Computes the longest restorable complete prefix, including an exact block boundary.
+    ///
+    /// This variant is for a private decoder state owner that will continue with
+    /// another model-side operation. Unlike generation startup, it does not need
+    /// to retain a final prompt token for logits production.
+    pub fn for_complete_prefix(
+        model_id: &str,
+        model_revision: &str,
+        prompt_tokens: &[u32],
+        persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
+        persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
+    ) -> PersistentPromptCachePrefixLookupResult {
+        Self::for_prompt_with_image_digests_and_boundary_policy(
+            model_id,
+            model_revision,
+            prompt_tokens,
+            &[],
+            true,
             persistent_prompt_cache_kv_block_exists,
             persistent_prompt_cache_recurrent_snapshot_exists,
         )
@@ -190,13 +214,35 @@ impl PersistentPromptCachePrefixLookup {
         persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
         persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
     ) -> PersistentPromptCachePrefixLookupResult {
+        Self::for_prompt_with_image_digests_and_boundary_policy(
+            model_id,
+            model_revision,
+            prompt_tokens,
+            ordered_image_sha256_digests,
+            false,
+            persistent_prompt_cache_kv_block_exists,
+            persistent_prompt_cache_recurrent_snapshot_exists,
+        )
+    }
+
+    fn for_prompt_with_image_digests_and_boundary_policy(
+        model_id: &str,
+        model_revision: &str,
+        prompt_tokens: &[u32],
+        ordered_image_sha256_digests: &[[u8; 32]],
+        allow_exact_block_boundary_restore: bool,
+        persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
+        persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
+    ) -> PersistentPromptCachePrefixLookupResult {
         let complete_prompt_block_count =
             prompt_tokens.len() / PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
         // An exact block-boundary prompt must retain its final block for a
         // forward pass. The final prompt token produces the logits used to
         // begin decode, while restoring only recurrent state cannot substitute
         // for that model computation.
-        let maximum_restorable_block_count = if prompt_tokens
+        let maximum_restorable_block_count = if allow_exact_block_boundary_restore {
+            complete_prompt_block_count
+        } else if prompt_tokens
             .len()
             .is_multiple_of(PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
         {

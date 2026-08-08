@@ -14,7 +14,6 @@ use super::Qwen3_5MtpArtifactCapability;
 use super::artifact_helpers::{
     captured_required_file_bytes, read_required_file_bytes, recognized_tensor_names, required_file,
 };
-use super::mtp_tensor_namespace::qwen3_5_mtp_tensor_profiles;
 use super::tensor_spec::qwen3_5_language_tensor_profiles;
 use super::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
 use super::vision_validation::{
@@ -25,6 +24,7 @@ use super::{
     OptiQMetadata, OptiQMetadataError, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5VisionConfig,
 };
 use super::{Qwen3_5ArtifactError, Qwen3_5ShardIndex};
+use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_tensor_profiles;
 
 /// Validates the complete Qwen3.5 artifact before any native allocation.
 ///

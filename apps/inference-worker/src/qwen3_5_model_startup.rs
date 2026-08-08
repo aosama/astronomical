@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use astronomical_config::{PrefillChunckSizingPolicy, PromptCacheConfig};
+use astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration;
 use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
@@ -21,6 +22,7 @@ pub(crate) fn initialize_qwen3_5_model(
     optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
     mtp_enabled: bool,
+    speculative_prefill: WorkerSpeculativePrefillConfiguration,
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
@@ -161,7 +163,7 @@ pub(crate) fn initialize_qwen3_5_model(
             ));
         }
     };
-    let qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
@@ -172,6 +174,7 @@ pub(crate) fn initialize_qwen3_5_model(
         DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
         true,
         mtp_enabled,
+        speculative_prefill,
         model_loading_performance_attribution,
         performance_attribution_log,
     )

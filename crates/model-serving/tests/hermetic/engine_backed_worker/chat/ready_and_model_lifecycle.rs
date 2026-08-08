@@ -29,6 +29,46 @@ async fn should_report_the_loaded_engines_target_only_mtp_runtime_state() {
 }
 
 #[tokio::test]
+async fn should_report_active_speculative_prefill_identity_when_the_draft_is_loaded() {
+    let engine_worker = EngineBackedWorker::new(
+        ScriptedChatProcessor::new(),
+        ScriptedChatEngine::new().with_speculative_prefill_runtime(
+            SpeculativePrefillRuntimeState::Active,
+            None,
+            Some("example/speculative-draft".to_owned()),
+            Some("draft-revision-1".to_owned()),
+        ),
+    );
+    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
+    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+    let worker_task = tokio::spawn(async move {
+        engine_worker
+            .run(worker_reader_transport, worker_writer_transport)
+            .await
+    });
+
+    assert_eq!(
+        next_event(&mut supervisor_reader).await,
+        ready_event_with_speculative_prefill_load_details(
+            MtpRuntimeState::Disabled,
+            None,
+            SpeculativePrefillRuntimeState::Active,
+            None,
+            Some("example/speculative-draft".to_owned()),
+            Some("draft-revision-1".to_owned()),
+        )
+    );
+
+    close_worker_transport(
+        ProtocolWriter::new(supervisor_writer_transport),
+        worker_task,
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn should_return_an_error_when_the_unit_model_factory_is_called() {
     let model_creation_outcome =
         <() as ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>>::create(

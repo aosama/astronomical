@@ -5,5 +5,7 @@ mod persistent_prompt_cache_disk_store_scan;
 mod persistent_prompt_cache_disk_store_support;
 mod persistent_prompt_cache_state_bridge;
 mod persistent_prompt_cache_write_rate;
+mod persistent_speculative_prefill_selection;
+mod persistent_speculative_prefill_target_state;
 mod qwen3_5;
 mod qwen3_5_moe;

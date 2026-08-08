@@ -207,6 +207,153 @@ impl Qwen3_5Model {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn forward_moe_paged_target_verification_with_performance_attribution(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        page_manifest: &QuantizedExpertPageManifest,
+        selected_indices: &MlxArray,
+        sorted_unique_expert_ids: &[usize],
+        selected_scores: &MlxArray,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        performance_attribution.measure_operation(
+            PerformanceOperation::PagedMoeGraphConstruction,
+            |_performance_attribution| {
+                let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
+                    &self.runtime,
+                    selected_indices,
+                    sorted_unique_expert_ids,
+                    page_manifest,
+                )?;
+                self.forward_moe_target_verification_with_precomputed_paged_expert_indices(
+                    hidden_states,
+                    mixture_of_experts_weights,
+                    paged_expert_weights,
+                    &page_slot_indices,
+                    selected_scores,
+                )
+            },
+        )
+    }
+
+    pub(super) fn forward_moe_with_complete_layer_target_verification_and_performance_attribution(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        complete_layer_expert_weights: &Qwen3_5PagedExpertWeights,
+        selected_indices: &MlxArray,
+        selected_scores: &MlxArray,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        performance_attribution.measure_operation(
+            PerformanceOperation::PagedMoeGraphConstruction,
+            |_performance_attribution| {
+                self.forward_moe_target_verification_with_precomputed_paged_expert_indices(
+                    hidden_states,
+                    mixture_of_experts_weights,
+                    complete_layer_expert_weights,
+                    selected_indices,
+                    selected_scores,
+                )
+            },
+        )
+    }
+
+    fn forward_moe_target_verification_with_precomputed_paged_expert_indices(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        selected_expert_indices: &MlxArray,
+        selected_scores: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let hidden_state_shape = hidden_states.shape();
+        let batch_size = hidden_state_shape[0];
+        let token_count = hidden_state_shape[1];
+        let hidden_dimension = hidden_state_shape[2];
+        let expert_count_per_token = selected_expert_indices.shape()[2];
+        let flattened_hidden_states = self
+            .runtime
+            .reshape(hidden_states, &[batch_size * token_count, hidden_dimension])?;
+        let flattened_expert_indices = self.runtime.reshape(
+            selected_expert_indices,
+            &[batch_size * token_count, expert_count_per_token],
+        )?;
+        let expanded_states = self.runtime.expand_dims(&flattened_hidden_states, -2)?;
+        let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
+        let selected_up = self.quantized_expert_linear(
+            &expanded_states,
+            &paged_expert_weights.up_projection,
+            &flattened_expert_indices,
+            false,
+        )?;
+        let selected_gate = self.quantized_expert_linear(
+            &expanded_states,
+            &paged_expert_weights.gate_projection,
+            &flattened_expert_indices,
+            false,
+        )?;
+        let selected_activated = self.runtime.apply_compiled_swiglu(
+            &self.compiled_swiglu,
+            &selected_gate,
+            &selected_up,
+        )?;
+        let selected_outputs = self.quantized_expert_linear(
+            &selected_activated,
+            &paged_expert_weights.down_projection,
+            &flattened_expert_indices,
+            false,
+        )?;
+        let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
+        let selected_outputs = self.runtime.reshape(
+            &selected_outputs,
+            &[
+                batch_size,
+                token_count,
+                expert_count_per_token,
+                hidden_dimension,
+            ],
+        )?;
+        let expanded_scores = self.runtime.expand_dims(selected_scores, -1)?;
+        let weighted_outputs = self.runtime.multiply(&selected_outputs, &expanded_scores)?;
+        let sparse_expert_output = self.runtime.sum_axis(&weighted_outputs, -2, false)?;
+
+        let execution_mode =
+            crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
+        let shared_gate = self.quantized_linear_for_paged_prefill_execution_mode(
+            hidden_states,
+            &mixture_of_experts_weights.shared_expert_gate_projection,
+            execution_mode,
+        )?;
+        let shared_up = self.quantized_linear_for_paged_prefill_execution_mode(
+            hidden_states,
+            &mixture_of_experts_weights.shared_expert_up_projection,
+            execution_mode,
+        )?;
+        let shared_activated =
+            self.runtime
+                .apply_compiled_swiglu(&self.compiled_swiglu, &shared_gate, &shared_up)?;
+        let shared_output = self.quantized_linear_for_paged_prefill_execution_mode(
+            &shared_activated,
+            &mixture_of_experts_weights.shared_expert_down_projection,
+            execution_mode,
+        )?;
+        let shared_gate_logits = self.quantized_linear_for_paged_prefill_execution_mode(
+            hidden_states,
+            &mixture_of_experts_weights.shared_expert_output_gate_projection,
+            execution_mode,
+        )?;
+        Ok(combine_sparse_and_shared_experts(
+            &self.runtime,
+            &sparse_expert_output,
+            &shared_output,
+            &shared_gate_logits,
+        )?)
+    }
+
     /// Copies only the routing evidence required for CPU page selection.
     ///
     /// The expert pager needs a sorted unique host list to choose files and retained

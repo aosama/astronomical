@@ -275,6 +275,22 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
+        if active_generation
+            .prompt_work_reuse
+            .target_eligible_token_count
+            > 0
+            || active_generation
+                .prompt_work_reuse
+                .drafter_eligible_token_count
+                > 0
+        {
+            event_writer
+                .send_event(&WorkerEvent::PromptWorkReuse {
+                    request_id: active_generation.request_id,
+                    prompt_work_reuse: active_generation.prompt_work_reuse,
+                })
+                .await?;
+        }
         event_writer
             .send_event(&WorkerEvent::Completed {
                 request_id: active_generation.request_id,

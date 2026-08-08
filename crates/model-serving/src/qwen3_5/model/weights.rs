@@ -18,10 +18,11 @@ use super::{
 /// Strict typed ownership for the indexed executable Qwen3.5 language shards.
 #[derive(Debug)]
 pub struct Qwen3_5Weights {
-    pub(super) embedding_weights: Qwen3_5AffineWeights,
-    pub(super) decoder_layer_weights: Vec<Qwen3_5DecoderLayerWeights>,
-    pub(super) final_normalization_weight: MlxArray,
-    pub(super) language_model_head_weights: Qwen3_5AffineWeights,
+    pub(crate) embedding_weights: Qwen3_5AffineWeights,
+    pub(crate) decoder_layer_weights: Vec<Qwen3_5DecoderLayerWeights>,
+    pub(crate) final_normalization_weight: MlxArray,
+    pub(crate) language_model_head_weights: Qwen3_5AffineWeights,
+    has_tied_embeddings: bool,
     model_shards: Vec<MlxSafetensors>,
     tensor_count: usize,
     total_payload_bytes: u64,
@@ -156,11 +157,15 @@ impl Qwen3_5Weights {
             &mut bound_tensors,
             "language_model.model.norm.weight".to_owned(),
         )?;
-        let language_model_head_weights = take_quantized_affine_weights(
-            &mut bound_tensors,
-            qwen3_5_config,
-            "language_model.lm_head",
-        )?;
+        let language_model_head_weights = if qwen3_5_config.has_tied_embeddings() {
+            embedding_weights.retained_reference()?
+        } else {
+            take_quantized_affine_weights(
+                &mut bound_tensors,
+                qwen3_5_config,
+                "language_model.lm_head",
+            )?
+        };
         if let Some(unassigned_tensor_name) = bound_tensors.keys().next() {
             return Err(Qwen3_5ExecutionError::UnassignedTensor {
                 tensor_name: unassigned_tensor_name.clone(),
@@ -172,6 +177,7 @@ impl Qwen3_5Weights {
             decoder_layer_weights,
             final_normalization_weight,
             language_model_head_weights,
+            has_tied_embeddings: qwen3_5_config.has_tied_embeddings(),
             model_shards,
             tensor_count,
             total_payload_bytes: actual_payload_bytes,
@@ -184,7 +190,7 @@ impl Qwen3_5Weights {
         self.model_shards.len()
     }
 
-    pub(super) fn model_shards(&self) -> &[MlxSafetensors] {
+    pub(crate) fn model_shards(&self) -> &[MlxSafetensors] {
         &self.model_shards
     }
 
@@ -206,7 +212,7 @@ impl Qwen3_5Weights {
         self.total_payload_bytes
     }
 
-    pub(super) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), Qwen3_5ExecutionError> {
+    pub(crate) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), Qwen3_5ExecutionError> {
         let mut bound_tensor_references = Vec::with_capacity(self.tensor_count);
         self.embedding_weights
             .append_array_references(&mut bound_tensor_references);
@@ -214,8 +220,10 @@ impl Qwen3_5Weights {
             decoder_layer_weights.append_array_references(&mut bound_tensor_references);
         }
         bound_tensor_references.push(&self.final_normalization_weight);
-        self.language_model_head_weights
-            .append_array_references(&mut bound_tensor_references);
+        if !self.has_tied_embeddings {
+            self.language_model_head_weights
+                .append_array_references(&mut bound_tensor_references);
+        }
         if bound_tensor_references.len() != self.tensor_count {
             return Err(Qwen3_5ExecutionError::TypedTensorCountMismatch {
                 actual_tensor_count: bound_tensor_references.len(),
@@ -330,7 +338,7 @@ fn take_linear_attention_weights(
     })
 }
 
-pub(super) fn take_full_attention_weights(
+pub(crate) fn take_full_attention_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     decoder_layer_prefix: &str,
