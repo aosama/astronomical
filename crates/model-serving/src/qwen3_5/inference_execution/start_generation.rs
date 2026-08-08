@@ -14,7 +14,11 @@ use super::super::{RequestDecoderStateStack, plan_qwen3_5_visual_embedding_suffi
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{
     Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error,
-    speculative_prefill_eligibility::qwen3_5_speculative_prefill_request_eligibility,
+    speculative_prefill_failure::configured_speculative_prefill_failure,
+    speculative_prefill_eligibility::{
+        Qwen3_5SpeculativePrefillRequestEligibility,
+        qwen3_5_speculative_prefill_request_eligibility,
+    },
 };
 use crate::qwen3_5::multi_token_prediction::create_optional_prediction_session;
 
@@ -46,6 +50,15 @@ impl Qwen3_5EngineState {
         if inference_request.max_output_tokens() == 0 {
             return Err(fatal_engine_error(
                 "generation output-token budget must be positive",
+            ));
+        }
+        let ordinary_target_prefill_control_span_token_count =
+            inference_request.ordinary_target_prefill_control_span_token_count();
+        if ordinary_target_prefill_control_span_token_count
+            > inference_request.input_token_ids().len().saturating_sub(1)
+        {
+            return Err(invalid_request_error(
+                "system-and-tool control span reaches beyond selectable prompt content",
             ));
         }
         if inference_request
@@ -345,15 +358,11 @@ impl Qwen3_5EngineState {
                     }
                     Ok(None) => {}
                     Err(target_state_restore_error) => {
-                        tracing::warn!(
-                            request_id = inference_request.request_id().value(),
-                            error = %target_state_restore_error,
-                            "sparse target state restore failed; retaining the exact target prefix"
-                        );
-                        self.clear_failed_speculative_prefill_target_restore(
-                            &mut performance_attribution,
-                        )
-                        .map_err(qwen3_5_runtime_error)?;
+                        return Err(configured_speculative_prefill_failure(
+                            inference_request.request_id(),
+                            "sparse target-state restoration",
+                            target_state_restore_error,
+                        ));
                     }
                 }
             }
@@ -373,6 +382,15 @@ impl Qwen3_5EngineState {
                     has_precomputed_visual_embeddings,
                     has_processed_visual_images,
                 );
+            if speculative_prefill_request_eligibility
+                == Qwen3_5SpeculativePrefillRequestEligibility::DraftModelUnavailable
+            {
+                return Err(configured_speculative_prefill_failure(
+                    inference_request.request_id(),
+                    "drafter availability validation",
+                    "the configured drafter is unavailable",
+                ));
+            }
             let should_use_speculative_prefill =
                 speculative_prefill_request_eligibility.is_eligible();
             tracing::info!(
@@ -391,12 +409,6 @@ impl Qwen3_5EngineState {
                 should_use_speculative_prefill,
                 "evaluated speculative-prefill request eligibility"
             );
-            if should_use_speculative_prefill {
-                // Sparse decoder state cannot be serialized as an exact dense
-                // prompt-cache block. Exact restores have already taken place;
-                // disable capture for this request while retaining cache reads.
-                can_use_persistent_prompt_cache = false;
-            }
             let visual_embeddings = if let Some(precomputed_visual_embeddings) =
                 precomputed_visual_embeddings
             {
@@ -451,6 +463,13 @@ impl Qwen3_5EngineState {
                 PerformanceCounter::RestoredPersistentPromptCacheTokenCount,
                 u64::from(persistent_prompt_cache_token_count),
             );
+            if should_use_speculative_prefill {
+                performance_attribution.record_counter(
+                    PerformanceCounter::SpeculativePrefillOrdinaryControlSpanTokenCount,
+                    u64::try_from(ordinary_target_prefill_control_span_token_count)
+                        .unwrap_or(u64::MAX),
+                );
+            }
             let target_eligible_prompt_work_token_count = if restored_sparse_target_state {
                 restored_target_work_token_count.saturating_add(
                     u64::try_from(prompt_token_ids.len().saturating_sub(prefill_cursor))
@@ -463,6 +482,7 @@ impl Qwen3_5EngineState {
                 request_decoder_state,
                 generated_token_count: 0,
                 input_token_ids: prompt_token_ids,
+                ordinary_target_prefill_control_span_token_count,
                 last_restored_persistent_prompt_cache_block_key,
                 can_use_persistent_prompt_cache,
                 maximum_output_tokens: inference_request.max_output_tokens(),
@@ -487,6 +507,7 @@ impl Qwen3_5EngineState {
                 should_use_speculative_prefill,
                 speculative_prefill_scoring_attempted: false,
                 speculative_prefill_selected_token_positions: None,
+                speculative_prefill_dense_target_prefix_token_count: 0,
                 speculative_prefill_prompt_token_indices: None,
                 speculative_prefill_processed_visual_images,
                 speculative_prefill_restored_target_token_positions,
@@ -498,6 +519,7 @@ impl Qwen3_5EngineState {
                     drafter_restored_token_count: 0,
                 },
                 force_next_speculative_prefill_draft_prefix_restore_failure_for_tests: false,
+                forced_speculative_prefill_failure_stage_for_tests: None,
                 force_next_prefill_capacity_rejection_for_tests: false,
             });
             Ok(EngineGenerationStart::with_expert_memory_mode(

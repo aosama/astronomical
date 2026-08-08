@@ -403,7 +403,8 @@ fn should_reject_enabled_speculative_prefill_when_target_model_is_not_discovered
             "speculative_prefill": {
                 "enabled": true,
                 "target_model_id": "target-model",
-                "draft_model_id": "draft-model"
+                "draft_model_id": "draft-model",
+                "keep_percentage": 20
             }
         }"#,
     )

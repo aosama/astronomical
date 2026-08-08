@@ -3,7 +3,7 @@ use super::Qwen3_5EngineState;
 #[cfg(feature = "direct-mlx")]
 use super::engine_request::Qwen3_5EngineRequest;
 #[cfg(feature = "direct-mlx")]
-use crate::{PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError};
+use crate::{PerformanceOperation, Qwen3_5ExecutionError};
 
 #[cfg(feature = "direct-mlx")]
 impl Qwen3_5EngineState {
@@ -40,21 +40,5 @@ impl Qwen3_5EngineState {
         )?;
         active_request.speculative_prefill_prompt_token_indices = Some(prompt_token_indices_on_gpu);
         Ok(())
-    }
-
-    pub(super) fn record_speculative_prefill_input_assembly_fallback(
-        &self,
-        active_request: &mut Qwen3_5EngineRequest,
-        speculative_prefill_input_assembly_error: impl std::fmt::Display,
-    ) {
-        active_request.should_use_speculative_prefill = false;
-        active_request
-            .performance_attribution
-            .record_counter(PerformanceCounter::SpeculativePrefillFallbackCount, 1);
-        tracing::warn!(
-            request_id = active_request.request_id.value(),
-            error = %speculative_prefill_input_assembly_error,
-            "optional speculative-prefill GPU input assembly failed; continuing target-only"
-        );
     }
 }

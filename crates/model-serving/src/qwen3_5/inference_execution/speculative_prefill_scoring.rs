@@ -1,12 +1,17 @@
 #[cfg(feature = "direct-mlx")]
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::{
+    Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests,
+};
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_selection::{
     qwen3_5_speculative_prefill_scoring_plan,
     qwen3_5_speculative_prefill_selectable_importance_score_range,
 };
 #[cfg(feature = "direct-mlx")]
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use super::{
+    Qwen3_5EngineState, qwen3_5_runtime_error,
+    speculative_prefill_failure::configured_speculative_prefill_failure,
+};
 #[cfg(feature = "direct-mlx")]
 use crate::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
@@ -14,8 +19,6 @@ use crate::{
     PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError,
     qwen3_5_select_speculative_prefill_token_positions_on_gpu,
 };
-#[cfg(feature = "direct-mlx")]
-use astronomical_runtime_integration::MlxRuntimeError;
 #[cfg(feature = "direct-mlx")]
 impl Qwen3_5EngineState {
     pub(super) fn prepare_speculative_prefill_selection(
@@ -30,6 +33,15 @@ impl Qwen3_5EngineState {
             return Ok(());
         }
         active_request.speculative_prefill_scoring_attempted = true;
+        active_request.speculative_prefill_dense_target_prefix_token_count =
+            if active_request
+                .speculative_prefill_restored_target_token_positions
+                .is_some()
+            {
+                0
+            } else {
+                scoring_start_position_tokens
+            };
         let Some((draft_scoring_token_range, selectable_importance_score_count)) =
             qwen3_5_speculative_prefill_scoring_plan(
                 scoring_start_position_tokens,
@@ -37,18 +49,11 @@ impl Qwen3_5EngineState {
                 active_request.input_token_ids.len(),
             )
         else {
-            active_request.should_use_speculative_prefill = false;
-            active_request
-                .performance_attribution
-                .record_counter(PerformanceCounter::SpeculativePrefillFallbackCount, 1);
-            tracing::warn!(
-                request_id = active_request.request_id.value(),
-                scoring_start_position_tokens,
-                final_prompt_index,
-                prompt_token_count = active_request.input_token_ids.len(),
-                "speculative-prefill scoring plan was invalid; continuing target-only"
-            );
-            return Ok(());
+            return Err(configured_speculative_prefill_failure(
+                active_request.request_id,
+                "draft scoring planning",
+                "the selectable conversation range is invalid",
+            ));
         };
         tracing::info!(
             request_id = active_request.request_id.value(),
@@ -61,15 +66,11 @@ impl Qwen3_5EngineState {
         let scoring_start_position_tokens_u32 = match u32::try_from(scoring_start_position_tokens) {
             Ok(scoring_start_position_tokens_u32) => scoring_start_position_tokens_u32,
             Err(_) => {
-                active_request.should_use_speculative_prefill = false;
-                active_request
-                    .performance_attribution
-                    .record_counter(PerformanceCounter::SpeculativePrefillFallbackCount, 1);
-                tracing::warn!(
-                    request_id = active_request.request_id.value(),
-                    "optional speculative-prefill suffix position exceeds the u32 range; continuing target-only"
-                );
-                return Ok(());
+                return Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "draft scoring planning",
+                    "the selectable conversation position exceeds the supported range",
+                ));
             }
         };
         let selection_store_token_key = self.speculative_prefill_store_key(
@@ -97,23 +98,38 @@ impl Qwen3_5EngineState {
         )? {
             return Ok(());
         }
+        if active_request.take_forced_speculative_prefill_failure_for_tests(
+            Qwen3_5SpeculativePrefillFailureStageForTests::DrafterLoading,
+        ) {
+            return Err(configured_speculative_prefill_failure(
+                active_request.request_id,
+                "drafter loading",
+                "forced drafter loading failure",
+            ));
+        }
         let draft_model = self.load_request_scoped_speculative_prefill_draft_model(
             active_request.request_id.value(),
             u32::from(active_request.maximum_output_tokens),
             &mut active_request.performance_attribution,
-        )?;
+        )
+        .map_err(|draft_loading_error| {
+            configured_speculative_prefill_failure(
+                active_request.request_id,
+                "drafter loading",
+                draft_loading_error,
+            )
+        })?;
         let mut draft_request_decoder_state =
             match RequestDecoderStateStack::empty_from_decoder_cache_layout(
                 draft_model.decoder_cache_layout(),
             ) {
                 Ok(draft_request_decoder_state) => draft_request_decoder_state,
                 Err(draft_state_creation_error) => {
-                    self.record_speculative_prefill_scoring_fallback(
-                        active_request,
-                        &draft_model,
+                    return Err(configured_speculative_prefill_failure(
+                        active_request.request_id,
+                        "drafter state initialization",
                         draft_state_creation_error,
-                    );
-                    return Ok(());
+                    ));
                 }
             };
         let should_force_draft_prefix_restore_failure = std::mem::take(
@@ -188,44 +204,11 @@ impl Qwen3_5EngineState {
         ) = match draft_prefix_restore_attempt {
             Ok(draft_prefix_restore_outcome) => draft_prefix_restore_outcome,
             Err(draft_prefix_restore_error) => {
-                tracing::warn!(
-                    request_id = active_request.request_id.value(),
-                    error = %draft_prefix_restore_error,
-                    "speculative-prefill draft prefix cache restore failed; retrying uncached scoring"
-                );
-                drop(draft_request_decoder_state);
-                if let Err(draft_allocator_cleanup_error) =
-                    active_request.performance_attribution.measure_operation(
-                        PerformanceOperation::MlxAllocatorCacheCleanup,
-                        |_performance_attribution| {
-                            draft_model
-                                .runtime()
-                                .synchronize_gpu_stream_and_clear_allocator_cache()
-                        },
-                    )
-                {
-                    self.record_speculative_prefill_scoring_fallback(
-                        active_request,
-                        &draft_model,
-                        draft_allocator_cleanup_error,
-                    );
-                    return Ok(());
-                }
-                draft_request_decoder_state =
-                    match RequestDecoderStateStack::empty_from_decoder_cache_layout(
-                        draft_model.decoder_cache_layout(),
-                    ) {
-                        Ok(draft_request_decoder_state) => draft_request_decoder_state,
-                        Err(draft_state_creation_error) => {
-                            self.record_speculative_prefill_scoring_fallback(
-                                active_request,
-                                &draft_model,
-                                draft_state_creation_error,
-                            );
-                            return Ok(());
-                        }
-                    };
-                (0, None, false)
+                return Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "drafter persistent-state restoration",
+                    draft_prefix_restore_error,
+                ));
             }
         };
         if draft_prefix_store_hit {
@@ -244,6 +227,10 @@ impl Qwen3_5EngineState {
                 restored_draft_prefix_token_count as u64,
             );
         }
+        active_request.prompt_work_reuse.drafter_eligible_token_count =
+            u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+        active_request.prompt_work_reuse.drafter_restored_token_count =
+            u64::try_from(restored_draft_prefix_token_count).unwrap_or(u64::MAX);
         let draft_scored_suffix_token_count =
             active_request.input_token_ids[restored_draft_prefix_token_count..].len();
         active_request.performance_attribution.record_counter(
@@ -255,14 +242,11 @@ impl Qwen3_5EngineState {
         ) {
             Ok(draft_forward_start_position_tokens) => draft_forward_start_position_tokens,
             Err(_) => {
-                self.record_speculative_prefill_scoring_fallback(
-                        active_request,
-                        &draft_model,
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "restored speculative-prefill drafter prefix exceeds the u32 range",
-                        },
-                    );
-                return Ok(());
+                return Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "drafter persistent-state restoration",
+                    "the restored drafter prefix exceeds the supported range",
+                ));
             }
         };
         let draft_importance_score_start_position_tokens = 0_usize;
@@ -275,12 +259,11 @@ impl Qwen3_5EngineState {
                 selectable_importance_score_count,
             )
         else {
-            self.record_speculative_prefill_scoring_fallback(
-                active_request,
-                &draft_model,
+            return Err(configured_speculative_prefill_failure(
+                active_request.request_id,
+                "draft score mapping",
                 "speculative-prefill draft scores do not cover the target selection range",
-            );
-            return Ok(());
+            ));
         };
         let should_capture_persistent_prompt_cache_blocks = self
             .speculative_prefill_draft_persistent_prompt_cache_write_queue
@@ -302,7 +285,11 @@ impl Qwen3_5EngineState {
                 },
             );
         if let Err(draft_memory_admission_error) = draft_memory_admission_result {
-            return Err(draft_memory_admission_error);
+            return Err(configured_speculative_prefill_failure(
+                active_request.request_id,
+                "drafter memory admission",
+                draft_memory_admission_error,
+            ));
         }
         tracing::info!(
             request_id = active_request.request_id.value(),
@@ -315,28 +302,31 @@ impl Qwen3_5EngineState {
             &draft_model,
             restored_draft_prefix_token_count,
             is_visual_speculative_prefill_request,
-        )?;
+        )
+        .map_err(|drafter_visual_input_error| {
+            configured_speculative_prefill_failure(
+                active_request.request_id,
+                "drafter visual input assembly",
+                drafter_visual_input_error,
+            )
+        })?;
         if !active_request.should_use_speculative_prefill {
             return Ok(());
         }
+        let should_force_draft_scoring_failure = active_request
+            .take_forced_speculative_prefill_failure_for_tests(
+                Qwen3_5SpeculativePrefillFailureStageForTests::DraftScoring,
+            );
         let draft_suffix_token_ids =
             &active_request.input_token_ids[restored_draft_prefix_token_count..];
-        let draft_scoring_outcome = loop {
-            let draft_scoring_allocation_checkpoint =
-                match draft_request_decoder_state.allocation_checkpoint() {
-                    Ok(draft_scoring_allocation_checkpoint) => draft_scoring_allocation_checkpoint,
-                    Err(draft_scoring_checkpoint_error) => {
-                        self.record_speculative_prefill_scoring_fallback(
-                            active_request,
-                            &draft_model,
-                            draft_scoring_checkpoint_error,
-                        );
-                        return Ok(());
-                    }
-                };
-            let draft_scoring_attempt_outcome = active_request.performance_attribution.measure_operation(
+        let draft_scoring_outcome = active_request.performance_attribution.measure_operation(
                 PerformanceOperation::SpeculativePrefillDraftScoring,
                 |performance_attribution| {
+                    if should_force_draft_scoring_failure {
+                        return Err(Qwen3_5ExecutionError::InvalidInput {
+                            description: "forced speculative-prefill draft scoring failure",
+                        });
+                    }
                     if let Some(draft_visual_embeddings) = draft_visual_embeddings.as_ref() {
                         draft_model.score_speculative_prefill_importance_with_visual_embeddings_and_performance_attribution(
                             draft_suffix_token_ids,
@@ -374,51 +364,18 @@ impl Qwen3_5EngineState {
                     }
                 },
             );
-            let Err(Qwen3_5ExecutionError::Runtime(MlxRuntimeError::ActiveMemoryLimitExceeded {
-                active_memory_bytes,
-                attempted_allocation_bytes,
-                allowed_active_memory_bytes,
-            })) = &draft_scoring_attempt_outcome
-            else {
-                break draft_scoring_attempt_outcome;
-            };
-            let rejected_draft_scoring_active_memory_bytes = *active_memory_bytes;
-            let rejected_draft_scoring_allocation_bytes = *attempted_allocation_bytes;
-            let rejected_draft_scoring_allowed_memory_bytes = *allowed_active_memory_bytes;
-            if let Err(draft_scoring_restore_error) = draft_request_decoder_state
-                .restore_allocation_checkpoint(draft_scoring_allocation_checkpoint)
-            {
-                self.record_speculative_prefill_scoring_fallback(
-                    active_request,
-                    &draft_model,
-                    draft_scoring_restore_error,
-                );
-                return Ok(());
-            }
-            let target_expert_reclamation_result =
-                active_request.performance_attribution.measure_operation(
-                    PerformanceOperation::SpeculativePrefillDraftMemoryAdmission,
-                    |performance_attribution| {
-                        draft_model
-                            .runtime()
-                            .synchronize_gpu_stream_and_clear_allocator_cache()
-                            .map_err(qwen3_5_runtime_error)?;
-                        self.reclaim_target_experts_after_draft_scoring_allocation_rejection(
-                            active_request.request_id.value(),
-                            rejected_draft_scoring_active_memory_bytes,
-                            rejected_draft_scoring_allocation_bytes,
-                            rejected_draft_scoring_allowed_memory_bytes,
-                            performance_attribution,
-                        )
-                    },
-                );
-            if let Err(target_expert_reclamation_error) = target_expert_reclamation_result {
-                return Err(target_expert_reclamation_error);
-            }
-        };
+        let should_force_selection_failure = active_request
+            .take_forced_speculative_prefill_failure_for_tests(
+                Qwen3_5SpeculativePrefillFailureStageForTests::Selection,
+            );
         let draft_scoring_outcome = active_request.performance_attribution.measure_operation(
             PerformanceOperation::SpeculativePrefillSelection,
             |_performance_attribution| draft_scoring_outcome.and_then(|draft_scoring_outcome| {
+                if should_force_selection_failure {
+                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                        description: "forced speculative-prefill selection failure",
+                    });
+                }
                 let importance_score_shape = draft_scoring_outcome.importance_scores.shape();
                 let selectable_importance_score_range_start_i32 =
                     i32::try_from(selectable_importance_score_range.start).map_err(|_| {
@@ -500,12 +457,11 @@ impl Qwen3_5EngineState {
                 },
             )
         {
-            self.record_speculative_prefill_scoring_fallback(
-                active_request,
-                &draft_model,
+            return Err(configured_speculative_prefill_failure(
+                active_request.request_id,
+                "drafter cleanup",
                 draft_allocator_cleanup_error,
-            );
-            return Ok(());
+            ));
         }
         self.persist_speculative_prefill_selection(
             active_request,
@@ -535,7 +491,13 @@ impl Qwen3_5EngineState {
                         .synchronize_gpu_stream_and_clear_allocator_cache()
                 },
             )
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(|draft_release_error| {
+                configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "drafter release",
+                    draft_release_error,
+                )
+            })?;
         let resumed_target_expert_retention =
             target_model.resume_expert_retention_after_request_memory_pressure();
         tracing::info!(

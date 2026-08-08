@@ -20,7 +20,7 @@ pub use processor::{
     Qwen3_5GenerationProcessor, qwen3_5_request_enables_thinking,
     translate_qwen3_5_preparation_error, translate_request_output_error,
 };
-pub use prompt::{Qwen3_5PromptError, Qwen3_5PromptRenderer};
+pub use prompt::{Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt};
 pub use request_output::{Qwen3_5RequestOutput, Qwen3_5RequestOutputError};
 #[cfg(feature = "direct-mlx")]
 pub use sampler::qwen3_5_apply_top_p_mask;

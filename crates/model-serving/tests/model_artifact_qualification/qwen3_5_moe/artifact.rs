@@ -309,7 +309,7 @@ fn should_validate_a_configured_depth_one_mtp_artifact() {
 #[cfg(feature = "direct-mlx")]
 #[tokio::test]
 #[ignore = "loads the configured target and smallest compatible SpecPrefill draft artifacts"]
-async fn should_load_the_configured_ornith_target_with_a_compatible_speculative_prefill_draft() {
+async fn should_stop_when_the_configured_drafter_prefix_restore_fails() {
     use std::time::Duration;
 
     use astronomical_ipc_protocol::{
@@ -430,53 +430,18 @@ async fn should_load_the_configured_ornith_target_with_a_compatible_speculative_
             .force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(request_id)
             .await
             .expect("the qualification should arm one draft-prefix cache miss");
-        let mut maximum_active_memory_bytes = 0_u64;
-        let mut maximum_peak_memory_bytes = 0_u64;
-        loop {
-            let generated_token = qwen3_5_engine
-                .decode_next_token(request_id)
-                .await
-                .expect("the target and draft should advance the request");
-            let memory_telemetry = match &generated_token {
-                GeneratedToken::TokenId {
-                    mlx_memory_telemetry,
-                    ..
-                }
-                | GeneratedToken::PrefillProgress {
-                    mlx_memory_telemetry,
-                    ..
-                } => mlx_memory_telemetry.as_ref(),
-                GeneratedToken::EndOfSequence => None,
-            };
-            if let Some(memory_telemetry) = memory_telemetry {
-                maximum_active_memory_bytes =
-                    maximum_active_memory_bytes.max(memory_telemetry.active_memory_bytes);
-                maximum_peak_memory_bytes =
-                    maximum_peak_memory_bytes.max(memory_telemetry.peak_memory_bytes);
-            }
-            if matches!(
-                generated_token,
-                GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence
-            ) {
-                break;
-            }
-        }
-        let configured_memory_limit_bytes = mlx_memory_limits.active_memory_limit_bytes() as u64;
-        assert!(maximum_active_memory_bytes <= configured_memory_limit_bytes);
-        assert!(
-            maximum_peak_memory_bytes
-                <= configured_memory_limit_bytes + configured_memory_limit_bytes / 100
-        );
-        let performance_attribution_reports = fs::read_to_string(&performance_attribution_log_path)
-            .expect("the qualification should write performance-attribution reports");
-        let generation_report = performance_attribution_reports
-            .lines()
-            .find(|report_line| report_line.contains("\"report_kind\":\"generation\""))
-            .expect("the qualification should write a generation report");
-        assert!(generation_report.contains("speculative_prefill_sparse_target_forward"));
-        assert!(generation_report.contains("speculative_prefill_selected_token_count"));
-        assert!(!generation_report.contains("speculative_prefill_fallback_count"));
-        eprintln!("[speculative-prefill-artifact] status=complete");
+        let generation_error = qwen3_5_engine
+            .decode_next_token(request_id)
+            .await
+            .expect_err("the configured drafter restore failure must stop the request");
+        assert!(matches!(
+            generation_error,
+            astronomical_model_serving::InferenceEngineError::InvalidRequest { ref reason }
+                if reason.contains("drafter persistent-state restoration")
+                    && reason.contains("request was stopped")
+                    && reason.contains("without a target-only retry")
+        ));
+        eprintln!("[speculative-prefill-artifact] status=stopped_as_configured");
     })
     .await
     .expect("target and draft qualification must finish within 115 seconds");

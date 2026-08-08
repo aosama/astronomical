@@ -288,30 +288,41 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
     assert!(
         super::performance_attribution::counter_amount(
             restored_generation_report,
-            "speculative_prefill_draft_persistent_prefix_restored_token_count",
-        ) >= 2_048,
-        "the restarted visual request must restore reusable draft prompt state"
+            "speculative_prefill_target_persistent_state_restored_token_count",
+        ) > 0,
+        "the restarted visual request must restore its selection-bound target state"
     );
-    assert!(
+    assert_eq!(
+        super::performance_attribution::counter_amount(
+            restored_generation_report,
+            "speculative_prefill_draft_persistent_prefix_restored_token_count",
+        ),
+        0,
+        "an exact visual target-state hit must not report drafter reuse"
+    );
+    assert_eq!(
         super::performance_attribution::operation_total_elapsed_nanoseconds(
             restored_generation_report,
             "speculative_prefill_request_scoped_draft_load",
-        ) > 0,
-        "the restored visual request must load a request-scoped draft after expert eviction"
+        ),
+        0,
+        "an exact visual target-state hit must not load a request-scoped drafter"
     );
-    assert!(
+    assert_eq!(
         super::performance_attribution::operation_total_elapsed_nanoseconds(
             restored_generation_report,
             "speculative_prefill_draft_scoring",
-        ) > 0,
-        "the restored visual request must complete draft scoring"
+        ),
+        0,
+        "an exact visual target-state hit must not repeat drafter scoring"
     );
-    assert!(
+    assert_eq!(
         super::performance_attribution::operation_total_elapsed_nanoseconds(
             restored_generation_report,
             "speculative_prefill_request_scoped_draft_release",
-        ) > 0,
-        "the restored visual request must release the draft before target paging"
+        ),
+        0,
+        "an exact visual target-state hit has no request-scoped drafter to release"
     );
     assert_eq!(
         super::performance_attribution::counter_amount(

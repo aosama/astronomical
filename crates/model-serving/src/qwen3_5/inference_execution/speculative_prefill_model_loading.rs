@@ -139,9 +139,8 @@ pub(super) fn load_speculative_prefill_draft_model(
         return Ok((None, None));
     }
     let Some(draft_model_directory) = speculative_prefill.draft_model_directory.as_ref() else {
-        return Ok((
-            None,
-            Some("draft model directory is unavailable".to_owned()),
+        return Err(configured_draft_loading_failure(
+            "draft model directory resolution",
         ));
     };
     let draft_validated_artifact = match Qwen3_5ArtifactValidator::new()
@@ -151,11 +150,10 @@ pub(super) fn load_speculative_prefill_draft_model(
         Err(draft_artifact_validation_error) => {
             tracing::warn!(
                 error = %draft_artifact_validation_error,
-                "speculative prefill draft artifact validation failed; serving target-only"
+                "configured SpecPrefill draft artifact validation failed; stopping model loading"
             );
-            return Ok((
-                None,
-                Some("draft model artifact validation failed".to_owned()),
+            return Err(configured_draft_loading_failure(
+                "draft model artifact validation",
             ));
         }
     };
@@ -163,11 +161,10 @@ pub(super) fn load_speculative_prefill_draft_model(
         tracing::warn!(
             configured_draft_model_id = ?speculative_prefill.draft_model_id,
             artifact_draft_model_id = draft_validated_artifact.model_id(),
-            "speculative prefill draft artifact identity differs from configuration; serving target-only"
+            "configured SpecPrefill draft artifact identity differs from configuration; stopping model loading"
         );
-        return Ok((
-            None,
-            Some("draft model identity does not match configuration".to_owned()),
+        return Err(configured_draft_loading_failure(
+            "draft model identity validation",
         ));
     }
     let draft_token_identifier_mapping_digest = match token_identifier_mapping_digest(
@@ -177,21 +174,19 @@ pub(super) fn load_speculative_prefill_draft_model(
         Err(draft_tokenizer_contract_error) => {
             tracing::warn!(
                 error = %draft_tokenizer_contract_error,
-                "speculative prefill draft tokenizer contract is unavailable; serving target-only"
+                "configured SpecPrefill draft tokenizer contract is unavailable; stopping model loading"
             );
-            return Ok((
-                None,
-                Some("draft tokenizer contract is unavailable".to_owned()),
+            return Err(configured_draft_loading_failure(
+                "draft tokenizer contract validation",
             ));
         }
     };
     if draft_token_identifier_mapping_digest != target_token_identifier_mapping_digest {
         tracing::warn!(
-            "speculative prefill draft and target tokenizers do not have the same contract; serving target-only"
+            "configured SpecPrefill draft and target tokenizers do not have the same contract; stopping model loading"
         );
-        return Ok((
-            None,
-            Some("draft and target tokenizer contracts differ".to_owned()),
+        return Err(configured_draft_loading_failure(
+            "target-and-drafter tokenizer compatibility validation",
         ));
     }
     if draft_validated_artifact.config().vocabulary_size()
@@ -200,11 +195,10 @@ pub(super) fn load_speculative_prefill_draft_model(
         tracing::warn!(
             draft_vocabulary_size = draft_validated_artifact.config().vocabulary_size(),
             target_vocabulary_size = target_model.config().vocabulary_size(),
-            "speculative prefill draft and target vocabularies differ; serving target-only"
+            "configured SpecPrefill draft and target vocabularies differ; stopping model loading"
         );
-        return Ok((
-            None,
-            Some("draft and target vocabularies differ".to_owned()),
+        return Err(configured_draft_loading_failure(
+            "target-and-drafter vocabulary compatibility validation",
         ));
     }
     let draft_model_revision = draft_validated_artifact.revision().to_owned();
@@ -216,11 +210,10 @@ pub(super) fn load_speculative_prefill_draft_model(
         Err(draft_runtime_initialization_error) => {
             tracing::warn!(
                 error = %draft_runtime_initialization_error,
-                "speculative prefill draft runtime initialization failed; serving target-only"
+                "configured SpecPrefill draft runtime initialization failed; stopping model loading"
             );
-            return Ok((
-                None,
-                Some("draft model runtime initialization failed".to_owned()),
+            return Err(configured_draft_loading_failure(
+                "draft MLX runtime initialization",
             ));
         }
     };
@@ -246,11 +239,10 @@ pub(super) fn load_speculative_prefill_draft_model(
                 }
                 tracing::warn!(
                     error = %draft_materialization_error,
-                    "speculative prefill draft weights could not be materialized; serving target-only"
+                    "configured SpecPrefill draft weights could not be materialized; stopping model loading"
                 );
-                return Ok((
-                    None,
-                    Some("draft model weights could not be materialized".to_owned()),
+                return Err(configured_draft_loading_failure(
+                    "draft weight materialization",
                 ));
             }
         },
@@ -266,13 +258,18 @@ pub(super) fn load_speculative_prefill_draft_model(
             }
             tracing::warn!(
                 error = %draft_load_error,
-                "speculative prefill draft model could not be loaded; serving target-only"
+                "configured SpecPrefill draft model could not be loaded; stopping model loading"
             );
-            return Ok((
-                None,
-                Some("draft model weights could not be loaded".to_owned()),
-            ));
+            return Err(configured_draft_loading_failure("draft weight loading"));
         }
     };
     Ok((Some((draft_model, draft_model_revision)), None))
+}
+
+fn configured_draft_loading_failure(failure_stage: &'static str) -> InferenceEngineError {
+    InferenceEngineError::Fatal {
+        reason: format!(
+            "configured SpecPrefill failed during {failure_stage}; model use was stopped"
+        ),
+    }
 }

@@ -58,6 +58,23 @@ impl Qwen3_5PromptRenderer {
         enable_thinking: bool,
         image_token_counts_per_user_message: &[Vec<usize>],
     ) -> Result<String, Qwen3_5PromptError> {
+        Self::render_with_control_span(
+            messages,
+            tools,
+            enable_thinking,
+            image_token_counts_per_user_message,
+        )
+        .map(Qwen3_5RenderedPrompt::into_string)
+    }
+
+    /// Renders the prompt and identifies the leading system-and-tool span that
+    /// the target model must process through ordinary full prefill.
+    pub fn render_with_control_span(
+        messages: &[ChatMessage],
+        tools: &[ChatToolDefinition],
+        enable_thinking: bool,
+        image_token_counts_per_user_message: &[Vec<usize>],
+    ) -> Result<Qwen3_5RenderedPrompt, Qwen3_5PromptError> {
         if messages.is_empty() {
             return Err(Qwen3_5PromptError::MissingMessages);
         }
@@ -72,6 +89,7 @@ impl Qwen3_5PromptRenderer {
         } else {
             render_tool_system_preamble(&mut rendered_prompt, messages.first(), tools)?;
         }
+        let ordinary_target_prefill_control_span_byte_count = rendered_prompt.len();
 
         let mut user_message_image_index = 0usize;
         for (message_index, message) in messages.iter().enumerate() {
@@ -132,7 +150,10 @@ impl Qwen3_5PromptRenderer {
             rendered_prompt.push_str(THINK_END);
             rendered_prompt.push_str("\n\n");
         }
-        Ok(rendered_prompt)
+        Ok(Qwen3_5RenderedPrompt {
+            rendered_prompt,
+            ordinary_target_prefill_control_span_byte_count,
+        })
     }
 
     /// Renders server-generated feedback after a malformed model tool call, then reopens assistant generation.
@@ -160,6 +181,44 @@ impl Qwen3_5PromptRenderer {
             rendered_correction.push_str("\n\n");
         }
         rendered_correction
+    }
+}
+
+/// One rendered prompt with the exact leading control-span byte boundary.
+#[derive(Debug)]
+pub struct Qwen3_5RenderedPrompt {
+    rendered_prompt: String,
+    ordinary_target_prefill_control_span_byte_count: usize,
+}
+
+impl Qwen3_5RenderedPrompt {
+    /// Returns the complete prompt text supplied to tokenization and the drafter.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.rendered_prompt
+    }
+
+    /// Returns the complete initial system prompt, tool definitions, tool
+    /// instructions, and their template delimiters.
+    #[must_use]
+    pub fn ordinary_target_prefill_control_span(&self) -> &str {
+        &self.rendered_prompt[..self.ordinary_target_prefill_control_span_byte_count]
+    }
+
+    /// Returns conversation content followed by the generation prefix.
+    #[must_use]
+    pub fn selectable_conversation_and_generation_suffix(&self) -> &str {
+        &self.rendered_prompt[self.ordinary_target_prefill_control_span_byte_count..]
+    }
+
+    #[must_use]
+    pub(crate) const fn ordinary_target_prefill_control_span_byte_count(&self) -> usize {
+        self.ordinary_target_prefill_control_span_byte_count
+    }
+
+    #[must_use]
+    fn into_string(self) -> String {
+        self.rendered_prompt
     }
 }
 

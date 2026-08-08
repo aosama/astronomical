@@ -205,7 +205,7 @@ impl ResolvedRuntimeConfig {
 /// Failure while loading or resolving runtime config for startup/reload.
 #[derive(Debug, Error)]
 pub enum ResolvedRuntimeConfigError {
-    #[error("invalid Astronomical configuration")]
+    #[error("invalid Astronomical configuration: {0}")]
     Configuration(#[from] AstronomicalConfigError),
     #[error("failed to discover configured models")]
     ModelDiscovery(#[from] DiscoveredModelError),

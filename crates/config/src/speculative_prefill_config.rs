@@ -154,9 +154,13 @@ pub(crate) fn resolve_speculative_prefill_config(
         return Err(AstronomicalConfigError::SpeculativePrefillMinimumPromptTokensMustBePositive);
     }
 
-    let keep_percentage = configured_speculative_prefill
-        .keep_percentage
-        .unwrap_or(SpeculativePrefillConfig::DEFAULT_KEEP_PERCENTAGE);
+    let keep_percentage = match configured_speculative_prefill.keep_percentage {
+        Some(configured_keep_percentage) => configured_keep_percentage,
+        None if enabled => {
+            return Err(AstronomicalConfigError::SpeculativePrefillKeepPercentageRequired);
+        }
+        None => SpeculativePrefillConfig::DEFAULT_KEEP_PERCENTAGE,
+    };
     if !(1..=100).contains(&keep_percentage) {
         return Err(AstronomicalConfigError::SpeculativePrefillKeepPercentageOutOfRange);
     }

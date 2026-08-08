@@ -7,7 +7,9 @@ use crate::{
 };
 use astronomical_ipc_protocol::RequestId;
 
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::{
+    Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests,
+};
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::{
     PromptPrefillChunckAttemptError, prefill_execution_error,
@@ -20,6 +22,8 @@ use super::{
     },
     qwen3_5_runtime_error, qwen3_5_selected_speculative_prefill_positions_for_range,
     qwen3_5_speculative_prefill_chunck_mode,
+    qwen3_5_speculative_prefill_sparse_target_is_active,
+    speculative_prefill_failure::configured_speculative_prefill_failure,
 };
 use crate::qwen3_5::multi_token_prediction::{
     execute_terminal_optional_history_capture_with_performance_attribution,
@@ -58,10 +62,18 @@ impl Qwen3_5EngineState {
             prefill_end,
             final_prompt_index,
         );
-        if !matches!(
+        let speculative_prefill_sparse_conversation_range_is_active =
+            qwen3_5_speculative_prefill_sparse_target_is_active(
+                active_request.should_use_speculative_prefill,
+                prefill_start,
+                active_request.ordinary_target_prefill_control_span_token_count,
+            );
+        if speculative_prefill_sparse_conversation_range_is_active
+            && !matches!(
             speculative_prefill_chunck_mode,
             Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
-        ) {
+        )
+        {
             self.prepare_speculative_prefill_selection(
                 active_request,
                 prefill_start,
@@ -71,7 +83,8 @@ impl Qwen3_5EngineState {
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
             && !active_request.persistent_prompt_cache_capture_has_stopped
-            && !active_request.has_optional_prediction_session();
+            && !active_request.has_optional_prediction_session()
+            && !speculative_prefill_sparse_conversation_range_is_active;
         let planned_completed_prefill_chunck_tokens = if capture_is_eligible {
             persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
                 prefill_start,
@@ -104,6 +117,14 @@ impl Qwen3_5EngineState {
             && !planned_completed_prefill_chunck_tokens.is_empty()
             && !writer_can_accept_projected_captures
         {
+            if active_request.should_use_speculative_prefill {
+                return Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "exact target prompt-state persistence admission",
+                    "the SSD writer cannot accept every completed protected-prefix boundary",
+                )
+                .into());
+            }
             active_request.persistent_prompt_cache_capture_has_stopped = true;
             tracing::info!(
                 "persistent prompt-cache capture stopped before forward because projected boundaries could not be accepted"
@@ -148,10 +169,10 @@ impl Qwen3_5EngineState {
             } else {
                 Vec::new()
             };
-        let mut speculative_prefill_target_token_count =
+        let speculative_prefill_target_token_count =
             selected_speculative_prefill_positions_for_current_chunck.len();
-        let mut speculative_prefill_target_is_active = active_request
-            .should_use_speculative_prefill
+        let speculative_prefill_target_is_active =
+            speculative_prefill_sparse_conversation_range_is_active
             && !matches!(
                 speculative_prefill_chunck_mode,
                 Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
@@ -181,7 +202,7 @@ impl Qwen3_5EngineState {
             }
             _ => 0,
         };
-        let mut adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
+        let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
             speculative_prefill_target_token_count,
             self.prefill_chunck_sizer
                 .prompt_processing_context_identifier(
@@ -208,7 +229,7 @@ impl Qwen3_5EngineState {
         let target_expert_payload_bytes_before_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
-        let mut active_memory_bytes_before_growth = self
+        let active_memory_bytes_before_growth = self
             .measure_adaptive_ram_growth_memory_admission(
                 adaptive_ram_growth_context,
                 &mut active_request.performance_attribution,
@@ -226,7 +247,7 @@ impl Qwen3_5EngineState {
                     .saturating_sub(target_expert_payload_bytes_after_context_admission),
             );
         }
-        let mut prefill_request_checkpoint = active_request
+        let prefill_request_checkpoint = active_request
             .prefill_request_checkpoint()
             .map_err(qwen3_5_runtime_error)?;
         let forward_chunck_started_at = Instant::now();
@@ -234,13 +255,41 @@ impl Qwen3_5EngineState {
         let mut terminal_history_token_count = 0;
         if speculative_prefill_target_is_active {
             if !selected_speculative_prefill_positions_for_current_chunck.is_empty() {
-                let sparse_target_gpu_inputs = prepare_sparse_target_gpu_inputs(
-                    active_request,
-                    model,
-                    &selected_speculative_prefill_positions_for_current_chunck,
-                    speculative_prefill_target_token_count,
-                )?;
+                let sparse_target_gpu_inputs = if active_request
+                    .take_forced_speculative_prefill_failure_for_tests(
+                        Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetInputAssembly,
+                    )
+                {
+                    Err(configured_speculative_prefill_failure(
+                        active_request.request_id,
+                        "sparse target input assembly",
+                        "forced speculative-prefill sparse input assembly failure",
+                    ))
+                } else {
+                    prepare_sparse_target_gpu_inputs(
+                        active_request,
+                        model,
+                        &selected_speculative_prefill_positions_for_current_chunck,
+                        speculative_prefill_target_token_count,
+                    )
+                }
+                .map_err(|sparse_input_assembly_error| {
+                    configured_speculative_prefill_failure(
+                        active_request.request_id,
+                        "sparse target input assembly",
+                        sparse_input_assembly_error,
+                    )
+                })?;
+                let should_force_sparse_target_execution_failure = active_request
+                    .take_forced_speculative_prefill_failure_for_tests(
+                        Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetExecution,
+                    );
                 let sparse_target_forward_result = (|| {
+                    if should_force_sparse_target_execution_failure {
+                        return Err(crate::Qwen3_5ExecutionError::InvalidInput {
+                            description: "forced speculative-prefill sparse target execution failure",
+                        });
+                    }
                     active_request.performance_attribution.measure_operation(
                         PerformanceOperation::SpeculativePrefillSparseTargetForward,
                         |performance_attribution| {
@@ -278,74 +327,13 @@ impl Qwen3_5EngineState {
                     )
                 })();
                 if let Err(qwen3_5_execution_error) = sparse_target_forward_result {
-                    if matches!(
-                        &qwen3_5_execution_error,
-                        crate::Qwen3_5ExecutionError::Runtime(
-                            astronomical_runtime_integration::MlxRuntimeError::ActiveMemoryLimitExceeded { .. }
-                        )
-                    ) {
-                        return Err(prefill_execution_error(
+                    return Err(PromptPrefillChunckAttemptError::Engine(
+                        configured_speculative_prefill_failure(
+                            active_request.request_id,
+                            "sparse target execution",
                             qwen3_5_execution_error,
-                            prefill_request_checkpoint,
-                        ));
-                    }
-                    if let Err(restore_error) = active_request
-                        .restore_prefill_request_checkpoint(prefill_request_checkpoint)
-                    {
-                        return Err(PromptPrefillChunckAttemptError::Engine(
-                            qwen3_5_runtime_error(restore_error),
-                        ));
-                    }
-                    active_request.should_use_speculative_prefill = false;
-                    active_request.speculative_prefill_selected_token_positions = None;
-                    speculative_prefill_target_is_active = false;
-                    speculative_prefill_target_token_count = 0;
-                    active_request
-                        .performance_attribution
-                        .record_counter(PerformanceCounter::SpeculativePrefillFallbackCount, 1);
-                    tracing::warn!(
-                        request_id = request_id.value(),
-                        error = %qwen3_5_execution_error,
-                        "optional speculative-prefill target execution failed; retrying target-only"
-                    );
-                    if let Err(allocator_cleanup_error) = model.runtime().clear_allocator_cache() {
-                        tracing::debug!(
-                            error = %allocator_cleanup_error,
-                            "speculative-prefill target allocator cleanup failed after fallback"
-                        );
-                    }
-                    let ordinary_adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
-                        prefill_token_count,
-                        self.prefill_chunck_sizer
-                            .prompt_processing_context_identifier(
-                                prefill_start,
-                                Qwen3_5PrefillExecutionContext::new(
-                                    active_request.visual_embeddings.is_some(),
-                                    active_request.has_optional_prediction_session(),
-                                    model.sparse_experts_are_paged(),
-                                    false,
-                                )
-                                .with_target_only_prefix(matches!(
-                                    speculative_prefill_chunck_mode,
-                                    Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix
-                                )),
-                            ),
-                        active_request.visual_embeddings.is_some(),
-                        active_request.has_optional_prediction_session(),
-                        model.sparse_experts_are_paged(),
-                    );
-                    active_memory_bytes_before_growth = self
-                        .measure_adaptive_ram_growth_memory_admission(
-                            ordinary_adaptive_ram_growth_context,
-                            &mut active_request.performance_attribution,
-                            &active_request.request_decoder_state,
-                            0,
-                            0,
-                        )?;
-                    adaptive_ram_growth_context = ordinary_adaptive_ram_growth_context;
-                    prefill_request_checkpoint = active_request
-                        .prefill_request_checkpoint()
-                        .map_err(qwen3_5_runtime_error)?;
+                        ),
+                    ));
                 }
             }
         }
@@ -482,7 +470,7 @@ impl Qwen3_5EngineState {
             &all_completed_prefill_chunck_tokens,
             terminal_history_token_count,
             &mut boundary_checkpoints,
-        );
+        )?;
         Ok(PromptPrefillChunckOutcome {
             active_memory_bytes_before_growth,
             forward_chunk_elapsed_millis: forward_chunck_started_at.elapsed().as_millis() as u64,

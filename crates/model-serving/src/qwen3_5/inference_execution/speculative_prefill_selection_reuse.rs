@@ -1,11 +1,10 @@
 #[cfg(feature = "direct-mlx")]
-use astronomical_runtime_integration::MlxRuntimeError;
-
-#[cfg(feature = "direct-mlx")]
-use crate::{PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError};
+use crate::{PerformanceCounter, PerformanceOperation};
 
 #[cfg(feature = "direct-mlx")]
 use super::Qwen3_5EngineState;
+#[cfg(feature = "direct-mlx")]
+use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 #[cfg(feature = "direct-mlx")]
 use super::engine_request::Qwen3_5EngineRequest;
 #[cfg(feature = "direct-mlx")]
@@ -31,19 +30,11 @@ impl Qwen3_5EngineState {
             if let Err(prompt_token_indices_error) =
                 self.prepare_speculative_prefill_prompt_token_indices_on_gpu(active_request)
             {
-                if matches!(
-                    &prompt_token_indices_error,
-                    Qwen3_5ExecutionError::Runtime(
-                        MlxRuntimeError::ActiveMemoryLimitExceeded { .. }
-                    )
-                ) {
-                    return Err(prompt_token_indices_error.into());
-                }
-                self.record_speculative_prefill_input_assembly_fallback(
-                    active_request,
+                return Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "reused sparse target input assembly",
                     prompt_token_indices_error,
-                );
-                return Ok(true);
+                ));
             }
             active_request.speculative_prefill_selected_token_positions =
                 Some(selected_token_positions);
@@ -90,10 +81,11 @@ impl Qwen3_5EngineState {
                     },
                 );
             if let Err(selection_load_error) = &persistent_selection_load_result {
-                tracing::debug!(
-                    error = %selection_load_error,
-                    "persisted speculative-prefill selection was unavailable; continuing with draft scoring"
-                );
+                return Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "selection restoration",
+                    selection_load_error,
+                ));
             }
             if let Ok(Some(selected_token_positions_on_gpu)) = persistent_selection_load_result {
                 let selected_token_positions = target_model
@@ -124,19 +116,11 @@ impl Qwen3_5EngineState {
                     if let Err(prompt_token_indices_error) =
                         self.prepare_speculative_prefill_prompt_token_indices_on_gpu(active_request)
                     {
-                        if matches!(
-                            &prompt_token_indices_error,
-                            Qwen3_5ExecutionError::Runtime(
-                                MlxRuntimeError::ActiveMemoryLimitExceeded { .. }
-                            )
-                        ) {
-                            return Err(prompt_token_indices_error.into());
-                        }
-                        self.record_speculative_prefill_input_assembly_fallback(
-                            active_request,
+                        return Err(configured_speculative_prefill_failure(
+                            active_request.request_id,
+                            "restored sparse target input assembly",
                             prompt_token_indices_error,
-                        );
-                        return Ok(true);
+                        ));
                     }
                     self.store_speculative_prefill_selection(
                         selection_store_token_key.clone(),
@@ -163,9 +147,11 @@ impl Qwen3_5EngineState {
                     );
                     return Ok(true);
                 }
-                tracing::warn!(
-                    "persisted speculative-prefill selection was outside the current prompt; continuing with draft scoring"
-                );
+                return Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "selection validation",
+                    "the restored selection is outside the current selectable conversation range",
+                ));
             }
         }
         Ok(false)

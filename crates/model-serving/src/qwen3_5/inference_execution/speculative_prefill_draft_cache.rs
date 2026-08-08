@@ -143,14 +143,14 @@ impl Qwen3_5EngineState {
             Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,
         >,
         performance_attribution: &mut PerformanceAttribution,
-    ) {
+    ) -> Result<(), Qwen3_5ExecutionError> {
         let (Some(draft_persistent_prompt_cache), Some(draft_persistent_prompt_cache_write_queue)) = (
             self.speculative_prefill_draft_persistent_prompt_cache
                 .as_ref(),
             self.speculative_prefill_draft_persistent_prompt_cache_write_queue
                 .as_ref(),
         ) else {
-            return;
+            return Ok(());
         };
 
         let mut previous_persistent_prompt_cache_block_key =
@@ -166,21 +166,16 @@ impl Qwen3_5EngineState {
                         .block_end_tokens
                         .saturating_sub(crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
             {
-                tracing::warn!(
-                    block_start_tokens = persistent_prompt_cache_block.block_start_tokens,
-                    block_end_tokens = persistent_prompt_cache_block.block_end_tokens,
-                    "skipping invalid speculative-prefill drafter cache block"
-                );
-                break;
+                return Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "speculative-prefill drafter cache block range is invalid",
+                });
             }
             if persistent_prompt_cache_block.block_start_tokens > 0
                 && previous_persistent_prompt_cache_block_key.is_none()
             {
-                tracing::info!(
-                    block_start_tokens = persistent_prompt_cache_block.block_start_tokens,
-                    "stopping speculative-prefill drafter cache capture without a parent block"
-                );
-                break;
+                return Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "speculative-prefill drafter cache block has no parent",
+                });
             }
             let persistent_prompt_cache_block_key =
                 match previous_persistent_prompt_cache_block_key.as_ref() {
@@ -204,12 +199,10 @@ impl Qwen3_5EngineState {
                 };
             let persistent_prompt_cache_block_key = match persistent_prompt_cache_block_key {
                 Ok(persistent_prompt_cache_block_key) => persistent_prompt_cache_block_key,
-                Err(block_key_error) => {
-                    tracing::warn!(
-                        error = %block_key_error,
-                        "stopping speculative-prefill drafter cache capture after block identity failure"
-                    );
-                    break;
+                Err(_block_key_error) => {
+                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                        description: "speculative-prefill drafter cache block identity failed",
+                    });
                 }
             };
             let mut block_performance_attribution =
@@ -231,21 +224,26 @@ impl Qwen3_5EngineState {
                         Some(persistent_prompt_cache_block_key);
                 }
                 Ok(write_queue_outcome) => {
-                    tracing::info!(
+                    tracing::error!(
                         outcome = ?write_queue_outcome,
-                        "stopping speculative-prefill drafter cache capture"
+                        "configured SpecPrefill drafter cache rejected a captured block"
                     );
-                    break;
+                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                        description: "speculative-prefill drafter cache rejected a captured block",
+                    });
                 }
                 Err(write_error) => {
-                    tracing::warn!(
+                    tracing::error!(
                         error = %write_error,
-                        "stopping speculative-prefill drafter cache capture after write failure"
+                        "configured SpecPrefill drafter cache block write failed"
                     );
-                    break;
+                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                        description: "speculative-prefill drafter cache block write failed",
+                    });
                 }
             }
         }
+        Ok(())
     }
 }
 

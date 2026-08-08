@@ -18,13 +18,15 @@ mod prompt_prefill;
 mod prompt_prefill_counters;
 mod prompt_prefill_errors;
 mod speculative_prefill;
+mod speculative_prefill_control_span;
 mod speculative_prefill_draft_cache;
 mod speculative_prefill_eligibility;
+mod speculative_prefill_failure;
 mod speculative_prefill_gpu_input;
 mod speculative_prefill_memory_admission;
 mod speculative_prefill_model_loading;
+mod speculative_prefill_policy_activation;
 mod speculative_prefill_scoring;
-mod speculative_prefill_scoring_fallback;
 mod speculative_prefill_selection;
 mod speculative_prefill_selection_persistence;
 mod speculative_prefill_selection_reuse;
@@ -56,8 +58,13 @@ use crate::{
 };
 
 use self::engine_request::Qwen3_5EngineRequest;
+pub use self::engine_request::Qwen3_5SpeculativePrefillFailureStageForTests;
 pub use self::speculative_prefill::{
     Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
+};
+pub use self::speculative_prefill_control_span::{
+    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 pub use self::speculative_prefill_selection::{
     Qwen3_5SpeculativePrefillSelectionError, qwen3_5_select_speculative_prefill_token_positions,
@@ -384,6 +391,40 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
 }
 
 impl Qwen3_5EngineState {
+    fn prompt_work_reuse_for_tests(
+        &self,
+        request_id: RequestId,
+    ) -> Result<astronomical_ipc_protocol::WorkerPromptWorkReuse, InferenceEngineError> {
+        let active_request = self.active_request.as_ref().ok_or_else(|| {
+            fatal_engine_error("cannot inspect prompt work reuse without an active request")
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot inspect prompt work reuse for a different request",
+            ));
+        }
+        Ok(active_request.prompt_work_reuse.clone())
+    }
+
+    fn speculative_prefill_selected_token_positions_for_tests(
+        &self,
+        request_id: RequestId,
+    ) -> Result<Option<Vec<usize>>, InferenceEngineError> {
+        let active_request = self.active_request.as_ref().ok_or_else(|| {
+            fatal_engine_error(
+                "cannot inspect speculative-prefill selected positions without an active request",
+            )
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot inspect speculative-prefill selected positions for a different request",
+            ));
+        }
+        Ok(active_request
+            .speculative_prefill_selected_token_positions
+            .clone())
+    }
+
     fn force_next_prefill_capacity_rejection_for_tests(
         &mut self,
         request_id: RequestId,
@@ -415,6 +456,23 @@ impl Qwen3_5EngineState {
             ));
         }
         active_request.force_next_speculative_prefill_draft_prefix_restore_failure_for_tests = true;
+        Ok(())
+    }
+
+    fn force_next_speculative_prefill_failure_for_tests(
+        &mut self,
+        request_id: RequestId,
+        failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
+    ) -> Result<(), InferenceEngineError> {
+        let active_request = self.active_request.as_mut().ok_or_else(|| {
+            fatal_engine_error("cannot force a speculative-prefill failure without an active request")
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot force a speculative-prefill failure for a different request",
+            ));
+        }
+        active_request.forced_speculative_prefill_failure_stage_for_tests = Some(failure_stage);
         Ok(())
     }
 

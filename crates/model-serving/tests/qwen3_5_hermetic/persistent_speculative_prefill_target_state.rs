@@ -4,11 +4,25 @@ use astronomical_model_serving::{
 };
 
 fn target_state_contract() -> PersistentSpeculativePrefillTargetStateContract {
+    target_state_contract_for_model_identity(
+        "target-model",
+        "target-revision",
+        "drafter-model",
+        "drafter-revision",
+    )
+}
+
+fn target_state_contract_for_model_identity(
+    target_model_id: &str,
+    target_model_revision: &str,
+    drafter_model_id: &str,
+    drafter_model_revision: &str,
+) -> PersistentSpeculativePrefillTargetStateContract {
     PersistentSpeculativePrefillTargetStateContract::new(
-        "target-model".to_owned(),
-        "target-revision".to_owned(),
-        "drafter-model".to_owned(),
-        "drafter-revision".to_owned(),
+        target_model_id.to_owned(),
+        target_model_revision.to_owned(),
+        drafter_model_id.to_owned(),
+        drafter_model_revision.to_owned(),
         [7_u8; 32],
         20,
         32,
@@ -113,4 +127,77 @@ fn should_invalidate_sparse_target_state_when_target_drafter_or_selection_policy
 
     assert_ne!(baseline_identity, changed_target_identity);
     assert_ne!(baseline_identity, changed_policy_identity);
+}
+
+#[test]
+fn should_isolate_sparse_target_state_across_target_and_drafter_revisions() {
+    let prompt_token_ids = (0..8_192)
+        .map(|token_position| token_position as u32)
+        .collect::<Vec<_>>();
+    let baseline_identity = target_state_contract_for_model_identity(
+        "target-model",
+        "target-revision-a",
+        "drafter-model",
+        "drafter-revision-a",
+    )
+    .target_state_identity_hash(&prompt_token_ids, &[]);
+
+    for changed_model_identity_contract in [
+        target_state_contract_for_model_identity(
+            "different-target",
+            "target-revision-a",
+            "drafter-model",
+            "drafter-revision-a",
+        ),
+        target_state_contract_for_model_identity(
+            "target-model",
+            "target-revision-b",
+            "drafter-model",
+            "drafter-revision-a",
+        ),
+        target_state_contract_for_model_identity(
+            "target-model",
+            "target-revision-a",
+            "different-drafter",
+            "drafter-revision-a",
+        ),
+        target_state_contract_for_model_identity(
+            "target-model",
+            "target-revision-a",
+            "drafter-model",
+            "drafter-revision-b",
+        ),
+    ] {
+        assert_ne!(
+            baseline_identity,
+            changed_model_identity_contract.target_state_identity_hash(&prompt_token_ids, &[]),
+        );
+    }
+}
+
+#[test]
+fn should_apply_the_same_targeted_keep_percentage_purge_to_sparse_target_state() {
+    let stored_sparse_target_policy = target_state_contract().policy_identity();
+
+    assert!(stored_sparse_target_policy.should_purge_for_active_keep_percentage(
+        "target-model",
+        "target-revision",
+        "drafter-model",
+        "drafter-revision",
+        35,
+    ));
+    assert!(!stored_sparse_target_policy.should_purge_for_active_keep_percentage(
+        "target-model",
+        "target-revision",
+        "drafter-model",
+        "drafter-revision",
+        20,
+    ));
+    assert!(!stored_sparse_target_policy.should_purge_for_active_keep_percentage(
+        "target-model",
+        "target-revision",
+        "different-drafter",
+        "drafter-revision",
+        35,
+    ));
 }

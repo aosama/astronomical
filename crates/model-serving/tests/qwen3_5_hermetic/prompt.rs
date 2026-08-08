@@ -26,6 +26,94 @@ fn should_render_one_user_turn_with_the_pinned_ornith_thinking_prefix() {
 }
 
 #[test]
+fn should_identify_the_complete_system_and_tool_preamble_as_ordinary_target_prefill() {
+    let rendered_prompt = Qwen3_5PromptRenderer::render_with_control_span(
+        &[
+            ChatMessage::System {
+                content: "Always use the declared repository tool.".to_owned(),
+            },
+            ChatMessage::User {
+                content: "Inspect Romeo and Juliet.".to_owned(),
+                images: Vec::new(),
+            },
+        ],
+        &[ChatToolDefinition {
+            name: "inspect_repository".to_owned(),
+            description: Some("Inspect one repository path.".to_owned()),
+            parameters_json: r#"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#
+                .to_owned(),
+        }],
+        false,
+        &[],
+    )
+    .expect("a tool-bearing prompt should expose its ordinary target-prefill boundary");
+
+    let ordinary_target_prefill_control_span = rendered_prompt
+        .ordinary_target_prefill_control_span();
+    let selectable_conversation_and_generation_suffix = rendered_prompt
+        .selectable_conversation_and_generation_suffix();
+
+    assert!(ordinary_target_prefill_control_span.starts_with("<|im_start|>system\n# Tools"));
+    assert!(ordinary_target_prefill_control_span.contains("inspect_repository"));
+    assert!(ordinary_target_prefill_control_span.contains("Always use the declared repository tool."));
+    assert!(ordinary_target_prefill_control_span.ends_with("<|im_end|>\n"));
+    assert_eq!(
+        selectable_conversation_and_generation_suffix,
+        "<|im_start|>user\nInspect Romeo and Juliet.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    );
+}
+
+#[test]
+fn should_identify_an_initial_system_message_without_tools_as_ordinary_target_prefill() {
+    let rendered_prompt = Qwen3_5PromptRenderer::render_with_control_span(
+        &[
+            ChatMessage::System {
+                content: "Answer from the supplied play.".to_owned(),
+            },
+            ChatMessage::User {
+                content: "Who is Romeo?".to_owned(),
+                images: Vec::new(),
+            },
+        ],
+        &[],
+        true,
+        &[],
+    )
+    .expect("a system-bearing prompt should expose its ordinary target-prefill boundary");
+
+    assert_eq!(
+        rendered_prompt
+            .ordinary_target_prefill_control_span(),
+        "<|im_start|>system\nAnswer from the supplied play.<|im_end|>\n"
+    );
+    assert!(
+        rendered_prompt
+            .selectable_conversation_and_generation_suffix()
+            .starts_with("<|im_start|>user\nWho is Romeo?")
+    );
+}
+
+#[test]
+fn should_leave_user_only_prompts_without_an_ordinary_target_control_span() {
+    let rendered_prompt = Qwen3_5PromptRenderer::render_with_control_span(
+        &[ChatMessage::User {
+            content: "Summarize Romeo and Juliet.".to_owned(),
+            images: Vec::new(),
+        }],
+        &[],
+        true,
+        &[],
+    )
+    .expect("a user-only prompt should render");
+
+    assert_eq!(rendered_prompt.ordinary_target_prefill_control_span(), "");
+    assert_eq!(
+        rendered_prompt.selectable_conversation_and_generation_suffix(),
+        rendered_prompt.as_str()
+    );
+}
+
+#[test]
 fn should_render_one_user_turn_with_a_closed_thinking_block_when_thinking_is_disabled() {
     let rendered_prompt = Qwen3_5PromptRenderer::render(
         &[ChatMessage::User {

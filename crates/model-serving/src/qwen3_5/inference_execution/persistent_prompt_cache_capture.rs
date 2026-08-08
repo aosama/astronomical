@@ -1,10 +1,12 @@
 use crate::{
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore, PersistentPromptCacheWriteQueue,
-    PersistentPromptCacheWriteQueueOutcome, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    InferenceEngineError, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PerformanceAttribution,
+    PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
+    PersistentPromptCacheWriteQueue, PersistentPromptCacheWriteQueueOutcome,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
 };
 
 use super::engine_request::Qwen3_5EngineRequest;
+use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 use super::{Qwen3_5EngineState, Qwen3_5Model};
 
 impl Qwen3_5EngineState {
@@ -17,7 +19,7 @@ impl Qwen3_5EngineState {
         successful_prefill_start: usize,
         successful_prefill_end: usize,
         boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
-    ) {
+    ) -> Result<(), InferenceEngineError> {
         for boundary_checkpoint in boundary_checkpoints {
             if active_request.persistent_prompt_cache_capture_has_stopped {
                 break;
@@ -25,20 +27,26 @@ impl Qwen3_5EngineState {
             let Some(absolute_boundary) = successful_prefill_start
                 .checked_add(boundary_checkpoint.completed_prefill_chunck_tokens)
             else {
-                stop_capture(active_request, "prompt-cache boundary position overflowed");
-                break;
+                return stop_capture_or_fail_configured_speculative_prefill(
+                    active_request,
+                    "prompt-cache boundary position overflowed",
+                );
             };
             if !absolute_boundary.is_multiple_of(PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
                 || absolute_boundary > successful_prefill_end
             {
-                stop_capture(active_request, "prompt-cache boundary position is invalid");
-                break;
+                return stop_capture_or_fail_configured_speculative_prefill(
+                    active_request,
+                    "prompt-cache boundary position is invalid",
+                );
             }
             let Some(block_start) =
                 absolute_boundary.checked_sub(PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
             else {
-                stop_capture(active_request, "prompt-cache block start underflowed");
-                break;
+                return stop_capture_or_fail_configured_speculative_prefill(
+                    active_request,
+                    "prompt-cache block start underflowed",
+                );
             };
             let block_end = absolute_boundary;
             let block_tokens = &active_request.input_token_ids[block_start..block_end];
@@ -57,11 +65,10 @@ impl Qwen3_5EngineState {
                 }
             };
             let Ok(persistent_prompt_cache_block_key) = persistent_prompt_cache_block_key else {
-                stop_capture(
+                return stop_capture_or_fail_configured_speculative_prefill(
                     active_request,
                     "prompt-cache block identity construction failed",
                 );
-                break;
             };
             let kv_block_tensors = match active_request.measure_operation_with_request(
                 PerformanceOperation::PersistentPromptCacheStateExtraction,
@@ -78,8 +85,10 @@ impl Qwen3_5EngineState {
                 Ok(kv_block_tensors) => kv_block_tensors,
                 Err(error) => {
                     tracing::warn!(block_start, block_end, %error, "prompt-cache KV extraction failed");
-                    stop_capture(active_request, "prompt-cache KV extraction failed");
-                    break;
+                    return stop_capture_or_fail_configured_speculative_prefill(
+                        active_request,
+                        error,
+                    );
                 }
             };
             let mut request_performance_attribution = std::mem::replace(
@@ -107,19 +116,21 @@ impl Qwen3_5EngineState {
                         Some(persistent_prompt_cache_block_key);
                 }
                 Ok(_) => {
-                    stop_capture(
+                    return stop_capture_or_fail_configured_speculative_prefill(
                         active_request,
                         "prompt-cache writer cannot accept more blocks",
                     );
-                    break;
                 }
                 Err(error) => {
                     tracing::warn!(block_start, block_end, %error, "prompt-cache block save failed");
-                    stop_capture(active_request, "prompt-cache block save failed");
-                    break;
+                    return stop_capture_or_fail_configured_speculative_prefill(
+                        active_request,
+                        error,
+                    );
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -140,4 +151,19 @@ fn stop_capture(active_request: &mut Qwen3_5EngineRequest, reason: &'static str)
         reason,
         "persistent prompt-cache capture stopped for this request"
     );
+}
+
+fn stop_capture_or_fail_configured_speculative_prefill(
+    active_request: &mut Qwen3_5EngineRequest,
+    failure_cause: impl std::fmt::Display,
+) -> Result<(), InferenceEngineError> {
+    if active_request.should_use_speculative_prefill {
+        return Err(configured_speculative_prefill_failure(
+            active_request.request_id,
+            "exact target prompt-state persistence",
+            failure_cause,
+        ));
+    }
+    stop_capture(active_request, "prompt-cache capture could not continue");
+    Ok(())
 }
