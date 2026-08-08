@@ -4,22 +4,21 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime, MlxSafetensors,
+    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime,
 };
 
 use crate::expert_paging::ExpertWeightMemoryCache;
-use crate::qwen3_5::Qwen3_5MtpArtifactCapability;
 use crate::qwen3_5_moe::{
     Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::model::Qwen3_5Model;
-use super::mtp::Qwen3_5MtpWeights;
 use super::{
-    Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5ShardIndex,
-    Qwen3_5VisionModel, Qwen3_5Weights, ValidatedQwen3_5Artifact,
+    Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
+    ValidatedQwen3_5Artifact,
 };
+use crate::qwen3_5::multi_token_prediction::bind_optional_weights;
 
 impl Qwen3_5Model {
     pub(crate) fn prewarm_complete_expert_layers_with_performance_attribution(
@@ -51,6 +50,7 @@ impl Qwen3_5Model {
             validated_artifact,
             model_directory,
             bind_mtp_weights,
+            true,
             &mut disabled_performance_attribution,
         )
     }
@@ -69,6 +69,7 @@ impl Qwen3_5Model {
         mut validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         bind_mtp_weights: bool,
+        should_bind_vision_weights: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let config = validated_artifact.config().clone();
@@ -78,9 +79,11 @@ impl Qwen3_5Model {
             },
         )?;
         let vision_config = validated_artifact.vision_config().cloned();
-        let has_separate_vision_sidecar = validated_artifact.has_separate_vision_sidecar();
-        let has_embedded_vision_tower =
-            validated_artifact.supports_image_input() && !has_separate_vision_sidecar;
+        let has_separate_vision_sidecar =
+            should_bind_vision_weights && validated_artifact.has_separate_vision_sidecar();
+        let has_embedded_vision_tower = should_bind_vision_weights
+            && validated_artifact.supports_image_input()
+            && !has_separate_vision_sidecar;
         let mtp_artifact_capability = validated_artifact.mtp_artifact_capability().clone();
         let shard_index = validated_artifact.shard_index().clone();
         let sidecar_vision_model = if has_separate_vision_sidecar {
@@ -154,7 +157,7 @@ impl Qwen3_5Model {
                 };
                 let weights =
                     Qwen3_5Weights::bind_from_model_shards(&config, &shard_index, model_shards)?;
-                let mtp_weights = bind_optional_mtp_weights(
+                let mtp_weights = bind_optional_weights(
                     bind_mtp_weights,
                     &mtp_artifact_capability,
                     &config,
@@ -214,6 +217,8 @@ impl Qwen3_5Model {
         let gated_delta_kernel = super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?;
         let gated_delta_checkpoint_kernel =
             super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?;
+        let target_verification_quantized_linear_kernel =
+            super::target_verification_quantized_linear::target_verification_quantized_linear_kernel()?;
         let compiled_swiglu = MlxCompiledSwiGlu::new()?;
         let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
         // Qwen3.5 config validation accepts BF16 activations only. Construct
@@ -238,57 +243,13 @@ impl Qwen3_5Model {
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,
+            target_verification_quantized_linear_kernel,
             compiled_swiglu,
             compiled_elementwise_graphs,
             inverse_linear_head_dimension_scale,
             inverse_square_root_linear_head_dimension_scale,
         })
     }
-}
-
-fn bind_optional_mtp_weights(
-    bind_mtp_weights: bool,
-    mtp_artifact_capability: &Qwen3_5MtpArtifactCapability,
-    qwen3_5_config: &Qwen3_5Config,
-    shard_index: &Qwen3_5ShardIndex,
-    model_shards: &[MlxSafetensors],
-    mtp_only_shards: Vec<MlxSafetensors>,
-    target_weights: &Qwen3_5Weights,
-    runtime: &MlxRuntime,
-) -> Option<Qwen3_5MtpWeights> {
-    if !bind_mtp_weights || !mtp_artifact_capability.is_mtp_capable() {
-        return None;
-    }
-    let mut mtp_weights =
-        match Qwen3_5MtpWeights::bind(qwen3_5_config, shard_index, model_shards, mtp_only_shards) {
-            Ok(mtp_weights) => mtp_weights,
-            Err(mtp_weight_binding_error) => {
-                tracing::warn!(
-                    error = %mtp_weight_binding_error,
-                    "optional MTP weight binding failed; serving target-only"
-                );
-                None
-            }
-        };
-    if let Some(bound_mtp_weights) = mtp_weights.as_mut()
-        && let Err(mtp_normalization_repair_error) =
-            bound_mtp_weights.repair_raw_normalization_weights(runtime, target_weights)
-    {
-        tracing::warn!(
-            error = %mtp_normalization_repair_error,
-            "optional MTP normalization repair failed; serving target-only"
-        );
-        mtp_weights = None;
-    }
-    if mtp_weights.is_none()
-        && let Err(mlx_allocator_cleanup_error) = runtime.clear_allocator_cache()
-    {
-        tracing::warn!(
-            error = %mlx_allocator_cleanup_error,
-            "failed to reclaim allocator memory after optional MTP initialization failure"
-        );
-    }
-    mtp_weights
 }
 
 /// Maps embedded vision tensor names to their loaded model-shard positions.

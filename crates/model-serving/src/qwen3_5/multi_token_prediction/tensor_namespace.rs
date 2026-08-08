@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 
 use crate::qwen3_5::artifacts::tensor_spec::append_qwen3_5_quantized_affine_tensor_profiles;
-use crate::qwen3_5::dense::mtp_tensor_spec::append_qwen3_5_dense_mtp_tensor_profiles;
-use crate::qwen3_5_moe::artifacts::mtp_tensor_spec::append_qwen3_5_moe_mtp_tensor_profiles;
 use crate::{TensorDtype, TensorProfile};
 
-use super::tensor_spec::qwen3_5_tensor_profile;
-use super::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
+use super::dense_tensor_spec::append_qwen3_5_dense_mtp_tensor_profiles;
+use super::moe_tensor_spec::append_qwen3_5_moe_mtp_tensor_profiles;
+use crate::qwen3_5::artifacts::tensor_spec::qwen3_5_tensor_profile;
+use crate::qwen3_5::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 
 /// Returns the config-resolved one-layer Qwen MTP namespace supported by the executor.
 #[must_use]

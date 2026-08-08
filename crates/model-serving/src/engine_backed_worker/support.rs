@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ExpertMemoryMode, ProtocolError, RequestId,
+    ChatGenerationCommand, ExpertMemoryMode, ProtocolError, RequestId, WorkerPromptWorkReuse,
 };
 use thiserror::Error;
 
@@ -57,6 +57,7 @@ pub(crate) struct ActiveEngineGeneration<RequestOutput> {
     pub(crate) next_tool_call_index: u16,
     pub(crate) prompt_token_count: u32,
     pub(crate) cached_token_count: u32,
+    pub(crate) prompt_work_reuse: WorkerPromptWorkReuse,
     pub(crate) prefill_processed_tokens: u32,
     pub(crate) prefill_elapsed_millis: u64,
     pub(crate) generation_started_at: Option<Instant>,
@@ -82,6 +83,7 @@ impl<RequestOutput> ActiveEngineGeneration<RequestOutput> {
             next_tool_call_index: 0,
             prompt_token_count,
             cached_token_count,
+            prompt_work_reuse: WorkerPromptWorkReuse::default(),
             prefill_processed_tokens: 0,
             prefill_elapsed_millis: 0,
             generation_started_at: None,

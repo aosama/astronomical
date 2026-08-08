@@ -6,13 +6,13 @@ use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::Qwen3_5Model;
 
-pub(super) struct GeneratedTokenEmission {
-    pub(super) generated_token: GeneratedToken,
-    pub(super) is_terminal: bool,
+pub(in crate::qwen3_5) struct GeneratedTokenEmission {
+    pub(in crate::qwen3_5) generated_token: GeneratedToken,
+    pub(in crate::qwen3_5) is_terminal: bool,
 }
 
 impl Qwen3_5EngineState {
-    pub(super) fn generated_token_will_be_terminal(
+    pub(in crate::qwen3_5) fn generated_token_will_be_terminal(
         &self,
         active_request: &Qwen3_5EngineRequest,
         generated_token_id: u32,
@@ -24,7 +24,7 @@ impl Qwen3_5EngineState {
                 >= active_request.maximum_output_tokens
     }
 
-    pub(super) fn build_generated_token_emission(
+    pub(in crate::qwen3_5) fn build_generated_token_emission(
         &self,
         model: &Qwen3_5Model,
         active_request: &mut Qwen3_5EngineRequest,
@@ -66,8 +66,9 @@ impl Qwen3_5EngineState {
                         })?,
                         model.active_memory_breakdown(
                             &active_request.request_decoder_state,
-                            active_request.mtp_request_state.as_ref(),
+                            active_request.additional_context_state_payload_bytes(),
                             mlx_active_memory_bytes,
+                            self.speculative_prefill_draft_model_payload_bytes(),
                         ),
                     ),
                 )
@@ -93,7 +94,7 @@ impl Qwen3_5EngineState {
     ) -> Result<u32, InferenceEngineError> {
         // The next token may already have been computed from the model's actual
         // chosen token, so the KV cache can have one token of drift after this
-        // override. MTP avoids starting new verification windows when this
+        // override. Optional prediction avoids starting new verification windows when this
         // boundary is imminent, preserving the existing target-only behavior.
         if active_request.is_inside_thinking && generated_token_id != self.think_end_token_id {
             if let Some(thinking_budget) = active_request.thinking_budget {
@@ -145,32 +146,4 @@ pub(super) fn synchronize_generated_token_id(
             |_performance_attribution| generated_token.item_u32(),
         )
         .map_err(qwen3_5_runtime_error)
-}
-
-/// Returns whether an MTP window could cross the forced thinking boundary.
-#[doc(hidden)]
-#[must_use]
-pub fn qwen3_5_mtp_verification_may_cross_thinking_budget(
-    is_inside_thinking: bool,
-    thinking_token_count: u16,
-    thinking_budget: Option<u16>,
-    possible_emitted_token_count: u16,
-) -> bool {
-    is_inside_thinking
-        && thinking_budget.is_some_and(|thinking_budget| {
-            thinking_token_count.saturating_add(possible_emitted_token_count) >= thinking_budget
-        })
-}
-
-/// Returns whether a depth-one MTP window fits output and context boundaries.
-#[doc(hidden)]
-#[must_use]
-pub fn qwen3_5_depth_one_mtp_window_fits(
-    generated_token_count: u16,
-    maximum_output_tokens: u16,
-    next_position_tokens: u32,
-    maximum_position_count: usize,
-) -> bool {
-    maximum_output_tokens.saturating_sub(generated_token_count) >= 2
-        && maximum_position_count.saturating_sub(next_position_tokens as usize) >= 2
 }

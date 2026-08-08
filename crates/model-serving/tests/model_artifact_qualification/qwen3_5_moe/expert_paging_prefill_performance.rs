@@ -45,7 +45,7 @@ async fn run_compact_prefill_performance_probe() {
         &prompt_token_ids,
         "paged_compact_performance",
         test_started_at,
-        Some(Qwen3_5MoEPagedPrefillExecutionMode::CompactMultiTokenDiagnostic),
+        Some(Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic),
     )
     .await;
     let maximum_token_local_to_compact_absolute_logit_delta = maximum_absolute_difference(

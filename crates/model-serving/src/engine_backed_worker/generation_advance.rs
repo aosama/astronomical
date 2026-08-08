@@ -222,7 +222,9 @@ where
                 prefill_optimizer_insight,
                 mlx_memory_telemetry,
                 expert_memory_mode,
+                prompt_work_reuse,
             } => {
+                active_generation.prompt_work_reuse = prompt_work_reuse;
                 if let Some(expert_memory_mode) = expert_memory_mode
                     && active_generation.last_reported_expert_memory_mode
                         != Some(expert_memory_mode)

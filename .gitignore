@@ -13,6 +13,7 @@
 
 # Agent harness local state
 .opencode/
+AGENTS.override.md
 
 # Local UI screenshot captures
 ScreenShots/
@@ -30,6 +31,8 @@ ScreenShots/
 .cache/
 tmp/
 temp/
+.tmp-*.txt
+.tmp-*.diff
 
 # Python bytecode
 __pycache__/

@@ -30,6 +30,8 @@ impl Qwen3_5EngineState {
         if self.active_request.is_some() {
             return Err(InferenceEngineError::EngineBusy);
         }
+        let speculative_prefill_draft_model_payload_bytes =
+            self.speculative_prefill_draft_model_payload_bytes();
         let Some(model) = self.model.as_mut() else {
             return Err(super::fatal_engine_error(
                 "cannot update the MLX memory ceiling before the model is loaded",
@@ -104,7 +106,10 @@ impl Qwen3_5EngineState {
             active_memory_bytes,
             allocator_cache_memory_bytes,
             peak_memory_bytes,
-            model.finalized_active_memory_breakdown(active_memory_bytes),
+            model.finalized_active_memory_breakdown(
+                active_memory_bytes,
+                speculative_prefill_draft_model_payload_bytes,
+            ),
         ));
         let expert_memory_mode = model.expert_memory_mode();
         tracing::info!(

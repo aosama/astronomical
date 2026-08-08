@@ -34,7 +34,10 @@ impl Qwen3_5EngineState {
             active_memory_bytes,
             allocator_cache_memory_bytes,
             peak_memory_bytes,
-            model.finalized_active_memory_breakdown(active_memory_bytes),
+            model.finalized_active_memory_breakdown(
+                active_memory_bytes,
+                self.speculative_prefill_draft_model_payload_bytes(),
+            ),
         )))
     }
 
@@ -214,7 +217,10 @@ impl Qwen3_5EngineState {
                     active_memory_bytes,
                     allocator_cache_memory_bytes,
                     peak_memory_bytes,
-                    model.finalized_active_memory_breakdown(active_memory_bytes),
+                    model.finalized_active_memory_breakdown(
+                        active_memory_bytes,
+                        self.speculative_prefill_draft_model_payload_bytes(),
+                    ),
                 )),
                 memory_counter_results => {
                     tracing::warn!(

@@ -150,37 +150,6 @@ impl MlxRuntime {
         })
     }
 
-    /// Applies the certified nontraditional Llama rotary embedding.
-    pub fn rope(
-        &self,
-        input: &MlxArray,
-        dimensions: i32,
-        base: f32,
-        offset_tokens: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
-        let optional_base = raw::mlx_optional_float {
-            value: base,
-            has_value: true,
-        };
-        self.output_array("apply MLX rotary embedding", |output, stream| {
-            // SAFETY: Input and stream are live, the optional scalar is passed
-            // by value, and an empty freqs handle selects generated frequencies.
-            unsafe {
-                raw::mlx_fast_rope(
-                    output,
-                    input.raw(),
-                    dimensions,
-                    false,
-                    optional_base,
-                    1.0,
-                    offset_tokens,
-                    MlxArray::empty_raw(),
-                    stream,
-                )
-            }
-        })
-    }
-
     /// Adds two broadcast-compatible arrays.
     pub fn add(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
         self.output_array("add MLX arrays", |output, stream| {

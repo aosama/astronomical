@@ -71,6 +71,10 @@ async fn cancel_worker_request(
                     request_id: progress_request_id,
                     ..
                 } if progress_request_id == request_id => {}
+                WorkerEvent::PromptWorkReuse {
+                    request_id: reuse_request_id,
+                    ..
+                } if reuse_request_id == request_id => {}
                 WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
                     publish_expert_memory_mode(health_snapshot, expert_memory_mode);
                 }

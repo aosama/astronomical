@@ -26,6 +26,29 @@ fn should_discover_special_token_ids_from_tokenizer_json() {
 }
 
 #[test]
+fn should_digest_token_identifier_mappings_independently_of_json_serialization() {
+    let compact_tokenizer_bytes = ornith_tokenizer_json_bytes(248_056);
+    let tokenizer_document = serde_json::from_slice::<serde_json::Value>(&compact_tokenizer_bytes)
+        .expect("the synthetic tokenizer should parse as JSON");
+    let pretty_tokenizer_bytes = serde_json::to_vec_pretty(&tokenizer_document)
+        .expect("the synthetic tokenizer should serialize with different formatting");
+
+    assert_ne!(compact_tokenizer_bytes, pretty_tokenizer_bytes);
+    assert_eq!(
+        Qwen3_5Tokenizer::token_identifier_mapping_digest(&compact_tokenizer_bytes)
+            .expect("the compact tokenizer mapping should digest"),
+        Qwen3_5Tokenizer::token_identifier_mapping_digest(&pretty_tokenizer_bytes)
+            .expect("the pretty tokenizer mapping should digest"),
+    );
+    assert_ne!(
+        Qwen3_5Tokenizer::token_identifier_mapping_digest(&compact_tokenizer_bytes)
+            .expect("the expected tokenizer mapping should digest"),
+        Qwen3_5Tokenizer::token_identifier_mapping_digest(&ornith_tokenizer_json_bytes(248_057))
+            .expect("the changed tokenizer mapping should digest"),
+    );
+}
+
+#[test]
 fn should_reject_a_tokenizer_missing_a_required_special_token() {
     let tokenizer_error = Qwen3_5Tokenizer::from_json_bytes(
         &ornith_tokenizer_json_bytes_missing_image_pad(),

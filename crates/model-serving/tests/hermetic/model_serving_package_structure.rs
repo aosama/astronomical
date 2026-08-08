@@ -143,6 +143,87 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
     }
 }
 
+#[test]
+fn should_isolate_multi_token_prediction_from_standard_qwen_execution_owners() {
+    let model_serving_source_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let multi_token_prediction_source_directory = model_serving_source_directory
+        .join("qwen3_5")
+        .join("multi_token_prediction");
+
+    assert_source_directory_contains_files(
+        &model_serving_source_directory.join("qwen3_5"),
+        "multi_token_prediction",
+        &[
+            "mod.rs",
+            "artifact.rs",
+            "model.rs",
+            "request_state.rs",
+            "prefill.rs",
+            "decode.rs",
+            "injected_input.rs",
+            "runtime.rs",
+        ],
+    );
+
+    for standard_qwen_source_file_name in [
+        "inference_execution/start_generation.rs",
+        "inference_execution/prefill_advance.rs",
+        "inference_execution/prompt_prefill.rs",
+        "inference_execution/advance_generation.rs",
+        "inference_execution/inject_input_tokens.rs",
+        "inference_execution/engine_request.rs",
+        "inference_execution/generated_token_emission.rs",
+        "model/forward_attribution.rs",
+        "model/forward_graph.rs",
+        "model/model.rs",
+        "decoder/request_state/state_stack.rs",
+        "../qwen3_5_moe/model/prefill_execution_mode.rs",
+    ] {
+        let standard_qwen_source = std::fs::read_to_string(
+            model_serving_source_directory
+                .join("qwen3_5")
+                .join(standard_qwen_source_file_name),
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "standard Qwen source must be readable: {standard_qwen_source_file_name}: {error}"
+            )
+        });
+        for isolated_multi_token_prediction_identifier in [
+            "mtp_request_state",
+            "mtp_target_hidden_states",
+            "verified_mtp_generated_token_ids",
+            "accepted_mtp_draft_rollback",
+            "prefill_mtp_history",
+            "forward_mtp_draft",
+            "forward_depth_one_mtp_verification",
+            "MtpPrefixAcceptanceOutcome",
+            "multi_token_prediction_request",
+            "TargetOnlyMtpPrefix",
+            "TerminalMtpCapture",
+            "terminal_mtp",
+            "restore_mtp_verified_prefix",
+            "combined_target_and_mtp",
+            "CompactMultiTokenDiagnostic",
+        ] {
+            assert!(
+                !standard_qwen_source.contains(isolated_multi_token_prediction_identifier),
+                "MTP identifier must remain in qwen3_5/multi_token_prediction: {standard_qwen_source_file_name} contains {isolated_multi_token_prediction_identifier}"
+            );
+        }
+    }
+
+    let multi_token_prediction_module_source =
+        std::fs::read_to_string(multi_token_prediction_source_directory.join("mod.rs"))
+            .expect("the multi-token prediction module must be readable");
+    assert!(
+        multi_token_prediction_module_source.contains("mod decode")
+            && multi_token_prediction_module_source.contains("mod prefill")
+            && multi_token_prediction_module_source.contains("mod request_state"),
+        "the multi-token prediction module must own its execution submodules"
+    );
+}
+
 fn assert_source_directory_contains_files(
     model_serving_source_directory: &Path,
     source_directory_name: &str,

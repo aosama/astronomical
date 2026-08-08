@@ -5,7 +5,7 @@ use crate::{TensorDtype, TensorProfile};
 use super::{Qwen3_5Config, Qwen3_5ExecutionError};
 
 /// Validates one bound MLX tensor against its config-derived tensor profile.
-pub(super) fn validate_bound_tensor(
+pub(crate) fn validate_bound_tensor(
     tensor_profile: &TensorProfile,
     bound_tensor: &MlxArray,
 ) -> Result<(), Qwen3_5ExecutionError> {
@@ -48,7 +48,7 @@ pub(super) fn validate_bound_tensor(
 }
 
 /// Validates that a quantized tensor profile uses an MLX-supported bit width.
-pub(super) fn validate_quantized_tensor_bits(
+pub(crate) fn validate_quantized_tensor_bits(
     qwen3_5_config: &Qwen3_5Config,
     tensor_profile: &TensorProfile,
 ) -> Result<(), Qwen3_5ExecutionError> {

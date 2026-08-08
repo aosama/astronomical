@@ -29,6 +29,8 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
+        speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
+        speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             config_home_directory.join(".astronomical").join("cache"),
             50_000_000_000,
@@ -138,6 +140,8 @@ async fn should_update_status_config_warning_after_successful_reload() {
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: true,
+        speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
+        speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             config_home_directory.join(".astronomical").join("cache"),
             50_000_000_000,
@@ -172,6 +176,99 @@ async fn should_update_status_config_warning_after_successful_reload() {
     let status_document: serde_json::Value =
         serde_json::from_slice(&status_body).expect("the status response should contain JSON");
     assert_eq!(status_document["config_warning"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn should_reject_rest_model_override_when_speculative_prefill_target_is_bound() {
+    const CONFIGURED_TARGET_MODEL_ID: &str = "astronomical/application-test-model";
+    const UNCONFIGURED_MODEL_ID: &str = "astronomical/another-test-model";
+
+    let config_home_directory = tempfile::tempdir()
+        .expect("a config home should be created")
+        .keep();
+    write_config_file(&config_home_directory, r#"{}"#);
+    let mut resolved_config = sample_resolved_config();
+    resolved_config.discovered_models = vec![
+        discovered_model_for(CONFIGURED_TARGET_MODEL_ID),
+        discovered_model_for(UNCONFIGURED_MODEL_ID),
+    ];
+    resolved_config.speculative_prefill = astronomical_config::SpeculativePrefillConfig::new(
+        true,
+        Some(CONFIGURED_TARGET_MODEL_ID.to_owned()),
+        Some("astronomical/draft-test-model".to_owned()),
+        8_192,
+        20,
+        32,
+        512,
+        8,
+        13,
+    );
+    let reloadable_config = Arc::new(RwLock::new(resolved_config));
+    let scripted_executor = ScriptedExecutor::ready(Vec::new());
+    let received_generation_commands = scripted_executor.received_generation_commands();
+    let application =
+        build_application_with_reload(scripted_executor, reloadable_config, config_home_directory);
+
+    let model_list_response = application
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/models")
+                .body(Body::empty())
+                .expect("the model-list request should be well formed"),
+        )
+        .await
+        .expect("the model-list request should receive a response");
+    assert_eq!(model_list_response.status(), StatusCode::OK);
+    let model_list_body = to_bytes(model_list_response.into_body(), 16 * 1024)
+        .await
+        .expect("the model-list response should be readable");
+    let model_list_text = String::from_utf8(model_list_body.to_vec())
+        .expect("the model-list response should be UTF-8");
+    assert!(model_list_text.contains(CONFIGURED_TARGET_MODEL_ID));
+    assert!(!model_list_text.contains(UNCONFIGURED_MODEL_ID));
+
+    let override_response = application
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(format!(
+                    r#"{{"model":"{UNCONFIGURED_MODEL_ID}","messages":[{{"role":"user","content":"hello"}}],"stream":true}}"#
+                )))
+                .expect("the model-override request should be well formed"),
+        )
+        .await
+        .expect("the model-override request should receive a response");
+    assert_eq!(override_response.status(), StatusCode::BAD_REQUEST);
+    let override_body = to_bytes(override_response.into_body(), 8 * 1024)
+        .await
+        .expect("the model-override response should be readable");
+    let override_body_text =
+        String::from_utf8(override_body.to_vec()).expect("the error response should be UTF-8");
+    assert!(override_body_text.contains(r#""code":"model_not_found""#));
+    assert!(
+        received_generation_commands
+            .lock()
+            .expect("the scripted command log should not be poisoned")
+            .is_empty()
+    );
+}
+
+fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel {
+    astronomical_config::DiscoveredModel {
+        model_id: model_id.to_owned(),
+        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        revision: "test-revision".to_owned(),
+        model_directory: PathBuf::from(format!("/fictional/models/{model_id}")),
+        context_window: 2_048,
+        max_input_tokens: 1_024,
+        max_output_tokens: 128,
+        has_vision: false,
+        model_size_bytes: 0,
+    }
 }
 
 #[tokio::test]

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, MtpRuntimeState, ProtocolReader,
-    ProtocolWriter, WorkerCommand, WorkerEvent,
+    ProtocolWriter, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
 };
 
 #[tokio::main]
@@ -16,6 +16,10 @@ async fn main() {
         .send_event(&WorkerEvent::Ready {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             model_id: "astronomical/test-worker".to_owned(),
             capabilities: ChatModelCapabilities {
                 supports_reasoning: false,

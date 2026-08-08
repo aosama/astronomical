@@ -182,6 +182,48 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
 }
 
 #[tokio::test]
+async fn should_round_trip_compact_sparse_target_decoder_state_without_dense_recomputation() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = shared_runtime();
+    let ornith_config = certified_ornith_config();
+    let mut sparse_target_decoder_state =
+        RequestDecoderStateStack::empty_from_config(&ornith_config);
+    populate_request_decoder_state_with_full_attention_tokens(
+        &runtime,
+        &mut sparse_target_decoder_state,
+        7,
+    );
+
+    let compact_target_state_tensors = sparse_target_decoder_state
+        .extract_speculative_prefill_target_state_tensors(&runtime)
+        .expect("sparse target state should extract every decoder layer");
+    let mut restored_sparse_target_decoder_state =
+        RequestDecoderStateStack::empty_from_config(&ornith_config);
+    restored_sparse_target_decoder_state
+        .restore_speculative_prefill_target_state_tensors(&compact_target_state_tensors, 7)
+        .expect("compact sparse target tensors should restore without target forwarding");
+
+    let restored_attention_layer = restored_sparse_target_decoder_state
+        .layer(3)
+        .expect("the certified full-attention layer should remain present");
+    match restored_attention_layer {
+        DecoderCacheState::AppendOnlyAttention { attention } => {
+            assert_eq!(attention.offset_tokens(), 7);
+            assert_eq!(
+                attention
+                    .keys_state()
+                    .expect("restored attention keys should remain present")
+                    .shape()[2],
+                7
+            );
+        }
+        DecoderCacheState::Composite { .. } => {
+            panic!("the certified full-attention layer must not change kind")
+        }
+    }
+}
+
+#[tokio::test]
 async fn should_materialize_restored_split_persistent_prompt_cache_state_before_first_prefill() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();

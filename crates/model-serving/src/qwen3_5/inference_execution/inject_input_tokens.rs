@@ -1,14 +1,17 @@
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{
-    AdaptiveRamGrowthContext, InferenceEngineError, PerformanceCounter, PerformanceOperation,
-};
+use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
 
 use super::super::model::memory_admission::{
     invalid_request_error, validate_context_memory_admission,
 };
 use super::memory_admission::record_completed_adaptive_ram_growth;
 use super::{Qwen3_5EngineState, fatal_engine_error};
+use crate::qwen3_5::multi_token_prediction::{
+    disable_prediction_after_optional_injection_failure, forward_final_injected_prediction_token,
+    projected_injected_prediction_growth_bytes, reseed_prediction_after_injected_prefix,
+    reset_prediction_after_injection, restore_queued_prediction_prefix_before_injection,
+};
 
 impl Qwen3_5EngineState {
     pub(super) fn inject_input_tokens(
@@ -66,23 +69,7 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        if !active_request.verified_mtp_generated_token_ids.is_empty() {
-            let accepted_mtp_draft_rollback = active_request
-                .accepted_mtp_draft_rollback
-                .take()
-                .ok_or_else(|| {
-                    fatal_engine_error("queued MTP draft lost its target rollback checkpoint")
-                })?;
-            active_request
-                .request_decoder_state
-                .restore_mtp_verified_prefix(
-                    accepted_mtp_draft_rollback.verified_prefix_position_tokens,
-                    accepted_mtp_draft_rollback.verified_prefix_boundary_checkpoint,
-                )
-                .map_err(super::qwen3_5_runtime_error)?;
-            active_request.next_position_tokens =
-                accepted_mtp_draft_rollback.verified_prefix_position_tokens;
-        }
+        restore_queued_prediction_prefix_before_injection(active_request)?;
         let remaining_output_tokens = active_request
             .maximum_output_tokens
             .saturating_sub(active_request.generated_token_count)
@@ -103,48 +90,32 @@ impl Qwen3_5EngineState {
             self.context_memory_reservation_bytes_per_token,
             projected_context_tokens,
             0,
+            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
         )?;
 
         active_request.pending_generated_token = None;
-        active_request.verified_mtp_generated_token_ids.clear();
-        active_request.mtp_target_hidden_states = None;
-        let mut should_reseed_mtp_after_injection = active_request.mtp_request_state.is_some();
-        if let Some(mtp_request_state) = active_request.mtp_request_state.as_mut() {
-            mtp_request_state
-                .reset_with_growth_tokens(self.full_attention_kv_state_growth_tokens)
-                .map_err(super::qwen3_5_runtime_error)?;
-        }
+        let mut should_reseed_prediction_after_injection = reset_prediction_after_injection(
+            active_request,
+            self.full_attention_kv_state_growth_tokens,
+        )?;
         let final_input_token_position = input_token_ids.len() - 1;
         if final_input_token_position > 0 {
             let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
-            let mtp_full_attention_growth_bytes = match active_request.mtp_request_state.as_ref() {
-                Some(mtp_request_state) => {
-                    let mtp_full_attention_bytes_per_layer_token = model
-                        .config()
-                        .full_attention_key_value_state_bytes_per_layer_token()
-                        .ok_or_else(|| {
-                            fatal_engine_error(
-                                "MTP full-attention bytes per layer token overflowed",
-                            )
-                        })?;
-                    mtp_request_state
-                        .projected_capacity_growth_bytes(
-                            mtp_full_attention_bytes_per_layer_token,
-                            feedback_prefix_token_ids.len(),
-                        )
-                        .map_err(super::qwen3_5_runtime_error)?
-                }
-                None => 0,
-            };
+            let additional_persistent_state_growth_bytes =
+                projected_injected_prediction_growth_bytes(
+                    model,
+                    active_request,
+                    feedback_prefix_token_ids.len(),
+                )?;
             let injected_prefill_execution_context =
                 super::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
                     false,
-                    active_request.mtp_request_state.is_some(),
+                    active_request.has_optional_prediction_session(),
                     model.sparse_experts_are_paged(),
                     self.persistent_prompt_cache.is_some()
                         && active_request.can_use_persistent_prompt_cache
                         && !active_request.persistent_prompt_cache_capture_has_stopped
-                        && active_request.mtp_request_state.is_none(),
+                        && !active_request.has_optional_prediction_session(),
                 );
             let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
                 feedback_prefix_token_ids.len(),
@@ -154,7 +125,7 @@ impl Qwen3_5EngineState {
                         injected_prefill_execution_context,
                     ),
                 false,
-                active_request.mtp_request_state.is_some(),
+                active_request.has_optional_prediction_session(),
                 model.sparse_experts_are_paged(),
             );
             let active_memory_bytes_before_growth = self
@@ -162,37 +133,24 @@ impl Qwen3_5EngineState {
                     adaptive_ram_growth_context,
                     &mut active_request.performance_attribution,
                     &active_request.request_decoder_state,
-                    mtp_full_attention_growth_bytes,
+                    additional_persistent_state_growth_bytes,
                     0,
                 )?;
-            if should_reseed_mtp_after_injection {
-                let target_prefill_output = model
-                    .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
-                        feedback_prefix_token_ids,
-                        active_request.next_position_tokens,
-                        &mut active_request.request_decoder_state,
-                        &mut active_request.performance_attribution,
-                    )
-                    .map_err(InferenceEngineError::from)?;
+            if should_reseed_prediction_after_injection {
                 let shifted_feedback_token_ids = &input_token_ids[1..];
-                if let Err(mtp_prefill_error) = model
-                    .prefill_mtp_history_from_token_ids_with_performance_attribution(
-                        target_prefill_output.pre_final_normalization_hidden_states(),
-                        shifted_feedback_token_ids,
-                        active_request
-                            .mtp_request_state
-                            .as_mut()
-                            .ok_or_else(|| fatal_engine_error("MTP request state disappeared"))?,
-                        &mut active_request.performance_attribution,
-                    )
-                {
+                if let Err(prediction_history_error) = reseed_prediction_after_injected_prefix(
+                    model,
+                    active_request,
+                    feedback_prefix_token_ids,
+                    shifted_feedback_token_ids,
+                ) {
                     tracing::warn!(
                         request_id = active_request.request_id.value(),
-                        error = %mtp_prefill_error,
-                        "MTP feedback-history prefill failed; continuing target-only"
+                        error = %prediction_history_error,
+                        "optional prediction feedback-history prefill failed; continuing target-only"
                     );
-                    active_request.mtp_request_state = None;
-                    should_reseed_mtp_after_injection = false;
+                    disable_prediction_after_optional_injection_failure(active_request);
+                    should_reseed_prediction_after_injection = false;
                 }
             } else {
                 model
@@ -219,7 +177,7 @@ impl Qwen3_5EngineState {
         let final_input_token_id = input_token_ids[final_input_token_position];
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
             1,
-            should_reseed_mtp_after_injection,
+            should_reseed_prediction_after_injection,
             model.sparse_experts_are_paged(),
         );
         let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
@@ -229,43 +187,23 @@ impl Qwen3_5EngineState {
             0,
             0,
         )?;
-        let (feedback_logits, mtp_target_hidden_states) = if should_reseed_mtp_after_injection {
-            let target_forward_output = model
-                .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
+        let next_generated_token = if should_reseed_prediction_after_injection {
+            forward_final_injected_prediction_token(model, active_request, final_input_token_id)?
+                .ok_or_else(|| {
+                    fatal_engine_error("prediction request disappeared before injected final token")
+                })?
+        } else {
+            let feedback_logits = model
+                .build_forward_chunk_with_performance_attribution(
                     &[final_input_token_id],
                     active_request.next_position_tokens,
                     &mut active_request.request_decoder_state,
                     &mut active_request.performance_attribution,
                 )
                 .map_err(InferenceEngineError::from)?;
-            (
-                target_forward_output
-                    .final_logits()
-                    .retain()
-                    .map_err(super::qwen3_5_runtime_error)?,
-                Some(target_forward_output.into_pre_final_normalization_hidden_states()),
-            )
-        } else {
-            (
-                model
-                    .build_forward_chunk_with_performance_attribution(
-                        &[final_input_token_id],
-                        active_request.next_position_tokens,
-                        &mut active_request.request_decoder_state,
-                        &mut active_request.performance_attribution,
-                    )
-                    .map_err(InferenceEngineError::from)?,
-                None,
-            )
+            active_request.advance_position(1)?;
+            active_request.build_generated_token(model, &feedback_logits)?
         };
-        active_request.advance_position(1)?;
-        let next_generated_token = active_request.build_generated_token(model, &feedback_logits)?;
-        active_request.mtp_target_hidden_states = mtp_target_hidden_states;
-        if should_reseed_mtp_after_injection {
-            active_request
-                .performance_attribution
-                .record_counter(PerformanceCounter::MtpFeedbackHistoryReseedCount, 1);
-        }
         active_request
             .performance_attribution
             .measure_operation(

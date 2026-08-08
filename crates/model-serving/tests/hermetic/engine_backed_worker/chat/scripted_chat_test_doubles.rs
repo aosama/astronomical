@@ -81,8 +81,19 @@ impl ModelGenerationProcessor for MalformedFinishProcessor {
         &self,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        speculative_prefill_unavailable_reason: Option<String>,
+        speculative_prefill_draft_model_id: Option<String>,
+        speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
-        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
+        ready_event_with_speculative_prefill_load_details(
+            mtp_runtime_state,
+            mtp_unavailable_reason,
+            speculative_prefill_runtime_state,
+            speculative_prefill_unavailable_reason,
+            speculative_prefill_draft_model_id,
+            speculative_prefill_draft_model_revision,
+        )
     }
 
     fn prepare_chat_generation(
@@ -133,8 +144,19 @@ impl ModelGenerationProcessor for ScriptedChatProcessor {
         &self,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        speculative_prefill_unavailable_reason: Option<String>,
+        speculative_prefill_draft_model_id: Option<String>,
+        speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
-        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
+        ready_event_with_speculative_prefill_load_details(
+            mtp_runtime_state,
+            mtp_unavailable_reason,
+            speculative_prefill_runtime_state,
+            speculative_prefill_unavailable_reason,
+            speculative_prefill_draft_model_id,
+            speculative_prefill_draft_model_revision,
+        )
     }
 
     fn prepare_chat_generation(
@@ -206,8 +228,19 @@ impl ModelGenerationProcessor for CorrectionRequestingProcessor {
         &self,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        speculative_prefill_unavailable_reason: Option<String>,
+        speculative_prefill_draft_model_id: Option<String>,
+        speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
-        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
+        ready_event_with_speculative_prefill_load_details(
+            mtp_runtime_state,
+            mtp_unavailable_reason,
+            speculative_prefill_runtime_state,
+            speculative_prefill_unavailable_reason,
+            speculative_prefill_draft_model_id,
+            speculative_prefill_draft_model_revision,
+        )
     }
 
     fn prepare_chat_generation(
@@ -275,6 +308,10 @@ pub(super) struct ScriptedChatEngine {
     cancelled_generation_finalization: GenerationFinalization,
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
+    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+    speculative_prefill_unavailable_reason: Option<String>,
+    speculative_prefill_draft_model_id: Option<String>,
+    speculative_prefill_draft_model_revision: Option<String>,
     active_generation_prompt_cache_stats: Option<WorkerEvent>,
 }
 
@@ -320,24 +357,19 @@ impl ScriptedChatEngine {
             cancelled_generation_finalization: GenerationFinalization::default(),
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             active_generation_prompt_cache_stats: None,
         }
     }
 
     pub(super) fn with_fatal_decode_reason(fatal_decode_reason: &str) -> Self {
-        Self {
-            cancellation_count: Arc::new(AtomicUsize::new(0)),
-            cached_token_count: 0,
-            generated_tokens: Vec::new(),
-            is_active: false,
-            next_token_index: 0,
-            fatal_decode_reason: Some(fatal_decode_reason.to_owned()),
-            initial_expert_memory_mode: None,
-            cancelled_generation_finalization: GenerationFinalization::default(),
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            active_generation_prompt_cache_stats: None,
-        }
+        let mut scripted_chat_engine =
+            Self::with_cached_token_count_and_generated_tokens(0, Vec::new());
+        scripted_chat_engine.fatal_decode_reason = Some(fatal_decode_reason.to_owned());
+        scripted_chat_engine
     }
 
     pub(super) fn with_cancelled_generation_finalization(
@@ -376,6 +408,20 @@ impl ScriptedChatEngine {
         self
     }
 
+    pub(super) fn with_speculative_prefill_runtime(
+        mut self,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        speculative_prefill_unavailable_reason: Option<String>,
+        speculative_prefill_draft_model_id: Option<String>,
+        speculative_prefill_draft_model_revision: Option<String>,
+    ) -> Self {
+        self.speculative_prefill_runtime_state = speculative_prefill_runtime_state;
+        self.speculative_prefill_unavailable_reason = speculative_prefill_unavailable_reason;
+        self.speculative_prefill_draft_model_id = speculative_prefill_draft_model_id;
+        self.speculative_prefill_draft_model_revision = speculative_prefill_draft_model_revision;
+        self
+    }
+
     pub(super) fn cancellation_count(&self) -> Arc<AtomicUsize> {
         Arc::clone(&self.cancellation_count)
     }
@@ -393,8 +439,14 @@ impl InferenceEngine for ScriptedChatEngine {
     type Request = ScriptedInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        let mut engine_load_result =
-            EngineLoadResult::new().with_mtp_runtime_state(self.mtp_runtime_state);
+        let mut engine_load_result = EngineLoadResult::new()
+            .with_mtp_runtime_state(self.mtp_runtime_state)
+            .with_speculative_prefill_runtime(
+                self.speculative_prefill_runtime_state,
+                self.speculative_prefill_unavailable_reason.clone(),
+                self.speculative_prefill_draft_model_id.clone(),
+                self.speculative_prefill_draft_model_revision.clone(),
+            );
         if let Some(mtp_unavailable_reason) = self.mtp_unavailable_reason.clone() {
             engine_load_result =
                 engine_load_result.with_mtp_unavailable_reason(mtp_unavailable_reason);

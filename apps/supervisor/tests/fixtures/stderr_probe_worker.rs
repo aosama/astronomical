@@ -3,7 +3,8 @@
 use std::{error::Error, os::unix::fs::MetadataExt, process::ExitCode};
 
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MtpRuntimeState, ProtocolWriter, WorkerEvent,
+    ChatModelCapabilities, MtpRuntimeState, ProtocolWriter, SpeculativePrefillRuntimeState,
+    WorkerEvent,
 };
 
 #[tokio::main]
@@ -26,6 +27,10 @@ async fn run_stderr_probe_worker() -> Result<(), Box<dyn Error + Send + Sync>> {
         .send_event(&WorkerEvent::Ready {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             model_id: "astronomical/test-worker".to_owned(),
             capabilities: ChatModelCapabilities {
                 supports_reasoning: false,

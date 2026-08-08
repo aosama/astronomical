@@ -67,4 +67,24 @@ pub enum AstronomicalConfigError {
     DefaultLogDirectoryRequiresHome,
     #[error("logging.retained_files must be positive")]
     InvalidRetainedLogFileCount,
+    #[error("speculative_prefill.draft_model_id is required when speculative prefill is enabled")]
+    SpeculativePrefillDraftModelRequired,
+    #[error("speculative_prefill.draft_model_id must not be empty")]
+    SpeculativePrefillDraftModelIdMustNotBeEmpty,
+    #[error("speculative_prefill.target_model_id is required when speculative prefill is enabled")]
+    SpeculativePrefillTargetModelRequired,
+    #[error("speculative_prefill.target_model_id must not be empty")]
+    SpeculativePrefillTargetModelIdMustNotBeEmpty,
+    #[error("speculative_prefill.minimum_prompt_tokens must be positive")]
+    SpeculativePrefillMinimumPromptTokensMustBePositive,
+    #[error("speculative_prefill.keep_percentage must be between 1 and 100")]
+    SpeculativePrefillKeepPercentageOutOfRange,
+    #[error("speculative_prefill.selection_chunck_token_count must be positive")]
+    SpeculativePrefillSelectionChunckTokenCountMustBePositive,
+    #[error("speculative_prefill.mandatory_trailing_token_count must be positive")]
+    SpeculativePrefillMandatoryTrailingTokenCountMustBePositive,
+    #[error("speculative_prefill.lookahead_token_count must be positive")]
+    SpeculativePrefillLookaheadTokenCountMustBePositive,
+    #[error("speculative_prefill.importance_pooling_kernel_token_count must be positive")]
+    SpeculativePrefillImportancePoolingKernelTokenCountMustBePositive,
 }

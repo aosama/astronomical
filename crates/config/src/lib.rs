@@ -10,6 +10,7 @@ mod model_discovery;
 mod model_discovery_huggingface_cache;
 mod model_identity;
 mod prompt_cache_config;
+mod speculative_prefill_config;
 
 pub use config_error::AstronomicalConfigError;
 pub use logging_config::{LogLevel, LoggingConfig};
@@ -22,8 +23,10 @@ pub use model_discovery::{
 };
 pub use model_identity::{decode_huggingface_cache_directory_name, resolve_model_id};
 pub use prompt_cache_config::PromptCacheConfig;
+pub use speculative_prefill_config::SpeculativePrefillConfig;
 
 use config_file::{UserConfigFile, config_file_path_for_home, read_user_config_file};
+use speculative_prefill_config::resolve_speculative_prefill_config;
 
 const CONFIG_DIRECTORY_NAME: &str = ".astronomical";
 const CONFIG_FILE_NAME: &str = "config.json";
@@ -213,6 +216,11 @@ impl AstronomicalConfig {
     #[must_use]
     pub fn mtp_enabled(&self) -> bool {
         self.user_config_file.mtp_enabled.unwrap_or(true)
+    }
+
+    /// Resolves the optional draft-assisted speculative-prefill policy.
+    pub fn speculative_prefill(&self) -> Result<SpeculativePrefillConfig, AstronomicalConfigError> {
+        resolve_speculative_prefill_config(&self.user_config_file.speculative_prefill)
     }
 
     /// Resolves the optional user MLX memory ceiling in decimal SI bytes.

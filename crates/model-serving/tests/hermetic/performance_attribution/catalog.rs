@@ -157,6 +157,14 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "final_logits_graph_construction",
         ),
         (
+            PerformanceOperation::SpeculativePrefillDraftVisionEmbeddingGraphConstruction,
+            "speculative_prefill_draft_vision_embedding_graph_construction",
+        ),
+        (
+            PerformanceOperation::SpeculativePrefillDraftVisionEmbeddingEvaluationSynchronizationWait,
+            "speculative_prefill_draft_vision_embedding_evaluation_synchronization_wait",
+        ),
+        (
             PerformanceOperation::TokenSamplingGraphConstruction,
             "token_sampling_graph_construction",
         ),
@@ -343,6 +351,10 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceCounter::SpeculativePrefillTerminalMtpHistoryTokenCount,
             "speculative_prefill_terminal_mtp_history_token_count",
+        ),
+        (
+            PerformanceCounter::SpeculativePrefillMandatoryVisualTokenCount,
+            "speculative_prefill_mandatory_visual_token_count",
         ),
         (
             PerformanceCounter::MtpPromptHistoryInitializationFallbackCount,
