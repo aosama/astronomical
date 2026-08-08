@@ -266,7 +266,7 @@ impl Qwen3_5Tokenizer {
             .measure_operation(
                 PerformanceOperation::PromptRendering,
                 |_performance_attribution| {
-                    Qwen3_5PromptRenderer::render(
+                    Qwen3_5PromptRenderer::render_with_control_span(
                         &chat_generation_command.messages,
                         &chat_generation_command.tools,
                         enable_thinking,
@@ -275,10 +275,13 @@ impl Qwen3_5Tokenizer {
                 },
             )
             .map_err(Qwen3_5TokenizerError::RenderPrompt)?;
-        let input_token_ids = performance_attribution.measure_operation(
-            PerformanceOperation::PromptTokenization,
-            |_performance_attribution| self.encode_prompt(&rendered_prompt),
-        )?;
+        let (input_token_ids, ordinary_target_prefill_control_span_token_count) =
+            performance_attribution.measure_operation(
+                PerformanceOperation::PromptTokenization,
+                |_performance_attribution| {
+                    self.encode_rendered_prompt_with_control_span(&rendered_prompt)
+                },
+            )?;
         validate_context_token_count(
             input_token_ids.len(),
             usize::from(chat_generation_command.settings.max_output_tokens),
@@ -298,6 +301,9 @@ impl Qwen3_5Tokenizer {
                 .unwrap_or(950),
             chat_generation_command.settings.seed,
         )
+        .with_ordinary_target_prefill_control_span_token_count(
+            ordinary_target_prefill_control_span_token_count,
+        )
         .with_image_pad_token_id(self.image_pad_token_id());
         if let Some(thinking_budget) = chat_generation_command.settings.thinking_budget {
             inference_request = inference_request.with_thinking_budget(thinking_budget);
@@ -307,6 +313,38 @@ impl Qwen3_5Tokenizer {
                 .with_processed_visual_images(prepared_chat_images.processed_visual_images);
         }
         Ok(inference_request)
+    }
+
+    /// Encodes one rendered prompt while converting its system-and-tool byte
+    /// boundary into the exact corresponding token count.
+    pub fn encode_rendered_prompt_with_control_span(
+        &self,
+        rendered_prompt: &super::Qwen3_5RenderedPrompt,
+    ) -> Result<(Vec<u32>, usize), Qwen3_5TokenizerError> {
+        let encoding = self
+            .tokenizer
+            .encode(rendered_prompt.as_str(), false)
+            .map_err(|source| Qwen3_5TokenizerError::EncodePrompt { source })?;
+        let ordinary_target_prefill_control_span_byte_count =
+            rendered_prompt.ordinary_target_prefill_control_span_byte_count();
+        let mut ordinary_target_prefill_control_span_token_count = 0usize;
+        for (token_start_byte_offset, token_end_byte_offset) in encoding.get_offsets() {
+            if *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
+                && *token_end_byte_offset > ordinary_target_prefill_control_span_byte_count
+            {
+                return Err(Qwen3_5TokenizerError::ControlSpanTokenBoundaryUnavailable);
+            }
+            if *token_end_byte_offset <= ordinary_target_prefill_control_span_byte_count
+                && *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
+            {
+                ordinary_target_prefill_control_span_token_count =
+                    ordinary_target_prefill_control_span_token_count.saturating_add(1);
+            }
+        }
+        Ok((
+            encoding.get_ids().to_vec(),
+            ordinary_target_prefill_control_span_token_count,
+        ))
     }
 }
 

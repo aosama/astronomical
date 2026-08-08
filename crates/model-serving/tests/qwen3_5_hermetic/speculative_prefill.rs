@@ -3,23 +3,39 @@
 mod prefill_execution_context;
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill_eligibility.rs"]
 mod speculative_prefill_eligibility;
-#[path = "speculative_prefill_policy.rs"]
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_selection.rs"]
 mod speculative_prefill_policy;
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_control_span.rs"]
+mod speculative_prefill_control_span;
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_failure.rs"]
+mod speculative_prefill_failure;
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill.rs"]
+mod speculative_prefill_chunck_policy;
 
 use prefill_execution_context::{
     CAPACITY_REDUCED_CONTEXT_FLAG, Qwen3_5PrefillExecutionContext,
     SPECULATIVE_PREFILL_TARGET_ONLY_PREFIX_CONTEXT_FLAG,
 };
+use astronomical_model_serving::InferenceEngineError;
 use speculative_prefill_eligibility::{
     Qwen3_5SpeculativePrefillRequestEligibility, qwen3_5_speculative_prefill_request_eligibility,
 };
 use speculative_prefill_policy::{
-    Qwen3_5SpeculativePrefillChunckMode,
     qwen3_5_merge_speculative_prefill_selection_with_image_pad_positions,
     qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_selected_speculative_prefill_positions_for_range,
-    qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_scoring_plan,
+    qwen3_5_speculative_prefill_scoring_plan,
     qwen3_5_speculative_prefill_selectable_importance_score_range,
+};
+use speculative_prefill_chunck_policy::{
+    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
+};
+use speculative_prefill_control_span::{
+    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    qwen3_5_speculative_prefill_sparse_target_is_active,
+};
+use speculative_prefill_failure::{
+    configured_speculative_prefill_activation_failure, configured_speculative_prefill_failure,
 };
 
 #[test]
@@ -134,6 +150,125 @@ fn should_score_the_complete_prompt_while_reserving_the_final_target_token() {
 }
 
 #[test]
+fn should_apply_keep_percentage_only_after_the_ordinary_target_control_span() {
+    let ordinary_target_control_span_end_position = 1_024;
+    let final_generation_kickoff_position = 11_025;
+    let complete_prompt_token_count = 11_026;
+
+    let (selectable_conversation_and_kickoff_range, selectable_conversation_token_count) =
+        qwen3_5_speculative_prefill_scoring_plan(
+            ordinary_target_control_span_end_position,
+            final_generation_kickoff_position,
+            complete_prompt_token_count,
+        )
+        .expect("the conversation after the control span should be selectable");
+
+    assert_eq!(
+        selectable_conversation_and_kickoff_range,
+        ordinary_target_control_span_end_position..complete_prompt_token_count
+    );
+    assert_eq!(selectable_conversation_token_count, 10_001);
+}
+
+#[test]
+fn should_end_ordinary_target_prefill_exactly_at_the_control_span_boundary() {
+    assert_eq!(
+        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(0, 2_048, 1_200),
+        Some(1_200)
+    );
+    assert_eq!(
+        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
+            0, 512, 1_200
+        ),
+        Some(512)
+    );
+    assert_eq!(
+        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
+            1_200, 3_248, 1_200
+        ),
+        Some(3_248)
+    );
+}
+
+#[test]
+fn should_activate_sparse_target_processing_only_after_the_control_span() {
+    assert!(!qwen3_5_speculative_prefill_sparse_target_is_active(
+        true, 0, 1_200
+    ));
+    assert!(!qwen3_5_speculative_prefill_sparse_target_is_active(
+        true, 1_199, 1_200
+    ));
+    assert!(qwen3_5_speculative_prefill_sparse_target_is_active(
+        true, 1_200, 1_200
+    ));
+    assert!(!qwen3_5_speculative_prefill_sparse_target_is_active(
+        false, 1_200, 1_200
+    ));
+}
+
+#[test]
+fn should_stop_a_configured_speculative_prefill_failure_without_target_only_retry() {
+    let generation_failure = configured_speculative_prefill_failure(
+        astronomical_ipc_protocol::RequestId::new(50),
+        "draft scoring",
+        "forced acceptance-test failure",
+    );
+
+    assert!(matches!(
+        generation_failure,
+        astronomical_model_serving::InferenceEngineError::InvalidRequest { ref reason }
+            if reason.contains("request was stopped")
+                && reason.contains("without a target-only retry")
+    ));
+}
+
+#[test]
+fn should_bound_every_configured_speculative_prefill_execution_failure_stage() {
+    for failure_stage in [
+        "drafter loading",
+        "drafter memory admission",
+        "drafter visual input assembly",
+        "draft scoring or selection",
+        "selection restoration",
+        "sparse target input assembly",
+        "sparse target execution",
+        "drafter prompt-state persistence",
+        "selection persistence",
+        "exact target prompt-state persistence",
+        "sparse target-state persistence",
+    ] {
+        let generation_failure = configured_speculative_prefill_failure(
+            astronomical_ipc_protocol::RequestId::new(50),
+            failure_stage,
+            "private implementation details",
+        );
+        assert!(matches!(
+            generation_failure,
+            InferenceEngineError::InvalidRequest { ref reason }
+                if reason.contains(failure_stage)
+                    && reason.contains("without a target-only retry")
+                    && !reason.contains("private implementation details")
+        ));
+    }
+}
+
+#[test]
+fn should_reject_speculative_prefill_activation_when_a_required_purge_fails() {
+    let model_loading_failure = configured_speculative_prefill_activation_failure(
+        "target keep-percentage state purge",
+        "private storage details that must not reach the user",
+    );
+
+    assert!(matches!(
+        model_loading_failure,
+        InferenceEngineError::Fatal { ref reason }
+            if reason.contains("target keep-percentage state purge")
+                && reason.contains("model use was stopped")
+                && !reason.contains("private storage details")
+    ));
+}
+
+#[test]
 fn should_select_the_target_suffix_from_full_visual_draft_scores_after_cache_restore() {
     let selectable_importance_score_range =
         qwen3_5_speculative_prefill_selectable_importance_score_range(0, 46_341, 45_056, 1_284)
@@ -229,6 +364,17 @@ fn should_let_the_mandatory_trailing_window_take_precedence_for_short_prompts() 
 }
 
 #[test]
+fn should_retain_an_unaligned_mandatory_trailing_window_in_full() {
+    let importance_scores = [0.9, 0.9, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1];
+
+    let selected_token_positions =
+        qwen3_5_select_speculative_prefill_token_positions(&importance_scores, 10, 4, 5)
+            .expect("selection should retain every mandatory trailing token");
+
+    assert_eq!(selected_token_positions, (4..10).collect::<Vec<_>>());
+}
+
+#[test]
 fn should_retain_every_prompt_position_when_keep_percentage_is_full() {
     let importance_scores = [0.1, 0.2, 0.3, 0.4, 0.5];
 
@@ -263,30 +409,34 @@ fn should_partition_selected_prompt_positions_by_original_prefill_range() {
 
 #[test]
 fn should_retain_every_image_pad_position_alongside_draft_selected_positions() {
-    let image_pad_positions = [1, 2, 5, 6, 7];
-    let visual_embedding_token_count = 1;
+    let prompt_token_ids = [10, 99, 99, 20, 30, 99, 99, 99, 40];
 
     let selected_prompt_positions =
         qwen3_5_merge_speculative_prefill_selection_with_image_pad_positions(
             vec![0, 3, 8],
-            &image_pad_positions,
-            visual_embedding_token_count,
-        );
+            &prompt_token_ids,
+            0,
+            prompt_token_ids.len(),
+            99,
+        )
+        .expect("valid image-pad positions should merge");
 
     assert_eq!(selected_prompt_positions, vec![0, 1, 2, 3, 5, 6, 7, 8],);
 }
 
 #[test]
 fn should_retain_only_selectable_image_pad_positions_when_the_final_token_is_reserved() {
-    let image_pad_positions = [1, 2];
-    let visual_embedding_token_count = 1;
+    let prompt_token_ids = [10, 99, 99];
 
     let selected_prompt_positions =
         qwen3_5_merge_speculative_prefill_selection_with_image_pad_positions(
             vec![0, 1],
-            &image_pad_positions,
-            visual_embedding_token_count,
-        );
+            &prompt_token_ids,
+            0,
+            2,
+            99,
+        )
+        .expect("the reserved final prompt token should remain outside selection");
 
-    assert_eq!(selected_prompt_positions, vec![0, 1, 2]);
+    assert_eq!(selected_prompt_positions, vec![0, 1]);
 }

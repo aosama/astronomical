@@ -52,6 +52,8 @@ impl Qwen3_5EngineState {
         prompt_token_count: usize,
     ) -> Option<PersistentSpeculativePrefillSelectionContract> {
         Some(PersistentSpeculativePrefillSelectionContract::new(
+            self.model_id.clone()?,
+            self.model_revision.clone()?,
             self.speculative_prefill.draft_model_id.clone()?,
             self.speculative_prefill_draft_model_revision.clone()?,
             self.speculative_prefill_token_identifier_mapping_digest?,

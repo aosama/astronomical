@@ -54,3 +54,21 @@ fn should_carry_validated_image_pad_token_id_in_the_inference_request() {
 
     assert_eq!(inference_request.image_pad_token_id(), Some(248_056));
 }
+
+#[test]
+fn should_carry_the_ordinary_target_prefill_control_span_token_count() {
+    let inference_request = Qwen3_5InferenceRequest::new_sampling(
+        RequestId::new(903),
+        vec![101, 102, 103, 201, 202, 301],
+        16,
+        0,
+        950,
+        None,
+    )
+    .with_ordinary_target_prefill_control_span_token_count(3);
+
+    assert_eq!(
+        inference_request.ordinary_target_prefill_control_span_token_count(),
+        3
+    );
+}

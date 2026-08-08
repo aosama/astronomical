@@ -336,6 +336,7 @@ pub enum PerformanceCounter {
     SpeculativePrefillTargetPersistentStateWriteCount,
     SpeculativePrefillTargetPersistentStateRestoredTokenCount,
     SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
+    SpeculativePrefillOrdinaryControlSpanTokenCount,
     SpeculativePrefillFallbackCount,
     MtpPromptHistoryInitializationFallbackCount,
     MtpFeedbackHistoryReseedCount,
@@ -392,6 +393,7 @@ impl PerformanceCounter {
         Self::SpeculativePrefillTargetPersistentStateWriteCount,
         Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount,
         Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
+        Self::SpeculativePrefillOrdinaryControlSpanTokenCount,
         Self::SpeculativePrefillFallbackCount,
         Self::MtpPromptHistoryInitializationFallbackCount,
         Self::MtpFeedbackHistoryReseedCount,
@@ -498,6 +500,9 @@ impl PerformanceCounter {
             }
             Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes => {
                 "speculative_prefill_target_expert_repopulated_payload_bytes"
+            }
+            Self::SpeculativePrefillOrdinaryControlSpanTokenCount => {
+                "speculative_prefill_ordinary_control_span_token_count"
             }
             Self::SpeculativePrefillFallbackCount => "speculative_prefill_fallback_count",
             Self::MtpPromptHistoryInitializationFallbackCount => {

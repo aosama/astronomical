@@ -8,7 +8,11 @@ use super::super::model::memory_admission::invalid_request_error;
 use super::memory_admission::collect_completed_forward_memory_snapshot;
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::PromptPrefillChunckAttemptError;
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{
+    Qwen3_5EngineState, fatal_engine_error,
+    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    qwen3_5_runtime_error, qwen3_5_speculative_prefill_sparse_target_is_active,
+};
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
 impl Qwen3_5EngineState {
@@ -36,7 +40,13 @@ impl Qwen3_5EngineState {
                 && !active_request.has_optional_prediction_session(),
         )
         .with_target_only_prefix(active_request.has_optional_prediction_session())
-        .with_speculative_prefill_sparse_target(active_request.should_use_speculative_prefill);
+        .with_speculative_prefill_sparse_target(
+            qwen3_5_speculative_prefill_sparse_target_is_active(
+                active_request.should_use_speculative_prefill,
+                prefill_start,
+                active_request.ordinary_target_prefill_control_span_token_count,
+            ),
+        );
         let candidate_prefill_chunck_end = self
             .prefill_chunck_sizer
             .next_prefill_chunck_end_for_execution_context(
@@ -44,7 +54,13 @@ impl Qwen3_5EngineState {
                 final_prompt_index,
                 prefill_execution_context,
             );
-        let requested_prefill_chunck_end = candidate_prefill_chunck_end;
+        let requested_prefill_chunck_end =
+            qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
+                prefill_start,
+                candidate_prefill_chunck_end,
+                active_request.ordinary_target_prefill_control_span_token_count,
+            )
+            .ok_or_else(|| fatal_engine_error("prompt-processing chunk did not advance"))?;
         let forward_chunk_started_at = Instant::now();
         let requested_prefill_chunck_token_count = requested_prefill_chunck_end - prefill_start;
         let mut attempted_prefill_chunck_token_count =
@@ -259,7 +275,7 @@ impl Qwen3_5EngineState {
                     prefill_start,
                     prefill_end,
                     boundary_checkpoints,
-                );
+                )?;
             }
         }
         active_request
@@ -293,7 +309,13 @@ impl Qwen3_5EngineState {
                 && !active_request.has_optional_prediction_session(),
         )
         .with_target_only_prefix(active_request.has_optional_prediction_session())
-        .with_speculative_prefill_sparse_target(active_request.should_use_speculative_prefill);
+        .with_speculative_prefill_sparse_target(
+            qwen3_5_speculative_prefill_sparse_target_is_active(
+                active_request.should_use_speculative_prefill,
+                prefill_end,
+                active_request.ordinary_target_prefill_control_span_token_count,
+            ),
+        );
         if matches!(
             speculative_prefill_chunck_mode,
             super::Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture

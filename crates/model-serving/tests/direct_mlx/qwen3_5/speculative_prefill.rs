@@ -168,6 +168,34 @@ async fn should_select_speculative_prefill_chunks_on_the_gpu() {
             .expect("the bounded partial final positions should copy"),
         vec![0, 1, 2, 3, 4],
     );
+
+    let unaligned_mandatory_trailing_scores = runtime
+        .array_from_f32(
+            &[0.9, 0.9, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            &[10],
+        )
+        .expect("the unaligned mandatory trailing scores should upload");
+    let unaligned_mandatory_trailing_positions =
+        qwen3_5_select_speculative_prefill_token_positions_on_gpu(
+            &runtime,
+            &unaligned_mandatory_trailing_scores,
+            10,
+            4,
+            5,
+        )
+        .expect("GPU selection should retain every unaligned mandatory trailing token");
+    let unaligned_mandatory_trailing_positions = runtime
+        .astype(
+            &unaligned_mandatory_trailing_positions,
+            MlxDtype::UInt32,
+        )
+        .expect("unaligned mandatory trailing positions should cast to uint32");
+    assert_eq!(
+        runtime
+            .copy_u32_values(&unaligned_mandatory_trailing_positions)
+            .expect("unaligned mandatory trailing positions should copy"),
+        (4_u32..10).collect::<Vec<_>>(),
+    );
 }
 
 #[tokio::test]

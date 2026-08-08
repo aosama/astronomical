@@ -134,6 +134,7 @@ impl Qwen3_5EngineState {
                         0,
                         0,
                     )?;
+                self.save_speculative_prefill_target_prefix(active_request)?;
                 let first_generated_token = if let Some(prediction_token) =
                     forward_initial_target_token_with_prediction_state(
                         model,
@@ -153,7 +154,6 @@ impl Qwen3_5EngineState {
                     active_request.advance_position(1)?;
                     active_request.build_generated_token(model, &final_prompt_logits)?
                 };
-                self.save_speculative_prefill_target_prefix(active_request);
                 active_request
                     .performance_attribution
                     .measure_operation(

@@ -22,6 +22,7 @@ use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
 use super::speculative_prefill_model_loading::{
     load_speculative_prefill_draft_model, token_identifier_mapping_digest,
 };
+use super::speculative_prefill_failure::configured_speculative_prefill_activation_failure;
 
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
@@ -200,6 +201,12 @@ impl Qwen3_5EngineState {
                             && let Err(visual_embedding_scan_error) = persistent_prompt_cache
                                 .scan_visual_embeddings(persistent_visual_embedding_model_contract)
                         {
+                            if self.speculative_prefill.enabled {
+                                return Err(configured_speculative_prefill_activation_failure(
+                                    "visual prompt-state storage scan",
+                                    visual_embedding_scan_error,
+                                ));
+                            }
                             tracing::warn!(
                                 "Qwen3.5 visual embedding cache could not be scanned; \
                                  continuing without persisted visual embeddings: {visual_embedding_scan_error}"
@@ -222,6 +229,12 @@ impl Qwen3_5EngineState {
                             ) {
                                 Ok(write_queue) => Some(write_queue),
                                 Err(write_queue_error) => {
+                                    if self.speculative_prefill.enabled {
+                                        return Err(configured_speculative_prefill_activation_failure(
+                                            "target prompt-state writer initialization",
+                                            write_queue_error,
+                                        ));
+                                    }
                                     tracing::warn!(
                                         error = %write_queue_error,
                                         "persistent prompt-cache writer could not start; serving cache reads without new writes"
@@ -235,6 +248,12 @@ impl Qwen3_5EngineState {
                         )
                     }
                     Err(persistent_prompt_cache_error) => {
+                        if self.speculative_prefill.enabled {
+                            return Err(configured_speculative_prefill_activation_failure(
+                                "target prompt-state storage initialization",
+                                persistent_prompt_cache_error,
+                            ));
+                        }
                         tracing::warn!(
                             "Qwen3.5 persistent prompt cache could not be opened; \
                              falling back to cold prefill: {persistent_prompt_cache_error}"
@@ -302,6 +321,12 @@ impl Qwen3_5EngineState {
                             ) {
                                 Ok(write_queue) => Some(write_queue),
                                 Err(write_queue_error) => {
+                                    if self.speculative_prefill.enabled {
+                                        return Err(configured_speculative_prefill_activation_failure(
+                                            "drafter prompt-state writer initialization",
+                                            write_queue_error,
+                                        ));
+                                    }
                                     tracing::warn!(
                                         error = %write_queue_error,
                                         "speculative-prefill drafter cache writer could not start; serving reads without new writes"
@@ -315,6 +340,12 @@ impl Qwen3_5EngineState {
                         )
                     }
                     Err(draft_persistent_prompt_cache_error) => {
+                        if self.speculative_prefill.enabled {
+                            return Err(configured_speculative_prefill_activation_failure(
+                                "drafter prompt-state storage initialization",
+                                draft_persistent_prompt_cache_error,
+                            ));
+                        }
                         tracing::warn!(
                             error = %draft_persistent_prompt_cache_error,
                             "speculative-prefill drafter persistent cache could not be opened; serving without drafter cache persistence"
@@ -325,6 +356,15 @@ impl Qwen3_5EngineState {
             } else {
                 (None, None)
             };
+            self.purge_obsolete_speculative_prefill_policy_state(
+                &resolved_model_id,
+                &resolved_model_revision,
+                speculative_prefill_draft_model
+                    .as_ref()
+                    .map(|(_draft_model, draft_model_revision)| draft_model_revision.as_str()),
+                persistent_prompt_cache.as_deref(),
+                speculative_prefill_draft_persistent_prompt_cache.as_deref(),
+            )?;
             Ok((
                 model,
                 model_contract,

@@ -35,6 +35,50 @@ async fn should_reject_invalid_config_reload_without_mutating_live_state() {
 }
 
 #[tokio::test]
+async fn should_reject_enabled_speculative_prefill_without_an_explicit_keep_percentage() {
+    let temporary_config_directory =
+        tempfile::tempdir().expect("a temporary config directory is needed");
+    let config_home_directory = temporary_config_directory.path().to_path_buf();
+    write_config_file(
+        &config_home_directory,
+        r#"{
+          "speculative_prefill": {
+            "enabled": true,
+            "target_model_id": "Qwen3.5-35B-Target",
+            "draft_model_id": "Qwen3.5-2B-Draft"
+          }
+        }"#,
+    );
+
+    let initial_resolved_config = sample_resolved_config();
+    let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
+    let application = build_application_with_reload(
+        ScriptedExecutor::ready(Vec::new()),
+        Arc::clone(&reloadable_config),
+        config_home_directory,
+    );
+
+    let response = post_config_reload(&application).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response_body = to_bytes(response.into_body(), 4 * 1024)
+        .await
+        .expect("the reload error body should be readable");
+    let response_json: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the reload error body should be JSON");
+    assert_eq!(response_json["status"], "invalid_config");
+    assert_eq!(
+        response_json["message"],
+        "invalid Astronomical configuration: speculative_prefill.keep_percentage is required when speculative prefill is enabled",
+    );
+    assert_eq!(
+        *reloadable_config
+            .read()
+            .expect("the reloadable config should remain readable"),
+        initial_resolved_config,
+    );
+}
+
+#[tokio::test]
 async fn should_return_existing_invalid_config_feedback_when_fixed_prefill_chunck_tokens_are_missing()
  {
     let temp_config_directory = tempfile::tempdir().expect("a temp config directory is needed");
@@ -61,7 +105,7 @@ async fn should_return_existing_invalid_config_feedback_when_fixed_prefill_chunc
     assert_eq!(response_json["status"], "invalid_config");
     assert_eq!(
         response_json["message"],
-        "invalid Astronomical configuration"
+        "invalid Astronomical configuration: fixed_prefill_chunck_tokens is required when prefill_chunck_size_optimizer_enabled is false"
     );
     let live_config = reloadable_config
         .read()
