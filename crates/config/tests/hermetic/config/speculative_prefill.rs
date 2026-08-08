@@ -99,6 +99,58 @@ fn should_require_a_target_model_when_speculative_prefill_is_enabled() {
 }
 
 #[test]
+fn should_require_an_explicit_keep_percentage_when_speculative_prefill_is_enabled() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "speculative_prefill": {
+            "enabled": true,
+            "target_model_id": "Qwen3.5-35B-Target",
+            "draft_model_id": "Qwen/Qwen3.5-2B-Draft"
+          }
+        }"#,
+    );
+
+    assert!(matches!(
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+        Err(AstronomicalConfigError::SpeculativePrefillKeepPercentageRequired)
+    ));
+}
+
+#[test]
+fn should_accept_the_minimum_and_maximum_explicit_keep_percentages() {
+    for keep_percentage in [1_u32, 100_u32] {
+        let temporary_home_directory =
+            tempfile::tempdir().expect("temp home should be created");
+        write_config(
+            temporary_home_directory.path(),
+            &format!(
+                r#"{{
+                  "speculative_prefill": {{
+                    "enabled": true,
+                    "target_model_id": "Qwen3.5-35B-Target",
+                    "draft_model_id": "Qwen/Qwen3.5-2B-Draft",
+                    "keep_percentage": {keep_percentage}
+                  }}
+                }}"#,
+            ),
+        );
+
+        let astronomical_config =
+            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+                .expect("a boundary keep percentage should load");
+        assert_eq!(
+            astronomical_config
+                .speculative_prefill()
+                .expect("speculative prefill config should resolve")
+                .keep_percentage(),
+            keep_percentage,
+        );
+    }
+}
+
+#[test]
 fn should_reject_an_empty_speculative_prefill_target_model_id() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
@@ -145,7 +197,8 @@ fn should_allow_speculative_prefill_with_mtp_enabled_by_default() {
           "speculative_prefill": {
             "enabled": true,
             "target_model_id": "Qwen3.5-35B-Target",
-            "draft_model_id": "Qwen/Qwen3.5-2B-Draft"
+            "draft_model_id": "Qwen/Qwen3.5-2B-Draft",
+            "keep_percentage": 20
           }
         }"#,
     );
@@ -173,7 +226,8 @@ fn should_select_speculative_prefill_when_mtp_is_explicitly_disabled() {
           "speculative_prefill": {
             "enabled": true,
             "target_model_id": "Qwen3.5-35B-Target",
-            "draft_model_id": "Qwen/Qwen3.5-2B-Draft"
+            "draft_model_id": "Qwen/Qwen3.5-2B-Draft",
+            "keep_percentage": 20
           }
         }"#,
     );

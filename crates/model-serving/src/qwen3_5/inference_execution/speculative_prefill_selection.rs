@@ -62,15 +62,15 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
             .map_err(|_| Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
             .max(1)
             .min(chunk_count);
-    let mandatory_trailing_chunk_count = if mandatory_trailing_token_count == 0 {
-        0
+    let mandatory_trailing_start_position = importance_scores
+        .len()
+        .saturating_sub(mandatory_trailing_token_count);
+    let first_mandatory_trailing_chunk_index = if mandatory_trailing_token_count == 0 {
+        chunk_count
     } else {
-        mandatory_trailing_token_count
-            .checked_add(selection_chunck_token_count - 1)
-            .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
-            / selection_chunck_token_count
-    }
-    .min(chunk_count);
+        mandatory_trailing_start_position / selection_chunck_token_count
+    };
+    let mandatory_trailing_chunk_count = chunk_count - first_mandatory_trailing_chunk_index;
     let ranked_chunk_end = chunk_count - mandatory_trailing_chunk_count;
     let ranked_chunk_budget = retained_chunk_count.saturating_sub(mandatory_trailing_chunk_count);
 

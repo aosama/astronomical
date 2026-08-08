@@ -1,5 +1,7 @@
 use sha2::{Digest, Sha256};
 
+use super::speculative_prefill_policy::PersistentSpeculativePrefillPolicyIdentity;
+
 #[cfg(feature = "direct-mlx")]
 use astronomical_runtime_integration::MlxArray;
 #[cfg(feature = "direct-mlx")]
@@ -13,7 +15,7 @@ use super::{
     persistent_safetensors_header::read_persistent_safetensors_header,
 };
 
-pub const PERSISTENT_SPECULATIVE_PREFILL_TARGET_STATE_FORMAT_VERSION: &str = "1";
+pub const PERSISTENT_SPECULATIVE_PREFILL_TARGET_STATE_FORMAT_VERSION: &str = "3";
 #[cfg(feature = "direct-mlx")]
 pub const SPECULATIVE_PREFILL_TARGET_SELECTED_POSITIONS_TENSOR_NAME: &str =
     "selected_target_token_positions";
@@ -121,6 +123,18 @@ impl PersistentSpeculativePrefillTargetStateContract {
         target_state_identity_hasher.finalize().into()
     }
 
+    /// Returns the target, drafter, and keep percentage bound to this state.
+    #[must_use]
+    pub fn policy_identity(&self) -> PersistentSpeculativePrefillPolicyIdentity {
+        PersistentSpeculativePrefillPolicyIdentity::new(
+            self.target_model_id.clone(),
+            self.target_model_revision.clone(),
+            self.drafter_model_id.clone(),
+            self.drafter_model_revision.clone(),
+            self.keep_percentage,
+        )
+    }
+
     #[cfg(feature = "direct-mlx")]
     pub(crate) fn target_model_id(&self) -> &str {
         &self.target_model_id
@@ -173,6 +187,7 @@ impl PersistentSpeculativePrefillTargetStateContract {
 #[cfg(feature = "direct-mlx")]
 pub(crate) struct PersistentSpeculativePrefillTargetStateFileHeader {
     prompt_prefix_token_count: usize,
+    policy_identity: PersistentSpeculativePrefillPolicyIdentity,
     tensor_names: Vec<String>,
 }
 
@@ -226,12 +241,25 @@ impl PersistentSpeculativePrefillTargetStateFileHeader {
         }
         Ok(Self {
             prompt_prefix_token_count,
+            policy_identity: PersistentSpeculativePrefillPolicyIdentity::new(
+                required_metadata(&parsed_header.metadata, "target_model_id")?.to_owned(),
+                required_metadata(&parsed_header.metadata, "target_model_revision")?.to_owned(),
+                required_metadata(&parsed_header.metadata, "drafter_model_id")?.to_owned(),
+                required_metadata(&parsed_header.metadata, "drafter_model_revision")?.to_owned(),
+                required_metadata(&parsed_header.metadata, "keep_percentage")?
+                    .parse::<u32>()
+                    .map_err(|_| "sparse target state keep_percentage is invalid".to_owned())?,
+            ),
             tensor_names: parsed_header.tensor_views.into_keys().collect(),
         })
     }
 
     pub(crate) const fn prompt_prefix_token_count(&self) -> usize {
         self.prompt_prefix_token_count
+    }
+
+    pub(crate) const fn policy_identity(&self) -> &PersistentSpeculativePrefillPolicyIdentity {
+        &self.policy_identity
     }
 
     pub(crate) fn tensor_names(&self) -> &[String] {
@@ -259,6 +287,18 @@ pub(crate) fn target_state_metadata_entries(
             target_state_contract.target_model_revision.clone(),
         ),
         (
+            "drafter_model_id",
+            target_state_contract.drafter_model_id.clone(),
+        ),
+        (
+            "drafter_model_revision",
+            target_state_contract.drafter_model_revision.clone(),
+        ),
+        (
+            "keep_percentage",
+            target_state_contract.keep_percentage.to_string(),
+        ),
+        (
             "target_state_identity_sha256",
             hexadecimal_sha256(target_state_identity_hash),
         ),
@@ -284,6 +324,17 @@ fn require_metadata(
         ));
     }
     Ok(())
+}
+
+#[cfg(feature = "direct-mlx")]
+fn required_metadata<'a>(
+    metadata_entries: &'a std::collections::HashMap<String, String>,
+    metadata_name: &'static str,
+) -> Result<&'a str, String> {
+    metadata_entries
+        .get(metadata_name)
+        .map(String::as_str)
+        .ok_or_else(|| format!("sparse target state is missing {metadata_name}"))
 }
 
 #[cfg(feature = "direct-mlx")]

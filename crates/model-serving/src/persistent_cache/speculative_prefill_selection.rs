@@ -7,6 +7,12 @@ use sha2::{Digest, Sha256};
 #[cfg(feature = "direct-mlx")]
 use thiserror::Error;
 
+use super::speculative_prefill_policy::PersistentSpeculativePrefillPolicyIdentity;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use super::speculative_prefill_selection_metadata::{
+    hex_encode, selection_file_metadata_entries, selection_prompt_metadata_entries,
+};
+
 #[cfg(feature = "direct-mlx")]
 use crate::safetensors::SafetensorsTensorView;
 
@@ -19,7 +25,7 @@ use super::persistent_safetensors_header::{
 };
 
 /// Current on-disk format for one persisted SpecPrefill selection.
-pub const PERSISTENT_SPECULATIVE_PREFILL_SELECTION_FORMAT_VERSION: &str = "1";
+pub const PERSISTENT_SPECULATIVE_PREFILL_SELECTION_FORMAT_VERSION: &str = "2";
 
 #[cfg(feature = "direct-mlx")]
 const PERSISTENT_SPECULATIVE_PREFILL_SELECTION_TENSOR_NAME: &str = "selected_token_positions";
@@ -27,16 +33,18 @@ const PERSISTENT_SPECULATIVE_PREFILL_SELECTION_TENSOR_NAME: &str = "selected_tok
 /// Exact drafter and selection configuration bound to one persisted selection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PersistentSpeculativePrefillSelectionContract {
-    draft_model_id: String,
-    draft_model_revision: String,
-    token_identifier_mapping_digest: [u8; 32],
-    keep_percentage: u32,
-    selection_chunck_token_count: u32,
-    mandatory_trailing_token_count: u32,
-    lookahead_token_count: u32,
-    importance_pooling_kernel_token_count: u32,
-    position_tokens: u32,
-    prompt_token_count: u32,
+    pub(super) target_model_id: String,
+    pub(super) target_model_revision: String,
+    pub(super) draft_model_id: String,
+    pub(super) draft_model_revision: String,
+    pub(super) token_identifier_mapping_digest: [u8; 32],
+    pub(super) keep_percentage: u32,
+    pub(super) selection_chunck_token_count: u32,
+    pub(super) mandatory_trailing_token_count: u32,
+    pub(super) lookahead_token_count: u32,
+    pub(super) importance_pooling_kernel_token_count: u32,
+    pub(super) position_tokens: u32,
+    pub(super) prompt_token_count: u32,
 }
 
 impl PersistentSpeculativePrefillSelectionContract {
@@ -44,6 +52,8 @@ impl PersistentSpeculativePrefillSelectionContract {
     #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        target_model_id: String,
+        target_model_revision: String,
         draft_model_id: String,
         draft_model_revision: String,
         token_identifier_mapping_digest: [u8; 32],
@@ -56,6 +66,8 @@ impl PersistentSpeculativePrefillSelectionContract {
         prompt_token_count: u32,
     ) -> Self {
         Self {
+            target_model_id,
+            target_model_revision,
             draft_model_id,
             draft_model_revision,
             token_identifier_mapping_digest,
@@ -67,6 +79,18 @@ impl PersistentSpeculativePrefillSelectionContract {
             position_tokens,
             prompt_token_count,
         }
+    }
+
+    /// Returns the target, drafter, and keep percentage bound to this selection.
+    #[must_use]
+    pub fn policy_identity(&self) -> PersistentSpeculativePrefillPolicyIdentity {
+        PersistentSpeculativePrefillPolicyIdentity::new(
+            self.target_model_id.clone(),
+            self.target_model_revision.clone(),
+            self.draft_model_id.clone(),
+            self.draft_model_revision.clone(),
+            self.keep_percentage,
+        )
     }
 
     /// Returns the model identity used by the drafter selection.
@@ -99,6 +123,14 @@ impl PersistentSpeculativePrefillSelectionContract {
         let mut selection_identity_hasher = Sha256::new();
         append_length_prefixed_bytes(
             &mut selection_identity_hasher,
+            self.target_model_id.as_bytes(),
+        );
+        append_length_prefixed_bytes(
+            &mut selection_identity_hasher,
+            self.target_model_revision.as_bytes(),
+        );
+        append_length_prefixed_bytes(
+            &mut selection_identity_hasher,
             self.draft_model_id.as_bytes(),
         );
         append_length_prefixed_bytes(
@@ -129,6 +161,7 @@ impl PersistentSpeculativePrefillSelectionContract {
 #[derive(Debug)]
 pub(crate) struct PersistentSpeculativePrefillSelectionFileHeader {
     selected_token_position_count: usize,
+    policy_identity: PersistentSpeculativePrefillPolicyIdentity,
 }
 
 #[cfg(feature = "direct-mlx")]
@@ -149,6 +182,7 @@ impl PersistentSpeculativePrefillSelectionFileHeader {
                 &parsed_header,
                 selection_file_path,
             )?,
+            policy_identity: selection_policy_identity(&parsed_header, selection_file_path)?,
         })
     }
 
@@ -176,11 +210,16 @@ impl PersistentSpeculativePrefillSelectionFileHeader {
                 &parsed_header,
                 selection_file_path,
             )?,
+            policy_identity: selection_policy_identity(&parsed_header, selection_file_path)?,
         })
     }
 
     pub(crate) const fn selected_token_position_count(&self) -> usize {
         self.selected_token_position_count
+    }
+
+    pub(crate) const fn policy_identity(&self) -> &PersistentSpeculativePrefillPolicyIdentity {
+        &self.policy_identity
     }
 }
 
@@ -217,9 +256,45 @@ pub(crate) enum PersistentSpeculativePrefillSelectionFileError {
     )]
     InvalidTensorLayout { selection_file_path: PathBuf },
     #[error(
+        "persisted speculative-prefill selection at {selection_file_path:?} has invalid metadata '{metadata_name}'"
+    )]
+    InvalidMetadata {
+        selection_file_path: PathBuf,
+        metadata_name: &'static str,
+    },
+    #[error(
         "persisted speculative-prefill selection at {selection_file_path:?} has tensor data outside the file"
     )]
     TensorDataOutsideFile { selection_file_path: PathBuf },
+}
+
+#[cfg(feature = "direct-mlx")]
+fn selection_policy_identity(
+    parsed_header: &PersistentSafetensorsHeader,
+    selection_file_path: &Path,
+) -> Result<PersistentSpeculativePrefillPolicyIdentity, PersistentSpeculativePrefillSelectionFileError>
+{
+    let required_metadata = |metadata_name: &'static str| {
+        parsed_header.metadata.get(metadata_name).cloned().ok_or_else(|| {
+            PersistentSpeculativePrefillSelectionFileError::MissingMetadata {
+                selection_file_path: selection_file_path.to_path_buf(),
+                metadata_name,
+            }
+        })
+    };
+    let keep_percentage = required_metadata("keep_percentage")?
+        .parse::<u32>()
+        .map_err(|_| PersistentSpeculativePrefillSelectionFileError::InvalidMetadata {
+            selection_file_path: selection_file_path.to_path_buf(),
+            metadata_name: "keep_percentage",
+        })?;
+    Ok(PersistentSpeculativePrefillPolicyIdentity::new(
+        required_metadata("target_model_id")?,
+        required_metadata("target_model_revision")?,
+        required_metadata("model_id")?,
+        required_metadata("model_revision")?,
+        keep_percentage,
+    ))
 }
 
 #[cfg(feature = "direct-mlx")]
@@ -270,6 +345,14 @@ fn validate_contract_metadata(
     expected_selection_identity_hash: [u8; 32],
 ) -> Result<(), PersistentSpeculativePrefillSelectionFileError> {
     let expected_metadata_entries = [
+        (
+            "target_model_id",
+            selection_contract.target_model_id.clone(),
+        ),
+        (
+            "target_model_revision",
+            selection_contract.target_model_revision.clone(),
+        ),
         (
             "token_identifier_mapping_digest",
             hex_encode(*selection_contract.token_identifier_mapping_digest()),
@@ -435,75 +518,4 @@ fn validate_tensor_offsets(
 fn append_length_prefixed_bytes(selection_identity_hasher: &mut Sha256, bytes: &[u8]) {
     selection_identity_hasher.update(u64::try_from(bytes.len()).unwrap_or(u64::MAX).to_le_bytes());
     selection_identity_hasher.update(bytes);
-}
-
-#[cfg(feature = "direct-mlx")]
-pub(crate) fn hex_encode(selection_hash_bytes: [u8; 32]) -> String {
-    selection_hash_bytes
-        .iter()
-        .map(|selection_hash_byte| format!("{selection_hash_byte:02x}"))
-        .collect()
-}
-
-#[cfg(feature = "direct-mlx")]
-pub(crate) fn selection_file_metadata_entries(
-    selection_contract: &PersistentSpeculativePrefillSelectionContract,
-    selection_identity_hash: [u8; 32],
-) -> [(&'static str, String); 10] {
-    [
-        (
-            "format_version",
-            PERSISTENT_SPECULATIVE_PREFILL_SELECTION_FORMAT_VERSION.to_owned(),
-        ),
-        ("model_id", selection_contract.draft_model_id.clone()),
-        (
-            "model_revision",
-            selection_contract.draft_model_revision.clone(),
-        ),
-        (
-            "token_identifier_mapping_digest",
-            hex_encode(*selection_contract.token_identifier_mapping_digest()),
-        ),
-        (
-            "keep_percentage",
-            selection_contract.keep_percentage.to_string(),
-        ),
-        (
-            "selection_chunck_token_count",
-            selection_contract.selection_chunck_token_count.to_string(),
-        ),
-        (
-            "mandatory_trailing_token_count",
-            selection_contract
-                .mandatory_trailing_token_count
-                .to_string(),
-        ),
-        (
-            "lookahead_token_count",
-            selection_contract.lookahead_token_count.to_string(),
-        ),
-        (
-            "importance_pooling_kernel_token_count",
-            selection_contract
-                .importance_pooling_kernel_token_count
-                .to_string(),
-        ),
-        ("selection_identity", hex_encode(selection_identity_hash)),
-    ]
-}
-
-#[cfg(feature = "direct-mlx")]
-pub(crate) fn selection_prompt_metadata_entries(
-    selection_contract: &PersistentSpeculativePrefillSelectionContract,
-) -> [(&'static str, String); 2] {
-    [
-        (
-            "position_tokens",
-            selection_contract.position_tokens.to_string(),
-        ),
-        (
-            "prompt_token_count",
-            selection_contract.prompt_token_count.to_string(),
-        ),
-    ]
 }

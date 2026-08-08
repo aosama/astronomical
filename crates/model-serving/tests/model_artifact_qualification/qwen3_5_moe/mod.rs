@@ -34,7 +34,21 @@ mod qwen3_6_35b_a3b_eight_bit_expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill;
 #[cfg(feature = "direct-mlx")]
+mod speculative_prefill_fail_closed;
+#[cfg(feature = "direct-mlx")]
 mod speculative_prefill_persistent_cache;
+mod speculative_prefill_qualification_support;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_tool_control;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_tool_false_positive;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_tool_sampled;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_visual_tool;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_tool_process_restart;
+mod speculative_prefill_tool_process_prompt;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_visual_memory_lifecycle;
 mod tokenizer;

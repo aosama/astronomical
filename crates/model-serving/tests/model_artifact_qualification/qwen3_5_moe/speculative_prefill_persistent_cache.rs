@@ -28,6 +28,11 @@ async fn should_reuse_target_and_drafter_ssd_state_for_a_long_chat_follow_up() {
         let initial_prompt = super::speculative_prefill::RepresentativePrompt {
             prompt_token_ids: representative_source_prompt.prompt_token_ids.repeat(5),
             image_pad_token_id: representative_source_prompt.image_pad_token_id,
+            processed_visual_images: Vec::new(),
+            ordinary_target_prefill_control_span_token_count: 0,
+            sampling_temperature_thousandths: 0,
+            sampling_top_p_thousandths: 1_000,
+            sampling_seed: None,
         };
         assert_eq!(initial_prompt.prompt_token_ids.len(), INITIAL_CHAT_PROMPT_TOKEN_COUNT);
         let persistent_prompt_cache_root_directory =
@@ -80,6 +85,11 @@ async fn should_reuse_target_and_drafter_ssd_state_for_a_long_chat_follow_up() {
         let follow_up_prompt = super::speculative_prefill::RepresentativePrompt {
             prompt_token_ids: follow_up_prompt_token_ids,
             image_pad_token_id: representative_source_prompt.image_pad_token_id,
+            processed_visual_images: Vec::new(),
+            ordinary_target_prefill_control_span_token_count: 0,
+            sampling_temperature_thousandths: 0,
+            sampling_top_p_thousandths: 1_000,
+            sampling_seed: None,
         };
         let target_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&target_model_directory, 20_480)

@@ -42,12 +42,13 @@ pub fn qwen3_5_select_speculative_prefill_token_positions_on_gpu(
     .map_err(|_| invalid_selection("retained selection chunk count overflowed"))?
     .max(1)
     .min(selection_chunck_count);
-    let mandatory_trailing_selection_chunck_count = mandatory_trailing_token_count
-        .checked_add(selection_chunck_token_count - 1)
-        .ok_or_else(|| invalid_selection("mandatory trailing chunk count overflowed"))?
-        / selection_chunck_token_count;
-    let mandatory_trailing_selection_chunck_count =
-        mandatory_trailing_selection_chunck_count.min(selection_chunck_count);
+    let mandatory_trailing_start_position = importance_score_count
+        .saturating_sub(mandatory_trailing_token_count);
+    let first_mandatory_trailing_selection_chunck_index =
+        mandatory_trailing_start_position / selection_chunck_token_count;
+    let mandatory_trailing_selection_chunck_count = selection_chunck_count
+        .checked_sub(first_mandatory_trailing_selection_chunck_index)
+        .ok_or_else(|| invalid_selection("mandatory trailing chunk count underflowed"))?;
     let ranked_selection_chunck_end =
         selection_chunck_count - mandatory_trailing_selection_chunck_count;
     let ranked_selection_chunck_budget =

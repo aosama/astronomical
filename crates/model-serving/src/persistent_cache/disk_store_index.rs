@@ -123,6 +123,27 @@ impl PersistentPromptCacheDiskStoreIndex {
         }
     }
 
+    pub(crate) fn files(
+        &self,
+        persistent_prompt_cache_file_kind: PersistentPromptCacheFileKind,
+    ) -> Vec<([u8; 32], TrackedPersistentPromptCacheFile)> {
+        let tracked_files = match persistent_prompt_cache_file_kind {
+            PersistentPromptCacheFileKind::SequenceStateBlock => &self.kv_blocks,
+            PersistentPromptCacheFileKind::BoundaryStateSnapshot => &self.recurrent_snapshots,
+            PersistentPromptCacheFileKind::VisualEmbedding => &self.visual_embeddings,
+            PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
+                &self.speculative_prefill_selections
+            }
+            PersistentPromptCacheFileKind::SpeculativePrefillTargetState => {
+                &self.speculative_prefill_target_states
+            }
+        };
+        tracked_files
+            .iter()
+            .map(|(file_hash, tracked_file)| (*file_hash, tracked_file.clone()))
+            .collect()
+    }
+
     pub(super) fn remove_files_by_path(&mut self, removed_file_paths: &[PathBuf]) {
         self.kv_blocks
             .retain(|_, tracked_file| !removed_file_paths.contains(&tracked_file.file_path));

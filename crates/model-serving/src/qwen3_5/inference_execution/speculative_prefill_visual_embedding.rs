@@ -1,5 +1,5 @@
 #[cfg(feature = "direct-mlx")]
-use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
+use astronomical_runtime_integration::MlxArray;
 
 #[cfg(feature = "direct-mlx")]
 use crate::{PerformanceOperation, Qwen3_5ExecutionError};
@@ -8,6 +8,8 @@ use crate::{PerformanceOperation, Qwen3_5ExecutionError};
 use super::Qwen3_5EngineState;
 #[cfg(feature = "direct-mlx")]
 use super::engine_request::Qwen3_5EngineRequest;
+#[cfg(feature = "direct-mlx")]
+use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 
 #[cfg(feature = "direct-mlx")]
 impl Qwen3_5EngineState {
@@ -22,12 +24,11 @@ impl Qwen3_5EngineState {
             return Ok(None);
         }
         let Some(draft_vision_model) = draft_model.vision_model() else {
-            self.record_speculative_prefill_scoring_fallback(
-                active_request,
-                draft_model,
+            return Err(configured_speculative_prefill_failure(
+                active_request.request_id,
+                "drafter visual initialization",
                 "visual speculative-prefill draft lost its vision tower",
-            );
-            return Ok(None);
+            ));
         };
         let ordered_image_visual_embedding_row_counts = active_request
             .speculative_prefill_processed_visual_images
@@ -43,8 +44,12 @@ impl Qwen3_5EngineState {
                 &ordered_image_visual_embedding_row_counts,
                 active_request.image_pad_token_id,
             )
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                description: "speculative-prefill draft visual suffix planning failed",
+            .map_err(|visual_suffix_planning_error| {
+                configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "drafter visual suffix planning",
+                    visual_suffix_planning_error,
+                )
             })?;
         let draft_visual_embedding_result = if draft_visual_embedding_suffix_plan
             .remaining_visual_embedding_row_count()
@@ -136,20 +141,11 @@ impl Qwen3_5EngineState {
                 Ok(draft_visual_embeddings)
             }
             Err(draft_visual_embedding_error) => {
-                if matches!(
-                    &draft_visual_embedding_error,
-                    Qwen3_5ExecutionError::Runtime(
-                        MlxRuntimeError::ActiveMemoryLimitExceeded { .. }
-                    )
-                ) {
-                    return Err(draft_visual_embedding_error.into());
-                }
-                self.record_speculative_prefill_scoring_fallback(
-                    active_request,
-                    draft_model,
+                Err(configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "drafter visual projection",
                     draft_visual_embedding_error,
-                );
-                Ok(None)
+                ))
             }
         }
     }
