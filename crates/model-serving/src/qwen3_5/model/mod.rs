@@ -77,7 +77,10 @@ pub use memory_admission::{
 #[cfg(feature = "direct-mlx")]
 pub use model::Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use speculative_prefill::Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock;
+pub(crate) use speculative_prefill::{
+    Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,
+    Qwen3_5SpeculativePrefillDraftScoringOutcome,
+};
 #[cfg(feature = "direct-mlx")]
 pub use speculative_prefill_attention_capture::qwen3_5_aggregate_speculative_prefill_attention_weights;
 #[cfg(feature = "direct-mlx")]

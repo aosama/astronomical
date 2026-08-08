@@ -31,6 +31,8 @@ ScreenShots/
 .cache/
 tmp/
 temp/
+.tmp-*.txt
+.tmp-*.diff
 
 # Python bytecode
 __pycache__/
