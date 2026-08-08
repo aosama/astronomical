@@ -18,12 +18,12 @@ use super::decoder_layer_weights::{
 };
 use super::error::invalid_request_decoder_state;
 use super::forward_contract::validate_forward_input;
-use super::mtp::Qwen3_5MtpWeights;
 use super::{
-    Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel, Qwen3_5Weights,
-    RequestDecoderStateStack,
+    Qwen3_5AttentionCapture, Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel,
+    Qwen3_5Weights, RequestDecoderStateStack,
 };
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpWeights;
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub struct Qwen3_5Model {
     pub(crate) config: Qwen3_5Config,
     pub(crate) decoder_cache_layout: DecoderCacheLayout,
     pub(crate) weights: Qwen3_5Weights,
-    pub(super) mtp_weights: Option<Qwen3_5MtpWeights>,
+    pub(crate) mtp_weights: Option<Qwen3_5MtpWeights>,
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
@@ -41,6 +41,7 @@ pub struct Qwen3_5Model {
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
+    pub(crate) target_verification_quantized_linear_kernel: MlxMetalKernel,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
     /// Model-owned BF16 scalar for the query normalization scale in every
@@ -204,6 +205,7 @@ impl Qwen3_5Model {
         let token_count = validate_forward_input(
             token_ids,
             starting_position_tokens,
+            None,
             request_decoder_state.layer_count(),
             self.config.layer_count() as usize,
             self.config.vocabulary_size(),
@@ -239,18 +241,7 @@ impl Qwen3_5Model {
         Ok(())
     }
 
-    pub(crate) fn materialize_mtp_weights(&mut self) -> Result<(), Qwen3_5ExecutionError> {
-        let Some(mtp_weights) = self.mtp_weights.as_ref() else {
-            return Ok(());
-        };
-        if let Err(mtp_materialization_error) = mtp_weights.materialize(&self.runtime) {
-            self.mtp_weights = None;
-            return Err(mtp_materialization_error);
-        }
-        Ok(())
-    }
-
-    pub(super) fn embedding_lookup(
+    pub(crate) fn embedding_lookup(
         &self,
         token_indices: &MlxArray,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -293,6 +284,8 @@ impl Qwen3_5Model {
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut DecoderCacheState,
+        token_position_offsets: Option<&MlxArray>,
+        attention_capture: Option<&mut Qwen3_5AttentionCapture>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
@@ -323,6 +316,7 @@ impl Qwen3_5Model {
                         convolution,
                         recurrent,
                         boundary_checkpoint_collector,
+                        paged_prefill_execution_mode,
                     )
                 },
             ),
@@ -338,6 +332,10 @@ impl Qwen3_5Model {
                         rope_offset_tokens,
                         full_attention_weights,
                         attention,
+                        layer_index,
+                        token_position_offsets,
+                        attention_capture,
+                        paged_prefill_execution_mode,
                     )
                 },
             ),
@@ -357,12 +355,17 @@ impl Qwen3_5Model {
             &decoder_layer_weights.post_attention_normalization_weight,
             f32::from_bits(self.config.rms_norm_epsilon_bits()),
         )?;
-        let should_use_compiled_elementwise_graphs = token_count != 1;
+        let should_use_compiled_elementwise_graphs = token_count != 1
+            && paged_prefill_execution_mode
+                != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
         let mlp_forward_span_started_at = performance_attribution.begin_operation_span();
         let mlp_output = match &decoder_layer_weights.mlp_weights {
-            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
-                self.forward_qwen3_5_dense_mlp(&normalized_attention, dense_mlp_weights)
-            }
+            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => self
+                .forward_qwen3_5_dense_mlp(
+                    &normalized_attention,
+                    dense_mlp_weights,
+                    paged_prefill_execution_mode,
+                ),
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
                 let expert_pager = self.expert_pager.as_ref().ok_or_else(|| {
                     Qwen3_5ExecutionError::MissingTensor {

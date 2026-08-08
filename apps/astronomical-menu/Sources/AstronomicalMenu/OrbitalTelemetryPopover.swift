@@ -370,13 +370,13 @@ struct PromptReuseBar: View {
   var body: some View {
     VStack(spacing: 5) {
       HStack {
-        Text("Prompt reuse").foregroundStyle(.secondary)
+        Text("Cache efficacy").foregroundStyle(.secondary)
         Spacer()
         Text(percentageTitle).font(PopoverTypography.monospacedBody)
       }
       HorizontalUsageBar(usageFraction: reusedFraction, fillColor: .cyan)
       HStack {
-        Text("Session prompts").foregroundStyle(.secondary)
+        Text("Target + drafter work").foregroundStyle(.secondary)
         Spacer()
         Text(breakdownTitle).font(PopoverTypography.monospacedBody)
       }

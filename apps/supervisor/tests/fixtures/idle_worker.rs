@@ -2,8 +2,8 @@ use std::{error::Error, process::ExitCode};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, MlxMemorySnapshotSource,
-    MtpRuntimeState, ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
-    WorkerMlxMemorySnapshot,
+    MtpRuntimeState, ProtocolReader, ProtocolWriter, SpeculativePrefillRuntimeState, WorkerCommand,
+    WorkerEvent, WorkerMlxMemorySnapshot,
 };
 
 #[tokio::main]
@@ -49,6 +49,11 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             minimum_mlx_memory_ceiling_bytes: 3_000_000_000,
                             mtp_runtime_state: MtpRuntimeState::Disabled,
                             mtp_unavailable_reason: None,
+                            speculative_prefill_runtime_state:
+                                SpeculativePrefillRuntimeState::Disabled,
+                            speculative_prefill_unavailable_reason: None,
+                            speculative_prefill_draft_model_id: None,
+                            speculative_prefill_draft_model_revision: None,
                             model_id: "astronomical/requested-model".to_owned(),
                             capabilities: ChatModelCapabilities {
                                 supports_reasoning: true,

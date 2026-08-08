@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use astronomical_config::{LogLevel, LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig};
+use astronomical_config::{
+    LogLevel, LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, SpeculativePrefillConfig,
+};
 use astronomical_supervisor::{
     ChatGenerationExecutor, ConfigReloadDecision, ConfigReloadDiff, GenerationPerformanceLog,
     ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
@@ -247,6 +249,8 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
+        speculative_prefill: SpeculativePrefillConfig::disabled(),
+        speculative_prefill_draft_model_directory: None,
         prompt_cache_config: PromptCacheConfig::new(
             PathBuf::from("/tmp/prompt-cache"),
             50_000_000_000,
@@ -378,4 +382,41 @@ fn should_resolve_reload_config_from_the_config_file() {
             .global_prompt_cache_root_directory(),
         &config_home_directory.join(".astronomical/cache")
     );
+}
+
+#[test]
+fn should_reject_enabled_speculative_prefill_when_target_model_is_not_discovered() {
+    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
+    let config_file_path = config_home_directory
+        .path()
+        .join(".astronomical")
+        .join("config.json");
+    std::fs::create_dir_all(
+        config_file_path
+            .parent()
+            .expect("the config path should have a parent"),
+    )
+    .expect("the config directory should be created");
+    std::fs::write(
+        &config_file_path,
+        r#"{
+            "speculative_prefill": {
+                "enabled": true,
+                "target_model_id": "target-model",
+                "draft_model_id": "draft-model"
+            }
+        }"#,
+    )
+    .expect("the config file should be written");
+    let resolver = ResolvedRuntimeConfigResolver::new(
+        config_home_directory.path().to_path_buf(),
+        PathBuf::from("/fallback/worker"),
+    );
+
+    assert!(matches!(
+        resolver.load(),
+        Err(astronomical_supervisor::ResolvedRuntimeConfigError::
+            SpeculativePrefillTargetModelNotDiscovered { target_model_id })
+            if target_model_id == "target-model"
+    ));
 }

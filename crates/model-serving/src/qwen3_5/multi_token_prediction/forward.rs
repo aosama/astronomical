@@ -1,14 +1,13 @@
 use astronomical_runtime_integration::{MlxArray, MlxDtype};
 
-use crate::qwen3_5::Qwen3_5MtpRequestState;
+use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRequestState;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::Qwen3_5ExecutionError;
-use super::decoder_layer_weights::{
+use crate::qwen3_5::model::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights, Qwen3_5FullAttentionWeights,
 };
-use super::model::Qwen3_5Model;
+use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 
 /// Evaluated Qwen MTP-head outputs for one or more draft positions.
 pub struct Qwen3_5MtpForwardOutput {
@@ -262,9 +261,12 @@ impl Qwen3_5Model {
             f32::from_bits(self.config.rms_norm_epsilon_bits()),
         )?;
         let mlp_output = match &mtp_weights.decoder_layer_weights.mlp_weights {
-            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
-                self.forward_qwen3_5_dense_mlp(&normalized_attention, dense_mlp_weights)?
-            }
+            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => self
+                .forward_qwen3_5_dense_mlp(
+                    &normalized_attention,
+                    dense_mlp_weights,
+                    Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                )?,
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
                 let expert_pager = self.expert_pager.as_ref().ok_or_else(|| {
                     Qwen3_5ExecutionError::MissingTensor {
@@ -304,6 +306,10 @@ impl Qwen3_5Model {
             mtp_full_attention_state.offset_tokens(),
             full_attention_weights,
             mtp_full_attention_state,
+            0,
+            None,
+            None,
+            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
         )
     }
 }

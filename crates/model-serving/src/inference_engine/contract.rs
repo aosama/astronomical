@@ -1,7 +1,10 @@
 use std::future::Future;
 
 use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
-use astronomical_ipc_protocol::{ExpertMemoryMode, MtpRuntimeState, RequestId, WorkerEvent};
+use astronomical_ipc_protocol::{
+    ExpertMemoryMode, MtpRuntimeState, RequestId, SpeculativePrefillRuntimeState, WorkerEvent,
+    WorkerPromptWorkReuse,
+};
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
 pub trait InferenceEngine {
@@ -130,11 +133,15 @@ pub trait MlxInferenceExecution: 'static {
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError>;
 }
 
-/// Result of loading engine resources, including MTP runtime state.
+/// Result of loading engine resources, including optional runtime optimizers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EngineLoadResult {
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
+    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+    speculative_prefill_unavailable_reason: Option<String>,
+    speculative_prefill_draft_model_id: Option<String>,
+    speculative_prefill_draft_model_revision: Option<String>,
     minimum_mlx_memory_ceiling_bytes: u64,
 }
 
@@ -145,6 +152,10 @@ impl EngineLoadResult {
         Self {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             minimum_mlx_memory_ceiling_bytes: 1,
         }
     }
@@ -160,6 +171,22 @@ impl EngineLoadResult {
     #[must_use]
     pub fn with_mtp_unavailable_reason(mut self, reason: String) -> Self {
         self.mtp_unavailable_reason = Some(reason);
+        self
+    }
+
+    /// Sets optional draft-assisted speculative-prefill load metadata.
+    #[must_use]
+    pub fn with_speculative_prefill_runtime(
+        mut self,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+        speculative_prefill_unavailable_reason: Option<String>,
+        speculative_prefill_draft_model_id: Option<String>,
+        speculative_prefill_draft_model_revision: Option<String>,
+    ) -> Self {
+        self.speculative_prefill_runtime_state = speculative_prefill_runtime_state;
+        self.speculative_prefill_unavailable_reason = speculative_prefill_unavailable_reason;
+        self.speculative_prefill_draft_model_id = speculative_prefill_draft_model_id;
+        self.speculative_prefill_draft_model_revision = speculative_prefill_draft_model_revision;
         self
     }
 
@@ -183,6 +210,30 @@ impl EngineLoadResult {
     #[must_use]
     pub fn mtp_unavailable_reason(&self) -> Option<&str> {
         self.mtp_unavailable_reason.as_deref()
+    }
+
+    /// Returns the optional draft-assisted speculative-prefill runtime state.
+    #[must_use]
+    pub const fn speculative_prefill_runtime_state(&self) -> SpeculativePrefillRuntimeState {
+        self.speculative_prefill_runtime_state
+    }
+
+    /// Returns the optional draft-assisted speculative-prefill load failure reason.
+    #[must_use]
+    pub fn speculative_prefill_unavailable_reason(&self) -> Option<&str> {
+        self.speculative_prefill_unavailable_reason.as_deref()
+    }
+
+    /// Returns the configured draft model identity, when present.
+    #[must_use]
+    pub fn speculative_prefill_draft_model_id(&self) -> Option<&str> {
+        self.speculative_prefill_draft_model_id.as_deref()
+    }
+
+    /// Returns the validated resident draft model revision, when active.
+    #[must_use]
+    pub fn speculative_prefill_draft_model_revision(&self) -> Option<&str> {
+        self.speculative_prefill_draft_model_revision.as_deref()
     }
 
     /// Returns the exact safe idle MLX minimum for the loaded engine.
@@ -327,6 +378,7 @@ pub enum GeneratedToken {
         prefill_optimizer_insight: Option<PrefillChunckOptimizerInsight>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         expert_memory_mode: Option<ExpertMemoryMode>,
+        prompt_work_reuse: WorkerPromptWorkReuse,
     },
     /// Engine-side end-of-sequence without an explicit token ID.
     EndOfSequence,

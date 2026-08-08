@@ -51,14 +51,45 @@ impl Qwen3_5Model {
             PerformanceOperation::PagedRouterGraphConstruction,
             |_performance_attribution| {
                 let router_logits = match &mixture_of_experts_weights.router_projection {
-                    Qwen3_5MoERouterGateWeights::Affine(quantized_weights) => {
-                        self.quantized_linear(hidden_states, quantized_weights)?
-                    }
+                    Qwen3_5MoERouterGateWeights::Affine(quantized_weights) => self
+                        .quantized_linear_for_paged_prefill_execution_mode(
+                            hidden_states,
+                            quantized_weights,
+                            paged_prefill_execution_mode,
+                        )?,
                     Qwen3_5MoERouterGateWeights::Unquantized(unquantized_weight) => {
                         let transposed_gate_weight =
                             self.runtime.transpose_axes(unquantized_weight, &[1, 0])?;
-                        self.runtime
-                            .matmul(hidden_states, &transposed_gate_weight)?
+                        if paged_prefill_execution_mode
+                            == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
+                            && token_count > 1
+                        {
+                            let hidden_dimension = hidden_state_shape.last().copied().ok_or(
+                                Qwen3_5ExecutionError::InvalidInput {
+                                    description: "paged MoE hidden dimension is missing",
+                                },
+                            )?;
+                            let mut token_router_logits = Vec::with_capacity(token_count as usize);
+                            for token_position_index in 0..token_count {
+                                let token_hidden_states = self.runtime.slice(
+                                    hidden_states,
+                                    &[0, token_position_index, 0],
+                                    &[1, token_position_index + 1, hidden_dimension],
+                                    &[1, 1, 1],
+                                )?;
+                                token_router_logits.push(
+                                    self.runtime
+                                        .matmul(&token_hidden_states, &transposed_gate_weight)?,
+                                );
+                            }
+                            let token_router_logit_references =
+                                token_router_logits.iter().collect::<Vec<_>>();
+                            self.runtime
+                                .concatenate_axis(&token_router_logit_references, 1)?
+                        } else {
+                            self.runtime
+                                .matmul(hidden_states, &transposed_gate_weight)?
+                        }
                     }
                 };
                 qwen3_5_moe_route_experts(
@@ -71,16 +102,29 @@ impl Qwen3_5Model {
             },
         )?;
 
-        if matches!(
-            paged_prefill_execution_mode,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
-                | Qwen3_5MoEPagedPrefillExecutionMode::ProductionDecodeVerification
-        ) {
+        if paged_prefill_execution_mode
+            != Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic
+            && paged_prefill_execution_mode
+                != Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic
+        {
             let mut expert_weight_memory_cache =
                 self.sparse_expert_weight_memory_cache()?.borrow_mut();
             if let Some(complete_layer_expert_weights) =
                 expert_weight_memory_cache.record_complete_layer_hit(layer_index)
             {
+                if paged_prefill_execution_mode
+                    == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
+                {
+                    return self
+                        .forward_moe_with_complete_layer_target_verification_and_performance_attribution(
+                            hidden_states,
+                            mixture_of_experts_weights,
+                            complete_layer_expert_weights,
+                            &selected_indices,
+                            &selected_scores,
+                            performance_attribution,
+                        );
+                }
                 return self.forward_moe_with_complete_layer_paging_and_performance_attribution(
                     hidden_states,
                     mixture_of_experts_weights,
@@ -96,7 +140,7 @@ impl Qwen3_5Model {
         if token_count > 1 {
             let should_allow_full_layer_page = match paged_prefill_execution_mode {
                 Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault => true,
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDecodeVerification => {
+                Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow => {
                     return self.forward_moe_with_cached_paging(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -106,10 +150,11 @@ impl Qwen3_5Model {
                         &selected_indices,
                         &selected_scores,
                         should_use_compiled_elementwise_graphs,
+                        true,
                         performance_attribution,
                     );
                 }
-                Qwen3_5MoEPagedPrefillExecutionMode::CompactMultiTokenDiagnostic => false,
+                Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic => false,
                 Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic => {
                     return self.forward_moe_with_per_token_paging(
                         hidden_states,
@@ -145,6 +190,7 @@ impl Qwen3_5Model {
             &selected_indices,
             &selected_scores,
             should_use_compiled_elementwise_graphs,
+            false,
             performance_attribution,
         )
     }
@@ -161,6 +207,7 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
+        should_execute_token_projections_separately: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let sorted_unique_expert_ids =
@@ -201,18 +248,30 @@ impl Qwen3_5Model {
             },
         );
 
-        // Forward through paged MoE with pre-computed routing results.
-        self.forward_moe_paged_with_performance_attribution(
-            hidden_states,
-            mixture_of_experts_weights,
-            &paged_weights,
-            &page_manifest,
-            selected_indices,
-            &sorted_unique_expert_ids,
-            selected_scores,
-            should_use_compiled_elementwise_graphs,
-            performance_attribution,
-        )
+        if should_execute_token_projections_separately {
+            self.forward_moe_paged_target_verification_with_performance_attribution(
+                hidden_states,
+                mixture_of_experts_weights,
+                &paged_weights,
+                &page_manifest,
+                selected_indices,
+                &sorted_unique_expert_ids,
+                selected_scores,
+                performance_attribution,
+            )
+        } else {
+            self.forward_moe_paged_with_performance_attribution(
+                hidden_states,
+                mixture_of_experts_weights,
+                &paged_weights,
+                &page_manifest,
+                selected_indices,
+                &sorted_unique_expert_ids,
+                selected_scores,
+                should_use_compiled_elementwise_graphs,
+                performance_attribution,
+            )
+        }
     }
 
     // Paging dependencies stay explicit instead of adding a request-context abstraction.
@@ -462,6 +521,7 @@ impl Qwen3_5Model {
                 &token_selected_indices,
                 &token_selected_scores,
                 should_use_compiled_elementwise_graphs,
+                false,
                 performance_attribution,
             )?;
             token_moe_outputs.push(token_moe_output);

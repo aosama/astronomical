@@ -5,10 +5,10 @@
 pub enum Qwen3_5MoEPagedPrefillExecutionMode {
     /// Uses adaptive direct layer pages for normal inference.
     ProductionDefault,
-    /// Uses retained decode expert pages for the two-token MTP verification window.
-    ProductionDecodeVerification,
+    /// Uses retained decode expert pages for a two-token target verification window.
+    TargetVerificationWindow,
     /// Executes sparse MoE separately for each prompt token through the decode cache.
     TokenLocalDiagnostic,
     /// Forces one compact selected-expert page for all prompt tokens.
-    CompactMultiTokenDiagnostic,
+    CompactPromptDiagnostic,
 }

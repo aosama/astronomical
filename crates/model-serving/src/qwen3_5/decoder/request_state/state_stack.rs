@@ -177,7 +177,7 @@ impl RequestDecoderStateStack {
             .fold(0, u64::saturating_add)
     }
 
-    /// Retains all decoder-layer state owners for MTP rollback.
+    /// Retains all decoder-layer state owners for verified-prefix rollback.
     pub fn checkpoint(&self) -> Result<RequestDecoderStateStackCheckpoint, MlxRuntimeError> {
         let mut layer_checkpoints = Vec::with_capacity(self.layers.len());
         for decoder_layer_state in &self.layers {
@@ -224,20 +224,20 @@ impl RequestDecoderStateStack {
         Ok(())
     }
 
-    /// Restores the valid first row retained during a two-token MTP verification.
-    pub(crate) fn restore_mtp_verified_prefix(
+    /// Restores the valid first row retained during a two-token verification window.
+    pub(crate) fn restore_verified_prefix(
         &mut self,
         verified_prefix_position_tokens: u32,
         mut verified_prefix_boundary_checkpoint: Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     ) -> Result<(), MlxRuntimeError> {
         if verified_prefix_boundary_checkpoint.completed_prefill_chunck_tokens != 1 {
             return Err(request_decoder_state_error(
-                "MTP verification boundary must retain exactly the first verifier row",
+                "verification boundary must retain exactly the first verifier row",
             ));
         }
         let verified_prefix_attention_offset_tokens =
             i32::try_from(verified_prefix_position_tokens).map_err(|_| {
-                request_decoder_state_error("MTP verified-prefix position exceeds the Int32 range")
+                request_decoder_state_error("verified-prefix position exceeds the Int32 range")
             })?;
         let expected_recurrent_snapshot_tensor_count = self
             .layers
@@ -248,7 +248,7 @@ impl RequestDecoderStateStack {
             .count()
             .checked_mul(2)
             .ok_or_else(|| {
-                request_decoder_state_error("MTP verified-prefix recurrent tensor count overflowed")
+                request_decoder_state_error("verified-prefix recurrent tensor count overflowed")
             })?;
         if verified_prefix_boundary_checkpoint
             .recurrent_snapshot_tensors
@@ -256,7 +256,7 @@ impl RequestDecoderStateStack {
             != expected_recurrent_snapshot_tensor_count
         {
             return Err(request_decoder_state_error(
-                "MTP verified-prefix boundary tensor count does not match the decoder state",
+                "verified-prefix boundary tensor count does not match the decoder state",
             ));
         }
 
@@ -265,7 +265,7 @@ impl RequestDecoderStateStack {
                 DecoderCacheState::AppendOnlyAttention { attention } => {
                     if verified_prefix_attention_offset_tokens > attention.offset_tokens() {
                         return Err(request_decoder_state_error(
-                            "MTP verified-prefix position exceeds live attention state",
+                            "verified-prefix position exceeds live attention state",
                         ));
                     }
                 }
@@ -282,7 +282,7 @@ impl RequestDecoderStateStack {
                             .contains_key(&recurrent_tensor_name)
                     {
                         return Err(request_decoder_state_error(
-                            "MTP verified-prefix boundary is missing recurrent state",
+                            "verified-prefix boundary is missing recurrent state",
                         ));
                     }
                 }
@@ -307,7 +307,7 @@ impl RequestDecoderStateStack {
                         .remove(&convolution_tensor_name)
                         .ok_or_else(|| {
                             request_decoder_state_error(
-                                "MTP verified-prefix boundary lost convolution state",
+                                "verified-prefix boundary lost convolution state",
                             )
                         })?;
                     let retained_recurrent_state = verified_prefix_boundary_checkpoint
@@ -315,7 +315,7 @@ impl RequestDecoderStateStack {
                         .remove(&recurrent_tensor_name)
                         .ok_or_else(|| {
                             request_decoder_state_error(
-                                "MTP verified-prefix boundary lost gated-delta recurrent state",
+                                "verified-prefix boundary lost gated-delta recurrent state",
                             )
                         })?;
                     convolution.restore_from_snapshot(retained_convolution_state);

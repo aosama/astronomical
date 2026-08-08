@@ -40,6 +40,11 @@ impl ModelGenerationProcessor for DeepSeekV4UnavailableGenerationProcessor {
         &self,
         _mtp_runtime_state: astronomical_ipc_protocol::MtpRuntimeState,
         _mtp_unavailable_reason: Option<String>,
+        _speculative_prefill_runtime_state:
+            astronomical_ipc_protocol::SpeculativePrefillRuntimeState,
+        _speculative_prefill_unavailable_reason: Option<String>,
+        _speculative_prefill_draft_model_id: Option<String>,
+        _speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
         WorkerEvent::ModelSwapFailed {
             loaded_model_remains_ready: false,

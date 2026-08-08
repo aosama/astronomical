@@ -4,10 +4,11 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    WorkerCommand, WorkerEvent, WorkerLogLevel, WorkerMlxMemorySnapshot,
-    WorkerPrefillChunckSizingPolicy, WorkerPrefillOptimizerCandidateEvidence,
-    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
-    WorkerPrefillOptimizerInsight, WorkerStartupConfiguration, decode_command,
+    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerLogLevel,
+    WorkerMlxMemorySnapshot, WorkerPrefillChunckSizingPolicy,
+    WorkerPrefillOptimizerCandidateEvidence, WorkerPrefillOptimizerContext,
+    WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
+    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration, decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -22,6 +23,15 @@ fn should_default_mtp_runtime_state_to_disabled() {
     assert_eq!(MtpRuntimeState::default(), MtpRuntimeState::Disabled);
 }
 
+#[test]
+fn should_serialize_speculative_prefill_runtime_state_as_snake_case() {
+    assert_eq!(
+        serde_json::to_string(&SpeculativePrefillRuntimeState::Unavailable)
+            .expect("speculative-prefill state should serialize"),
+        "\"unavailable\""
+    );
+}
+
 #[tokio::test]
 async fn should_round_trip_worker_startup_configuration() {
     let worker_command = WorkerCommand::InitializeWorker(WorkerStartupConfiguration {
@@ -34,6 +44,18 @@ async fn should_round_trip_worker_startup_configuration() {
         optimizer_state_directory: None,
         configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
         mtp_enabled: true,
+        speculative_prefill: WorkerSpeculativePrefillConfiguration {
+            enabled: true,
+            target_model_id: Some("astronomical/target-model".to_owned()),
+            draft_model_id: Some("astronomical/draft-model".to_owned()),
+            draft_model_directory: None,
+            minimum_prompt_tokens: 8_192,
+            keep_percentage: 20,
+            selection_chunck_token_count: 32,
+            mandatory_trailing_token_count: 512,
+            lookahead_token_count: 8,
+            importance_pooling_kernel_token_count: 13,
+        },
         performance_attribution_enabled: false,
         logging_directory: PathBuf::from("/tmp/fictional-logs"),
         logging_level: WorkerLogLevel::Warn,

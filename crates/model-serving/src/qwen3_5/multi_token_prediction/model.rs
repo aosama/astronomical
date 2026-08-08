@@ -2,17 +2,18 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
 
-use super::super::qwen3_5_mtp_tensor_profiles;
-use super::decoder_layer_weights::{
+use crate::qwen3_5::model::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
     Qwen3_5DecoderLayerWeights,
 };
-use super::model::Qwen3_5Model;
-use super::weights::{take_full_attention_weights, take_tensor};
-use super::weights_validation::{validate_bound_tensor, validate_quantized_tensor_bits};
-use super::{
-    Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5ShardIndex,
-    Qwen3_5Weights,
+use crate::qwen3_5::model::weights::{take_full_attention_weights, take_tensor};
+use crate::qwen3_5::model::weights_validation::{
+    validate_bound_tensor, validate_quantized_tensor_bits,
+};
+use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model, Qwen3_5Weights};
+use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_tensor_profiles;
+use crate::qwen3_5::{
+    Qwen3_5Config, Qwen3_5FeedForwardArchitecture, Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex,
 };
 use crate::qwen3_5_moe::artifacts::tensor_spec::is_sparse_selected_expert_tensor_name;
 use crate::qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights;
@@ -21,7 +22,7 @@ const MTP_NORMALIZATION_REPAIR_MARGIN: f32 = 0.4;
 
 /// Resident weights for the supported one-layer Qwen multi-token prediction head.
 #[derive(Debug)]
-pub(super) struct Qwen3_5MtpWeights {
+pub(crate) struct Qwen3_5MtpWeights {
     pub(super) pre_fc_normalization_embedding_weight: MlxArray,
     pub(super) pre_fc_normalization_hidden_weight: MlxArray,
     pub(super) fusion_projection: Qwen3_5AffineWeights,
@@ -34,7 +35,7 @@ pub(super) struct Qwen3_5MtpWeights {
 }
 
 impl Qwen3_5MtpWeights {
-    pub(super) fn bind(
+    pub(crate) fn bind(
         qwen3_5_config: &Qwen3_5Config,
         shard_index: &Qwen3_5ShardIndex,
         model_shards: &[MlxSafetensors],
@@ -154,7 +155,7 @@ impl Qwen3_5MtpWeights {
         }))
     }
 
-    pub(super) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), Qwen3_5ExecutionError> {
+    pub(crate) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), Qwen3_5ExecutionError> {
         let mut array_references = Vec::with_capacity(self.tensor_count);
         self.append_array_references(&mut array_references);
         if array_references.len() != self.tensor_count {
@@ -166,7 +167,7 @@ impl Qwen3_5MtpWeights {
         Ok(runtime.evaluate_arrays(&array_references)?)
     }
 
-    pub(super) fn payload_byte_count(&self) -> u64 {
+    pub(crate) fn payload_byte_count(&self) -> u64 {
         let mut array_references = Vec::with_capacity(self.tensor_count);
         self.append_array_references(&mut array_references);
         array_references
@@ -193,7 +194,7 @@ impl Qwen3_5MtpWeights {
     /// A raw MTP gamma sits about one below its already converted trunk counterpart.
     /// Comparing to the counterpart avoids an unreliable absolute cutoff and makes a
     /// second repair pass a no-op.
-    pub(super) fn repair_raw_normalization_weights(
+    pub(crate) fn repair_raw_normalization_weights(
         &mut self,
         runtime: &MlxRuntime,
         trunk_weights: &Qwen3_5Weights,
@@ -327,4 +328,62 @@ impl Qwen3_5Model {
                 .map_or(0, Qwen3_5MtpWeights::payload_byte_count),
         )
     }
+}
+
+pub(crate) fn bind_optional_weights(
+    bind_mtp_weights: bool,
+    mtp_artifact_capability: &Qwen3_5MtpArtifactCapability,
+    qwen3_5_config: &Qwen3_5Config,
+    shard_index: &Qwen3_5ShardIndex,
+    model_shards: &[MlxSafetensors],
+    mtp_only_shards: Vec<MlxSafetensors>,
+    target_weights: &Qwen3_5Weights,
+    runtime: &MlxRuntime,
+) -> Option<Qwen3_5MtpWeights> {
+    if !bind_mtp_weights || !mtp_artifact_capability.is_mtp_capable() {
+        return None;
+    }
+    let mut mtp_weights =
+        match Qwen3_5MtpWeights::bind(qwen3_5_config, shard_index, model_shards, mtp_only_shards) {
+            Ok(mtp_weights) => mtp_weights,
+            Err(mtp_weight_binding_error) => {
+                tracing::warn!(
+                    error = %mtp_weight_binding_error,
+                    "optional MTP weight binding failed; serving target-only"
+                );
+                None
+            }
+        };
+    if let Some(bound_mtp_weights) = mtp_weights.as_mut()
+        && let Err(mtp_normalization_repair_error) =
+            bound_mtp_weights.repair_raw_normalization_weights(runtime, target_weights)
+    {
+        tracing::warn!(
+            error = %mtp_normalization_repair_error,
+            "optional MTP normalization repair failed; serving target-only"
+        );
+        mtp_weights = None;
+    }
+    if mtp_weights.is_none()
+        && let Err(mlx_allocator_cleanup_error) = runtime.clear_allocator_cache()
+    {
+        tracing::warn!(
+            error = %mlx_allocator_cleanup_error,
+            "failed to reclaim allocator memory after optional MTP initialization failure"
+        );
+    }
+    mtp_weights
+}
+
+pub(crate) fn materialize_optional_weights(
+    model: &mut Qwen3_5Model,
+) -> Result<(), Qwen3_5ExecutionError> {
+    let Some(mtp_weights) = model.mtp_weights.as_ref() else {
+        return Ok(());
+    };
+    if let Err(mtp_materialization_error) = mtp_weights.materialize(&model.runtime) {
+        model.mtp_weights = None;
+        return Err(mtp_materialization_error);
+    }
+    Ok(())
 }

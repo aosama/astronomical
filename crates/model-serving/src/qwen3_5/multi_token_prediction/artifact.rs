@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 
-use super::{Qwen3_5Config, Qwen3_5ShardIndex, qwen3_5_mtp_tensor_names};
+use crate::qwen3_5::{Qwen3_5Config, Qwen3_5ShardIndex};
+
+use super::tensor_namespace::qwen3_5_mtp_tensor_names;
 
 /// Data-driven MTP capability discovered from the validated artifact inventory.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -34,9 +36,6 @@ impl Qwen3_5MtpArtifactCapability {
             return Self::TargetOnly;
         }
         if qwen3_5_config.mtp_layer_count() != Self::DISCOVERED_SUPPORTED_MTP_LAYER_COUNT as u32 {
-            // The current executor is depth-one. Keep a valid target model
-            // usable when a future artifact contains a different predictor
-            // depth instead of treating that optional package as corruption.
             return Self::TargetOnly;
         }
         let expected_mtp_tensor_names = qwen3_5_mtp_tensor_names(qwen3_5_config);

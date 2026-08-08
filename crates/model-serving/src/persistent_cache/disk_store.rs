@@ -25,6 +25,8 @@ use std::collections::HashMap;
 const KV_BLOCKS_DIRECTORY_NAME: &str = "kv_blocks";
 const RECURRENT_SNAPSHOTS_DIRECTORY_NAME: &str = "recurrent_snapshots";
 const VISUAL_EMBEDDINGS_DIRECTORY_NAME: &str = "visual_embeddings";
+const SPECULATIVE_PREFILL_SELECTIONS_DIRECTORY_NAME: &str = "speculative_prefill_selections";
+const SPECULATIVE_PREFILL_TARGET_STATES_DIRECTORY_NAME: &str = "speculative_prefill_target_states";
 
 /// Valid enabled prompt-cache filesystem state for one active model under one global quota.
 #[derive(Clone, Debug)]
@@ -65,6 +67,19 @@ impl PersistentPromptCacheDiskStoreConfig {
         }
     }
 
+    /// Derives an isolated cache namespace while retaining the shared global quota.
+    #[must_use]
+    pub fn for_model(&self, model_id: &str, model_revision: &str) -> Self {
+        Self::new_with_ssd_write_rate(
+            self.global_prompt_cache_root_directory
+                .join(model_id)
+                .join(model_revision),
+            self.global_prompt_cache_root_directory.clone(),
+            self.global_prompt_cache_maximum_size_bytes,
+            self.ssd_write_rate_megabytes_per_second,
+        )
+    }
+
     #[must_use]
     pub const fn global_prompt_cache_maximum_size_bytes(&self) -> u64 {
         self.global_prompt_cache_maximum_size_bytes
@@ -82,6 +97,8 @@ pub struct PersistentPromptCacheDiskStore {
     pub(super) kv_blocks_directory: PathBuf,
     pub(super) recurrent_snapshots_directory: PathBuf,
     pub(crate) visual_embeddings_directory: PathBuf,
+    pub(crate) speculative_prefill_selections_directory: PathBuf,
+    pub(crate) speculative_prefill_target_states_directory: PathBuf,
     pub(crate) global_prompt_cache_root_directory: PathBuf,
     pub(crate) global_prompt_cache_maximum_size_bytes: u64,
     pub(crate) global_prompt_cache_total_size_bytes: AtomicU64,
@@ -108,6 +125,10 @@ impl PersistentPromptCacheDiskStore {
             persistent_prompt_cache_directory.join(RECURRENT_SNAPSHOTS_DIRECTORY_NAME);
         let visual_embeddings_directory =
             persistent_prompt_cache_directory.join(VISUAL_EMBEDDINGS_DIRECTORY_NAME);
+        let speculative_prefill_selections_directory =
+            persistent_prompt_cache_directory.join(SPECULATIVE_PREFILL_SELECTIONS_DIRECTORY_NAME);
+        let speculative_prefill_target_states_directory = persistent_prompt_cache_directory
+            .join(SPECULATIVE_PREFILL_TARGET_STATES_DIRECTORY_NAME);
         prepare_prompt_cache_directory_tree(
             &global_prompt_cache_root_directory,
             &persistent_prompt_cache_directory,
@@ -115,6 +136,8 @@ impl PersistentPromptCacheDiskStore {
                 &kv_blocks_directory,
                 &recurrent_snapshots_directory,
                 &visual_embeddings_directory,
+                &speculative_prefill_selections_directory,
+                &speculative_prefill_target_states_directory,
             ],
         )?;
         let mut tracked_files = PersistentPromptCacheDiskStoreIndex::default();
@@ -146,11 +169,41 @@ impl PersistentPromptCacheDiskStore {
                 .is_ok()
             },
         )?;
+        scan_current_format_directory(
+            &speculative_prefill_selections_directory,
+            PersistentPromptCacheFileKind::SpeculativePrefillSelection,
+            &mut tracked_files,
+            |file, file_path| {
+                validate_current_file_header(
+                    PersistentPromptCacheFileKind::SpeculativePrefillSelection,
+                    file,
+                    file_path,
+                    &model_contract,
+                )
+                .is_ok()
+            },
+        )?;
+        scan_current_format_directory(
+            &speculative_prefill_target_states_directory,
+            PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
+            &mut tracked_files,
+            |file, file_path| {
+                validate_current_file_header(
+                    PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
+                    file,
+                    file_path,
+                    &model_contract,
+                )
+                .is_ok()
+            },
+        )?;
         let disk_store = Self {
             active_model_prompt_cache_directory: persistent_prompt_cache_directory,
             kv_blocks_directory,
             recurrent_snapshots_directory,
             visual_embeddings_directory,
+            speculative_prefill_selections_directory,
+            speculative_prefill_target_states_directory,
             global_prompt_cache_root_directory,
             global_prompt_cache_maximum_size_bytes,
             global_prompt_cache_total_size_bytes: AtomicU64::new(0),
@@ -177,6 +230,11 @@ impl PersistentPromptCacheDiskStore {
 
     pub fn visual_embedding_count(&self) -> usize {
         self.lock_tracked_files().visual_embedding_count()
+    }
+
+    pub fn speculative_prefill_selection_count(&self) -> usize {
+        self.lock_tracked_files()
+            .speculative_prefill_selection_count()
     }
 
     pub fn has_kv_block(&self, block_hash: &[u8; 32]) -> bool {
@@ -260,6 +318,8 @@ impl PersistentPromptCacheDiskStore {
                 &self.kv_blocks_directory,
                 &self.recurrent_snapshots_directory,
                 &self.visual_embeddings_directory,
+                &self.speculative_prefill_selections_directory,
+                &self.speculative_prefill_target_states_directory,
             ],
         )
     }

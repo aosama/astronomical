@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::config_document::{Qwen3_5ConfigDocument, Qwen3_5TextConfig};
-use super::config_validation::{
-    QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError, validate_exact_boolean, validate_exact_value,
-};
+use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError, validate_exact_value};
 use super::quantizations::optiq::OptiQQuantizationProfile;
 
 const EXPECTED_MOE_ARCHITECTURE: &str = "Qwen3_5MoeForConditionalGeneration";
@@ -108,11 +106,6 @@ impl Qwen3_5Config {
             resolved_eos_token_ids.push(pad_token_id);
         }
         let eos_token_ids = resolved_eos_token_ids;
-        validate_exact_boolean(
-            "tie_word_embeddings",
-            config_document.tie_word_embeddings,
-            false,
-        )?;
         config_document
             .text_config
             .validate(feed_forward_architecture)?;

@@ -5,6 +5,20 @@ import XCTest
 @testable import AstronomicalMenu
 
 final class StatusPresentationContractTests: XCTestCase {
+  func test_should_present_combined_target_and_drafter_avoided_prompt_work() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"idle","serving_session":{"completed_request_count":2,"total_prompt_token_count":90000,"total_reused_prompt_token_count":0,"target_prompt_work_token_count":10000,"target_reused_prompt_work_token_count":8000,"drafter_prompt_work_token_count":50000,"drafter_reused_prompt_work_token_count":40000,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":20}}
+        """.utf8)
+    )
+
+    XCTAssertEqual(statusDocument.sessionPromptReusePercentageTitle, "80%")
+    XCTAssertEqual(statusDocument.sessionPromptReuseFraction, 0.8, accuracy: 0.0001)
+    XCTAssertEqual(statusDocument.sessionPromptReuseBreakdownTitle, "48,000 reused · 12,000 new")
+  }
+
   func test_should_present_every_system_memory_pressure_state_with_explicit_text() {
     XCTAssertEqual(SystemMemoryPressureTitle.normal.rawValue, "Normal")
     XCTAssertEqual(SystemMemoryPressureTitle.warning.rawValue, "Warning")

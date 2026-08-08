@@ -58,6 +58,16 @@ where
                         engine_load_result
                             .mtp_unavailable_reason()
                             .map(String::from),
+                        engine_load_result.speculative_prefill_runtime_state(),
+                        engine_load_result
+                            .speculative_prefill_unavailable_reason()
+                            .map(String::from),
+                        engine_load_result
+                            .speculative_prefill_draft_model_id()
+                            .map(String::from),
+                        engine_load_result
+                            .speculative_prefill_draft_model_revision()
+                            .map(String::from),
                     ),
                 )
                 .await?;

@@ -3,11 +3,9 @@
 - This is our constitution at repo-root/docs/north-star-product-vision.md everything is derived from there.
 - You keep repo-root/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs.
 - The user is ALWAYS looking for you to **proactively** suggest how to reduce over engineering and reduce code complexity.
-- Proactively suggest to the user ways to reduce the number of abstractions and layers in this codebase.
 - All commands and tests must emit a live progress indicator instead of leaving the user with silent output.
 - NEVER pipe long-running commands through | tail -30, | head, or any filter that buffers output and hides live progress from the user. The user must be able to observe progress as it happens.
 - All and any tests must have a built in timeout with a maximum of 120 seconds.
-- Rust takes a longer time to compile as comapred to other languages, ALWAYS proactively look for opportunities to reduce the overall build/compile time without sacreficing performance.
 - Astronomical is expected to adapt to any laptop, any RAM size, any GPU wired memory limit. Do not hardwire or optimize the codebase just for this laptop that we are developing in.
 - Keep full workspace verification and formatting verification only before committing and pushing when the user asks you to commit. This codebase is slow to format check and do a full workspace/test runs.
 - Before every requested commit or push run scripts/verify-before-commit.sh; never substitute cargo test --workspace --all-targets because it runs broad integration binaries serially.
@@ -38,8 +36,6 @@
 ## Coding Principles
 
 - Code files should remain around the 500 lines marker not longer.
-- Opt for and Prefer and Utilize simple designs with fewer abstractions that elaborate layers of facades and abstractions.
-- Prioritize simple architecture versus elaborate abstractions.
 - Prioritize reduction of layers and abstractions while you are working.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
 
@@ -57,40 +53,30 @@
 
 - Long variable names and class names are accepted and the user prefers long communicative names to brief ambigous names.
 
-## Useful Codebases
+## Must Always Consult and Read the MLX and MLX-C codebases
 
 - MLX is the core Apple Silicon array framework and the source of truth for its behavior.
 - MLX-C provides the foundational C bindings used by this project.
 - When optimizing MLX behavior, inspect the available upstream MLX and MLX-C source before proposing new native operations. Independently implement only the behavior Astronomical needs and preserve any required attribution for actual source reuse.
-
-## Building The MACOS Application
-
-- Rust optimized builds must be used across all the stack when building the final macos application.
 
 ## No Backward Compatibility for Cache or REST API surfaces
 
 - There is no requirement for Backward compatibility for the cache or REST API surfaces. There are no downstream consumers of these surfaces so compatibility is not an issue.
 - There is no requirement for backward compatibility shims.
 
-## No Over Engineering or Over Architecting
-
-- This is not a software to launch a rocket to outer space, this is NOT a medical grade software, this is a software that a programmer or a student will run locally to get basic work done.
-- This is NOT a profressional grade server application, PLEASE DO NOT OVER ENGINEER SOLUTIONS.
-- This is NOT a mission critical software, this will run on a laptop for personal use or study work.
-- This is NOT an enterprise grade software, this is a personal use software.
-
 ## Requirements for Performance Profiling and Attribution
 
 - This codebase needs to be performance optimized, to achieve that, all our code, regardless which part, needs to have performance logging and attribution that can be switched on and off through config parameter. The performance logging needs to capture start time and end time of each operation. this will allow us to ATTRIBUTE performance issues to specific code parts. Without attribution we will be guessing why we are observing a slow down, which is a bad state to be in, hence it is imperative that when you are editing code or refactoring or creating new code that they follow a unified performance logging and attribution pattern.
+
 - The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging and finally token generation. In short any and all operations invovled in actually serving a model request to the end user.
+
 - The minimum representative performane test needs to intake 1K tokens and output 1K tokens with a plus or minus 15% allowance. Anything below that is not a representative measurement at all.
+
+## Test Fixtures and Their Reuse for Performance And Correctness Tests
+
+- The fixture of Romeo and Juliet MUST be used and the source test input for LLMs, there should not be radnom text or tokens used for testing.
 
 ## Maximize the Use of the GPU versus CPU
 
-- In this code base, the user of the GPU should be adopted to the maximum extent possible, it has been observed that the more computations that can be offloaded to the GPU, the better the performance will be.
+- In this code base, maximize the use of GPU sto the maximum extent possible, it has been observed that the more computations that can be offloaded to the GPU, the better the performance will be.
 - Do not assume that a certain GPU operation will be slower or will not yield more performance than the CPU.
-
-## Speculative Decoding Whether MTP or DFlash are First Class Citizens
-
-- The desired default behavior is that MTP or DFlash is enabled by default for models that support those.
-- There shouldnt be any defaults that disable MTP or Dflash or any type of speculative decoding for models that support those.

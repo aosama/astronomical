@@ -106,6 +106,7 @@ impl Qwen3_5EngineState {
                     self.context_memory_reservation_bytes_per_token,
                     total_context_tokens,
                     persistent_prompt_cache_restore_temporary_workspace_bytes,
+                    self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
                 )
             },
         )?;
@@ -250,6 +251,7 @@ impl Qwen3_5EngineState {
                     self.context_memory_reservation_bytes_per_token,
                     remaining_context_token_count,
                     0,
+                    self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
                 )
             },
         )?;

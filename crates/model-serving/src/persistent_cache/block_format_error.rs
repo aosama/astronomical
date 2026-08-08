@@ -136,4 +136,11 @@ pub enum PersistentPromptCacheBlockError {
         end_offset: u64,
         file_size_bytes: u64,
     },
+    #[error(
+        "persistent prompt-cache model-specific artifact at {persistent_prompt_cache_block_path:?} is invalid: {description}"
+    )]
+    InvalidModelSpecificArtifact {
+        persistent_prompt_cache_block_path: std::path::PathBuf,
+        description: String,
+    },
 }

@@ -172,6 +172,38 @@ fn should_keep_the_final_block_for_forward_processing_when_prompt_ends_on_a_bloc
 }
 
 #[test]
+fn should_restore_a_complete_exact_boundary_when_the_caller_only_needs_decoder_state() {
+    let prompt_tokens = prompt_tokens_with_complete_blocks_and_trailing_tokens(2, 0);
+    let block_keys = persistent_prompt_cache_block_keys_for_prompt(&prompt_tokens, 2);
+    let final_block_hash = block_keys[1].block_hash();
+
+    let lookup_result = PersistentPromptCachePrefixLookup::for_complete_prefix(
+        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
+        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        &prompt_tokens,
+        |block_hash| {
+            block_keys
+                .iter()
+                .any(|block_key| block_key.block_hash() == *block_hash)
+        },
+        |block_hash| *block_hash == final_block_hash,
+    );
+
+    assert_eq!(
+        lookup_result.restored_token_count(),
+        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2
+    );
+    assert!(lookup_result.remaining_tokens().is_empty());
+    assert_eq!(
+        lookup_result
+            .last_restored_persistent_prompt_cache_block_key()
+            .expect("the complete prefix should restore its final block")
+            .block_hash(),
+        final_block_hash
+    );
+}
+
+#[test]
 fn should_not_match_blocks_when_the_root_block_differs() {
     let original_prompt_tokens = prompt_tokens_with_complete_blocks_and_trailing_tokens(3, 0);
     let mut modified_prompt_tokens = original_prompt_tokens.clone();

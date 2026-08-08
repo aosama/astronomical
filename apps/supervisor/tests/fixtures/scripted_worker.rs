@@ -3,9 +3,10 @@ use std::{error::Error, process::ExitCode, time::Duration};
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatModelCapabilities, ExpertMemoryMode, MlxMemorySnapshotSource, MtpRuntimeState,
-    ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
-    WorkerPrefillOptimizerCandidateEvidence, WorkerPrefillOptimizerContext,
-    WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
+    ProtocolReader, ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand,
+    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerCandidateEvidence,
+    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
+    WorkerPrefillOptimizerInsight,
 };
 
 const READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
@@ -34,6 +35,10 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         .send_event(&WorkerEvent::Ready {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+            speculative_prefill_unavailable_reason: None,
+            speculative_prefill_draft_model_id: None,
+            speculative_prefill_draft_model_revision: None,
             model_id: ready_model_id,
             capabilities: ChatModelCapabilities {
                 supports_reasoning: true,

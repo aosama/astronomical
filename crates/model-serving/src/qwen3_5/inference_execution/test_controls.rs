@@ -30,6 +30,18 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         .await
     }
 
+    /// Forces one draft-prefix restore failure so qualification can verify uncached retry.
+    pub async fn force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(
+        &self,
+        request_id: RequestId,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution
+                .force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(request_id)
+        })
+        .await
+    }
+
     /// Arms one deterministic draft rejection through the production acceptance path.
     pub async fn force_next_mtp_draft_rejection_for_tests(
         &self,
