@@ -29,6 +29,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut active_request_id = None;
     let mut cancellation_acknowledgement_delay = Duration::ZERO;
     let mut should_acknowledge_cancellation = true;
+    let mut should_emit_unexpected_cancellation_event = false;
     let ready_model_id = std::env::var(READY_MODEL_ID_ENVIRONMENT_VARIABLE)
         .unwrap_or_else(|_| DEFAULT_READY_MODEL_ID.to_owned());
     event_writer
@@ -101,6 +102,11 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         active_request_id = Some(request_id);
                         cancellation_acknowledgement_delay = Duration::from_secs(4);
                         should_acknowledge_cancellation = true;
+                    }
+                    "astronomical/unexpected-cancellation-event-fixture" => {
+                        active_request_id = Some(request_id);
+                        should_acknowledge_cancellation = true;
+                        should_emit_unexpected_cancellation_event = true;
                     }
                     "astronomical/activity-transition-fixture" => {
                         send_activity_transition(request_id, &mut event_writer).await?;
@@ -323,6 +329,20 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 }
                 tokio::time::sleep(cancellation_acknowledgement_delay).await;
                 cancellation_acknowledgement_delay = Duration::ZERO;
+                if should_emit_unexpected_cancellation_event {
+                    should_emit_unexpected_cancellation_event = false;
+                    event_writer
+                        .send_event(&WorkerEvent::Completed {
+                            request_id: RequestId::new(2),
+                            prompt_token_count: 1,
+                            generated_token_count: 0,
+                            reasoning_token_count: 0,
+                            cached_token_count: 0,
+                            reason: ChatGenerationCompletionReason::Cancelled,
+                        })
+                        .await?;
+                    continue;
+                }
                 event_writer
                     .send_event(&WorkerEvent::Completed {
                         request_id,
