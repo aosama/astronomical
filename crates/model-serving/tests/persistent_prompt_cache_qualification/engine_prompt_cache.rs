@@ -80,6 +80,7 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
         {
             GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
             GeneratedToken::PrefillProgress { .. } => {}
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }
@@ -496,6 +497,7 @@ pub(super) async fn generate_token_ids(
                 completed_prefill_chunck_tokens,
                 ..
             } => completed_prefill_chunck_token_counts.push(completed_prefill_chunck_tokens),
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
                 return (generated_token_ids, completed_prefill_chunck_token_counts);
             }
