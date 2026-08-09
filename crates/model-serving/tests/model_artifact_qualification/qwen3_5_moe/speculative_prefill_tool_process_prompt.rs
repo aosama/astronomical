@@ -14,8 +14,7 @@ const PROCESS_RESTART_OUTPUT_TOKEN_COUNT: u16 = 256;
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
-const BASELINE_SYSTEM_INSTRUCTION: &str =
-    "Use the declared tool and return its required fields.";
+const BASELINE_SYSTEM_INSTRUCTION: &str = "Use the declared tool and return its required fields.";
 
 pub(super) fn prepare_natural_tool_prompt(
     tokenizer: &Qwen3_5Tokenizer,
@@ -254,7 +253,10 @@ pub(super) fn file_count_in_directory(directory_path: &Path) -> usize {
             0
         }
         Err(directory_read_error) => {
-            panic!("failed to read {}: {directory_read_error}", directory_path.display())
+            panic!(
+                "failed to read {}: {directory_read_error}",
+                directory_path.display()
+            )
         }
     }
 }

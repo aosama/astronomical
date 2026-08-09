@@ -35,34 +35,42 @@ fn selection_contract_for_model_identity(
 fn should_purge_only_a_matching_target_drafter_pairing_with_an_obsolete_keep_percentage() {
     let stored_selection_policy = selection_contract("drafter-a").policy_identity();
 
-    assert!(stored_selection_policy.should_purge_for_active_keep_percentage(
-        "target-model",
-        "target-revision",
-        "drafter-a",
-        "revision-a",
-        40,
-    ));
-    assert!(!stored_selection_policy.should_purge_for_active_keep_percentage(
-        "target-model",
-        "target-revision",
-        "drafter-a",
-        "revision-a",
-        20,
-    ));
-    assert!(!stored_selection_policy.should_purge_for_active_keep_percentage(
-        "other-target",
-        "target-revision",
-        "drafter-a",
-        "revision-a",
-        40,
-    ));
-    assert!(!stored_selection_policy.should_purge_for_active_keep_percentage(
-        "target-model",
-        "target-revision",
-        "other-drafter",
-        "revision-a",
-        40,
-    ));
+    assert!(
+        stored_selection_policy.should_purge_for_active_keep_percentage(
+            "target-model",
+            "target-revision",
+            "drafter-a",
+            "revision-a",
+            40,
+        )
+    );
+    assert!(
+        !stored_selection_policy.should_purge_for_active_keep_percentage(
+            "target-model",
+            "target-revision",
+            "drafter-a",
+            "revision-a",
+            20,
+        )
+    );
+    assert!(
+        !stored_selection_policy.should_purge_for_active_keep_percentage(
+            "other-target",
+            "target-revision",
+            "drafter-a",
+            "revision-a",
+            40,
+        )
+    );
+    assert!(
+        !stored_selection_policy.should_purge_for_active_keep_percentage(
+            "target-model",
+            "target-revision",
+            "other-drafter",
+            "revision-a",
+            40,
+        )
+    );
 }
 
 #[test]

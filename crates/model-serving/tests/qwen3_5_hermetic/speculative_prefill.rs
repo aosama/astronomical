@@ -1,31 +1,21 @@
 #[allow(dead_code)]
 #[path = "../../src/qwen3_5/inference_execution/prefill_execution_context.rs"]
 mod prefill_execution_context;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_eligibility.rs"]
-mod speculative_prefill_eligibility;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_selection.rs"]
-mod speculative_prefill_policy;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_control_span.rs"]
-mod speculative_prefill_control_span;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_failure.rs"]
-mod speculative_prefill_failure;
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill.rs"]
 mod speculative_prefill_chunck_policy;
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_control_span.rs"]
+mod speculative_prefill_control_span;
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_eligibility.rs"]
+mod speculative_prefill_eligibility;
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_failure.rs"]
+mod speculative_prefill_failure;
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_selection.rs"]
+mod speculative_prefill_policy;
 
+use astronomical_model_serving::InferenceEngineError;
 use prefill_execution_context::{
     CAPACITY_REDUCED_CONTEXT_FLAG, Qwen3_5PrefillExecutionContext,
     SPECULATIVE_PREFILL_TARGET_ONLY_PREFIX_CONTEXT_FLAG,
-};
-use astronomical_model_serving::InferenceEngineError;
-use speculative_prefill_eligibility::{
-    Qwen3_5SpeculativePrefillRequestEligibility, qwen3_5_speculative_prefill_request_eligibility,
-};
-use speculative_prefill_policy::{
-    qwen3_5_merge_speculative_prefill_selection_with_image_pad_positions,
-    qwen3_5_select_speculative_prefill_token_positions,
-    qwen3_5_selected_speculative_prefill_positions_for_range,
-    qwen3_5_speculative_prefill_scoring_plan,
-    qwen3_5_speculative_prefill_selectable_importance_score_range,
 };
 use speculative_prefill_chunck_policy::{
     Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
@@ -34,8 +24,18 @@ use speculative_prefill_control_span::{
     qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
     qwen3_5_speculative_prefill_sparse_target_is_active,
 };
+use speculative_prefill_eligibility::{
+    Qwen3_5SpeculativePrefillRequestEligibility, qwen3_5_speculative_prefill_request_eligibility,
+};
 use speculative_prefill_failure::{
     configured_speculative_prefill_activation_failure, configured_speculative_prefill_failure,
+};
+use speculative_prefill_policy::{
+    qwen3_5_merge_speculative_prefill_selection_with_image_pad_positions,
+    qwen3_5_select_speculative_prefill_token_positions,
+    qwen3_5_selected_speculative_prefill_positions_for_range,
+    qwen3_5_speculative_prefill_scoring_plan,
+    qwen3_5_speculative_prefill_selectable_importance_score_range,
 };
 
 #[test]
@@ -177,15 +177,11 @@ fn should_end_ordinary_target_prefill_exactly_at_the_control_span_boundary() {
         Some(1_200)
     );
     assert_eq!(
-        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
-            0, 512, 1_200
-        ),
+        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(0, 512, 1_200),
         Some(512)
     );
     assert_eq!(
-        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
-            1_200, 3_248, 1_200
-        ),
+        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(1_200, 3_248, 1_200),
         Some(3_248)
     );
 }

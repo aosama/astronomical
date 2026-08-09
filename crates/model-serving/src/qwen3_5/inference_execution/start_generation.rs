@@ -14,11 +14,11 @@ use super::super::{RequestDecoderStateStack, plan_qwen3_5_visual_embedding_suffi
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{
     Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error,
-    speculative_prefill_failure::configured_speculative_prefill_failure,
     speculative_prefill_eligibility::{
         Qwen3_5SpeculativePrefillRequestEligibility,
         qwen3_5_speculative_prefill_request_eligibility,
     },
+    speculative_prefill_failure::configured_speculative_prefill_failure,
 };
 use crate::qwen3_5::multi_token_prediction::create_optional_prediction_session;
 
@@ -506,12 +506,14 @@ impl Qwen3_5EngineState {
                 optional_prediction_session,
                 should_use_speculative_prefill,
                 speculative_prefill_scoring_attempted: false,
+                speculative_prefill_draft_phase_announced: false,
                 speculative_prefill_selected_token_positions: None,
                 speculative_prefill_dense_target_prefix_token_count: 0,
                 speculative_prefill_prompt_token_indices: None,
                 speculative_prefill_processed_visual_images,
                 speculative_prefill_restored_target_token_positions,
                 speculative_prefill_target_expert_payload_bytes_after_draft_release: None,
+                speculative_prefill_draft_memory_telemetry: None,
                 prompt_work_reuse: astronomical_ipc_protocol::WorkerPromptWorkReuse {
                     target_eligible_token_count: target_eligible_prompt_work_token_count,
                     target_restored_token_count: restored_target_work_token_count,
@@ -522,13 +524,21 @@ impl Qwen3_5EngineState {
                 forced_speculative_prefill_failure_stage_for_tests: None,
                 force_next_prefill_capacity_rejection_for_tests: false,
             });
+            let restored_prompt_prefix_token_count = u32::try_from(prefill_cursor)
+                .map_err(|_| fatal_engine_error("restored prompt prefix exceeds the u32 range"))?;
+            let initial_prompt_processing_phase = (!should_use_speculative_prefill
+                || restored_sparse_target_state
+                || prefill_cursor < ordinary_target_prefill_control_span_token_count)
+                .then_some(astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target);
             Ok(EngineGenerationStart::with_expert_memory_mode(
                 persistent_prompt_cache_token_count,
                 self.model
                     .as_ref()
                     .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
                     .expert_memory_mode(),
-            ))
+            )
+            .with_restored_prompt_prefix_token_count(restored_prompt_prefix_token_count)
+            .with_prompt_processing_phase(initial_prompt_processing_phase))
         })();
         if admitted_generation_start.is_err()
             && let Some(model) = self.model.as_ref()

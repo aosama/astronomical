@@ -105,11 +105,13 @@ impl Qwen3_5EngineState {
             return Ok(());
         }
         let Some(target_state_contract) = self.speculative_prefill_target_state_contract() else {
-            return Err(super::speculative_prefill_failure::configured_speculative_prefill_failure(
-                active_request.request_id,
-                "sparse target-state persistence planning",
-                "the target-state contract is unavailable",
-            ));
+            return Err(
+                super::speculative_prefill_failure::configured_speculative_prefill_failure(
+                    active_request.request_id,
+                    "sparse target-state persistence planning",
+                    "the target-state contract is unavailable",
+                ),
+            );
         };
         let (Some(target_persistent_prompt_cache), Some(target_model)) =
             (self.persistent_prompt_cache.as_ref(), self.model.as_ref())
@@ -138,13 +140,12 @@ impl Qwen3_5EngineState {
                         target_model,
                         active_request,
                     )?;
-                let final_generation_kickoff_position = active_request
-                    .input_token_ids
-                    .len()
-                    .checked_sub(1)
-                    .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                        description: "generation prompt must not be empty",
-                    })?;
+                let final_generation_kickoff_position =
+                    active_request.input_token_ids.len().checked_sub(1).ok_or(
+                        Qwen3_5ExecutionError::InvalidInput {
+                            description: "generation prompt must not be empty",
+                        },
+                    )?;
                 let named_decoder_state_tensors = decoder_state_tensors
                     .iter()
                     .map(|(tensor_name, target_state_tensor)| {
@@ -165,8 +166,8 @@ impl Qwen3_5EngineState {
         match save_outcome {
             Ok(()) => {
                 active_request.performance_attribution.record_counter(
-                PerformanceCounter::SpeculativePrefillTargetPersistentStateWriteCount,
-                1,
+                    PerformanceCounter::SpeculativePrefillTargetPersistentStateWriteCount,
+                    1,
                 );
                 Ok(())
             }
@@ -197,11 +198,13 @@ impl Qwen3_5EngineState {
             .collect::<Result<Vec<_>, _>>()?;
         let dense_target_prefix_position_tensor = target_model.runtime().array_from_u32(
             &dense_target_prefix_positions,
-            &[i32::try_from(dense_target_prefix_positions.len()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "dense target prefix position count exceeds i32",
-                }
-            })?],
+            &[
+                i32::try_from(dense_target_prefix_positions.len()).map_err(|_| {
+                    Qwen3_5ExecutionError::InvalidInput {
+                        description: "dense target prefix position count exceeds i32",
+                    }
+                })?,
+            ],
         )?;
         let current_selected_positions = active_request
             .speculative_prefill_selected_token_positions

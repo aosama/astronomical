@@ -5,9 +5,9 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{RequestId, WorkerSpeculativePrefillConfiguration};
 use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    InferenceEngineError,
-    PerformanceAttribution, PerformanceAttributionLog, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    InferenceEngineError, PerformanceAttribution, PerformanceAttributionLog,
+    PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5Tokenizer,
 };
 
@@ -16,6 +16,7 @@ use super::speculative_prefill::{
 };
 
 const FORCED_FAILURE_QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
+const RECOVERY_PROGRESS_LOG_INTERVAL: usize = 64;
 
 #[tokio::test]
 #[ignore = "loads the target and proves an unavailable configured drafter stops model activation"]
@@ -82,6 +83,170 @@ async fn should_stop_model_activation_when_the_configured_drafter_is_unavailable
     })
     .await
     .expect("the unavailable configured drafter journey should finish within 115 seconds");
+}
+
+#[tokio::test]
+#[ignore = "loads the configured target and drafter and recovers one sparse target active-memory rejection"]
+async fn should_recover_sparse_target_memory_pressure_without_target_only_retry() {
+    tokio::time::timeout(FORCED_FAILURE_QUALIFICATION_TIMEOUT, async {
+        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+        let target_model_directory = crate::common::configured_ornith_model_artifact_directory();
+        let (draft_model_directory, draft_model_id) =
+            super::configured_speculative_prefill_draft_model_artifact(&target_model_directory);
+        let validated_target_artifact = Qwen3_5ArtifactValidator::new()
+            .validate(&target_model_directory, 1)
+            .expect("the memory-recovery target artifact should validate");
+        let target_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_target_artifact)
+            .expect("the memory-recovery target tokenizer should load");
+        let target_model_id = validated_target_artifact.model_id().to_owned();
+        let target_image_pad_token_id = target_tokenizer.image_pad_token_id();
+        let representative_prompt = prepare_representative_prompt(&target_model_directory);
+        let mlx_memory_limits =
+            crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+        let attribution_directory = tempfile::tempdir()
+            .expect("the memory-recovery qualification should create an attribution directory");
+        let performance_attribution_log_path = attribution_directory
+            .path()
+            .join("performance-attribution.jsonl");
+        let persistent_prompt_cache_directory = tempfile::tempdir()
+            .expect("the memory-recovery qualification should create an SSD cache directory");
+        let persistent_prompt_cache_config = PersistentPromptCacheDiskStoreConfig::new(
+            persistent_prompt_cache_directory.path().join("target"),
+            persistent_prompt_cache_directory.path().to_path_buf(),
+            crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
+        );
+        let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+            validated_target_artifact,
+            mlx_memory_limits.active_memory_limit_bytes(),
+            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+            Some(persistent_prompt_cache_config),
+            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(32)
+                .expect("the memory-recovery prefill chunk size should be valid"),
+            target_tokenizer.think_end_token_id(),
+            target_model_directory,
+            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+            true,
+            false,
+            WorkerSpeculativePrefillConfiguration {
+                enabled: true,
+                target_model_id: Some(target_model_id),
+                draft_model_id: Some(draft_model_id),
+                draft_model_directory: Some(draft_model_directory),
+                minimum_prompt_tokens: 8_192,
+                keep_percentage: SPECULATIVE_PREFILL_KEEP_PERCENTAGE,
+                selection_chunck_token_count: 32,
+                mandatory_trailing_token_count: 512,
+                lookahead_token_count: 8,
+                importance_pooling_kernel_token_count: 13,
+            },
+            PerformanceAttribution::enabled(),
+            PerformanceAttributionLog::open(&performance_attribution_log_path, true)
+                .expect("the memory-recovery attribution log should open"),
+        )
+        .expect("the memory-recovery engine should construct");
+        eprintln!("[speculative-prefill-memory-recovery] status=loading-model");
+        qwen3_5_engine
+            .load()
+            .await
+            .expect("the configured target and drafter should load before memory recovery");
+
+        let recoverable_memory_pressure_request_id = RequestId::new(95_490);
+        qwen3_5_engine
+            .start_generation(
+                Qwen3_5InferenceRequest::new(
+                    recoverable_memory_pressure_request_id,
+                    representative_prompt.prompt_token_ids,
+                    1,
+                )
+                .with_image_pad_token_id(target_image_pad_token_id)
+                .with_ordinary_target_prefill_control_span_token_count(
+                    representative_prompt.ordinary_target_prefill_control_span_token_count,
+                )
+                .with_performance_attribution(PerformanceAttribution::enabled()),
+            )
+            .await
+            .expect("the recoverable sparse-target request should be admitted");
+        qwen3_5_engine
+            .force_next_speculative_prefill_failure_for_tests(
+                recoverable_memory_pressure_request_id,
+                Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetActiveMemoryLimitRejection,
+            )
+            .await
+            .expect("the recoverable sparse-target memory rejection should arm");
+        let mut recovered_prefill_progress_event_count = 0_usize;
+        loop {
+            match qwen3_5_engine
+                .decode_next_token(recoverable_memory_pressure_request_id)
+                .await
+                .expect("recoverable sparse-target memory pressure must remain inside SpecPrefill")
+            {
+                GeneratedToken::PrefillProgress {
+                    completed_prefill_chunck_tokens,
+                    ..
+                } => {
+                    recovered_prefill_progress_event_count =
+                        recovered_prefill_progress_event_count.saturating_add(1);
+                    if recovered_prefill_progress_event_count == 1
+                        || recovered_prefill_progress_event_count
+                            .is_multiple_of(RECOVERY_PROGRESS_LOG_INTERVAL)
+                    {
+                        eprintln!(
+                            "[speculative-prefill-memory-recovery] status=prefill-progress progress_event_count={recovered_prefill_progress_event_count} completed_prefill_chunck_tokens={completed_prefill_chunck_tokens}"
+                        );
+                    }
+                }
+                GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+                GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
+            }
+        }
+        assert!(
+            recovered_prefill_progress_event_count > 0,
+            "the recovered request must publish successful prompt-processing progress"
+        );
+        let attribution_report_documents =
+            super::performance_attribution::read_attribution_report_documents(
+                &performance_attribution_log_path,
+            );
+        let recovery_generation_report =
+            super::performance_attribution::generation_report_for_request(
+                &attribution_report_documents,
+                recoverable_memory_pressure_request_id.value(),
+            );
+        for (counter_identifier, expected_counter_description) in [
+            (
+                "prefill_capacity_rejection_count",
+                "recoverable sparse-target allocation rejection",
+            ),
+            ("prefill_capacity_retry_count", "bounded prefill retry"),
+            (
+                "speculative_prefill_sparse_target_chunck_count",
+                "completed sparse target chunk",
+            ),
+            (
+                "speculative_prefill_selected_token_count",
+                "completed selected target position",
+            ),
+        ] {
+            assert!(
+                super::performance_attribution::counter_amount(
+                    recovery_generation_report,
+                    counter_identifier,
+                ) >= 1,
+                "the recovered request must attribute at least one {expected_counter_description}"
+            );
+        }
+        assert_eq!(
+            super::performance_attribution::counter_amount(
+                recovery_generation_report,
+                "speculative_prefill_fallback_count",
+            ),
+            0,
+            "recoverable memory pressure must never invoke target-only prefill"
+        );
+        eprintln!("[speculative-prefill-memory-recovery] status=success");
+    })
+    .await
+    .expect("the sparse-target memory-recovery journey should finish within 115 seconds");
 }
 
 #[tokio::test]
@@ -169,7 +334,8 @@ async fn should_stop_every_forced_speculative_prefill_execution_stage_without_ta
                 .await
                 .expect("the valid baseline request should complete")
             {
-                GeneratedToken::PrefillProgress { .. } => continue,
+                GeneratedToken::PrefillProgress { .. }
+                | GeneratedToken::PromptProcessingPhaseStarted { .. } => continue,
                 GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
             }
         }
@@ -312,12 +478,11 @@ fn collect_persisted_speculative_prefill_file_contents(
         }
         return;
     }
-    let current_path_enters_speculative_prefill_namespace =
-        is_inside_speculative_prefill_namespace
-            || current_path.file_name().is_some_and(|directory_name| {
-                directory_name == "speculative_prefill_selections"
-                    || directory_name == "speculative_prefill_target_states"
-            });
+    let current_path_enters_speculative_prefill_namespace = is_inside_speculative_prefill_namespace
+        || current_path.file_name().is_some_and(|directory_name| {
+            directory_name == "speculative_prefill_selections"
+                || directory_name == "speculative_prefill_target_states"
+        });
     for directory_entry in std::fs::read_dir(current_path)
         .expect("the persisted SpecPrefill cache tree should remain readable")
     {

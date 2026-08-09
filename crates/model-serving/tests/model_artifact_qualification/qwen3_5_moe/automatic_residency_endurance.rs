@@ -107,6 +107,7 @@ async fn run_large_request(
             } => eprintln!(
                 "[automatic-residency-endurance {request_number}/3] status=progress phase=prefill processed_tokens={processed_token_count}"
             ),
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => return,
         }
     }

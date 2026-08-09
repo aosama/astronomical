@@ -3,25 +3,42 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration;
 
 use crate::{
-    InferenceEngineError, PerformanceAttribution, PerformanceOperation, Qwen3_5ArtifactValidator,
-    Qwen3_5Model, Qwen3_5Tokenizer,
+    InferenceEngineError, MlxMemoryTelemetry, PerformanceAttribution, PerformanceOperation,
+    Qwen3_5ArtifactValidator, Qwen3_5Model, Qwen3_5Tokenizer,
     qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure,
 };
 
 use super::Qwen3_5EngineState;
 use super::ValidatedQwen3_5Artifact;
+use super::engine_request::Qwen3_5EngineRequest;
 
 impl Qwen3_5EngineState {
-    pub(super) fn speculative_prefill_draft_model_payload_bytes(&self) -> u64 {
-        self.speculative_prefill_draft_model
-            .as_ref()
-            .map_or(0, |draft_model| {
-                draft_model
-                    .resident_model_payload_byte_count()
-                    .saturating_add(draft_model.vision_model().map_or(0, |draft_vision_model| {
-                        draft_vision_model.resident_payload_bytes()
-                    }))
-            })
+    pub(super) fn speculative_prefill_draft_memory_telemetry(
+        &self,
+        active_request: &Qwen3_5EngineRequest,
+        draft_model: &Qwen3_5Model,
+        draft_request_decoder_state: &super::super::RequestDecoderStateStack,
+        draft_visual_embeddings: Option<&astronomical_runtime_integration::MlxArray>,
+    ) -> Option<MlxMemoryTelemetry> {
+        let target_model = self.model.as_ref()?;
+        let mlx_memory_snapshot = draft_model.runtime().memory_snapshot().ok()?;
+        let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes()).ok()?;
+        let allocator_cache_memory_bytes =
+            u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).ok()?;
+        let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).ok()?;
+        Some(MlxMemoryTelemetry::new(
+            active_memory_bytes,
+            allocator_cache_memory_bytes,
+            peak_memory_bytes,
+            target_model.active_memory_breakdown_with_speculative_prefill_draft(
+                active_request.request_decoder_state(),
+                active_request.additional_context_state_payload_bytes(),
+                active_memory_bytes,
+                draft_model,
+                draft_request_decoder_state,
+                draft_visual_embeddings,
+            ),
+        ))
     }
 
     pub(super) fn speculative_prefill_draft_maximum_expert_page_reservation_bytes(&self) -> usize {

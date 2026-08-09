@@ -1,3 +1,5 @@
+use astronomical_runtime_integration::MlxArray;
+
 use crate::MlxActiveMemoryBreakdown;
 
 use super::{Qwen3_5Model, Qwen3_5VisionModel, RequestDecoderStateStack};
@@ -31,6 +33,54 @@ impl Qwen3_5Model {
             0,
             mlx_active_memory_bytes,
             additional_model_core_payload_bytes,
+        )
+    }
+
+    #[must_use]
+    pub(crate) fn active_memory_breakdown_with_speculative_prefill_draft(
+        &self,
+        request_decoder_state: &RequestDecoderStateStack,
+        additional_context_state_payload_bytes: u64,
+        mlx_active_memory_bytes: u64,
+        draft_model: &Self,
+        draft_request_decoder_state: &RequestDecoderStateStack,
+        draft_visual_embeddings: Option<&MlxArray>,
+    ) -> MlxActiveMemoryBreakdown {
+        let context_state_payload_bytes = request_decoder_state
+            .payload_byte_count()
+            .saturating_add(additional_context_state_payload_bytes);
+        let target_model_core_payload_bytes =
+            self.resident_model_payload_byte_count().saturating_add(
+                self.vision_model
+                    .as_ref()
+                    .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
+            );
+        let draft_model_payload_bytes = draft_model
+            .resident_model_payload_byte_count()
+            .saturating_add(
+                draft_model
+                    .vision_model
+                    .as_ref()
+                    .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
+            )
+            .saturating_add(
+                draft_model
+                    .expert_weight_memory_cache_statistics()
+                    .resident_payload_byte_count,
+            )
+            .saturating_add(draft_request_decoder_state.payload_byte_count())
+            .saturating_add(
+                draft_visual_embeddings.map_or(0, |draft_visual_embeddings| {
+                    u64::try_from(draft_visual_embeddings.byte_count()).unwrap_or(u64::MAX)
+                }),
+            );
+        MlxActiveMemoryBreakdown::reconcile_with_speculative_prefill_draft(
+            mlx_active_memory_bytes,
+            self.expert_weight_memory_cache_statistics()
+                .resident_payload_byte_count,
+            target_model_core_payload_bytes,
+            context_state_payload_bytes,
+            draft_model_payload_bytes,
         )
     }
 

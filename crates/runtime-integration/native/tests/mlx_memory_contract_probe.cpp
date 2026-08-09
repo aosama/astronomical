@@ -252,6 +252,68 @@ void require_active_memory_limit_rejection(
   print_counters("active_memory_limit_" + allocation_path_name, after_rejection);
 }
 
+void require_evaluation_rejection_preserves_prior_tape_work(const Stream& gpu_stream) {
+  clear_cache();
+  const auto previous_allocator_cache_limit_bytes = set_cache_limit(0);
+  const auto previous_active_memory_limit_bytes =
+      set_memory_limit(kActiveMemoryEnforcementLimitBytes);
+  try {
+    auto valid_pending_values = full(Shape{1024}, 3.0F, float32, gpu_stream);
+    auto valid_pending_result = multiply(
+        valid_pending_values,
+        full(Shape{1024}, 2.0F, float32, gpu_stream),
+        gpu_stream);
+    auto valid_pending_sum = sum(valid_pending_result, gpu_stream);
+    auto expanded_valid_sum = broadcast_to(
+        valid_pending_sum,
+        Shape{static_cast<ShapeElem>(kGraphDimension),
+              static_cast<ShapeElem>(kGraphDimension)},
+        gpu_stream);
+    auto oversized_dependent_result = contiguous(expanded_valid_sum, false, gpu_stream);
+
+    bool dependent_evaluation_was_rejected = false;
+    try {
+      eval(oversized_dependent_result);
+    } catch (const std::runtime_error& evaluation_error) {
+      dependent_evaluation_was_rejected = true;
+      require_condition(
+          std::string(evaluation_error.what()).starts_with(kActiveMemoryLimitErrorMarker),
+          "evaluation replaced the original active-memory rejection: " +
+              std::string(evaluation_error.what()));
+    }
+    require_condition(
+        dependent_evaluation_was_rejected,
+        "dependent oversized evaluation did not reject above the active-memory limit");
+
+    const float preserved_valid_sum = valid_pending_sum.item<float>();
+    synchronize(gpu_stream);
+    require_condition(
+        preserved_valid_sum == 6144.0F,
+        "active-memory rejection corrupted valid work evaluated earlier in the same tape");
+
+    const float fresh_fitting_sum =
+        sum(add(
+                full(Shape{512}, 2.0F, float32, gpu_stream),
+                full(Shape{512}, 1.0F, float32, gpu_stream),
+                gpu_stream),
+            gpu_stream)
+            .item<float>();
+    require_condition(
+        fresh_fitting_sum == 1536.0F,
+        "a fresh fitting graph produced incorrect values after active-memory rejection");
+    print_counters(
+        "evaluation_rejection_preserves_prior_tape_work", read_memory_counters());
+  } catch (...) {
+    clear_cache();
+    set_memory_limit(previous_active_memory_limit_bytes);
+    set_cache_limit(previous_allocator_cache_limit_bytes);
+    throw;
+  }
+  clear_cache();
+  set_memory_limit(previous_active_memory_limit_bytes);
+  set_cache_limit(previous_allocator_cache_limit_bytes);
+}
+
 void require_strict_active_memory_limit(const Stream& gpu_stream) {
   clear_cache();
   const auto previous_allocator_cache_limit_bytes = set_cache_limit(kCacheLimitBytes);
@@ -424,6 +486,7 @@ void run_probe() {
   require_zero_cache_limit(gpu_stream);
   require_allocation_triggered_cache_reclamation(gpu_stream);
   require_async_evaluation_cleanup_boundary(gpu_stream);
+  require_evaluation_rejection_preserves_prior_tape_work(gpu_stream);
   require_strict_active_memory_limit(gpu_stream);
   synchronize(gpu_stream);
   clear_cache();

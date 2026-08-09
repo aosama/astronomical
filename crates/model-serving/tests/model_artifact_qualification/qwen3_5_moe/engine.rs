@@ -69,6 +69,7 @@ async fn should_generate_the_certified_greedy_continuation_through_the_engine_tr
         {
             GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
             GeneratedToken::PrefillProgress { .. } => {}
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }
@@ -131,6 +132,7 @@ async fn should_generate_the_certified_sampled_continuation_through_the_engine_t
         {
             GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
             GeneratedToken::PrefillProgress { .. } => {}
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }
@@ -278,6 +280,7 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
                 .expect("the resident model should generate without SSD expert streaming")
             {
                 GeneratedToken::PrefillProgress { .. } => {}
+                GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
                 GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
             }
         }

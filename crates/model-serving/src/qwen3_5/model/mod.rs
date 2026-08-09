@@ -79,6 +79,7 @@ pub use model::Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use speculative_prefill::{
     Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,
+    Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer,
     Qwen3_5SpeculativePrefillDraftScoringOutcome,
 };
 #[cfg(feature = "direct-mlx")]

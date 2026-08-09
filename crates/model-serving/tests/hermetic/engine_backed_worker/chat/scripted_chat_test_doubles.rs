@@ -300,6 +300,7 @@ fn prepared_generation(
 pub(super) struct ScriptedChatEngine {
     cancellation_count: Arc<AtomicUsize>,
     cached_token_count: u32,
+    restored_prompt_prefix_token_count: u32,
     generated_tokens: Vec<GeneratedToken>,
     is_active: bool,
     next_token_index: usize,
@@ -349,6 +350,7 @@ impl ScriptedChatEngine {
         Self {
             cancellation_count: Arc::new(AtomicUsize::new(0)),
             cached_token_count,
+            restored_prompt_prefix_token_count: cached_token_count,
             generated_tokens,
             is_active: false,
             next_token_index: 0,
@@ -363,6 +365,14 @@ impl ScriptedChatEngine {
             speculative_prefill_draft_model_revision: None,
             active_generation_prompt_cache_stats: None,
         }
+    }
+
+    pub(super) fn with_restored_prompt_prefix_token_count(
+        mut self,
+        restored_prompt_prefix_token_count: u32,
+    ) -> Self {
+        self.restored_prompt_prefix_token_count = restored_prompt_prefix_token_count;
+        self
     }
 
     pub(super) fn with_fatal_decode_reason(fatal_decode_reason: &str) -> Self {
@@ -392,6 +402,7 @@ impl ScriptedChatEngine {
                     expert_payload_bytes,
                     model_core_payload_bytes,
                     context_state_payload_bytes,
+                    speculative_prefill_draft_memory_bytes: 0,
                 },
             )),
         );
@@ -463,15 +474,18 @@ impl InferenceEngine for ScriptedChatEngine {
         }
         self.is_active = true;
         self.next_token_index = 0;
-        Ok(self.initial_expert_memory_mode.map_or_else(
-            || EngineGenerationStart::new(self.cached_token_count),
-            |expert_memory_mode| {
-                EngineGenerationStart::with_expert_memory_mode(
-                    self.cached_token_count,
-                    expert_memory_mode,
-                )
-            },
-        ))
+        Ok(self
+            .initial_expert_memory_mode
+            .map_or_else(
+                || EngineGenerationStart::new(self.cached_token_count),
+                |expert_memory_mode| {
+                    EngineGenerationStart::with_expert_memory_mode(
+                        self.cached_token_count,
+                        expert_memory_mode,
+                    )
+                },
+            )
+            .with_restored_prompt_prefix_token_count(self.restored_prompt_prefix_token_count))
     }
 
     async fn decode_next_token(
@@ -537,63 +551,5 @@ impl InferenceEngine for ScriptedChatEngine {
             .is_active
             .then(|| self.active_generation_prompt_cache_stats.clone())
             .flatten())
-    }
-}
-
-pub(super) struct TrackingChatEngine {
-    is_active: bool,
-}
-
-impl TrackingChatEngine {
-    pub(super) fn new() -> Self {
-        Self { is_active: false }
-    }
-}
-
-impl InferenceEngine for TrackingChatEngine {
-    type Request = ScriptedInferenceRequest;
-
-    async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Ok(EngineLoadResult::new())
-    }
-
-    async fn start_generation(
-        &mut self,
-        _generation_request: ScriptedInferenceRequest,
-    ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        if self.is_active {
-            return Err(InferenceEngineError::EngineBusy);
-        }
-        self.is_active = true;
-        Ok(EngineGenerationStart::new(0))
-    }
-
-    async fn decode_next_token(
-        &mut self,
-        _request_id: RequestId,
-    ) -> Result<GeneratedToken, InferenceEngineError> {
-        Ok(GeneratedToken::TokenId {
-            token_id: 1,
-            is_reasoning_token: false,
-            expert_memory_mode: None,
-            mlx_memory_telemetry: None,
-            generation_finalization: None,
-        })
-    }
-
-    async fn inject_input_tokens(
-        &mut self,
-        _request_id: RequestId,
-        _input_token_ids: Vec<u32>,
-    ) -> Result<(), InferenceEngineError> {
-        Ok(())
-    }
-
-    async fn cancel_generation(
-        &mut self,
-        _request_id: RequestId,
-    ) -> Result<GenerationFinalization, InferenceEngineError> {
-        self.is_active = false;
-        Ok(GenerationFinalization::default())
     }
 }

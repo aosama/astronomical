@@ -272,22 +272,30 @@ pub(crate) enum PersistentSpeculativePrefillSelectionFileError {
 fn selection_policy_identity(
     parsed_header: &PersistentSafetensorsHeader,
     selection_file_path: &Path,
-) -> Result<PersistentSpeculativePrefillPolicyIdentity, PersistentSpeculativePrefillSelectionFileError>
-{
+) -> Result<
+    PersistentSpeculativePrefillPolicyIdentity,
+    PersistentSpeculativePrefillSelectionFileError,
+> {
     let required_metadata = |metadata_name: &'static str| {
-        parsed_header.metadata.get(metadata_name).cloned().ok_or_else(|| {
-            PersistentSpeculativePrefillSelectionFileError::MissingMetadata {
-                selection_file_path: selection_file_path.to_path_buf(),
-                metadata_name,
-            }
-        })
+        parsed_header
+            .metadata
+            .get(metadata_name)
+            .cloned()
+            .ok_or_else(
+                || PersistentSpeculativePrefillSelectionFileError::MissingMetadata {
+                    selection_file_path: selection_file_path.to_path_buf(),
+                    metadata_name,
+                },
+            )
     };
     let keep_percentage = required_metadata("keep_percentage")?
         .parse::<u32>()
-        .map_err(|_| PersistentSpeculativePrefillSelectionFileError::InvalidMetadata {
-            selection_file_path: selection_file_path.to_path_buf(),
-            metadata_name: "keep_percentage",
-        })?;
+        .map_err(
+            |_| PersistentSpeculativePrefillSelectionFileError::InvalidMetadata {
+                selection_file_path: selection_file_path.to_path_buf(),
+                metadata_name: "keep_percentage",
+            },
+        )?;
     Ok(PersistentSpeculativePrefillPolicyIdentity::new(
         required_metadata("target_model_id")?,
         required_metadata("target_model_revision")?,

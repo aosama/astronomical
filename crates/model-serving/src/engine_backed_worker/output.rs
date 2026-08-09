@@ -382,5 +382,7 @@ pub(crate) fn worker_memory_snapshot(
         expert_payload_bytes: mlx_active_memory_breakdown.expert_payload_bytes,
         model_core_payload_bytes: mlx_active_memory_breakdown.model_core_payload_bytes,
         context_state_payload_bytes: mlx_active_memory_breakdown.context_state_payload_bytes,
+        speculative_prefill_draft_memory_bytes: mlx_active_memory_breakdown
+            .speculative_prefill_draft_memory_bytes,
     }
 }

@@ -472,6 +472,7 @@ async fn should_report_completed_prefill_chunck_tokens_for_prompt_processing_pro
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
     executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
+        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 2_200,
         elapsed_millis: 0,
@@ -496,7 +497,7 @@ async fn should_report_completed_prefill_chunck_tokens_for_prompt_processing_pro
 
     assert_eq!(status_document["status"], "ready");
     assert_eq!(status_document["activity"], "prompt_processing");
-    assert_eq!(status_document["progress"]["phase"], "prefill");
+    assert_eq!(status_document["progress"]["phase"], "target");
     assert_eq!(
         status_document["progress"]["completed_prefill_chunck_tokens"],
         2_048
@@ -508,6 +509,7 @@ async fn should_omit_completed_prefill_chunck_tokens_before_the_first_measuremen
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
     executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
+        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 2_200,
         elapsed_millis: 0,
@@ -530,7 +532,7 @@ async fn should_omit_completed_prefill_chunck_tokens_before_the_first_measuremen
     let status_document: serde_json::Value =
         serde_json::from_slice(&status_body).expect("the status body should contain JSON");
 
-    assert_eq!(status_document["progress"]["phase"], "prefill");
+    assert_eq!(status_document["progress"]["phase"], "target");
     assert!(
         status_document["progress"]
             .get("completed_prefill_chunck_tokens")

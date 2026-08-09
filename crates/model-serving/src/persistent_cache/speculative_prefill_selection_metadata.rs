@@ -22,7 +22,10 @@ pub(crate) fn selection_file_metadata_entries(
             "format_version",
             PERSISTENT_SPECULATIVE_PREFILL_SELECTION_FORMAT_VERSION.to_owned(),
         ),
-        ("target_model_id", selection_contract.target_model_id.clone()),
+        (
+            "target_model_id",
+            selection_contract.target_model_id.clone(),
+        ),
         (
             "target_model_revision",
             selection_contract.target_model_revision.clone(),
