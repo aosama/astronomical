@@ -321,6 +321,7 @@ test("clamps memory segments so they never exceed active memory", () => {
             expertBytes: 80,
             modelCoreBytes: 20,
             contextStateBytes: 0,
+            drafterBytes: 0,
             runtimeWorkBytes: 0,
             availableBytes: 100
         }
@@ -349,6 +350,7 @@ test("computes available bytes as ceiling minus active when nothing is clamped",
             expertBytes: 30,
             modelCoreBytes: 5,
             contextStateBytes: 2,
+            drafterBytes: 0,
             runtimeWorkBytes: 3,
             availableBytes: 160
         }
@@ -370,8 +372,39 @@ test("reports a null memory snapshot as all zero segments with full available he
             expertBytes: 0,
             modelCoreBytes: 0,
             contextStateBytes: 0,
+            drafterBytes: 0,
             runtimeWorkBytes: 0,
             availableBytes: 200
+        }
+    );
+});
+
+test("keeps drafter memory separate from model core and runtime work", () => {
+    const scriptContext = createConsoleContext();
+    scriptContext.mlxMemorySnapshot = {
+        active_memory_bytes: 100,
+        expert_payload_bytes: 20,
+        model_core_payload_bytes: 30,
+        context_state_payload_bytes: 10,
+        speculative_prefill_draft_memory_bytes: 25
+    };
+    scriptContext.mlxMemoryCeilingBytes = 200;
+
+    const segmentBytes = vm.runInContext(
+        "reconciledMlxMemorySegmentBytes(mlxMemorySnapshot, mlxMemoryCeilingBytes)",
+        scriptContext
+    );
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(segmentBytes)),
+        {
+            activeMemoryBytes: 100,
+            expertBytes: 20,
+            modelCoreBytes: 30,
+            contextStateBytes: 10,
+            drafterBytes: 25,
+            runtimeWorkBytes: 15,
+            availableBytes: 100
         }
     );
 });

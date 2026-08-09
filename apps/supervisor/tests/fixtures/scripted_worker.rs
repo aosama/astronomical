@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand,
     WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerCandidateEvidence,
     WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
-    WorkerPrefillOptimizerInsight,
+    WorkerPrefillOptimizerInsight, WorkerPromptProcessingPhase,
 };
 
 const READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
@@ -225,6 +225,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         event_writer
                             .send_event(&WorkerEvent::PrefillProgress {
                                 request_id,
+                                prompt_processing_phase: WorkerPromptProcessingPhase::Target,
                                 processed_tokens: 2_048,
                                 total_tokens: 50_000,
                                 elapsed_millis: 1_500,
@@ -266,7 +267,9 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     expert_payload_bytes: 4_000,
                                     model_core_payload_bytes: 3_000,
                                     context_state_payload_bytes: 2_000,
+                                    speculative_prefill_draft_memory_bytes: 0,
                                 }),
+                                speculative_prefill_draft_memory_snapshot: None,
                             })
                             .await?;
                         event_writer
@@ -292,6 +295,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     expert_payload_bytes: 19_000,
                                     model_core_payload_bytes: 3_000,
                                     context_state_payload_bytes: 0,
+                                    speculative_prefill_draft_memory_bytes: 0,
                                 }),
                             })
                             .await?;

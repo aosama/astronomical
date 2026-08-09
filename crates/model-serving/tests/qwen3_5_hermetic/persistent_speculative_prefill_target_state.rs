@@ -179,25 +179,31 @@ fn should_isolate_sparse_target_state_across_target_and_drafter_revisions() {
 fn should_apply_the_same_targeted_keep_percentage_purge_to_sparse_target_state() {
     let stored_sparse_target_policy = target_state_contract().policy_identity();
 
-    assert!(stored_sparse_target_policy.should_purge_for_active_keep_percentage(
-        "target-model",
-        "target-revision",
-        "drafter-model",
-        "drafter-revision",
-        35,
-    ));
-    assert!(!stored_sparse_target_policy.should_purge_for_active_keep_percentage(
-        "target-model",
-        "target-revision",
-        "drafter-model",
-        "drafter-revision",
-        20,
-    ));
-    assert!(!stored_sparse_target_policy.should_purge_for_active_keep_percentage(
-        "target-model",
-        "target-revision",
-        "different-drafter",
-        "drafter-revision",
-        35,
-    ));
+    assert!(
+        stored_sparse_target_policy.should_purge_for_active_keep_percentage(
+            "target-model",
+            "target-revision",
+            "drafter-model",
+            "drafter-revision",
+            35,
+        )
+    );
+    assert!(
+        !stored_sparse_target_policy.should_purge_for_active_keep_percentage(
+            "target-model",
+            "target-revision",
+            "drafter-model",
+            "drafter-revision",
+            20,
+        )
+    );
+    assert!(
+        !stored_sparse_target_policy.should_purge_for_active_keep_percentage(
+            "target-model",
+            "target-revision",
+            "different-drafter",
+            "drafter-revision",
+            35,
+        )
+    );
 }

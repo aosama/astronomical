@@ -19,10 +19,10 @@ use crate::qwen3_5::{
 };
 use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
 
+use super::speculative_prefill_failure::configured_speculative_prefill_activation_failure;
 use super::speculative_prefill_model_loading::{
     load_speculative_prefill_draft_model, token_identifier_mapping_digest,
 };
-use super::speculative_prefill_failure::configured_speculative_prefill_activation_failure;
 
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
@@ -230,10 +230,12 @@ impl Qwen3_5EngineState {
                                 Ok(write_queue) => Some(write_queue),
                                 Err(write_queue_error) => {
                                     if self.speculative_prefill.enabled {
-                                        return Err(configured_speculative_prefill_activation_failure(
-                                            "target prompt-state writer initialization",
-                                            write_queue_error,
-                                        ));
+                                        return Err(
+                                            configured_speculative_prefill_activation_failure(
+                                                "target prompt-state writer initialization",
+                                                write_queue_error,
+                                            ),
+                                        );
                                     }
                                     tracing::warn!(
                                         error = %write_queue_error,
@@ -322,10 +324,12 @@ impl Qwen3_5EngineState {
                                 Ok(write_queue) => Some(write_queue),
                                 Err(write_queue_error) => {
                                     if self.speculative_prefill.enabled {
-                                        return Err(configured_speculative_prefill_activation_failure(
-                                            "drafter prompt-state writer initialization",
-                                            write_queue_error,
-                                        ));
+                                        return Err(
+                                            configured_speculative_prefill_activation_failure(
+                                                "drafter prompt-state writer initialization",
+                                                write_queue_error,
+                                            ),
+                                        );
                                     }
                                     tracing::warn!(
                                         error = %write_queue_error,

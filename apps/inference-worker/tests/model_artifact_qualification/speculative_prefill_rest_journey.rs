@@ -2,15 +2,15 @@ use std::path::{Path, PathBuf};
 
 use astronomical_config::AstronomicalConfig;
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
-    ChatToolDefinition, RequestId,
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition,
+    RequestId,
 };
 use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 use serde_json::{Value, json};
 
 use super::model_artifact_rest_qualification::{
-    E2E_TIMEOUT, get_endpoint, launch_model_artifact_rest_server_for_model,
-    post_chat_completion, stop_model_artifact_rest_server,
+    E2E_TIMEOUT, get_endpoint, launch_model_artifact_rest_server_for_model, post_chat_completion,
+    stop_model_artifact_rest_server,
 };
 
 const ROMEO_AND_JULIET_SOURCE: &str =

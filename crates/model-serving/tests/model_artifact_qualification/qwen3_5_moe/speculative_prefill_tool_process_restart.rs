@@ -276,10 +276,8 @@ async fn should_run_one_speculative_prefill_tool_process_pass() {
             PROCESS_PASS_REPORT_PATH_ENVIRONMENT_VARIABLE,
             "the child process requires a report path",
         );
-        let cold_tool_call_report_path = std::env::var_os(
-            COLD_TOOL_CALL_REPORT_PATH_ENVIRONMENT_VARIABLE,
-        )
-        .map(PathBuf::from);
+        let cold_tool_call_report_path =
+            std::env::var_os(COLD_TOOL_CALL_REPORT_PATH_ENVIRONMENT_VARIABLE).map(PathBuf::from);
         let process_pass_report = run_process_pass(
             &process_pass_role,
             &shared_process_cache_root,
@@ -330,9 +328,7 @@ async fn run_isolated_process_pass(
             cold_tool_call_report_path,
         );
     }
-    eprintln!(
-        "[speculative-prefill-process-restart] status=progress pass={process_pass_role}"
-    );
+    eprintln!("[speculative-prefill-process-restart] status=progress pass={process_pass_role}");
     let child_process_status = child_process_command
         .status()
         .await
@@ -352,12 +348,18 @@ async fn run_process_pass(
     let (draft_model_directory, draft_model_id) =
         super::configured_speculative_prefill_draft_model_artifact(&target_model_directory);
     let validated_target_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&target_model_directory, PROCESS_RESTART_OUTPUT_TOKEN_COUNT as u32)
+        .validate(
+            &target_model_directory,
+            PROCESS_RESTART_OUTPUT_TOKEN_COUNT as u32,
+        )
         .expect("the process-pass target artifact should validate");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_target_artifact)
         .expect("the process-pass tokenizer should load");
     let validated_draft_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&draft_model_directory, PROCESS_RESTART_OUTPUT_TOKEN_COUNT as u32)
+        .validate(
+            &draft_model_directory,
+            PROCESS_RESTART_OUTPUT_TOKEN_COUNT as u32,
+        )
         .expect("the process-pass draft artifact should validate");
     let declared_tools = literary_analysis_tools();
     let (representative_prompt, maximum_output_token_count) = match process_pass_role {
@@ -404,7 +406,9 @@ async fn run_process_pass(
             )
         }
         unexpected_process_pass_role => {
-            panic!("unexpected speculative-prefill process pass role: {unexpected_process_pass_role}")
+            panic!(
+                "unexpected speculative-prefill process pass role: {unexpected_process_pass_role}"
+            )
         }
     };
     let target_persistent_prompt_cache_directory = shared_process_cache_root.join("target");
@@ -421,14 +425,14 @@ async fn run_process_pass(
         SPECULATIVE_PREFILL_KEEP_PERCENTAGE
     };
     let request_id = RequestId::new(match process_pass_role {
-            "cold" => 95_400,
-            "warm_exact" => 95_401,
-            "follow_up" => 95_402,
-            "changed_control" => 95_403,
-            "changed_keep_percentage" => 95_404,
-            "changed_selection_settings" => 95_405,
-            _ => unreachable!(),
-        });
+        "cold" => 95_400,
+        "warm_exact" => 95_401,
+        "follow_up" => 95_402,
+        "changed_control" => 95_403,
+        "changed_keep_percentage" => 95_404,
+        "changed_selection_settings" => 95_405,
+        _ => unreachable!(),
+    });
     let process_pass_measurement = if process_pass_role == "changed_selection_settings" {
         run_representative_generation_with_selection_chunck_token_count(
             &target_model_directory,

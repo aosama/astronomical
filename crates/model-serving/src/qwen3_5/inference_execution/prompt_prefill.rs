@@ -7,13 +7,11 @@ use crate::{
 };
 use astronomical_ipc_protocol::RequestId;
 
-use super::engine_request::{
-    Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests,
-};
+use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests};
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::{
-    PromptPrefillChunckAttemptError, prefill_execution_error,
-    terminal_optional_prefill_error_is_fallback,
+    PromptPrefillChunckAttemptError, configured_speculative_prefill_execution_error,
+    prefill_execution_error, terminal_optional_prefill_error_is_fallback,
 };
 use super::{
     Qwen3_5EngineState, Qwen3_5SpeculativePrefillChunckMode, fatal_engine_error,
@@ -21,8 +19,7 @@ use super::{
         prepare_sparse_target_gpu_inputs, record_sparse_target_and_mode_counters,
     },
     qwen3_5_runtime_error, qwen3_5_selected_speculative_prefill_positions_for_range,
-    qwen3_5_speculative_prefill_chunck_mode,
-    qwen3_5_speculative_prefill_sparse_target_is_active,
+    qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
     speculative_prefill_failure::configured_speculative_prefill_failure,
 };
 use crate::qwen3_5::multi_token_prediction::{
@@ -68,18 +65,6 @@ impl Qwen3_5EngineState {
                 prefill_start,
                 active_request.ordinary_target_prefill_control_span_token_count,
             );
-        if speculative_prefill_sparse_conversation_range_is_active
-            && !matches!(
-            speculative_prefill_chunck_mode,
-            Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
-        )
-        {
-            self.prepare_speculative_prefill_selection(
-                active_request,
-                prefill_start,
-                final_prompt_index,
-            )?;
-        }
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
             && !active_request.persistent_prompt_cache_capture_has_stopped
@@ -173,10 +158,10 @@ impl Qwen3_5EngineState {
             selected_speculative_prefill_positions_for_current_chunck.len();
         let speculative_prefill_target_is_active =
             speculative_prefill_sparse_conversation_range_is_active
-            && !matches!(
-                speculative_prefill_chunck_mode,
-                Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
-            );
+                && !matches!(
+                    speculative_prefill_chunck_mode,
+                    Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
+                );
         let additional_persistent_state_growth_bytes = match (
             speculative_prefill_chunck_mode,
             active_request.optional_prediction_session(),
@@ -229,14 +214,13 @@ impl Qwen3_5EngineState {
         let target_expert_payload_bytes_before_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
-        let active_memory_bytes_before_growth = self
-            .measure_adaptive_ram_growth_memory_admission(
-                adaptive_ram_growth_context,
-                &mut active_request.performance_attribution,
-                &active_request.request_decoder_state,
-                additional_persistent_state_growth_bytes,
-                exact_temporary_workspace_bytes,
-            )?;
+        let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
+            adaptive_ram_growth_context,
+            &mut active_request.performance_attribution,
+            &active_request.request_decoder_state,
+            additional_persistent_state_growth_bytes,
+            exact_temporary_workspace_bytes,
+        )?;
         if speculative_prefill_target_is_active {
             let target_expert_payload_bytes_after_context_admission = model
                 .expert_weight_memory_cache_statistics()
@@ -258,8 +242,7 @@ impl Qwen3_5EngineState {
                 let sparse_target_gpu_inputs = if active_request
                     .take_forced_speculative_prefill_failure_for_tests(
                         Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetInputAssembly,
-                    )
-                {
+                    ) {
                     Err(configured_speculative_prefill_failure(
                         active_request.request_id,
                         "sparse target input assembly",
@@ -280,11 +263,24 @@ impl Qwen3_5EngineState {
                         sparse_input_assembly_error,
                     )
                 })?;
+                let should_force_sparse_target_active_memory_limit_rejection = active_request
+                    .take_forced_speculative_prefill_failure_for_tests(
+                        Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetActiveMemoryLimitRejection,
+                    );
                 let should_force_sparse_target_execution_failure = active_request
                     .take_forced_speculative_prefill_failure_for_tests(
                         Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetExecution,
                     );
                 let sparse_target_forward_result = (|| {
+                    if should_force_sparse_target_active_memory_limit_rejection {
+                        return Err(crate::Qwen3_5ExecutionError::Runtime(
+                            astronomical_runtime_integration::MlxRuntimeError::ActiveMemoryLimitExceeded {
+                                active_memory_bytes: 2,
+                                attempted_allocation_bytes: 2,
+                                allowed_active_memory_bytes: 3,
+                            },
+                        ));
+                    }
                     if should_force_sparse_target_execution_failure {
                         return Err(crate::Qwen3_5ExecutionError::InvalidInput {
                             description: "forced speculative-prefill sparse target execution failure",
@@ -327,12 +323,11 @@ impl Qwen3_5EngineState {
                     )
                 })();
                 if let Err(qwen3_5_execution_error) = sparse_target_forward_result {
-                    return Err(PromptPrefillChunckAttemptError::Engine(
-                        configured_speculative_prefill_failure(
-                            active_request.request_id,
-                            "sparse target execution",
-                            qwen3_5_execution_error,
-                        ),
+                    return Err(configured_speculative_prefill_execution_error(
+                        active_request.request_id,
+                        "sparse target execution",
+                        qwen3_5_execution_error,
+                        prefill_request_checkpoint,
                     ));
                 }
             }

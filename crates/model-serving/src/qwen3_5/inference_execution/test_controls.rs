@@ -4,8 +4,8 @@ use astronomical_ipc_protocol::RequestId;
 use crate::MlxInferenceEngine;
 
 use super::{
-    Qwen3_5InferenceExecution, Qwen3_5SpeculativePrefillFailureStageForTests,
-    fatal_engine_error, qwen3_5_runtime_error,
+    Qwen3_5InferenceExecution, Qwen3_5SpeculativePrefillFailureStageForTests, fatal_engine_error,
+    qwen3_5_runtime_error,
 };
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {

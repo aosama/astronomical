@@ -278,6 +278,7 @@ async fn run_generation_until_first_token(
                     (estimated_total_seconds - elapsed_seconds).max(0.0),
                 );
             }
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => return Ok(()),
         }
     }
@@ -376,6 +377,7 @@ async fn run_generation_until_output_sample(
                     mlx_memory_telemetry.peak_memory_bytes,
                 );
             }
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::TokenId { .. } => {
                 generated_token_count = generated_token_count.saturating_add(1);
                 if generated_token_count >= observed_output_token_count {

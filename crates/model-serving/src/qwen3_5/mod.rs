@@ -59,9 +59,8 @@ pub use text::qwen3_5_apply_top_p_mask;
 pub use text::{
     Qwen3_5GenerationProcessor, Qwen3_5InferenceRequest, Qwen3_5OutputEvent, Qwen3_5OutputParser,
     Qwen3_5OutputParserError, Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt,
-    Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig,
-    Qwen3_5SamplingStrategy, Qwen3_5TokenDecoder, Qwen3_5TokenIds, Qwen3_5Tokenizer,
-    Qwen3_5TokenizerError, Qwen3_5ToolCall,
+    Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy,
+    Qwen3_5TokenDecoder, Qwen3_5TokenIds, Qwen3_5Tokenizer, Qwen3_5TokenizerError, Qwen3_5ToolCall,
     discover_sampler_config, discover_token_ids, qwen3_5_request_enables_thinking,
     resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
     validate_context_token_count,

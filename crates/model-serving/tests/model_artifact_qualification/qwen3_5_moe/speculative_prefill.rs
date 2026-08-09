@@ -1,6 +1,10 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+pub(super) use super::speculative_prefill_qualification_support::prepare_representative_prompt;
+use super::speculative_prefill_qualification_support::{
+    assert_within_memory_limits, clear_reclaimable_mlx_memory, decode_generated_output_text,
+};
 use astronomical_ipc_protocol::{RequestId, WorkerSpeculativePrefillConfiguration};
 use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
@@ -8,10 +12,6 @@ use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
     Qwen3_5Tokenizer,
 };
-use super::speculative_prefill_qualification_support::{
-    assert_within_memory_limits, clear_reclaimable_mlx_memory, decode_generated_output_text,
-};
-pub(super) use super::speculative_prefill_qualification_support::prepare_representative_prompt;
 
 const REPRESENTATIVE_OUTPUT_TOKEN_COUNT: u16 = 1_024;
 const PARITY_OUTPUT_TOKEN_COUNT: u16 = 64;
@@ -460,7 +460,9 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
                 mlx_memory_telemetry,
                 ..
             } => mlx_memory_telemetry.as_ref(),
-            GeneratedToken::EndOfSequence => None,
+            GeneratedToken::PromptProcessingPhaseStarted { .. } | GeneratedToken::EndOfSequence => {
+                None
+            }
         };
         if let Some(memory_telemetry) = memory_telemetry {
             maximum_active_memory_bytes =

@@ -125,25 +125,59 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         .start_generation(visual_request)
         .await
         .expect("the cache-deleted visual prompt should start with SpecPrefill enabled");
+    let mut observed_live_speculative_prefill_draft_memory = false;
     loop {
         match qwen3_5_engine
             .decode_next_token(RequestId::new(CACHE_DELETED_VISUAL_REQUEST_IDENTIFIER))
             .await
             .expect("the cache-deleted visual prompt should not fall back or fail")
         {
-            GeneratedToken::TokenId { .. } => {
+            GeneratedToken::TokenId {
+                mlx_memory_telemetry,
+                ..
+            } => {
+                let mlx_memory_telemetry = mlx_memory_telemetry.expect(
+                    "the enabled adaptive memory guard should report target execution memory",
+                );
+                assert_eq!(
+                    mlx_memory_telemetry
+                        .active_memory_breakdown
+                        .speculative_prefill_draft_memory_bytes,
+                    0,
+                    "target execution after draft release must report zero drafter memory"
+                );
                 eprintln!("[cache-deleted-visual-specprefill] status=output-token-generated");
                 break;
             }
             GeneratedToken::EndOfSequence => break,
             GeneratedToken::PrefillProgress {
                 completed_prefill_chunck_tokens,
+                speculative_prefill_draft_memory_telemetry,
                 ..
-            } => eprintln!(
-                "[cache-deleted-visual-specprefill] status=prefill-progress completed_prefill_chunck_tokens={completed_prefill_chunck_tokens}"
-            ),
+            } => {
+                if let Some(speculative_prefill_draft_memory_telemetry) =
+                    speculative_prefill_draft_memory_telemetry
+                {
+                    assert!(
+                        speculative_prefill_draft_memory_telemetry
+                            .active_memory_breakdown
+                            .speculative_prefill_draft_memory_bytes
+                            > 0,
+                        "cold draft scoring must report nonzero standalone drafter memory"
+                    );
+                    observed_live_speculative_prefill_draft_memory = true;
+                }
+                eprintln!(
+                    "[cache-deleted-visual-specprefill] status=prefill-progress completed_prefill_chunck_tokens={completed_prefill_chunck_tokens}"
+                );
+            }
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
         }
     }
+    assert!(
+        observed_live_speculative_prefill_draft_memory,
+        "cold visual SpecPrefill must expose one live draft-scoring memory observation"
+    );
     let attribution_report_documents =
         super::performance_attribution::read_attribution_report_documents(
             &performance_attribution_log_path,
@@ -204,6 +238,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         RESTORED_VISUAL_REQUEST_IDENTIFIER,
     )
     .with_performance_attribution(PerformanceAttribution::enabled());
+    let restored_visual_prompt_token_count = restored_visual_request.input_token_ids().len();
     let restored_performance_attribution_log_path = temporary_attribution_directory
         .path()
         .join("restored-performance-attribution.jsonl");
@@ -249,10 +284,21 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         "[restored-visual-specprefill] status=prefill prompt_tokens={} cache_state=restored",
         restored_visual_request.input_token_ids().len()
     );
-    restored_qwen3_5_engine
+    let restored_generation_start = restored_qwen3_5_engine
         .start_generation(restored_visual_request)
         .await
         .expect("the restored-cache visual prompt should start with SpecPrefill enabled");
+    assert_eq!(
+        restored_generation_start.cached_token_count(),
+        0,
+        "sparse target state must not inflate exact persistent-cache usage"
+    );
+    assert_eq!(
+        usize::try_from(restored_generation_start.restored_prompt_prefix_token_count())
+            .expect("the restored prompt prefix should fit usize"),
+        restored_visual_prompt_token_count.saturating_sub(1),
+        "prompt progress must exclude the complete restored pre-kickoff target prefix"
+    );
     loop {
         let generated_token = restored_qwen3_5_engine
             .decode_next_token(RequestId::new(RESTORED_VISUAL_REQUEST_IDENTIFIER));
@@ -261,6 +307,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
             .expect("the restored-cache visual prompt should not fall back or fail");
         match generated_token {
             GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::PrefillProgress {
                 completed_prefill_chunck_tokens,
                 ..

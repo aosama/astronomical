@@ -22,10 +22,8 @@ impl PersistentPromptCacheDiskStore {
     pub fn purge_obsolete_speculative_prefill_keep_percentage_entries(
         &self,
         active_policy_identity: &PersistentSpeculativePrefillPolicyIdentity,
-    ) -> Result<
-        PersistentSpeculativePrefillPolicyPurgeOutcome,
-        PersistentPromptCacheDiskStoreError,
-    > {
+    ) -> Result<PersistentSpeculativePrefillPolicyPurgeOutcome, PersistentPromptCacheDiskStoreError>
+    {
         let _write_operation_guard = self.lock_write_operations();
         let speculative_prefill_selection_count = self.purge_obsolete_policy_file_kind(
             PersistentPromptCacheFileKind::SpeculativePrefillSelection,
@@ -52,10 +50,12 @@ impl PersistentPromptCacheDiskStore {
         let mut purged_file_count = 0usize;
         for (policy_file_hash, tracked_policy_file) in tracked_policy_files {
             let policy_file = open_without_following_symlinks(&tracked_policy_file.file_path)
-                .map_err(|source| PersistentPromptCacheDiskStoreError::OpenBlockFile {
-                    block_file_path: tracked_policy_file.file_path.clone(),
-                    source,
-                })?;
+                .map_err(
+                    |source| PersistentPromptCacheDiskStoreError::OpenBlockFile {
+                        block_file_path: tracked_policy_file.file_path.clone(),
+                        source,
+                    },
+                )?;
             let stored_policy_identity = match persistent_prompt_cache_file_kind {
                 PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
                     PersistentSpeculativePrefillSelectionFileHeader::read_model_bound_from_file(

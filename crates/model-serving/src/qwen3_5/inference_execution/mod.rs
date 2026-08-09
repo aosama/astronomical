@@ -22,6 +22,7 @@ mod speculative_prefill_control_span;
 mod speculative_prefill_draft_cache;
 mod speculative_prefill_eligibility;
 mod speculative_prefill_failure;
+mod speculative_prefill_failure_diagnostics;
 mod speculative_prefill_gpu_input;
 mod speculative_prefill_memory_admission;
 mod speculative_prefill_model_loading;
@@ -276,7 +277,6 @@ pub struct Qwen3_5InferenceExecution {
     model_directory: PathBuf,
     model_id: Option<String>,
     model_revision: Option<String>,
-    /// Revision of the resident draft model used to isolate draft state entries.
     pub(super) speculative_prefill_draft_model_revision: Option<String>,
     /// Startup validation outcome for the configured request-scoped draft model.
     pub(super) speculative_prefill_draft_is_available: bool,
@@ -465,7 +465,9 @@ impl Qwen3_5EngineState {
         failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
     ) -> Result<(), InferenceEngineError> {
         let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error("cannot force a speculative-prefill failure without an active request")
+            fatal_engine_error(
+                "cannot force a speculative-prefill failure without an active request",
+            )
         })?;
         if active_request.request_id != request_id {
             return Err(fatal_engine_error(

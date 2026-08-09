@@ -102,6 +102,20 @@ impl Qwen3_5EngineState {
                 draft_scoring_reservation_bytes,
                 self.memory_limits.allowed_active_memory_bytes(),
             );
+        tracing::info!(
+            request_id,
+            draft_suffix_token_count,
+            active_memory_bytes_before_draft_scoring =
+                memory_snapshot_before_draft_scoring.active_memory_bytes(),
+            allowed_active_memory_bytes = self.memory_limits.allowed_active_memory_bytes(),
+            draft_decoder_state_growth_bytes,
+            draft_vision_payload_bytes,
+            draft_maximum_expert_page_reservation_bytes,
+            draft_temporary_workspace_bytes,
+            draft_scoring_reservation_bytes,
+            required_target_expert_reclamation_bytes,
+            "projected speculative-prefill drafter scoring memory"
+        );
         if required_target_expert_reclamation_bytes == 0 {
             return Ok(());
         }
