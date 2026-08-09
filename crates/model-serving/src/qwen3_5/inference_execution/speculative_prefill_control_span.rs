@@ -12,9 +12,7 @@ pub const fn qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary
     }
     if prefill_start_position < ordinary_target_prefill_control_span_end_position {
         return Some(
-            if candidate_prefill_end_position
-                < ordinary_target_prefill_control_span_end_position
-            {
+            if candidate_prefill_end_position < ordinary_target_prefill_control_span_end_position {
                 candidate_prefill_end_position
             } else {
                 ordinary_target_prefill_control_span_end_position

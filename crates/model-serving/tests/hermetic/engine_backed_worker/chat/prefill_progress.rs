@@ -1,12 +1,12 @@
 use super::*;
 
 #[tokio::test]
-async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_using_native_prefill_elapsed_time()
+async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_cached_usage()
  {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(15),
         ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
-            10,
+            3,
             vec![
                 GeneratedToken::PrefillProgress {
                     processed_token_count: 2,
@@ -22,11 +22,23 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                             expert_payload_bytes: 1_000,
                             model_core_payload_bytes: 4_000,
                             context_state_payload_bytes: 2_000,
+                            speculative_prefill_draft_memory_bytes: 0,
+                        },
+                    )),
+                    speculative_prefill_draft_memory_telemetry: Some(MlxMemoryTelemetry::new(
+                        20_000,
+                        1_000,
+                        22_000,
+                        MlxActiveMemoryBreakdown {
+                            expert_payload_bytes: 2_000,
+                            model_core_payload_bytes: 3_000,
+                            context_state_payload_bytes: 1_000,
+                            speculative_prefill_draft_memory_bytes: 14_000,
                         },
                     )),
                     expert_memory_mode: None,
                     prompt_work_reuse: WorkerPromptWorkReuse {
-                        target_eligible_token_count: 15,
+                        target_eligible_token_count: 13,
                         target_restored_token_count: 10,
                         drafter_eligible_token_count: 15,
                         drafter_restored_token_count: 10,
@@ -44,9 +56,10 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                         16_000,
                         MlxActiveMemoryBreakdown::default(),
                     )),
+                    speculative_prefill_draft_memory_telemetry: None,
                     expert_memory_mode: None,
                     prompt_work_reuse: WorkerPromptWorkReuse {
-                        target_eligible_token_count: 15,
+                        target_eligible_token_count: 13,
                         target_restored_token_count: 10,
                         drafter_eligible_token_count: 15,
                         drafter_restored_token_count: 10,
@@ -67,7 +80,8 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                     generation_finalization: None,
                 },
             ],
-        ),
+        )
+        .with_restored_prompt_prefix_token_count(10),
     );
     let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
     let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
@@ -116,10 +130,12 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
             completed_prefill_chunck_tokens,
             prefill_optimizer_insight,
             mlx_memory_snapshot,
+            speculative_prefill_draft_memory_snapshot,
+            ..
         } => {
             assert_eq!(request_id, RequestId::new(742));
             assert_eq!(processed_tokens, 2);
-            assert_eq!(total_tokens, 5);
+            assert_eq!(total_tokens, 3);
             assert_eq!(elapsed_millis, 400);
             assert_eq!(forward_prefill_chunck_elapsed_millis, Some(350));
             assert_eq!(completed_prefill_chunck_tokens, Some(2_048));
@@ -134,6 +150,20 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
                     expert_payload_bytes: 1_000,
                     model_core_payload_bytes: 4_000,
                     context_state_payload_bytes: 2_000,
+                    speculative_prefill_draft_memory_bytes: 0,
+                })
+            );
+            assert_eq!(
+                speculative_prefill_draft_memory_snapshot,
+                Some(WorkerMlxMemorySnapshot {
+                    source: MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
+                    active_memory_bytes: 20_000,
+                    allocator_cache_memory_bytes: 1_000,
+                    peak_memory_bytes: 22_000,
+                    expert_payload_bytes: 2_000,
+                    model_core_payload_bytes: 3_000,
+                    context_state_payload_bytes: 1_000,
+                    speculative_prefill_draft_memory_bytes: 14_000,
                 })
             );
         }
@@ -150,8 +180,8 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
             ..
         } => {
             assert_eq!(request_id, RequestId::new(742));
-            assert_eq!(processed_tokens, 5);
-            assert_eq!(total_tokens, 5);
+            assert_eq!(processed_tokens, 3);
+            assert_eq!(total_tokens, 3);
             assert_eq!(elapsed_millis, 1_000);
             assert_eq!(completed_prefill_chunck_tokens, Some(2_048));
         }
@@ -164,7 +194,7 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
         WorkerEvent::PromptWorkReuse {
             request_id: RequestId::new(742),
             prompt_work_reuse: WorkerPromptWorkReuse {
-                target_eligible_token_count: 15,
+                target_eligible_token_count: 13,
                 target_restored_token_count: 10,
                 drafter_eligible_token_count: 15,
                 drafter_restored_token_count: 10,
@@ -175,7 +205,7 @@ async fn should_report_prefill_progress_before_and_after_uncached_prompt_delta_u
         next_event(&mut supervisor_reader).await,
         WorkerEvent::Completed {
             prompt_token_count: 15,
-            cached_token_count: 10,
+            cached_token_count: 3,
             ..
         }
     ));
@@ -197,6 +227,7 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
                     completed_prefill_chunck_tokens: 512,
                     prefill_optimizer_insight: None,
                     mlx_memory_telemetry: None,
+                    speculative_prefill_draft_memory_telemetry: None,
                     expert_memory_mode: None,
                     prompt_work_reuse: WorkerPromptWorkReuse::default(),
                 },
@@ -260,5 +291,89 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
         other_event => panic!("expected measured active prefill progress, got {other_event:?}"),
     }
 
+    close_worker_transport(supervisor_writer, worker_task).await;
+}
+
+#[tokio::test]
+async fn should_report_only_the_confirmed_active_prompt_processing_phase() {
+    let engine_worker = EngineBackedWorker::new(
+        ScriptedChatProcessor::with_prompt_token_count(16),
+        ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
+            0,
+            vec![
+                GeneratedToken::PromptProcessingPhaseStarted {
+                    prompt_processing_phase: WorkerPromptProcessingPhase::Drafter,
+                    total_token_count: 16,
+                },
+                GeneratedToken::PrefillProgress {
+                    processed_token_count: 8,
+                    elapsed_millis: 400,
+                    forward_prefill_chunck_elapsed_millis: 350,
+                    completed_prefill_chunck_tokens: 8,
+                    prefill_optimizer_insight: None,
+                    mlx_memory_telemetry: None,
+                    speculative_prefill_draft_memory_telemetry: None,
+                    expert_memory_mode: None,
+                    prompt_work_reuse: WorkerPromptWorkReuse::default(),
+                },
+                GeneratedToken::TokenId {
+                    token_id: 1,
+                    is_reasoning_token: false,
+                    expert_memory_mode: None,
+                    mlx_memory_telemetry: None,
+                    generation_finalization: None,
+                },
+            ],
+        ),
+    );
+    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
+    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let worker_task = tokio::spawn(async move {
+        engine_worker
+            .run(worker_reader_transport, worker_writer_transport)
+            .await
+    });
+
+    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    supervisor_writer
+        .send_command(&WorkerCommand::Generate(chat_command(744, 12)))
+        .await
+        .expect("the worker should receive a phase-aware chat request");
+
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::PrefillProgress {
+            prompt_processing_phase: WorkerPromptProcessingPhase::Target,
+            processed_tokens: 0,
+            ..
+        }
+    ));
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::PrefillProgress {
+            prompt_processing_phase: WorkerPromptProcessingPhase::Drafter,
+            processed_tokens: 0,
+            total_tokens: 16,
+            ..
+        }
+    ));
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::PrefillProgress {
+            prompt_processing_phase: WorkerPromptProcessingPhase::Target,
+            processed_tokens: 8,
+            ..
+        }
+    ));
+
+    supervisor_writer
+        .send_command(&WorkerCommand::Cancel {
+            request_id: RequestId::new(744),
+        })
+        .await
+        .expect("the phase-aware request should be cancellable");
     close_worker_transport(supervisor_writer, worker_task).await;
 }

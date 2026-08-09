@@ -91,6 +91,8 @@ where
         self.emit_persistent_prompt_cache_stats(event_writer)
             .await?;
         let cached_prompt_token_count = generation_start.cached_token_count();
+        let restored_prompt_prefix_token_count =
+            generation_start.restored_prompt_prefix_token_count();
         let initial_expert_memory_mode = generation_start.expert_memory_mode();
         if let Some(expert_memory_mode) = initial_expert_memory_mode {
             tracing::info!(
@@ -103,19 +105,23 @@ where
                 .send_event(&WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode })
                 .await?;
         }
-        let uncached_prompt_token_count =
-            prompt_token_count.saturating_sub(cached_prompt_token_count);
-        if uncached_prompt_token_count > 1 {
+        let required_prompt_processing_token_count =
+            prompt_token_count.saturating_sub(restored_prompt_prefix_token_count);
+        if required_prompt_processing_token_count > 1
+            && let Some(prompt_processing_phase) = generation_start.prompt_processing_phase()
+        {
             event_writer
                 .send_event(&WorkerEvent::PrefillProgress {
                     request_id,
+                    prompt_processing_phase,
                     processed_tokens: 0,
-                    total_tokens: uncached_prompt_token_count,
+                    total_tokens: required_prompt_processing_token_count,
                     elapsed_millis: 0,
                     forward_prefill_chunck_elapsed_millis: None,
                     completed_prefill_chunck_tokens: None,
                     prefill_optimizer_insight: None,
                     mlx_memory_snapshot: None,
+                    speculative_prefill_draft_memory_snapshot: None,
                 })
                 .await?;
         }
@@ -124,6 +130,7 @@ where
             &generation_command,
             prompt_token_count,
             cached_prompt_token_count,
+            required_prompt_processing_token_count,
             prepared_generation.request_output,
         );
         active_engine_generation.last_reported_expert_memory_mode = initial_expert_memory_mode;

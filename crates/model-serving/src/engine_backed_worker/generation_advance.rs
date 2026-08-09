@@ -221,9 +221,18 @@ where
                 completed_prefill_chunck_tokens,
                 prefill_optimizer_insight,
                 mlx_memory_telemetry,
+                speculative_prefill_draft_memory_telemetry,
                 expert_memory_mode,
                 prompt_work_reuse,
             } => {
+                if prompt_work_reuse.target_eligible_token_count > 0 {
+                    let required_target_prompt_processing_token_count = prompt_work_reuse
+                        .target_eligible_token_count
+                        .saturating_sub(prompt_work_reuse.target_restored_token_count);
+                    active_generation.required_prompt_processing_token_count =
+                        u32::try_from(required_target_prompt_processing_token_count)
+                            .unwrap_or(u32::MAX);
+                }
                 active_generation.prompt_work_reuse = prompt_work_reuse;
                 if let Some(expert_memory_mode) = expert_memory_mode
                     && active_generation.last_reported_expert_memory_mode
@@ -246,19 +255,20 @@ where
                 active_generation.prefill_elapsed_millis = active_generation
                     .prefill_elapsed_millis
                     .saturating_add(elapsed_millis);
-                let uncached_prompt_token_count = active_generation
-                    .prompt_token_count
-                    .saturating_sub(active_generation.cached_token_count);
-                if uncached_prompt_token_count == 0 {
+                let required_prompt_processing_token_count =
+                    active_generation.required_prompt_processing_token_count;
+                if required_prompt_processing_token_count == 0 {
                     return Ok(Some(active_generation));
                 }
                 event_writer
                     .send_event(&WorkerEvent::PrefillProgress {
                         request_id: active_generation.request_id,
+                        prompt_processing_phase:
+                            astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
                         processed_tokens: active_generation
                             .prefill_processed_tokens
-                            .min(uncached_prompt_token_count),
-                        total_tokens: uncached_prompt_token_count,
+                            .min(required_prompt_processing_token_count),
+                        total_tokens: required_prompt_processing_token_count,
                         elapsed_millis: active_generation.prefill_elapsed_millis,
                         forward_prefill_chunck_elapsed_millis: Some(
                             forward_prefill_chunck_elapsed_millis,
@@ -268,23 +278,40 @@ where
                             .map(to_worker_prefill_optimizer_insight)
                             .transpose()?,
                         mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
-                            astronomical_ipc_protocol::WorkerMlxMemorySnapshot {
-                                source: MlxMemorySnapshotSource::Prefill,
-                                active_memory_bytes: mlx_memory_telemetry.active_memory_bytes,
-                                allocator_cache_memory_bytes: mlx_memory_telemetry
-                                    .allocator_cache_memory_bytes,
-                                peak_memory_bytes: mlx_memory_telemetry.peak_memory_bytes,
-                                expert_payload_bytes: mlx_memory_telemetry
-                                    .active_memory_breakdown
-                                    .expert_payload_bytes,
-                                model_core_payload_bytes: mlx_memory_telemetry
-                                    .active_memory_breakdown
-                                    .model_core_payload_bytes,
-                                context_state_payload_bytes: mlx_memory_telemetry
-                                    .active_memory_breakdown
-                                    .context_state_payload_bytes,
-                            }
+                            super::output::worker_memory_snapshot(
+                                MlxMemorySnapshotSource::Prefill,
+                                mlx_memory_telemetry,
+                            )
                         }),
+                        speculative_prefill_draft_memory_snapshot:
+                            speculative_prefill_draft_memory_telemetry.map(
+                                |speculative_prefill_draft_memory_telemetry| {
+                                    super::output::worker_memory_snapshot(
+                                        MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
+                                        speculative_prefill_draft_memory_telemetry,
+                                    )
+                                },
+                            ),
+                    })
+                    .await?;
+                Ok(Some(active_generation))
+            }
+            GeneratedToken::PromptProcessingPhaseStarted {
+                prompt_processing_phase,
+                total_token_count,
+            } => {
+                event_writer
+                    .send_event(&WorkerEvent::PrefillProgress {
+                        request_id: active_generation.request_id,
+                        prompt_processing_phase,
+                        processed_tokens: 0,
+                        total_tokens: total_token_count,
+                        elapsed_millis: 0,
+                        forward_prefill_chunck_elapsed_millis: None,
+                        completed_prefill_chunck_tokens: None,
+                        prefill_optimizer_insight: None,
+                        mlx_memory_snapshot: None,
+                        speculative_prefill_draft_memory_snapshot: None,
                     })
                     .await?;
                 Ok(Some(active_generation))

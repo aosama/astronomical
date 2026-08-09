@@ -40,22 +40,25 @@ fn should_identify_the_complete_system_and_tool_preamble_as_ordinary_target_pref
         &[ChatToolDefinition {
             name: "inspect_repository".to_owned(),
             description: Some("Inspect one repository path.".to_owned()),
-            parameters_json: r#"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#
-                .to_owned(),
+            parameters_json:
+                r#"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#
+                    .to_owned(),
         }],
         false,
         &[],
     )
     .expect("a tool-bearing prompt should expose its ordinary target-prefill boundary");
 
-    let ordinary_target_prefill_control_span = rendered_prompt
-        .ordinary_target_prefill_control_span();
-    let selectable_conversation_and_generation_suffix = rendered_prompt
-        .selectable_conversation_and_generation_suffix();
+    let ordinary_target_prefill_control_span =
+        rendered_prompt.ordinary_target_prefill_control_span();
+    let selectable_conversation_and_generation_suffix =
+        rendered_prompt.selectable_conversation_and_generation_suffix();
 
     assert!(ordinary_target_prefill_control_span.starts_with("<|im_start|>system\n# Tools"));
     assert!(ordinary_target_prefill_control_span.contains("inspect_repository"));
-    assert!(ordinary_target_prefill_control_span.contains("Always use the declared repository tool."));
+    assert!(
+        ordinary_target_prefill_control_span.contains("Always use the declared repository tool.")
+    );
     assert!(ordinary_target_prefill_control_span.ends_with("<|im_end|>\n"));
     assert_eq!(
         selectable_conversation_and_generation_suffix,
@@ -82,8 +85,7 @@ fn should_identify_an_initial_system_message_without_tools_as_ordinary_target_pr
     .expect("a system-bearing prompt should expose its ordinary target-prefill boundary");
 
     assert_eq!(
-        rendered_prompt
-            .ordinary_target_prefill_control_span(),
+        rendered_prompt.ordinary_target_prefill_control_span(),
         "<|im_start|>system\nAnswer from the supplied play.<|im_end|>\n"
     );
     assert!(

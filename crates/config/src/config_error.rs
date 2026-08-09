@@ -77,9 +77,7 @@ pub enum AstronomicalConfigError {
     SpeculativePrefillTargetModelIdMustNotBeEmpty,
     #[error("speculative_prefill.minimum_prompt_tokens must be positive")]
     SpeculativePrefillMinimumPromptTokensMustBePositive,
-    #[error(
-        "speculative_prefill.keep_percentage is required when speculative prefill is enabled"
-    )]
+    #[error("speculative_prefill.keep_percentage is required when speculative prefill is enabled")]
     SpeculativePrefillKeepPercentageRequired,
     #[error("speculative_prefill.keep_percentage must be between 1 and 100")]
     SpeculativePrefillKeepPercentageOutOfRange,

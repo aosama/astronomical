@@ -121,8 +121,7 @@ fn should_require_an_explicit_keep_percentage_when_speculative_prefill_is_enable
 #[test]
 fn should_accept_the_minimum_and_maximum_explicit_keep_percentages() {
     for keep_percentage in [1_u32, 100_u32] {
-        let temporary_home_directory =
-            tempfile::tempdir().expect("temp home should be created");
+        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
         write_config(
             temporary_home_directory.path(),
             &format!(

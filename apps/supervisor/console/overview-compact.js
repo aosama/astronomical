@@ -13,6 +13,7 @@ function reconciledMlxMemorySegmentBytes(mlxMemorySnapshot, mlxMemoryCeilingByte
             expertBytes: 0,
             modelCoreBytes: 0,
             contextStateBytes: 0,
+            drafterBytes: 0,
             runtimeWorkBytes: 0,
             availableBytes: Math.max(0, mlxMemoryCeilingBytes || 0)
         };
@@ -21,18 +22,26 @@ function reconciledMlxMemorySegmentBytes(mlxMemorySnapshot, mlxMemoryCeilingByte
     const expertPayloadBytes = mlxMemorySnapshot.expert_payload_bytes || 0;
     const modelCorePayloadBytes = mlxMemorySnapshot.model_core_payload_bytes || 0;
     const contextStatePayloadBytes = mlxMemorySnapshot.context_state_payload_bytes || 0;
+    const speculativePrefillDraftMemoryBytes =
+        mlxMemorySnapshot.speculative_prefill_draft_memory_bytes || 0;
     const reconciledExpertBytes = Math.min(expertPayloadBytes, activeMemoryBytes);
     const activeAfterExperts = Math.max(0, activeMemoryBytes - reconciledExpertBytes);
     const reconciledModelCoreBytes = Math.min(modelCorePayloadBytes, activeAfterExperts);
     const activeAfterModelCore = Math.max(0, activeAfterExperts - reconciledModelCoreBytes);
     const reconciledContextStateBytes = Math.min(contextStatePayloadBytes, activeAfterModelCore);
-    const reconciledRuntimeWorkBytes = Math.max(0, activeAfterModelCore - reconciledContextStateBytes);
+    const activeAfterContextState = Math.max(0, activeAfterModelCore - reconciledContextStateBytes);
+    const reconciledDrafterBytes = Math.min(
+        speculativePrefillDraftMemoryBytes,
+        activeAfterContextState
+    );
+    const reconciledRuntimeWorkBytes = Math.max(0, activeAfterContextState - reconciledDrafterBytes);
     const availableBytes = Math.max(0, mlxMemoryCeilingBytes - activeMemoryBytes);
     return {
         activeMemoryBytes,
         expertBytes: reconciledExpertBytes,
         modelCoreBytes: reconciledModelCoreBytes,
         contextStateBytes: reconciledContextStateBytes,
+        drafterBytes: reconciledDrafterBytes,
         runtimeWorkBytes: reconciledRuntimeWorkBytes,
         availableBytes
     };
@@ -52,6 +61,7 @@ function renderCompactMlxMemory(statusDocument) {
     setCompactMlxSegmentWidths(
         reconciledMemorySegments.expertBytes,
         reconciledMemorySegments.modelCoreBytes,
+        reconciledMemorySegments.drafterBytes,
         reconciledMemorySegments.contextStateBytes,
         reconciledMemorySegments.runtimeWorkBytes,
         reconciledMemorySegments.availableBytes,
@@ -79,9 +89,10 @@ function renderCompactMemoryPressure(memoryPressureState) {
     pressureStateElement.dataset.pressureState = pressurePresentation.state;
 }
 
-function setCompactMlxSegmentWidths(expertBytes, modelCoreBytes, contextStateBytes, runtimeWorkBytes, availableBytes, ceilingBytes) {
+function setCompactMlxSegmentWidths(expertBytes, modelCoreBytes, drafterBytes, contextStateBytes, runtimeWorkBytes, availableBytes, ceilingBytes) {
     setMlxSegmentWidth("compact-mem-seg-experts", expertBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-model-core", modelCoreBytes, ceilingBytes);
+    setMlxSegmentWidth("compact-mem-seg-drafter", drafterBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-context-state", contextStateBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-runtime-work", runtimeWorkBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-available", availableBytes, ceilingBytes);

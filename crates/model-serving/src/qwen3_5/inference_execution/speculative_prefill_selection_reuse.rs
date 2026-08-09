@@ -4,9 +4,9 @@ use crate::{PerformanceCounter, PerformanceOperation};
 #[cfg(feature = "direct-mlx")]
 use super::Qwen3_5EngineState;
 #[cfg(feature = "direct-mlx")]
-use super::speculative_prefill_failure::configured_speculative_prefill_failure;
-#[cfg(feature = "direct-mlx")]
 use super::engine_request::Qwen3_5EngineRequest;
+#[cfg(feature = "direct-mlx")]
+use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_store::Qwen3_5SpeculativePrefillStoreKey;
 

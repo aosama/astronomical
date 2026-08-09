@@ -2,7 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, SpeculativePrefillRuntimeState,
-    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerInsight, WorkerPromptWorkReuse,
+    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerInsight,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 use tokio::time::Instant;
 
@@ -65,6 +66,7 @@ impl WorkerActivity {
 pub enum ActiveRequestProgress {
     /// Accumulated prompt-processing progress for the active request.
     Prefill {
+        prompt_processing_phase: WorkerPromptProcessingPhase,
         processed_tokens: u32,
         total_tokens: u32,
         /// Supervisor wall-clock origin used only for live status presentation.
@@ -168,7 +170,7 @@ pub struct WorkerHealthSnapshot {
     pub speculative_prefill_unavailable_reason: Option<String>,
     /// Configured draft model identity reported by the worker.
     pub speculative_prefill_draft_model_id: Option<String>,
-    /// Validated resident draft revision reported by the worker.
+    /// Validated request-scoped draft revision reported by the worker.
     pub speculative_prefill_draft_model_revision: Option<String>,
     /// Latest persistent prompt-cache observability stats from the worker.
     pub persistent_prompt_cache_stats: Option<WorkerEvent>,

@@ -22,8 +22,9 @@ pub use protocol_message::{
     SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerLogLevel,
     WorkerMlxMemorySnapshot, WorkerPrefillChunckSizingPolicy,
     WorkerPrefillOptimizerCandidateEvidence, WorkerPrefillOptimizerContext,
-    WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight, WorkerPromptWorkReuse,
-    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
+    WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse, WorkerSpeculativePrefillConfiguration,
+    WorkerStartupConfiguration,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;

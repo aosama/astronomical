@@ -29,9 +29,7 @@ impl Qwen3_5EngineState {
                     .draft_model_id
                     .clone()
                     .ok_or_else(|| {
-                        fatal_engine_error(
-                            "configured SpecPrefill has no drafter model identifier",
-                        )
+                        fatal_engine_error("configured SpecPrefill has no drafter model identifier")
                     })?,
                 loaded_draft_model_revision
                     .ok_or_else(|| {
@@ -72,8 +70,7 @@ impl Qwen3_5EngineState {
             })?;
         tracing::info!(
             target_selection_count = target_purge_outcome.speculative_prefill_selection_count,
-            target_sparse_state_count =
-                target_purge_outcome.speculative_prefill_target_state_count,
+            target_sparse_state_count = target_purge_outcome.speculative_prefill_target_state_count,
             drafter_selection_count = drafter_purge_outcome.speculative_prefill_selection_count,
             drafter_sparse_state_count =
                 drafter_purge_outcome.speculative_prefill_target_state_count,

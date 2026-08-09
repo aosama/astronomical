@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
-    ChatToolDefinition, RequestId,
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition,
+    RequestId,
 };
 use astronomical_model_serving::{
     PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5OutputEvent,
@@ -186,7 +186,10 @@ async fn should_complete_the_tool_journey_without_any_ssd_activity_when_caching_
         let (draft_model_directory, draft_model_id) =
             super::configured_speculative_prefill_draft_model_artifact(&target_model_directory);
         let validated_target_artifact = Qwen3_5ArtifactValidator::new()
-            .validate(&target_model_directory, REPRESENTATIVE_TOOL_OUTPUT_TOKEN_COUNT as u32)
+            .validate(
+                &target_model_directory,
+                REPRESENTATIVE_TOOL_OUTPUT_TOKEN_COUNT as u32,
+            )
             .expect("the cache-disabled target artifact should validate");
         let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_target_artifact)
             .expect("the cache-disabled tokenizer should load");
@@ -199,7 +202,9 @@ async fn should_complete_the_tool_journey_without_any_ssd_activity_when_caching_
         );
         let inaccessible_cache_sentinel_directory = tempfile::tempdir()
             .expect("the cache-disabled journey should create an untouched sentinel directory");
-        let cache_sentinel_path = inaccessible_cache_sentinel_directory.path().join("sentinel");
+        let cache_sentinel_path = inaccessible_cache_sentinel_directory
+            .path()
+            .join("sentinel");
         std::fs::write(&cache_sentinel_path, b"unchanged")
             .expect("the cache-disabled sentinel should be written");
         let mlx_memory_limits =
@@ -324,7 +329,10 @@ pub(super) fn prepare_representative_tool_prompt(
     let mut prompt_token_ids =
         complete_prompt_token_ids[..retained_prompt_prefix_token_count].to_vec();
     prompt_token_ids.extend_from_slice(assistant_suffix_token_ids);
-    assert_eq!(prompt_token_ids.len(), REPRESENTATIVE_TOOL_PROMPT_TOKEN_COUNT);
+    assert_eq!(
+        prompt_token_ids.len(),
+        REPRESENTATIVE_TOOL_PROMPT_TOKEN_COUNT
+    );
     RepresentativePrompt {
         prompt_token_ids,
         image_pad_token_id: tokenizer.image_pad_token_id(),
@@ -350,7 +358,11 @@ pub(super) fn parse_one_tool_call(
     generated_token_ids: &[u32],
 ) -> Qwen3_5ToolCall {
     let tool_calls = parse_tool_calls(tokenizer, declared_tools, generated_token_ids);
-    assert_eq!(tool_calls.len(), 1, "the model should emit exactly one declared tool call");
+    assert_eq!(
+        tool_calls.len(),
+        1,
+        "the model should emit exactly one declared tool call"
+    );
     tool_calls
         .into_iter()
         .next()
@@ -423,29 +435,26 @@ fn assert_representative_tool_prompt_selection_boundaries(
         .checked_sub(1)
         .expect("the tool prompt must contain its final generation-kickoff token");
     let selectable_conversation_token_count = final_generation_kickoff_position
-        .checked_sub(
-            representative_tool_prompt.ordinary_target_prefill_control_span_token_count,
-        )
+        .checked_sub(representative_tool_prompt.ordinary_target_prefill_control_span_token_count)
         .expect("the selectable conversation must follow the complete control span");
     let selectable_conversation_chunck_count =
         selectable_conversation_token_count.div_ceil(SELECTION_CHUNCK_TOKEN_COUNT);
-    let percentage_derived_conversation_chunck_budget =
-        (selectable_conversation_chunck_count * SPECULATIVE_PREFILL_KEEP_PERCENTAGE as usize)
-            .div_ceil(100);
-    let mandatory_trailing_start_position = selectable_conversation_token_count
-        .saturating_sub(MANDATORY_TRAILING_TOKEN_COUNT);
+    let percentage_derived_conversation_chunck_budget = (selectable_conversation_chunck_count
+        * SPECULATIVE_PREFILL_KEEP_PERCENTAGE as usize)
+        .div_ceil(100);
+    let mandatory_trailing_start_position =
+        selectable_conversation_token_count.saturating_sub(MANDATORY_TRAILING_TOKEN_COUNT);
     let first_mandatory_trailing_chunck_index =
         mandatory_trailing_start_position / SELECTION_CHUNCK_TOKEN_COUNT;
-    let mandatory_trailing_chunck_count = selectable_conversation_chunck_count
-        .saturating_sub(first_mandatory_trailing_chunck_index);
-    let retained_conversation_chunck_count = percentage_derived_conversation_chunck_budget
-        .max(mandatory_trailing_chunck_count);
-    let final_selectable_chunck_token_count = selectable_conversation_token_count
-        .saturating_sub(
-            selectable_conversation_chunck_count
-                .saturating_sub(1)
-                .saturating_mul(SELECTION_CHUNCK_TOKEN_COUNT),
-        );
+    let mandatory_trailing_chunck_count =
+        selectable_conversation_chunck_count.saturating_sub(first_mandatory_trailing_chunck_index);
+    let retained_conversation_chunck_count =
+        percentage_derived_conversation_chunck_budget.max(mandatory_trailing_chunck_count);
+    let final_selectable_chunck_token_count = selectable_conversation_token_count.saturating_sub(
+        selectable_conversation_chunck_count
+            .saturating_sub(1)
+            .saturating_mul(SELECTION_CHUNCK_TOKEN_COUNT),
+    );
     let expected_selected_conversation_token_count = retained_conversation_chunck_count
         .saturating_sub(1)
         .saturating_mul(SELECTION_CHUNCK_TOKEN_COUNT)

@@ -316,6 +316,7 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 2px s
 .mlx-segment { height: 100%; transition: width 300ms ease; }
 .mlx-segment-experts { background: #0a84ff; }
 .mlx-segment-model-core { background: #56b4e9; }
+.mlx-segment-drafter { background: #e69f00; }
 .mlx-segment-context-state { background: #f0e442; }
 .mlx-segment-runtime-work { background: #a78bfa; }
 .mlx-segment-available { background: rgba(154, 163, 192, 0.25); }

@@ -164,6 +164,7 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
     if let Some(progress) = worker_health_snapshot.active_request_progress {
         match progress {
             ActiveRequestProgress::Prefill {
+                prompt_processing_phase,
                 processed_tokens,
                 total_tokens,
                 elapsed_millis,
@@ -174,7 +175,7 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                     u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
                 );
                 status_json["progress"] = serde_json::json!({
-                    "phase": "prefill",
+                    "phase": prompt_processing_phase,
                     "processed_tokens": processed_tokens,
                     "total_tokens": total_tokens,
                     "elapsed_ms": live_elapsed_millis,

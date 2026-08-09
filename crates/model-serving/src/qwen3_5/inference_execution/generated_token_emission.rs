@@ -68,7 +68,7 @@ impl Qwen3_5EngineState {
                             &active_request.request_decoder_state,
                             active_request.additional_context_state_payload_bytes(),
                             mlx_active_memory_bytes,
-                            self.speculative_prefill_draft_model_payload_bytes(),
+                            0,
                         ),
                     ),
                 )

@@ -62,11 +62,9 @@ fn should_round_trip_the_longest_selection_bound_sparse_target_state_for_a_follo
         )
         .expect("the sparse target state should save");
     drop(target_cache_store);
-    let target_cache_store = PersistentPromptCacheDiskStore::open(
-        target_cache_store_config,
-        target_model_contract,
-    )
-    .expect("the target cache store should reopen after a process boundary");
+    let target_cache_store =
+        PersistentPromptCacheDiskStore::open(target_cache_store_config, target_model_contract)
+            .expect("the target cache store should reopen after a process boundary");
 
     let restored_target_state = target_cache_store
         .load_longest_speculative_prefill_target_state(
@@ -235,7 +233,10 @@ fn should_purge_only_obsolete_sparse_target_state_for_the_active_pairing() {
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[1, 1, 2, 2])
         .expect("the target decoder state fixture should upload");
     for (target_state_contract, prompt_token_ids) in [
-        (&obsolete_active_pairing_contract, &obsolete_prompt_token_ids),
+        (
+            &obsolete_active_pairing_contract,
+            &obsolete_prompt_token_ids,
+        ),
         (
             &preserved_unrelated_pairing_contract,
             &preserved_prompt_token_ids,
