@@ -8,7 +8,7 @@ fn should_accept_a_mixed_architecture_neutral_decoder_cache_layout() {
     let decoder_cache_layout = DecoderCacheLayout::new(vec![
         DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
             "linear.convolution",
-            DecoderCacheTensorDtype::BFloat16,
+            DecoderCacheTensorDtype::Float16,
             vec![1, 3, 8],
         )),
         DecoderCacheLayerLayout::composite(vec![
