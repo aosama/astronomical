@@ -73,15 +73,23 @@ struct OrbitalTelemetryPopover: View {
 
   var body: some View {
     let statusDocument = telemetryStore.statusDocument
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top) {
         VStack(alignment: .leading, spacing: 4) {
           Text("ASTRONOMICAL").font(PopoverTypography.boldCaption).tracking(2).foregroundStyle(
             .cyan)
-          Text(statusDocument.readyModelIdentifier ?? "No model resident").font(
-            PopoverTypography.headline
-          )
-          .lineLimit(1)
+          HStack(alignment: .center, spacing: 6) {
+            Text(statusDocument.readyModelIdentifier ?? "No model resident")
+              .font(PopoverTypography.headline)
+              .lineLimit(1)
+            if statusDocument.mtpRuntimeState == "active" {
+              Text("MTP")
+                .font(PopoverTypography.semiboldCaption)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.cyan.opacity(0.2), in: Capsule())
+            }
+          }
         }
         Spacer()
         Text(statusDocument.phaseTitle)
@@ -90,8 +98,10 @@ struct OrbitalTelemetryPopover: View {
           .background(
             statusDocument.isActive ? .cyan.opacity(0.2) : .secondary.opacity(0.15), in: Capsule())
       }
-      metricRow("Size on disk", statusDocument.modelDiskSizeTitle)
-      metricRow("Generation mode", statusDocument.mtpRuntimeStateTitle)
+      HStack(alignment: .top, spacing: 16) {
+        summaryMetric("Size on disk", statusDocument.modelDiskSizeTitle)
+        summaryMetric("Residency", statusDocument.modelFootprintTitle)
+      }
       if let mtpUnavailableReason = statusDocument.mtpUnavailableReason {
         Text(mtpUnavailableReason)
           .font(.caption)
@@ -99,7 +109,6 @@ struct OrbitalTelemetryPopover: View {
           .lineLimit(2)
           .frame(maxWidth: .infinity, alignment: .trailing)
       }
-      metricRow("Residency", statusDocument.modelFootprintTitle)
       Divider()
       metricRow("Flight", statusDocument.flightTitle)
       ProgressView(
@@ -168,6 +177,14 @@ struct OrbitalTelemetryPopover: View {
       Spacer()
       Text(metricText).font(PopoverTypography.monospacedBody)
     }
+  }
+
+  private func summaryMetric(_ metricLabel: String, _ metricText: String) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(metricLabel).font(.caption).foregroundStyle(.secondary)
+      Text(metricText).font(PopoverTypography.monospacedBody).lineLimit(1)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   @ViewBuilder
