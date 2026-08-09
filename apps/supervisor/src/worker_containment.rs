@@ -100,9 +100,11 @@ async fn cancel_worker_request(
                     request_id: failed_request_id,
                     ..
                 } if failed_request_id == request_id => return Ok(()),
-                _ => {
+                unexpected_worker_event => {
                     return Err(WorkerControlError::UnexpectedCancellationEvent {
                         request_id: request_id.value(),
+                        unexpected_worker_event_summary: unexpected_worker_event
+                            .diagnostic_summary(),
                     });
                 }
             }
@@ -120,15 +122,33 @@ pub(super) async fn contain_worker_failure(
     active_generation: &mut Option<ActiveGeneration>,
     operation_error: WorkerControlError,
 ) {
-    tracing::error!(error = %operation_error, "worker failed; terminating local worker process");
+    let worker_process_id = worker_process.process_id();
+    tracing::error!(
+        error = %operation_error,
+        worker_process_id = ?worker_process_id,
+        "worker failed; terminating local worker process"
+    );
     fail_active_generation(
         active_generation,
         ChatGenerationStreamErrorCode::WorkerUnavailable,
     );
     publish_activity(health_snapshot, WorkerActivity::Idle);
     clear_active_request_progress(health_snapshot);
-    if let Err(cleanup_error) = worker_process.force_terminate().await {
-        tracing::error!(error = %cleanup_error, "failed to terminate local worker process");
+    match worker_process.force_terminate().await {
+        Ok(worker_termination_outcome) => {
+            tracing::error!(
+                worker_process_id = ?worker_process_id,
+                worker_termination_outcome = ?worker_termination_outcome,
+                "local worker process terminated after failure"
+            );
+        }
+        Err(cleanup_error) => {
+            tracing::error!(
+                error = %cleanup_error,
+                worker_process_id = ?worker_process_id,
+                "failed to terminate local worker process"
+            );
+        }
     }
     publish_health(
         health_snapshot,

@@ -4,7 +4,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerHealthStatus,
+    ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerControlError, WorkerHealthStatus,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -80,6 +80,44 @@ async fn should_keep_worker_ready_when_prefill_cancellation_acknowledgement_is_d
         .shutdown()
         .await
         .expect("shutdown should succeed");
+}
+
+#[tokio::test]
+async fn should_record_the_unexpected_event_that_contains_a_cancellation_mismatch() {
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+        .expect("Cargo should provide the test worker path");
+    let worker_executor = launch_test_executor(worker_executable_path)
+        .await
+        .expect("the worker should launch");
+    wait_for_health(&worker_executor, WorkerHealthStatus::Ready).await;
+    let stream_receiver = worker_executor
+        .start_chat_generation(command_for_model(
+            "astronomical/unexpected-cancellation-event-fixture",
+        ))
+        .await
+        .expect("the fixture should start the cancellable request");
+
+    drop(stream_receiver);
+    timeout(
+        Duration::from_secs(5),
+        wait_for_health(&worker_executor, WorkerHealthStatus::Unavailable),
+    )
+    .await
+    .expect("the unexpected cancellation event should contain the worker");
+
+    let diagnostic_error = WorkerControlError::UnexpectedCancellationEvent {
+        request_id: 1,
+        unexpected_worker_event_summary: "completed request_id=2".to_owned(),
+    };
+    assert_eq!(
+        diagnostic_error.to_string(),
+        "worker emitted an unexpected event while cancelling request 1: completed request_id=2"
+    );
+
+    worker_executor
+        .shutdown()
+        .await
+        .expect("shutdown after cancellation containment should be idempotent");
 }
 
 fn command_for_model(model_id: &str) -> ChatGenerationCommand {

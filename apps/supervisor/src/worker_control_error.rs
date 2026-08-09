@@ -80,10 +80,14 @@ pub enum WorkerControlError {
     TerminateWorker(#[source] io::Error),
 
     /// The worker emitted an unexpected event while cancellation cleanup was waiting for an ack.
-    #[error("worker emitted an unexpected event while cancelling request {request_id}")]
+    #[error(
+        "worker emitted an unexpected event while cancelling request {request_id}: {unexpected_worker_event_summary}"
+    )]
     UnexpectedCancellationEvent {
         /// The request being cancelled.
         request_id: u64,
+        /// A bounded event-kind and request-correlation summary without model payloads.
+        unexpected_worker_event_summary: String,
     },
 
     /// The worker closed its IPC output before the supervisor received the expected event.
