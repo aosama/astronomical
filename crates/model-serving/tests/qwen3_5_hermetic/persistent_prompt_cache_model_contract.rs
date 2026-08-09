@@ -1,6 +1,7 @@
 use astronomical_model_serving::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    PersistentPromptCacheModelContract, qwen3_5_decoder_cache_layout,
+    DecoderCacheTensorDtype, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
+    ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentPromptCacheModelContract,
+    qwen3_5_decoder_cache_layout,
 };
 
 use crate::common::qwen3_5_moe::{
@@ -72,5 +73,41 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_meta
             .decoder_cache_layout()
             .boundary_tensor_count(),
         60
+    );
+    let decoder_cache_layout = persistent_prompt_cache_model_contract.decoder_cache_layout();
+    assert!(
+        decoder_cache_layout
+            .sequence_tensor_layouts()
+            .iter()
+            .all(|tensor_layout| tensor_layout.tensor_layout().dtype()
+                == DecoderCacheTensorDtype::Float32)
+    );
+    let boundary_tensor_layouts = decoder_cache_layout.boundary_tensor_layouts();
+    assert_eq!(
+        boundary_tensor_layouts
+            .iter()
+            .filter(|tensor_layout| {
+                tensor_layout.tensor_layout().dtype() == DecoderCacheTensorDtype::Float16
+            })
+            .count(),
+        30
+    );
+    assert_eq!(
+        boundary_tensor_layouts
+            .iter()
+            .filter(|tensor_layout| {
+                tensor_layout.tensor_layout().dtype() == DecoderCacheTensorDtype::Float32
+            })
+            .count(),
+        30
+    );
+    assert_eq!(
+        decoder_cache_layout
+            .persistent_prompt_cache_block_payload_byte_count(2_048)
+            .expect("the certified prompt-cache payload byte count should fit usize"),
+        decoder_cache_layout
+            .boundary_snapshot_payload_byte_count()
+            .expect("the certified boundary payload byte count should fit usize")
+            + 2_048 * 40_960,
     );
 }

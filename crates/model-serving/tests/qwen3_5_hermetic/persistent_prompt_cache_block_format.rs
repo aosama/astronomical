@@ -4,14 +4,14 @@ use std::path::Path;
 
 use astronomical_model_serving::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    PersistentPromptCacheBlockHeader, PersistentPromptCacheModelContract,
-    qwen3_5_decoder_cache_layout,
+    PersistentPromptCacheBlockError, PersistentPromptCacheBlockHeader,
+    PersistentPromptCacheModelContract, qwen3_5_decoder_cache_layout,
 };
 
 use crate::common::qwen3_5_moe::certified_ornith_config;
 
 const EXPECTED_PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT: usize = 2_048;
-const EXPECTED_PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "8";
+const EXPECTED_PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "9";
 
 #[test]
 fn should_accept_a_well_formed_ornith_persistent_prompt_cache_kv_block_header() {
@@ -54,6 +54,36 @@ fn should_accept_a_well_formed_ornith_persistent_prompt_cache_kv_block_header() 
         .len()
         * 2;
     assert_eq!(kv_block_header.tensor_count(), expected_kv_tensor_count);
+}
+
+#[test]
+fn should_reject_a_kv_block_whose_attention_state_is_not_float32() {
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let persistent_prompt_cache_kv_block_path =
+        temporary_directory.path().join("kv-bfloat16.safetensors");
+    write_synthetic_persistent_prompt_cache_file(
+        &persistent_prompt_cache_kv_block_path,
+        SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention,
+        |_| false,
+    );
+
+    let persistent_prompt_cache_kv_block_file = File::open(&persistent_prompt_cache_kv_block_path)
+        .expect("the test should reopen the synthetic BF16 KV block");
+    let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
+        &persistent_prompt_cache_kv_block_file,
+        &persistent_prompt_cache_kv_block_path,
+        &persistent_prompt_cache_model_contract(),
+    )
+    .expect_err("Qwen attention cache state must retain its F32 execution dtype");
+    assert!(matches!(
+        rejection,
+        PersistentPromptCacheBlockError::TensorDtypeMismatch {
+            expected_dtype: "F32",
+            ref actual_dtype,
+            ..
+        } if actual_dtype == "BF16"
+    ));
 }
 
 fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelContract {
@@ -112,6 +142,38 @@ fn should_accept_a_well_formed_ornith_persistent_prompt_cache_recurrent_snapshot
         recurrent_snapshot_header.tensor_count(),
         expected_recurrent_tensor_count
     );
+}
+
+#[test]
+fn should_reject_a_recurrent_snapshot_whose_convolution_state_is_not_float16() {
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let persistent_prompt_cache_recurrent_snapshot_path = temporary_directory
+        .path()
+        .join("snapshot-bfloat16.safetensors");
+    write_synthetic_persistent_prompt_cache_file(
+        &persistent_prompt_cache_recurrent_snapshot_path,
+        SyntheticPersistentPromptCacheTensorLayout::RecurrentWithBfloat16Convolution,
+        |_| false,
+    );
+
+    let persistent_prompt_cache_recurrent_snapshot_file =
+        File::open(&persistent_prompt_cache_recurrent_snapshot_path)
+            .expect("the test should reopen the synthetic BF16 recurrent snapshot");
+    let rejection = PersistentPromptCacheBlockHeader::read_recurrent_snapshot_from_file(
+        &persistent_prompt_cache_recurrent_snapshot_file,
+        &persistent_prompt_cache_recurrent_snapshot_path,
+        &persistent_prompt_cache_model_contract(),
+    )
+    .expect_err("Qwen convolution cache state must retain its F16 execution dtype");
+    assert!(matches!(
+        rejection,
+        PersistentPromptCacheBlockError::TensorDtypeMismatch {
+            expected_dtype: "F16",
+            ref actual_dtype,
+            ..
+        } if actual_dtype == "BF16"
+    ));
 }
 
 #[test]
@@ -264,7 +326,7 @@ fn should_reject_format_four_state_after_execution_math_changes() {
 
     let rejection_text = rejection.to_string();
     assert!(
-        rejection_text.contains("format version is 4, expected 8"),
+        rejection_text.contains("format version is 4, expected 9"),
         "format-four state should fail with an actionable compatibility error: {rejection_text}"
     );
 }
@@ -295,7 +357,7 @@ fn should_reject_format_seven_state_after_expert_residency_correction() {
 
     let rejection_text = rejection.to_string();
     assert!(
-        rejection_text.contains("format version is 7, expected 8"),
+        rejection_text.contains("format version is 7, expected 9"),
         "format-seven state should fail with an actionable compatibility error: {rejection_text}"
     );
 }
@@ -303,7 +365,9 @@ fn should_reject_format_seven_state_after_expert_residency_correction() {
 #[derive(Clone, Copy)]
 enum SyntheticPersistentPromptCacheTensorLayout {
     KvOnly,
+    KvWithBfloat16Attention,
     RecurrentOnly,
+    RecurrentWithBfloat16Convolution,
     KvAndRecurrent,
 }
 
@@ -407,6 +471,7 @@ fn synthetic_persistent_prompt_cache_tensor_entries(
             && matches!(
                 synthetic_tensor_layout,
                 SyntheticPersistentPromptCacheTensorLayout::KvOnly
+                    | SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention
                     | SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent
             )
         {
@@ -423,9 +488,26 @@ fn synthetic_persistent_prompt_cache_tensor_entries(
                 ];
                 tensor_entries.push((
                     tensor_name,
-                    "BF16",
+                    if matches!(
+                        synthetic_tensor_layout,
+                        SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention
+                    ) {
+                        "BF16"
+                    } else {
+                        "F32"
+                    },
                     shape.clone(),
-                    tensor_byte_count(&shape, 2),
+                    tensor_byte_count(
+                        &shape,
+                        if matches!(
+                            synthetic_tensor_layout,
+                            SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention
+                        ) {
+                            2
+                        } else {
+                            4
+                        },
+                    ),
                 ));
             }
         }
@@ -433,6 +515,7 @@ fn synthetic_persistent_prompt_cache_tensor_entries(
             && matches!(
                 synthetic_tensor_layout,
                 SyntheticPersistentPromptCacheTensorLayout::RecurrentOnly
+                    | SyntheticPersistentPromptCacheTensorLayout::RecurrentWithBfloat16Convolution
                     | SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent
             )
         {
@@ -447,8 +530,22 @@ fn synthetic_persistent_prompt_cache_tensor_entries(
                 linear_value_head_dimension,
                 linear_key_head_dimension,
             ];
+            let convolution_dtype = match synthetic_tensor_layout {
+                SyntheticPersistentPromptCacheTensorLayout::RecurrentWithBfloat16Convolution => {
+                    "BF16"
+                }
+                SyntheticPersistentPromptCacheTensorLayout::RecurrentOnly
+                | SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent => "F16",
+                SyntheticPersistentPromptCacheTensorLayout::KvOnly
+                | SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention => "F16",
+            };
             for (tensor_suffix, dtype, shape, element_size_bytes) in [
-                ("linear.convolution", "BF16", convolution_shape, 2_u64),
+                (
+                    "linear.convolution",
+                    convolution_dtype,
+                    convolution_shape,
+                    2_u64,
+                ),
                 (
                     "linear.gated_delta_recurrent",
                     "F32",

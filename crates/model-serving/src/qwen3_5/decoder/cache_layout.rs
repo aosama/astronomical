@@ -43,13 +43,13 @@ pub fn qwen3_5_decoder_cache_layout(
                 DecoderCacheLayerLayout::append_only_attention(
                     DecoderCacheTensorLayout::sequence(
                         QWEN_ATTENTION_KEYS_TENSOR_ROLE,
-                        DecoderCacheTensorDtype::BFloat16,
+                        DecoderCacheTensorDtype::Float32,
                         full_attention_key_value_dimensions.clone(),
                         2,
                     ),
                     DecoderCacheTensorLayout::sequence(
                         QWEN_ATTENTION_VALUES_TENSOR_ROLE,
-                        DecoderCacheTensorDtype::BFloat16,
+                        DecoderCacheTensorDtype::Float32,
                         full_attention_key_value_dimensions.clone(),
                         2,
                     ),
@@ -59,7 +59,7 @@ pub fn qwen3_5_decoder_cache_layout(
                 DecoderCacheLayerLayout::composite(vec![
                     DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
                         QWEN_CONVOLUTION_TENSOR_ROLE,
-                        DecoderCacheTensorDtype::BFloat16,
+                        DecoderCacheTensorDtype::Float16,
                         linear_convolution_dimensions.clone(),
                     )),
                     DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
