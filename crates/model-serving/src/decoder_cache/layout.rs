@@ -5,6 +5,7 @@ use super::layout_error::DecoderCacheLayoutError;
 /// Scalar type required by one persisted decoder-cache tensor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DecoderCacheTensorDtype {
+    Float16,
     BFloat16,
     Float32,
 }
@@ -14,6 +15,7 @@ impl DecoderCacheTensorDtype {
     #[must_use]
     pub const fn scalar_byte_count(self) -> usize {
         match self {
+            Self::Float16 => 2,
             Self::BFloat16 => 2,
             Self::Float32 => 4,
         }

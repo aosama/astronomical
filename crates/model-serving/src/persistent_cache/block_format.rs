@@ -32,7 +32,9 @@ use super::persistent_safetensors_header::{
 /// shape-safe variable-length compiled decay execution.
 /// Version 8: invalidates state produced before the complete-layer rollback
 /// corrected macOS-pressure expert residency.
-pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "8";
+/// Version 9: requires exact F32 attention, F16 convolution, and F32
+/// gated-delta recurrent state so every restored block preserves execution math.
+pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "9";
 
 /// Parsed and validated metadata for one Qwen3.5-MoE persistent prompt-cache block on disk.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -287,6 +289,7 @@ fn validate_expected_tensor_layout(
         }
     })?;
     let expected_dtype = match expected_tensor_layout.tensor_layout().dtype() {
+        DecoderCacheTensorDtype::Float16 => "F16",
         DecoderCacheTensorDtype::BFloat16 => "BF16",
         DecoderCacheTensorDtype::Float32 => "F32",
     };

@@ -207,6 +207,7 @@ async fn generate_one_token(
                 );
                 completed_prefill_chunck_token_counts.push(completed_prefill_chunck_tokens);
             }
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
                 panic!("the visual request ended before producing one token");
             }

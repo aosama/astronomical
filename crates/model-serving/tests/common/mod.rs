@@ -22,6 +22,21 @@ pub(crate) mod qwen3_5;
 pub(crate) mod qwen3_5_moe;
 
 #[allow(dead_code)]
+pub(crate) fn resolve_model_artifact_qualification_mlx_memory_ceiling_bytes(
+    configured_mlx_memory_ceiling_bytes: Option<u64>,
+    machine_mlx_memory_ceiling_bytes: usize,
+) -> usize {
+    configured_mlx_memory_ceiling_bytes.map_or(
+        machine_mlx_memory_ceiling_bytes,
+        |configured_mlx_memory_ceiling_bytes| {
+            usize::try_from(configured_mlx_memory_ceiling_bytes)
+                .unwrap_or(usize::MAX)
+                .min(machine_mlx_memory_ceiling_bytes)
+        },
+    )
+}
+
+#[allow(dead_code)]
 pub(crate) const SYNTHETIC_RED_PNG_BYTES: &[u8] = &[
     137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0,
     0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240, 31, 0,
@@ -61,6 +76,8 @@ pub(crate) async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> MlxMemoryLimits {
+    let astronomical_config = AstronomicalConfig::load_from_default_location()
+        .expect("the standard Astronomical configuration should load for model qualification");
     let mut sysctl_command = Command::new(SYSCTL_EXECUTABLE_PATH);
     sysctl_command
         .arg("-n")
@@ -91,7 +108,7 @@ pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> M
         .unwrap_or_else(|parse_error| {
             panic!("{IOGPU_WIRED_LIMIT_SYSCTL_KEY} should be an unsigned integer: {parse_error}")
         });
-    let gpu_wired_memory_limit_bytes = if wired_limit_mebibytes == 0 {
+    let machine_mlx_memory_ceiling_bytes = if wired_limit_mebibytes == 0 {
         maximum_recommended_gpu_working_set_size_bytes()
             .expect("MLX should expose the default GPU wired-memory working set")
     } else {
@@ -99,12 +116,27 @@ pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> M
             .checked_mul(BYTES_PER_MEBIBYTE)
             .expect("the GPU wired-memory limit should fit in usize bytes")
     };
+    let configured_mlx_memory_ceiling_bytes = astronomical_config
+        .maximum_mlx_memory_bytes()
+        .expect("the configured model-artifact MLX memory ceiling should be valid");
+    let effective_mlx_memory_ceiling_bytes =
+        resolve_model_artifact_qualification_mlx_memory_ceiling_bytes(
+            configured_mlx_memory_ceiling_bytes,
+            machine_mlx_memory_ceiling_bytes,
+        );
     eprintln!(
-        "[model-artifact-memory] gpu_wired_memory_limit_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
-        gpu_wired_memory_limit_bytes, gpu_wired_memory_limit_bytes, gpu_wired_memory_limit_bytes
+        "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
+        machine_mlx_memory_ceiling_bytes,
+        configured_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
     );
-    MlxMemoryLimits::new(gpu_wired_memory_limit_bytes, gpu_wired_memory_limit_bytes)
-        .expect("the machine-derived model-artifact MLX memory limits should be valid")
+    MlxMemoryLimits::new(
+        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
+    )
+    .expect("the machine-derived model-artifact MLX memory limits should be valid")
 }
 
 #[cfg(feature = "direct-mlx")]
