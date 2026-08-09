@@ -119,6 +119,7 @@ dependencies = [
  "tokenizers",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

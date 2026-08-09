@@ -72,10 +72,21 @@ pub enum SpeculativePrefillRuntimeState {
     /// The user preference is disabled.
     #[default]
     Disabled,
-    /// A validated resident draft model is available for scoring.
+    /// A validated request-scoped draft model is available for scoring.
     Active,
     /// The preference is enabled but the draft model could not be used.
     Unavailable,
+}
+
+/// Model currently processing the active prompt phase.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerPromptProcessingPhase {
+    /// The target model is processing protected or selected prompt work.
+    #[default]
+    Target,
+    /// The request-scoped SpecPrefill drafter is preparing importance scores.
+    Drafter,
 }
 
 /// Lifecycle point at which the worker observed MLX allocator memory.
@@ -86,6 +97,8 @@ pub enum MlxMemorySnapshotSource {
     ModelLoaded,
     /// A prompt-processing chunk completed.
     Prefill,
+    /// A complete active-memory observation captured while request-scoped draft scoring ran.
+    SpeculativePrefillDraftScoring,
     /// One-token-ahead decode work was submitted to MLX.
     DecodeSubmitted,
     /// Request state and reclaimable allocator memory were released.
@@ -106,6 +119,8 @@ pub struct WorkerMlxMemorySnapshot {
     pub expert_payload_bytes: u64,
     pub model_core_payload_bytes: u64,
     pub context_state_payload_bytes: u64,
+    /// Complete active MLX memory attributed to the request-scoped drafter phase.
+    pub speculative_prefill_draft_memory_bytes: u64,
 }
 
 /// Why the worker's adaptive prefill optimizer requested one candidate.
@@ -311,7 +326,7 @@ pub enum WorkerEvent {
         speculative_prefill_unavailable_reason: Option<String>,
         /// Configured draft model identity when speculative prefill is enabled.
         speculative_prefill_draft_model_id: Option<String>,
-        /// Validated resident draft revision when speculative prefill is active.
+        /// Validated request-scoped draft revision when speculative prefill is active.
         speculative_prefill_draft_model_revision: Option<String>,
     },
     /// Delivers one or more ordered model outputs in a single frame.
@@ -326,6 +341,7 @@ pub enum WorkerEvent {
     /// Reports initial prompt-processing status or one completed prompt-processing chunk.
     PrefillProgress {
         request_id: RequestId,
+        prompt_processing_phase: WorkerPromptProcessingPhase,
         processed_tokens: u32,
         total_tokens: u32,
         elapsed_millis: u64,
@@ -337,6 +353,8 @@ pub enum WorkerEvent {
         prefill_optimizer_insight: Option<WorkerPrefillOptimizerInsight>,
         /// Present with completed chunks; worker-owned MLX allocator observation.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+        /// Snapshot captured while the request-scoped SpecPrefill drafter was scoring.
+        speculative_prefill_draft_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Reports generated-token progress that has not necessarily produced public output yet.
     GenerationProgress {
@@ -383,7 +401,7 @@ pub enum WorkerEvent {
         speculative_prefill_unavailable_reason: Option<String>,
         /// Configured draft model identity when speculative prefill is enabled.
         speculative_prefill_draft_model_id: Option<String>,
-        /// Validated resident draft revision when speculative prefill is active.
+        /// Validated request-scoped draft revision when speculative prefill is active.
         speculative_prefill_draft_model_revision: Option<String>,
     },
     /// Reports that a model swap failed while the worker process remained responsive.

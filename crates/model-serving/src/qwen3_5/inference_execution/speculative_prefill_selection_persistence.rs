@@ -1,18 +1,16 @@
 #[cfg(feature = "direct-mlx")]
-use crate::{
-    PerformanceCounter, PerformanceOperation, PersistentPromptCacheBlockKey, Qwen3_5ExecutionError,
-};
+use crate::{PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError};
 
 #[cfg(feature = "direct-mlx")]
 use super::super::model::Qwen3_5SpeculativePrefillDraftScoringOutcome;
 #[cfg(feature = "direct-mlx")]
 use super::Qwen3_5EngineState;
 #[cfg(feature = "direct-mlx")]
-use super::speculative_prefill_failure::configured_speculative_prefill_failure;
-#[cfg(feature = "direct-mlx")]
 use super::engine_request::Qwen3_5EngineRequest;
 #[cfg(feature = "direct-mlx")]
 use super::engine_request::Qwen3_5SpeculativePrefillFailureStageForTests;
+#[cfg(feature = "direct-mlx")]
+use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_selection::qwen3_5_merge_speculative_prefill_selection_with_image_pad_positions;
 #[cfg(feature = "direct-mlx")]
@@ -35,10 +33,10 @@ impl Qwen3_5EngineState {
         selection_store_token_key: Qwen3_5SpeculativePrefillStoreKey,
         scoring_start_position_tokens_u32: u32,
         restored_draft_prefix_token_count: usize,
-        draft_persistent_prefix_block_key: Option<PersistentPromptCacheBlockKey>,
+        draft_prompt_state_persistence_failed: bool,
     ) -> Result<(), crate::InferenceEngineError> {
         match draft_scoring_outcome {
-            Ok((absolute_selected_token_positions, mut draft_scoring_outcome)) => {
+            Ok((absolute_selected_token_positions, draft_scoring_outcome)) => {
                 let absolute_selected_token_positions = if is_visual_speculative_prefill_request {
                     let mandatory_visual_token_count = active_request.input_token_ids
                         [scoring_start_position_tokens..final_prompt_index]
@@ -98,39 +96,12 @@ impl Qwen3_5EngineState {
                             restored_target_token_positions.shape()[0].max(0) as usize
                         },
                     );
-                active_request.prompt_work_reuse.target_eligible_token_count =
-                    u64::try_from(
-                        target_prefix_work_token_count
-                            .saturating_add(absolute_selected_token_positions.len())
-                            .saturating_add(1),
-                    )
-                    .unwrap_or(u64::MAX);
-                let persistent_prompt_cache_blocks =
-                    std::mem::take(&mut draft_scoring_outcome.persistent_prompt_cache_blocks);
-                if active_request.take_forced_speculative_prefill_failure_for_tests(
-                    Qwen3_5SpeculativePrefillFailureStageForTests::DrafterPromptStatePersistence,
-                ) {
-                    return Err(configured_speculative_prefill_failure(
-                        active_request.request_id,
-                        "drafter prompt-state persistence",
-                        "forced drafter prompt-state persistence failure",
-                    ));
-                }
-                self.save_speculative_prefill_draft_persistent_prompt_cache_blocks(
-                    draft_model,
-                    &active_request.input_token_ids,
-                    &active_request.ordered_image_sha256_digests,
-                    draft_persistent_prefix_block_key.as_ref(),
-                    persistent_prompt_cache_blocks,
-                    &mut active_request.performance_attribution,
+                active_request.prompt_work_reuse.target_eligible_token_count = u64::try_from(
+                    target_prefix_work_token_count
+                        .saturating_add(absolute_selected_token_positions.len())
+                        .saturating_add(1),
                 )
-                .map_err(|draft_state_persistence_error| {
-                    configured_speculative_prefill_failure(
-                        active_request.request_id,
-                        "drafter prompt-state persistence",
-                        draft_state_persistence_error,
-                    )
-                })?;
+                .unwrap_or(u64::MAX);
                 if !is_visual_speculative_prefill_request
                     && self
                         .speculative_prefill_draft_persistent_prompt_cache
@@ -248,9 +219,14 @@ impl Qwen3_5EngineState {
                 );
             }
             Err(speculative_prefill_error) => {
+                let failure_stage = if draft_prompt_state_persistence_failed {
+                    "drafter prompt-state persistence"
+                } else {
+                    "draft scoring or selection"
+                };
                 return Err(configured_speculative_prefill_failure(
                     active_request.request_id,
-                    "draft scoring or selection",
+                    failure_stage,
                     speculative_prefill_error,
                 ));
             }

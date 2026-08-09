@@ -10,6 +10,7 @@ pub enum Qwen3_5SpeculativePrefillFailureStageForTests {
     DrafterPromptStatePersistence,
     SelectionPersistence,
     SparseTargetInputAssembly,
+    SparseTargetActiveMemoryLimitRejection,
     SparseTargetExecution,
     SparseTargetStatePersistence,
 }
@@ -82,6 +83,8 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) should_use_speculative_prefill: bool,
     /// Marks the one-time draft scoring attempt for this request.
     pub(super) speculative_prefill_scoring_attempted: bool,
+    /// Whether the worker has been told that a confirmed drafter phase will begin.
+    pub(super) speculative_prefill_draft_phase_announced: bool,
     /// Original prompt positions retained for target sparse prefill.
     pub(super) speculative_prefill_selected_token_positions: Option<Vec<usize>>,
     /// Complete exact target prefix processed before sparse conversation positions.
@@ -94,6 +97,8 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) speculative_prefill_restored_target_token_positions: Option<MlxArray>,
     /// Target expert payload retained immediately after the request-scoped draft release.
     pub(super) speculative_prefill_target_expert_payload_bytes_after_draft_release: Option<u64>,
+    /// Active MLX telemetry captured before the request-scoped drafter is released.
+    pub(super) speculative_prefill_draft_memory_telemetry: Option<crate::MlxMemoryTelemetry>,
     pub(super) prompt_work_reuse: WorkerPromptWorkReuse,
     pub(super) force_next_speculative_prefill_draft_prefix_restore_failure_for_tests: bool,
     pub(super) forced_speculative_prefill_failure_stage_for_tests:
@@ -106,9 +111,7 @@ impl Qwen3_5EngineRequest {
         &mut self,
         expected_failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
     ) -> bool {
-        if self.forced_speculative_prefill_failure_stage_for_tests
-            != Some(expected_failure_stage)
-        {
+        if self.forced_speculative_prefill_failure_stage_for_tests != Some(expected_failure_stage) {
             return false;
         }
         self.forced_speculative_prefill_failure_stage_for_tests = None;

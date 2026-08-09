@@ -140,13 +140,11 @@ impl Qwen3_5EngineState {
                     .clear();
                 Ok(draft_visual_embeddings)
             }
-            Err(draft_visual_embedding_error) => {
-                Err(configured_speculative_prefill_failure(
-                    active_request.request_id,
-                    "drafter visual projection",
-                    draft_visual_embedding_error,
-                ))
-            }
+            Err(draft_visual_embedding_error) => Err(configured_speculative_prefill_failure(
+                active_request.request_id,
+                "drafter visual projection",
+                draft_visual_embedding_error,
+            )),
         }
     }
 }

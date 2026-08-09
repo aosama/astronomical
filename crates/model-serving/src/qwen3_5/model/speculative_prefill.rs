@@ -19,8 +19,6 @@ pub(crate) struct Qwen3_5SpeculativePrefillDraftScoringOutcome {
     pub(crate) draft_prompt_prefix_allocation_checkpoint:
         RequestDecoderStateStackAllocationCheckpoint,
     pub(crate) draft_prompt_prefix_payload_bytes: u64,
-    pub(crate) persistent_prompt_cache_blocks:
-        Vec<Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock>,
 }
 
 /// One dense draft decoder-state block captured at a complete prompt boundary.
@@ -30,6 +28,13 @@ pub(crate) struct Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock {
     pub(crate) kv_block_tensors: HashMap<String, MlxArray>,
     pub(crate) recurrent_snapshot_tensors: HashMap<String, MlxArray>,
 }
+
+pub(crate) type Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'a> =
+    dyn FnMut(
+            Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,
+            &mut PerformanceAttribution,
+        ) -> Result<(), Qwen3_5ExecutionError>
+        + 'a;
 
 impl Qwen3_5Model {
     /// Scores prompt-token importance with a local draft-model decoder state.
@@ -46,7 +51,9 @@ impl Qwen3_5Model {
         scored_prompt_token_count: usize,
         lookahead_token_count: usize,
         importance_pooling_kernel_token_count: usize,
-        should_capture_persistent_prompt_cache_blocks: bool,
+        persistent_prompt_cache_block_consumer: Option<
+            &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
+        >,
         mut request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5SpeculativePrefillDraftScoringOutcome, Qwen3_5ExecutionError> {
@@ -57,7 +64,7 @@ impl Qwen3_5Model {
             scored_prompt_token_count,
             lookahead_token_count,
             importance_pooling_kernel_token_count,
-            should_capture_persistent_prompt_cache_blocks,
+            persistent_prompt_cache_block_consumer,
             None,
             &mut request_decoder_state,
             performance_attribution,
@@ -74,7 +81,9 @@ impl Qwen3_5Model {
         scored_prompt_token_count: usize,
         lookahead_token_count: usize,
         importance_pooling_kernel_token_count: usize,
-        should_capture_persistent_prompt_cache_blocks: bool,
+        persistent_prompt_cache_block_consumer: Option<
+            &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
+        >,
         visual_embeddings: &MlxArray,
         image_pad_token_id: u32,
         mut request_decoder_state: &mut RequestDecoderStateStack,
@@ -87,7 +96,7 @@ impl Qwen3_5Model {
             scored_prompt_token_count,
             lookahead_token_count,
             importance_pooling_kernel_token_count,
-            should_capture_persistent_prompt_cache_blocks,
+            persistent_prompt_cache_block_consumer,
             Some((visual_embeddings, image_pad_token_id)),
             &mut request_decoder_state,
             performance_attribution,
@@ -103,7 +112,9 @@ impl Qwen3_5Model {
         scored_prompt_token_count: usize,
         lookahead_token_count: usize,
         importance_pooling_kernel_token_count: usize,
-        should_capture_persistent_prompt_cache_blocks: bool,
+        mut persistent_prompt_cache_block_consumer: Option<
+            &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
+        >,
         visual_embedding_input: Option<(&MlxArray, u32)>,
         mut request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
@@ -132,9 +143,6 @@ impl Qwen3_5Model {
             Qwen3_5AttentionCapture::new(self.config.layer_count() as usize);
         let mut draft_forward_position_tokens = starting_position_tokens;
         let mut final_draft_logits = None;
-        let can_capture_persistent_prompt_cache_blocks =
-            should_capture_persistent_prompt_cache_blocks;
-        let mut persistent_prompt_cache_blocks = Vec::new();
         let mut consumed_visual_embedding_count = 0_usize;
 
         for draft_prompt_token_ids in
@@ -179,7 +187,7 @@ impl Qwen3_5Model {
                 .ok_or(Qwen3_5ExecutionError::InvalidInput {
                     description: "speculative-prefill draft position counter overflowed",
                 })?;
-            if can_capture_persistent_prompt_cache_blocks
+            if persistent_prompt_cache_block_consumer.is_some()
                 && usize::try_from(draft_forward_position_tokens).is_ok_and(
                     |completed_prompt_token_count| {
                         completed_prompt_token_count
@@ -198,7 +206,7 @@ impl Qwen3_5Model {
                     .ok_or(Qwen3_5ExecutionError::InvalidInput {
                         description: "speculative-prefill draft block start underflowed",
                     })?;
-                persistent_prompt_cache_blocks.push(
+                let persistent_prompt_cache_block =
                     Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock {
                         block_start_tokens,
                         block_end_tokens,
@@ -220,8 +228,15 @@ impl Qwen3_5Model {
                                     .extract_persistent_prompt_cache_recurrent_snapshot_tensors()
                             },
                         )?,
-                    },
-                );
+                    };
+                if let Some(persistent_prompt_cache_block_consumer) =
+                    persistent_prompt_cache_block_consumer.as_deref_mut()
+                {
+                    persistent_prompt_cache_block_consumer(
+                        persistent_prompt_cache_block,
+                        performance_attribution,
+                    )?;
+                }
             }
         }
 
@@ -269,7 +284,6 @@ impl Qwen3_5Model {
             importance_scores,
             draft_prompt_prefix_allocation_checkpoint,
             draft_prompt_prefix_payload_bytes,
-            persistent_prompt_cache_blocks,
         })
     }
 

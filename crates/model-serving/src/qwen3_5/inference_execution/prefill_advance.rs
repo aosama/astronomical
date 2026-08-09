@@ -10,8 +10,8 @@ use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::PromptPrefillChunckAttemptError;
 use super::{
     Qwen3_5EngineState, fatal_engine_error,
-    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
-    qwen3_5_runtime_error, qwen3_5_speculative_prefill_sparse_target_is_active,
+    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary, qwen3_5_runtime_error,
+    qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
@@ -24,6 +24,37 @@ impl Qwen3_5EngineState {
         let final_prompt_index = active_request.input_token_ids.len() - 1;
         if active_request.prefill_cursor >= final_prompt_index {
             return Ok(None);
+        }
+        if qwen3_5_speculative_prefill_sparse_target_is_active(
+            active_request.should_use_speculative_prefill,
+            active_request.prefill_cursor,
+            active_request.ordinary_target_prefill_control_span_token_count,
+        ) {
+            let speculative_prefill_selection_preparation = match self
+                .prepare_speculative_prefill_selection(
+                    active_request,
+                    active_request.prefill_cursor,
+                    final_prompt_index,
+                ) {
+                Ok(speculative_prefill_selection_preparation) => {
+                    speculative_prefill_selection_preparation
+                }
+                Err(speculative_prefill_failure) => {
+                    self.log_speculative_prefill_drafter_failure_diagnostics(active_request);
+                    return Err(speculative_prefill_failure);
+                }
+            };
+            if matches!(
+                speculative_prefill_selection_preparation,
+                super::speculative_prefill_scoring::SpeculativePrefillSelectionPreparation::DrafterPhaseStarted
+            ) {
+                return Ok(Some(GeneratedToken::PromptProcessingPhaseStarted {
+                    prompt_processing_phase:
+                        astronomical_ipc_protocol::WorkerPromptProcessingPhase::Drafter,
+                    total_token_count: u32::try_from(active_request.input_token_ids.len())
+                        .unwrap_or(u32::MAX),
+                }));
+            }
         }
         let model = self
             .model
@@ -374,12 +405,15 @@ impl Qwen3_5EngineState {
                                 &active_request.request_decoder_state,
                                 active_request.additional_context_state_payload_bytes(),
                                 active_memory_bytes,
-                                self.speculative_prefill_draft_model_payload_bytes(),
+                                0,
                             ),
                         ),
                     )
                 })
                 .transpose()?,
+            speculative_prefill_draft_memory_telemetry: active_request
+                .speculative_prefill_draft_memory_telemetry
+                .take(),
             expert_memory_mode: Some(model.expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
         }))

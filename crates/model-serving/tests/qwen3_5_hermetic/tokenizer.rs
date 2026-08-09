@@ -2,10 +2,10 @@
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill_selection.rs"]
 mod speculative_prefill_selection;
 
+use astronomical_ipc_protocol::{ChatMessage, ChatToolDefinition};
 use astronomical_model_serving::{
     Qwen3_5PromptRenderer, Qwen3_5Tokenizer, Qwen3_5TokenizerError, validate_context_token_count,
 };
-use astronomical_ipc_protocol::{ChatMessage, ChatToolDefinition};
 use speculative_prefill_selection::qwen3_5_select_speculative_prefill_token_positions;
 
 use crate::common::qwen3_5_moe::certified_ornith_image_processor;
@@ -167,8 +167,8 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
     let selection_chunck_token_count = 64_usize;
     let keep_percentage = 20_u32;
     let mandatory_trailing_token_count = 128_usize;
-    let selectable_conversation_chunck_count = selectable_conversation_token_count
-        .div_ceil(selection_chunck_token_count);
+    let selectable_conversation_chunck_count =
+        selectable_conversation_token_count.div_ceil(selection_chunck_token_count);
     let percentage_derived_conversation_chunck_budget =
         (selectable_conversation_chunck_count * keep_percentage as usize).div_ceil(100);
     let importance_scores = (0..selectable_conversation_token_count)
@@ -184,9 +184,7 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
         .expect("the selectable conversation should produce a sparse target selection");
     let mut selected_conversation_chunck_indices = selected_relative_conversation_positions
         .iter()
-        .map(|selected_relative_position| {
-            selected_relative_position / selection_chunck_token_count
-        })
+        .map(|selected_relative_position| selected_relative_position / selection_chunck_token_count)
         .collect::<Vec<_>>();
     selected_conversation_chunck_indices.dedup();
     let selected_absolute_conversation_positions = selected_relative_conversation_positions
@@ -217,9 +215,11 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
     assert!(
         (selectable_conversation_token_count - mandatory_trailing_token_count
             ..selectable_conversation_token_count)
-            .all(|mandatory_relative_position| selected_relative_conversation_positions
-                .binary_search(&mandatory_relative_position)
-                .is_ok())
+            .all(
+                |mandatory_relative_position| selected_relative_conversation_positions
+                    .binary_search(&mandatory_relative_position)
+                    .is_ok()
+            )
     );
     assert_eq!(
         &complete_ordered_target_positions[..ordinary_target_prefill_control_span_token_count],
@@ -229,11 +229,16 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
         complete_ordered_target_positions.last().copied(),
         Some(final_generation_kickoff_position)
     );
-    assert!(complete_ordered_target_positions.windows(2).all(|positions| positions[0] < positions[1]));
+    assert!(
+        complete_ordered_target_positions
+            .windows(2)
+            .all(|positions| positions[0] < positions[1])
+    );
     assert!(
         selected_absolute_conversation_positions
             .iter()
-            .all(|selected_position| *selected_position >= ordinary_target_prefill_control_span_token_count
+            .all(|selected_position| *selected_position
+                >= ordinary_target_prefill_control_span_token_count
                 && *selected_position < final_generation_kickoff_position)
     );
 }

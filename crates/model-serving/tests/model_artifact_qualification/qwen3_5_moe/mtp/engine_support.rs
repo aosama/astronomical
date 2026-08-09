@@ -107,6 +107,7 @@ pub(super) async fn generate_with_mtp_engine(
                 }
             }
             GeneratedToken::PrefillProgress { .. } => {}
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }

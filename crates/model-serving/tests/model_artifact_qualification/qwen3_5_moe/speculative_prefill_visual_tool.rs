@@ -213,7 +213,10 @@ async fn should_use_ordinary_target_only_processing_for_a_text_only_visual_draft
             target_only_visual_measurement.speculative_prefill_draft_scoring_elapsed_seconds,
             0.0,
         );
-        assert_eq!(target_only_visual_measurement.speculative_prefill_fallback_count, 0);
+        assert_eq!(
+            target_only_visual_measurement.speculative_prefill_fallback_count,
+            0
+        );
         assert_eq!(
             target_only_visual_measurement.speculative_prefill_target_persistent_state_write_count,
             0,
@@ -256,12 +259,15 @@ fn configured_text_only_compatible_draft(
         let draft_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&discovered_model.model_directory, 1)
             .ok()?;
-        let tokenizer_matches = draft_artifact.tokenizer_bytes().is_some_and(|tokenizer_bytes| {
-            Qwen3_5Tokenizer::token_identifier_mapping_digest(tokenizer_bytes)
-                .is_ok_and(|draft_tokenizer_digest| draft_tokenizer_digest == target_tokenizer_digest)
-        });
-        let vocabulary_matches = draft_artifact.config().vocabulary_size()
-            == target_artifact.config().vocabulary_size();
+        let tokenizer_matches = draft_artifact
+            .tokenizer_bytes()
+            .is_some_and(|tokenizer_bytes| {
+                Qwen3_5Tokenizer::token_identifier_mapping_digest(tokenizer_bytes).is_ok_and(
+                    |draft_tokenizer_digest| draft_tokenizer_digest == target_tokenizer_digest,
+                )
+            });
+        let vocabulary_matches =
+            draft_artifact.config().vocabulary_size() == target_artifact.config().vocabulary_size();
         let is_text_only = draft_artifact
             .shard_index()
             .vision_tensor_name_to_shard_file_name()
@@ -273,9 +279,7 @@ fn configured_text_only_compatible_draft(
         ))
     })
     .min_by_key(|(draft_payload_bytes, _, _)| *draft_payload_bytes)
-    .map(|(_, draft_model_directory, draft_model_id)| {
-        (draft_model_directory, draft_model_id)
-    })
+    .map(|(_, draft_model_directory, draft_model_id)| (draft_model_directory, draft_model_id))
     .expect("configured models should contain a tokenizer-compatible text-only Qwen draft")
 }
 

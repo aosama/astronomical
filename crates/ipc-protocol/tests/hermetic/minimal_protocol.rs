@@ -8,7 +8,8 @@ use astronomical_ipc_protocol::{
     WorkerMlxMemorySnapshot, WorkerPrefillChunckSizingPolicy,
     WorkerPrefillOptimizerCandidateEvidence, WorkerPrefillOptimizerContext,
     WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
-    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration, decode_command,
+    WorkerPromptProcessingPhase, WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
+    decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -233,6 +234,7 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
             expert_payload_bytes: 18_000_000_000,
             model_core_payload_bytes: 8_000_000_000,
             context_state_payload_bytes: 0,
+            speculative_prefill_draft_memory_bytes: 0,
         }),
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
@@ -415,6 +417,7 @@ fn should_represent_target_only_mtp_runtime_state() {
 async fn should_round_trip_prefill_progress_event() {
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(81),
+        prompt_processing_phase: WorkerPromptProcessingPhase::Target,
         processed_tokens: 1024,
         total_tokens: 4096,
         elapsed_millis: 1200,
@@ -453,6 +456,17 @@ async fn should_round_trip_prefill_progress_event() {
             expert_payload_bytes: 4_000,
             model_core_payload_bytes: 3_000,
             context_state_payload_bytes: 2_000,
+            speculative_prefill_draft_memory_bytes: 0,
+        }),
+        speculative_prefill_draft_memory_snapshot: Some(WorkerMlxMemorySnapshot {
+            source: MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
+            active_memory_bytes: 20_000,
+            allocator_cache_memory_bytes: 1_000,
+            peak_memory_bytes: 22_000,
+            expert_payload_bytes: 2_000,
+            model_core_payload_bytes: 3_000,
+            context_state_payload_bytes: 1_000,
+            speculative_prefill_draft_memory_bytes: 14_000,
         }),
     };
 
@@ -478,6 +492,7 @@ async fn should_round_trip_prefill_progress_event() {
 async fn should_round_trip_prefill_progress_before_a_chunk_measurement() {
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(82),
+        prompt_processing_phase: WorkerPromptProcessingPhase::Drafter,
         processed_tokens: 0,
         total_tokens: 4096,
         elapsed_millis: 0,
@@ -485,6 +500,7 @@ async fn should_round_trip_prefill_progress_before_a_chunk_measurement() {
         completed_prefill_chunck_tokens: None,
         prefill_optimizer_insight: None,
         mlx_memory_snapshot: None,
+        speculative_prefill_draft_memory_snapshot: None,
     };
 
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);

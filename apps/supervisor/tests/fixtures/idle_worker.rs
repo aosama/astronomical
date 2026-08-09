@@ -92,6 +92,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             expert_payload_bytes: 12_000_000_000,
                             model_core_payload_bytes: 8_000_000_000,
                             context_state_payload_bytes: 0,
+                            speculative_prefill_draft_memory_bytes: 0,
                         }),
                     })
                     .await?;
@@ -144,6 +145,7 @@ where
                 expert_payload_bytes: 12_000_000_000,
                 model_core_payload_bytes: 8_000_000_000,
                 context_state_payload_bytes: 0,
+                speculative_prefill_draft_memory_bytes: 0,
             }),
         })
         .await

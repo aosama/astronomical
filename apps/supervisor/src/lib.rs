@@ -32,6 +32,7 @@ mod worker_health;
 mod worker_loop_types;
 mod worker_memory_limit;
 mod worker_model_swap;
+mod worker_prefill_progress;
 mod worker_process;
 
 pub use application::{

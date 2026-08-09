@@ -3,7 +3,7 @@ use std::future::Future;
 use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 use astronomical_ipc_protocol::{
     ExpertMemoryMode, MtpRuntimeState, RequestId, SpeculativePrefillRuntimeState, WorkerEvent,
-    WorkerPromptWorkReuse,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
@@ -230,7 +230,7 @@ impl EngineLoadResult {
         self.speculative_prefill_draft_model_id.as_deref()
     }
 
-    /// Returns the validated resident draft model revision, when active.
+    /// Returns the validated request-scoped draft model revision, when active.
     #[must_use]
     pub fn speculative_prefill_draft_model_revision(&self) -> Option<&str> {
         self.speculative_prefill_draft_model_revision.as_deref()
@@ -247,7 +247,9 @@ impl EngineLoadResult {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EngineGenerationStart {
     cached_token_count: u32,
+    restored_prompt_prefix_token_count: u32,
     expert_memory_mode: Option<ExpertMemoryMode>,
+    prompt_processing_phase: Option<WorkerPromptProcessingPhase>,
 }
 
 impl EngineGenerationStart {
@@ -256,7 +258,9 @@ impl EngineGenerationStart {
     pub const fn new(cached_token_count: u32) -> Self {
         Self {
             cached_token_count,
+            restored_prompt_prefix_token_count: cached_token_count,
             expert_memory_mode: None,
+            prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
         }
     }
 
@@ -267,8 +271,20 @@ impl EngineGenerationStart {
     ) -> Self {
         Self {
             cached_token_count,
+            restored_prompt_prefix_token_count: cached_token_count,
             expert_memory_mode: Some(expert_memory_mode),
+            prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
         }
+    }
+
+    /// Records the complete logical prompt prefix whose processing state was restored.
+    #[must_use]
+    pub const fn with_restored_prompt_prefix_token_count(
+        mut self,
+        restored_prompt_prefix_token_count: u32,
+    ) -> Self {
+        self.restored_prompt_prefix_token_count = restored_prompt_prefix_token_count;
+        self
     }
 
     /// Returns the number of prompt tokens restored from persistent cache.
@@ -277,9 +293,30 @@ impl EngineGenerationStart {
         self.cached_token_count
     }
 
+    /// Returns the logical prompt prefix already represented by restored engine state.
+    #[must_use]
+    pub const fn restored_prompt_prefix_token_count(&self) -> u32 {
+        self.restored_prompt_prefix_token_count
+    }
+
     #[must_use]
     pub const fn expert_memory_mode(&self) -> Option<ExpertMemoryMode> {
         self.expert_memory_mode
+    }
+
+    /// Records the model that will process the next prompt phase.
+    #[must_use]
+    pub const fn with_prompt_processing_phase(
+        mut self,
+        prompt_processing_phase: Option<WorkerPromptProcessingPhase>,
+    ) -> Self {
+        self.prompt_processing_phase = prompt_processing_phase;
+        self
+    }
+
+    #[must_use]
+    pub const fn prompt_processing_phase(&self) -> Option<WorkerPromptProcessingPhase> {
+        self.prompt_processing_phase
     }
 }
 
@@ -377,8 +414,15 @@ pub enum GeneratedToken {
         completed_prefill_chunck_tokens: u32,
         prefill_optimizer_insight: Option<PrefillChunckOptimizerInsight>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+        /// Active MLX telemetry captured during request-scoped draft scoring.
+        speculative_prefill_draft_memory_telemetry: Option<MlxMemoryTelemetry>,
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
+    },
+    /// A confirmed prompt phase is about to begin before its blocking model work.
+    PromptProcessingPhaseStarted {
+        prompt_processing_phase: WorkerPromptProcessingPhase,
+        total_token_count: u32,
     },
     /// Engine-side end-of-sequence without an explicit token ID.
     EndOfSequence,
@@ -398,7 +442,7 @@ impl GeneratedToken {
             | Self::PrefillProgress {
                 expert_memory_mode, ..
             } => *expert_memory_mode = final_expert_memory_mode,
-            Self::EndOfSequence => {}
+            Self::PromptProcessingPhaseStarted { .. } | Self::EndOfSequence => {}
         }
         self
     }

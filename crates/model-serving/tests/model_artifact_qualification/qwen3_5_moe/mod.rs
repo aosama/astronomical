@@ -36,21 +36,23 @@ mod speculative_prefill;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_fail_closed;
 #[cfg(feature = "direct-mlx")]
+mod speculative_prefill_memory_admission;
+#[cfg(feature = "direct-mlx")]
 mod speculative_prefill_persistent_cache;
 mod speculative_prefill_qualification_support;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_tool_control;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_tool_false_positive;
+mod speculative_prefill_tool_process_prompt;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_tool_process_restart;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_tool_sampled;
 #[cfg(feature = "direct-mlx")]
-mod speculative_prefill_visual_tool;
-#[cfg(feature = "direct-mlx")]
-mod speculative_prefill_tool_process_restart;
-mod speculative_prefill_tool_process_prompt;
-#[cfg(feature = "direct-mlx")]
 mod speculative_prefill_visual_memory_lifecycle;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_visual_tool;
 mod tokenizer;
 mod vision_model;
 mod weights;

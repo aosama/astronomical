@@ -5,6 +5,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     let expertPayloadByteCount: UInt64
     let modelCorePayloadByteCount: UInt64
     let contextStatePayloadByteCount: UInt64
+    let speculativePrefillDraftMemoryByteCount: UInt64
     let runtimeWorkByteCount: UInt64
     let availableByteCount: UInt64
   }
@@ -16,6 +17,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     let expertPayloadBytes: UInt64
     let modelCorePayloadBytes: UInt64
     let contextStatePayloadBytes: UInt64
+    let speculativePrefillDraftMemoryBytes: UInt64
 
     enum CodingKeys: String, CodingKey {
       case source
@@ -25,6 +27,22 @@ struct SupervisorStatusDocument: Codable, Equatable {
       case expertPayloadBytes = "expert_payload_bytes"
       case modelCorePayloadBytes = "model_core_payload_bytes"
       case contextStatePayloadBytes = "context_state_payload_bytes"
+      case speculativePrefillDraftMemoryBytes = "speculative_prefill_draft_memory_bytes"
+    }
+
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      source = try container.decode(String.self, forKey: .source)
+      activeMemoryBytes = try container.decode(UInt64.self, forKey: .activeMemoryBytes)
+      allocatorCacheMemoryBytes =
+        try container.decode(UInt64.self, forKey: .allocatorCacheMemoryBytes)
+      peakMemoryBytes = try container.decode(UInt64.self, forKey: .peakMemoryBytes)
+      expertPayloadBytes = try container.decode(UInt64.self, forKey: .expertPayloadBytes)
+      modelCorePayloadBytes = try container.decode(UInt64.self, forKey: .modelCorePayloadBytes)
+      contextStatePayloadBytes =
+        try container.decode(UInt64.self, forKey: .contextStatePayloadBytes)
+      speculativePrefillDraftMemoryBytes =
+        try container.decodeIfPresent(UInt64.self, forKey: .speculativePrefillDraftMemoryBytes) ?? 0
     }
   }
   struct Progress: Codable, Equatable {
@@ -228,21 +246,29 @@ struct SupervisorStatusDocument: Codable, Equatable {
   }
   var menuBarTitle: String {
     guard status == "ready" else { return status == "loading" ? " Loading" : "" }
-    guard let currentRate else { return "" }
-    return activity == "generating"
-      ? String(format: "GEN %.1f tok/s", currentRate)
-      : "PP \(Int(currentRate.rounded())) tok/s"
+    if activity == "generating", let currentRate {
+      return String(format: "GEN %.1f tok/s", currentRate)
+    }
+    guard activity == "prompt_processing", let progress else { return "" }
+    let completionPercentageTitle = progress.completionPercentageTitle
+    if progress.phase == "drafter" { return "Drafting…" }
+    guard let currentRate else { return "Target \(completionPercentageTitle)" }
+    return "Target \(completionPercentageTitle) · \(Int(currentRate.rounded())) tok/s"
   }
   var flightTitle: String {
-    guard let currentRate else { return isActive ? phaseTitle : "Standing by" }
-    return activity == "generating"
-      ? String(format: "Generating · %.1f tok/s", currentRate)
-      : "Prompt processing · \(Int(currentRate.rounded())) tok/s"
+    guard isActive else { return "Standing by" }
+    if activity == "generating" {
+      return currentRate.map { String(format: "Generating · %.1f tok/s", $0) } ?? "Generating"
+    }
+    guard let progress else { return phaseTitle }
+    if progress.phase == "drafter" { return "Drafting…" }
+    guard let currentRate else { return "Target · \(progress.completionPercentageTitle)" }
+    return "Target · \(progress.completionPercentageTitle) · \(Int(currentRate.rounded())) tok/s"
   }
   var phaseTitle: String {
     switch activity {
     case "generating": "Generating"
-    case "prompt_processing": "Prompt processing"
+    case "prompt_processing": progress?.phase == "drafter" ? "Drafting…" : "Target"
     default:
       switch status {
       case "ready": "Ready"
@@ -268,7 +294,12 @@ struct SupervisorStatusDocument: Codable, Equatable {
     }
   }
   var progressTitle: String {
-    progress.map { "\($0.processedTokens) / \($0.totalTokens) tokens" } ?? "Standing by"
+    guard let progress else { return "Standing by" }
+    if progress.phase == "drafter" { return "Drafting…" }
+    let tokenCountTitle = "\(progress.processedTokens) / \(progress.totalTokens) tokens"
+    return progress.phase == "generation"
+      ? tokenCountTitle
+      : "\(progress.completionPercentageTitle) · \(tokenCountTitle)"
   }
   var elapsedTimeMetricTitle: String {
     progress?.phase == "generation" ? "Elapsed" : "Elapsed / ETA"
@@ -298,6 +329,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     switch mlxMemorySnapshot?.source {
     case "model_loaded": "Model loaded"
     case "prefill": "Prompt snapshot"
+    case "speculative_prefill_draft_scoring": "Live drafter scoring"
     case "decode_submitted": "Live decode"
     case "finalized": "After cleanup"
     case "idle_poll": "Idle sample"
@@ -322,12 +354,20 @@ struct SupervisorStatusDocument: Codable, Equatable {
       mlxMemorySnapshot?.contextStatePayloadBytes ?? 0,
       activeBytesAfterModelCore
     )
-    let reconciledRuntimeWorkByteCount = activeBytesAfterModelCore.saturatingSubtracting(
+    let activeBytesAfterContextState = activeBytesAfterModelCore.saturatingSubtracting(
       reconciledContextStatePayloadByteCount)
+    let reconciledSpeculativePrefillDraftMemoryByteCount = min(
+      mlxMemorySnapshot?.speculativePrefillDraftMemoryBytes ?? 0,
+      activeBytesAfterContextState
+    )
+    let reconciledRuntimeWorkByteCount = activeBytesAfterContextState.saturatingSubtracting(
+      reconciledSpeculativePrefillDraftMemoryByteCount)
     return MlxMemoryBreakdown(
       expertPayloadByteCount: reconciledExpertPayloadByteCount,
       modelCorePayloadByteCount: reconciledModelCorePayloadByteCount,
       contextStatePayloadByteCount: reconciledContextStatePayloadByteCount,
+      speculativePrefillDraftMemoryByteCount:
+        reconciledSpeculativePrefillDraftMemoryByteCount,
       runtimeWorkByteCount: reconciledRuntimeWorkByteCount,
       availableByteCount: mlxMemoryCeilingBytes.saturatingSubtracting(
         mlxMemoryActiveBytes)
@@ -379,6 +419,14 @@ struct SupervisorStatusDocument: Codable, Equatable {
     guard let sessionPromptReuse else { return "No completed prompts" }
     return
       "\(groupedTokenCountText(sessionPromptReuse.reusedPromptTokenCount)) reused · \(groupedTokenCountText(sessionPromptReuse.newPromptTokenCount)) new"
+  }
+}
+
+extension SupervisorStatusDocument.Progress {
+  var completionPercentageTitle: String {
+    guard totalTokens > 0 else { return "0%" }
+    let boundedProcessedTokens = min(processedTokens, totalTokens)
+    return "\(Int((Double(boundedProcessedTokens) / Double(totalTokens) * 100).rounded(.down)))%"
   }
 }
 

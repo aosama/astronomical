@@ -54,6 +54,7 @@ pub(crate) async fn run_attributed_generation(
                 }
             }
             GeneratedToken::PrefillProgress { .. } => {}
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }
