@@ -1,6 +1,9 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationOutput, ProtocolWriter, RequestId, WorkerEvent,
-    WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
+    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerPersistentPromptCacheStartupCleanupCategory,
+    WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
 
 pub(super) async fn send_accepted_chat<WriteTransport>(
@@ -122,15 +125,39 @@ where
 
 fn accepted_cache_diagnostics() -> WorkerPersistentPromptCacheRequestDiagnostics {
     WorkerPersistentPromptCacheRequestDiagnostics {
-        lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Hit,
+        lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Miss,
         block_token_count: 2_048,
         complete_prompt_block_count: 3,
         maximum_restorable_block_count: 3,
-        matched_sequence_state_block_count: 3,
-        restored_block_count: 3,
-        first_missing_sequence_state_block_index: None,
-        miss_reason: None,
-        expected_block_hash_prefix: None,
+        matched_sequence_state_block_count: 0,
+        restored_block_count: 0,
+        first_missing_sequence_state_block_index: Some(0),
+        miss_reason: Some(WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing),
+        expected_block_hash_prefix: Some(
+            WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash([7_u8; 32]),
+        ),
+        startup_cleanup_evidence: Some(WorkerPersistentPromptCacheStartupCleanupEvidence {
+            interrupted_transaction_recovery: WorkerPersistentPromptCacheStartupCleanupCategory {
+                artifact_count: 1,
+                block_count: 0,
+                byte_count: 128,
+            },
+            obsolete_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+                artifact_count: 2,
+                block_count: 0,
+                byte_count: 256,
+            },
+            corrupt_current_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+                artifact_count: 0,
+                block_count: 1,
+                byte_count: 512,
+            },
+            quota_eviction: WorkerPersistentPromptCacheStartupCleanupCategory {
+                artifact_count: 0,
+                block_count: 0,
+                byte_count: 0,
+            },
+        }),
         published_block_count: 1,
         allocator_bytes_cleared_for_publication: 512,
         expert_bytes_reclaimed_for_publication: 1_024,

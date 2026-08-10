@@ -58,15 +58,29 @@ async fn should_persist_worker_cache_diagnostics_for_a_completed_user_request() 
     )
     .expect("the performance record should be valid JSON");
     let cache_diagnostics = &performance_record["persistent_prompt_cache_diagnostics"];
-    assert_eq!(cache_diagnostics["lookup_outcome"], "hit");
+    assert_eq!(cache_diagnostics["lookup_outcome"], "miss");
     assert_eq!(cache_diagnostics["block_token_count"], 2_048);
-    assert_eq!(cache_diagnostics["matched_sequence_state_block_count"], 3);
-    assert_eq!(cache_diagnostics["restored_block_count"], 3);
+    assert_eq!(cache_diagnostics["matched_sequence_state_block_count"], 0);
+    assert_eq!(cache_diagnostics["restored_block_count"], 0);
     assert_eq!(
         cache_diagnostics["first_missing_sequence_state_block_index"],
-        Value::Null
+        0
+    );
+    assert_eq!(
+        cache_diagnostics["miss_reason"],
+        "root_sequence_state_block_missing"
+    );
+    assert_eq!(
+        cache_diagnostics["startup_cleanup_evidence"]["obsolete_format"]["artifact_count"],
+        2
+    );
+    assert_eq!(
+        cache_diagnostics["startup_cleanup_evidence"]["corrupt_current_format"]["block_count"],
+        1
     );
     assert_eq!(cache_diagnostics["published_block_count"], 1);
+    assert!(!performance_log_document.contains("/fictional/"));
+    assert!(!performance_log_document.contains("model_directory"));
 }
 
 async fn wait_for_ready_worker(worker_executor: &astronomical_supervisor::WorkerHandle) {

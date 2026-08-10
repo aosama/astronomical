@@ -53,6 +53,8 @@ mod speculative_prefill_policy;
 mod speculative_prefill_selection;
 mod speculative_prefill_selection_metadata;
 mod speculative_prefill_target_state;
+#[cfg(feature = "direct-mlx")]
+mod startup_cleanup_evidence;
 mod visual_embedding_format;
 mod visual_embedding_key;
 mod visual_embedding_model_contract;
@@ -92,6 +94,10 @@ pub use speculative_prefill_target_state::{
     PERSISTENT_SPECULATIVE_PREFILL_TARGET_STATE_FORMAT_VERSION,
     PersistentSpeculativePrefillTargetStateContract,
     longest_reusable_speculative_prefill_target_prefix,
+};
+#[cfg(feature = "direct-mlx")]
+pub use startup_cleanup_evidence::{
+    PersistentPromptCacheStartupCleanupCategory, PersistentPromptCacheStartupCleanupEvidence,
 };
 pub use visual_embedding_format::{
     PersistentVisualEmbeddingFileError, PersistentVisualEmbeddingFileHeader,

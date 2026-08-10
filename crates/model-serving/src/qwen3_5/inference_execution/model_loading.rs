@@ -19,6 +19,7 @@ use crate::qwen3_5::{
 };
 use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
 
+use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup;
 use super::speculative_prefill_failure::configured_speculative_prefill_activation_failure;
 use super::speculative_prefill_model_loading::{
     load_speculative_prefill_draft_model, token_identifier_mapping_digest,
@@ -214,6 +215,10 @@ impl Qwen3_5EngineState {
                                 "required visual prompt-state storage scan failed: {visual_embedding_scan_error}"
                             )));
                         }
+                        log_persistent_prompt_cache_startup_cleanup(
+                            "target",
+                            &persistent_prompt_cache,
+                        );
                         tracing::info!(
                             sequence_state_block_count =
                                 persistent_prompt_cache.sequence_state_block_count(),
@@ -283,6 +288,10 @@ impl Qwen3_5EngineState {
                     },
                 ) {
                     Ok(draft_persistent_prompt_cache) => {
+                        log_persistent_prompt_cache_startup_cleanup(
+                            "speculative_prefill_draft",
+                            &draft_persistent_prompt_cache,
+                        );
                         tracing::info!(
                             draft_model_id,
                             draft_model_revision,

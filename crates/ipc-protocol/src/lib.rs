@@ -20,6 +20,8 @@ pub use message_codec::{decode_command, decode_event, encode_command, encode_eve
 pub use persistent_prompt_cache_diagnostics::{
     WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
     WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerPersistentPromptCacheStartupCleanupCategory,
+    WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
