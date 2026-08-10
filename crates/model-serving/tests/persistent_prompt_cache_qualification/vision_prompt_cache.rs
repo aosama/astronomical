@@ -22,7 +22,7 @@ const VISUAL_QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
 async fn should_preserve_visual_prefill_output_across_an_8192_token_cache_restore() {
     timeout(
         VISUAL_QUALIFICATION_TIMEOUT,
-        run_visual_prompt_cache_qualification(false, false),
+        run_visual_prompt_cache_qualification(false),
     )
     .await
     .expect("the visual prompt-cache qualification must finish within 115 seconds");
@@ -33,27 +33,13 @@ async fn should_preserve_visual_prefill_output_across_an_8192_token_cache_restor
 async fn should_restore_visual_and_decoder_state_after_a_checkpoint_prefill_retry() {
     timeout(
         VISUAL_QUALIFICATION_TIMEOUT,
-        run_visual_prompt_cache_qualification(true, false),
+        run_visual_prompt_cache_qualification(true),
     )
     .await
     .expect("the visual prefill rollback qualification must finish within 115 seconds");
 }
 
-#[tokio::test]
-#[ignore = "removes the optional cache writer and verifies the visual forward remains 8192 tokens"]
-async fn should_keep_large_visual_prefill_when_the_cache_writer_is_unavailable() {
-    timeout(
-        VISUAL_QUALIFICATION_TIMEOUT,
-        run_visual_prompt_cache_qualification(false, true),
-    )
-    .await
-    .expect("the read-only visual cache qualification must finish within 115 seconds");
-}
-
-async fn run_visual_prompt_cache_qualification(
-    force_prefill_retry: bool,
-    disable_prompt_cache_writes: bool,
-) {
+async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
@@ -89,13 +75,6 @@ async fn run_visual_prompt_cache_qualification(
         .load()
         .await
         .expect("the visual qualification engine should load");
-    if disable_prompt_cache_writes {
-        qwen3_5_engine
-            .disable_persistent_prompt_cache_writes_for_tests()
-            .await
-            .expect("the visual qualification should remove the optional cache writer");
-    }
-
     let cold_request = representative_visual_request(&tokenizer, RequestId::new(9_100));
     assert!(cold_request.input_token_ids().len() >= VISUAL_QUALIFICATION_MINIMUM_PROMPT_TOKENS);
     qwen3_5_engine
@@ -114,28 +93,17 @@ async fn run_visual_prompt_cache_qualification(
         cold_prefill_chunck_token_counts.contains(&VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS),
         "the visual request must complete one 8192-token forward"
     );
-    if disable_prompt_cache_writes {
-        assert_eq!(
-            prompt_cache_sequence_state_block_count(&qwen3_5_engine).await,
-            0
-        );
-    } else {
-        wait_for_four_prompt_cache_blocks(&qwen3_5_engine).await;
-    }
+    wait_for_four_prompt_cache_blocks(&qwen3_5_engine).await;
 
     let restored_request = representative_visual_request(&tokenizer, RequestId::new(9_101));
     let restored_generation_start = qwen3_5_engine
         .start_generation(restored_request)
         .await
         .expect("the restored visual request should start");
-    if disable_prompt_cache_writes {
-        assert_eq!(restored_generation_start.cached_token_count(), 0);
-    } else {
-        assert!(
-            restored_generation_start.cached_token_count()
-                >= VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS
-        );
-    }
+    assert!(
+        restored_generation_start.cached_token_count()
+            >= VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS
+    );
     let (restored_token_id, _restored_prefill_chunck_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_101)).await;
     assert_eq!(cold_token_id, restored_token_id);

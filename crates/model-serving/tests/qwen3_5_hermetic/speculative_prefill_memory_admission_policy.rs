@@ -18,10 +18,12 @@ pub(crate) fn speculative_prefill_draft_scoring_reservation_bytes(
     draft_decoder_state_growth_bytes: usize,
     draft_vision_payload_bytes: usize,
     draft_maximum_expert_page_reservation_bytes: usize,
-    draft_temporary_workspace_bytes: usize,
+    draft_boundary_checkpoint_workspace_bytes: usize,
+    draft_direct_publication_workspace_bytes: usize,
 ) -> Option<usize> {
     draft_decoder_state_growth_bytes
         .checked_add(draft_vision_payload_bytes)?
         .checked_add(draft_maximum_expert_page_reservation_bytes)?
-        .checked_add(draft_temporary_workspace_bytes)
+        .checked_add(draft_boundary_checkpoint_workspace_bytes)?
+        .checked_add(draft_direct_publication_workspace_bytes)
 }

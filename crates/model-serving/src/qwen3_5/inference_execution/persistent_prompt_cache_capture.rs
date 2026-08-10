@@ -1,12 +1,20 @@
+//! Qwen3.5 request-side extraction and required synchronous cache publication.
+//!
+//! The request cursor advances only after the matching block is durably published
+//! or an exact block was already present. Capacity pressure gets one narrowly
+//! typed retry after allocator and pageable-expert reclamation; storage, quota,
+//! validation, and topology failures stop the request without retry.
+
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore, PersistentPromptCacheWriteQueue,
-    PersistentPromptCacheWriteQueueOutcome, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
+    PersistentPromptCachePublicationOutcome, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
 };
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::speculative_prefill_failure::configured_speculative_prefill_failure;
-use super::{Qwen3_5EngineState, Qwen3_5Model};
+use super::{Qwen3_5EngineState, Qwen3_5Model, qwen3_5_runtime_error};
+use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
 /// Owns the user-visible failure contract for one required prompt-state write.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,7 +66,6 @@ impl Qwen3_5EngineState {
     pub(super) fn capture_persistent_prompt_cache_blocks(
         &self,
         persistent_prompt_cache: &PersistentPromptCacheDiskStore,
-        persistent_prompt_cache_write_queue: &PersistentPromptCacheWriteQueue,
         model: &Qwen3_5Model,
         active_request: &mut Qwen3_5EngineRequest,
         successful_prefill_start: usize,
@@ -66,6 +73,9 @@ impl Qwen3_5EngineState {
         boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
         prompt_state_persistence_owner: PromptStatePersistenceOwner,
     ) -> Result<(), InferenceEngineError> {
+        // Boundary checkpoints are emitted by the successful forward. Recompute
+        // absolute positions here and validate them before slicing user tokens;
+        // never trust a model-specific checkpoint to be aligned implicitly.
         let persistent_prompt_cache_block_token_count =
             persistent_prompt_cache.model_contract.block_token_count();
         for boundary_checkpoint in boundary_checkpoints {
@@ -101,6 +111,8 @@ impl Qwen3_5EngineState {
             };
             let block_end = absolute_boundary;
             let block_tokens = &active_request.input_token_ids[block_start..block_end];
+            // Root identity binds model contract, tokens, and ordered images.
+            // Every child then hashes its parent, making prompt history explicit.
             let persistent_prompt_cache_block_key = match active_request
                 .last_restored_persistent_prompt_cache_block_key
                 .as_ref()
@@ -122,6 +134,9 @@ impl Qwen3_5EngineState {
                     "prompt-cache block identity construction failed",
                 ));
             };
+            // Extraction returns MLX arrays referencing exact decoder state. Keep
+            // these same arrays alive through a possible retry; recapturing after
+            // reclamation could observe mutated request state or duplicate work.
             let kv_block_tensors = match active_request.measure_operation_with_request(
                 PerformanceOperation::PersistentPromptCacheStateExtraction,
                 |active_request| {
@@ -146,11 +161,51 @@ impl Qwen3_5EngineState {
                     ));
                 }
             };
+            // Synchronize before clearing allocator cache because submitted GPU
+            // work may still own cached buffers. Publication needs contiguous
+            // workspace for its largest tensor materialization.
+            let memory_snapshot_before_cleanup = model.runtime().memory_snapshot().ok();
+            active_request
+                .performance_attribution
+                .measure_operation(
+                    PerformanceOperation::MlxAllocatorCacheCleanup,
+                    |_performance_attribution| {
+                        model
+                            .runtime()
+                            .synchronize_gpu_stream_and_clear_allocator_cache()
+                    },
+                )
+                .map_err(qwen3_5_runtime_error)?;
+            let memory_snapshot_after_cleanup = model.runtime().memory_snapshot().ok();
+            if let Some(persistent_prompt_cache_diagnostics) =
+                active_request.persistent_prompt_cache_diagnostics.as_mut()
+            {
+                let allocator_bytes_cleared = memory_snapshot_before_cleanup
+                    .as_ref()
+                    .map_or(0, |memory_snapshot| {
+                        u64::try_from(memory_snapshot.allocator_cache_memory_bytes())
+                            .unwrap_or(u64::MAX)
+                    })
+                    .saturating_sub(memory_snapshot_after_cleanup.as_ref().map_or(
+                        0,
+                        |memory_snapshot| {
+                            u64::try_from(memory_snapshot.allocator_cache_memory_bytes())
+                                .unwrap_or(u64::MAX)
+                        },
+                    ));
+                persistent_prompt_cache_diagnostics.allocator_bytes_cleared_for_publication =
+                    persistent_prompt_cache_diagnostics
+                        .allocator_bytes_cleared_for_publication
+                        .saturating_add(allocator_bytes_cleared);
+            }
+            // The disk-store API needs mutable attribution while the request also
+            // remains mutably borrowed. Move the owner out temporarily and put it
+            // back on every return path before interpreting publication outcome.
             let mut request_performance_attribution = std::mem::replace(
                 &mut active_request.performance_attribution,
                 PerformanceAttribution::disabled(),
             );
-            let save_outcome = persistent_prompt_cache_write_queue.serialize_and_enqueue(
+            let save_outcome = persistent_prompt_cache.publish_block_with_performance_attribution(
                 model.runtime(),
                 &persistent_prompt_cache_block_key,
                 active_request
@@ -161,41 +216,77 @@ impl Qwen3_5EngineState {
                 &mut request_performance_attribution,
             );
             active_request.performance_attribution = request_performance_attribution;
-            match save_outcome {
-                Ok(write_queue_outcome)
-                    if persistent_prompt_cache_write_outcome_advances_parent_chain(
-                        write_queue_outcome,
-                    ) =>
+            // Retry exactly once and only for the typed MLX active-memory limit.
+            // Reusing `kv_block_tensors` and the checkpoint tensors is essential:
+            // this is resource reclamation, not a second logical capture.
+            let save_outcome = match save_outcome {
+                Err(publication_error)
+                    if publication_error.active_memory_deficit_bytes().is_some() =>
                 {
+                    let active_memory_deficit_bytes =
+                        publication_error.active_memory_deficit_bytes().unwrap_or(0);
+                    let expert_payload_bytes_before_reclamation = model
+                        .expert_weight_memory_cache_statistics()
+                        .resident_payload_byte_count;
+                    active_request.performance_attribution.measure_operation(
+                        PerformanceOperation::ExpertWeightMemoryCacheEviction,
+                        |_performance_attribution| {
+                            reclaim_retained_experts_for_request_memory_pressure(
+                                model,
+                                active_memory_deficit_bytes,
+                            )
+                        },
+                    )?;
+                    let expert_payload_bytes_after_reclamation = model
+                        .expert_weight_memory_cache_statistics()
+                        .resident_payload_byte_count;
+                    if let Some(persistent_prompt_cache_diagnostics) =
+                        active_request.persistent_prompt_cache_diagnostics.as_mut()
+                    {
+                        persistent_prompt_cache_diagnostics
+                            .expert_bytes_reclaimed_for_publication =
+                            persistent_prompt_cache_diagnostics
+                                .expert_bytes_reclaimed_for_publication
+                                .saturating_add(
+                                    expert_payload_bytes_before_reclamation
+                                        .saturating_sub(expert_payload_bytes_after_reclamation),
+                                );
+                    }
+                    // Expert eviction is measured separately from serialization
+                    // so performance reports can attribute why publication paused.
+                    let mut retry_performance_attribution = std::mem::replace(
+                        &mut active_request.performance_attribution,
+                        PerformanceAttribution::disabled(),
+                    );
+                    let retry_outcome = persistent_prompt_cache
+                        .publish_block_with_performance_attribution(
+                            model.runtime(),
+                            &persistent_prompt_cache_block_key,
+                            active_request
+                                .last_restored_persistent_prompt_cache_block_key
+                                .as_ref(),
+                            &kv_block_tensors,
+                            &boundary_checkpoint.recurrent_snapshot_tensors,
+                            &mut retry_performance_attribution,
+                        );
+                    active_request.performance_attribution = retry_performance_attribution;
+                    retry_outcome
+                }
+                save_outcome => save_outcome,
+            };
+            match save_outcome {
+                Ok(publication_outcome) => {
+                    if publication_outcome == PersistentPromptCachePublicationOutcome::Published
+                        && let Some(persistent_prompt_cache_diagnostics) =
+                            active_request.persistent_prompt_cache_diagnostics.as_mut()
+                    {
+                        persistent_prompt_cache_diagnostics.record_published_block();
+                    }
+                    // Both successful outcomes prove durable availability, so the
+                    // next block may safely use this key as its parent. Diagnostics
+                    // count physical publications only, not idempotent reuse.
                     active_request.last_restored_persistent_prompt_cache_block_key =
                         Some(persistent_prompt_cache_block_key);
-                }
-                Ok(_) => {
-                    let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
-                    let expert_weight_memory_cache_statistics =
-                        model.expert_weight_memory_cache_statistics();
-                    tracing::error!(
-                        request_id = active_request.request_id.value(),
-                        block_start,
-                        block_end,
-                        block_index = persistent_prompt_cache_block_key.block_index(),
-                        expert_memory_mode = ?model.expert_memory_mode(),
-                        retained_expert_payload_bytes = expert_weight_memory_cache_statistics.resident_payload_byte_count,
-                        maximum_retained_expert_payload_bytes = expert_weight_memory_cache_statistics.maximum_resident_payload_byte_count,
-                        retained_complete_expert_layer_count = expert_weight_memory_cache_statistics.complete_layer_count,
-                        expert_eviction_count = expert_weight_memory_cache_statistics.eviction_count,
-                        mlx_active_memory_bytes = mlx_memory_snapshot.as_ref().map(|snapshot| snapshot.active_memory_bytes()),
-                        mlx_allocator_cache_memory_bytes = mlx_memory_snapshot.as_ref().map(|snapshot| snapshot.allocator_cache_memory_bytes()),
-                        mlx_peak_memory_bytes = mlx_memory_snapshot.as_ref().map(|snapshot| snapshot.peak_memory_bytes()),
-                        runtime_active_memory_limit_bytes = model.runtime().memory_limits().active_memory_limit_bytes(),
-                        "required persistent prompt-cache capture rejected after queue admission evidence"
-                    );
-                    return Err(required_prompt_state_persistence_failure(
-                        prompt_state_persistence_owner,
-                        active_request,
-                        "required persistent prompt-state capture",
-                        "prompt-cache writer cannot accept more blocks",
-                    ));
                 }
                 Err(error) => {
                     tracing::warn!(block_start, block_end, %error, "prompt-cache block save failed");
@@ -213,12 +304,14 @@ impl Qwen3_5EngineState {
 }
 
 #[must_use]
-pub fn persistent_prompt_cache_write_outcome_advances_parent_chain(
-    write_queue_outcome: PersistentPromptCacheWriteQueueOutcome,
+pub fn persistent_prompt_cache_publication_advances_parent_chain(
+    publication_outcome: PersistentPromptCachePublicationOutcome,
 ) -> bool {
+    // Kept as a public pure contract for direct tests and alternate callers:
+    // there is intentionally no non-durable success variant.
     matches!(
-        write_queue_outcome,
-        PersistentPromptCacheWriteQueueOutcome::Queued
-            | PersistentPromptCacheWriteQueueOutcome::AlreadyQueued
+        publication_outcome,
+        PersistentPromptCachePublicationOutcome::Published
+            | PersistentPromptCachePublicationOutcome::AlreadyPublished
     )
 }

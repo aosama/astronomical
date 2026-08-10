@@ -4,9 +4,124 @@ use astronomical_ipc_protocol::RequestId;
 use crate::MlxInferenceEngine;
 
 use super::{
-    Qwen3_5InferenceExecution, Qwen3_5SpeculativePrefillFailureStageForTests, fatal_engine_error,
-    qwen3_5_runtime_error,
+    Qwen3_5EngineState, Qwen3_5InferenceExecution, Qwen3_5SpeculativePrefillFailureStageForTests,
+    fatal_engine_error, qwen3_5_runtime_error,
 };
+
+// These owner-thread operations intentionally live beside their asynchronous
+// public wrappers. Keeping qualification-only state mutation out of the engine
+// owner prevents the production lifecycle module from becoming a test-control bag.
+impl Qwen3_5EngineState {
+    fn prompt_work_reuse_for_tests(
+        &self,
+        request_id: RequestId,
+    ) -> Result<astronomical_ipc_protocol::WorkerPromptWorkReuse, InferenceEngineError> {
+        let active_request = self.active_request.as_ref().ok_or_else(|| {
+            fatal_engine_error("cannot inspect prompt work reuse without an active request")
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot inspect prompt work reuse for a different request",
+            ));
+        }
+        Ok(active_request.prompt_work_reuse.clone())
+    }
+
+    fn speculative_prefill_selected_token_positions_for_tests(
+        &self,
+        request_id: RequestId,
+    ) -> Result<Option<Vec<usize>>, InferenceEngineError> {
+        let active_request = self.active_request.as_ref().ok_or_else(|| {
+            fatal_engine_error(
+                "cannot inspect speculative-prefill selected positions without an active request",
+            )
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot inspect speculative-prefill selected positions for a different request",
+            ));
+        }
+        Ok(active_request
+            .speculative_prefill_selected_token_positions
+            .clone())
+    }
+
+    fn force_next_prefill_capacity_rejection_for_tests(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<(), InferenceEngineError> {
+        let active_request = self.active_request.as_mut().ok_or_else(|| {
+            fatal_engine_error("cannot force prefill rejection without an active request")
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot force prefill rejection for a different request",
+            ));
+        }
+        active_request.force_next_prefill_capacity_rejection_for_tests = true;
+        Ok(())
+    }
+
+    fn force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<(), InferenceEngineError> {
+        let active_request = self.active_request.as_mut().ok_or_else(|| {
+            fatal_engine_error(
+                "cannot force speculative-prefill draft-prefix restore failure without an active request",
+            )
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot force speculative-prefill draft-prefix restore failure for a different request",
+            ));
+        }
+        active_request.force_next_speculative_prefill_draft_prefix_restore_failure_for_tests = true;
+        Ok(())
+    }
+
+    fn force_next_speculative_prefill_failure_for_tests(
+        &mut self,
+        request_id: RequestId,
+        failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
+    ) -> Result<(), InferenceEngineError> {
+        let active_request = self.active_request.as_mut().ok_or_else(|| {
+            fatal_engine_error(
+                "cannot force a speculative-prefill failure without an active request",
+            )
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot force a speculative-prefill failure for a different request",
+            ));
+        }
+        active_request.forced_speculative_prefill_failure_stage_for_tests = Some(failure_stage);
+        Ok(())
+    }
+
+    fn force_next_mtp_draft_rejection_for_tests(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<(), InferenceEngineError> {
+        let active_request = self.active_request.as_mut().ok_or_else(|| {
+            fatal_engine_error("cannot force MTP rejection without an active request")
+        })?;
+        if active_request.request_id != request_id {
+            return Err(fatal_engine_error(
+                "cannot force MTP rejection for a different request",
+            ));
+        }
+        if let Some(optional_prediction_session) = active_request.optional_prediction_session_mut()
+        {
+            optional_prediction_session.force_next_draft_rejection_for_tests();
+            Ok(())
+        } else {
+            Err(fatal_engine_error(
+                "cannot force MTP rejection for a target-only request",
+            ))
+        }
+    }
+}
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     /// Returns truthful per-model prompt work for an active qualification request.
@@ -55,19 +170,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
                 "selected speculative-prefill positions owner operation returned no response",
             )
         })
-    }
-
-    /// Leaves prompt-cache reads available while removing the optional writer.
-    pub async fn disable_persistent_prompt_cache_writes_for_tests(
-        &self,
-    ) -> Result<(), InferenceEngineError> {
-        self.run_owner_test_operation(|qwen_inference_execution| {
-            qwen_inference_execution
-                .persistent_prompt_cache_write_queue
-                .take();
-            Ok(())
-        })
-        .await
     }
 
     /// Rejects one completed prefill attempt so qualification can verify full retry rollback.

@@ -83,12 +83,6 @@ impl Qwen3_5EngineState {
             .map_or(0, |draft_persistent_prompt_cache| {
                 draft_persistent_prompt_cache.total_size_bytes()
             });
-        let draft_persistent_prompt_cache_pending_serialized_bytes = self
-            .speculative_prefill_draft_persistent_prompt_cache_write_queue
-            .as_ref()
-            .map_or(0, |draft_persistent_prompt_cache_write_queue| {
-                draft_persistent_prompt_cache_write_queue.pending_serialized_bytes()
-            });
         let restored_target_position_count = active_request
             .speculative_prefill_restored_target_token_positions
             .as_ref()
@@ -176,7 +170,6 @@ impl Qwen3_5EngineState {
             draft_persistent_prompt_cache_sequence_state_count,
             draft_persistent_prompt_cache_boundary_snapshot_count,
             draft_persistent_prompt_cache_size_bytes,
-            draft_persistent_prompt_cache_pending_serialized_bytes,
             "captured configured SpecPrefill drafter failure diagnostics"
         );
     }

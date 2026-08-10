@@ -1,4 +1,7 @@
-use astronomical_model_serving::persistent_prompt_cache_boundary_completed_prefill_chunck_tokens;
+use astronomical_model_serving::{
+    persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
+    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
+};
 
 #[test]
 fn should_report_every_persistent_prompt_cache_boundary_crossed_by_one_prefill_chunck() {
@@ -28,6 +31,35 @@ fn should_report_every_persistent_prompt_cache_boundary_crossed_by_one_prefill_c
                 persistent_prompt_cache_block_token_count,
             ),
             "unexpected local boundary counts for [{prefill_chunck_start}, {prefill_chunck_end})"
+        );
+    }
+}
+
+#[test]
+fn should_clamp_cache_enabled_prefill_to_the_next_persistent_boundary() {
+    for (
+        prefill_chunck_start,
+        requested_prefill_chunck_end,
+        persistent_prompt_cache_block_token_count,
+        expected_prefill_chunck_end,
+    ) in [
+        (0, 128, 2_048, 128),
+        (0, 4_096, 2_048, 2_048),
+        (128, 4_096, 2_048, 2_048),
+        (2_048, 8_192, 2_048, 4_096),
+        (2_048, 2_048, 2_048, 2_048),
+        (4_096, 2_048, 2_048, 2_048),
+        (0, 4_096, 0, 4_096),
+        (usize::MAX - 1_024, usize::MAX, 2_048, usize::MAX),
+    ] {
+        assert_eq!(
+            expected_prefill_chunck_end,
+            persistent_prompt_cache_boundary_clamped_prefill_chunck_end(
+                prefill_chunck_start,
+                requested_prefill_chunck_end,
+                persistent_prompt_cache_block_token_count,
+            ),
+            "unexpected boundary clamp for [{prefill_chunck_start}, {requested_prefill_chunck_end})"
         );
     }
 }

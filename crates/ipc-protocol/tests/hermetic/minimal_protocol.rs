@@ -555,6 +555,7 @@ async fn should_round_trip_one_persistent_prompt_cache_stats_event() {
         persistent_prompt_cache_hits: 12,
         persistent_prompt_cache_misses: 3,
         persistent_prompt_cache_tokens_saved: 95_000,
+        persistent_prompt_cache_block_token_count: 2_048,
         persistent_prompt_cache_sequence_state_block_count: 87,
         persistent_prompt_cache_boundary_state_snapshot_count: 1,
         persistent_prompt_cache_visual_embedding_count: 5,

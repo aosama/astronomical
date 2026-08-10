@@ -1,6 +1,4 @@
-use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationOutput, WorkerEvent,
-};
+use astronomical_ipc_protocol::{ChatGenerationOutput, WorkerEvent};
 use std::{
     sync::{Arc, RwLock},
     time::Duration,
@@ -8,16 +6,16 @@ use std::{
 use tokio::time::Instant;
 
 use crate::{
-    ActiveRequestProgress, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationPerformanceRecord, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
+    ActiveRequestProgress, ChatGenerationStreamEvent, GenerationPerformanceLog, WorkerActivity,
+    WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
-    generation_performance_log::unix_epoch_millis,
+    worker_completion_event::handle_worker_completion_event,
     worker_health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot,
         publish_active_request_progress, publish_activity, publish_expert_memory_mode,
         publish_health, publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
         publish_mlx_memory_limit_rejection, publish_persistent_prompt_cache_stats,
-        record_prompt_work_reuse, record_serving_session,
+        record_prompt_work_reuse,
     },
     worker_loop_types::ActiveGeneration,
     worker_prefill_progress::handle_worker_prefill_progress,
@@ -362,114 +360,21 @@ pub(super) fn handle_worker_event(
             generated_token_count,
             reasoning_token_count,
             cached_token_count,
+            persistent_prompt_cache_diagnostics,
             reason,
         } => {
-            let Some(active_request) = active_generation.as_ref() else {
-                return Err(protocol_violation("completion without an active request"));
-            };
-            let latest_known_generated_token_count = active_request
-                .generated_token_count
-                .max(active_request.latest_generation_progress_token_count);
-            let is_valid_reason = match reason {
-                ChatGenerationCompletionReason::EndOfSequence => {
-                    generated_token_count <= active_request.max_output_tokens
-                }
-                ChatGenerationCompletionReason::MaximumOutputTokens => {
-                    generated_token_count == active_request.max_output_tokens
-                }
-                ChatGenerationCompletionReason::ToolCalls => {
-                    active_request.next_tool_call_index > 0
-                }
-                ChatGenerationCompletionReason::Cancelled => false,
-            };
-            if request_id != active_request.request_id
-                || generated_token_count < latest_known_generated_token_count
-                || generated_token_count > active_request.max_output_tokens
-                || !is_valid_reason
-            {
-                return Err(protocol_violation(
-                    "completion correlation or count mismatch",
-                ));
-            }
-            let Some(completed_request) = active_generation.take() else {
-                return Ok(());
-            };
-            let total_elapsed_millis = completed_request
-                .request_started_at
-                .elapsed()
-                .as_millis()
-                .try_into()
-                .unwrap_or(u64::MAX);
-            let generation_elapsed_millis = completed_request
-                .generation_started_at
-                .map_or(0, |started_at| started_at.elapsed().as_millis() as u64);
-            let prefill_elapsed_millis = completed_request.prefill_elapsed_millis;
-            let (prefill_tok_per_second, generation_tok_per_second) =
-                GenerationPerformanceRecord::compute_throughput(
-                    prompt_token_count,
-                    cached_token_count,
-                    generated_token_count,
-                    prefill_elapsed_millis,
-                    generation_elapsed_millis,
-                );
-            let model_id = health_snapshot
-                .read()
-                .map(|snapshot| snapshot.ready_model_id.clone())
-                .ok()
-                .flatten()
-                .unwrap_or_default();
-            tracing::info!(
-                request_id = request_id.value(),
-                prompt_token_count,
-                generated_token_count,
-                cached_token_count,
-                completion_reason = ?reason,
-                prefill_elapsed_millis,
-                generation_elapsed_millis,
-                total_elapsed_millis,
-                prefill_tok_per_second = ?prefill_tok_per_second,
-                generation_tok_per_second = ?generation_tok_per_second,
-                "worker generation completed"
-            );
-            performance_log.record(&GenerationPerformanceRecord {
-                timestamp_millis: unix_epoch_millis(),
-                request_id: request_id.value(),
-                model_id,
-                prompt_token_count,
-                cached_token_count,
-                generated_token_count,
-                completion_reason: match reason {
-                    ChatGenerationCompletionReason::EndOfSequence => "end_of_sequence",
-                    ChatGenerationCompletionReason::MaximumOutputTokens => "maximum_output_tokens",
-                    ChatGenerationCompletionReason::ToolCalls => "tool_calls",
-                    ChatGenerationCompletionReason::Cancelled => "cancelled",
-                }
-                .to_owned(),
-                prefill_elapsed_millis,
-                generation_elapsed_millis,
-                total_elapsed_millis,
-                prefill_tok_per_second,
-                generation_tok_per_second,
-                mlx_peak_memory_bytes: completed_request.last_mlx_peak_memory_bytes,
-                mlx_active_memory_bytes: completed_request.last_mlx_active_memory_bytes,
-            });
-            record_serving_session(
-                health_snapshot,
-                prompt_token_count,
-                cached_token_count,
-                prefill_tok_per_second,
-                generation_tok_per_second,
-            );
-            publish_activity(health_snapshot, WorkerActivity::Idle);
-            clear_active_request_progress(health_snapshot);
-            let stream_event = ChatGenerationStreamEvent::Completed {
+            handle_worker_completion_event(
+                request_id,
                 prompt_token_count,
                 generated_token_count,
                 reasoning_token_count,
                 cached_token_count,
+                persistent_prompt_cache_diagnostics,
                 reason,
-            };
-            try_send_stream_event(&completed_request.stream_event_sender, stream_event)?;
+                health_snapshot,
+                active_generation,
+                performance_log,
+            )?;
         }
         WorkerEvent::Failed { request_id, reason } => {
             let Some(active_request) = active_generation.as_ref() else {

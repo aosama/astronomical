@@ -11,7 +11,7 @@ use crate::qwen3_5::model::memory_admission::{
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, PerformanceAttribution,
-    PerformanceCounter, PerformanceOperation,
+    PerformanceAttributionOutcome, PerformanceCounter, PerformanceOperation,
 };
 
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
@@ -41,11 +41,42 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
 }
 
 impl Qwen3_5EngineState {
+    pub(super) fn admit_initial_generation_context_or_record_rejection(
+        &mut self,
+        request_id: RequestId,
+        configured_maximum_output_tokens: u16,
+        total_context_tokens: usize,
+        can_use_persistent_prompt_cache: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<u64, InferenceEngineError> {
+        // Return reclaimed expert bytes so request diagnostics can explain work
+        // performed specifically to reserve direct cache-publication workspace.
+        match self.validate_initial_generation_context_memory_admission(
+            total_context_tokens,
+            can_use_persistent_prompt_cache,
+            performance_attribution,
+        ) {
+            Ok(reclaimed_expert_payload_bytes) => Ok(reclaimed_expert_payload_bytes),
+            Err(context_admission_error) => {
+                self.record_generation_performance_attribution(
+                    std::mem::replace(performance_attribution, PerformanceAttribution::disabled()),
+                    PerformanceAttributionOutcome::Rejected,
+                    request_id,
+                    configured_maximum_output_tokens,
+                    None,
+                    Some("generation context admission rejected"),
+                );
+                Err(context_admission_error)
+            }
+        }
+    }
+
     pub(super) fn validate_initial_generation_context_memory_admission(
         &self,
         total_context_tokens: usize,
+        can_use_persistent_prompt_cache: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), InferenceEngineError> {
+    ) -> Result<u64, InferenceEngineError> {
         let model = self
             .model
             .as_ref()
@@ -56,27 +87,46 @@ impl Qwen3_5EngineState {
         let context_admission_outcome = performance_attribution.measure_operation(
             PerformanceOperation::MemoryAdmissionSnapshot,
             |_performance_attribution| {
+                // Cache capture already owns decoder-state arrays. Admission adds
+                // only the largest one-at-a-time native serialization workspace,
+                // and only for requests eligible to publish persistent state.
+                let direct_publication_workspace_bytes = if can_use_persistent_prompt_cache {
+                    self.persistent_prompt_cache_model_contract
+                        .as_ref()
+                        .map_or(0, |model_contract| {
+                            model_contract.direct_publication_workspace_bytes()
+                        })
+                } else {
+                    0
+                };
                 validate_context_memory_admission(
                     model,
                     self.memory_limits,
                     self.context_memory_reservation_bytes_per_token,
                     total_context_tokens,
-                    0,
+                    direct_publication_workspace_bytes,
                     self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
                 )
             },
         );
+        let target_expert_payload_bytes_after_context_admission = model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        let target_expert_payload_bytes_reclaimed_during_context_admission =
+            target_expert_payload_bytes_before_context_admission
+                .saturating_sub(target_expert_payload_bytes_after_context_admission);
         if self.speculative_prefill.enabled {
-            let target_expert_payload_bytes_after_context_admission = model
-                .expert_weight_memory_cache_statistics()
-                .resident_payload_byte_count;
             performance_attribution.record_counter(
                 PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-                target_expert_payload_bytes_before_context_admission
-                    .saturating_sub(target_expert_payload_bytes_after_context_admission),
+                target_expert_payload_bytes_reclaimed_during_context_admission,
             );
         }
-        context_admission_outcome
+        context_admission_outcome?;
+        Ok(if can_use_persistent_prompt_cache {
+            target_expert_payload_bytes_reclaimed_during_context_admission
+        } else {
+            0
+        })
     }
 
     /// Attributes adaptive admission, including any retained-expert reclamation.

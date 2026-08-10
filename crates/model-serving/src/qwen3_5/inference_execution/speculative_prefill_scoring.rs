@@ -8,6 +8,8 @@ use super::speculative_prefill_selection::{
     qwen3_5_speculative_prefill_selectable_importance_score_range,
 };
 #[cfg(feature = "direct-mlx")]
+use super::speculative_prefill_selection_gpu::select_absolute_speculative_prefill_positions_from_draft_scores;
+#[cfg(feature = "direct-mlx")]
 use super::{
     Qwen3_5EngineState, qwen3_5_runtime_error,
     speculative_prefill_failure::configured_speculative_prefill_failure,
@@ -15,10 +17,7 @@ use super::{
 #[cfg(feature = "direct-mlx")]
 use crate::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
-use crate::{
-    PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError,
-    qwen3_5_select_speculative_prefill_token_positions_on_gpu,
-};
+use crate::{PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError};
 #[cfg(feature = "direct-mlx")]
 pub(super) enum SpeculativePrefillSelectionPreparation {
     Ready,
@@ -406,81 +405,24 @@ impl Qwen3_5EngineState {
             );
         let draft_scoring_outcome = active_request.performance_attribution.measure_operation(
             PerformanceOperation::SpeculativePrefillSelection,
-            |_performance_attribution| draft_scoring_outcome.and_then(|draft_scoring_outcome| {
-                if should_force_selection_failure {
-                    return Err(Qwen3_5ExecutionError::InvalidInput {
-                        description: "forced speculative-prefill selection failure",
-                    });
-                }
-                let importance_score_shape = draft_scoring_outcome.importance_scores.shape();
-                let selectable_importance_score_range_start_i32 =
-                    i32::try_from(selectable_importance_score_range.start).map_err(|_| {
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "speculative-prefill importance score range start exceeds the MLX range",
-                        }
-                    })?;
-                let selectable_importance_score_range_end_i32 =
-                    i32::try_from(selectable_importance_score_range.end).map_err(|_| {
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "speculative-prefill importance score range end exceeds the MLX range",
-                        }
-                    })?;
-                if importance_score_shape.len() != 1
-                    || importance_score_shape[0] < selectable_importance_score_range_end_i32
-                {
-                    return Err(Qwen3_5ExecutionError::InvalidInput {
-                        description: "speculative-prefill draft produced fewer importance scores than expected",
-                    });
-                }
-                let selectable_importance_scores = draft_model.runtime().slice(
-                    &draft_scoring_outcome.importance_scores,
-                    &[selectable_importance_score_range_start_i32],
-                    &[selectable_importance_score_range_end_i32],
-                    &[1],
-                )?;
-                let selected_token_positions =
-                    qwen3_5_select_speculative_prefill_token_positions_on_gpu(
-                        draft_model.runtime(),
-                        &selectable_importance_scores,
+            |_performance_attribution| {
+                draft_scoring_outcome.and_then(|draft_scoring_outcome| {
+                    if should_force_selection_failure {
+                        return Err(Qwen3_5ExecutionError::InvalidInput {
+                            description: "forced speculative-prefill selection failure",
+                        });
+                    }
+                    select_absolute_speculative_prefill_positions_from_draft_scores(
+                        &draft_model,
+                        draft_scoring_outcome,
+                        selectable_importance_score_range.clone(),
+                        scoring_start_position_tokens,
                         self.speculative_prefill.keep_percentage,
-                        usize::try_from(self.speculative_prefill.selection_chunck_token_count)
-                            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                                description: "speculative-prefill selection chunk count exceeds the usize range",
-                            })?,
-                        usize::try_from(self.speculative_prefill.mandatory_trailing_token_count)
-                            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                                description: "speculative-prefill trailing token count exceeds the usize range",
-                            })?,
-                    )?;
-                let scoring_start_position_scalar = draft_model.runtime().array_from_i32(
-                    &[i32::try_from(scoring_start_position_tokens).map_err(|_| {
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "speculative-prefill scoring start exceeds the MLX range",
-                        }
-                    })?],
-                    &[],
-                )?;
-                let absolute_selected_token_positions = draft_model
-                    .runtime()
-                    .add(&selected_token_positions, &scoring_start_position_scalar)?;
-                let absolute_selected_token_positions = draft_model.runtime().astype(
-                    &absolute_selected_token_positions,
-                    astronomical_runtime_integration::MlxDtype::UInt32,
-                )?;
-                let absolute_selected_token_positions = draft_model
-                    .runtime()
-                    .copy_u32_values(&absolute_selected_token_positions)?
-                    .into_iter()
-                    .map(|selected_token_position| {
-                        usize::try_from(selected_token_position).map_err(|_| {
-                            Qwen3_5ExecutionError::InvalidInput {
-                                description: "speculative-prefill selected position exceeds usize",
-                            }
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok((absolute_selected_token_positions, draft_scoring_outcome))
-            }),
+                        self.speculative_prefill.selection_chunck_token_count,
+                        self.speculative_prefill.mandatory_trailing_token_count,
+                    )
+                })
+            },
         );
         active_request.speculative_prefill_draft_memory_telemetry = self
             .speculative_prefill_draft_memory_telemetry(

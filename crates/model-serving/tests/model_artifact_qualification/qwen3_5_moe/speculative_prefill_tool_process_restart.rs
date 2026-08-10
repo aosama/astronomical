@@ -45,7 +45,7 @@ pub(super) struct SpeculativePrefillProcessPassReport {
     pub(super) drafter_restored_token_count: u64,
     pub(super) drafter_scored_suffix_token_count: u64,
     pub(super) target_state_write_count: u64,
-    pub(super) drafter_dense_state_file_count: usize,
+    pub(super) drafter_dense_state_block_count: usize,
     pub(super) selection_file_count: usize,
     pub(super) sparse_target_state_file_count: usize,
 }
@@ -73,7 +73,7 @@ async fn should_restore_an_identical_tool_request_after_a_real_process_restart()
 
         let cold_report = read_process_pass_report(&cold_report_path);
         let warm_report = read_process_pass_report(&warm_report_path);
-        assert!(cold_report.drafter_dense_state_file_count >= 1);
+        assert!(cold_report.drafter_dense_state_block_count >= 1);
         assert!(cold_report.selection_file_count >= 1);
         assert!(cold_report.sparse_target_state_file_count >= 1);
         assert!(cold_report.target_state_write_count >= 1);
@@ -207,8 +207,8 @@ async fn should_purge_old_sparse_policy_state_before_using_a_changed_keep_percen
         assert_eq!(changed_keep_report.selection_file_count, 1);
         assert_eq!(changed_keep_report.sparse_target_state_file_count, 1);
         assert!(
-            changed_keep_report.drafter_dense_state_file_count
-                >= cold_report.drafter_dense_state_file_count,
+            changed_keep_report.drafter_dense_state_block_count
+                >= cold_report.drafter_dense_state_block_count,
             "the keep-percentage purge must preserve dense drafter prompt state",
         );
         eprintln!(
@@ -491,8 +491,8 @@ async fn run_process_pass(
             .speculative_prefill_draft_scored_suffix_token_count,
         target_state_write_count: process_pass_measurement
             .speculative_prefill_target_persistent_state_write_count,
-        drafter_dense_state_file_count: file_count_in_directory(
-            &drafter_cache_directory.join("kv_blocks"),
+        drafter_dense_state_block_count: file_count_in_directory(
+            &drafter_cache_directory.join("blocks"),
         ),
         selection_file_count: file_count_in_directory(
             &drafter_cache_directory.join("speculative_prefill_selections"),

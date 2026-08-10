@@ -28,6 +28,7 @@ pub struct PersistentPromptCacheLookupDiagnostics {
     maximum_restorable_block_count: usize,
     matched_sequence_state_block_count: usize,
     first_missing_sequence_state_block_index: Option<usize>,
+    first_missing_sequence_state_block_hash: Option<[u8; 32]>,
     newest_boundary_state_snapshot_block_index: Option<usize>,
     miss_reason: Option<PersistentPromptCacheMissReason>,
 }
@@ -42,6 +43,7 @@ impl PersistentPromptCacheLookupDiagnostics {
             maximum_restorable_block_count,
             matched_sequence_state_block_count: 0,
             first_missing_sequence_state_block_index: None,
+            first_missing_sequence_state_block_hash: None,
             newest_boundary_state_snapshot_block_index: None,
             miss_reason: None,
         }
@@ -71,6 +73,12 @@ impl PersistentPromptCacheLookupDiagnostics {
         self.first_missing_sequence_state_block_index
     }
 
+    /// Returns the expected block hash for the first missing KV block, when available.
+    #[must_use]
+    pub const fn first_missing_sequence_state_block_hash(&self) -> Option<[u8; 32]> {
+        self.first_missing_sequence_state_block_hash
+    }
+
     /// Returns the recurrent snapshot position used as the restore boundary.
     #[must_use]
     pub const fn newest_boundary_state_snapshot_block_index(&self) -> Option<usize> {
@@ -93,8 +101,10 @@ impl PersistentPromptCacheLookupDiagnostics {
     fn record_first_missing_sequence_state_block_index(
         &mut self,
         missing_sequence_state_block_index: usize,
+        missing_sequence_state_block_hash: Option<[u8; 32]>,
     ) {
         self.first_missing_sequence_state_block_index = Some(missing_sequence_state_block_index);
+        self.first_missing_sequence_state_block_hash = missing_sequence_state_block_hash;
     }
 
     fn record_newest_boundary_state_snapshot_block_index(
@@ -286,7 +296,8 @@ impl PersistentPromptCachePrefixLookup {
                 // engine can always process the complete prompt cold.
                 Ok(persistent_prompt_cache_block_key) => persistent_prompt_cache_block_key,
                 Err(_) => {
-                    lookup_diagnostics.record_first_missing_sequence_state_block_index(block_index);
+                    lookup_diagnostics
+                        .record_first_missing_sequence_state_block_index(block_index, None);
                     break;
                 }
             };
@@ -295,7 +306,10 @@ impl PersistentPromptCachePrefixLookup {
                     &persistent_prompt_cache_block_key.block_hash(),
                 )
             {
-                lookup_diagnostics.record_first_missing_sequence_state_block_index(block_index);
+                lookup_diagnostics.record_first_missing_sequence_state_block_index(
+                    block_index,
+                    Some(persistent_prompt_cache_block_key.block_hash()),
+                );
                 break;
             }
             // Boundary-only models still construct the deterministic chain, but do not require

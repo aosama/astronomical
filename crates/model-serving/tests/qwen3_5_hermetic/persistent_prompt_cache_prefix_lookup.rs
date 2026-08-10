@@ -208,6 +208,11 @@ fn should_not_match_blocks_when_the_root_block_differs() {
         &original_prompt_tokens[..persistent_prompt_cache_block_token_count()],
     )
     .expect("the test should hash the original root block");
+    let requested_root_block_key = PersistentPromptCacheBlockKey::for_root_block(
+        persistent_prompt_cache_model_contract_ref(),
+        &modified_prompt_tokens[..persistent_prompt_cache_block_token_count()],
+    )
+    .expect("the test should hash the requested root block");
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
         persistent_prompt_cache_model_contract_ref(),
@@ -227,6 +232,10 @@ fn should_not_match_blocks_when_the_root_block_differs() {
     assert_eq!(
         lookup_diagnostics.first_missing_sequence_state_block_index(),
         Some(0)
+    );
+    assert_eq!(
+        lookup_diagnostics.first_missing_sequence_state_block_hash(),
+        Some(requested_root_block_key.block_hash())
     );
     assert_eq!(
         lookup_diagnostics.miss_reason(),
@@ -292,6 +301,10 @@ fn should_report_missing_recurrent_snapshot_before_missing_child_when_matched_pr
     assert_eq!(
         lookup_diagnostics.first_missing_sequence_state_block_index(),
         Some(1)
+    );
+    assert_eq!(
+        lookup_diagnostics.first_missing_sequence_state_block_hash(),
+        Some(block_keys[1].block_hash())
     );
     assert_eq!(
         lookup_diagnostics.newest_boundary_state_snapshot_block_index(),

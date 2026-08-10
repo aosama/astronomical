@@ -24,6 +24,7 @@ mod shutdown_control;
 mod status_endpoint;
 mod system_telemetry;
 mod worker;
+mod worker_completion_event;
 mod worker_containment;
 mod worker_control_error;
 mod worker_event_handler;
