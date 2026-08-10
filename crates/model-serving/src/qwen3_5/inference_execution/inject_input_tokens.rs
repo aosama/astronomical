@@ -114,7 +114,6 @@ impl Qwen3_5EngineState {
                     model.sparse_experts_are_paged(),
                     self.persistent_prompt_cache.is_some()
                         && active_request.can_use_persistent_prompt_cache
-                        && !active_request.persistent_prompt_cache_capture_has_stopped
                         && !active_request.has_optional_prediction_session(),
                 );
             let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(

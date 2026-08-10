@@ -21,11 +21,11 @@ const CONFIGURED_TARGET_SUMMARY_MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 768;
 const CONFIGURED_TARGET_SUMMARY_REQUEST_IDENTIFIER: u64 = 95_260;
 const CONFIGURED_TARGET_SUMMARY_TIMEOUT: Duration = Duration::from_secs(115);
 const CONFIGURED_TARGET_SUMMARY_ACTIVE_MEMORY_LIMIT_BYTES: usize = 16_000_000_000;
-const REPORTED_OPTIQ_SIX_BIT_PROMPT_TOKEN_COUNT: usize = 104_249;
-const REPORTED_OPTIQ_SIX_BIT_MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 5_000;
-const REPORTED_OPTIQ_SIX_BIT_REQUEST_IDENTIFIER: u64 = 95_261;
-const REPORTED_OPTIQ_SIX_BIT_ACTIVE_MEMORY_LIMIT_BYTES: usize = 32_000_000_000;
-const REPORTED_OPTIQ_SIX_BIT_TARGET_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-6bit";
+const PINNED_OPTIQ_FOUR_BIT_PROMPT_TOKEN_COUNT: usize = 104_249;
+const PINNED_OPTIQ_FOUR_BIT_MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 5_000;
+const PINNED_OPTIQ_FOUR_BIT_REQUEST_IDENTIFIER: u64 = 95_261;
+const PINNED_OPTIQ_FOUR_BIT_ACTIVE_MEMORY_LIMIT_BYTES: usize = 32_000_000_000;
+const PINNED_OPTIQ_FOUR_BIT_TARGET_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
 
 #[tokio::test]
 #[ignore = "loads the configured target and drafter for a cold-cache 60K Romeo and Juliet summary journey"]
@@ -46,16 +46,16 @@ async fn should_complete_the_configured_cold_cache_60k_three_paragraph_summary_w
 }
 
 #[tokio::test]
-#[ignore = "loads the reported OptiQ 6-bit target and configured drafter for a cold-cache 104,249-token journey"]
-async fn should_complete_the_reported_optiq_six_bit_104249_token_journey_within_32_gb() {
+#[ignore = "requires model_directories to discover the pinned Ornith-1.0-35B-OptiQ-4bit target and loads it with the configured drafter for a cold-cache 104,249-token journey"]
+async fn should_complete_the_pinned_optiq_four_bit_104249_token_journey_within_32_gb() {
     tokio::time::timeout(
         CONFIGURED_TARGET_SUMMARY_TIMEOUT,
         run_configured_cold_cache_summary_journey(
-            REPORTED_OPTIQ_SIX_BIT_PROMPT_TOKEN_COUNT,
-            REPORTED_OPTIQ_SIX_BIT_MAXIMUM_OUTPUT_TOKEN_COUNT,
-            REPORTED_OPTIQ_SIX_BIT_REQUEST_IDENTIFIER,
-            REPORTED_OPTIQ_SIX_BIT_ACTIVE_MEMORY_LIMIT_BYTES,
-            Some(REPORTED_OPTIQ_SIX_BIT_TARGET_MODEL_ID),
+            PINNED_OPTIQ_FOUR_BIT_PROMPT_TOKEN_COUNT,
+            PINNED_OPTIQ_FOUR_BIT_MAXIMUM_OUTPUT_TOKEN_COUNT,
+            PINNED_OPTIQ_FOUR_BIT_REQUEST_IDENTIFIER,
+            PINNED_OPTIQ_FOUR_BIT_ACTIVE_MEMORY_LIMIT_BYTES,
+            Some(PINNED_OPTIQ_FOUR_BIT_TARGET_MODEL_ID),
         ),
     )
     .await
@@ -211,7 +211,7 @@ async fn run_configured_cold_cache_summary_journey(
             .with_ordinary_target_prefill_control_span_token_count(
                 summary_prompt.ordinary_target_prefill_control_span_token_count,
             )
-            .with_thinking_budget(0)
+            .with_thinking_budget(256)
             .with_performance_attribution(PerformanceAttribution::enabled()),
         )
         .await

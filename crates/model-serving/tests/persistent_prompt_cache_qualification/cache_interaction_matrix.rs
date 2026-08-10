@@ -1,10 +1,7 @@
 use std::{fs, time::Duration};
 
 use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
-    InferenceEngine, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, Qwen3_5Engine,
-    Qwen3_5InferenceRequest,
-};
+use astronomical_model_serving::{InferenceEngine, Qwen3_5Engine, Qwen3_5InferenceRequest};
 use tokio::time::timeout;
 
 use super::engine_prompt_cache::{
@@ -13,8 +10,6 @@ use super::engine_prompt_cache::{
 };
 
 const CACHE_INTERACTION_QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
-const CACHE_INTERACTION_PROMPT_TOKEN_COUNT: usize =
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2 + 16;
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 4_096;
 
 #[derive(Clone, Copy)]
@@ -121,14 +116,16 @@ async fn run_qualification_cell(qualification_cell: CacheInteractionQualificatio
         PrefillSizingMode::Fixed => Some(FIXED_PREFILL_CHUNCK_TOKENS),
         PrefillSizingMode::Optimized => None,
     };
-    let prompt_token_ids =
-        persistent_prompt_cache_eligible_prompt_token_ids(CACHE_INTERACTION_PROMPT_TOKEN_COUNT);
-    let (mut qwen3_5_engine, _, _) = load_persistent_prompt_cache_qualification_engine(
-        &model_directory,
-        persistent_prompt_cache_directory.path(),
-        fixed_prefill_chunck_tokens,
-    )
-    .await;
+    let (mut qwen3_5_engine, _, _, persistent_prompt_cache_model_contract) =
+        load_persistent_prompt_cache_qualification_engine(
+            &model_directory,
+            persistent_prompt_cache_directory.path(),
+            fixed_prefill_chunck_tokens,
+        )
+        .await;
+    let prompt_token_ids = persistent_prompt_cache_eligible_prompt_token_ids(
+        persistent_prompt_cache_model_contract.block_token_count() * 2 + 16,
+    );
 
     let (cold_cached_token_count, cold_generated_token_ids) = run_one_token_request(
         &mut qwen3_5_engine,
@@ -146,7 +143,7 @@ async fn run_qualification_cell(qualification_cell: CacheInteractionQualificatio
         StorageTransition::LiveReuse => {}
         StorageTransition::WorkerRestart => {
             drop(qwen3_5_engine);
-            (qwen3_5_engine, _, _) = load_persistent_prompt_cache_qualification_engine(
+            (qwen3_5_engine, _, _, _) = load_persistent_prompt_cache_qualification_engine(
                 &model_directory,
                 persistent_prompt_cache_directory.path(),
                 fixed_prefill_chunck_tokens,
@@ -182,7 +179,8 @@ async fn run_qualification_cell(qualification_cell: CacheInteractionQualificatio
     let (warm_cached_token_count, warm_generated_token_ids) =
         run_one_token_request(&mut qwen3_5_engine, warm_request_id, &prompt_token_ids).await;
     assert!(
-        warm_cached_token_count >= (PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2) as u32,
+        warm_cached_token_count
+            >= (persistent_prompt_cache_model_contract.block_token_count() * 2) as u32,
         "the pre-existing cache restored {warm_cached_token_count} tokens but must restore both complete prompt blocks"
     );
     assert_eq!(

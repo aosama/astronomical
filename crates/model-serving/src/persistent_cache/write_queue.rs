@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
@@ -13,15 +12,13 @@ use crate::PerformanceAttribution;
 use super::block_key::PersistentPromptCacheBlockKey;
 use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
-use super::disk_store_file::PersistentPromptCacheSerializedFileWriter;
 use super::disk_store_write::{
-    ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES, PersistentPromptCacheSerializationOutcome,
-    PersistentPromptCacheSerializedBlock, estimated_serialized_safetensors_file_byte_count,
+    PersistentPromptCacheSerializationOutcome, PersistentPromptCacheSerializedBlock,
 };
+use super::save_admission::PersistentPromptCacheBlockSaveAdmission;
+use super::write_queue_writer::run_writer_loop;
 
-const MAXIMUM_PENDING_SERIALIZED_BYTES: u64 = 256_000_000;
 const PENDING_WRITE_RENDEZVOUS_CAPACITY: usize = 0;
-const WRITE_SLICE_BYTES: usize = 64 * 1024;
 const WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,6 +27,13 @@ pub enum PersistentPromptCacheWriteQueueOutcome {
     AlreadyQueued,
     DroppedBecauseQueueIsFull,
     SkipBecauseCacheIsFull,
+}
+
+pub(super) struct PersistentPromptCachePublicationRequest {
+    pub(super) serialized_block: PersistentPromptCacheSerializedBlock,
+    pub(super) publication_result_sender: SyncSender<
+        Result<PersistentPromptCacheBlockSaveAdmission, PersistentPromptCacheDiskStoreError>,
+    >,
 }
 
 /// Pure rate policy used by the filesystem writer and hermetic tests.
@@ -42,11 +46,12 @@ pub struct PersistentPromptCacheWriteRateLimiter {
 pub fn persistent_prompt_cache_write_queue_can_accept(
     pending_serialized_bytes: u64,
     incoming_serialized_bytes: u64,
+    maximum_pending_serialized_bytes: u64,
 ) -> bool {
     pending_serialized_bytes
         .checked_add(incoming_serialized_bytes)
         .is_some_and(|projected_pending_serialized_bytes| {
-            projected_pending_serialized_bytes <= MAXIMUM_PENDING_SERIALIZED_BYTES
+            projected_pending_serialized_bytes <= maximum_pending_serialized_bytes
         })
 }
 
@@ -74,45 +79,6 @@ impl PersistentPromptCacheWriteRateLimiter {
     }
 }
 
-struct ConfiguredPersistentPromptCacheSerializedFileWriter {
-    write_rate_limiter: PersistentPromptCacheWriteRateLimiter,
-    shutdown_requested: Arc<AtomicBool>,
-}
-
-impl PersistentPromptCacheSerializedFileWriter
-    for ConfiguredPersistentPromptCacheSerializedFileWriter
-{
-    fn write_serialized_file(
-        &self,
-        output_file: &mut std::fs::File,
-        serialized_safetensors_bytes: &[u8],
-    ) -> std::io::Result<()> {
-        let write_started_at = Instant::now();
-        let mut written_byte_count = 0_u64;
-        for serialized_safetensors_slice in serialized_safetensors_bytes.chunks(WRITE_SLICE_BYTES) {
-            if self.shutdown_requested.load(Ordering::Acquire) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Interrupted,
-                    "persistent prompt-cache writer shutdown interrupted the queued write",
-                ));
-            }
-            let next_written_byte_count = written_byte_count.saturating_add(
-                u64::try_from(serialized_safetensors_slice.len()).unwrap_or(u64::MAX),
-            );
-            let minimum_elapsed = self
-                .write_rate_limiter
-                .minimum_elapsed_for_bytes(next_written_byte_count);
-            let actual_elapsed = write_started_at.elapsed();
-            if minimum_elapsed > actual_elapsed {
-                std::thread::sleep(minimum_elapsed - actual_elapsed);
-            }
-            output_file.write_all(serialized_safetensors_slice)?;
-            written_byte_count = next_written_byte_count;
-        }
-        Ok(())
-    }
-}
-
 /// Bounded write-behind owner for persistent prompt-cache files.
 ///
 /// MLX serialization remains synchronous on the engine owner thread. Only
@@ -122,7 +88,7 @@ pub struct PersistentPromptCacheWriteQueue {
     disk_store: Arc<PersistentPromptCacheDiskStore>,
     pending_serialized_bytes: Arc<AtomicU64>,
     pending_block_hashes: Arc<Mutex<HashSet<[u8; 32]>>>,
-    serialized_block_sender: Mutex<Option<SyncSender<PersistentPromptCacheSerializedBlock>>>,
+    serialized_block_sender: Mutex<Option<SyncSender<PersistentPromptCachePublicationRequest>>>,
     shutdown_requested: Arc<AtomicBool>,
     writer_completed_receiver: Receiver<()>,
     writer_thread: Option<JoinHandle<()>>,
@@ -180,6 +146,20 @@ impl PersistentPromptCacheWriteQueue {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<PersistentPromptCacheWriteQueueOutcome, PersistentPromptCacheDiskStoreError> {
         let persistent_prompt_cache_block_hash = persistent_prompt_cache_block_key.block_hash();
+        let persistent_prompt_cache_model_contract = self.disk_store.model_contract_ref();
+        let sequence_state_is_published = !persistent_prompt_cache_model_contract
+            .has_sequence_state()
+            || self
+                .disk_store
+                .has_kv_block(&persistent_prompt_cache_block_hash);
+        let boundary_state_is_published = !persistent_prompt_cache_model_contract
+            .has_boundary_state()
+            || self
+                .disk_store
+                .has_recurrent_snapshot(&persistent_prompt_cache_block_hash);
+        if sequence_state_is_published && boundary_state_is_published {
+            return Ok(PersistentPromptCacheWriteQueueOutcome::AlreadyQueued);
+        }
         if self
             .pending_block_hashes
             .lock()
@@ -188,16 +168,30 @@ impl PersistentPromptCacheWriteQueue {
         {
             return Ok(PersistentPromptCacheWriteQueueOutcome::AlreadyQueued);
         }
-        let estimated_serialized_byte_count =
-            estimated_serialized_safetensors_file_byte_count(kv_block_tensors).saturating_add(
-                estimated_serialized_safetensors_file_byte_count(recurrent_snapshot_tensors),
+        let capture_tensor_payload_bytes = kv_block_tensors
+            .values()
+            .chain(recurrent_snapshot_tensors.values())
+            .map(|persistent_state_tensor| {
+                u64::try_from(persistent_state_tensor.byte_count()).unwrap_or(u64::MAX)
+            })
+            .fold(0_u64, u64::saturating_add);
+        // Reject before requesting MLX serialization whenever the live runtime cannot reserve
+        // the capture plus its contract workspace. SafeTensors overhead is intentionally not
+        // guessed here: the exact serialized size is checked again after MLX produces it.
+        let maximum_capture_serialized_bytes = self.available_capture_serialized_bytes(runtime)?;
+        if capture_tensor_payload_bytes > maximum_capture_serialized_bytes {
+            self.log_capture_rejection(
+                runtime,
+                persistent_prompt_cache_block_key,
+                "tensor_payload_exceeds_live_capture_capacity_before_serialization",
+                capture_tensor_payload_bytes,
+                maximum_capture_serialized_bytes,
+                None,
             );
-        if !persistent_prompt_cache_write_queue_can_accept(
-            self.pending_serialized_bytes.load(Ordering::Acquire),
-            estimated_serialized_byte_count,
-        ) {
             return Ok(PersistentPromptCacheWriteQueueOutcome::DroppedBecauseQueueIsFull);
         }
+        let maximum_capture_serialized_byte_count =
+            usize::try_from(maximum_capture_serialized_bytes).unwrap_or(usize::MAX);
         let serialization_outcome = self
             .disk_store
             .serialize_kv_block_and_recurrent_snapshot_with_performance_attribution(
@@ -206,16 +200,57 @@ impl PersistentPromptCacheWriteQueue {
                 parent_persistent_prompt_cache_block_key,
                 kv_block_tensors,
                 recurrent_snapshot_tensors,
+                maximum_capture_serialized_byte_count,
                 performance_attribution,
             )?;
         let PersistentPromptCacheSerializationOutcome::Serialized(serialized_block) =
             serialization_outcome
         else {
+            self.log_capture_rejection(
+                runtime,
+                persistent_prompt_cache_block_key,
+                "ssd_quota_rejected_serialized_capture",
+                capture_tensor_payload_bytes,
+                maximum_capture_serialized_bytes,
+                None,
+            );
             return Ok(PersistentPromptCacheWriteQueueOutcome::SkipBecauseCacheIsFull);
         };
         let serialized_byte_count = serialized_block.serialized_byte_count();
-        if !reserve_pending_serialized_bytes(&self.pending_serialized_bytes, serialized_byte_count)
-        {
+        // Serialization can add real header and alignment bytes that no static estimate can
+        // safely predict. Re-sample admission before handing ordinary bytes to the writer.
+        if !self.capture_memory_admission_is_available(runtime, serialized_byte_count)? {
+            self.log_capture_rejection(
+                runtime,
+                persistent_prompt_cache_block_key,
+                "serialized_bytes_exceed_live_capture_capacity_after_serialization",
+                capture_tensor_payload_bytes,
+                maximum_capture_serialized_bytes,
+                Some(serialized_byte_count),
+            );
+            return Ok(PersistentPromptCacheWriteQueueOutcome::DroppedBecauseQueueIsFull);
+        }
+        let memory_snapshot = runtime.memory_snapshot().map_err(|source| {
+            PersistentPromptCacheDiskStoreError::ReadMlxMemorySnapshot { source }
+        })?;
+        let maximum_pending_serialized_bytes = self.maximum_pending_serialized_bytes(
+            runtime,
+            memory_snapshot.active_memory_bytes(),
+            memory_snapshot.allocator_cache_memory_bytes(),
+        );
+        if !reserve_pending_serialized_bytes(
+            &self.pending_serialized_bytes,
+            serialized_byte_count,
+            maximum_pending_serialized_bytes,
+        ) {
+            self.log_capture_rejection(
+                runtime,
+                persistent_prompt_cache_block_key,
+                "pending_serialized_bytes_exceed_live_capture_capacity",
+                capture_tensor_payload_bytes,
+                maximum_capture_serialized_bytes,
+                Some(serialized_byte_count),
+            );
             return Ok(PersistentPromptCacheWriteQueueOutcome::DroppedBecauseQueueIsFull);
         }
         let sender_guard = self
@@ -234,8 +269,22 @@ impl PersistentPromptCacheWriteQueue {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(persistent_prompt_cache_block_hash);
         let writer_handoff_started_at = Instant::now();
-        match serialized_block_sender.send(*serialized_block) {
-            Ok(()) => Ok(PersistentPromptCacheWriteQueueOutcome::Queued),
+        let (publication_result_sender, publication_result_receiver) = sync_channel(0);
+        let publication_request = PersistentPromptCachePublicationRequest {
+            serialized_block: *serialized_block,
+            publication_result_sender,
+        };
+        match serialized_block_sender.send(publication_request) {
+            // A child cache key is meaningful only after the parent state is durable. This
+            // acknowledgement therefore supplies bounded backpressure instead of letting the
+            // engine race ahead and later discover an unpublishable parent chain.
+            Ok(()) => match publication_result_receiver.recv() {
+                Ok(Ok(_)) => Ok(PersistentPromptCacheWriteQueueOutcome::Queued),
+                Ok(Err(publication_error)) => Err(publication_error),
+                Err(_) => {
+                    Err(PersistentPromptCacheDiskStoreError::WriterPublicationAcknowledgementLost)
+                }
+            },
             Err(_) => {
                 subtract_pending_serialized_bytes(
                     &self.pending_serialized_bytes,
@@ -264,14 +313,23 @@ impl PersistentPromptCacheWriteQueue {
         projected_single_capture_tensor_payload_bytes: usize,
         projected_boundary_count: usize,
     ) -> bool {
-        let projected_single_capture_tensor_payload_bytes =
+        let projected_single_capture_payload_bytes =
             u64::try_from(projected_single_capture_tensor_payload_bytes).unwrap_or(u64::MAX);
-        let projected_single_capture_serialized_bytes =
-            projected_single_capture_tensor_payload_bytes
-                .saturating_add(ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES.saturating_mul(2));
-        let projected_all_capture_serialized_bytes = u64::try_from(projected_boundary_count)
+        let projected_all_capture_payload_bytes = u64::try_from(projected_boundary_count)
             .unwrap_or(u64::MAX)
-            .saturating_mul(projected_single_capture_serialized_bytes);
+            .saturating_mul(projected_single_capture_payload_bytes);
+        let maximum_pending_serialized_bytes = self
+            .disk_store
+            .model_contract_ref()
+            .effective_mlx_memory_ceiling_bytes()
+            .saturating_sub(
+                u64::try_from(
+                    self.disk_store
+                        .model_contract_ref()
+                        .maximum_tensor_serialization_workspace_bytes(),
+                )
+                .unwrap_or(u64::MAX),
+            );
         !self.shutdown_requested.load(Ordering::Acquire)
             && self
                 .serialized_block_sender
@@ -280,12 +338,13 @@ impl PersistentPromptCacheWriteQueue {
                 .is_some()
             && persistent_prompt_cache_write_queue_can_accept(
                 self.pending_serialized_bytes.load(Ordering::Acquire),
-                projected_single_capture_serialized_bytes,
+                projected_all_capture_payload_bytes,
+                maximum_pending_serialized_bytes,
             )
             && self
                 .disk_store
                 .total_size_bytes()
-                .checked_add(projected_all_capture_serialized_bytes)
+                .checked_add(projected_all_capture_payload_bytes)
                 .is_some_and(|projected_total_size_bytes| {
                     projected_total_size_bytes
                         <= self.disk_store.global_prompt_cache_maximum_size_bytes
@@ -308,6 +367,104 @@ impl PersistentPromptCacheWriteQueue {
     #[doc(hidden)]
     pub fn request_writer_shutdown_for_tests(&self) {
         self.shutdown_requested.store(true, Ordering::Release);
+    }
+
+    fn maximum_pending_serialized_bytes(
+        &self,
+        runtime: &MlxRuntime,
+        active_memory_bytes: usize,
+        allocator_cache_memory_bytes: usize,
+    ) -> u64 {
+        // Both MLX's active allocation limit and the artifact's effective ceiling constrain the
+        // same process. The lower ceiling wins after subtracting live arrays, reclaimable
+        // allocator storage, and the largest serializer workspace promised by the contract.
+        let current_runtime_memory_bytes = u64::try_from(active_memory_bytes)
+            .unwrap_or(u64::MAX)
+            .saturating_add(u64::try_from(allocator_cache_memory_bytes).unwrap_or(u64::MAX));
+        self.disk_store
+            .model_contract_ref()
+            .effective_mlx_memory_ceiling_bytes()
+            .min(
+                u64::try_from(runtime.memory_limits().active_memory_limit_bytes())
+                    .unwrap_or(u64::MAX),
+            )
+            .saturating_sub(current_runtime_memory_bytes)
+            .saturating_sub(
+                u64::try_from(
+                    self.disk_store
+                        .model_contract_ref()
+                        .maximum_tensor_serialization_workspace_bytes(),
+                )
+                .unwrap_or(u64::MAX),
+            )
+    }
+
+    fn capture_memory_admission_is_available(
+        &self,
+        runtime: &MlxRuntime,
+        next_capture_serialized_bytes: u64,
+    ) -> Result<bool, PersistentPromptCacheDiskStoreError> {
+        Ok(next_capture_serialized_bytes <= self.available_capture_serialized_bytes(runtime)?)
+    }
+
+    fn available_capture_serialized_bytes(
+        &self,
+        runtime: &MlxRuntime,
+    ) -> Result<u64, PersistentPromptCacheDiskStoreError> {
+        let memory_snapshot = runtime.memory_snapshot().map_err(|source| {
+            PersistentPromptCacheDiskStoreError::ReadMlxMemorySnapshot { source }
+        })?;
+        let maximum_pending_serialized_bytes = self.maximum_pending_serialized_bytes(
+            runtime,
+            memory_snapshot.active_memory_bytes(),
+            memory_snapshot.allocator_cache_memory_bytes(),
+        );
+        Ok(maximum_pending_serialized_bytes
+            .saturating_sub(self.pending_serialized_bytes.load(Ordering::Acquire)))
+    }
+
+    fn log_capture_rejection(
+        &self,
+        runtime: &MlxRuntime,
+        persistent_prompt_cache_block_key: &PersistentPromptCacheBlockKey,
+        rejection_stage: &'static str,
+        capture_tensor_payload_bytes: u64,
+        available_capture_serialized_bytes: u64,
+        serialized_capture_bytes: Option<u64>,
+    ) {
+        let memory_snapshot = runtime.memory_snapshot().ok();
+        let active_memory_bytes = memory_snapshot
+            .as_ref()
+            .map_or(usize::MAX, |snapshot| snapshot.active_memory_bytes());
+        let allocator_cache_memory_bytes =
+            memory_snapshot.as_ref().map_or(usize::MAX, |snapshot| {
+                snapshot.allocator_cache_memory_bytes()
+            });
+        let peak_memory_bytes = memory_snapshot
+            .as_ref()
+            .map_or(usize::MAX, |snapshot| snapshot.peak_memory_bytes());
+        let persistent_prompt_cache_model_contract = self.disk_store.model_contract_ref();
+        tracing::error!(
+            rejection_stage,
+            block_index = persistent_prompt_cache_block_key.block_index(),
+            active_memory_bytes,
+            allocator_cache_memory_bytes,
+            peak_memory_bytes,
+            runtime_active_memory_limit_bytes = runtime.memory_limits().active_memory_limit_bytes(),
+            contract_effective_mlx_memory_ceiling_bytes =
+                persistent_prompt_cache_model_contract.effective_mlx_memory_ceiling_bytes(),
+            maximum_tensor_serialization_workspace_bytes = persistent_prompt_cache_model_contract
+                .maximum_tensor_serialization_workspace_bytes(),
+            capture_tensor_payload_bytes,
+            serialized_capture_bytes,
+            available_capture_serialized_bytes,
+            pending_serialized_bytes = self.pending_serialized_bytes.load(Ordering::Acquire),
+            persistent_prompt_cache_disk_bytes = self.disk_store.total_size_bytes(),
+            persistent_prompt_cache_quota_bytes =
+                self.disk_store.global_prompt_cache_maximum_size_bytes,
+            writer_shutdown_requested = self.shutdown_requested.load(Ordering::Acquire),
+            "persistent prompt-cache capture admission rejected with complete live-memory evidence"
+        );
     }
 }
 
@@ -337,81 +494,17 @@ impl Drop for PersistentPromptCacheWriteQueue {
     }
 }
 
-fn run_writer_loop(
-    disk_store: &PersistentPromptCacheDiskStore,
-    serialized_block_receiver: Receiver<PersistentPromptCacheSerializedBlock>,
-    pending_serialized_bytes: &AtomicU64,
-    pending_block_hashes: &Mutex<HashSet<[u8; 32]>>,
-    shutdown_requested: Arc<AtomicBool>,
-    write_rate_limiter: PersistentPromptCacheWriteRateLimiter,
-) {
-    let serialized_file_writer = ConfiguredPersistentPromptCacheSerializedFileWriter {
-        write_rate_limiter,
-        shutdown_requested: Arc::clone(&shutdown_requested),
-    };
-    while let Ok(serialized_block) = serialized_block_receiver.recv() {
-        if shutdown_requested.load(Ordering::Acquire) {
-            break;
-        }
-        let serialized_byte_count = serialized_block.serialized_byte_count();
-        let persistent_prompt_cache_block_hash = serialized_block
-            .persistent_prompt_cache_block_key
-            .block_hash();
-        let block_index = serialized_block
-            .persistent_prompt_cache_block_key
-            .block_index();
-        if let Some(parent_block_key) = serialized_block
-            .parent_persistent_prompt_cache_block_key
-            .as_ref()
-            && !disk_store.has_kv_block(&parent_block_key.block_hash())
-        {
-            subtract_pending_serialized_bytes(pending_serialized_bytes, serialized_byte_count);
-            pending_block_hashes
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&persistent_prompt_cache_block_hash);
-            tracing::warn!(
-                block_index,
-                "dropping queued persistent prompt-cache child because its parent was not published"
-            );
-            continue;
-        }
-        let write_started_at = Instant::now();
-        let save_outcome =
-            disk_store.save_serialized_block(serialized_block, &serialized_file_writer);
-        let write_elapsed_millis = write_started_at.elapsed().as_millis();
-        subtract_pending_serialized_bytes(pending_serialized_bytes, serialized_byte_count);
-        pending_block_hashes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&persistent_prompt_cache_block_hash);
-        match save_outcome {
-            Ok(_) => tracing::info!(
-                block_index,
-                serialized_byte_count,
-                write_elapsed_millis,
-                "persistent prompt-cache block write completed"
-            ),
-            Err(save_error) => tracing::warn!(
-                block_index,
-                serialized_byte_count,
-                write_elapsed_millis,
-                error = %save_error,
-                "persistent prompt-cache block write failed"
-            ),
-        }
-    }
-}
-
 fn reserve_pending_serialized_bytes(
     pending_serialized_bytes: &AtomicU64,
     serialized_byte_count: u64,
+    maximum_pending_serialized_bytes: u64,
 ) -> bool {
     let mut observed_pending_serialized_bytes = pending_serialized_bytes.load(Ordering::Acquire);
     loop {
         if !persistent_prompt_cache_write_queue_can_accept(
             observed_pending_serialized_bytes,
             serialized_byte_count,
+            maximum_pending_serialized_bytes,
         ) {
             return false;
         }
@@ -431,7 +524,7 @@ fn reserve_pending_serialized_bytes(
     }
 }
 
-fn subtract_pending_serialized_bytes(
+pub(super) fn subtract_pending_serialized_bytes(
     pending_serialized_bytes: &AtomicU64,
     serialized_byte_count: u64,
 ) {

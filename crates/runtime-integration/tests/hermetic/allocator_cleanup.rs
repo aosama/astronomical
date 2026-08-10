@@ -17,6 +17,14 @@ const QWEN_GENERATION_FINALIZATION_SOURCE: &str = include_str!(
 );
 
 #[test]
+fn should_leave_mlx_per_buffer_wired_residency_disabled() {
+    assert!(
+        !MLX_RUNTIME_MEMORY_POLICY_SOURCE.contains("raw::mlx_set_wired_limit"),
+        "production memory policy must not enable the MLX residency-set path that can panic IOGPU during allocation-pressure reclamation"
+    );
+}
+
+#[test]
 fn should_synchronize_gpu_stream_before_clearing_allocator_cache() {
     let synchronized_cleanup_start = MLX_RUNTIME_MEMORY_POLICY_SOURCE
         .find("pub fn synchronize_gpu_stream_and_clear_allocator_cache")

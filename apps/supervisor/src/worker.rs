@@ -304,7 +304,6 @@ pub(crate) async fn run_worker(
                             ));
                             continue;
                         }
-
                         publish_health(
                             &health_snapshot,
                             WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Loading),

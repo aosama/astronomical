@@ -383,9 +383,9 @@ async fn should_evict_the_oldest_visual_embedding_under_shared_quota_pressure() 
         .zeros(&[8, 2_048], MlxDtype::BFloat16)
         .expect("the test should create second visual embeddings");
 
-    // One projected image fits the estimate check and actual quota, but two
-    // projected images do not. This proves visual files participate in the
-    // same byte accounting and oldest-file eviction loop as prompt-state files.
+    // One projected image fits the actual quota, but two projected images do
+    // not. This proves visual files participate in the same byte accounting
+    // and oldest-file eviction loop as prompt-state files.
     let one_visual_embedding_quota_bytes = u64::try_from(first_visual_embeddings.byte_count())
         .unwrap_or(0)
         .saturating_add(17 * 1024);

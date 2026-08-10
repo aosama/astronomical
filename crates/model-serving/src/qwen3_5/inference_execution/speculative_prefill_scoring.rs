@@ -342,6 +342,15 @@ impl Qwen3_5EngineState {
             &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
         > = should_capture_persistent_prompt_cache_blocks
             .then_some(&mut persist_completed_draft_block);
+        let persistent_prompt_cache_block_token_count = self
+            .speculative_prefill_draft_persistent_prompt_cache
+            .as_ref()
+            .map(|persistent_prompt_cache| {
+                persistent_prompt_cache
+                    .model_contract_ref()
+                    .block_token_count()
+            })
+            .unwrap_or(1);
         let draft_scoring_outcome = active_request.performance_attribution.measure_operation(
                 PerformanceOperation::SpeculativePrefillDraftScoring,
                 |performance_attribution| {
@@ -362,6 +371,7 @@ impl Qwen3_5EngineState {
                                 self.speculative_prefill.importance_pooling_kernel_token_count,
                             )
                             .unwrap_or(usize::MAX),
+                            persistent_prompt_cache_block_token_count,
                             persistent_prompt_cache_block_consumer.as_deref_mut(),
                             draft_visual_embeddings,
                             active_request.image_pad_token_id,
@@ -380,6 +390,7 @@ impl Qwen3_5EngineState {
                                 self.speculative_prefill.importance_pooling_kernel_token_count,
                             )
                             .unwrap_or(usize::MAX),
+                            persistent_prompt_cache_block_token_count,
                             persistent_prompt_cache_block_consumer.as_deref_mut(),
                             &mut draft_request_decoder_state,
                             performance_attribution,

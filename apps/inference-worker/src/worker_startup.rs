@@ -1,7 +1,7 @@
 use astronomical_config::{PrefillChunckSizingPolicy, PromptCacheConfig};
 use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerPrefillChunckSizingPolicy,
-    WorkerStartupConfiguration,
+    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
@@ -136,6 +136,11 @@ where
     let mtp_enabled = worker_startup_configuration.mtp_enabled;
     let persistent_prompt_cache_enabled =
         worker_startup_configuration.persistent_prompt_cache_enabled;
+    let worker_runtime_feature_configuration = WorkerRuntimeFeatureConfiguration {
+        persistent_prompt_cache_enabled,
+        mtp_enabled,
+        speculative_prefill_enabled: worker_startup_configuration.speculative_prefill.enabled,
+    };
     let machine_mlx_memory_ceiling_bytes = sample_iogpu_wired_limit_bytes()
         .await
         .map_err(WorkerProcessError::Startup)?;
@@ -188,7 +193,8 @@ where
                 description: "MLX memory ceiling exceeds the u64 range",
             })
         })?,
-    );
+    )
+    .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration);
     engine_worker
         .run_with_protocol(command_reader, event_writer)
         .await

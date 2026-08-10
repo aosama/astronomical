@@ -67,7 +67,6 @@ impl Qwen3_5EngineState {
             model.sparse_experts_are_paged(),
             self.persistent_prompt_cache.is_some()
                 && active_request.can_use_persistent_prompt_cache
-                && !active_request.persistent_prompt_cache_capture_has_stopped
                 && !active_request.has_optional_prediction_session(),
         )
         .with_target_only_prefix(active_request.has_optional_prediction_session())
@@ -298,6 +297,65 @@ impl Qwen3_5EngineState {
             self.persistent_prompt_cache_write_queue.as_ref(),
         ) {
             if active_request.can_use_persistent_prompt_cache && !boundary_checkpoints.is_empty() {
+                // A completed prefill forward leaves temporary MLX allocations eligible for
+                // allocator reuse. They are not decoder state and must not make a required
+                // disk capture appear too large for the live MLX ceiling. Capture admission
+                // deliberately runs after this cleanup so its existing accounting evaluates
+                // live arrays plus the next serialized payload, not stale allocator storage.
+                //
+                // The GPU stream must be synchronized first: clearing MLX allocator storage
+                // without that barrier can release a Metal allocation while submitted prompt
+                // work still references it. Keep this narrowly scoped to an actual capture;
+                // it is not an excuse to evict retained experts or weaken queue admission.
+                let memory_snapshot_before_persistent_prompt_cache_capture_cleanup =
+                    model.runtime().memory_snapshot().ok();
+                let persistent_prompt_cache_capture_cleanup_started_at = Instant::now();
+                active_request
+                    .performance_attribution
+                    .measure_operation(
+                        PerformanceOperation::MlxAllocatorCacheCleanup,
+                        |_performance_attribution| {
+                            model
+                                .runtime()
+                                .synchronize_gpu_stream_and_clear_allocator_cache()
+                        },
+                    )
+                    .map_err(qwen3_5_runtime_error)?;
+                let memory_snapshot_after_persistent_prompt_cache_capture_cleanup =
+                    model.runtime().memory_snapshot().ok();
+                tracing::info!(
+                    request_id = request_id.value(),
+                    cleanup_stage = "pre_capture_persistent_prompt_cache_cleanup",
+                    prefill_start,
+                    prefill_end,
+                    persistent_prompt_cache_checkpoint_count = boundary_checkpoints.len(),
+                    active_memory_bytes_before_cleanup =
+                        memory_snapshot_before_persistent_prompt_cache_capture_cleanup
+                            .as_ref()
+                            .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
+                    allocator_cache_memory_bytes_before_cleanup =
+                        memory_snapshot_before_persistent_prompt_cache_capture_cleanup
+                            .as_ref()
+                            .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+                    active_memory_bytes_after_cleanup =
+                        memory_snapshot_after_persistent_prompt_cache_capture_cleanup
+                            .as_ref()
+                            .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
+                    allocator_cache_memory_bytes_after_cleanup =
+                        memory_snapshot_after_persistent_prompt_cache_capture_cleanup
+                            .as_ref()
+                            .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+                    runtime_active_memory_limit_bytes =
+                        model.runtime().memory_limits().active_memory_limit_bytes(),
+                    cleanup_elapsed_millis = persistent_prompt_cache_capture_cleanup_started_at
+                        .elapsed()
+                        .as_millis(),
+                    "reclaimed MLX allocator-cache storage before required persistent prompt-cache capture"
+                );
+                // Capture uses the unchanged write queue as the source of truth for serialized
+                // host ownership, disk quota, and atomic publication. The cleanup above only
+                // removes reclaimable GPU allocator bytes; it cannot turn an over-capacity
+                // queue or a disk-quota rejection into an accepted capture.
                 self.capture_persistent_prompt_cache_blocks(
                     persistent_prompt_cache,
                     persistent_prompt_cache_write_queue,
@@ -306,9 +364,16 @@ impl Qwen3_5EngineState {
                     prefill_start,
                     prefill_end,
                     boundary_checkpoints,
+                    super::persistent_prompt_cache_capture::PromptStatePersistenceOwner::for_active_request(active_request),
                 )?;
             }
         }
+        // Keep the established end-of-chunk cleanup as well. A chunk without a cache boundary,
+        // or the work created while serializing a boundary, must not retain temporary MLX
+        // allocations until the next prompt chunk or request finalization.
+        let memory_snapshot_before_end_of_prefill_chunck_cleanup =
+            model.runtime().memory_snapshot().ok();
+        let end_of_prefill_chunck_cleanup_started_at = Instant::now();
         active_request
             .performance_attribution
             .measure_operation(
@@ -320,6 +385,35 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(qwen3_5_runtime_error)?;
+        let memory_snapshot_after_end_of_prefill_chunck_cleanup =
+            model.runtime().memory_snapshot().ok();
+        tracing::info!(
+            request_id = request_id.value(),
+            cleanup_stage = "end_of_prefill_chunck_cleanup",
+            prefill_start,
+            prefill_end,
+            active_memory_bytes_before_cleanup =
+                memory_snapshot_before_end_of_prefill_chunck_cleanup
+                    .as_ref()
+                    .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
+            allocator_cache_memory_bytes_before_cleanup =
+                memory_snapshot_before_end_of_prefill_chunck_cleanup
+                    .as_ref()
+                    .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+            active_memory_bytes_after_cleanup = memory_snapshot_after_end_of_prefill_chunck_cleanup
+                .as_ref()
+                .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
+            allocator_cache_memory_bytes_after_cleanup =
+                memory_snapshot_after_end_of_prefill_chunck_cleanup
+                    .as_ref()
+                    .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+            runtime_active_memory_limit_bytes =
+                model.runtime().memory_limits().active_memory_limit_bytes(),
+            cleanup_elapsed_millis = end_of_prefill_chunck_cleanup_started_at
+                .elapsed()
+                .as_millis(),
+            "cleared MLX allocator-cache storage after prompt-processing chunk"
+        );
         let mlx_memory_snapshot = collect_completed_forward_memory_snapshot(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context,
@@ -336,7 +430,6 @@ impl Qwen3_5EngineState {
             model.sparse_experts_are_paged(),
             self.persistent_prompt_cache.is_some()
                 && active_request.can_use_persistent_prompt_cache
-                && !active_request.persistent_prompt_cache_capture_has_stopped
                 && !active_request.has_optional_prediction_session(),
         )
         .with_target_only_prefix(active_request.has_optional_prediction_session())

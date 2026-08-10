@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, SpeculativePrefillRuntimeState,
     WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerInsight,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -172,6 +172,8 @@ pub struct WorkerHealthSnapshot {
     pub speculative_prefill_draft_model_id: Option<String>,
     /// Validated request-scoped draft revision reported by the worker.
     pub speculative_prefill_draft_model_revision: Option<String>,
+    /// Feature settings explicitly acknowledged by the currently running worker.
+    pub worker_runtime_feature_configuration: Option<WorkerRuntimeFeatureConfiguration>,
     /// Latest persistent prompt-cache observability stats from the worker.
     pub persistent_prompt_cache_stats: Option<WorkerEvent>,
     /// Latest worker-owned MLX allocator observation, regardless of request lifecycle phase.
@@ -212,6 +214,7 @@ impl WorkerHealthSnapshot {
             speculative_prefill_unavailable_reason: None,
             speculative_prefill_draft_model_id: None,
             speculative_prefill_draft_model_revision: None,
+            worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             prefill_optimizer_insights: Vec::new(),
@@ -280,6 +283,7 @@ impl WorkerHealthSnapshot {
             speculative_prefill_unavailable_reason: None,
             speculative_prefill_draft_model_id: None,
             speculative_prefill_draft_model_revision: None,
+            worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             prefill_optimizer_insights: Vec::new(),
@@ -308,6 +312,7 @@ impl WorkerHealthSnapshot {
             speculative_prefill_unavailable_reason: None,
             speculative_prefill_draft_model_id: None,
             speculative_prefill_draft_model_revision: None,
+            worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             prefill_optimizer_insights: Vec::new(),
@@ -342,6 +347,16 @@ impl WorkerHealthSnapshot {
         self.speculative_prefill_unavailable_reason = speculative_prefill_unavailable_reason;
         self.speculative_prefill_draft_model_id = speculative_prefill_draft_model_id;
         self.speculative_prefill_draft_model_revision = speculative_prefill_draft_model_revision;
+        self
+    }
+
+    /// Records the startup feature policy acknowledged by this exact worker.
+    #[must_use]
+    pub fn with_worker_runtime_feature_configuration(
+        mut self,
+        worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration,
+    ) -> Self {
+        self.worker_runtime_feature_configuration = Some(worker_runtime_feature_configuration);
         self
     }
 }

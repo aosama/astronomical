@@ -27,15 +27,6 @@ impl PersistentPromptCacheDiskStore {
         let _write_operation_guard = self.lock_write_operations();
         self.prepare_active_model_storage_directories()?;
         let visual_embedding_hash = visual_embedding_key.visual_embedding_hash();
-        let estimated_visual_embedding_bytes = u64::try_from(visual_embeddings.byte_count())
-            .unwrap_or(u64::MAX)
-            .saturating_add(16 * 1024);
-        if estimated_visual_embedding_bytes > self.global_prompt_cache_maximum_size_bytes {
-            return Err(PersistentPromptCacheDiskStoreError::SizeBoundExceeded {
-                maximum_size_bytes: self.global_prompt_cache_maximum_size_bytes,
-                estimated_block_bytes: estimated_visual_embedding_bytes,
-            });
-        }
         let visual_embedding_file_path = save_visual_embedding_safetensors_file(
             runtime,
             &self.visual_embeddings_directory,

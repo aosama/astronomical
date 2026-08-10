@@ -1,17 +1,18 @@
-/// Decision for one persistent prompt-cache block save attempt.
+/// Decision for one persistent model-state capture save attempt.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PersistentPromptCacheBlockSaveAdmission {
-    /// Save can append or replace the block without removing any tracked block.
     SaveWithoutEviction,
-    /// Save can proceed, then the store should evict old unrelated blocks to fit.
+    SaveAndReclaimParentBoundary,
     SaveAndEvictOldBlocksToFit,
-    /// Saving this block would make the restorable prefix exceed the cache budget.
+    SaveReclaimParentAndEvictOldBlocksToFit,
     SkipBecauseCacheIsFull,
 }
 
+#[cfg(feature = "direct-mlx")]
 const COMMON_PREFIX_RECURRENT_SNAPSHOT_STRIDE_BLOCKS: u32 = 4;
 
-/// Returns whether a block-boundary recurrent snapshot should remain available for branched prompts.
+/// Returns whether a block-boundary recurrent snapshot remains available for branched prompts.
+#[cfg(feature = "direct-mlx")]
 #[must_use]
 pub fn persistent_prompt_cache_recurrent_snapshot_is_common_prefix_checkpoint(
     persistent_prompt_cache_block_index: u32,
@@ -22,48 +23,64 @@ pub fn persistent_prompt_cache_recurrent_snapshot_is_common_prefix_checkpoint(
             .is_multiple_of(COMMON_PREFIX_RECURRENT_SNAPSHOT_STRIDE_BLOCKS)
 }
 
-/// Decides whether saving one block would preserve a useful contiguous prefix.
+impl PersistentPromptCacheBlockSaveAdmission {
+    #[must_use]
+    pub const fn should_reclaim_parent_boundary(self) -> bool {
+        matches!(
+            self,
+            Self::SaveAndReclaimParentBoundary | Self::SaveReclaimParentAndEvictOldBlocksToFit
+        )
+    }
+}
+
+/// Decides retention from exact tracked bytes and current quota pressure.
 #[must_use]
 pub fn persistent_prompt_cache_save_admission(
     tracked_persistent_prompt_cache_size_bytes: u64,
-    estimated_persistent_prompt_cache_kv_block_bytes: u64,
-    estimated_persistent_prompt_cache_recurrent_snapshot_bytes: u64,
-    reclaimable_parent_recurrent_snapshot_bytes: u64,
+    estimated_sequence_state_bytes: u64,
+    estimated_boundary_state_bytes: u64,
+    reclaimable_parent_boundary_state_bytes: u64,
     maximum_persistent_prompt_cache_size_bytes: u64,
-    persistent_prompt_cache_block_index: u32,
-    persistent_prompt_cache_kv_block_is_already_tracked: bool,
+    sequence_state_is_already_tracked: bool,
+    boundary_state_is_already_tracked: bool,
 ) -> PersistentPromptCacheBlockSaveAdmission {
-    let estimated_persistent_prompt_cache_save_bytes =
-        estimated_persistent_prompt_cache_kv_block_bytes
-            .saturating_add(estimated_persistent_prompt_cache_recurrent_snapshot_bytes);
-    if estimated_persistent_prompt_cache_save_bytes == 0
-        || estimated_persistent_prompt_cache_save_bytes > maximum_persistent_prompt_cache_size_bytes
-    {
-        return PersistentPromptCacheBlockSaveAdmission::SkipBecauseCacheIsFull;
-    }
-
-    if persistent_prompt_cache_kv_block_is_already_tracked {
+    let new_sequence_state_bytes = if sequence_state_is_already_tracked {
+        0
+    } else {
+        estimated_sequence_state_bytes
+    };
+    let new_boundary_state_bytes = if boundary_state_is_already_tracked {
+        0
+    } else {
+        estimated_boundary_state_bytes
+    };
+    let new_capture_bytes = new_sequence_state_bytes.saturating_add(new_boundary_state_bytes);
+    if new_capture_bytes == 0 {
         return PersistentPromptCacheBlockSaveAdmission::SaveWithoutEviction;
     }
-
-    let net_persistent_prompt_cache_growth_bytes = estimated_persistent_prompt_cache_save_bytes
-        .saturating_sub(reclaimable_parent_recurrent_snapshot_bytes);
-    if tracked_persistent_prompt_cache_size_bytes
-        .saturating_add(net_persistent_prompt_cache_growth_bytes)
+    if new_capture_bytes > maximum_persistent_prompt_cache_size_bytes {
+        return PersistentPromptCacheBlockSaveAdmission::SkipBecauseCacheIsFull;
+    }
+    // Preserve the parent whenever the new capture already fits. It is a useful restore point
+    // for prompts that branch before this child, so reclamation is a pressure response rather
+    // than a normal replacement policy.
+    if tracked_persistent_prompt_cache_size_bytes.saturating_add(new_capture_bytes)
         <= maximum_persistent_prompt_cache_size_bytes
     {
         return PersistentPromptCacheBlockSaveAdmission::SaveWithoutEviction;
     }
-
-    if net_persistent_prompt_cache_growth_bytes == 0 {
-        return PersistentPromptCacheBlockSaveAdmission::SaveAndEvictOldBlocksToFit;
+    let size_after_parent_reclamation = tracked_persistent_prompt_cache_size_bytes
+        .saturating_add(new_capture_bytes)
+        .saturating_sub(reclaimable_parent_boundary_state_bytes);
+    // A non-checkpoint parent boundary is superseded by this child. Reclaim it before global
+    // eviction so extending one prompt chain does not discard unrelated reusable prefixes.
+    if reclaimable_parent_boundary_state_bytes > 0
+        && size_after_parent_reclamation <= maximum_persistent_prompt_cache_size_bytes
+    {
+        return PersistentPromptCacheBlockSaveAdmission::SaveAndReclaimParentBoundary;
     }
-
-    let maximum_restorable_prefix_block_count =
-        maximum_persistent_prompt_cache_size_bytes / net_persistent_prompt_cache_growth_bytes;
-    if u64::from(persistent_prompt_cache_block_index) < maximum_restorable_prefix_block_count {
-        return PersistentPromptCacheBlockSaveAdmission::SaveAndEvictOldBlocksToFit;
+    if reclaimable_parent_boundary_state_bytes > 0 {
+        return PersistentPromptCacheBlockSaveAdmission::SaveReclaimParentAndEvictOldBlocksToFit;
     }
-
-    PersistentPromptCacheBlockSaveAdmission::SkipBecauseCacheIsFull
+    PersistentPromptCacheBlockSaveAdmission::SaveAndEvictOldBlocksToFit
 }

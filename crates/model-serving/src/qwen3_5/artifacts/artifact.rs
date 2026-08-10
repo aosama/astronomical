@@ -75,6 +75,9 @@ impl Qwen3_5ArtifactValidator {
         if optiq_metadata_path.is_file() {
             required_file_profiles.push(required_file("optiq_metadata.json"));
         }
+        if model_directory.join("generation_config.json").is_file() {
+            required_file_profiles.push(required_file("generation_config.json"));
+        }
 
         let mut required_files = validate_required_files(model_directory, &required_file_profiles)?;
 
@@ -373,6 +376,14 @@ impl ValidatedQwen3_5Artifact {
     pub fn tokenizer_bytes(&self) -> Option<&[u8]> {
         self.required_files
             .get("tokenizer.json")
+            .and_then(ValidatedRequiredFile::captured_bytes)
+    }
+
+    /// Returns optional model-provided sampler defaults retained during validation.
+    #[must_use]
+    pub fn generation_config_bytes(&self) -> Option<&[u8]> {
+        self.required_files
+            .get("generation_config.json")
             .and_then(ValidatedRequiredFile::captured_bytes)
     }
 

@@ -1,4 +1,4 @@
-/// One persistent prompt-cache block could not be read or did not match the expected Qwen3.5-MoE layout.
+/// One persistent model-state block could not be read or did not match its storage contract.
 ///
 /// These errors describe an untrusted on-disk artifact rather than a model
 /// inference failure. The disk store uses them to reject and remove a bad
@@ -109,6 +109,15 @@ pub enum PersistentPromptCacheBlockError {
         tensor_name: String,
         expected_shape: Vec<usize>,
         actual_shape: Vec<usize>,
+    },
+    #[error(
+        "persistent prompt-cache block tensor {tensor_name} at {persistent_prompt_cache_block_path:?} declares {actual_payload_byte_count} payload bytes, expected {expected_payload_byte_count}"
+    )]
+    TensorPayloadSizeMismatch {
+        persistent_prompt_cache_block_path: std::path::PathBuf,
+        tensor_name: String,
+        expected_payload_byte_count: u64,
+        actual_payload_byte_count: u64,
     },
     #[error(
         "persistent prompt-cache block at {persistent_prompt_cache_block_path:?} has {actual_tensor_count} tensors, expected {expected_tensor_count}"

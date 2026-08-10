@@ -218,6 +218,20 @@ impl WorkerSpeculativePrefillConfiguration {
     }
 }
 
+/// Worker-acknowledged feature settings safe to expose through local status.
+///
+/// This intentionally excludes startup paths and model locations. It proves the
+/// effective policy of the worker process that will serve requests.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerRuntimeFeatureConfiguration {
+    /// Whether the worker will persist and restore ordinary prompt state.
+    pub persistent_prompt_cache_enabled: bool,
+    /// Whether the worker may activate multi-token prediction for a compatible model.
+    pub mtp_enabled: bool,
+    /// Whether the currently bound target model may execute draft-assisted prefill.
+    pub speculative_prefill_enabled: bool,
+}
+
 /// Fully resolved worker-owned startup settings.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -268,6 +282,13 @@ pub enum WorkerCommand {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerEvent {
+    /// Confirms the feature settings applied by the currently running worker.
+    ///
+    /// A fresh idle worker emits this after its Idle event. A loaded model emits
+    /// it again after target binding determines its actual SpecPrefill state.
+    RuntimeFeatureConfigurationApplied {
+        worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration,
+    },
     /// Reports that the worker process is running without a model loaded.
     ///
     /// The supervisor must send `SwapModel` before forwarding the first
@@ -437,6 +458,9 @@ impl WorkerEvent {
     #[must_use]
     pub fn diagnostic_summary(&self) -> String {
         match self {
+            Self::RuntimeFeatureConfigurationApplied { .. } => {
+                "runtime_feature_configuration_applied".to_owned()
+            }
             Self::Idle { .. } => "idle".to_owned(),
             Self::MlxMemorySample { .. } => "mlx_memory_sample".to_owned(),
             Self::MlxMemoryLimitChanged { .. } => "mlx_memory_limit_changed".to_owned(),

@@ -144,7 +144,11 @@ async fn should_exit_after_the_worker_future_finishes_while_stdin_remains_blocke
         .take()
         .expect("the parent should keep worker stdin open");
 
-    let worker_exit_status = match timeout(Duration::from_secs(1), worker_process.wait()).await {
+    // The child only waits 100 milliseconds before its future completes, but parallel hermetic
+    // execution can delay process scheduling. Keep the test bounded while allowing the operating
+    // system enough time to observe the runtime's deliberate shutdown rather than failing on a
+    // one-second scheduling race.
+    let worker_exit_status = match timeout(Duration::from_secs(3), worker_process.wait()).await {
         Ok(wait_outcome) => wait_outcome.expect("the blocked-stdin worker should run"),
         Err(_) => {
             worker_process

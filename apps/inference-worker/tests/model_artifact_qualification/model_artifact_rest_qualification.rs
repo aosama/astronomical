@@ -214,6 +214,23 @@ pub(super) async fn launch_model_artifact_rest_server_for_model(
     isolated_worker_home_directory: Option<&Path>,
     performance_log_directory: Option<&Path>,
 ) -> ModelArtifactRestServer {
+    launch_model_artifact_rest_server_for_model_with_memory_limit(
+        model_id,
+        model_directory,
+        isolated_worker_home_directory,
+        performance_log_directory,
+        None,
+    )
+    .await
+}
+
+pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limit(
+    model_id: &str,
+    model_directory: PathBuf,
+    isolated_worker_home_directory: Option<&Path>,
+    performance_log_directory: Option<&Path>,
+    maximum_mlx_memory_bytes: Option<u64>,
+) -> ModelArtifactRestServer {
     let production_worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
             .expect("Cargo should provide the production inference-worker executable path"),
@@ -233,6 +250,15 @@ pub(super) async fn launch_model_artifact_rest_server_for_model(
         tempfile::tempdir().expect("the deployment litmus log directory should be created");
     let performance_log_directory =
         performance_log_directory.unwrap_or_else(|| deployment_litmus_log_directory.path());
+    let mut worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
+    if let Some(maximum_mlx_memory_bytes) = maximum_mlx_memory_bytes {
+        // The public configuration intentionally accepts whole decimal GB. Qualification also
+        // needs half-GB cells, so inject the exact byte ceiling through the production typed
+        // worker-startup protocol after normal configuration resolution. The server, subprocess,
+        // model load, and HTTP boundary remain the production path; only this test input is exact.
+        worker_startup_configuration.configured_maximum_mlx_memory_bytes =
+            Some(maximum_mlx_memory_bytes);
+    }
     let worker_handle = WorkerHandle::launch_with_startup_configuration(
         &production_worker_executable_path,
         Duration::from_secs(60),
@@ -240,7 +266,7 @@ pub(super) async fn launch_model_artifact_rest_server_for_model(
             .expect("the deployment litmus performance log should open"),
         single_model_directories(model_id, &model_directory),
         20_480,
-        worker_runtime_config.worker_startup_configuration(),
+        worker_startup_configuration,
     )
     .await
     .expect("the production worker should launch for the deployment litmus");
