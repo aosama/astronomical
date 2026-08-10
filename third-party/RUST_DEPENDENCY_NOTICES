@@ -3196,7 +3196,7 @@ Used by:
 - autocfg 1.5.1
 - base64 0.13.1
 - base64 0.22.1
-- base64 0.23.0
+- base64 0.23.1
 - bitflags 2.13.1
 - bumpalo 3.20.3
 - cexpr 0.6.0
