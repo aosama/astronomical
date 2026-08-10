@@ -3,7 +3,8 @@ use std::future::Future;
 use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 use astronomical_ipc_protocol::{
     ExpertMemoryMode, MtpRuntimeState, RequestId, SpeculativePrefillRuntimeState, WorkerEvent,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptProcessingPhase,
+    WorkerPromptWorkReuse,
 };
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
@@ -244,12 +245,13 @@ impl EngineLoadResult {
 }
 
 /// Engine-side metadata reported when one generation request starts.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EngineGenerationStart {
     cached_token_count: u32,
     restored_prompt_prefix_token_count: u32,
     expert_memory_mode: Option<ExpertMemoryMode>,
     prompt_processing_phase: Option<WorkerPromptProcessingPhase>,
+    persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
 }
 
 impl EngineGenerationStart {
@@ -261,6 +263,7 @@ impl EngineGenerationStart {
             restored_prompt_prefix_token_count: cached_token_count,
             expert_memory_mode: None,
             prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
+            persistent_prompt_cache_diagnostics: None,
         }
     }
 
@@ -274,6 +277,7 @@ impl EngineGenerationStart {
             restored_prompt_prefix_token_count: cached_token_count,
             expert_memory_mode: Some(expert_memory_mode),
             prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
+            persistent_prompt_cache_diagnostics: None,
         }
     }
 
@@ -317,6 +321,22 @@ impl EngineGenerationStart {
     #[must_use]
     pub const fn prompt_processing_phase(&self) -> Option<WorkerPromptProcessingPhase> {
         self.prompt_processing_phase
+    }
+
+    #[must_use]
+    pub fn with_persistent_prompt_cache_diagnostics(
+        mut self,
+        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    ) -> Self {
+        self.persistent_prompt_cache_diagnostics = persistent_prompt_cache_diagnostics;
+        self
+    }
+
+    #[must_use]
+    pub const fn persistent_prompt_cache_diagnostics(
+        &self,
+    ) -> Option<&WorkerPersistentPromptCacheRequestDiagnostics> {
+        self.persistent_prompt_cache_diagnostics.as_ref()
     }
 }
 
@@ -418,6 +438,7 @@ pub enum GeneratedToken {
         speculative_prefill_draft_memory_telemetry: Option<MlxMemoryTelemetry>,
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
+        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
     },
     /// A confirmed prompt phase is about to begin before its blocking model work.
     PromptProcessingPhaseStarted {

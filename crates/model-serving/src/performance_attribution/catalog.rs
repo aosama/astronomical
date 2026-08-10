@@ -29,7 +29,11 @@ pub enum PerformanceOperation {
     PersistentPromptCacheStateExtraction,
     PersistentPromptCacheKvBlockSerialization,
     PersistentPromptCacheRecurrentSnapshotSerialization,
+    PersistentPromptCachePublicationValidation,
+    PersistentPromptCacheGlobalQuotaEviction,
     PersistentPromptCacheRetentionCleanup,
+    PersistentPromptCachePublicationSynchronizationWait,
+    PersistentPromptCacheAtomicCommit,
     ExpertPageManifestConstruction,
     ExpertPageMemoryBudgetSnapshot,
     PagedRouterGraphConstruction,
@@ -103,7 +107,11 @@ impl PerformanceOperation {
         Self::PersistentPromptCacheStateExtraction,
         Self::PersistentPromptCacheKvBlockSerialization,
         Self::PersistentPromptCacheRecurrentSnapshotSerialization,
+        Self::PersistentPromptCachePublicationValidation,
+        Self::PersistentPromptCacheGlobalQuotaEviction,
         Self::PersistentPromptCacheRetentionCleanup,
+        Self::PersistentPromptCachePublicationSynchronizationWait,
+        Self::PersistentPromptCacheAtomicCommit,
         Self::ExpertPageManifestConstruction,
         Self::ExpertPageMemoryBudgetSnapshot,
         Self::PagedRouterGraphConstruction,
@@ -194,9 +202,19 @@ impl PerformanceOperation {
             Self::PersistentPromptCacheRecurrentSnapshotSerialization => {
                 "persistent_prompt_cache_recurrent_snapshot_serialization"
             }
+            Self::PersistentPromptCachePublicationValidation => {
+                "persistent_prompt_cache_publication_validation"
+            }
+            Self::PersistentPromptCacheGlobalQuotaEviction => {
+                "persistent_prompt_cache_global_quota_eviction"
+            }
             Self::PersistentPromptCacheRetentionCleanup => {
                 "persistent_prompt_cache_retention_cleanup"
             }
+            Self::PersistentPromptCachePublicationSynchronizationWait => {
+                "persistent_prompt_cache_publication_synchronization_wait"
+            }
+            Self::PersistentPromptCacheAtomicCommit => "persistent_prompt_cache_atomic_commit",
             Self::ExpertPageManifestConstruction => "expert_page_manifest_construction",
             Self::ExpertPageMemoryBudgetSnapshot => "expert_page_memory_budget_snapshot",
             Self::PagedRouterGraphConstruction => "paged_router_graph_construction",

@@ -7,9 +7,9 @@ use speculative_prefill_memory_admission::{
 };
 
 #[test]
-fn should_reserve_draft_decoder_state_vision_expert_page_and_temporary_workspace() {
+fn should_reserve_draft_decoder_state_vision_expert_page_boundary_and_publication_workspace() {
     assert_eq!(
-        speculative_prefill_draft_scoring_reservation_bytes(900, 100, 75, 25),
+        speculative_prefill_draft_scoring_reservation_bytes(900, 100, 75, 15, 10),
         Some(1_100),
     );
 }

@@ -35,7 +35,7 @@ pub use inference_execution::{
     Qwen3_5Engine, Qwen3_5MtpRuntimeState, Qwen3_5PrefillChunckSizer,
     Qwen3_5PrefillChunckSizerError, Qwen3_5PrefillExecutionContext,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5SpeculativePrefillSelectionError,
-    persistent_prompt_cache_write_outcome_advances_parent_chain, qwen3_5_depth_one_mtp_window_fits,
+    persistent_prompt_cache_publication_advances_parent_chain, qwen3_5_depth_one_mtp_window_fits,
     qwen3_5_mtp_runtime_state_after_load, qwen3_5_mtp_verification_may_cross_thinking_budget,
     qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_selected_speculative_prefill_positions_for_range,

@@ -13,17 +13,23 @@ pub(crate) const fn speculative_prefill_draft_scoring_reclamation_target_bytes(
 
 /// Combines the independently owned drafter allocations required before its
 /// scoring graph can run.
+///
+/// Decoder growth and visual payload are long-lived for scoring. The expert page,
+/// boundary checkpoint, and direct-publication workspace are transient but may
+/// overlap at a cache boundary, so admission must reserve all five categories.
 #[must_use]
 pub(crate) fn speculative_prefill_draft_scoring_reservation_bytes(
     draft_decoder_state_growth_bytes: usize,
     draft_vision_payload_bytes: usize,
     draft_maximum_expert_page_reservation_bytes: usize,
-    draft_temporary_workspace_bytes: usize,
+    draft_boundary_checkpoint_workspace_bytes: usize,
+    draft_direct_publication_workspace_bytes: usize,
 ) -> Option<usize> {
     draft_decoder_state_growth_bytes
         .checked_add(draft_vision_payload_bytes)?
         .checked_add(draft_maximum_expert_page_reservation_bytes)?
-        .checked_add(draft_temporary_workspace_bytes)
+        .checked_add(draft_boundary_checkpoint_workspace_bytes)?
+        .checked_add(draft_direct_publication_workspace_bytes)
 }
 
 #[cfg(feature = "direct-mlx")]
@@ -75,7 +81,11 @@ impl Qwen3_5EngineState {
             usize::try_from(draft_vision_payload_bytes).map_err(|_| {
                 fatal_engine_error("speculative-prefill draft vision payload exceeds usize")
             })?;
-        let draft_temporary_workspace_bytes = draft_model
+        // A scoring forward can land on a drafter cache boundary. Capturing the
+        // recurrent checkpoint and streaming its largest tensor can overlap with
+        // decoder growth and a resident expert page, so both workspaces belong in
+        // admission even though they are released shortly after publication.
+        let draft_boundary_checkpoint_workspace_bytes = draft_model
             .decoder_cache_layout()
             .boundary_snapshot_payload_byte_count()
             .map_err(|draft_workspace_projection_error| {
@@ -83,11 +93,20 @@ impl Qwen3_5EngineState {
                     "failed to project speculative-prefill draft temporary workspace: {draft_workspace_projection_error}"
                 ))
             })?;
+        let draft_direct_publication_workspace_bytes = self
+            .speculative_prefill_draft_persistent_prompt_cache
+            .as_ref()
+            .map_or(0, |draft_persistent_prompt_cache| {
+                draft_persistent_prompt_cache
+                    .model_contract_ref()
+                    .direct_publication_workspace_bytes()
+            });
         let draft_scoring_reservation_bytes = speculative_prefill_draft_scoring_reservation_bytes(
             draft_decoder_state_growth_bytes,
             draft_vision_payload_bytes,
             draft_maximum_expert_page_reservation_bytes,
-            draft_temporary_workspace_bytes,
+            draft_boundary_checkpoint_workspace_bytes,
+            draft_direct_publication_workspace_bytes,
         )
         .ok_or_else(|| {
             fatal_engine_error("speculative-prefill draft scoring reservation overflowed")
@@ -96,6 +115,8 @@ impl Qwen3_5EngineState {
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
+        // Only pageable target experts are reclaimable here. Target core weights,
+        // active request state, and the configured ceiling remain unchanged.
         let required_target_expert_reclamation_bytes =
             speculative_prefill_draft_scoring_reclamation_target_bytes(
                 memory_snapshot_before_draft_scoring.active_memory_bytes(),
@@ -111,7 +132,8 @@ impl Qwen3_5EngineState {
             draft_decoder_state_growth_bytes,
             draft_vision_payload_bytes,
             draft_maximum_expert_page_reservation_bytes,
-            draft_temporary_workspace_bytes,
+            draft_boundary_checkpoint_workspace_bytes,
+            draft_direct_publication_workspace_bytes,
             draft_scoring_reservation_bytes,
             required_target_expert_reclamation_bytes,
             "projected speculative-prefill drafter scoring memory"
@@ -168,7 +190,8 @@ impl Qwen3_5EngineState {
             draft_decoder_state_growth_bytes,
             draft_vision_payload_bytes,
             draft_maximum_expert_page_reservation_bytes,
-            draft_temporary_workspace_bytes,
+            draft_boundary_checkpoint_workspace_bytes,
+            draft_direct_publication_workspace_bytes,
             draft_scoring_reservation_bytes,
             required_target_expert_reclamation_bytes,
             reclaimed_target_expert_payload_bytes,

@@ -141,7 +141,7 @@ fn should_purge_only_obsolete_keep_percentage_selections_for_the_active_pairing(
     )
     .expect("the dense drafter prompt-state identity should be valid");
     drafter_cache_store
-        .save_kv_block_and_recurrent_snapshot(
+        .publish_block(
             &runtime,
             &dense_drafter_prompt_state_block_key,
             None,

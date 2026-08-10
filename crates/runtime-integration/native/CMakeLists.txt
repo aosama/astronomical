@@ -98,6 +98,10 @@ FetchContent_Declare(
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.0-adaptive-io-thread-pool.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.0-streaming-safetensors-writer.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 FetchContent_Declare(
     mlx_c

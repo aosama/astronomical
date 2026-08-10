@@ -18,7 +18,7 @@ impl Qwen3_5Model {
             .freeze_retention_growth_for_request_memory_pressure()
     }
 
-    fn limit_expert_retention_for_request_memory_pressure(
+    pub(crate) fn limit_expert_retention_for_request_memory_pressure(
         &self,
         retained_expert_payload_reclamation_target_bytes: usize,
     ) -> bool {

@@ -36,12 +36,14 @@ pub enum PersistentPromptCacheModelContractError {
         effective_mlx_memory_ceiling_bytes: u64,
     },
     #[error(
-        "persistent model-state capture payload requires {capture_payload_bytes} SSD bytes, above quota {global_ssd_quota_bytes} bytes"
+        "persistent model-state block files require {block_file_bytes} SSD bytes, above quota {global_ssd_quota_bytes} bytes"
     )]
-    CaptureExceedsSsdQuota {
-        capture_payload_bytes: u64,
+    BlockFilesExceedSsdQuota {
+        block_file_bytes: u64,
         global_ssd_quota_bytes: u64,
     },
+    #[error("failed to derive persistent model-state storage geometry")]
+    SerializeStorageGeometry(#[source] serde_json::Error),
     #[error(transparent)]
     DecoderCacheLayout(#[from] DecoderCacheLayoutError),
 }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, ChatModelCapabilities,
+    ChatGenerationOutput, ChatModelCapabilities, WorkerPersistentPromptCacheRequestDiagnostics,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -398,6 +398,7 @@ pub enum WorkerEvent {
         generated_token_count: u16,
         reasoning_token_count: u16,
         cached_token_count: u32,
+        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
         reason: ChatGenerationCompletionReason,
     },
     /// Reports a request-scoped failure that leaves the process responsive.
@@ -441,6 +442,7 @@ pub enum WorkerEvent {
         persistent_prompt_cache_hits: u64,
         persistent_prompt_cache_misses: u64,
         persistent_prompt_cache_tokens_saved: u64,
+        persistent_prompt_cache_block_token_count: u64,
         persistent_prompt_cache_sequence_state_block_count: u64,
         persistent_prompt_cache_boundary_state_snapshot_count: u64,
         persistent_prompt_cache_visual_embedding_count: u64,

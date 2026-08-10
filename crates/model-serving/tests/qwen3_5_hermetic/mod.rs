@@ -10,7 +10,6 @@ mod persistent_prompt_cache_block_key;
 mod persistent_prompt_cache_model_contract;
 mod persistent_prompt_cache_prefill_boundary;
 mod persistent_prompt_cache_prefix_lookup;
-mod persistent_prompt_cache_retention_policy;
 mod persistent_prompt_cache_stats;
 mod persistent_speculative_prefill_selection;
 mod persistent_speculative_prefill_target_state;

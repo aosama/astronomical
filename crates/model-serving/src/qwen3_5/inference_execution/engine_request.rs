@@ -1,4 +1,6 @@
-use astronomical_ipc_protocol::{RequestId, WorkerPromptWorkReuse};
+use astronomical_ipc_protocol::{
+    RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
+};
 
 /// Deterministic failure points used by isolated SpecPrefill qualification.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -99,6 +101,8 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     /// Active MLX telemetry captured before the request-scoped drafter is released.
     pub(super) speculative_prefill_draft_memory_telemetry: Option<crate::MlxMemoryTelemetry>,
     pub(super) prompt_work_reuse: WorkerPromptWorkReuse,
+    pub(super) persistent_prompt_cache_diagnostics:
+        Option<WorkerPersistentPromptCacheRequestDiagnostics>,
     pub(super) force_next_speculative_prefill_draft_prefix_restore_failure_for_tests: bool,
     pub(super) forced_speculative_prefill_failure_stage_for_tests:
         Option<Qwen3_5SpeculativePrefillFailureStageForTests>,

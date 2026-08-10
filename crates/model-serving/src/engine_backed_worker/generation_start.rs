@@ -134,6 +134,9 @@ where
             prepared_generation.request_output,
         );
         active_engine_generation.last_reported_expert_memory_mode = initial_expert_memory_mode;
+        active_engine_generation.persistent_prompt_cache_diagnostics = generation_start
+            .persistent_prompt_cache_diagnostics()
+            .cloned();
         Ok(Some(active_engine_generation))
     }
 }

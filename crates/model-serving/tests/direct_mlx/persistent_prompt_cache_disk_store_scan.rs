@@ -29,13 +29,13 @@ fn write_cross_model_prompt_cache_file(
     file_name_hex_digit: char,
     file_byte_count: usize,
 ) -> PathBuf {
-    let cross_model_kv_blocks_directory = global_prompt_cache_root_directory
+    let cross_model_visual_embeddings_directory = global_prompt_cache_root_directory
         .join(model_directory_name)
         .join("revision")
-        .join("kv_blocks");
-    fs::create_dir_all(&cross_model_kv_blocks_directory)
-        .expect("the test should create a cross-model KV blocks directory");
-    let cross_model_prompt_cache_file_path = cross_model_kv_blocks_directory.join(format!(
+        .join("visual_embeddings");
+    fs::create_dir_all(&cross_model_visual_embeddings_directory)
+        .expect("the test should create a cross-model visual-embedding directory");
+    let cross_model_prompt_cache_file_path = cross_model_visual_embeddings_directory.join(format!(
         "{}.safetensors",
         file_name_hex_digit.to_string().repeat(64)
     ));
@@ -45,6 +45,58 @@ fn write_cross_model_prompt_cache_file(
     )
     .expect("the test should write a cross-model prompt-cache file");
     cross_model_prompt_cache_file_path
+}
+
+fn write_cross_model_block_directory(
+    global_prompt_cache_root_directory: &Path,
+    model_directory_name: &str,
+    block_hash_hex: &str,
+    parent_block_hash_hex: Option<&str>,
+    state_file_byte_count: usize,
+    modified_at_seconds: u64,
+) -> PathBuf {
+    let cross_model_block_directory = global_prompt_cache_root_directory
+        .join(model_directory_name)
+        .join("revision")
+        .join("blocks")
+        .join(block_hash_hex);
+    fs::create_dir_all(&cross_model_block_directory)
+        .expect("the test should create a cross-model block directory");
+    let manifest_json = serde_json::json!({
+        "format_version": "11",
+        "block_hash": block_hash_hex,
+        "block_index": 0,
+        "parent_block_hash": parent_block_hash_hex,
+        "storage_contract_fingerprint": "cross-model-contract-fingerprint",
+        "has_sequence_state": true,
+        "has_boundary_state": true,
+    });
+    fs::write(
+        cross_model_block_directory.join("manifest.json"),
+        manifest_json.to_string(),
+    )
+    .expect("the test should write a cross-model block manifest");
+    fs::write(
+        cross_model_block_directory.join("sequence.safetensors"),
+        vec![1_u8; state_file_byte_count],
+    )
+    .expect("the test should write a cross-model sequence state file");
+    fs::write(
+        cross_model_block_directory.join("boundary.safetensors"),
+        vec![2_u8; state_file_byte_count],
+    )
+    .expect("the test should write a cross-model boundary state file");
+    fs::File::open(&cross_model_block_directory)
+        .expect("the test should open the cross-model block directory")
+        .set_times(
+            FileTimes::new().set_modified(UNIX_EPOCH + Duration::from_secs(modified_at_seconds)),
+        )
+        .expect("the test should persist the block directory modification time");
+    cross_model_block_directory
+}
+
+fn block_hash_hex_for_digit(block_hash_digit: char) -> String {
+    block_hash_digit.to_string().repeat(64)
 }
 
 fn recursive_non_directory_byte_count(directory: &Path) -> u64 {
@@ -167,6 +219,103 @@ fn should_evict_the_oldest_written_cross_model_file_first() {
 
     assert!(!older_cross_model_prompt_cache_file_path.exists());
     assert!(newer_cross_model_prompt_cache_file_path.exists());
+}
+
+#[test]
+fn should_evict_a_cross_model_block_parent_with_its_descendants_under_global_quota_pressure() {
+    let global_prompt_cache_root_directory =
+        tempfile::tempdir().expect("the test should create a global prompt-cache root");
+    let parent_block_hash_hex = block_hash_hex_for_digit('1');
+    let child_block_hash_hex = block_hash_hex_for_digit('2');
+    let unrelated_block_hash_hex = block_hash_hex_for_digit('3');
+    let parent_block_directory = write_cross_model_block_directory(
+        global_prompt_cache_root_directory.path(),
+        "z-older-model",
+        &parent_block_hash_hex,
+        None,
+        256,
+        10,
+    );
+    let child_block_directory = write_cross_model_block_directory(
+        global_prompt_cache_root_directory.path(),
+        "z-older-model",
+        &child_block_hash_hex,
+        Some(&parent_block_hash_hex),
+        256,
+        20,
+    );
+    let unrelated_block_directory = write_cross_model_block_directory(
+        global_prompt_cache_root_directory.path(),
+        "a-newer-model",
+        &unrelated_block_hash_hex,
+        None,
+        256,
+        30,
+    );
+
+    let unrelated_block_size_bytes = recursive_non_directory_byte_count(&unrelated_block_directory);
+    PersistentPromptCacheDiskStore::open(
+        PersistentPromptCacheDiskStoreConfig::new(
+            global_prompt_cache_root_directory
+                .path()
+                .join("active-model")
+                .join("revision"),
+            global_prompt_cache_root_directory.path().to_path_buf(),
+            unrelated_block_size_bytes,
+        ),
+        persistent_prompt_cache_model_contract(),
+    )
+    .expect("the active model prompt cache should evict the oldest block subtree");
+
+    assert!(
+        !parent_block_directory.exists(),
+        "evicting a parent block must delete the parent directory"
+    );
+    assert!(
+        !child_block_directory.exists(),
+        "evicting a parent block must also delete dependent descendants"
+    );
+    assert!(
+        unrelated_block_directory.exists(),
+        "the newer unrelated block should remain after subtree eviction satisfies quota"
+    );
+}
+
+#[test]
+fn should_delete_stale_cross_model_block_staging_directory_below_global_quota() {
+    let global_prompt_cache_root_directory =
+        tempfile::tempdir().expect("the test should create a global prompt-cache root");
+    let stale_staging_directory = global_prompt_cache_root_directory
+        .path()
+        .join("cross-model")
+        .join("revision")
+        .join("blocks")
+        .join(format!("{}.staging-test", block_hash_hex_for_digit('4')));
+    fs::create_dir_all(&stale_staging_directory)
+        .expect("the test should create a stale staging directory");
+    fs::write(
+        stale_staging_directory.join("sequence.safetensors.tmp"),
+        vec![0_u8; 128],
+    )
+    .expect("the test should write a stale staged state file");
+
+    PersistentPromptCacheDiskStore::open(
+        PersistentPromptCacheDiskStoreConfig::new(
+            global_prompt_cache_root_directory
+                .path()
+                .join("active-model")
+                .join("revision"),
+            global_prompt_cache_root_directory.path().to_path_buf(),
+            10_000,
+        ),
+        persistent_prompt_cache_model_contract(),
+    )
+    .expect("the global cache should remove stale block staging directories");
+
+    assert!(
+        !stale_staging_directory.exists(),
+        "abandoned block staging directories must not remain globally visible"
+    );
 }
 
 #[test]

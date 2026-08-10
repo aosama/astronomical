@@ -37,7 +37,7 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
     let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
     let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     persistent_prompt_cache
-        .save_kv_block_and_recurrent_snapshot(
+        .publish_block(
             &runtime,
             &persistent_prompt_cache_block_key,
             None,
@@ -63,7 +63,7 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
     assert_eq!(persistent_prompt_cache.boundary_state_snapshot_count(), 0);
 
     persistent_prompt_cache
-        .save_kv_block_and_recurrent_snapshot(
+        .publish_block(
             &runtime,
             &persistent_prompt_cache_block_key,
             None,
@@ -72,16 +72,7 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
         )
         .expect("the replacement write should recreate deleted cache directories");
 
-    assert!(
-        active_model_prompt_cache_directory
-            .join("kv_blocks")
-            .is_dir()
-    );
-    assert!(
-        active_model_prompt_cache_directory
-            .join("recurrent_snapshots")
-            .is_dir()
-    );
+    assert!(active_model_prompt_cache_directory.join("blocks").is_dir());
     assert!(
         persistent_prompt_cache
             .load_kv_block(&runtime, &persistent_prompt_cache_block_key, None)

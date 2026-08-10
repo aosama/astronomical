@@ -3,6 +3,7 @@ mod decoder_state_reuse;
 pub(crate) mod engine_request;
 pub(in crate::qwen3_5) mod generated_token_emission;
 mod generation_finalization;
+mod generation_request_validation;
 mod inject_input_tokens;
 pub(in crate::qwen3_5) mod memory_admission;
 mod memory_limit;
@@ -29,6 +30,8 @@ mod speculative_prefill_model_loading;
 mod speculative_prefill_policy_activation;
 mod speculative_prefill_scoring;
 mod speculative_prefill_selection;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_selection_gpu;
 mod speculative_prefill_selection_persistence;
 mod speculative_prefill_selection_reuse;
 mod speculative_prefill_store;
@@ -53,9 +56,8 @@ use crate::{
     MlxMemoryLimitAdjustment, MlxMemoryTelemetry, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PersistentPromptCacheCounters,
     PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheModelContract, PersistentPromptCacheWriteQueue,
-    PersistentVisualEmbeddingModelContract, Qwen3_5InferenceRequest,
-    build_persistent_prompt_cache_stats_event,
+    PersistentPromptCacheModelContract, PersistentVisualEmbeddingModelContract,
+    Qwen3_5InferenceRequest, build_persistent_prompt_cache_stats_event,
 };
 
 use self::engine_request::Qwen3_5EngineRequest;
@@ -80,7 +82,7 @@ pub use crate::qwen3_5::multi_token_prediction::{
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_verification_may_cross_thinking_budget,
 };
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
-pub use persistent_prompt_cache_capture::persistent_prompt_cache_write_outcome_advances_parent_chain;
+pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use prefill_chunck_sizer::Qwen3_5PrefillChunckSizer;
 pub use prefill_chunck_sizer_configuration::Qwen3_5PrefillChunckSizerError;
 pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
@@ -239,9 +241,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             persistent_prompt_cache_model_contract: None,
             persistent_visual_embedding_model_contract: None,
             persistent_prompt_cache: None,
-            persistent_prompt_cache_write_queue: None,
             speculative_prefill_draft_persistent_prompt_cache: None,
-            speculative_prefill_draft_persistent_prompt_cache_write_queue: None,
             prefill_chunck_sizer,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
@@ -304,14 +304,9 @@ pub struct Qwen3_5InferenceExecution {
     pub(crate) persistent_visual_embedding_model_contract:
         Option<PersistentVisualEmbeddingModelContract>,
     pub(in super::super) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
-    pub(in super::super) persistent_prompt_cache_write_queue:
-        Option<PersistentPromptCacheWriteQueue>,
     /// SSD-backed dense decoder state owned by the configured SpecPrefill drafter.
     pub(in super::super) speculative_prefill_draft_persistent_prompt_cache:
         Option<Arc<PersistentPromptCacheDiskStore>>,
-    /// Bounded write-behind owner for the drafter's persistent decoder state.
-    pub(in super::super) speculative_prefill_draft_persistent_prompt_cache_write_queue:
-        Option<PersistentPromptCacheWriteQueue>,
     prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
     vocabulary_size: u32,
@@ -391,93 +386,6 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
 }
 
 impl Qwen3_5EngineState {
-    fn prompt_work_reuse_for_tests(
-        &self,
-        request_id: RequestId,
-    ) -> Result<astronomical_ipc_protocol::WorkerPromptWorkReuse, InferenceEngineError> {
-        let active_request = self.active_request.as_ref().ok_or_else(|| {
-            fatal_engine_error("cannot inspect prompt work reuse without an active request")
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot inspect prompt work reuse for a different request",
-            ));
-        }
-        Ok(active_request.prompt_work_reuse.clone())
-    }
-
-    fn speculative_prefill_selected_token_positions_for_tests(
-        &self,
-        request_id: RequestId,
-    ) -> Result<Option<Vec<usize>>, InferenceEngineError> {
-        let active_request = self.active_request.as_ref().ok_or_else(|| {
-            fatal_engine_error(
-                "cannot inspect speculative-prefill selected positions without an active request",
-            )
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot inspect speculative-prefill selected positions for a different request",
-            ));
-        }
-        Ok(active_request
-            .speculative_prefill_selected_token_positions
-            .clone())
-    }
-
-    fn force_next_prefill_capacity_rejection_for_tests(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error("cannot force prefill rejection without an active request")
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force prefill rejection for a different request",
-            ));
-        }
-        active_request.force_next_prefill_capacity_rejection_for_tests = true;
-        Ok(())
-    }
-
-    fn force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error(
-                "cannot force speculative-prefill draft-prefix restore failure without an active request",
-            )
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force speculative-prefill draft-prefix restore failure for a different request",
-            ));
-        }
-        active_request.force_next_speculative_prefill_draft_prefix_restore_failure_for_tests = true;
-        Ok(())
-    }
-
-    fn force_next_speculative_prefill_failure_for_tests(
-        &mut self,
-        request_id: RequestId,
-        failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error(
-                "cannot force a speculative-prefill failure without an active request",
-            )
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force a speculative-prefill failure for a different request",
-            ));
-        }
-        active_request.forced_speculative_prefill_failure_stage_for_tests = Some(failure_stage);
-        Ok(())
-    }
-
     fn collect_persistent_prompt_cache_stats(&self) -> Option<WorkerEvent> {
         let persistent_prompt_cache = self.persistent_prompt_cache.as_ref()?;
         let global_prompt_cache_maximum_size_bytes = self
@@ -486,6 +394,12 @@ impl Qwen3_5EngineState {
             .map(|disk_store_config| disk_store_config.global_prompt_cache_maximum_size_bytes())?;
         Some(build_persistent_prompt_cache_stats_event(
             &self.persistent_prompt_cache_counters,
+            u64::try_from(
+                persistent_prompt_cache
+                    .model_contract_ref()
+                    .block_token_count(),
+            )
+            .unwrap_or(u64::MAX),
             u64::try_from(persistent_prompt_cache.sequence_state_block_count()).unwrap_or(u64::MAX),
             u64::try_from(persistent_prompt_cache.boundary_state_snapshot_count())
                 .unwrap_or(u64::MAX),
@@ -511,29 +425,6 @@ impl Qwen3_5EngineState {
                 active_request,
                 PerformanceAttributionOutcome::Cancelled,
                 None,
-            ))
-        }
-    }
-
-    fn force_next_mtp_draft_rejection_for_tests(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error("cannot force MTP rejection without an active request")
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force MTP rejection for a different request",
-            ));
-        }
-        if let Some(optional_prediction_session) = active_request.optional_prediction_session_mut()
-        {
-            optional_prediction_session.force_next_draft_rejection_for_tests();
-            Ok(())
-        } else {
-            Err(fatal_engine_error(
-                "cannot force MTP rejection for a target-only request",
             ))
         }
     }

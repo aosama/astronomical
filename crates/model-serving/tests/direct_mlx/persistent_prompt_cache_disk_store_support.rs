@@ -4,7 +4,7 @@ use std::fs;
 use astronomical_model_serving::{
     DecoderCachePersistedTensorLayout, PersistentPromptCacheBlockKey,
     PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheDiskStoreError,
+    PersistentPromptCacheDiskStoreError, PersistentPromptCacheModelContract,
 };
 use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
 
@@ -24,6 +24,21 @@ pub(super) fn open_persistent_prompt_cache_disk_store(
             global_prompt_cache_maximum_size_bytes,
         ),
         persistent_prompt_cache_model_contract(),
+    )
+}
+
+pub(super) fn open_persistent_prompt_cache_disk_store_with_contract(
+    persistent_prompt_cache_directory: &tempfile::TempDir,
+    global_prompt_cache_maximum_size_bytes: u64,
+    model_contract: PersistentPromptCacheModelContract,
+) -> Result<PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreError> {
+    PersistentPromptCacheDiskStore::open(
+        PersistentPromptCacheDiskStoreConfig::new(
+            persistent_prompt_cache_directory.path().to_path_buf(),
+            persistent_prompt_cache_directory.path().to_path_buf(),
+            global_prompt_cache_maximum_size_bytes,
+        ),
+        model_contract,
     )
 }
 
@@ -91,7 +106,7 @@ pub(super) fn synthetic_recurrent_snapshot_tensors(
     )
 }
 
-fn synthetic_tensors_for_contract(
+pub(super) fn synthetic_tensors_for_contract(
     runtime: &MlxRuntime,
     persisted_tensor_layouts: &[DecoderCachePersistedTensorLayout],
     block_token_count: usize,

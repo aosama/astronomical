@@ -209,6 +209,7 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
             }
             WorkerEvent::PrefillProgress { .. }
             | WorkerEvent::GenerationProgress { .. }
+            | WorkerEvent::PromptWorkReuse { .. }
             | WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::MlxMemoryLimitChanged { .. }
             | WorkerEvent::MlxMemoryLimitRejected { .. }
@@ -217,6 +218,7 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
             | WorkerEvent::PersistentPromptCacheStats { .. }
             | WorkerEvent::ModelSwapped { .. }
             | WorkerEvent::Idle { .. }
+            | WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
             | WorkerEvent::Ready { .. } => {}
         }
     }

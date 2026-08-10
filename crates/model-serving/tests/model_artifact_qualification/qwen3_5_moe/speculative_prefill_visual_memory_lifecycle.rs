@@ -216,14 +216,14 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         "RAM pressure must evict target experts and never convert this request to target-only"
     );
     drop(qwen3_5_engine);
-    let draft_kv_block_directory = temporary_prompt_cache_directory
+    let draft_block_directory = temporary_prompt_cache_directory
         .path()
         .join(&draft_model_id)
         .join(&draft_model_revision)
-        .join("kv_blocks");
+        .join("blocks");
     assert!(
-        std::fs::read_dir(&draft_kv_block_directory)
-            .expect("the cold visual request should create the draft KV directory")
+        std::fs::read_dir(&draft_block_directory)
+            .expect("the cold visual request should create the draft block directory")
             .next()
             .is_some(),
         "the cold visual request must publish reusable draft KV blocks"

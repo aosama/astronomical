@@ -123,6 +123,7 @@ impl PersistentPromptCacheCounters {
 #[must_use]
 pub fn build_persistent_prompt_cache_stats_event(
     persistent_prompt_cache_counters: &PersistentPromptCacheCounters,
+    persistent_prompt_cache_block_token_count: u64,
     persistent_prompt_cache_sequence_state_block_count: u64,
     persistent_prompt_cache_boundary_state_snapshot_count: u64,
     persistent_prompt_cache_visual_embedding_count: u64,
@@ -137,6 +138,7 @@ pub fn build_persistent_prompt_cache_stats_event(
             .persistent_prompt_cache_misses(),
         persistent_prompt_cache_tokens_saved: persistent_prompt_cache_counters
             .persistent_prompt_cache_tokens_saved(),
+        persistent_prompt_cache_block_token_count,
         persistent_prompt_cache_sequence_state_block_count,
         persistent_prompt_cache_boundary_state_snapshot_count,
         persistent_prompt_cache_visual_embedding_count,
