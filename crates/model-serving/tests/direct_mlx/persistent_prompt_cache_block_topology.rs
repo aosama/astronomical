@@ -161,8 +161,9 @@ async fn should_complete_interrupted_parent_boundary_compaction_before_startup_e
     );
     let model_contract = persistent_prompt_cache.model_contract_ref().clone();
     let interrupted_transaction_size_bytes = persistent_prompt_cache.total_size_bytes();
+    let recovered_boundary_file_byte_count = model_contract.boundary_state_file_bytes();
     let post_compaction_quota_bytes = interrupted_transaction_size_bytes
-        .checked_sub(model_contract.boundary_state_file_bytes())
+        .checked_sub(recovered_boundary_file_byte_count)
         .expect("one parent boundary should fit inside the interrupted transaction");
     drop(persistent_prompt_cache);
 
@@ -177,6 +178,16 @@ async fn should_complete_interrupted_parent_boundary_compaction_before_startup_e
     assert_eq!(reopened_prompt_cache.boundary_state_snapshot_count(), 2);
     assert!(!reopened_prompt_cache.has_recurrent_snapshot(&child_block_key.block_hash()));
     assert!(reopened_prompt_cache.has_kv_block(&grandchild_block_key.block_hash()));
+    let interrupted_transaction_recovery = reopened_prompt_cache
+        .startup_cleanup_evidence()
+        .expect("startup compaction should retain cleanup evidence")
+        .interrupted_transaction_recovery;
+    assert_eq!(interrupted_transaction_recovery.artifact_count, 1);
+    assert_eq!(interrupted_transaction_recovery.block_count, 0);
+    assert_eq!(
+        interrupted_transaction_recovery.byte_count,
+        recovered_boundary_file_byte_count
+    );
 }
 
 #[tokio::test]
@@ -284,6 +295,15 @@ async fn should_remove_descendants_when_their_sequence_ancestor_is_missing_on_re
     assert_eq!(reopened_prompt_cache.sequence_state_block_count(), 0);
     assert_eq!(reopened_prompt_cache.boundary_state_snapshot_count(), 0);
     assert!(!block_directory_path(&persistent_prompt_cache_directory, &child_block_key).exists());
+    assert_eq!(
+        reopened_prompt_cache
+            .startup_cleanup_evidence()
+            .expect("orphan pruning should retain cleanup evidence")
+            .corrupt_current_format
+            .block_count,
+        1,
+        "the orphan child should be counted exactly once"
+    );
 }
 
 #[tokio::test]

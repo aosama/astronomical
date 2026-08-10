@@ -15,7 +15,7 @@ use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::parse_persistent_prompt_cache_file_hash_from_path;
 use super::disk_store_global_quota_candidate::{
     GlobalPromptCacheBlockSubtree, GlobalPromptCacheEvictionCandidate, GlobalPromptCacheFile,
-    GlobalPromptCacheStaleDirectory,
+    GlobalPromptCacheStaleDirectory, GlobalPromptCacheStandaloneFileClassification,
 };
 
 pub(super) struct GlobalPromptCacheQuotaScan {
@@ -104,8 +104,8 @@ pub(super) fn scan_global_prompt_cache_quota(
     // age. Within each class, oldest-write-first gives predictable LRU-like
     // pressure relief without maintaining another persistent access database.
     eviction_candidates.sort_by(|left_candidate, right_candidate| {
-        (!left_candidate.is_stale_transaction_artifact())
-            .cmp(&(!right_candidate.is_stale_transaction_artifact()))
+        (!left_candidate.is_unconditionally_removable())
+            .cmp(&(!right_candidate.is_unconditionally_removable()))
             .then_with(|| {
                 left_candidate
                     .modified_at()
@@ -201,20 +201,27 @@ fn scan_standalone_file(
     // `kv_blocks` and `recurrent_snapshots` are retired pre-format-11 storage
     // trees. Their files are recoverable cache artifacts, not valid committed
     // blocks, so startup may reclaim them before current-format content.
-    let is_stale_writer_temp_file = file_path
+    let is_obsolete_format_artifact = file_path.ancestors().any(|ancestor_path| {
+        ancestor_path.file_name().is_some_and(|directory_name| {
+            directory_name == "kv_blocks" || directory_name == "recurrent_snapshots"
+        })
+    });
+    let cleanup_classification = if file_path
         .extension()
         .is_some_and(|extension| extension == "tmp")
-        || file_path.ancestors().any(|ancestor_path| {
-            ancestor_path.file_name().is_some_and(|directory_name| {
-                directory_name == "kv_blocks" || directory_name == "recurrent_snapshots"
-            })
-        });
+    {
+        GlobalPromptCacheStandaloneFileClassification::AbandonedTransaction
+    } else if is_obsolete_format_artifact {
+        GlobalPromptCacheStandaloneFileClassification::ObsoleteFormat
+    } else {
+        GlobalPromptCacheStandaloneFileClassification::CommittedArtifact
+    };
     Ok(GlobalPromptCacheFile {
         file_path: file_path.to_path_buf(),
         file_size_bytes: file_metadata.len(),
         modified_at,
         is_visual_embedding,
-        is_stale_writer_temp_file,
+        cleanup_classification,
     })
 }
 
@@ -357,9 +364,9 @@ fn build_block_subtree_candidates(
                 .push(subtree_block_directory.block_directory_path.clone());
             subtree_tracked_file_paths.extend(subtree_block_directory.tracked_file_paths.clone());
         }
-        let root_block_directory = block_directory_by_identity
-            .get(block_identity)
-            .expect("the root block identity came from the block map");
+        let Some(root_block_directory) = block_directory_by_identity.get(block_identity) else {
+            continue;
+        };
         eviction_candidates.push(GlobalPromptCacheEvictionCandidate::BlockSubtree(
             GlobalPromptCacheBlockSubtree {
                 root_block_directory_path: root_block_directory.block_directory_path.clone(),

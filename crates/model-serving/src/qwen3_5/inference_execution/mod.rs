@@ -10,6 +10,7 @@ mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
 mod persistent_prompt_cache_capture;
+mod persistent_prompt_cache_startup_logging;
 mod prefill_advance;
 mod prefill_chunck_sizer;
 mod prefill_chunck_sizer_configuration;

@@ -19,6 +19,7 @@ use super::disk_store_scan::{
     scan_current_format_block_directories, scan_current_format_directory,
 };
 use super::model_contract::PersistentPromptCacheModelContract;
+use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 use astronomical_runtime_integration::{MlxArray, MlxRuntime, PositionalFileReadMetrics};
 use std::collections::HashMap;
 
@@ -81,6 +82,7 @@ pub struct PersistentPromptCacheDiskStore {
     pub(crate) model_contract: PersistentPromptCacheModelContract,
     tracked_files: Mutex<PersistentPromptCacheDiskStoreIndex>,
     write_operations: Mutex<()>,
+    pending_startup_cleanup_evidence: Mutex<Option<PersistentPromptCacheStartupCleanupEvidence>>,
 }
 
 impl PersistentPromptCacheDiskStore {
@@ -102,6 +104,7 @@ impl PersistentPromptCacheDiskStore {
             persistent_prompt_cache_directory.join(SPECULATIVE_PREFILL_SELECTIONS_DIRECTORY_NAME);
         let speculative_prefill_target_states_directory = persistent_prompt_cache_directory
             .join(SPECULATIVE_PREFILL_TARGET_STATES_DIRECTORY_NAME);
+        let mut startup_cleanup_evidence = PersistentPromptCacheStartupCleanupEvidence::default();
         // Open order is a recovery protocol: establish trusted directories,
         // rebuild the active-model index from valid committed artifacts, remove
         // abandoned global transactions, then reconcile retention and quota.
@@ -120,11 +123,13 @@ impl PersistentPromptCacheDiskStore {
             &blocks_directory,
             &mut tracked_files,
             &model_contract,
+            &mut startup_cleanup_evidence,
         )?;
         scan_current_format_directory(
             &speculative_prefill_selections_directory,
             PersistentPromptCacheFileKind::SpeculativePrefillSelection,
             &mut tracked_files,
+            &mut startup_cleanup_evidence,
             |file, file_path| {
                 validate_current_file_header(
                     PersistentPromptCacheFileKind::SpeculativePrefillSelection,
@@ -139,6 +144,7 @@ impl PersistentPromptCacheDiskStore {
             &speculative_prefill_target_states_directory,
             PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
             &mut tracked_files,
+            &mut startup_cleanup_evidence,
             |file, file_path| {
                 validate_current_file_header(
                     PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
@@ -162,11 +168,12 @@ impl PersistentPromptCacheDiskStore {
             model_contract,
             tracked_files: Mutex::new(tracked_files),
             write_operations: Mutex::new(()),
+            pending_startup_cleanup_evidence: Mutex::new(startup_cleanup_evidence.into_non_empty()),
         };
         // Stale bytes must disappear before quota considers deleting useful
         // content. Retention reconciliation then protects the validated active
         // chain while evicting unrelated content and completing crash cleanup.
-        disk_store.remove_stale_global_prompt_cache_transaction_artifacts()?;
+        disk_store.remove_unconditionally_reclaimable_startup_artifacts()?;
         disk_store.reconcile_startup_retention_and_global_quota()?;
         Ok(disk_store)
     }
@@ -223,6 +230,30 @@ impl PersistentPromptCacheDiskStore {
             .load(Ordering::Relaxed)
     }
 
+    pub fn startup_cleanup_evidence(&self) -> Option<PersistentPromptCacheStartupCleanupEvidence> {
+        *self.lock_startup_cleanup_evidence()
+    }
+
+    pub fn take_startup_cleanup_evidence(
+        &self,
+    ) -> Option<PersistentPromptCacheStartupCleanupEvidence> {
+        self.lock_startup_cleanup_evidence().take()
+    }
+
+    pub(crate) fn record_startup_cleanup_evidence(
+        &self,
+        additional_evidence: PersistentPromptCacheStartupCleanupEvidence,
+    ) {
+        if additional_evidence.into_non_empty().is_none() {
+            return;
+        }
+        let mut pending_evidence = self.lock_startup_cleanup_evidence();
+        match pending_evidence.as_mut() {
+            Some(existing_evidence) => existing_evidence.merge(additional_evidence),
+            None => *pending_evidence = Some(additional_evidence),
+        }
+    }
+
     pub(crate) fn lock_tracked_files(&self) -> MutexGuard<'_, PersistentPromptCacheDiskStoreIndex> {
         self.tracked_files
             .lock()
@@ -231,6 +262,14 @@ impl PersistentPromptCacheDiskStore {
 
     pub(crate) fn lock_write_operations(&self) -> MutexGuard<'_, ()> {
         self.write_operations
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn lock_startup_cleanup_evidence(
+        &self,
+    ) -> MutexGuard<'_, Option<PersistentPromptCacheStartupCleanupEvidence>> {
+        self.pending_startup_cleanup_evidence
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }

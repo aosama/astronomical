@@ -15,6 +15,7 @@ use super::disk_store_file::{
     PersistentPromptCacheFileKind, remove_cache_owned_file_or_confirm_absent, synchronize_directory,
 };
 use super::retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint;
+use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 
 impl PersistentPromptCacheDiskStore {
     pub(super) fn reconcile_startup_retention_and_global_quota(
@@ -29,12 +30,9 @@ impl PersistentPromptCacheDiskStore {
             .into_iter()
             .map(|(_, tracked_block)| tracked_block.block_directory_path)
             .collect::<Vec<_>>();
-        match self.enforce_global_prompt_cache_quota_for_commit(
-            0,
-            0,
-            &protected_active_block_directory_paths,
-            None,
-        ) {
+        match self
+            .enforce_startup_global_prompt_cache_quota(&protected_active_block_directory_paths)
+        {
             Ok(()) => return Ok(()),
             Err(PersistentPromptCacheDiskStoreError::GlobalPromptCacheQuotaNotSatisfied {
                 ..
@@ -45,12 +43,7 @@ impl PersistentPromptCacheDiskStore {
         // only bytes now eligible inside the chain are redundant non-checkpoint
         // parent boundaries left by a crash after child commit.
         self.compact_active_model_parent_boundaries_for_startup_quota()?;
-        self.enforce_global_prompt_cache_quota_for_commit(
-            0,
-            0,
-            &protected_active_block_directory_paths,
-            None,
-        )
+        self.enforce_startup_global_prompt_cache_quota(&protected_active_block_directory_paths)
     }
 
     fn compact_active_model_parent_boundaries_for_startup_quota(
@@ -60,6 +53,7 @@ impl PersistentPromptCacheDiskStore {
             return Ok(());
         }
         let mut committed_size_bytes = self.total_size_bytes();
+        let mut startup_cleanup_evidence = PersistentPromptCacheStartupCleanupEvidence::default();
         if committed_size_bytes <= self.global_prompt_cache_maximum_size_bytes {
             return Ok(());
         }
@@ -130,7 +124,11 @@ impl PersistentPromptCacheDiskStore {
             );
             committed_size_bytes =
                 committed_size_bytes.saturating_sub(reclaimable_boundary.boundary_file_size_bytes);
+            startup_cleanup_evidence
+                .interrupted_transaction_recovery
+                .record_artifact(reclaimable_boundary.boundary_file_size_bytes);
         }
+        self.record_startup_cleanup_evidence(startup_cleanup_evidence);
         self.refresh_global_prompt_cache_accounting()
     }
 }

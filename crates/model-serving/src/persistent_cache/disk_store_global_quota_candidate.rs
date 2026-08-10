@@ -13,7 +13,21 @@ pub(super) struct GlobalPromptCacheFile {
     pub(super) file_size_bytes: u64,
     pub(super) modified_at: SystemTime,
     pub(super) is_visual_embedding: bool,
-    pub(super) is_stale_writer_temp_file: bool,
+    pub(super) cleanup_classification: GlobalPromptCacheStandaloneFileClassification,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum GlobalPromptCacheStandaloneFileClassification {
+    AbandonedTransaction,
+    ObsoleteFormat,
+    CommittedArtifact,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum GlobalPromptCacheCleanupClassification {
+    InterruptedTransactionRecovery,
+    ObsoleteFormat,
+    QuotaEviction,
 }
 
 #[derive(Debug)]
@@ -70,13 +84,45 @@ impl GlobalPromptCacheEvictionCandidate {
         }
     }
 
-    pub(super) fn is_stale_transaction_artifact(&self) -> bool {
+    pub(super) fn unconditional_cleanup_classification(
+        &self,
+    ) -> Option<GlobalPromptCacheCleanupClassification> {
         match self {
             Self::StandaloneFile(global_prompt_cache_file) => {
-                global_prompt_cache_file.is_stale_writer_temp_file
+                match global_prompt_cache_file.cleanup_classification {
+                    GlobalPromptCacheStandaloneFileClassification::AbandonedTransaction => {
+                        Some(GlobalPromptCacheCleanupClassification::InterruptedTransactionRecovery)
+                    }
+                    GlobalPromptCacheStandaloneFileClassification::ObsoleteFormat => {
+                        Some(GlobalPromptCacheCleanupClassification::ObsoleteFormat)
+                    }
+                    GlobalPromptCacheStandaloneFileClassification::CommittedArtifact => None,
+                }
             }
-            Self::StaleDirectory(_) => true,
-            Self::BlockSubtree(_) => false,
+            Self::StaleDirectory(_) => {
+                Some(GlobalPromptCacheCleanupClassification::InterruptedTransactionRecovery)
+            }
+            Self::BlockSubtree(_) => None,
+        }
+    }
+
+    pub(super) fn is_unconditionally_removable(&self) -> bool {
+        self.unconditional_cleanup_classification().is_some()
+    }
+
+    pub(super) fn removed_artifact_count(&self) -> usize {
+        usize::from(matches!(self, Self::StandaloneFile(_)))
+    }
+
+    pub(super) fn removed_block_count(&self) -> usize {
+        match self {
+            Self::StandaloneFile(_) => 0,
+            Self::StaleDirectory(_) => 1,
+            Self::BlockSubtree(global_prompt_cache_block_subtree) => {
+                global_prompt_cache_block_subtree
+                    .block_directory_paths
+                    .len()
+            }
         }
     }
 
