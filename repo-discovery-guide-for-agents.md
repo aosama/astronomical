@@ -6,7 +6,7 @@ Agent orientation map for non-obvious repository facts; this is not user-facing 
 
 Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old.
 
-Last verified: 2026-08-09 (spot-checked: worker MLX memory policy, production standard-safetensors paging, supervisor and worker ownership, live MLX memory control, automatic sparse residency, cache-safe large prefill, and public verification entry points)
+Last verified: 2026-08-10 (spot-checked: Rust dependency-notice generation, CI enforcement, GitHub Pages deployment boundaries, and public verification entry points)
 
 ## Project overview
 
@@ -88,7 +88,7 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 
 - docs/north-star-product-vision.md - the retained product direction; the former architecture, organization, and safety mandate documents were intentionally deleted because they encouraged framework growth.
 - README.md, CONTRIBUTING.md, and SECURITY.md - public project, contribution, and vulnerability-reporting entry points. Keep private local docs and agent instructions ignored.
-- .github/ - public issue and pull-request templates plus SHA-pinned workflows. CI first classifies changed paths in a lightweight job; static-only site, documentation, and public-asset changes skip macOS Rust/native verification while code changes run the capped verified native provisioning plus bounded Rust hermetic-target compilation and tests. The separate Pages workflow publishes site unchanged without adding a frontend build tool.
+- .github/ - public issue and pull-request templates plus SHA-pinned workflows. CI first classifies changed paths in a lightweight job; static-only site, documentation, and public-asset changes skip macOS Rust/native verification while code changes verify the generated Rust dependency notices, run capped verified native provisioning, and execute bounded Rust hermetic-target compilation and tests. The separate Pages workflow publishes site unchanged without adding a frontend build tool.
 - site/ - dependency-free GitHub Pages source. The homepage and evidence reports share direct CSS and an SVG mark; each public claim distinguishes measured qualification, architecture facts, and unresolved performance questions.
 - docs/expert-paging-cpu-gpu-ssd-execution-flow.md - critical verified map of host control, MLX graphics-processor execution, expert-weight memory-cache least-recently-used policy, and bounded safetensors SSD reads. Update it whenever those boundaries change.
 - apps/supervisor/ - localhost astronomicald, Axum REST/SSE, one WorkerHandle, one concrete worker loop, and one WorkerProcess. It has no XPC, actor framework, lifecycle object, or session/launcher hierarchy. Each completed generation appends one JSONL line to ~/.astronomical/logs/performance.jsonl with per-request throughput (prefill_tok_per_second, generation_tok_per_second), latency, token counts, MLX memory, and model identity. The Astronomical Observatory embedded web admin console is served at root / on the same port as the OpenAI API; seven static assets (index.html, console.js, overview-compact.js, memory-control.js, optimizer.js, playground.js, console.css) under apps/supervisor/console/ are compiled into the daemon from src/console_assets.rs and merged into every Router builder through console_routes(). No new crate, process, or runtime dependency. GET /v1/system/telemetry exposes local GPU utilization sampled from IOKit AGXAccelerator PerformanceStatistics and nullable macOS memory pressure sampled through a bounded sysctl probe in src/system_telemetry.rs; null pressure means unavailable. That module owns the supervisor crate's only unsafe FFI and the crate-level unsafe lint remains denied everywhere else.
@@ -154,4 +154,4 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 
 ## Maintenance snapshot
 
-Verified worker memory-ceiling propagation, disabled MLX per-buffer wired residency, synchronized allocator cleanup, standard-safetensors-only production expert paging, contract-derived persistent model-state storage, Cargo test aliases, and public verification entry points on 2026-08-09.
+Verified generated Rust dependency-notice enforcement, GitHub Pages deployment boundaries, Cargo test aliases, and public verification entry points on 2026-08-10.
