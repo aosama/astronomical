@@ -53,14 +53,6 @@
 - Code files should remain around the 500 lines marker not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
 
-## Keep Dependencies Updated to Latest Version
-
-- Always make sure we are using the latest dependencies for this project.
-
-## Naming Convensions in Variables
-
-- Long variable names and class names are accepted and the user prefers long communicative names to brief ambigous names.
-
 ## No Backward Compatibility for REST API surface
 
 - There is no requirement for Backward compatibility for the REST API surface. There are no downstream consumers of these surfaces so compatibility is not an issue.
