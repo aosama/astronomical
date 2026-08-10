@@ -14,5 +14,6 @@
 #[cfg(feature = "direct-mlx")]
 mod cache_interaction_matrix;
 mod engine_prompt_cache;
+mod large_prefill_prompt;
 #[cfg(feature = "direct-mlx")]
 mod vision_prompt_cache;

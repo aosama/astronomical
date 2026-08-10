@@ -2,14 +2,13 @@ use std::collections::HashMap;
 use std::fs;
 
 use astronomical_model_serving::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PersistentPromptCacheBlockKey,
+    DecoderCachePersistedTensorLayout, PersistentPromptCacheBlockKey,
     PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
     PersistentPromptCacheDiskStoreError,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
 
-use crate::common::qwen3_5_moe::{certified_ornith_config, persistent_prompt_cache_model_contract};
+use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -38,8 +37,12 @@ pub(super) fn runtime_with_shared_limits() -> MlxRuntime {
 }
 
 pub(super) fn write_format_four_cache_file(format_four_cache_file_path: &std::path::Path) {
+    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
     let mut header_bytes = format!(
-        r#"{{"__metadata__":{{"format_version":"4","model_id":"{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID}","model_revision":"{ORNITH_1_0_35B_OPTIQ_4BIT_REVISION}","block_token_count":"{PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT}"}}}}"#
+        r#"{{"__metadata__":{{"format_version":"4","model_id":"{}","model_revision":"{}","block_token_count":"{}"}}}}"#,
+        persistent_prompt_cache_model_contract.model_id(),
+        persistent_prompt_cache_model_contract.model_revision(),
+        persistent_prompt_cache_model_contract.block_token_count(),
     )
     .into_bytes();
     let header_padding_byte_count = (8 - header_bytes.len() % 8) % 8;
@@ -54,106 +57,67 @@ pub(super) fn persistent_prompt_cache_block_key_for_seed(
     token_seed: u32,
 ) -> PersistentPromptCacheBlockKey {
     PersistentPromptCacheBlockKey::for_root_block(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        &persistent_prompt_cache_model_contract(),
         &block_tokens_for_seed(token_seed),
     )
     .expect("the test should hash the block tokens")
 }
 
 pub(super) fn block_tokens_for_seed(token_seed: u32) -> Vec<u32> {
-    (0..PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+    (0..persistent_prompt_cache_model_contract().block_token_count())
         .map(|token_offset| token_seed + token_offset as u32)
         .collect()
 }
 
 pub(super) fn synthetic_kv_block_tensors(runtime: &MlxRuntime) -> HashMap<String, MlxArray> {
-    let ornith_config = certified_ornith_config();
-    let key_value_head_count = ornith_config.key_value_head_count() as i32;
-    let head_dimension = ornith_config.head_dimension() as i32;
-    let full_attention_layer_count = (0..ornith_config.layer_count() as usize)
-        .filter(|layer_index| ornith_config.decoder_layer_is_full_attention(*layer_index))
-        .count();
-    let mut kv_block_tensors = HashMap::with_capacity(full_attention_layer_count * 2);
-    for layer_index in 0..ornith_config.layer_count() as usize {
-        if ornith_config.decoder_layer_is_full_attention(layer_index) {
-            let keys = runtime
-                .zeros(
-                    &[
-                        1,
-                        key_value_head_count,
-                        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT as i32,
-                        head_dimension,
-                    ],
-                    MlxDtype::BFloat16,
-                )
-                .expect("the test should create the keys tensor");
-            let values = runtime
-                .zeros(
-                    &[
-                        1,
-                        key_value_head_count,
-                        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT as i32,
-                        head_dimension,
-                    ],
-                    MlxDtype::BFloat16,
-                )
-                .expect("the test should create the values tensor");
-            kv_block_tensors.insert(format!("layer_{layer_index}_attention.keys"), keys);
-            kv_block_tensors.insert(format!("layer_{layer_index}_attention.values"), values);
-        }
-    }
-    kv_block_tensors
+    synthetic_tensors_for_contract(
+        runtime,
+        &persistent_prompt_cache_model_contract()
+            .decoder_cache_layout()
+            .sequence_tensor_layouts(),
+        persistent_prompt_cache_model_contract().block_token_count(),
+    )
 }
 
 pub(super) fn synthetic_recurrent_snapshot_tensors(
     runtime: &MlxRuntime,
 ) -> HashMap<String, MlxArray> {
-    let ornith_config = certified_ornith_config();
-    let linear_convolution_kernel_dimension =
-        ornith_config.linear_convolution_kernel_dimension() as i32;
-    let linear_convolution_dimension = ornith_config.linear_convolution_state_dimension();
-    let linear_value_head_count = ornith_config.linear_value_head_count() as i32;
-    let linear_value_head_dimension = ornith_config.linear_value_head_dimension() as i32;
-    let linear_key_head_dimension = ornith_config.linear_key_head_dimension() as i32;
-    let linear_attention_layer_count = (0..ornith_config.layer_count() as usize)
-        .filter(|layer_index| !ornith_config.decoder_layer_is_full_attention(*layer_index))
-        .count();
-    let mut recurrent_snapshot_tensors = HashMap::with_capacity(linear_attention_layer_count * 2);
-    for layer_index in 0..ornith_config.layer_count() as usize {
-        if !ornith_config.decoder_layer_is_full_attention(layer_index) {
-            let convolution = runtime
-                .zeros(
-                    &[
-                        1,
-                        linear_convolution_kernel_dimension.saturating_sub(1),
-                        linear_convolution_dimension,
-                    ],
-                    MlxDtype::BFloat16,
-                )
-                .expect("the test should create the convolution tensor");
-            let recurrent = runtime
-                .zeros(
-                    &[
-                        1,
-                        linear_value_head_count,
-                        linear_value_head_dimension,
-                        linear_key_head_dimension,
-                    ],
-                    MlxDtype::Float32,
-                )
-                .expect("the test should create the recurrent tensor");
-            recurrent_snapshot_tensors.insert(
-                format!("layer_{layer_index}_linear.convolution"),
-                convolution,
-            );
-            recurrent_snapshot_tensors.insert(
-                format!("layer_{layer_index}_linear.gated_delta_recurrent"),
-                recurrent,
-            );
-        }
-    }
-    recurrent_snapshot_tensors
+    synthetic_tensors_for_contract(
+        runtime,
+        &persistent_prompt_cache_model_contract()
+            .decoder_cache_layout()
+            .boundary_tensor_layouts(),
+        persistent_prompt_cache_model_contract().block_token_count(),
+    )
+}
+
+fn synthetic_tensors_for_contract(
+    runtime: &MlxRuntime,
+    persisted_tensor_layouts: &[DecoderCachePersistedTensorLayout],
+    block_token_count: usize,
+) -> HashMap<String, MlxArray> {
+    persisted_tensor_layouts
+        .iter()
+        .map(|persisted_tensor_layout| {
+            let tensor_layout = persisted_tensor_layout.tensor_layout();
+            let tensor_dimensions = tensor_layout
+                .dimensions()
+                .iter()
+                .enumerate()
+                .map(|(dimension_index, tensor_dimension)| {
+                    if Some(dimension_index) == tensor_layout.sequence_axis() {
+                        block_token_count as i32
+                    } else {
+                        *tensor_dimension as i32
+                    }
+                })
+                .collect::<Vec<_>>();
+            let tensor = runtime
+                .zeros(&tensor_dimensions, tensor_layout.dtype().mlx_dtype())
+                .expect("the contract-derived test tensor should allocate");
+            (persisted_tensor_layout.persistent_tensor_name(), tensor)
+        })
+        .collect()
 }
 
 pub(super) fn assert_split_tensor_shapes_match(

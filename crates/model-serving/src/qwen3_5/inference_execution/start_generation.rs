@@ -1,12 +1,9 @@
 use crate::{
     EngineGenerationStart, InferenceEngineError, PerformanceAttributionOutcome, PerformanceCounter,
-    PerformanceOperation, PersistentPromptCacheBlockKey, Qwen3_5InferenceRequest,
-    Qwen3_5SamplingStrategy,
+    PersistentPromptCacheBlockKey, Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy,
 };
 
-use super::super::model::memory_admission::{
-    invalid_request_error, validate_context_memory_admission,
-};
+use super::super::model::memory_admission::invalid_request_error;
 use super::super::resolve_sampling_seed;
 use super::super::text::sampler::{random_state_for_seed, validate_sampled_strategy};
 use super::super::text::sampling_seed::current_time_millis_since_unix_epoch;
@@ -251,10 +248,9 @@ impl Qwen3_5EngineState {
                 // state (including counters) can be mutated as &mut self while the
                 // disk store is used as a plain borrowed reference.
                 let persistent_prompt_cache = self.persistent_prompt_cache.take();
-                let mut persistent_prompt_cache_restore_failed = false;
-                let restore_outcome =
+                let restore_result =
                     if let Some(persistent_prompt_cache) = persistent_prompt_cache.as_ref() {
-                        match self.restore_persistent_prompt_cache_prefix(
+                        self.restore_persistent_prompt_cache_prefix(
                             inference_request.request_id(),
                             persistent_prompt_cache,
                             &prompt_token_ids,
@@ -262,55 +258,16 @@ impl Qwen3_5EngineState {
                             total_context_tokens,
                             &mut request_decoder_state,
                             &mut performance_attribution,
-                        ) {
-                            Ok(restore_outcome) => Some(restore_outcome),
-                            Err(persistent_prompt_cache_error) => {
-                                tracing::warn!(
-                                    "Qwen3.5 persistent prompt-cache restore failed; \
-                             falling back to cold prefill: {persistent_prompt_cache_error}"
-                                );
-                                persistent_prompt_cache_restore_failed = true;
-                                None
-                            }
-                        }
+                        )
+                        .map(Some)
                     } else {
-                        None
+                        Ok(None)
                     };
+                // Restores can fail closed for data correctness, but the disk-store owner must
+                // remain installed for the next independent request. Returning while it is
+                // temporarily taken would silently turn later traffic into cache-disabled mode.
                 self.persistent_prompt_cache = persistent_prompt_cache;
-                if persistent_prompt_cache_restore_failed {
-                    let model_after_restore_failure = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
-                    request_decoder_state =
-                        RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                            model_after_restore_failure.decoder_cache_layout(),
-                            self.full_attention_kv_state_growth_tokens,
-                        )
-                        .map_err(qwen3_5_runtime_error)?;
-                    performance_attribution
-                        .measure_operation(
-                            PerformanceOperation::MlxAllocatorCacheCleanup,
-                            |_performance_attribution| {
-                                model_after_restore_failure
-                                    .runtime()
-                                    .synchronize_gpu_stream_and_clear_allocator_cache()
-                            },
-                        )
-                        .map_err(qwen3_5_runtime_error)?;
-                    performance_attribution.measure_operation(
-                        PerformanceOperation::MemoryAdmissionSnapshot,
-                        |_performance_attribution| {
-                            validate_context_memory_admission(
-                                model_after_restore_failure,
-                                self.memory_limits,
-                                self.context_memory_reservation_bytes_per_token,
-                                total_context_tokens,
-                                0,
-                                self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
-                            )
-                        },
-                    )?;
-                }
+                let restore_outcome = restore_result?;
                 if let Some(restore_outcome) = restore_outcome {
                     persistent_prompt_cache_token_count =
                         restore_outcome.persistent_prompt_cache_token_count;
@@ -489,7 +446,6 @@ impl Qwen3_5EngineState {
                 ordered_image_sha256_digests,
                 next_position_tokens,
                 pending_generated_token: None,
-                persistent_prompt_cache_capture_has_stopped: false,
                 prefill_cursor,
                 maximum_successful_prefill_chunck_tokens: None,
                 random_state,

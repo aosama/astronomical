@@ -79,7 +79,6 @@ pub use performance_attribution::{
     PerformanceOperationMeasurement,
 };
 pub use persistent_cache::{
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
     PERSISTENT_SPECULATIVE_PREFILL_SELECTION_FORMAT_VERSION,
     PERSISTENT_SPECULATIVE_PREFILL_TARGET_STATE_FORMAT_VERSION,
     PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION, PersistentPromptCacheBlockError,
@@ -87,13 +86,13 @@ pub use persistent_cache::{
     PersistentPromptCacheBlockKeyError, PersistentPromptCacheBlockSaveAdmission,
     PersistentPromptCacheCounters, PersistentPromptCacheLookupDiagnostics,
     PersistentPromptCacheMissReason, PersistentPromptCacheModelContract,
-    PersistentPromptCachePrefixLookup, PersistentPromptCachePrefixLookupResult,
-    PersistentSpeculativePrefillPolicyIdentity, PersistentSpeculativePrefillSelectionContract,
-    PersistentSpeculativePrefillTargetStateContract, PersistentVisualEmbeddingFileError,
-    PersistentVisualEmbeddingFileHeader, PersistentVisualEmbeddingKey,
-    PersistentVisualEmbeddingModelContract, longest_reusable_speculative_prefill_target_prefix,
+    PersistentPromptCacheModelContractError, PersistentPromptCachePrefixLookup,
+    PersistentPromptCachePrefixLookupResult, PersistentSpeculativePrefillPolicyIdentity,
+    PersistentSpeculativePrefillSelectionContract, PersistentSpeculativePrefillTargetStateContract,
+    PersistentVisualEmbeddingFileError, PersistentVisualEmbeddingFileHeader,
+    PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
+    longest_reusable_speculative_prefill_target_prefix,
     persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
-    persistent_prompt_cache_recurrent_snapshot_is_common_prefix_checkpoint,
     persistent_prompt_cache_save_admission,
 };
 #[cfg(feature = "direct-mlx")]

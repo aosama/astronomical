@@ -215,10 +215,10 @@ fn prepared_prompt_from_messages(
 fn process_pass_generation_settings() -> ChatGenerationSettings {
     ChatGenerationSettings {
         max_output_tokens: PROCESS_RESTART_OUTPUT_TOKEN_COUNT,
-        temperature_thousandths: Some(0),
-        top_p_thousandths: Some(1_000),
+        temperature_thousandths: None,
+        top_p_thousandths: None,
         seed: None,
-        thinking_budget: Some(0),
+        thinking_budget: Some(256),
     }
 }
 

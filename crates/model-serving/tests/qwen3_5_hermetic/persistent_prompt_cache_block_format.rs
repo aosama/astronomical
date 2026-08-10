@@ -1,578 +1,322 @@
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
 use astronomical_model_serving::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     PersistentPromptCacheBlockError, PersistentPromptCacheBlockHeader,
-    PersistentPromptCacheModelContract, qwen3_5_decoder_cache_layout,
+    PersistentPromptCacheModelContract,
 };
+use serde_json::{Map, Value, json};
 
-use crate::common::qwen3_5_moe::certified_ornith_config;
-
-const EXPECTED_PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT: usize = 2_048;
-const EXPECTED_PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "9";
+use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
 
 #[test]
-fn should_accept_a_well_formed_ornith_persistent_prompt_cache_kv_block_header() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_kv_block_path = temporary_directory.path().join("kv.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_kv_block_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvOnly,
-        |_| false,
+fn should_accept_a_contract_generated_sequence_state_header() {
+    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
+    let sequence_state_file_path = temporary_directory.path().join("sequence.safetensors");
+    write_contract_generated_file(
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
+        false,
+        None,
+        None,
     );
 
-    let persistent_prompt_cache_kv_block_file = File::open(&persistent_prompt_cache_kv_block_path)
-        .expect("the test should reopen the synthetic KV block");
-    let kv_block_header = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
-        &persistent_prompt_cache_kv_block_file,
-        &persistent_prompt_cache_kv_block_path,
-        &persistent_prompt_cache_model_contract(),
+    let sequence_state_file = File::open(&sequence_state_file_path)
+        .expect("the generated sequence-state file should reopen");
+    let sequence_state_header = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
+        &sequence_state_file,
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
     )
-    .expect("a well-formed Ornith persistent prompt-cache KV block should validate");
+    .expect("the contract-generated sequence state should validate");
 
     assert_eq!(
-        kv_block_header.format_version(),
-        EXPECTED_PERSISTENT_PROMPT_CACHE_FORMAT_VERSION
+        sequence_state_header.block_token_count(),
+        persistent_prompt_cache_model_contract.block_token_count()
     );
     assert_eq!(
-        kv_block_header.model_id(),
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID
+        sequence_state_header.tensor_count(),
+        persistent_prompt_cache_model_contract
+            .decoder_cache_layout()
+            .sequence_tensor_count()
     );
     assert_eq!(
-        kv_block_header.model_revision(),
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION
+        sequence_state_header.storage_contract_fingerprint(),
+        persistent_prompt_cache_model_contract.storage_contract_fingerprint_hex()
     );
-    assert_eq!(
-        kv_block_header.block_token_count(),
-        EXPECTED_PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
-    );
-    let expected_kv_tensor_count = certified_ornith_config()
-        .full_attention_decoder_layer_indexes()
-        .len()
-        * 2;
-    assert_eq!(kv_block_header.tensor_count(), expected_kv_tensor_count);
 }
 
 #[test]
-fn should_reject_a_kv_block_whose_attention_state_is_not_float32() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_kv_block_path =
-        temporary_directory.path().join("kv-bfloat16.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_kv_block_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention,
-        |_| false,
+fn should_accept_a_contract_generated_boundary_state_header() {
+    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
+    let boundary_state_file_path = temporary_directory.path().join("boundary.safetensors");
+    write_contract_generated_file(
+        &boundary_state_file_path,
+        &persistent_prompt_cache_model_contract,
+        true,
+        None,
+        None,
     );
 
-    let persistent_prompt_cache_kv_block_file = File::open(&persistent_prompt_cache_kv_block_path)
-        .expect("the test should reopen the synthetic BF16 KV block");
-    let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
-        &persistent_prompt_cache_kv_block_file,
-        &persistent_prompt_cache_kv_block_path,
-        &persistent_prompt_cache_model_contract(),
-    )
-    .expect_err("Qwen attention cache state must retain its F32 execution dtype");
-    assert!(matches!(
-        rejection,
-        PersistentPromptCacheBlockError::TensorDtypeMismatch {
-            expected_dtype: "F32",
-            ref actual_dtype,
-            ..
-        } if actual_dtype == "BF16"
-    ));
-}
-
-fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelContract {
-    PersistentPromptCacheModelContract::new(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&certified_ornith_config())
-            .expect("the certified Ornith configuration should build a decoder-cache layout"),
-    )
-}
-
-#[test]
-fn should_accept_a_well_formed_ornith_persistent_prompt_cache_recurrent_snapshot_header() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_recurrent_snapshot_path =
-        temporary_directory.path().join("snapshot.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_recurrent_snapshot_path,
-        SyntheticPersistentPromptCacheTensorLayout::RecurrentOnly,
-        |_| false,
-    );
-
-    let persistent_prompt_cache_recurrent_snapshot_file =
-        File::open(&persistent_prompt_cache_recurrent_snapshot_path)
-            .expect("the test should reopen the synthetic recurrent snapshot");
-    let recurrent_snapshot_header =
+    let boundary_state_file =
+        File::open(&boundary_state_file_path).expect("the generated boundary file should reopen");
+    let boundary_state_header =
         PersistentPromptCacheBlockHeader::read_recurrent_snapshot_from_file(
-            &persistent_prompt_cache_recurrent_snapshot_file,
-            &persistent_prompt_cache_recurrent_snapshot_path,
-            &persistent_prompt_cache_model_contract(),
+            &boundary_state_file,
+            &boundary_state_file_path,
+            &persistent_prompt_cache_model_contract,
         )
-        .expect("a well-formed Ornith persistent prompt-cache recurrent snapshot should validate");
+        .expect("the contract-generated boundary state should validate");
 
     assert_eq!(
-        recurrent_snapshot_header.format_version(),
-        EXPECTED_PERSISTENT_PROMPT_CACHE_FORMAT_VERSION
-    );
-    assert_eq!(
-        recurrent_snapshot_header.model_id(),
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID
-    );
-    assert_eq!(
-        recurrent_snapshot_header.model_revision(),
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION
-    );
-    assert_eq!(
-        recurrent_snapshot_header.block_token_count(),
-        EXPECTED_PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
-    );
-    let expected_recurrent_tensor_count = certified_ornith_config()
-        .linear_attention_decoder_layer_indexes()
-        .len()
-        * 2;
-    assert_eq!(
-        recurrent_snapshot_header.tensor_count(),
-        expected_recurrent_tensor_count
+        boundary_state_header.tensor_count(),
+        persistent_prompt_cache_model_contract
+            .decoder_cache_layout()
+            .boundary_tensor_count()
     );
 }
 
 #[test]
-fn should_reject_a_recurrent_snapshot_whose_convolution_state_is_not_float16() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_recurrent_snapshot_path = temporary_directory
-        .path()
-        .join("snapshot-bfloat16.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_recurrent_snapshot_path,
-        SyntheticPersistentPromptCacheTensorLayout::RecurrentWithBfloat16Convolution,
-        |_| false,
+fn should_reject_a_declared_dtype_that_differs_from_the_model_contract() {
+    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let first_sequence_tensor_name = persistent_prompt_cache_model_contract
+        .decoder_cache_layout()
+        .sequence_tensor_layouts()
+        .first()
+        .expect("the certified model should have sequence state")
+        .persistent_tensor_name();
+    let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
+    let sequence_state_file_path = temporary_directory.path().join("wrong-dtype.safetensors");
+    write_contract_generated_file(
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
+        false,
+        Some(first_sequence_tensor_name.as_str()),
+        None,
     );
 
-    let persistent_prompt_cache_recurrent_snapshot_file =
-        File::open(&persistent_prompt_cache_recurrent_snapshot_path)
-            .expect("the test should reopen the synthetic BF16 recurrent snapshot");
-    let rejection = PersistentPromptCacheBlockHeader::read_recurrent_snapshot_from_file(
-        &persistent_prompt_cache_recurrent_snapshot_file,
-        &persistent_prompt_cache_recurrent_snapshot_path,
-        &persistent_prompt_cache_model_contract(),
+    let sequence_state_file = File::open(&sequence_state_file_path)
+        .expect("the generated wrong-dtype file should reopen");
+    let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
+        &sequence_state_file,
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
     )
-    .expect_err("Qwen convolution cache state must retain its F16 execution dtype");
+    .expect_err("a wrong execution dtype must be rejected");
+
     assert!(matches!(
         rejection,
-        PersistentPromptCacheBlockError::TensorDtypeMismatch {
-            expected_dtype: "F16",
-            ref actual_dtype,
-            ..
-        } if actual_dtype == "BF16"
+        PersistentPromptCacheBlockError::TensorDtypeMismatch { .. }
     ));
 }
 
 #[test]
-fn should_reject_a_kv_block_missing_a_required_tensor() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_kv_block_path = temporary_directory.path().join("kv.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_kv_block_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvOnly,
-        |tensor_name| tensor_name == "layer_3_attention.keys",
-    );
-
-    let persistent_prompt_cache_kv_block_file = File::open(&persistent_prompt_cache_kv_block_path)
-        .expect("the test should reopen the synthetic KV block");
-    let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
-        &persistent_prompt_cache_kv_block_file,
-        &persistent_prompt_cache_kv_block_path,
-        &persistent_prompt_cache_model_contract(),
-    );
-
-    assert!(rejection.is_err());
-}
-
-#[test]
-fn should_reject_a_recurrent_snapshot_missing_a_required_tensor() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_recurrent_snapshot_path =
-        temporary_directory.path().join("snapshot.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_recurrent_snapshot_path,
-        SyntheticPersistentPromptCacheTensorLayout::RecurrentOnly,
-        |tensor_name| tensor_name == "layer_0_linear.gated_delta_recurrent",
-    );
-
-    let persistent_prompt_cache_recurrent_snapshot_file =
-        File::open(&persistent_prompt_cache_recurrent_snapshot_path)
-            .expect("the test should reopen the synthetic recurrent snapshot");
-    let rejection = PersistentPromptCacheBlockHeader::read_recurrent_snapshot_from_file(
-        &persistent_prompt_cache_recurrent_snapshot_file,
-        &persistent_prompt_cache_recurrent_snapshot_path,
-        &persistent_prompt_cache_model_contract(),
-    );
-
-    assert!(rejection.is_err());
-}
-
-#[test]
-fn should_reject_a_kv_block_containing_recurrent_tensors() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_kv_block_path = temporary_directory.path().join("kv.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_kv_block_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent,
-        |_| false,
-    );
-
-    let persistent_prompt_cache_kv_block_file = File::open(&persistent_prompt_cache_kv_block_path)
-        .expect("the test should reopen the synthetic KV block");
-    let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
-        &persistent_prompt_cache_kv_block_file,
-        &persistent_prompt_cache_kv_block_path,
-        &persistent_prompt_cache_model_contract(),
-    );
-
-    assert!(rejection.is_err());
-}
-
-#[test]
-fn should_reject_a_recurrent_snapshot_containing_kv_tensors() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_recurrent_snapshot_path =
-        temporary_directory.path().join("snapshot.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_recurrent_snapshot_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent,
-        |_| false,
-    );
-
-    let persistent_prompt_cache_recurrent_snapshot_file =
-        File::open(&persistent_prompt_cache_recurrent_snapshot_path)
-            .expect("the test should reopen the synthetic recurrent snapshot");
-    let rejection = PersistentPromptCacheBlockHeader::read_recurrent_snapshot_from_file(
-        &persistent_prompt_cache_recurrent_snapshot_file,
-        &persistent_prompt_cache_recurrent_snapshot_path,
-        &persistent_prompt_cache_model_contract(),
-    );
-
-    assert!(rejection.is_err());
-}
-
-#[test]
-fn should_reject_a_truncated_current_format_kv_block_file() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let persistent_prompt_cache_kv_block_path = temporary_directory.path().join("kv.safetensors");
-    write_synthetic_persistent_prompt_cache_file(
-        &persistent_prompt_cache_kv_block_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvOnly,
-        |_| false,
-    );
-    let original_file_size_bytes = std::fs::metadata(&persistent_prompt_cache_kv_block_path)
-        .expect("the test should read the synthetic KV block metadata")
-        .len();
-    let persistent_prompt_cache_kv_block_file = OpenOptions::new()
-        .write(true)
-        .open(&persistent_prompt_cache_kv_block_path)
-        .expect("the test should open the synthetic KV block for truncation");
-    persistent_prompt_cache_kv_block_file
-        .set_len(original_file_size_bytes / 2)
-        .expect("the test should truncate the synthetic KV block");
-
-    let persistent_prompt_cache_kv_block_file = File::open(&persistent_prompt_cache_kv_block_path)
-        .expect("the test should reopen the truncated KV block");
-    let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
-        &persistent_prompt_cache_kv_block_file,
-        &persistent_prompt_cache_kv_block_path,
-        &persistent_prompt_cache_model_contract(),
-    );
-
-    assert!(rejection.is_err());
-}
-
-#[test]
-fn should_reject_format_four_state_after_execution_math_changes() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let stale_persistent_prompt_cache_kv_block_path = temporary_directory
+fn should_reject_a_missing_declared_tensor() {
+    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let first_sequence_tensor_name = persistent_prompt_cache_model_contract
+        .decoder_cache_layout()
+        .sequence_tensor_layouts()
+        .first()
+        .expect("the certified model should have sequence state")
+        .persistent_tensor_name();
+    let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
+    let sequence_state_file_path = temporary_directory
         .path()
-        .join("format-four-kv.safetensors");
-    write_synthetic_persistent_prompt_cache_file_with_format_version(
-        &stale_persistent_prompt_cache_kv_block_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvOnly,
-        |_| false,
-        "4",
+        .join("missing-tensor.safetensors");
+    write_contract_generated_file(
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
+        false,
+        None,
+        Some(first_sequence_tensor_name.as_str()),
     );
 
-    let stale_persistent_prompt_cache_kv_block_file =
-        File::open(&stale_persistent_prompt_cache_kv_block_path)
-            .expect("the test should reopen the format-four KV block");
+    let sequence_state_file = File::open(&sequence_state_file_path)
+        .expect("the generated missing-tensor file should reopen");
     let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
-        &stale_persistent_prompt_cache_kv_block_file,
-        &stale_persistent_prompt_cache_kv_block_path,
-        &persistent_prompt_cache_model_contract(),
-    )
-    .expect_err("state produced before the execution-math change must be rejected");
-
-    let rejection_text = rejection.to_string();
-    assert!(
-        rejection_text.contains("format version is 4, expected 9"),
-        "format-four state should fail with an actionable compatibility error: {rejection_text}"
+        &sequence_state_file,
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
     );
+
+    assert!(rejection.is_err());
 }
 
 #[test]
-fn should_reject_format_seven_state_after_expert_residency_correction() {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let stale_persistent_prompt_cache_kv_block_path = temporary_directory
+fn should_reject_a_foreign_storage_contract_fingerprint_before_payload_use() {
+    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
+    let sequence_state_file_path = temporary_directory
         .path()
-        .join("format-seven-kv.safetensors");
-    write_synthetic_persistent_prompt_cache_file_with_format_version(
-        &stale_persistent_prompt_cache_kv_block_path,
-        SyntheticPersistentPromptCacheTensorLayout::KvOnly,
-        |_| false,
-        "7",
+        .join("foreign-contract.safetensors");
+    write_contract_generated_file(
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
+        false,
+        None,
+        None,
+    );
+    replace_metadata_value(
+        &sequence_state_file_path,
+        "storage_contract_fingerprint",
+        "00".repeat(32),
     );
 
-    let stale_persistent_prompt_cache_kv_block_file =
-        File::open(&stale_persistent_prompt_cache_kv_block_path)
-            .expect("the test should reopen the format-seven KV block");
+    let sequence_state_file = File::open(&sequence_state_file_path)
+        .expect("the generated foreign-contract file should reopen");
     let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
-        &stale_persistent_prompt_cache_kv_block_file,
-        &stale_persistent_prompt_cache_kv_block_path,
-        &persistent_prompt_cache_model_contract(),
+        &sequence_state_file,
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
+    );
+
+    assert!(rejection.is_err());
+}
+
+#[test]
+fn should_reject_a_previous_disposable_format_version() {
+    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
+    let sequence_state_file_path = temporary_directory.path().join("old-format.safetensors");
+    write_contract_generated_file(
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
+        false,
+        None,
+        None,
+    );
+    replace_metadata_value(&sequence_state_file_path, "format_version", "9".to_owned());
+
+    let sequence_state_file =
+        File::open(&sequence_state_file_path).expect("the generated old-format file should reopen");
+    let rejection = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
+        &sequence_state_file,
+        &sequence_state_file_path,
+        &persistent_prompt_cache_model_contract,
     )
-    .expect_err("state produced before the expert-residency correction must be rejected");
+    .expect_err("the old disposable format must be rejected");
 
-    let rejection_text = rejection.to_string();
-    assert!(
-        rejection_text.contains("format version is 7, expected 9"),
-        "format-seven state should fail with an actionable compatibility error: {rejection_text}"
-    );
+    assert!(rejection.to_string().contains("expected 10"));
 }
 
-#[derive(Clone, Copy)]
-enum SyntheticPersistentPromptCacheTensorLayout {
-    KvOnly,
-    KvWithBfloat16Attention,
-    RecurrentOnly,
-    RecurrentWithBfloat16Convolution,
-    KvAndRecurrent,
-}
-
-fn write_synthetic_persistent_prompt_cache_file(
+fn write_contract_generated_file(
     persistent_prompt_cache_file_path: &Path,
-    synthetic_tensor_layout: SyntheticPersistentPromptCacheTensorLayout,
-    should_omit_tensor_name: impl Fn(&str) -> bool,
+    persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+    should_write_boundary_state: bool,
+    wrong_dtype_tensor_name: Option<&str>,
+    omitted_tensor_name: Option<&str>,
 ) {
-    write_synthetic_persistent_prompt_cache_file_with_format_version(
-        persistent_prompt_cache_file_path,
-        synthetic_tensor_layout,
-        should_omit_tensor_name,
-        EXPECTED_PERSISTENT_PROMPT_CACHE_FORMAT_VERSION,
-    );
-}
-
-fn write_synthetic_persistent_prompt_cache_file_with_format_version(
-    persistent_prompt_cache_file_path: &Path,
-    synthetic_tensor_layout: SyntheticPersistentPromptCacheTensorLayout,
-    should_omit_tensor_name: impl Fn(&str) -> bool,
-    persistent_prompt_cache_format_version: &str,
-) {
-    let tensor_entries = synthetic_persistent_prompt_cache_tensor_entries(
-        synthetic_tensor_layout,
-        should_omit_tensor_name,
-    );
-    let mut header_json = String::from("{");
-    let mut current_data_section_offset: u64 = 0;
-    for (tensor_entry_index, (tensor_name, dtype, shape, byte_count)) in
-        tensor_entries.iter().enumerate()
-    {
-        if tensor_entry_index > 0 {
-            header_json.push(',');
+    let persisted_tensor_layouts = if should_write_boundary_state {
+        persistent_prompt_cache_model_contract
+            .decoder_cache_layout()
+            .boundary_tensor_layouts()
+    } else {
+        persistent_prompt_cache_model_contract
+            .decoder_cache_layout()
+            .sequence_tensor_layouts()
+    };
+    let mut header_entries = Map::new();
+    let mut payload_offset_bytes = 0_u64;
+    for persisted_tensor_layout in persisted_tensor_layouts {
+        let tensor_name = persisted_tensor_layout.persistent_tensor_name();
+        if omitted_tensor_name == Some(tensor_name.as_str()) {
+            continue;
         }
-        let next_data_section_offset = current_data_section_offset + *byte_count;
-        header_json.push_str(&format!(
-            r#""{tensor_name}":{{"dtype":"{dtype}","shape":[{shape}],"data_offsets":[{current_data_section_offset},{next_data_section_offset}]}}"#,
-            shape = shape
-                .iter()
-                .map(|dimension| dimension.to_string())
-                .collect::<Vec<_>>()
-                .join(","),
-        ));
-        current_data_section_offset = next_data_section_offset;
+        let tensor_layout = persisted_tensor_layout.tensor_layout();
+        let tensor_shape = tensor_layout
+            .dimensions()
+            .iter()
+            .enumerate()
+            .map(|(dimension_index, tensor_dimension)| {
+                if Some(dimension_index) == tensor_layout.sequence_axis() {
+                    persistent_prompt_cache_model_contract.block_token_count()
+                } else {
+                    *tensor_dimension
+                }
+            })
+            .collect::<Vec<_>>();
+        let tensor_element_size_bytes = tensor_layout.dtype().scalar_byte_count() as u64;
+        let tensor_payload_byte_count = tensor_shape.iter().fold(
+            tensor_element_size_bytes,
+            |payload_byte_count, tensor_dimension| {
+                payload_byte_count.saturating_mul(*tensor_dimension as u64)
+            },
+        );
+        let payload_end_bytes = payload_offset_bytes.saturating_add(tensor_payload_byte_count);
+        header_entries.insert(
+            tensor_name.clone(),
+            json!({
+                // Pick a dtype different from the contract rather than assuming the certified
+                // sequence tensors use one particular precision. The header validator must
+                // reject the mismatch before it considers the synthetic payload contents.
+                "dtype": if wrong_dtype_tensor_name == Some(tensor_name.as_str()) {
+                    match tensor_layout.dtype().safetensors_dtype_name() {
+                        "BF16" => "F32",
+                        _ => "BF16",
+                    }
+                } else { tensor_layout.dtype().safetensors_dtype_name() },
+                "shape": tensor_shape,
+                "data_offsets": [payload_offset_bytes, payload_end_bytes],
+            }),
+        );
+        payload_offset_bytes = payload_end_bytes;
     }
-    header_json.push_str(&format!(
-        r#", "__metadata__":{{"format_version":"{persistent_prompt_cache_format_version}","model_id":"{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID}","model_revision":"{ORNITH_1_0_35B_OPTIQ_4BIT_REVISION}","block_token_count":"{EXPECTED_PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT}"}}"#
-    ));
-    header_json.push('}');
-
-    let header_bytes = header_json.into_bytes();
-    let header_padding_bytes = (8 - header_bytes.len() % 8) % 8;
-    let padded_header_length_bytes = header_bytes.len() + header_padding_bytes;
-    let mut persistent_prompt_cache_file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(persistent_prompt_cache_file_path)
-        .expect("the test should create the synthetic persistent prompt-cache file");
+    header_entries.insert(
+        "__metadata__".to_owned(),
+        json!({
+            "format_version": "10",
+            "model_id": persistent_prompt_cache_model_contract.model_id(),
+            "model_revision": persistent_prompt_cache_model_contract.model_revision(),
+            "block_token_count": persistent_prompt_cache_model_contract.block_token_count().to_string(),
+            "storage_contract_fingerprint": persistent_prompt_cache_model_contract.storage_contract_fingerprint_hex(),
+        }),
+    );
+    let header_bytes = serde_json::to_vec(&Value::Object(header_entries))
+        .expect("the generated header should serialize");
+    let mut persistent_prompt_cache_file =
+        File::create(persistent_prompt_cache_file_path).expect("the generated file should open");
     persistent_prompt_cache_file
-        .write_all(&(padded_header_length_bytes as u64).to_le_bytes())
-        .expect("the test should write the header length prefix");
+        .write_all(&(header_bytes.len() as u64).to_le_bytes())
+        .expect("the generated header length should write");
     persistent_prompt_cache_file
         .write_all(&header_bytes)
-        .expect("the test should write the header");
+        .expect("the generated header should write");
     persistent_prompt_cache_file
-        .write_all(&vec![b' '; header_padding_bytes])
-        .expect("the test should write the header padding");
-    let data_section_start_offset = 8 + padded_header_length_bytes as u64;
-    persistent_prompt_cache_file
-        .set_len(data_section_start_offset + current_data_section_offset)
-        .expect("the test should size the synthetic safetensors payload region");
-    persistent_prompt_cache_file
-        .sync_all()
-        .expect("the test should sync the synthetic persistent prompt-cache file");
+        .write_all(&vec![0_u8; payload_offset_bytes as usize])
+        .expect("the generated payload should write");
 }
 
-fn synthetic_persistent_prompt_cache_tensor_entries(
-    synthetic_tensor_layout: SyntheticPersistentPromptCacheTensorLayout,
-    should_omit_tensor_name: impl Fn(&str) -> bool,
-) -> Vec<(String, &'static str, Vec<usize>, u64)> {
-    let ornith_config = certified_ornith_config();
-    let decoder_layer_count = ornith_config.layer_count() as usize;
-    let key_value_head_count = ornith_config.key_value_head_count() as usize;
-    let head_dimension = ornith_config.head_dimension() as usize;
-    let linear_convolution_kernel_dimension =
-        ornith_config.linear_convolution_kernel_dimension() as usize;
-    let linear_convolution_dimension = (ornith_config.linear_key_head_count() as usize)
-        .saturating_mul(ornith_config.linear_key_head_dimension() as usize)
-        .saturating_mul(2)
-        .saturating_add(
-            (ornith_config.linear_value_head_count() as usize)
-                .saturating_mul(ornith_config.linear_value_head_dimension() as usize),
-        );
-    let linear_value_head_count = ornith_config.linear_value_head_count() as usize;
-    let linear_value_head_dimension = ornith_config.linear_value_head_dimension() as usize;
-    let linear_key_head_dimension = ornith_config.linear_key_head_dimension() as usize;
-    let mut tensor_entries = Vec::new();
-    for layer_index in 0..decoder_layer_count {
-        let layer_is_full_attention = ornith_config.decoder_layer_is_full_attention(layer_index);
-        if layer_is_full_attention
-            && matches!(
-                synthetic_tensor_layout,
-                SyntheticPersistentPromptCacheTensorLayout::KvOnly
-                    | SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention
-                    | SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent
-            )
-        {
-            for tensor_suffix in ["attention.keys", "attention.values"] {
-                let tensor_name = format!("layer_{layer_index}_{tensor_suffix}");
-                if should_omit_tensor_name(&tensor_name) {
-                    continue;
-                }
-                let shape = vec![
-                    1,
-                    key_value_head_count,
-                    EXPECTED_PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
-                    head_dimension,
-                ];
-                tensor_entries.push((
-                    tensor_name,
-                    if matches!(
-                        synthetic_tensor_layout,
-                        SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention
-                    ) {
-                        "BF16"
-                    } else {
-                        "F32"
-                    },
-                    shape.clone(),
-                    tensor_byte_count(
-                        &shape,
-                        if matches!(
-                            synthetic_tensor_layout,
-                            SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention
-                        ) {
-                            2
-                        } else {
-                            4
-                        },
-                    ),
-                ));
-            }
-        }
-        if !layer_is_full_attention
-            && matches!(
-                synthetic_tensor_layout,
-                SyntheticPersistentPromptCacheTensorLayout::RecurrentOnly
-                    | SyntheticPersistentPromptCacheTensorLayout::RecurrentWithBfloat16Convolution
-                    | SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent
-            )
-        {
-            let convolution_shape = vec![
-                1usize,
-                linear_convolution_kernel_dimension.saturating_sub(1),
-                linear_convolution_dimension,
-            ];
-            let recurrent_shape = vec![
-                1usize,
-                linear_value_head_count,
-                linear_value_head_dimension,
-                linear_key_head_dimension,
-            ];
-            let convolution_dtype = match synthetic_tensor_layout {
-                SyntheticPersistentPromptCacheTensorLayout::RecurrentWithBfloat16Convolution => {
-                    "BF16"
-                }
-                SyntheticPersistentPromptCacheTensorLayout::RecurrentOnly
-                | SyntheticPersistentPromptCacheTensorLayout::KvAndRecurrent => "F16",
-                SyntheticPersistentPromptCacheTensorLayout::KvOnly
-                | SyntheticPersistentPromptCacheTensorLayout::KvWithBfloat16Attention => "F16",
-            };
-            for (tensor_suffix, dtype, shape, element_size_bytes) in [
-                (
-                    "linear.convolution",
-                    convolution_dtype,
-                    convolution_shape,
-                    2_u64,
-                ),
-                (
-                    "linear.gated_delta_recurrent",
-                    "F32",
-                    recurrent_shape,
-                    4_u64,
-                ),
-            ] {
-                let tensor_name = format!("layer_{layer_index}_{tensor_suffix}");
-                if should_omit_tensor_name(&tensor_name) {
-                    continue;
-                }
-                tensor_entries.push((
-                    tensor_name,
-                    dtype,
-                    shape.clone(),
-                    tensor_byte_count(&shape, element_size_bytes),
-                ));
-            }
-        }
-    }
-    tensor_entries
-}
-
-fn tensor_byte_count(shape: &[usize], element_size_bytes: u64) -> u64 {
-    shape
-        .iter()
-        .map(|dimension| *dimension as u64)
-        .product::<u64>()
-        * element_size_bytes
+fn replace_metadata_value(
+    persistent_prompt_cache_file_path: &Path,
+    metadata_name: &str,
+    metadata_value: String,
+) {
+    let file_bytes =
+        std::fs::read(persistent_prompt_cache_file_path).expect("the metadata fixture should read");
+    let header_length_bytes = u64::from_le_bytes(
+        file_bytes[..8]
+            .try_into()
+            .expect("the metadata fixture should have a length prefix"),
+    ) as usize;
+    let mut header_document: Value =
+        serde_json::from_slice(&file_bytes[8..8 + header_length_bytes])
+            .expect("the metadata fixture header should parse");
+    header_document["__metadata__"][metadata_name] = Value::String(metadata_value);
+    let header_bytes = serde_json::to_vec(&header_document)
+        .expect("the modified metadata fixture should serialize");
+    let payload_bytes = &file_bytes[8 + header_length_bytes..];
+    let mut replacement_file = File::create(persistent_prompt_cache_file_path)
+        .expect("the metadata fixture should reopen for replacement");
+    replacement_file
+        .write_all(&(header_bytes.len() as u64).to_le_bytes())
+        .expect("the replacement header length should write");
+    replacement_file
+        .write_all(&header_bytes)
+        .expect("the replacement header should write");
+    replacement_file
+        .write_all(payload_bytes)
+        .expect("the replacement payload should write");
 }

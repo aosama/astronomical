@@ -21,11 +21,34 @@ pub(super) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
     required_prompt_token_count: usize,
     maximum_output_token_count: u16,
 ) -> RepresentativePrompt {
+    prepare_romeo_and_juliet_summary_prompt(
+        model_directory,
+        target_model_id,
+        request_id,
+        required_prompt_token_count,
+        maximum_output_token_count,
+        "Summarize the supplied Romeo and Juliet source in exactly three concise prose paragraphs. Do not use a heading, bullets, or a numbered list. Preserve the central conflict, the major decisions, and the tragic outcome.",
+        Some(256),
+        true,
+    )
+}
+
+fn prepare_romeo_and_juliet_summary_prompt(
+    model_directory: &Path,
+    target_model_id: &str,
+    request_id: RequestId,
+    required_prompt_token_count: usize,
+    maximum_output_token_count: u16,
+    summary_instruction: &str,
+    thinking_budget: Option<u16>,
+    enable_thinking: bool,
+) -> RepresentativePrompt {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, u32::from(maximum_output_token_count))
         .expect("the configured summary target artifact should validate");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the configured summary tokenizer should load");
+    let model_sampler_configuration = tokenizer.model_sampler_config();
     assert!(
         required_prompt_token_count < validated_artifact.config().maximum_position_count() as usize,
         "the summary prompt must remain below the validated model context limit"
@@ -43,7 +66,7 @@ pub(super) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
                     model: target_model_id.to_owned(),
                     messages: vec![ChatMessage::User {
                         content: format!(
-                            "Summarize the supplied Romeo and Juliet source in exactly three concise prose paragraphs. Do not use a heading, bullets, or a numbered list. Preserve the central conflict, the major decisions, and the tragic outcome.\n\nSource material:\n{repeated_source_material}"
+                            "{summary_instruction}\n\nSource material:\n{repeated_source_material}"
                         ),
                         images: Vec::new(),
                     }],
@@ -51,13 +74,15 @@ pub(super) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
                     tool_choice: ChatToolChoice::None,
                     settings: ChatGenerationSettings {
                         max_output_tokens: maximum_output_token_count,
-                        temperature_thousandths: Some(0),
-                        top_p_thousandths: Some(1_000),
-                        seed: Some(1),
-                        thinking_budget: Some(0),
+                        temperature_thousandths: Some(
+                            model_sampler_configuration.temperature_thousandths,
+                        ),
+                        top_p_thousandths: Some(model_sampler_configuration.top_p_thousandths),
+                        seed: None,
+                        thinking_budget,
                     },
                 },
-                false,
+                enable_thinking,
             )
             .expect("the configured summary prompt should prepare");
         if prepared_chat_request.input_token_ids().len() >= required_prompt_token_count {
@@ -85,9 +110,9 @@ pub(super) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
         processed_visual_images: Vec::new(),
         ordinary_target_prefill_control_span_token_count: prepared_chat_request
             .ordinary_target_prefill_control_span_token_count(),
-        sampling_temperature_thousandths: 0,
-        sampling_top_p_thousandths: 1_000,
-        sampling_seed: Some(1),
+        sampling_temperature_thousandths: model_sampler_configuration.temperature_thousandths,
+        sampling_top_p_thousandths: model_sampler_configuration.top_p_thousandths,
+        sampling_seed: None,
     }
 }
 
@@ -120,6 +145,7 @@ pub(super) fn prepare_representative_prompt(model_directory: &Path) -> Represent
         .expect("the representative SpecPrefill target artifact should validate");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the representative SpecPrefill tokenizer should load");
+    let model_sampler_configuration = tokenizer.model_sampler_config();
     let mut repeated_source_material = String::new();
     let prepared_chat_request = loop {
         if !repeated_source_material.is_empty() {
@@ -141,10 +167,12 @@ pub(super) fn prepare_representative_prompt(model_directory: &Path) -> Represent
                     tool_choice: ChatToolChoice::None,
                     settings: ChatGenerationSettings {
                         max_output_tokens: REPRESENTATIVE_OUTPUT_TOKEN_COUNT,
-                        temperature_thousandths: Some(0),
-                        top_p_thousandths: Some(1_000),
+                        temperature_thousandths: Some(
+                            model_sampler_configuration.temperature_thousandths,
+                        ),
+                        top_p_thousandths: Some(model_sampler_configuration.top_p_thousandths),
                         seed: None,
-                        thinking_budget: None,
+                        thinking_budget: Some(256),
                     },
                 },
                 false,

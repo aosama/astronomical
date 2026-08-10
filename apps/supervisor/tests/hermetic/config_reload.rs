@@ -385,6 +385,46 @@ fn should_resolve_reload_config_from_the_config_file() {
 }
 
 #[test]
+fn should_not_resolve_a_draft_model_when_speculative_prefill_is_disabled() {
+    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
+    let config_file_path = config_home_directory
+        .path()
+        .join(".astronomical")
+        .join("config.json");
+    std::fs::create_dir_all(
+        config_file_path
+            .parent()
+            .expect("the config path should have a parent"),
+    )
+    .expect("the config directory should be created");
+    std::fs::write(
+        &config_file_path,
+        r#"{
+            "speculative_prefill": {
+                "enabled": false,
+                "draft_model_id": "astronomical/unused-draft"
+            }
+        }"#,
+    )
+    .expect("the config file should be written");
+    let resolver = ResolvedRuntimeConfigResolver::new(
+        config_home_directory.path().to_path_buf(),
+        PathBuf::from("/fallback/worker"),
+    );
+
+    let resolved_runtime_config = resolver
+        .load()
+        .expect("a disabled speculative-prefill draft must not require discovery");
+
+    assert!(!resolved_runtime_config.speculative_prefill.is_enabled());
+    assert!(
+        resolved_runtime_config
+            .speculative_prefill_draft_model_directory
+            .is_none()
+    );
+}
+
+#[test]
 fn should_reject_enabled_speculative_prefill_when_target_model_is_not_discovered() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
     let config_file_path = config_home_directory

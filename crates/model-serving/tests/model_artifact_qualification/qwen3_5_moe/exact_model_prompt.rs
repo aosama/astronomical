@@ -38,10 +38,10 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids_for_model(
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
             max_output_tokens: maximum_output_token_count,
-            temperature_thousandths: Some(0),
-            top_p_thousandths: Some(1_000),
-            seed: Some(1),
-            thinking_budget: None,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+            seed: None,
+            thinking_budget: Some(256),
         },
     };
     let rendered_prompt = Qwen3_5PromptRenderer::render(

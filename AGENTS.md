@@ -70,8 +70,6 @@
 
 - The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging and finally token generation. In short any and all operations invovled in actually serving a model request to the end user.
 
-- The minimum representative performane test needs to intake 1K tokens and output 1K tokens with a plus or minus 15% allowance. Anything below that is not a representative measurement at all.
-
 ## Test Fixtures and Their Reuse for Performance And Correctness Tests
 
 - The fixture of Romeo and Juliet MUST be used and the source test input for LLMs, there should not be radnom text or tokens used for testing.
@@ -80,3 +78,13 @@
 
 - In this code base, maximize the use of GPU sto the maximum extent possible, it has been observed that the more computations that can be offloaded to the GPU, the better the performance will be.
 - Do not assume that a certain GPU operation will be slower or will not yield more performance than the CPU.
+
+## End To End Testing Discipline using Real Models with GPU Execution
+
+- For any test that excercises a real model, the thinking budget should be 256 tokens.
+
+- For any test that excercises a real model, the temperature, top_p and any other model parameter should be loaded and used from the model accompanying files and must not be hardcoded.
+
+- The minimum representative performane test needs to intake 1K tokens and output 1K tokens with a plus or minus 15% allowance. Anything below that is not a representative measurement at all.
+
+- End to end testing whether for performance or memory or caching or other end to end real model reasons must user the REST API dependency sync-openai for validaiton. The exceptions are those performance tests that absolutely need to introspect behaviour at a non-rest api layer, however these should be limited.

@@ -390,10 +390,10 @@ fn generation_command(
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
             max_output_tokens: maximum_output_tokens,
-            temperature_thousandths: Some(0),
-            top_p_thousandths: Some(950),
-            seed: Some(1),
-            thinking_budget: None,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+            seed: None,
+            thinking_budget: Some(256),
         },
     }
 }

@@ -7,7 +7,7 @@ use super::{check_status, error_handling::lock_unpoisoned};
 static RUNTIME_MEMORY_LIMITS: Mutex<Option<MlxMemoryLimits>> = Mutex::new(None);
 
 impl MlxRuntime {
-    /// Replaces the three process-local MLX memory limits without reinitializing the runtime.
+    /// Replaces the two process-local MLX memory limits without reinitializing the runtime.
     ///
     /// Native controls are updated before either Rust-side policy is changed. If a later
     /// native control fails, set_memory_limits restores the previous native values and this
@@ -38,15 +38,6 @@ impl MlxRuntime {
     /// Reads the active allocator limit currently enforced by MLX.
     pub fn configured_memory_limit_bytes(&self) -> Result<usize, MlxRuntimeError> {
         read_memory_metric(raw::mlx_get_memory_limit, "read the MLX memory limit")
-    }
-
-    /// Returns the MLX process residency-set limit applied during initialization.
-    ///
-    /// Applying this value neither allocates the bytes immediately nor changes
-    /// any privileged kernel setting.
-    #[must_use]
-    pub const fn configured_wired_memory_limit_bytes(&self) -> usize {
-        self.memory_limits.active_memory_limit_bytes
     }
 
     /// Samples process-local MLX allocator bytes.
@@ -120,31 +111,19 @@ pub(super) fn configure_runtime_memory_limits(
     Ok(())
 }
 
-/// Applies three related but distinct MLX process controls.
+/// Applies the active-allocation and allocator-retention MLX process controls.
 ///
-/// - `mlx_set_wired_limit` resizes MLX's Metal residency set. It is an
-///   unprivileged per-process operation and cannot exceed the macOS system cap.
 /// - `mlx_set_memory_limit` configures MLX graph-evaluation memory guidance.
 /// - `mlx_set_cache_limit` controls reclaimable allocator retention.
 ///
-/// None of these calls runs `sysctl`, changes `iogpu.wired_limit_mb`, or reserves
-/// the complete limit immediately. Rollback preserves the previous process
-/// policy if a later MLX control cannot be applied.
+/// Astronomical deliberately leaves MLX's per-buffer wired residency disabled.
+/// MLX allocation-pressure reclamation removes cached buffers from that residency
+/// set while Metal command buffers use unretained references. On affected macOS
+/// releases, that removal can panic IOGPU with a prepare-count underflow.
+///
+/// Neither control runs `sysctl` or changes `iogpu.wired_limit_mb`. Rollback
+/// preserves the previous process policy if the allocator-cache control fails.
 fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
-    let mut previous_wired_memory_limit_bytes = 0;
-    // MLX forwards this call to its Metal allocator's residency set. The C API
-    // returns the previous process-local value through the output pointer and
-    // rejects values above Metal's reported system maximum.
-    // SAFETY: The output points to initialized writable storage and the requested
-    // process limit was validated as positive by `MlxMemoryLimits`.
-    let wired_memory_status = unsafe {
-        raw::mlx_set_wired_limit(
-            &mut previous_wired_memory_limit_bytes,
-            memory_limits.active_memory_limit_bytes,
-        )
-    };
-    check_status(wired_memory_status, "set the MLX wired memory limit")?;
-
     let mut previous_memory_limit_bytes = 0;
     // SAFETY: The output points to initialized writable storage and the
     // non-terminating handler is installed before this function is reached.
@@ -154,10 +133,7 @@ fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeErr
             memory_limits.active_memory_limit_bytes,
         )
     };
-    if let Err(memory_error) = check_status(memory_status, "set the MLX active memory limit") {
-        restore_wired_memory_limit(previous_wired_memory_limit_bytes);
-        return Err(memory_error);
-    }
+    check_status(memory_status, "set the MLX active memory limit")?;
 
     let mut previous_allocator_cache_limit_bytes = 0;
     // SAFETY: The output points to initialized writable storage and the cache
@@ -181,22 +157,9 @@ fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeErr
                 previous_memory_limit_bytes,
             );
         }
-        restore_wired_memory_limit(previous_wired_memory_limit_bytes);
         return Err(allocator_cache_error);
     }
     Ok(())
-}
-
-fn restore_wired_memory_limit(previous_wired_memory_limit_bytes: usize) {
-    let mut ignored_current_wired_memory_limit_bytes = 0;
-    // SAFETY: This best-effort rollback restores the previous process limit
-    // using initialized writable output storage.
-    unsafe {
-        raw::mlx_set_wired_limit(
-            &mut ignored_current_wired_memory_limit_bytes,
-            previous_wired_memory_limit_bytes,
-        );
-    }
 }
 
 fn read_memory_metric(

@@ -18,6 +18,7 @@ mod persistent_visual_embedding_key;
 mod persistent_visual_embedding_suffix_plan;
 mod processor;
 mod prompt;
+mod sampler_config;
 mod sampling_seed;
 mod speculative_prefill;
 mod speculative_prefill_memory_admission;

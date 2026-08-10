@@ -287,6 +287,15 @@ async fn run_bounded_generation(qwen3_5_engine: &mut Qwen3_5Engine, request_id: 
                     mlx_memory_telemetry.peak_memory_bytes,
                 );
             }
+            GeneratedToken::PromptProcessingPhaseStarted {
+                prompt_processing_phase,
+                total_token_count,
+            } => {
+                eprintln!(
+                    "[memory-contract] status=progress phase=prompt_processing_started request_id={} prompt_processing_phase={prompt_processing_phase:?} total_token_count={total_token_count}",
+                    request_id.value(),
+                );
+            }
             GeneratedToken::EndOfSequence => {
                 assert!(
                     generated_token_count > 0,

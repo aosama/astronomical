@@ -14,7 +14,35 @@ final class MenuControlStateTests: XCTestCase {
 
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
-      .success("Config reloaded; restarting the worker")
+      .success("Config reloaded and applied by the worker")
+    )
+  }
+
+  @MainActor
+  func test_should_not_report_worker_restart_success_before_status_confirms_the_acknowledged_policy() async {
+    let telemetryStore = TelemetryStore(
+      supervisorClient: RestartAcknowledgedButStatusUnconfirmedSupervisorClient()
+    )
+
+    await telemetryStore.performConfigurationReload()
+
+    XCTAssertEqual(
+      telemetryStore.controlActionFeedback,
+      .failure("Worker restart completed, but its applied configuration was not confirmed")
+    )
+  }
+
+  @MainActor
+  func test_should_report_worker_restart_success_after_status_confirms_the_acknowledged_policy() async {
+    let telemetryStore = TelemetryStore(
+      supervisorClient: RestartAcknowledgedAndStatusConfirmedSupervisorClient()
+    )
+
+    await telemetryStore.performConfigurationReload()
+
+    XCTAssertEqual(
+      telemetryStore.controlActionFeedback,
+      .success("Config reloaded and applied by the worker")
     )
   }
 
@@ -154,8 +182,78 @@ final class MenuControlStateTests: XCTestCase {
 private struct SuccessfulReloadSupervisorClient: SupervisorClient {
   func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
 
-  func reloadConfiguration() async throws -> String {
-    "Config reloaded; restarting the worker"
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded and applied by the worker")
+  }
+
+  func requestShutdown() async throws {}
+
+  func healthIsAvailable() async -> Bool { true }
+}
+
+private struct RestartAcknowledgedButStatusUnconfirmedSupervisorClient: SupervisorClient {
+  private let acknowledgedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
+    persistentPromptCacheEnabled: true,
+    mtpEnabled: true,
+    speculativePrefillEnabled: false
+  )
+
+  func fetchStatus() async throws -> SupervisorStatusDocument {
+    // The prior worker's matching policy is not proof that the replacement has applied it. The
+    // acknowledgment flag is the status-side owner for that lifecycle boundary.
+    SupervisorStatusDocument(
+      status: "ready",
+      activity: "idle",
+      readyModelIdentifier: nil,
+      progress: nil,
+      expertMemoryMode: nil,
+      workerRuntimeFeatureConfigurationApplied: false,
+      workerRuntimeFeatureConfiguration: acknowledgedFeatureConfiguration,
+      mlxMemoryCeilingBytes: 32_000_000_000,
+      servingSession: .empty
+    )
+  }
+
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(
+      message: "Config reloaded and applied by the worker",
+      workerRestartCompleted: true,
+      workerRuntimeFeatureConfiguration: acknowledgedFeatureConfiguration
+    )
+  }
+
+  func requestShutdown() async throws {}
+
+  func healthIsAvailable() async -> Bool { true }
+}
+
+private struct RestartAcknowledgedAndStatusConfirmedSupervisorClient: SupervisorClient {
+  private let appliedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
+    persistentPromptCacheEnabled: true,
+    mtpEnabled: true,
+    speculativePrefillEnabled: false
+  )
+
+  func fetchStatus() async throws -> SupervisorStatusDocument {
+    SupervisorStatusDocument(
+      status: "ready",
+      activity: "idle",
+      readyModelIdentifier: nil,
+      progress: nil,
+      expertMemoryMode: nil,
+      workerRuntimeFeatureConfigurationApplied: true,
+      workerRuntimeFeatureConfiguration: appliedFeatureConfiguration,
+      mlxMemoryCeilingBytes: 32_000_000_000,
+      servingSession: .empty
+    )
+  }
+
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(
+      message: "Config reloaded and applied by the worker",
+      workerRestartCompleted: true,
+      workerRuntimeFeatureConfiguration: appliedFeatureConfiguration
+    )
   }
 
   func requestShutdown() async throws {}
@@ -168,7 +266,9 @@ private struct SuccessfulMaximumMlxMemoryUpdateSupervisorClient: SupervisorClien
     maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
   }
 
-  func reloadConfiguration() async throws -> String { "Config reloaded" }
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded")
+  }
 
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
     "MLX memory setting persisted and applied"
@@ -193,7 +293,9 @@ private actor QueuedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient {
     )
   }
 
-  func reloadConfiguration() async throws -> String { "Config reloaded" }
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded")
+  }
 
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
     "MLX memory setting persisted and queued until generation finalizes"
@@ -216,7 +318,9 @@ private struct RejectedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient 
     )
   }
 
-  func reloadConfiguration() async throws -> String { "Config reloaded" }
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded")
+  }
 
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
     "MLX memory setting persisted and queued until generation finalizes"
@@ -232,7 +336,9 @@ private struct DelayedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient {
     maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
   }
 
-  func reloadConfiguration() async throws -> String { "Config reloaded" }
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded")
+  }
 
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
     try await Task.sleep(for: .milliseconds(200))
@@ -269,7 +375,7 @@ private func maximumMlxMemoryStatusDocument(
 private struct FailingReloadSupervisorClient: SupervisorClient {
   func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
 
-  func reloadConfiguration() async throws -> String {
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
     throw ConfigurationReloadFailure.validationFailed
   }
 

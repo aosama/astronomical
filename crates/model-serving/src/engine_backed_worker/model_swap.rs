@@ -1,4 +1,6 @@
-use astronomical_ipc_protocol::{MlxMemorySnapshotSource, ProtocolWriter, WorkerEvent};
+use astronomical_ipc_protocol::{
+    MlxMemorySnapshotSource, ProtocolWriter, SpeculativePrefillRuntimeState, WorkerEvent,
+};
 use tokio::io::AsyncWrite;
 
 use super::support::{ModelFactory, WorkerRuntimeError};
@@ -112,6 +114,19 @@ where
         self.loaded_model = Some(replacement_model);
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
         event_writer.send_event(&model_swapped_event).await?;
+        if let Some(mut worker_runtime_feature_configuration) =
+            self.worker_runtime_feature_configuration()
+        {
+            worker_runtime_feature_configuration.speculative_prefill_enabled = !matches!(
+                engine_load_result.speculative_prefill_runtime_state(),
+                SpeculativePrefillRuntimeState::Disabled
+            );
+            event_writer
+                .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                    worker_runtime_feature_configuration,
+                })
+                .await?;
+        }
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
         self.emit_persistent_prompt_cache_stats(event_writer)

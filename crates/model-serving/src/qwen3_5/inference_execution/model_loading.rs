@@ -160,11 +160,24 @@ impl Qwen3_5EngineState {
                 fatal_engine_error("model loading lost the validated model revision")
             })?;
             let decoder_cache_layout = model.decoder_cache_layout().clone();
-            let model_contract = PersistentPromptCacheModelContract::new(
+            let global_prompt_cache_maximum_size_bytes = self
+                .persistent_prompt_cache_disk_store_config
+                .as_ref()
+                .map(|disk_store_config| disk_store_config.global_prompt_cache_maximum_size_bytes())
+                .unwrap_or(u64::MAX);
+            let model_contract = PersistentPromptCacheModelContract::resolve(
                 resolved_model_id.clone(),
                 resolved_model_revision.clone(),
                 decoder_cache_layout,
-            );
+                model.config().maximum_position_count() as usize,
+                model.runtime().memory_limits().active_memory_limit_bytes() as u64,
+                global_prompt_cache_maximum_size_bytes,
+            )
+            .map_err(|model_contract_error| {
+                fatal_engine_error(format!(
+                    "could not resolve persistent model-state storage contract: {model_contract_error}"
+                ))
+            })?;
             let persistent_visual_embedding_model_contract =
                 qwen3_5_vision_config.as_ref().map(|vision_config| {
                     let qwen3_5_image_processor =
@@ -201,16 +214,9 @@ impl Qwen3_5EngineState {
                             && let Err(visual_embedding_scan_error) = persistent_prompt_cache
                                 .scan_visual_embeddings(persistent_visual_embedding_model_contract)
                         {
-                            if self.speculative_prefill.enabled {
-                                return Err(configured_speculative_prefill_activation_failure(
-                                    "visual prompt-state storage scan",
-                                    visual_embedding_scan_error,
-                                ));
-                            }
-                            tracing::warn!(
-                                "Qwen3.5 visual embedding cache could not be scanned; \
-                                 continuing without persisted visual embeddings: {visual_embedding_scan_error}"
-                            );
+                            return Err(fatal_engine_error(format!(
+                                "required visual prompt-state storage scan failed: {visual_embedding_scan_error}"
+                            )));
                         }
                         tracing::info!(
                             sequence_state_block_count =
@@ -229,19 +235,9 @@ impl Qwen3_5EngineState {
                             ) {
                                 Ok(write_queue) => Some(write_queue),
                                 Err(write_queue_error) => {
-                                    if self.speculative_prefill.enabled {
-                                        return Err(
-                                            configured_speculative_prefill_activation_failure(
-                                                "target prompt-state writer initialization",
-                                                write_queue_error,
-                                            ),
-                                        );
-                                    }
-                                    tracing::warn!(
-                                        error = %write_queue_error,
-                                        "persistent prompt-cache writer could not start; serving cache reads without new writes"
-                                    );
-                                    None
+                                    return Err(fatal_engine_error(format!(
+                                        "required target prompt-state writer initialization failed: {write_queue_error}"
+                                    )));
                                 }
                             };
                         (
@@ -250,17 +246,9 @@ impl Qwen3_5EngineState {
                         )
                     }
                     Err(persistent_prompt_cache_error) => {
-                        if self.speculative_prefill.enabled {
-                            return Err(configured_speculative_prefill_activation_failure(
-                                "target prompt-state storage initialization",
-                                persistent_prompt_cache_error,
-                            ));
-                        }
-                        tracing::warn!(
-                            "Qwen3.5 persistent prompt cache could not be opened; \
-                             falling back to cold prefill: {persistent_prompt_cache_error}"
-                        );
-                        (None, None)
+                        return Err(fatal_engine_error(format!(
+                            "required target prompt-state storage initialization failed: {persistent_prompt_cache_error}"
+                        )));
                     }
                 }
             } else {
@@ -283,11 +271,24 @@ impl Qwen3_5EngineState {
                                 "loaded speculative-prefill draft model has no configured model ID",
                             )
                         })?;
-                let draft_model_contract = PersistentPromptCacheModelContract::new(
+                let draft_model_contract = PersistentPromptCacheModelContract::resolve(
                     draft_model_id.clone(),
                     draft_model_revision.clone(),
                     draft_model.decoder_cache_layout().clone(),
-                );
+                    draft_model.config().maximum_position_count() as usize,
+                    draft_model
+                        .runtime()
+                        .memory_limits()
+                        .active_memory_limit_bytes() as u64,
+                    persistent_prompt_cache_disk_store_config
+                        .global_prompt_cache_maximum_size_bytes(),
+                )
+                .map_err(|draft_model_contract_error| {
+                    configured_speculative_prefill_activation_failure(
+                        "drafter persistent model-state storage contract",
+                        draft_model_contract_error,
+                    )
+                })?;
                 let draft_prompt_cache_config = persistent_prompt_cache_disk_store_config
                     .for_model(&draft_model_id, draft_model_revision);
                 let draft_prompt_cache_maximum_size_bytes =
@@ -323,19 +324,9 @@ impl Qwen3_5EngineState {
                             ) {
                                 Ok(write_queue) => Some(write_queue),
                                 Err(write_queue_error) => {
-                                    if self.speculative_prefill.enabled {
-                                        return Err(
-                                            configured_speculative_prefill_activation_failure(
-                                                "drafter prompt-state writer initialization",
-                                                write_queue_error,
-                                            ),
-                                        );
-                                    }
-                                    tracing::warn!(
-                                        error = %write_queue_error,
-                                        "speculative-prefill drafter cache writer could not start; serving reads without new writes"
-                                    );
-                                    None
+                                    return Err(fatal_engine_error(format!(
+                                        "required drafter prompt-state writer initialization failed: {write_queue_error}"
+                                    )));
                                 }
                             };
                         (
@@ -344,17 +335,9 @@ impl Qwen3_5EngineState {
                         )
                     }
                     Err(draft_persistent_prompt_cache_error) => {
-                        if self.speculative_prefill.enabled {
-                            return Err(configured_speculative_prefill_activation_failure(
-                                "drafter prompt-state storage initialization",
-                                draft_persistent_prompt_cache_error,
-                            ));
-                        }
-                        tracing::warn!(
-                            error = %draft_persistent_prompt_cache_error,
-                            "speculative-prefill drafter persistent cache could not be opened; serving without drafter cache persistence"
-                        );
-                        (None, None)
+                        return Err(fatal_engine_error(format!(
+                            "required drafter prompt-state storage initialization failed: {draft_persistent_prompt_cache_error}"
+                        )));
                     }
                 }
             } else {

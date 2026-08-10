@@ -1,7 +1,9 @@
 use crate::{PerformanceCounter, Qwen3_5PersistentPromptCacheBoundaryCheckpoint};
 
 use super::engine_request::Qwen3_5EngineRequest;
-use super::speculative_prefill_failure::configured_speculative_prefill_failure;
+use super::persistent_prompt_cache_capture::{
+    PromptStatePersistenceOwner, required_prompt_state_persistence_failure,
+};
 use super::{Qwen3_5SpeculativePrefillChunckMode, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::Qwen3_5Model;
 use crate::qwen3_5::multi_token_prediction::record_terminal_history_token_count;
@@ -133,16 +135,12 @@ pub(super) fn record_sparse_target_and_mode_counters(
                 });
             }
             Err(error) => {
-                if active_request.should_use_speculative_prefill {
-                    return Err(configured_speculative_prefill_failure(
-                        active_request.request_id,
-                        "exact target prompt-state extraction",
-                        error,
-                    ));
-                }
-                tracing::warn!(%error, "final prompt-cache boundary extraction failed");
-                boundary_checkpoints.clear();
-                active_request.persistent_prompt_cache_capture_has_stopped = true;
+                return Err(required_prompt_state_persistence_failure(
+                    PromptStatePersistenceOwner::for_active_request(active_request),
+                    active_request,
+                    "exact target prompt-state extraction",
+                    error,
+                ));
             }
         }
     }

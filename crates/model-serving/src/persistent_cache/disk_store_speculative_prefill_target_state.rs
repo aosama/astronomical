@@ -39,22 +39,6 @@ impl PersistentPromptCacheDiskStore {
         }
         let target_state_identity_hash = target_state_contract
             .target_state_identity_hash(prompt_prefix_token_ids, ordered_image_sha256_digests);
-        let estimated_target_state_file_bytes = decoder_state_tensors
-            .iter()
-            .fold(
-                selected_target_token_positions.byte_count() as u64,
-                |estimated_bytes, (_, target_state_tensor)| {
-                    estimated_bytes.saturating_add(target_state_tensor.byte_count() as u64)
-                },
-            )
-            .saturating_add(super::disk_store_write::ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES);
-        if estimated_target_state_file_bytes > self.global_prompt_cache_maximum_size_bytes {
-            return Err(PersistentPromptCacheDiskStoreError::SizeBoundExceeded {
-                maximum_size_bytes: self.global_prompt_cache_maximum_size_bytes,
-                estimated_block_bytes: estimated_target_state_file_bytes,
-            });
-        }
-
         let _write_operation_guard = self.lock_write_operations();
         self.prepare_active_model_storage_directories()?;
         let metadata_entries = target_state_metadata_entries(
@@ -72,9 +56,26 @@ impl PersistentPromptCacheDiskStore {
             selected_target_token_positions,
         ));
         named_target_state_arrays.extend_from_slice(decoder_state_tensors);
+        // Sparse target state can still contain substantial decoder tensors. Bound MLX output
+        // by the global quota before materializing the byte vector, then use its exact length
+        // below rather than reviving an estimated SafeTensors overhead.
+        let maximum_serialized_target_state_byte_count =
+            usize::try_from(self.global_prompt_cache_maximum_size_bytes).unwrap_or(usize::MAX);
         let serialized_target_state_bytes = runtime
-            .serialize_safetensors(&named_target_state_arrays, &metadata_entry_references)
+            .serialize_safetensors_with_maximum_byte_count(
+                &named_target_state_arrays,
+                &metadata_entry_references,
+                maximum_serialized_target_state_byte_count,
+            )
             .map_err(|source| PersistentPromptCacheDiskStoreError::SaveSafetensors { source })?;
+        let serialized_target_state_byte_count =
+            u64::try_from(serialized_target_state_bytes.len()).unwrap_or(u64::MAX);
+        if serialized_target_state_byte_count > self.global_prompt_cache_maximum_size_bytes {
+            return Err(PersistentPromptCacheDiskStoreError::SizeBoundExceeded {
+                maximum_size_bytes: self.global_prompt_cache_maximum_size_bytes,
+                estimated_block_bytes: serialized_target_state_byte_count,
+            });
+        }
         let target_state_file_path = save_serialized_safetensors_file(
             &self.speculative_prefill_target_states_directory,
             target_state_identity_hash,

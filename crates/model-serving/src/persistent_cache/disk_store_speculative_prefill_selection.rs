@@ -34,16 +34,6 @@ impl PersistentPromptCacheDiskStore {
             self.model_contract_ref().model_revision(),
         )?;
         let selection_identity_hash = selection_contract.selection_identity_hash(prompt_token_ids);
-        let estimated_selection_file_bytes = u64::try_from(selected_token_positions.byte_count())
-            .unwrap_or(u64::MAX)
-            .saturating_add(super::disk_store_write::ESTIMATED_SAFETENSORS_FILE_OVERHEAD_BYTES);
-        if estimated_selection_file_bytes > self.global_prompt_cache_maximum_size_bytes {
-            return Err(PersistentPromptCacheDiskStoreError::SizeBoundExceeded {
-                maximum_size_bytes: self.global_prompt_cache_maximum_size_bytes,
-                estimated_block_bytes: estimated_selection_file_bytes,
-            });
-        }
-
         let _write_operation_guard = self.lock_write_operations();
         self.prepare_active_model_storage_directories()?;
         let mut metadata_entries =
@@ -59,9 +49,26 @@ impl PersistentPromptCacheDiskStore {
             SPECULATIVE_PREFILL_SELECTION_TENSOR_NAME,
             selected_token_positions,
         )];
+        // The exact SafeTensors byte count remains the authority for quota admission, but the
+        // serializer must receive that quota as a hard bound so a malformed or unexpectedly
+        // large selection cannot allocate an unbounded in-memory byte vector first.
+        let maximum_serialized_selection_byte_count =
+            usize::try_from(self.global_prompt_cache_maximum_size_bytes).unwrap_or(usize::MAX);
         let serialized_selection_bytes = runtime
-            .serialize_safetensors(&named_arrays, &metadata_entry_references)
+            .serialize_safetensors_with_maximum_byte_count(
+                &named_arrays,
+                &metadata_entry_references,
+                maximum_serialized_selection_byte_count,
+            )
             .map_err(|source| PersistentPromptCacheDiskStoreError::SaveSafetensors { source })?;
+        let serialized_selection_byte_count =
+            u64::try_from(serialized_selection_bytes.len()).unwrap_or(u64::MAX);
+        if serialized_selection_byte_count > self.global_prompt_cache_maximum_size_bytes {
+            return Err(PersistentPromptCacheDiskStoreError::SizeBoundExceeded {
+                maximum_size_bytes: self.global_prompt_cache_maximum_size_bytes,
+                estimated_block_bytes: serialized_selection_byte_count,
+            });
+        }
         let selection_file_path = save_serialized_safetensors_file(
             &self.speculative_prefill_selections_directory,
             selection_identity_hash,

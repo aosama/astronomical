@@ -14,6 +14,7 @@ where
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
+            worker_runtime_feature_configuration: None,
         }
     }
 }
@@ -35,6 +36,7 @@ where
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
+            worker_runtime_feature_configuration: None,
         }
     }
 
@@ -57,6 +59,17 @@ where
             machine_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: 1,
+            worker_runtime_feature_configuration: None,
         }
+    }
+
+    /// Attaches the worker-startup feature policy that must be acknowledged to the supervisor.
+    #[must_use]
+    pub fn with_worker_runtime_feature_configuration(
+        mut self,
+        worker_runtime_feature_configuration: astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration,
+    ) -> Self {
+        self.worker_runtime_feature_configuration = Some(worker_runtime_feature_configuration);
+        self
     }
 }

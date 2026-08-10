@@ -51,6 +51,7 @@ impl Qwen3_5Model {
         scored_prompt_token_count: usize,
         lookahead_token_count: usize,
         importance_pooling_kernel_token_count: usize,
+        persistent_prompt_cache_block_token_count: usize,
         persistent_prompt_cache_block_consumer: Option<
             &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
         >,
@@ -64,6 +65,7 @@ impl Qwen3_5Model {
             scored_prompt_token_count,
             lookahead_token_count,
             importance_pooling_kernel_token_count,
+            persistent_prompt_cache_block_token_count,
             persistent_prompt_cache_block_consumer,
             None,
             &mut request_decoder_state,
@@ -81,6 +83,7 @@ impl Qwen3_5Model {
         scored_prompt_token_count: usize,
         lookahead_token_count: usize,
         importance_pooling_kernel_token_count: usize,
+        persistent_prompt_cache_block_token_count: usize,
         persistent_prompt_cache_block_consumer: Option<
             &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
         >,
@@ -96,6 +99,7 @@ impl Qwen3_5Model {
             scored_prompt_token_count,
             lookahead_token_count,
             importance_pooling_kernel_token_count,
+            persistent_prompt_cache_block_token_count,
             persistent_prompt_cache_block_consumer,
             Some((visual_embeddings, image_pad_token_id)),
             &mut request_decoder_state,
@@ -112,6 +116,7 @@ impl Qwen3_5Model {
         scored_prompt_token_count: usize,
         lookahead_token_count: usize,
         importance_pooling_kernel_token_count: usize,
+        persistent_prompt_cache_block_token_count: usize,
         mut persistent_prompt_cache_block_consumer: Option<
             &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
         >,
@@ -191,7 +196,7 @@ impl Qwen3_5Model {
                 && usize::try_from(draft_forward_position_tokens).is_ok_and(
                     |completed_prompt_token_count| {
                         completed_prompt_token_count
-                            .is_multiple_of(crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+                            .is_multiple_of(persistent_prompt_cache_block_token_count)
                     },
                 )
             {
@@ -202,7 +207,7 @@ impl Qwen3_5Model {
                         }
                     })?;
                 let block_start_tokens = block_end_tokens
-                    .checked_sub(crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+                    .checked_sub(persistent_prompt_cache_block_token_count)
                     .ok_or(Qwen3_5ExecutionError::InvalidInput {
                         description: "speculative-prefill draft block start underflowed",
                     })?;
@@ -218,6 +223,7 @@ impl Qwen3_5Model {
                                         &self.runtime,
                                         block_start_tokens,
                                         block_end_tokens,
+                                        persistent_prompt_cache_block_token_count,
                                     )
                             },
                         )?,

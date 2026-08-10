@@ -26,34 +26,46 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
             .map(Arc::<str>::from),
         None => application_state.config_warning.clone(),
     };
-    let speculative_prefill_enabled = application_state
+    let configured_speculative_prefill_enabled = application_state
         .reloadable_config
         .as_ref()
         .and_then(|reloadable_config| reloadable_config.read().ok())
-        .map(|resolved_runtime_config| resolved_runtime_config.speculative_prefill.is_enabled())
+        .is_some_and(|resolved_runtime_config| {
+            resolved_runtime_config.speculative_prefill.is_enabled()
+        });
+    let speculative_prefill_enabled = worker_health_snapshot
+        .worker_runtime_feature_configuration
+        .map(|worker_runtime_feature_configuration| {
+            worker_runtime_feature_configuration.speculative_prefill_enabled
+        })
         .unwrap_or_else(|| {
             !matches!(
                 worker_health_snapshot.speculative_prefill_runtime_state,
                 astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Disabled
             )
         });
-    let configured_speculative_prefill_draft_model_id = application_state
-        .reloadable_config
-        .as_ref()
-        .and_then(|reloadable_config| reloadable_config.read().ok())
-        .and_then(|resolved_runtime_config| {
-            resolved_runtime_config
-                .speculative_prefill
-                .draft_model_id()
-                .map(str::to_owned)
+    let configured_speculative_prefill_draft_model_id = speculative_prefill_enabled
+        .then(|| {
+            application_state
+                .reloadable_config
+                .as_ref()
+                .and_then(|reloadable_config| reloadable_config.read().ok())
+                .and_then(|resolved_runtime_config| {
+                    resolved_runtime_config
+                        .speculative_prefill
+                        .draft_model_id()
+                        .map(str::to_owned)
+                })
+                .or_else(|| {
+                    worker_health_snapshot
+                        .speculative_prefill_draft_model_id
+                        .clone()
+                })
         })
-        .or_else(|| {
-            worker_health_snapshot
-                .speculative_prefill_draft_model_id
-                .clone()
-        });
-    let configured_speculative_prefill_target_model_id =
-        application_state.configured_speculative_prefill_target_model_id();
+        .flatten();
+    let configured_speculative_prefill_target_model_id = speculative_prefill_enabled
+        .then(|| application_state.configured_speculative_prefill_target_model_id())
+        .flatten();
     let mut status_json = serde_json::json!({
         "status": worker_health_snapshot.status.as_str(),
         "activity": worker_health_snapshot.activity.as_str(),
@@ -67,6 +79,12 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
             .unwrap_or_else(|_| serde_json::json!("disabled")),
         "mtp_unavailable_reason": worker_health_snapshot.mtp_unavailable_reason(),
         "speculative_prefill_enabled": speculative_prefill_enabled,
+        "configured_speculative_prefill_enabled": configured_speculative_prefill_enabled,
+        "worker_runtime_feature_configuration_applied": worker_health_snapshot.worker_runtime_feature_configuration.is_some(),
+        // Keep the exact worker acknowledgement available beside the derived convenience fields.
+        // The menu compares this complete value with the reload response before declaring a
+        // replacement applied, so a stale Ready status cannot masquerade as the new policy.
+        "worker_runtime_feature_configuration": worker_health_snapshot.worker_runtime_feature_configuration,
         "speculative_prefill_runtime_state": serde_json::to_value(
             worker_health_snapshot.speculative_prefill_runtime_state,
         )

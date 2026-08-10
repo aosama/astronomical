@@ -25,16 +25,13 @@ fn should_reuse_drafter_selection_after_switching_to_another_drafter_and_back() 
     let shared_decoder_cache_layout = persistent_prompt_cache_model_contract()
         .decoder_cache_layout()
         .clone();
-    let drafter_a_model_contract = PersistentPromptCacheModelContract::new(
-        "drafter-a".to_owned(),
-        "revision-a".to_owned(),
+    let drafter_a_model_contract = resolve_model_contract(
+        "drafter-a",
+        "revision-a",
         shared_decoder_cache_layout.clone(),
     );
-    let drafter_b_model_contract = PersistentPromptCacheModelContract::new(
-        "drafter-b".to_owned(),
-        "revision-b".to_owned(),
-        shared_decoder_cache_layout,
-    );
+    let drafter_b_model_contract =
+        resolve_model_contract("drafter-b", "revision-b", shared_decoder_cache_layout);
     let drafter_a_selection_contract = selection_contract("drafter-a", "revision-a");
     let drafter_b_selection_contract = selection_contract("drafter-b", "revision-b");
 
@@ -100,9 +97,9 @@ fn should_purge_only_obsolete_keep_percentage_selections_for_the_active_pairing(
     let selected_token_positions_on_gpu = runtime
         .array_from_u32(&[0, 2, 3], &[3])
         .expect("the selection tensor should be created");
-    let drafter_model_contract = PersistentPromptCacheModelContract::new(
-        "drafter-a".to_owned(),
-        "revision-a".to_owned(),
+    let drafter_model_contract = resolve_model_contract(
+        "drafter-a",
+        "revision-a",
         persistent_prompt_cache_model_contract()
             .decoder_cache_layout()
             .clone(),
@@ -139,8 +136,7 @@ fn should_purge_only_obsolete_keep_percentage_selections_for_the_active_pairing(
             .expect("the policy-specific selection should be saved");
     }
     let dense_drafter_prompt_state_block_key = PersistentPromptCacheBlockKey::for_root_block(
-        drafter_model_contract.model_id(),
-        drafter_model_contract.model_revision(),
+        &drafter_model_contract,
         &block_tokens_for_seed(0),
     )
     .expect("the dense drafter prompt-state identity should be valid");
@@ -217,9 +213,9 @@ fn should_report_a_required_keep_percentage_purge_deletion_failure() {
     let selected_token_positions_on_gpu = runtime
         .array_from_u32(&[0, 2, 3], &[3])
         .expect("the selection tensor should be created");
-    let drafter_model_contract = PersistentPromptCacheModelContract::new(
-        "drafter-a".to_owned(),
-        "revision-a".to_owned(),
+    let drafter_model_contract = resolve_model_contract(
+        "drafter-a",
+        "revision-a",
         persistent_prompt_cache_model_contract()
             .decoder_cache_layout()
             .clone(),
@@ -328,4 +324,20 @@ fn selection_contract_for_policy(
         0,
         4,
     )
+}
+
+fn resolve_model_contract(
+    model_id: &str,
+    model_revision: &str,
+    decoder_cache_layout: astronomical_model_serving::DecoderCacheLayout,
+) -> PersistentPromptCacheModelContract {
+    PersistentPromptCacheModelContract::resolve(
+        model_id.to_owned(),
+        model_revision.to_owned(),
+        decoder_cache_layout,
+        16_384,
+        20_000_000_000,
+        10_000_000_000,
+    )
+    .expect("the drafter storage contract should resolve")
 }

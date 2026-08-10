@@ -69,6 +69,12 @@ pub enum DecoderCacheLayoutError {
     TensorPayloadByteCountOverflow { qualified_role_name: String },
     #[error("decoder-cache boundary snapshot payload byte count overflowed")]
     BoundarySnapshotPayloadByteCountOverflow,
+    #[error("decoder-cache sequence-state payload byte count per token overflowed")]
+    SequenceStatePayloadByteCountPerTokenOverflow,
+    #[error("decoder-cache sequence tensor payload byte count overflowed")]
+    SequenceTensorPayloadByteCountOverflow,
+    #[error("decoder-cache persistence alignment token count overflowed")]
+    PersistenceAlignmentTokenCountOverflow,
     #[error("persistent prompt-cache block payload byte count overflowed")]
     PersistentPromptCacheBlockPayloadByteCountOverflow,
     #[error(
