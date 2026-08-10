@@ -98,6 +98,7 @@ pub use persistent_cache::{
 pub use persistent_cache::{
     PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
     PersistentPromptCacheDiskStoreError, PersistentPromptCachePublicationOutcome,
+    PersistentPromptCacheStartupCleanupCategory, PersistentPromptCacheStartupCleanupEvidence,
     PersistentSpeculativePrefillPolicyPurgeOutcome, RestoredSpeculativePrefillTargetState,
     build_persistent_prompt_cache_stats_event,
 };

@@ -8,6 +8,8 @@ use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
     WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,
     WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerPersistentPromptCacheStartupCleanupCategory,
+    WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
 
 use crate::{
@@ -69,12 +71,24 @@ impl Qwen3_5EngineState {
         let restored_token_count = lookup_result.restored_token_count();
         let prompt_token_count = prompt_token_ids.len();
         let lookup_diagnostics = lookup_result.diagnostics();
-        let persistent_prompt_cache_diagnostics = persistent_prompt_cache_request_diagnostics(
+        let mut persistent_prompt_cache_diagnostics = persistent_prompt_cache_request_diagnostics(
             persistent_prompt_cache.model_contract.block_token_count(),
             lookup_diagnostics,
             restored_token_count,
         );
         if restored_token_count == 0 {
+            if matches!(
+                lookup_diagnostics.miss_reason(),
+                Some(
+                    crate::PersistentPromptCacheMissReason::RootSequenceStateBlockMissing
+                        | crate::PersistentPromptCacheMissReason::BoundaryStateSnapshotMissing
+                )
+            ) {
+                persistent_prompt_cache_diagnostics.startup_cleanup_evidence =
+                    persistent_prompt_cache
+                        .take_startup_cleanup_evidence()
+                        .map(worker_startup_cleanup_evidence);
+            }
             tracing::info!(
                 request_id = request_id.value(),
                 prompt_token_count,
@@ -89,6 +103,8 @@ impl Qwen3_5EngineState {
                 newest_boundary_state_snapshot_block_index = ?lookup_diagnostics
                     .newest_boundary_state_snapshot_block_index(),
                 miss_reason = ?lookup_diagnostics.miss_reason(),
+                startup_cleanup_evidence = ?persistent_prompt_cache_diagnostics
+                    .startup_cleanup_evidence,
                 "persistent prompt-cache miss: no restorable prefix found"
             );
             self.persistent_prompt_cache_counters.record_cache_miss();
@@ -353,9 +369,35 @@ fn persistent_prompt_cache_request_diagnostics(
         expected_block_hash_prefix: lookup_diagnostics
             .first_missing_sequence_state_block_hash()
             .map(WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash),
+        startup_cleanup_evidence: None,
         published_block_count: 0,
         allocator_bytes_cleared_for_publication: 0,
         expert_bytes_reclaimed_for_publication: 0,
+    }
+}
+
+fn worker_startup_cleanup_evidence(
+    startup_cleanup_evidence: crate::PersistentPromptCacheStartupCleanupEvidence,
+) -> WorkerPersistentPromptCacheStartupCleanupEvidence {
+    WorkerPersistentPromptCacheStartupCleanupEvidence {
+        interrupted_transaction_recovery: worker_startup_cleanup_category(
+            startup_cleanup_evidence.interrupted_transaction_recovery,
+        ),
+        obsolete_format: worker_startup_cleanup_category(startup_cleanup_evidence.obsolete_format),
+        corrupt_current_format: worker_startup_cleanup_category(
+            startup_cleanup_evidence.corrupt_current_format,
+        ),
+        quota_eviction: worker_startup_cleanup_category(startup_cleanup_evidence.quota_eviction),
+    }
+}
+
+fn worker_startup_cleanup_category(
+    startup_cleanup_category: crate::PersistentPromptCacheStartupCleanupCategory,
+) -> WorkerPersistentPromptCacheStartupCleanupCategory {
+    WorkerPersistentPromptCacheStartupCleanupCategory {
+        artifact_count: startup_cleanup_category.artifact_count,
+        block_count: startup_cleanup_category.block_count,
+        byte_count: startup_cleanup_category.byte_count,
     }
 }
 
