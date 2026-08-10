@@ -1,9 +1,18 @@
+//! Immutable storage and memory geometry for one model revision.
+//!
+//! Resolution happens once from validated decoder layout and live machine/user
+//! budgets. Every later lookup, write, quota decision, and memory admission uses
+//! this same contract so no component invents its own block size or tensor shape.
+
 use sha2::{Digest, Sha256};
 
 use crate::{DecoderCacheLayout, DecoderCachePersistedTensorLayout};
 
 use super::block_format::PERSISTENT_PROMPT_CACHE_FORMAT_VERSION;
 use super::model_contract_error::PersistentPromptCacheModelContractError;
+use super::model_contract_storage_geometry::{
+    exact_state_file_bytes, maximum_block_manifest_file_bytes,
+};
 
 /// Architecture-neutral decoder-state storage contract derived from validated model metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,7 +27,11 @@ pub struct PersistentPromptCacheModelContract {
     sequence_state_payload_bytes_per_block: usize,
     boundary_state_payload_bytes: usize,
     capture_payload_bytes: usize,
-    maximum_tensor_serialization_workspace_bytes: usize,
+    sequence_state_file_bytes: u64,
+    boundary_state_file_bytes: u64,
+    maximum_block_manifest_file_bytes: u64,
+    maximum_committed_block_bytes: u64,
+    direct_publication_workspace_bytes: usize,
     storage_contract_fingerprint: [u8; 32],
 }
 
@@ -56,13 +69,62 @@ impl PersistentPromptCacheModelContract {
         // tuning constant. Matching append-only allocation growth avoids capture boundaries that
         // force incompatible state reshaping, while the quota-derived size prevents a laptop
         // with less SSD capacity from accepting a state block it can never retain.
-        let block_token_count = derive_block_token_count(
+        let mut block_token_count = derive_block_token_count(
             maximum_context_token_count,
             persistence_alignment_token_count,
             sequence_state_payload_bytes_per_token,
             boundary_state_payload_bytes,
             global_ssd_quota_bytes,
         )?;
+        let maximum_block_manifest_file_bytes =
+            maximum_block_manifest_file_bytes(maximum_context_token_count)?;
+        // A first-pass block size can still produce too many repeated headers or
+        // recurrent snapshots for one maximum-length chain. Grow by the model's
+        // required alignment until that complete chain fits the configured SSD
+        // quota; never derive a laptop-specific literal.
+        let (sequence_state_file_bytes, boundary_state_file_bytes, maximum_committed_block_bytes) = loop {
+            let sequence_state_file_bytes = exact_state_file_bytes(
+                block_token_count,
+                decoder_cache_layout.sequence_tensor_layouts(),
+            )?;
+            let boundary_state_file_bytes = exact_state_file_bytes(
+                block_token_count,
+                decoder_cache_layout.boundary_tensor_layouts(),
+            )?;
+            let maximum_committed_block_bytes = sequence_state_file_bytes
+                .checked_add(boundary_state_file_bytes)
+                .and_then(|state_file_bytes| {
+                    state_file_bytes.checked_add(maximum_block_manifest_file_bytes)
+                })
+                .ok_or(PersistentPromptCacheModelContractError::CapturePayloadByteCountOverflow)?;
+            let maximum_committed_block_count =
+                checked_ceiling_division(maximum_context_token_count, block_token_count)?;
+            let maximum_chain_bytes = maximum_committed_block_bytes
+                .checked_mul(u64::try_from(maximum_committed_block_count).unwrap_or(u64::MAX))
+                .ok_or(PersistentPromptCacheModelContractError::CapturePayloadByteCountOverflow)?;
+            if maximum_chain_bytes <= global_ssd_quota_bytes {
+                break (
+                    sequence_state_file_bytes,
+                    boundary_state_file_bytes,
+                    maximum_committed_block_bytes,
+                );
+            }
+            let next_block_token_count = block_token_count
+                .checked_add(persistence_alignment_token_count)
+                .map(|next_block_token_count| {
+                    next_block_token_count.min(maximum_context_token_count)
+                })
+                .ok_or(PersistentPromptCacheModelContractError::CapturePayloadByteCountOverflow)?;
+            if next_block_token_count == block_token_count {
+                return Err(
+                    PersistentPromptCacheModelContractError::BlockFilesExceedSsdQuota {
+                        block_file_bytes: maximum_committed_block_bytes,
+                        global_ssd_quota_bytes,
+                    },
+                );
+            }
+            block_token_count = next_block_token_count;
+        };
         let sequence_state_payload_bytes_per_block = sequence_state_payload_bytes_per_token
             .checked_mul(block_token_count)
             .ok_or(
@@ -71,7 +133,10 @@ impl PersistentPromptCacheModelContract {
         let capture_payload_bytes = sequence_state_payload_bytes_per_block
             .checked_add(boundary_state_payload_bytes)
             .ok_or(PersistentPromptCacheModelContractError::CapturePayloadByteCountOverflow)?;
-        let maximum_tensor_serialization_workspace_bytes = decoder_cache_layout
+        // Native safetensors publication evaluates and copies one tensor at a
+        // time. Peak *additional* workspace is therefore the largest individual
+        // tensor, not the sum of captured decoder state already owned by request.
+        let direct_publication_workspace_bytes = decoder_cache_layout
             .maximum_sequence_tensor_payload_byte_count(block_token_count)?
             .max(
                 decoder_cache_layout
@@ -87,31 +152,29 @@ impl PersistentPromptCacheModelContract {
                     .max()
                     .unwrap_or(0),
             );
-        // MLX serialization needs the captured state plus one largest materialized tensor. Keep
-        // this conservative reservation in the model contract so every write-path admission
-        // consults the same validated geometry rather than inventing per-call byte estimates.
-        let initial_capture_memory_bytes = u64::try_from(capture_payload_bytes)
-            .unwrap_or(u64::MAX)
-            .checked_add(
-                u64::try_from(maximum_tensor_serialization_workspace_bytes).unwrap_or(u64::MAX),
-            )
-            .ok_or(PersistentPromptCacheModelContractError::CapturePayloadByteCountOverflow)?;
-        if initial_capture_memory_bytes > effective_mlx_memory_ceiling_bytes {
+        // Captured arrays are existing decoder-state ownership. Direct publication adds only
+        // the largest one-at-a-time contiguous tensor materialization proven by the MLX writer.
+        let direct_publication_workspace_bytes_u64 =
+            u64::try_from(direct_publication_workspace_bytes).unwrap_or(u64::MAX);
+        if direct_publication_workspace_bytes_u64 > effective_mlx_memory_ceiling_bytes {
             return Err(
                 PersistentPromptCacheModelContractError::CaptureExceedsMlxMemoryCeiling {
-                    capture_memory_bytes: initial_capture_memory_bytes,
+                    capture_memory_bytes: direct_publication_workspace_bytes_u64,
                     effective_mlx_memory_ceiling_bytes,
                 },
             );
         }
-        if u64::try_from(capture_payload_bytes).unwrap_or(u64::MAX) > global_ssd_quota_bytes {
+        if maximum_committed_block_bytes > global_ssd_quota_bytes {
             return Err(
-                PersistentPromptCacheModelContractError::CaptureExceedsSsdQuota {
-                    capture_payload_bytes: u64::try_from(capture_payload_bytes).unwrap_or(u64::MAX),
+                PersistentPromptCacheModelContractError::BlockFilesExceedSsdQuota {
+                    block_file_bytes: maximum_committed_block_bytes,
                     global_ssd_quota_bytes,
                 },
             );
         }
+        // The fingerprint is compatibility identity, not merely model identity.
+        // Any layout, dtype, block-size, format, model, or revision change must
+        // prevent old files from being joined to the new chain.
         let storage_contract_fingerprint = storage_contract_fingerprint(
             &model_id,
             &model_revision,
@@ -130,7 +193,11 @@ impl PersistentPromptCacheModelContract {
             sequence_state_payload_bytes_per_block,
             boundary_state_payload_bytes,
             capture_payload_bytes,
-            maximum_tensor_serialization_workspace_bytes,
+            sequence_state_file_bytes,
+            boundary_state_file_bytes,
+            maximum_block_manifest_file_bytes,
+            maximum_committed_block_bytes,
+            direct_publication_workspace_bytes,
             storage_contract_fingerprint,
         })
     }
@@ -191,8 +258,28 @@ impl PersistentPromptCacheModelContract {
     }
 
     #[must_use]
-    pub const fn maximum_tensor_serialization_workspace_bytes(&self) -> usize {
-        self.maximum_tensor_serialization_workspace_bytes
+    pub const fn sequence_state_file_bytes(&self) -> u64 {
+        self.sequence_state_file_bytes
+    }
+
+    #[must_use]
+    pub const fn boundary_state_file_bytes(&self) -> u64 {
+        self.boundary_state_file_bytes
+    }
+
+    #[must_use]
+    pub const fn maximum_block_manifest_file_bytes(&self) -> u64 {
+        self.maximum_block_manifest_file_bytes
+    }
+
+    #[must_use]
+    pub const fn maximum_committed_block_bytes(&self) -> u64 {
+        self.maximum_committed_block_bytes
+    }
+
+    #[must_use]
+    pub const fn direct_publication_workspace_bytes(&self) -> usize {
+        self.direct_publication_workspace_bytes
     }
 
     #[must_use]
@@ -291,6 +378,9 @@ fn storage_contract_fingerprint(
     decoder_cache_layout: &DecoderCacheLayout,
     block_token_count: usize,
 ) -> [u8; 32] {
+    // Every variable-length field is length-prefixed to prevent concatenation
+    // ambiguity (`ab` + `c` versus `a` + `bc`). Numeric fields use fixed-width
+    // big-endian bytes so the digest is independent of host architecture.
     let mut fingerprint_digest = Sha256::new();
     update_length_prefixed_bytes(
         &mut fingerprint_digest,

@@ -1,4 +1,14 @@
-use astronomical_ipc_protocol::RequestId;
+//! Restores the longest complete persistent prompt-cache prefix into live Qwen state.
+//!
+//! Lookup is allocation-free. After a complete chain is identified, all sequence
+//! blocks and the newest required boundary are loaded, reconstructed, synchronized,
+//! and released before memory admission is repeated for only the remaining context.
+
+use astronomical_ipc_protocol::{
+    RequestId, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
+    WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,
+    WorkerPersistentPromptCacheRequestDiagnostics,
+};
 
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
@@ -22,6 +32,7 @@ pub(super) struct PersistentPromptCacheRestoreOutcome {
     pub(super) restored_token_count: usize,
     pub(super) last_restored_persistent_prompt_cache_block_key:
         Option<PersistentPromptCacheBlockKey>,
+    pub(super) persistent_prompt_cache_diagnostics: WorkerPersistentPromptCacheRequestDiagnostics,
 }
 
 impl Qwen3_5EngineState {
@@ -58,6 +69,11 @@ impl Qwen3_5EngineState {
         let restored_token_count = lookup_result.restored_token_count();
         let prompt_token_count = prompt_token_ids.len();
         let lookup_diagnostics = lookup_result.diagnostics();
+        let persistent_prompt_cache_diagnostics = persistent_prompt_cache_request_diagnostics(
+            persistent_prompt_cache.model_contract.block_token_count(),
+            lookup_diagnostics,
+            restored_token_count,
+        );
         if restored_token_count == 0 {
             tracing::info!(
                 request_id = request_id.value(),
@@ -83,9 +99,13 @@ impl Qwen3_5EngineState {
                 persistent_prompt_cache_token_count: 0,
                 restored_token_count: 0,
                 last_restored_persistent_prompt_cache_block_key: None,
+                persistent_prompt_cache_diagnostics,
             });
         }
 
+        // Reconstruction temporarily owns loaded block arrays and concatenated
+        // live decoder state at the same time. Admission reserves that overlap
+        // before the first MLX-backed file is loaded.
         let persistent_prompt_cache_restore_temporary_workspace_bytes =
             persistent_prompt_cache_restore_temporary_workspace_bytes(
                 self.context_memory_reservation_bytes_per_token,
@@ -160,6 +180,8 @@ impl Qwen3_5EngineState {
             last_restored_persistent_prompt_cache_block_key =
                 Some(persistent_prompt_cache_block_key);
         }
+        // Sequence state is append-only across every matched block, but recurrent
+        // state needs only the newest boundary corresponding to the restored end.
         let recurrent_snapshot_block_key = last_restored_persistent_prompt_cache_block_key
             .as_ref()
             .ok_or_else(|| {
@@ -222,6 +244,9 @@ impl Qwen3_5EngineState {
                      persistent prompt-cache blocks: {persistent_prompt_cache_error}"
                 ))
             })?;
+        // Drop file-loaded owners before allocator cleanup. Live request state has
+        // already materialized independent arrays, so retaining these handles
+        // would inflate active memory throughout generation.
         drop(persistent_prompt_cache_kv_block_tensors);
         drop(persistent_prompt_cache_recurrent_snapshot_tensors);
         performance_attribution
@@ -236,6 +261,9 @@ impl Qwen3_5EngineState {
                 ))
             })?;
         model.resume_expert_retention_after_request_memory_pressure();
+        // The initial admission was conservative because no prefix was restored
+        // yet. Re-admit against only uncached context after temporary load memory
+        // is gone, allowing the ordinary request path to use reclaimed capacity.
         let remaining_context_token_count = total_context_tokens
             .checked_sub(restored_token_count)
             .ok_or_else(|| {
@@ -284,7 +312,66 @@ impl Qwen3_5EngineState {
             persistent_prompt_cache_token_count,
             restored_token_count,
             last_restored_persistent_prompt_cache_block_key,
+            persistent_prompt_cache_diagnostics,
         })
+    }
+}
+
+fn persistent_prompt_cache_request_diagnostics(
+    persistent_prompt_cache_block_token_count: usize,
+    lookup_diagnostics: &crate::PersistentPromptCacheLookupDiagnostics,
+    restored_token_count: usize,
+) -> WorkerPersistentPromptCacheRequestDiagnostics {
+    // Diagnostics are bounded scalar evidence copied over IPC. Never include full
+    // hashes, prompts, local paths, or model tensor details in the public log.
+    let restored_block_count = restored_token_count / persistent_prompt_cache_block_token_count;
+    WorkerPersistentPromptCacheRequestDiagnostics {
+        lookup_outcome: if restored_token_count == 0 {
+            WorkerPersistentPromptCacheLookupOutcome::Miss
+        } else {
+            WorkerPersistentPromptCacheLookupOutcome::Hit
+        },
+        block_token_count: u64::try_from(persistent_prompt_cache_block_token_count)
+            .unwrap_or(u64::MAX),
+        complete_prompt_block_count: u64::try_from(
+            lookup_diagnostics.complete_prompt_block_count(),
+        )
+        .unwrap_or(u64::MAX),
+        maximum_restorable_block_count: u64::try_from(
+            lookup_diagnostics.maximum_restorable_block_count(),
+        )
+        .unwrap_or(u64::MAX),
+        matched_sequence_state_block_count: u64::try_from(
+            lookup_diagnostics.matched_sequence_state_block_count(),
+        )
+        .unwrap_or(u64::MAX),
+        restored_block_count: u64::try_from(restored_block_count).unwrap_or(u64::MAX),
+        first_missing_sequence_state_block_index: lookup_diagnostics
+            .first_missing_sequence_state_block_index()
+            .map(|block_index| u64::try_from(block_index).unwrap_or(u64::MAX)),
+        miss_reason: lookup_diagnostics.miss_reason().map(worker_miss_reason),
+        expected_block_hash_prefix: lookup_diagnostics
+            .first_missing_sequence_state_block_hash()
+            .map(WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash),
+        published_block_count: 0,
+        allocator_bytes_cleared_for_publication: 0,
+        expert_bytes_reclaimed_for_publication: 0,
+    }
+}
+
+fn worker_miss_reason(
+    miss_reason: crate::PersistentPromptCacheMissReason,
+) -> WorkerPersistentPromptCacheMissReason {
+    match miss_reason {
+        crate::PersistentPromptCacheMissReason::PromptTooShortForPersistentPromptCache => {
+            WorkerPersistentPromptCacheMissReason::PromptTooShortForPersistentPromptCache
+        }
+        crate::PersistentPromptCacheMissReason::RootSequenceStateBlockMissing => {
+            WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing
+        }
+        crate::PersistentPromptCacheMissReason::BoundaryStateSnapshotMissing => {
+            WorkerPersistentPromptCacheMissReason::BoundaryStateSnapshotMissing
+        }
     }
 }
 

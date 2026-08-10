@@ -74,10 +74,6 @@ pub enum PersistentPromptCacheBlockError {
         actual_format_version: String,
         expected_format_version: String,
     },
-    #[error("persistent prompt-cache block is for foreign model {actual_model_id}")]
-    ForeignModel { actual_model_id: String },
-    #[error("persistent prompt-cache block is for foreign model revision {actual_model_revision}")]
-    ForeignModelRevision { actual_model_revision: String },
     #[error(
         "persistent prompt-cache block token count is {actual_block_token_count}, expected {expected_block_token_count}"
     )]

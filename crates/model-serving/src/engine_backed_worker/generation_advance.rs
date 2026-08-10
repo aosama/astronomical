@@ -224,6 +224,7 @@ where
                 speculative_prefill_draft_memory_telemetry,
                 expert_memory_mode,
                 prompt_work_reuse,
+                persistent_prompt_cache_diagnostics,
             } => {
                 if prompt_work_reuse.target_eligible_token_count > 0 {
                     let required_target_prompt_processing_token_count = prompt_work_reuse
@@ -234,6 +235,10 @@ where
                             .unwrap_or(u32::MAX);
                 }
                 active_generation.prompt_work_reuse = prompt_work_reuse;
+                if persistent_prompt_cache_diagnostics.is_some() {
+                    active_generation.persistent_prompt_cache_diagnostics =
+                        persistent_prompt_cache_diagnostics;
+                }
                 if let Some(expert_memory_mode) = expert_memory_mode
                     && active_generation.last_reported_expert_memory_mode
                         != Some(expert_memory_mode)

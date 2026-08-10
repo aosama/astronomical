@@ -298,6 +298,9 @@ where
                 generated_token_count: active_generation.generated_token_count,
                 reasoning_token_count: active_generation.reasoning_token_count,
                 cached_token_count: active_generation.cached_token_count,
+                persistent_prompt_cache_diagnostics: active_generation
+                    .persistent_prompt_cache_diagnostics
+                    .clone(),
                 reason: completion_reason,
             })
             .await?;

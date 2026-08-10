@@ -21,9 +21,6 @@ pub(super) struct CacheStatsE2eCase {
     timeout: Duration,
 }
 
-const PERSISTENT_PROMPT_CACHE_PUBLICATION_TIMEOUT: Duration = Duration::from_secs(15);
-const PERSISTENT_PROMPT_CACHE_PUBLICATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
-
 pub(super) fn two_thousand_word_case() -> CacheStatsE2eCase {
     CacheStatsE2eCase {
         test_name: "2k",
@@ -190,8 +187,12 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         persistent_prompt_cache_hits_after_first_request, 0,
         "the first request should not have produced any cache hits"
     );
-
-    wait_for_persistent_prompt_cache_publication(server_address, log_prefix).await;
+    assert!(
+        cache_stats_after_first_request["persistent_prompt_cache_sequence_state_block_count"]
+            .as_u64()
+            .is_some_and(|sequence_state_block_count| sequence_state_block_count > 0),
+        "required prompt-cache publication must be visible when the first response completes: {cache_stats_after_first_request}"
+    );
 
     // Check what was saved to disk after phase 1.
     log_cache_directory_contents(
@@ -246,13 +247,13 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
     let persistent_prompt_cache_sequence_state_block_count_after_second_request =
         cache_stats_after_second_request["persistent_prompt_cache_sequence_state_block_count"]
             .as_u64()
-            .expect("the cache stats should report KV block count");
+            .expect("the cache stats should report sequence-state block count");
     let persistent_prompt_cache_misses_after_second_request =
         cache_stats_after_second_request["persistent_prompt_cache_misses"]
             .as_u64()
             .expect("the cache stats should report misses after the second request");
     eprintln!(
-        "{log_prefix} phase 2 complete in {:.1}s: hits={} misses={} tokens_saved={} kv_blocks={}",
+        "{log_prefix} phase 2 complete in {:.1}s: hits={} misses={} tokens_saved={} sequence_state_blocks={}",
         phase_two_started_at.elapsed().as_secs_f64(),
         persistent_prompt_cache_hits_after_second_request,
         persistent_prompt_cache_misses_after_second_request,
@@ -310,7 +311,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
     );
     assert!(
         persistent_prompt_cache_sequence_state_block_count_after_second_request >= 1,
-        "the cache should contain at least one KV block after the first request saved it; \
+        "the cache should contain at least one sequence-state block after the first request saved it; \
          sequence_state_block_count={persistent_prompt_cache_sequence_state_block_count_after_second_request}"
     );
 
@@ -326,32 +327,4 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         .expect("the real worker should terminate and be reaped");
 
     eprintln!("{log_prefix} cache miss then cache hit verified through /v1/cache/stats");
-}
-
-async fn wait_for_persistent_prompt_cache_publication(
-    server_address: SocketAddr,
-    log_prefix: &str,
-) {
-    let publication_deadline = Instant::now() + PERSISTENT_PROMPT_CACHE_PUBLICATION_TIMEOUT;
-    loop {
-        let persistent_prompt_cache_stats = get_cache_stats_json(server_address).await;
-        let persistent_prompt_cache_sequence_state_block_count =
-            persistent_prompt_cache_stats["persistent_prompt_cache_sequence_state_block_count"]
-                .as_u64()
-                .unwrap_or(0);
-        if persistent_prompt_cache_sequence_state_block_count > 0 {
-            eprintln!(
-                "{log_prefix} persistent prompt-cache publication completed with {persistent_prompt_cache_sequence_state_block_count} KV blocks"
-            );
-            return;
-        }
-        if Instant::now() >= publication_deadline {
-            panic!(
-                "{log_prefix} persistent prompt-cache files were not published within {} seconds: {}",
-                PERSISTENT_PROMPT_CACHE_PUBLICATION_TIMEOUT.as_secs(),
-                persistent_prompt_cache_stats
-            );
-        }
-        sleep(PERSISTENT_PROMPT_CACHE_PUBLICATION_POLL_INTERVAL).await;
-    }
 }

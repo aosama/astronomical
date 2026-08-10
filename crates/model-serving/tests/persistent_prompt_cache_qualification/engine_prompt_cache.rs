@@ -277,14 +277,14 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         |persistent_prompt_cache_block_hash| {
             persistent_prompt_cache_file_exists(
                 persistent_prompt_cache_directory.path(),
-                "kv_blocks",
+                "sequence.safetensors",
                 persistent_prompt_cache_block_hash,
             )
         },
         |persistent_prompt_cache_block_hash| {
             persistent_prompt_cache_file_exists(
                 persistent_prompt_cache_directory.path(),
-                "recurrent_snapshots",
+                "boundary.safetensors",
                 persistent_prompt_cache_block_hash,
             )
         },
@@ -429,7 +429,7 @@ async fn persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplie
 
 fn persistent_prompt_cache_file_exists(
     persistent_prompt_cache_directory: &Path,
-    cache_file_kind_directory: &str,
+    state_file_name: &str,
     persistent_prompt_cache_block_hash: &[u8; 32],
 ) -> bool {
     let persistent_prompt_cache_block_hash_hex = persistent_prompt_cache_block_hash
@@ -437,10 +437,9 @@ fn persistent_prompt_cache_file_exists(
         .map(|block_hash_byte| format!("{block_hash_byte:02x}"))
         .collect::<String>();
     persistent_prompt_cache_directory
-        .join(cache_file_kind_directory)
-        .join(format!(
-            "{persistent_prompt_cache_block_hash_hex}.safetensors"
-        ))
+        .join("blocks")
+        .join(persistent_prompt_cache_block_hash_hex)
+        .join(state_file_name)
         .is_file()
 }
 

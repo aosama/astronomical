@@ -38,45 +38,10 @@ impl Qwen3_5EngineState {
             );
             return Err(InferenceEngineError::EngineBusy);
         }
-        if self.model.is_none() {
-            return Err(fatal_engine_error("Qwen3.5 engine is not loaded"));
-        }
-        if inference_request.input_token_ids().is_empty() {
-            return Err(fatal_engine_error("generation prompt must not be empty"));
-        }
-        if inference_request.max_output_tokens() == 0 {
-            return Err(fatal_engine_error(
-                "generation output-token budget must be positive",
-            ));
-        }
+        let total_context_tokens =
+            self.validate_generation_request_and_resolve_total_context(&inference_request)?;
         let ordinary_target_prefill_control_span_token_count =
             inference_request.ordinary_target_prefill_control_span_token_count();
-        if ordinary_target_prefill_control_span_token_count
-            > inference_request.input_token_ids().len().saturating_sub(1)
-        {
-            return Err(invalid_request_error(
-                "system-and-tool control span reaches beyond selectable prompt content",
-            ));
-        }
-        if inference_request
-            .input_token_ids()
-            .iter()
-            .any(|token_id| *token_id >= self.vocabulary_size)
-        {
-            return Err(fatal_engine_error(
-                "generation prompt contains a token outside the certified vocabulary",
-            ));
-        }
-        let total_context_tokens = inference_request
-            .input_token_ids()
-            .len()
-            .checked_add(usize::from(inference_request.max_output_tokens()))
-            .ok_or_else(|| invalid_request_error("generation context token count overflowed"))?;
-        if total_context_tokens > self.maximum_position_count {
-            return Err(invalid_request_error(
-                "generation context exceeds the certified maximum position count",
-            ));
-        }
         let model = self
             .model
             .as_ref()
@@ -89,21 +54,15 @@ impl Qwen3_5EngineState {
             } else {
                 Default::default()
             };
-        let context_admission_outcome = self.validate_initial_generation_context_memory_admission(
-            total_context_tokens,
-            &mut performance_attribution,
-        );
-        if let Err(context_admission_error) = context_admission_outcome {
-            self.record_generation_performance_attribution(
-                performance_attribution,
-                PerformanceAttributionOutcome::Rejected,
+        let initial_publication_expert_reclaimed_bytes = self
+            .admit_initial_generation_context_or_record_rejection(
                 request_id,
                 configured_maximum_output_tokens,
-                None,
-                Some("generation context admission rejected"),
-            );
-            return Err(context_admission_error);
-        }
+                total_context_tokens,
+                self.persistent_prompt_cache.is_some()
+                    && !inference_request.has_visual_embeddings(),
+                &mut performance_attribution,
+            )?;
         let admitted_generation_start = (|| {
             let sampling_strategy = inference_request.sampling_strategy();
             let random_state = match sampling_strategy {
@@ -243,6 +202,7 @@ impl Qwen3_5EngineState {
             let mut last_restored_persistent_prompt_cache_block_key: Option<
                 PersistentPromptCacheBlockKey,
             > = None;
+            let mut persistent_prompt_cache_diagnostics = None;
             if self.persistent_prompt_cache.is_some() && can_use_persistent_prompt_cache {
                 // Split the borrow: take the cache out temporarily so the engine
                 // state (including counters) can be mutated as &mut self while the
@@ -275,6 +235,8 @@ impl Qwen3_5EngineState {
                     next_position_tokens = restore_outcome.persistent_prompt_cache_token_count;
                     last_restored_persistent_prompt_cache_block_key =
                         restore_outcome.last_restored_persistent_prompt_cache_block_key;
+                    persistent_prompt_cache_diagnostics =
+                        Some(restore_outcome.persistent_prompt_cache_diagnostics);
                     restored_target_work_token_count =
                         u64::from(restore_outcome.persistent_prompt_cache_token_count);
                 } else {
@@ -283,6 +245,17 @@ impl Qwen3_5EngineState {
                     next_position_tokens = 0;
                     last_restored_persistent_prompt_cache_block_key = None;
                 }
+            }
+            if let Some(persistent_prompt_cache_diagnostics) =
+                persistent_prompt_cache_diagnostics.as_mut()
+            {
+                // Initial admission can evict experts before lookup diagnostics
+                // exist. Merge those bytes now so the final per-request record
+                // accounts for all publication-related reclamation.
+                persistent_prompt_cache_diagnostics.expert_bytes_reclaimed_for_publication =
+                    persistent_prompt_cache_diagnostics
+                        .expert_bytes_reclaimed_for_publication
+                        .saturating_add(initial_publication_expert_reclaimed_bytes);
             }
             if self.speculative_prefill.enabled
                 && self.speculative_prefill_draft_is_available
@@ -476,6 +449,7 @@ impl Qwen3_5EngineState {
                     drafter_eligible_token_count: 0,
                     drafter_restored_token_count: 0,
                 },
+                persistent_prompt_cache_diagnostics: persistent_prompt_cache_diagnostics.clone(),
                 force_next_speculative_prefill_draft_prefix_restore_failure_for_tests: false,
                 forced_speculative_prefill_failure_stage_for_tests: None,
                 force_next_prefill_capacity_rejection_for_tests: false,
@@ -494,7 +468,8 @@ impl Qwen3_5EngineState {
                     .expert_memory_mode(),
             )
             .with_restored_prompt_prefix_token_count(restored_prompt_prefix_token_count)
-            .with_prompt_processing_phase(initial_prompt_processing_phase))
+            .with_prompt_processing_phase(initial_prompt_processing_phase)
+            .with_persistent_prompt_cache_diagnostics(persistent_prompt_cache_diagnostics))
         })();
         if admitted_generation_start.is_err()
             && let Some(model) = self.model.as_ref()

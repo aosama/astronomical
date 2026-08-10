@@ -6,23 +6,18 @@ use super::block_format_error::PersistentPromptCacheBlockError;
 
 /// One failure while opening, scanning, saving, or loading a persistent prompt-cache block.
 ///
-/// The engine treats these failures as cache-local: it warns, discards any
-/// partial restore, and continues with cold prefill. The error retains the
-/// lower-level source for local diagnostics without changing generation's
-/// public error contract.
+/// Required prompt-state initialization, restoration, and publication surface these failures at
+/// the model or request boundary. The error retains its lower-level cause for bounded diagnostics.
 #[derive(Debug, thiserror::Error)]
 pub enum PersistentPromptCacheDiskStoreError {
-    #[error("failed to start the persistent prompt-cache writer thread")]
-    StartWriterThread {
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("persistent prompt-cache writer stopped before publication acknowledgement")]
-    WriterPublicationAcknowledgementLost,
     #[error(
         "persistent prompt-cache parent state was not published before child block {block_index}"
     )]
     ParentStateNotPublished { block_index: u32 },
+    #[error("persistent prompt-cache block {block_hash:02x?} has conflicting stored topology")]
+    ExistingBlockTopologyMismatch { block_hash: [u8; 32] },
+    #[error("persistent prompt-cache block {block_index} has invalid requested ancestry")]
+    InvalidRequestedBlockAncestry { block_index: u32 },
     #[error(
         "failed to create persistent prompt-cache directory at {persistent_prompt_cache_directory:?}"
     )]
@@ -75,6 +70,11 @@ pub enum PersistentPromptCacheDiskStoreError {
         #[source]
         source: MlxRuntimeError,
     },
+    #[error("failed to write safetensors through its retained file descriptor")]
+    WriteSafetensorsDescriptor {
+        #[source]
+        source: std::io::Error,
+    },
     #[error("failed to read MLX memory for persistent model-state admission")]
     ReadMlxMemorySnapshot {
         #[source]
@@ -93,6 +93,16 @@ pub enum PersistentPromptCacheDiskStoreError {
         #[source]
         source: std::io::Error,
     },
+    #[error(
+        "persistent prompt-cache file {file_path:?} reported {reported_size_bytes} bytes but contains {actual_size_bytes} bytes"
+    )]
+    WrittenFileSizeMismatch {
+        file_path: PathBuf,
+        reported_size_bytes: u64,
+        actual_size_bytes: u64,
+    },
+    #[error("unsupported persistent prompt-cache state file name {file_name}")]
+    InvalidStateFileName { file_name: String },
     #[error("failed to open block file at {block_file_path:?}")]
     OpenBlockFile {
         block_file_path: PathBuf,
@@ -104,6 +114,36 @@ pub enum PersistentPromptCacheDiskStoreError {
         block_file_path: PathBuf,
         #[source]
         source: PersistentPromptCacheBlockError,
+    },
+    #[error("failed to read prompt-cache block manifest at {manifest_file_path:?}")]
+    ReadBlockManifest {
+        manifest_file_path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to parse prompt-cache block manifest at {manifest_file_path:?}")]
+    ParseBlockManifest {
+        manifest_file_path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("failed to serialize prompt-cache block manifest")]
+    SerializeBlockManifest {
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("invalid prompt-cache block manifest at {manifest_file_path:?}: {description}")]
+    InvalidBlockManifest {
+        manifest_file_path: PathBuf,
+        description: String,
+    },
+    #[error(
+        "failed to synchronize prompt-cache directory at {persistent_prompt_cache_directory:?}"
+    )]
+    SynchronizePromptCacheDirectory {
+        persistent_prompt_cache_directory: PathBuf,
+        #[source]
+        source: std::io::Error,
     },
     #[error("failed to validate model-specific persistent artifact at {artifact_file_path:?}")]
     ValidateModelSpecificArtifact {
@@ -132,12 +172,6 @@ pub enum PersistentPromptCacheDiskStoreError {
         actual_tensor_count: usize,
     },
     #[error(
-        "persistent model-state serialization exhausted its {maximum_capture_serialized_byte_count}-byte live capture limit"
-    )]
-    SerializedCaptureByteLimitExceeded {
-        maximum_capture_serialized_byte_count: usize,
-    },
-    #[error(
         "failed to remove persistent prompt-cache file at {persistent_prompt_cache_file_path:?}"
     )]
     RemovePromptCacheFile {
@@ -158,4 +192,26 @@ pub enum PersistentPromptCacheDiskStoreError {
         maximum_size_bytes: u64,
         remaining_size_bytes: u64,
     },
+}
+
+impl PersistentPromptCacheDiskStoreError {
+    #[must_use]
+    pub fn active_memory_deficit_bytes(&self) -> Option<usize> {
+        let Self::SaveSafetensors {
+            source:
+                MlxRuntimeError::ActiveMemoryLimitExceeded {
+                    active_memory_bytes,
+                    attempted_allocation_bytes,
+                    allowed_active_memory_bytes,
+                },
+        } = self
+        else {
+            return None;
+        };
+        Some(
+            active_memory_bytes
+                .saturating_add(*attempted_allocation_bytes)
+                .saturating_sub(*allowed_active_memory_bytes),
+        )
+    }
 }

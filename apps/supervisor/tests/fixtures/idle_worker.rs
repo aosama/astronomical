@@ -89,6 +89,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         generated_token_count: 0,
                         reasoning_token_count: 0,
                         cached_token_count: 0,
+                        persistent_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
                     .await?;

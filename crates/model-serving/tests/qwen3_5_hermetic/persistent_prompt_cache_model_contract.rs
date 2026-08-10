@@ -200,6 +200,22 @@ fn should_resolve_sequence_only_and_boundary_only_storage_contracts() {
     assert!(boundary_only_contract.block_token_count() <= 100);
     assert!(!boundary_only_contract.has_sequence_state());
     assert!(boundary_only_contract.has_boundary_state());
+    for storage_contract in [&sequence_only_contract, &boundary_only_contract] {
+        let maximum_committed_block_count = storage_contract
+            .maximum_context_token_count()
+            .div_ceil(storage_contract.block_token_count());
+        assert!(
+            storage_contract
+                .maximum_committed_block_bytes()
+                .saturating_mul(maximum_committed_block_count as u64)
+                <= if storage_contract.has_sequence_state() {
+                    1_000_000
+                } else {
+                    10_000
+                },
+            "the complete active chain must fit its exact committed-byte quota"
+        );
+    }
 }
 
 #[test]

@@ -247,6 +247,7 @@ async fn cache_stats(State(application_state): State<ApplicationState>) -> Respo
         "persistent_prompt_cache_hits": persistent_prompt_cache_summary.hits,
         "persistent_prompt_cache_misses": persistent_prompt_cache_summary.misses,
         "persistent_prompt_cache_tokens_saved": persistent_prompt_cache_summary.tokens_saved,
+        "persistent_prompt_cache_block_token_count": persistent_prompt_cache_summary.block_token_count,
         "persistent_prompt_cache_sequence_state_block_count": persistent_prompt_cache_summary.sequence_state_block_count,
         "persistent_prompt_cache_boundary_state_snapshot_count": persistent_prompt_cache_summary.boundary_state_snapshot_count,
         "persistent_prompt_cache_visual_embedding_count": persistent_prompt_cache_summary.visual_embedding_count,

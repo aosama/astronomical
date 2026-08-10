@@ -6,6 +6,7 @@ async fn should_report_prompt_cache_lookup_counters_when_generation_starts() {
         persistent_prompt_cache_hits: 1,
         persistent_prompt_cache_misses: 1,
         persistent_prompt_cache_tokens_saved: 2_048,
+        persistent_prompt_cache_block_token_count: 2_048,
         persistent_prompt_cache_sequence_state_block_count: 2,
         persistent_prompt_cache_boundary_state_snapshot_count: 1,
         persistent_prompt_cache_visual_embedding_count: 0,

@@ -225,9 +225,8 @@ fn persistent_prompt_cache_safetensors_disk_usage(
                     .is_some_and(|extension| extension == "safetensors")
             {
                 if cache_entry_path
-                    .parent()
-                    .and_then(Path::file_name)
-                    .is_some_and(|directory_name| directory_name == "kv_blocks")
+                    .file_name()
+                    .is_some_and(|file_name| file_name == "sequence.safetensors")
                 {
                     kv_block_file_count += 1;
                 }

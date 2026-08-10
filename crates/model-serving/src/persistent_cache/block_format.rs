@@ -1,10 +1,7 @@
 //! Bounded, MLX-free validator for persisted model-state files.
 //!
-//! Version 7 derives decoder-state tensor validation from the model-owned,
-//! architecture-neutral cache layout. Version 8 invalidates snapshots written
-//! before the expert-residency correction. Version 6 used Qwen-specific names.
 //! This module reads only the length-prefixed JSON header, validates the declared
-//! tensor layout against the expected Qwen3.5-MoE file kind, and returns the
+//! tensor layout against the active architecture-neutral model contract, and returns the
 //! metadata the prompt-cache owner needs to decide whether to load the file.
 //! It never reads the multi-megabyte tensor payload region.
 
@@ -33,14 +30,14 @@ use super::persistent_safetensors_header::{
 /// corrected macOS-pressure expert residency.
 /// Version 10: binds model-derived block geometry and the complete storage
 /// contract fingerprint while allowing each declared state kind independently.
-pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "10";
+/// Version 11: atomically publishes complete block directories and removes
+/// redundant model identity metadata from state files.
+pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "11";
 
 /// Parsed and validated metadata for one Qwen3.5-MoE persistent prompt-cache block on disk.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PersistentPromptCacheBlockHeader {
     format_version: String,
-    model_id: String,
-    model_revision: String,
     storage_contract_fingerprint: String,
     block_token_count: usize,
     tensor_count: usize,
@@ -112,8 +109,6 @@ impl PersistentPromptCacheBlockHeader {
         )?;
         Ok(Self {
             format_version: metadata.format_version,
-            model_id: metadata.model_id,
-            model_revision: metadata.model_revision,
             storage_contract_fingerprint: metadata.storage_contract_fingerprint,
             block_token_count: metadata.block_token_count,
             tensor_count: parsed_header.tensor_views.len(),
@@ -124,18 +119,6 @@ impl PersistentPromptCacheBlockHeader {
     #[must_use]
     pub fn format_version(&self) -> &str {
         &self.format_version
-    }
-
-    /// Returns the model id stamped into the block.
-    #[must_use]
-    pub fn model_id(&self) -> &str {
-        &self.model_id
-    }
-
-    /// Returns the model revision stamped into the block.
-    #[must_use]
-    pub fn model_revision(&self) -> &str {
-        &self.model_revision
     }
 
     /// Returns the number of prompt tokens captured by this block.
@@ -165,8 +148,6 @@ enum PersistentPromptCacheFileKind {
 
 struct RequiredMetadata {
     format_version: String,
-    model_id: String,
-    model_revision: String,
     storage_contract_fingerprint: String,
     block_token_count: usize,
 }
@@ -180,20 +161,6 @@ fn extract_required_metadata(
         .ok_or_else(|| PersistentPromptCacheBlockError::MissingMetadata {
             persistent_prompt_cache_block_path: persistent_prompt_cache_block_path.to_path_buf(),
             field_name: "format_version",
-        })?
-        .clone();
-    let model_id = metadata
-        .get("model_id")
-        .ok_or_else(|| PersistentPromptCacheBlockError::MissingMetadata {
-            persistent_prompt_cache_block_path: persistent_prompt_cache_block_path.to_path_buf(),
-            field_name: "model_id",
-        })?
-        .clone();
-    let model_revision = metadata
-        .get("model_revision")
-        .ok_or_else(|| PersistentPromptCacheBlockError::MissingMetadata {
-            persistent_prompt_cache_block_path: persistent_prompt_cache_block_path.to_path_buf(),
-            field_name: "model_revision",
         })?
         .clone();
     let storage_contract_fingerprint = metadata
@@ -218,8 +185,6 @@ fn extract_required_metadata(
     })?;
     Ok(RequiredMetadata {
         format_version,
-        model_id,
-        model_revision,
         storage_contract_fingerprint,
         block_token_count,
     })
@@ -230,22 +195,12 @@ fn validate_metadata(
     persistent_prompt_cache_block_path: &Path,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
 ) -> Result<(), PersistentPromptCacheBlockError> {
-    // A content hash proves prompt ancestry, not tensor compatibility. These
-    // checks bind persisted state to its serialization contract and model.
+    // A content hash proves prompt ancestry, not tensor compatibility. The storage-contract
+    // fingerprint binds model identity, revision, tensor geometry, and execution dtype.
     if metadata.format_version != PERSISTENT_PROMPT_CACHE_FORMAT_VERSION {
         return Err(PersistentPromptCacheBlockError::UnsupportedFormatVersion {
             actual_format_version: metadata.format_version.clone(),
             expected_format_version: PERSISTENT_PROMPT_CACHE_FORMAT_VERSION.to_owned(),
-        });
-    }
-    if metadata.model_id != persistent_prompt_cache_model_contract.model_id() {
-        return Err(PersistentPromptCacheBlockError::ForeignModel {
-            actual_model_id: metadata.model_id.clone(),
-        });
-    }
-    if metadata.model_revision != persistent_prompt_cache_model_contract.model_revision() {
-        return Err(PersistentPromptCacheBlockError::ForeignModelRevision {
-            actual_model_revision: metadata.model_revision.clone(),
         });
     }
     if metadata.block_token_count != persistent_prompt_cache_model_contract.block_token_count() {
@@ -278,7 +233,7 @@ fn validate_tensor_layout(
 ) -> Result<(), PersistentPromptCacheBlockError> {
     // Each file kind has a closed layout contract. Be deliberately strict: a
     // plausible-looking subset could produce silent wrong generation rather
-    // than a recoverable cold-prefill miss.
+    // than a typed request failure.
     let expected_tensor_layouts = match persistent_prompt_cache_file_kind {
         PersistentPromptCacheFileKind::SequenceStateBlock => persistent_prompt_cache_model_contract
             .decoder_cache_layout()

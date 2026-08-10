@@ -7,8 +7,9 @@ use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
-    PersistentPromptCacheFileKind, hex_encode, open_without_following_symlinks,
-    read_file_size_bytes, remove_cache_owned_file_or_confirm_absent,
+    PersistentPromptCacheFileKind, hex_encode, map_safetensors_writer_error,
+    open_without_following_symlinks, read_file_size_bytes,
+    remove_cache_owned_file_or_confirm_absent,
 };
 use super::disk_store_index::TrackedPersistentPromptCacheFile;
 use super::disk_store_scan::scan_current_format_directory;
@@ -208,7 +209,7 @@ fn save_visual_embedding_safetensors_file(
         runtime.save_safetensors(temporary_file, &[named_array], &metadata_entries)
     {
         remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
-        return Err(PersistentPromptCacheDiskStoreError::SaveSafetensors { source: save_error });
+        return Err(map_safetensors_writer_error(save_error));
     }
     fs::rename(&temp_file_path, &file_path).map_err(|rename_error| {
         let temporary_file_cleanup_result =

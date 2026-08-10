@@ -3,6 +3,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::time::SystemTime;
 
+use astronomical_ipc_protocol::WorkerPersistentPromptCacheRequestDiagnostics;
 use serde::Serialize;
 
 /// One row in the generation performance log.
@@ -54,6 +55,12 @@ pub struct GenerationPerformanceRecord {
     pub mlx_peak_memory_bytes: Option<u64>,
     /// Active MLX GPU memory at last prefill progress event, in bytes.
     pub mlx_active_memory_bytes: Option<u64>,
+    /// Bounded cache lookup, publication, and reclamation attribution for this request.
+    ///
+    /// The worker computes this evidence while it owns MLX and disk-cache state;
+    /// the supervisor transports it unchanged into the completion record so log
+    /// readers can distinguish a true cache miss from publication memory pressure.
+    pub persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
 }
 
 impl GenerationPerformanceRecord {

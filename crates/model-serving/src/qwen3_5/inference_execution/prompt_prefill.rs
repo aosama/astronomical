@@ -8,9 +8,6 @@ use crate::{
 use astronomical_ipc_protocol::RequestId;
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests};
-use super::persistent_prompt_cache_capture::{
-    PromptStatePersistenceOwner, required_prompt_state_persistence_failure,
-};
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::{
     PromptPrefillChunckAttemptError, configured_speculative_prefill_execution_error,
@@ -90,38 +87,7 @@ impl Qwen3_5EngineState {
         } else {
             Vec::new()
         };
-        let projected_single_capture_tensor_payload_bytes = model
-            .decoder_cache_layout()
-            .persistent_prompt_cache_block_payload_byte_count(
-                persistent_prompt_cache_block_token_count,
-            )
-            .map_err(|error| {
-                fatal_engine_error(format!(
-                    "failed to project prompt-cache capture bytes: {error}"
-                ))
-            })?;
-        let writer_can_accept_projected_captures = self
-            .persistent_prompt_cache_write_queue
-            .as_ref()
-            .is_some_and(|persistent_prompt_cache_write_queue| {
-                persistent_prompt_cache_write_queue.can_accept_projected_captures(
-                    projected_single_capture_tensor_payload_bytes,
-                    planned_completed_prefill_chunck_tokens.len(),
-                )
-            });
-        let capture_is_active = capture_is_eligible && writer_can_accept_projected_captures;
-        if capture_is_eligible
-            && !planned_completed_prefill_chunck_tokens.is_empty()
-            && !writer_can_accept_projected_captures
-        {
-            return Err(required_prompt_state_persistence_failure(
-                PromptStatePersistenceOwner::for_active_request(active_request),
-                active_request,
-                "exact target prompt-state persistence admission",
-                "the SSD writer cannot accept every completed protected-prefix boundary",
-            )
-            .into());
-        }
+        let capture_is_active = capture_is_eligible;
         let all_completed_prefill_chunck_tokens = if capture_is_active {
             planned_completed_prefill_chunck_tokens
         } else {
@@ -133,7 +99,7 @@ impl Qwen3_5EngineState {
         {
             intermediate_completed_prefill_chunck_tokens.pop();
         }
-        let exact_temporary_workspace_bytes = model
+        let boundary_checkpoint_workspace_bytes = model
             .decoder_cache_layout()
             .boundary_snapshot_payload_byte_count()
             .map_err(|error| {
@@ -143,6 +109,24 @@ impl Qwen3_5EngineState {
             })?
             .checked_mul(intermediate_completed_prefill_chunck_tokens.len())
             .ok_or_else(|| fatal_engine_error("boundary checkpoint workspace bytes overflowed"))?;
+        let direct_publication_workspace_bytes = if !all_completed_prefill_chunck_tokens.is_empty()
+        {
+            self.persistent_prompt_cache
+                .as_ref()
+                .map(|persistent_prompt_cache| {
+                    persistent_prompt_cache
+                        .model_contract_ref()
+                        .direct_publication_workspace_bytes()
+                })
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        let exact_temporary_workspace_bytes = boundary_checkpoint_workspace_bytes
+            .checked_add(direct_publication_workspace_bytes)
+            .ok_or_else(|| {
+                fatal_engine_error("prompt-cache publication workspace bytes overflowed")
+            })?;
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::PrefillChunckCount, 1);
@@ -227,14 +211,25 @@ impl Qwen3_5EngineState {
             additional_persistent_state_growth_bytes,
             exact_temporary_workspace_bytes,
         )?;
+        let target_expert_payload_bytes_after_context_admission = model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        let target_expert_payload_bytes_reclaimed_during_context_admission =
+            target_expert_payload_bytes_before_context_admission
+                .saturating_sub(target_expert_payload_bytes_after_context_admission);
+        if direct_publication_workspace_bytes > 0
+            && let Some(persistent_prompt_cache_diagnostics) =
+                active_request.persistent_prompt_cache_diagnostics.as_mut()
+        {
+            persistent_prompt_cache_diagnostics.expert_bytes_reclaimed_for_publication =
+                persistent_prompt_cache_diagnostics
+                    .expert_bytes_reclaimed_for_publication
+                    .saturating_add(target_expert_payload_bytes_reclaimed_during_context_admission);
+        }
         if speculative_prefill_target_is_active {
-            let target_expert_payload_bytes_after_context_admission = model
-                .expert_weight_memory_cache_statistics()
-                .resident_payload_byte_count;
             active_request.performance_attribution.record_counter(
                 PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-                target_expert_payload_bytes_before_context_admission
-                    .saturating_sub(target_expert_payload_bytes_after_context_admission),
+                target_expert_payload_bytes_reclaimed_during_context_admission,
             );
         }
         let prefill_request_checkpoint = active_request

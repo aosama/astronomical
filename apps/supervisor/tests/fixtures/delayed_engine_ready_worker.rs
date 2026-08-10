@@ -46,6 +46,7 @@ async fn main() {
                         generated_token_count: 0,
                         reasoning_token_count: 0,
                         cached_token_count: 0,
+                        persistent_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
                     .await;
@@ -58,6 +59,7 @@ async fn main() {
                         generated_token_count: 0,
                         reasoning_token_count: 0,
                         cached_token_count: 0,
+                        persistent_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::Cancelled,
                     })
                     .await;
