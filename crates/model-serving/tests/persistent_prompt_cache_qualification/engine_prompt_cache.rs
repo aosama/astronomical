@@ -2,11 +2,10 @@ use std::{future::Future, path::Path, time::Duration};
 
 use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
-    PersistentPromptCachePrefixLookup, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
-    qwen3_5_decoder_cache_layout,
+    GeneratedToken, InferenceEngine, PersistentPromptCacheDiskStoreConfig,
+    PersistentPromptCacheModelContract, PersistentPromptCachePrefixLookup,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    Qwen3_5Tokenizer, qwen3_5_decoder_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 
@@ -26,69 +25,6 @@ struct PersistentPromptCacheParityQualificationOutcome {
     cold_completed_prefill_chunck_token_counts: Vec<u32>,
     restored_cached_token_count: u32,
     restored_generated_token_ids: Vec<u32>,
-}
-
-#[tokio::test]
-#[ignore = "loads and generates with the complete Ornith artifact"]
-async fn should_generate_identical_output_with_prompt_cache_disabled_and_cold_prefill() {
-    require_persistent_prompt_cache_qualification_completion(
-        run_prompt_cache_disabled_cold_prefill_qualification(),
-    )
-    .await;
-}
-
-async fn run_prompt_cache_disabled_cold_prefill_qualification() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_ornith_model_artifact_directory();
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the Ornith artifact should validate before engine loading");
-    let mlx_memory_limits =
-        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
-        validated_artifact,
-        mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
-        None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
-            .expect("the test prefill_chunck_tokens should be valid"),
-        248_069,
-        model_directory.to_path_buf(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
-        true,
-    )
-    .expect("the bounded Ornith engine settings should be valid");
-    qwen3_5_engine
-        .load()
-        .await
-        .expect("the engine should materialize the complete Ornith model");
-    let request_id = RequestId::new(2_000);
-    qwen3_5_engine
-        .start_generation(
-            Qwen3_5InferenceRequest::new(request_id, SAY_HI_PROMPT_TOKEN_IDS.to_vec(), 10)
-                .with_image_pad_token_id(248_069),
-        )
-        .await
-        .expect("the engine should accept one greedy generation request");
-
-    let mut generated_token_ids = Vec::new();
-    while generated_token_ids.len() < 10 {
-        match qwen3_5_engine
-            .decode_next_token(request_id)
-            .await
-            .expect("each engine boundary should advance the request")
-        {
-            GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
-            GeneratedToken::PrefillProgress { .. } => {}
-            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
-            GeneratedToken::EndOfSequence => break,
-        }
-    }
-
-    assert_eq!(
-        generated_token_ids,
-        vec![12_675, 0, 2_500, 628, 353, 1_438, 488, 3_242, 30, 248_046]
-    );
 }
 
 #[tokio::test]
@@ -353,9 +289,11 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
             Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(fixed_prefill_chunck_tokens)
                 .expect("the selected fixed prefill size should be valid")
         }
-        None => Qwen3_5PrefillChunckSizer::production(
+        None => Qwen3_5PrefillChunckSizer::for_optimized_with_behavior(
             maximum_prefill_chunck_tokens,
             vec![1_024, 2_048, 4_096, 8_192],
+            5,
+            32_768,
         )
         .expect("the configured candidates should configure the optimizer"),
     };
@@ -364,11 +302,20 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
     let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
         model_id.clone(),
         model_revision.clone(),
-        qwen3_5_decoder_cache_layout(validated_artifact.config())
-            .expect("the validated artifact should provide a decoder-cache layout"),
+        qwen3_5_decoder_cache_layout(
+            validated_artifact.config(),
+            crate::common::standard_worker_chunking_configuration()
+                .full_attention_key_value_growth_tokens as usize,
+        )
+        .expect("the validated artifact should provide a decoder-cache layout"),
         validated_artifact.config().maximum_position_count() as usize,
         mlx_memory_limits.active_memory_limit_bytes() as u64,
         crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
+        crate::common::standard_worker_chunking_configuration()
+            .prompt_cache_block_tokens
+            .map(|block_token_count| block_token_count as usize),
+        crate::common::standard_worker_chunking_configuration()
+            .prompt_cache_common_prefix_stride_blocks,
     )
     .expect("the qualification model should resolve a persistent storage contract");
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
@@ -383,8 +330,9 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
         prefill_chunck_sizer,
         248_069,
         model_directory.to_path_buf(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the engine should accept the prompt-cache directory");
     qwen3_5_engine
@@ -411,11 +359,20 @@ async fn persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplie
     let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
         validated_artifact.model_id().to_owned(),
         validated_artifact.revision().to_owned(),
-        qwen3_5_decoder_cache_layout(validated_artifact.config())
-            .expect("the validated artifact should provide a decoder-cache layout"),
+        qwen3_5_decoder_cache_layout(
+            validated_artifact.config(),
+            crate::common::standard_worker_chunking_configuration()
+                .full_attention_key_value_growth_tokens as usize,
+        )
+        .expect("the validated artifact should provide a decoder-cache layout"),
         validated_artifact.config().maximum_position_count() as usize,
         mlx_memory_limits.active_memory_limit_bytes() as u64,
         crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
+        crate::common::standard_worker_chunking_configuration()
+            .prompt_cache_block_tokens
+            .map(|block_token_count| block_token_count as usize),
+        crate::common::standard_worker_chunking_configuration()
+            .prompt_cache_common_prefix_stride_blocks,
     )
     .expect("the model should resolve a persistent storage contract");
     persistent_prompt_cache_eligible_prompt_token_ids(
@@ -529,7 +486,7 @@ pub(super) fn persistent_prompt_cache_eligible_prompt_token_ids(
     prompt_token_ids
 }
 
-async fn require_persistent_prompt_cache_qualification_completion(
+pub(super) async fn require_persistent_prompt_cache_qualification_completion(
     test_future: impl Future<Output = ()>,
 ) {
     // The pinned artifact is intentionally large, but a local qualification

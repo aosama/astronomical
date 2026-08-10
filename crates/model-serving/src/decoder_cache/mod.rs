@@ -16,8 +16,7 @@ mod storage_geometry;
 
 #[cfg(feature = "direct-mlx")]
 pub use append_only_attention_state::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, FullAttentionKeyValueState,
-    FullAttentionKeyValueStateAllocationCheckpoint,
+    FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,
 };
 #[cfg(feature = "direct-mlx")]
 pub use convolution_state::{
@@ -28,9 +27,8 @@ pub use gated_delta_recurrent_state::{
     GatedDeltaRecurrentState, GatedDeltaRecurrentStateCheckpoint,
 };
 pub use layout::{
-    DEFAULT_APPEND_ONLY_ATTENTION_CAPACITY_GROWTH_TOKENS, DecoderCacheLayerLayout,
-    DecoderCacheLayout, DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype,
-    DecoderCacheTensorLayout,
+    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCachePersistedTensorLayout,
+    DecoderCacheTensorDtype, DecoderCacheTensorLayout,
 };
 pub use layout_error::DecoderCacheLayoutError;
 #[cfg(feature = "direct-mlx")]

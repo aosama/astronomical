@@ -8,7 +8,6 @@ use std::time::{Duration, Instant};
 
 use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5ExpertWeightMemoryCache, Qwen3_5Model,
-    RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::{MissedTickBehavior, interval, sleep};
@@ -154,8 +153,14 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
 
     eprintln!("[direct-cache-proof] status=progress phase=model_load");
     let model_load_started_at = Instant::now();
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-        .expect("the Ornith model should load with automatic expert residency");
+    let qwen3_5_model = Qwen3_5Model::load(
+        runtime,
+        validated_artifact,
+        &model_directory,
+        false,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the Ornith model should load with automatic expert residency");
     eprintln!(
         "[direct-cache-proof] status=progress phase=model_loaded elapsed_seconds={:.2}",
         model_load_started_at.elapsed().as_secs_f64()
@@ -222,7 +227,7 @@ fn run_one_say_hi_paged_decode(
     config: &astronomical_model_serving::Qwen3_5Config,
     decode_label: &str,
 ) -> Result<(), astronomical_model_serving::Qwen3_5ExecutionError> {
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(config);
     let prefill_started_at = Instant::now();
     qwen3_5_model.prefill_chunck(
         &SAY_HI_PROMPT_TOKEN_IDS[..SAY_HI_PROMPT_TOKEN_IDS.len() - 1],

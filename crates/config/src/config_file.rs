@@ -9,9 +9,14 @@ use serde::Deserialize;
 use super::logging_config::LogLevel;
 use super::{
     AstronomicalConfigError, CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME,
-    DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES, DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
-    maximum_mlx_memory_gb_to_bytes, parse_loopback_bind_address, prompt_cache_size_gb_to_bytes,
-    resolve_prefill_chunck_sizing_policy,
+    DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
+    DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+    DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
+    DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL, DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
+    DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
+    DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS, DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
+    DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS, maximum_mlx_memory_gb_to_bytes,
+    parse_loopback_bind_address, prompt_cache_size_gb_to_bytes,
 };
 
 static TEMPORARY_CONFIG_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -24,9 +29,8 @@ pub(crate) struct UserConfigFile {
     pub(crate) model_directories: Vec<PathBuf>,
     /// Per-request output-token ceiling. Defaults to 20,480 when not set.
     pub(crate) max_output_tokens: Option<u32>,
-    pub(crate) prefill_chunck_size_optimizer_enabled: Option<bool>,
-    pub(crate) fixed_prefill_chunck_tokens: Option<u32>,
-    pub(crate) optimizer_prefill_chunck_token_candidates: Option<Vec<u32>>,
+    #[serde(default)]
+    pub(crate) chunking: ChunkingConfigFile,
     /// Enables bounded model-loading and request performance-attribution reports.
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     pub(crate) performance_attribution_enabled: Option<bool>,
@@ -45,6 +49,33 @@ pub(crate) struct UserConfigFile {
     pub(crate) supervisor: Option<SupervisorConfigFile>,
     pub(crate) prompt_cache_max_size_gb: Option<u64>,
     pub(crate) logging: Option<LoggingConfigFile>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ChunkingConfigFile {
+    /// Enables measured candidate selection instead of the fixed token count.
+    pub(crate) prefill_size_optimizer_enabled: Option<bool>,
+    /// Required prompt-processing chunk length when optimization is disabled.
+    pub(crate) fixed_prefill_tokens: Option<u32>,
+    /// Strictly increasing token lengths available to the adaptive optimizer.
+    pub(crate) optimizer_prefill_token_candidates: Option<Vec<u32>>,
+    /// Append-only attention capacity added by each storage growth operation.
+    pub(crate) full_attention_key_value_growth_tokens: Option<u32>,
+    /// Maximum prompt rows evaluated by one speculative drafter forward.
+    pub(crate) speculative_prefill_draft_forward_tokens: Option<u32>,
+    /// Multi-token decoder-layer submission interval; zero keeps one lazy graph.
+    pub(crate) prefill_graph_submission_layer_interval: Option<u32>,
+    /// One-token decoder-layer submission interval; zero disables intermediate submission.
+    pub(crate) generation_graph_submission_layer_interval: Option<u32>,
+    /// Number of completed measurements retained for each optimizer candidate.
+    pub(crate) prefill_optimizer_observation_window: Option<u32>,
+    /// Prompt-position width represented by one optimizer context bucket.
+    pub(crate) prefill_optimizer_position_bucket_tokens: Option<u32>,
+    /// Exact persistent-cache block length, or null for model-derived sizing.
+    pub(crate) prompt_cache_block_tokens: Option<u32>,
+    /// Cache-block interval between retained common-prefix restart checkpoints.
+    pub(crate) prompt_cache_common_prefix_stride_blocks: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -101,8 +132,18 @@ pub(crate) fn read_user_config_file(
                 "model_directories": [],
                 "mtp_enabled": true,
                 "persistent_prompt_cache_enabled": true,
-                "prefill_chunck_size_optimizer_enabled": true,
-                "optimizer_prefill_chunck_token_candidates": DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
+                "chunking": {
+                    "prefill_size_optimizer_enabled": true,
+                    "optimizer_prefill_token_candidates": DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
+                    "full_attention_key_value_growth_tokens": DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
+                    "speculative_prefill_draft_forward_tokens": DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
+                    "prefill_graph_submission_layer_interval": DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                    "generation_graph_submission_layer_interval": DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                    "prefill_optimizer_observation_window": DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
+                    "prefill_optimizer_position_bucket_tokens": DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
+                    "prompt_cache_block_tokens": null,
+                    "prompt_cache_common_prefix_stride_blocks": DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS
+                },
                 "prompt_cache_max_size_gb": DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
             }))
             .map_err(|serialization_error| {
@@ -143,13 +184,7 @@ pub(crate) fn validate_user_config_file(
     for model_directory_path in &user_config_file.model_directories {
         validate_optional_absolute_path("model_directories", Some(model_directory_path))?;
     }
-    resolve_prefill_chunck_sizing_policy(
-        user_config_file.prefill_chunck_size_optimizer_enabled,
-        user_config_file.fixed_prefill_chunck_tokens,
-        user_config_file
-            .optimizer_prefill_chunck_token_candidates
-            .as_deref(),
-    )?;
+    super::chunking_config::ChunkingConfig::resolve(&user_config_file.chunking)?;
     super::speculative_prefill_config::resolve_speculative_prefill_config(
         &user_config_file.speculative_prefill,
     )?;

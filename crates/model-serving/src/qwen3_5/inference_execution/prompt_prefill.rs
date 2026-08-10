@@ -69,46 +69,56 @@ impl Qwen3_5EngineState {
             && active_request.can_use_persistent_prompt_cache
             && !active_request.has_optional_prediction_session()
             && !speculative_prefill_sparse_conversation_range_is_active;
-        let persistent_prompt_cache_block_token_count = self
-            .persistent_prompt_cache
-            .as_ref()
-            .map(|persistent_prompt_cache| {
-                persistent_prompt_cache
+        // Cache-disabled and request-ineligible paths stop here: they do not
+        // plan checkpoint boundaries, derive a synthetic block length, or
+        // reserve checkpoint/publication memory. Cache-enabled execution uses
+        // the one contract owned by the open store.
+        let (all_completed_prefill_chunck_tokens, persistent_prompt_cache_block_token_count) =
+            if capture_is_eligible {
+                let persistent_prompt_cache_block_token_count = self
+                    .persistent_prompt_cache
+                    .as_ref()
+                    .ok_or_else(|| {
+                        fatal_engine_error(
+                            "eligible prompt-cache capture has no persistent cache owner",
+                        )
+                    })?
                     .model_contract_ref()
-                    .block_token_count()
-            })
-            .unwrap_or(1);
-        let planned_completed_prefill_chunck_tokens = if capture_is_eligible {
-            persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
-                prefill_start,
-                prefill_end,
-                persistent_prompt_cache_block_token_count,
-            )
-        } else {
-            Vec::new()
-        };
-        let capture_is_active = capture_is_eligible;
-        let all_completed_prefill_chunck_tokens = if capture_is_active {
-            planned_completed_prefill_chunck_tokens
-        } else {
-            Vec::new()
-        };
+                    .block_token_count();
+                (
+                    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
+                        prefill_start,
+                        prefill_end,
+                        persistent_prompt_cache_block_token_count,
+                    ),
+                    Some(persistent_prompt_cache_block_token_count),
+                )
+            } else {
+                (Vec::new(), None)
+            };
         let mut intermediate_completed_prefill_chunck_tokens =
             all_completed_prefill_chunck_tokens.clone();
         if intermediate_completed_prefill_chunck_tokens.last().copied() == Some(prefill_token_count)
         {
             intermediate_completed_prefill_chunck_tokens.pop();
         }
-        let boundary_checkpoint_workspace_bytes = model
-            .decoder_cache_layout()
-            .boundary_snapshot_payload_byte_count()
-            .map_err(|error| {
-                fatal_engine_error(format!(
-                    "failed to project boundary checkpoint workspace: {error}"
-                ))
-            })?
-            .checked_mul(intermediate_completed_prefill_chunck_tokens.len())
-            .ok_or_else(|| fatal_engine_error("boundary checkpoint workspace bytes overflowed"))?;
+        let boundary_checkpoint_workspace_bytes =
+            if intermediate_completed_prefill_chunck_tokens.is_empty() {
+                0
+            } else {
+                model
+                    .decoder_cache_layout()
+                    .boundary_snapshot_payload_byte_count()
+                    .map_err(|error| {
+                        fatal_engine_error(format!(
+                            "failed to project boundary checkpoint workspace: {error}"
+                        ))
+                    })?
+                    .checked_mul(intermediate_completed_prefill_chunck_tokens.len())
+                    .ok_or_else(|| {
+                        fatal_engine_error("boundary checkpoint workspace bytes overflowed")
+                    })?
+            };
         let direct_publication_workspace_bytes = if !all_completed_prefill_chunck_tokens.is_empty()
         {
             self.persistent_prompt_cache
@@ -352,6 +362,12 @@ impl Qwen3_5EngineState {
                             (consumed_visual_embedding_count, Vec::new())
                         })
                 } else {
+                    let persistent_prompt_cache_block_token_count =
+                        persistent_prompt_cache_block_token_count.ok_or_else(|| {
+                            fatal_engine_error(
+                                "planned visual prompt-cache checkpoints have no block contract",
+                            )
+                        })?;
                     model
                     .prefill_chunck_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
                     &active_request.input_token_ids[prefill_start..prefill_end],
@@ -426,6 +442,12 @@ impl Qwen3_5EngineState {
                             )
                             .map(|()| Vec::new())
                     } else {
+                        let persistent_prompt_cache_block_token_count =
+                            persistent_prompt_cache_block_token_count.ok_or_else(|| {
+                                fatal_engine_error(
+                                    "planned text prompt-cache checkpoints have no block contract",
+                                )
+                            })?;
                         model
                             .prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
                                 &active_request.input_token_ids[prefill_start..prefill_end],

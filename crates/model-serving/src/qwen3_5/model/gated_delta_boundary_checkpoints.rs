@@ -3,9 +3,9 @@ use astronomical_runtime_integration::{
     MlxRuntime, MlxRuntimeError,
 };
 
-use super::gated_delta_sequence::{
-    gated_delta_kernel_source, gated_delta_sequence_error, template_arguments,
-    validate_gated_delta_sequence_shapes,
+use super::gated_delta_sequence::gated_delta_kernel_source;
+use super::gated_delta_sequence_contract::{
+    gated_delta_sequence_error, template_arguments, validate_gated_delta_sequence_shapes,
 };
 
 const GATED_DELTA_CHECKPOINT_SETUP_SOURCE: &str = r#"

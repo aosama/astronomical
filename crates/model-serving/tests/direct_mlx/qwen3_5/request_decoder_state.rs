@@ -27,7 +27,8 @@ async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
 #[tokio::test]
 async fn should_grow_full_attention_kv_capacity_in_256_token_steps() {
     let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let mut kv_state = FullAttentionKeyValueState::empty();
+    let mut kv_state = FullAttentionKeyValueState::empty_with_growth_tokens(256)
+        .expect("the test attention growth should be valid");
     assert!(
         kv_state.capacity_tokens() == 0,
         "an empty KV state should report zero capacity before the first update"
@@ -349,7 +350,8 @@ async fn should_grow_the_mtp_slab_by_one_configured_step_when_update_crosses_cap
 #[tokio::test]
 async fn should_return_active_view_covering_only_written_tokens() {
     let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let mut kv_state = FullAttentionKeyValueState::empty();
+    let mut kv_state = FullAttentionKeyValueState::empty_with_growth_tokens(256)
+        .expect("the test attention growth should be valid");
 
     let new_keys = runtime
         .array_from_f32(&[0.0; 51_200], &[1, 2, 100, 256])
@@ -380,7 +382,7 @@ async fn should_restore_decoder_state_stack_to_checkpoint_after_mtp_attention_up
     let full_attention_layer_index = (0..ornith_config.layer_count() as usize)
         .find(|layer_index| ornith_config.decoder_layer_is_full_attention(*layer_index))
         .expect("the certified config should contain at least one full-attention layer");
-    let mut decoder_state_stack = RequestDecoderStateStack::empty_from_config(&ornith_config);
+    let mut decoder_state_stack = crate::common::standard_request_decoder_state(&ornith_config);
 
     let initial_keys = runtime
         .array_from_f32(&[1.0], &[1, 1, 1, 1])
@@ -504,7 +506,7 @@ async fn should_roll_convolution_state_buffer_by_token_count() {
 async fn should_create_empty_decoder_state_stack_in_certified_layer_order() {
     let ornith_config = certified_ornith_config();
     let decoder_layer_count = ornith_config.layer_count() as usize;
-    let decoder_state_stack = RequestDecoderStateStack::empty_from_config(&ornith_config);
+    let decoder_state_stack = crate::common::standard_request_decoder_state(&ornith_config);
 
     assert_eq!(
         decoder_state_stack.layer_count(),
@@ -539,7 +541,7 @@ async fn should_create_empty_decoder_state_stack_in_certified_layer_order() {
 async fn should_expose_decoder_state_stack_mutably_in_the_same_decoder_order() {
     let ornith_config = certified_ornith_config();
     let decoder_layer_count = ornith_config.layer_count() as usize;
-    let mut decoder_state_stack = RequestDecoderStateStack::empty_from_config(&ornith_config);
+    let mut decoder_state_stack = crate::common::standard_request_decoder_state(&ornith_config);
 
     for layer_index in 0..decoder_layer_count {
         let layer_state = decoder_state_stack
@@ -564,7 +566,7 @@ async fn should_expose_decoder_state_stack_mutably_in_the_same_decoder_order() {
 async fn should_report_inconsistent_linear_layer_tensor_allocation() {
     let (_direct_mlx_guard, runtime) = test_runtime().await;
     let mut decoder_state_stack =
-        RequestDecoderStateStack::empty_from_config(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&certified_ornith_config());
     let linear_layer_state = decoder_state_stack
         .layer_mut(0)
         .expect("layer 0 should exist in the certified decoder stack");

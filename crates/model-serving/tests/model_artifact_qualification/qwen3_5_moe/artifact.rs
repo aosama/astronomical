@@ -3,10 +3,9 @@ use std::fs;
 use astronomical_model_serving::Qwen3_5ArtifactValidator;
 #[cfg(feature = "direct-mlx")]
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5Engine,
-    Qwen3_5FeedForwardArchitecture, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
-    Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    Qwen3_5Engine, Qwen3_5FeedForwardArchitecture, Qwen3_5InferenceRequest,
+    Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
 };
 
 /// Links or copies a regular file from source to target, falling back to copy
@@ -180,8 +179,9 @@ async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expe
             .expect("the BF16 qualification prefill chunk size should be valid"),
         248_069,
         model_directory,
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         false,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the native BF16 paged engine settings should be valid");
     eprintln!("native-bf16-paging status=progress phase=model_load");
@@ -378,7 +378,7 @@ async fn should_stop_when_the_configured_drafter_prefix_restore_fails() {
         lookahead_token_count: 2,
         importance_pooling_kernel_token_count: 3,
     };
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_target_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -387,7 +387,7 @@ async fn should_stop_when_the_configured_drafter_prefix_restore_fails() {
             .expect("the qualification prefill chunk size should be valid"),
         target_think_end_token_id,
         target_model_directory_path,
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
         true,
         speculative_prefill_configuration,

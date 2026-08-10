@@ -4,10 +4,6 @@ use super::append_only_attention_state_operations::{
     active_view, build_updated_storage, full_attention_error, projected_capacity_tokens,
 };
 
-/// Default capacity-growth granularity for the full-attention KV slab. Matches
-/// the 256-token capacity-growth policy.
-pub const DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS: i32 = 256;
-
 pub(super) const STATE_DIMENSION_TOKEN_AXIS: usize = 2;
 pub(super) const FULL_ATTENTION_OPERATION: &str = "update the in-memory full-attention KV state";
 
@@ -36,12 +32,6 @@ pub struct FullAttentionKeyValueStateAllocationCheckpoint {
 }
 
 impl FullAttentionKeyValueState {
-    /// Creates empty KV state without allocating MLX arrays.
-    #[must_use]
-    pub fn empty() -> Self {
-        Self::empty_with_validated_growth_tokens(DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS)
-    }
-
     pub(crate) fn empty_with_validated_growth_tokens(
         full_attention_kv_state_growth_tokens: i32,
     ) -> Self {

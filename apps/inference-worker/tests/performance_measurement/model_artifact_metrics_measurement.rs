@@ -80,11 +80,11 @@ fn should_disable_prefill_chunck_optimizer_for_summary_metrics_worker() {
     .expect("the metrics worker config should be JSON");
 
     assert_eq!(
-        configuration_document["prefill_chunck_size_optimizer_enabled"], false,
+        configuration_document["chunking"]["prefill_size_optimizer_enabled"], false,
         "summary metrics must measure fixed-size prefill chunks, not adaptive optimizer output"
     );
     assert_eq!(
-        configuration_document["fixed_prefill_chunck_tokens"],
+        configuration_document["chunking"]["fixed_prefill_tokens"],
         FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS,
         "summary metrics should use the fixed benchmark prefill chunk size"
     );
@@ -251,8 +251,10 @@ fn isolated_prompt_cache_worker_launcher(
         .expect("the isolated prompt-cache metrics configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
-        "prefill_chunck_size_optimizer_enabled": false,
-        "fixed_prefill_chunck_tokens": FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS,
+        "chunking": {
+            "prefill_size_optimizer_enabled": false,
+            "fixed_prefill_tokens": FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS,
+        },
     });
     fs::write(
         configuration_directory.join("config.json"),

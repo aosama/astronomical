@@ -62,7 +62,8 @@ pub enum PerformanceOperation {
     MtpPromptHistoryInitializationSpan,
     MtpTargetVerificationSynchronizationWait,
     MtpRejectedDraftStateRestoration,
-    PrefillStateEvaluationSynchronizationWait,
+    PrefillStateAsyncEvaluationSubmission,
+    PrefillStateGraphicsProcessorCompletionWait,
     ExpertBoundedSafetensorsLazyPageConstruction,
     ExpertWeightMemoryCachePageAssemblyGraphConstruction,
     ExpertPagingDiagnosticLogging,
@@ -140,7 +141,8 @@ impl PerformanceOperation {
         Self::MtpPromptHistoryInitializationSpan,
         Self::MtpTargetVerificationSynchronizationWait,
         Self::MtpRejectedDraftStateRestoration,
-        Self::PrefillStateEvaluationSynchronizationWait,
+        Self::PrefillStateAsyncEvaluationSubmission,
+        Self::PrefillStateGraphicsProcessorCompletionWait,
         Self::ExpertBoundedSafetensorsLazyPageConstruction,
         Self::ExpertWeightMemoryCachePageAssemblyGraphConstruction,
         Self::ExpertPagingDiagnosticLogging,
@@ -267,8 +269,11 @@ impl PerformanceOperation {
                 "mtp_target_verification_synchronization_wait"
             }
             Self::MtpRejectedDraftStateRestoration => "mtp_rejected_draft_state_restoration",
-            Self::PrefillStateEvaluationSynchronizationWait => {
-                "prefill_state_evaluation_synchronization_wait"
+            Self::PrefillStateAsyncEvaluationSubmission => {
+                "prefill_state_async_evaluation_submission"
+            }
+            Self::PrefillStateGraphicsProcessorCompletionWait => {
+                "prefill_state_graphics_processor_completion_wait"
             }
             Self::ExpertBoundedSafetensorsLazyPageConstruction => {
                 "expert_bounded_safetensors_lazy_page_construction"

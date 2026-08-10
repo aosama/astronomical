@@ -223,8 +223,10 @@ pub(super) fn write_cache_pressure_worker_config(
         "prompt_cache_max_size_gb": PROMPT_CACHE_MAXIMUM_SIZE_GB,
         "performance_attribution_enabled": true,
         "mtp_enabled": false,
-        "prefill_chunck_size_optimizer_enabled": false,
-        "fixed_prefill_chunck_tokens": 2_048,
+        "chunking": {
+            "prefill_size_optimizer_enabled": false,
+            "fixed_prefill_tokens": 2_048,
+        },
     });
     fs::write(
         configuration_directory.join("config.json"),

@@ -34,6 +34,8 @@ async fn should_checkpoint_gated_delta_state_at_every_requested_boundary() {
         .expect("the initial recurrent state should be valid");
     let checkpoint_kernel = qwen3_5_gated_delta_checkpoint_kernel()
         .expect("the checkpoint gated-delta kernel should construct");
+    let ordinary_kernel =
+        qwen3_5_gated_delta_kernel().expect("the ordinary gated-delta kernel should construct");
 
     let checkpoint_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
         &runtime,
@@ -49,8 +51,6 @@ async fn should_checkpoint_gated_delta_state_at_every_requested_boundary() {
     )
     .expect("the checkpoint gated-delta sequence should build a valid graph");
 
-    let ordinary_kernel =
-        qwen3_5_gated_delta_kernel().expect("the ordinary gated-delta kernel should construct");
     let segment_inputs = gated_delta_inputs(&runtime, CHECKPOINT_INTERVAL_TOKEN_COUNT);
     let mut segmented_recurrent_state = initial_recurrent_state;
     let mut segmented_outputs = Vec::new();
@@ -119,7 +119,6 @@ async fn should_checkpoint_reject_invalid_gated_delta_boundary_plans() {
         .expect("the validation recurrent state should be valid");
     let checkpoint_kernel = qwen3_5_gated_delta_checkpoint_kernel()
         .expect("the checkpoint gated-delta kernel should construct");
-
     for (completed_prefill_chunck_tokens, checkpoint_interval_token_count) in [
         (vec![], 2),
         (vec![0], 2),

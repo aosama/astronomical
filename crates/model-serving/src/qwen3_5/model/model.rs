@@ -18,6 +18,7 @@ use super::decoder_layer_weights::{
 };
 use super::error::invalid_request_decoder_state;
 use super::forward_contract::validate_forward_input;
+use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use super::{
     Qwen3_5AttentionCapture, Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel,
     Qwen3_5Weights, RequestDecoderStateStack,
@@ -44,6 +45,7 @@ pub struct Qwen3_5Model {
     pub(crate) target_verification_quantized_linear_kernel: MlxMetalKernel,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
+    pub(crate) chunking: Qwen3_5ModelChunkingConfiguration,
     /// Model-owned BF16 scalar for the query normalization scale in every
     /// linear-attention forward pass.
     pub(crate) inverse_linear_head_dimension_scale: MlxArray,

@@ -108,15 +108,16 @@ pub(super) fn prepare_prefill_qualification_worker(
         .expect("the isolated benchmark configuration directory should be created");
     let mut configuration_document = json!({
         "model_directories": [model_directory],
+        "chunking": {},
     });
     match fixed_prefill_chunck_tokens {
         Some(configured_fixed_prefill_chunck_tokens) => {
-            configuration_document["prefill_chunck_size_optimizer_enabled"] = json!(false);
-            configuration_document["fixed_prefill_chunck_tokens"] =
+            configuration_document["chunking"]["prefill_size_optimizer_enabled"] = json!(false);
+            configuration_document["chunking"]["fixed_prefill_tokens"] =
                 json!(configured_fixed_prefill_chunck_tokens);
         }
         None => {
-            configuration_document["prefill_chunck_size_optimizer_enabled"] = json!(true);
+            configuration_document["chunking"]["prefill_size_optimizer_enabled"] = json!(true);
         }
     }
     if let Some(configured_maximum_mlx_memory_gb) = maximum_mlx_memory_gb {

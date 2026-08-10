@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, ChatModelCapabilities, WorkerPersistentPromptCacheRequestDiagnostics,
+    ChatGenerationOutput, ChatModelCapabilities, WorkerChunkingConfiguration,
+    WorkerPersistentPromptCacheRequestDiagnostics,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -180,18 +181,6 @@ pub enum WorkerLogLevel {
     Trace,
 }
 
-/// Prompt-processing sizing policy supplied by the supervisor.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum WorkerPrefillChunckSizingPolicy {
-    Optimized {
-        optimizer_prefill_chunck_token_candidates: Vec<u32>,
-    },
-    Fixed {
-        fixed_prefill_chunck_tokens: u32,
-    },
-}
-
 /// Resolved optional draft-assisted speculative-prefill settings supplied to the worker.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -239,7 +228,7 @@ pub struct WorkerStartupConfiguration {
     pub global_prompt_cache_root_directory: PathBuf,
     pub global_prompt_cache_maximum_size_bytes: u64,
     pub persistent_prompt_cache_enabled: bool,
-    pub prefill_chunck_sizing_policy: WorkerPrefillChunckSizingPolicy,
+    pub chunking: WorkerChunkingConfiguration,
     pub optimizer_state_directory: Option<PathBuf>,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub mtp_enabled: bool,

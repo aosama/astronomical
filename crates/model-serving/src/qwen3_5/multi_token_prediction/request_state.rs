@@ -4,8 +4,7 @@ use astronomical_runtime_integration::MlxArray;
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::decoder_cache::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, FullAttentionKeyValueState,
-    FullAttentionKeyValueStateAllocationCheckpoint,
+    FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,
 };
 use crate::qwen3_5::Qwen3_5SamplingStrategy;
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
@@ -219,14 +218,6 @@ pub struct Qwen3_5MtpRequestStateAllocationCheckpoint {
 }
 
 impl Qwen3_5MtpRequestState {
-    /// Creates empty MTP state using the standard full-attention slab-growth policy.
-    #[must_use]
-    pub fn empty() -> Self {
-        Self {
-            full_attention_key_value_state: FullAttentionKeyValueState::empty(),
-        }
-    }
-
     /// Creates empty MTP state with an explicit full-attention slab-growth policy.
     pub fn empty_with_growth_tokens(
         full_attention_kv_state_growth_tokens: i32,
@@ -236,17 +227,6 @@ impl Qwen3_5MtpRequestState {
                 full_attention_kv_state_growth_tokens,
             )?,
         })
-    }
-
-    pub(crate) fn empty_with_validated_growth_tokens(
-        full_attention_kv_state_growth_tokens: i32,
-    ) -> Self {
-        Self {
-            full_attention_key_value_state:
-                FullAttentionKeyValueState::empty_with_validated_growth_tokens(
-                    full_attention_kv_state_growth_tokens,
-                ),
-        }
     }
 
     /// Returns the MTP full-attention history's logical token length.
@@ -350,12 +330,6 @@ impl Qwen3_5MtpRequestState {
 
     pub(in crate::qwen3_5) fn full_attention_key_value_state(&self) -> &FullAttentionKeyValueState {
         &self.full_attention_key_value_state
-    }
-}
-
-impl Default for Qwen3_5MtpRequestState {
-    fn default() -> Self {
-        Self::empty_with_validated_growth_tokens(DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS)
     }
 }
 

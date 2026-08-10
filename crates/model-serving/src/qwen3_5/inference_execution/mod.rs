@@ -47,7 +47,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::{
-    RequestId, SpeculativePrefillRuntimeState, WorkerEvent, WorkerSpeculativePrefillConfiguration,
+    RequestId, SpeculativePrefillRuntimeState, WorkerChunkingConfiguration, WorkerEvent,
+    WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 
@@ -108,10 +109,11 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
-        full_attention_kv_state_growth_tokens: i32,
+        chunking: WorkerChunkingConfiguration,
         mtp_enabled: bool,
+        speculative_prefill: WorkerSpeculativePrefillConfiguration,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
-        Self::new_with_prefill_chunck_sizer_and_performance_attribution(
+        Self::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
             allocator_cache_memory_limit_bytes,
@@ -119,17 +121,18 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             prefill_chunck_sizer,
             think_end_token_id,
             model_directory,
-            full_attention_kv_state_growth_tokens,
+            chunking,
             true,
             mtp_enabled,
+            speculative_prefill,
             PerformanceAttribution::disabled(),
             PerformanceAttributionLog::disabled(),
         )
     }
 
-    /// Starts the owner thread with explicit model-loading performance attribution ownership.
+    /// Starts the owner thread with every model-serving work boundary resolved.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_prefill_chunck_sizer_and_performance_attribution(
+    pub fn new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
         allocator_cache_memory_limit_bytes: usize,
@@ -137,57 +140,17 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
-        full_attention_kv_state_growth_tokens: i32,
-        adaptive_ram_growth_guard_enabled: bool,
-        mtp_enabled: bool,
-        model_loading_performance_attribution: PerformanceAttribution,
-        performance_attribution_log: PerformanceAttributionLog,
-    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
-        Self::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
-            validated_artifact,
-            active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
-            prefill_chunck_sizer,
-            think_end_token_id,
-            model_directory,
-            full_attention_kv_state_growth_tokens,
-            adaptive_ram_growth_guard_enabled,
-            mtp_enabled,
-            WorkerSpeculativePrefillConfiguration {
-                enabled: false,
-                target_model_id: None,
-                draft_model_id: None,
-                draft_model_directory: None,
-                minimum_prompt_tokens: 8_192,
-                keep_percentage: 20,
-                selection_chunck_token_count: 32,
-                mandatory_trailing_token_count: 512,
-                lookahead_token_count: 8,
-                importance_pooling_kernel_token_count: 13,
-            },
-            model_loading_performance_attribution,
-            performance_attribution_log,
-        )
-    }
-
-    /// Starts the owner thread with optional draft-assisted speculative prefill.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
-        validated_artifact: ValidatedQwen3_5Artifact,
-        active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
-        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-        prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
-        think_end_token_id: u32,
-        model_directory: PathBuf,
-        full_attention_kv_state_growth_tokens: i32,
+        chunking: WorkerChunkingConfiguration,
         adaptive_ram_growth_guard_enabled: bool,
         mtp_enabled: bool,
         speculative_prefill: WorkerSpeculativePrefillConfiguration,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+        let full_attention_kv_state_growth_tokens =
+            i32::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
+                fatal_engine_error("full-attention growth tokens exceed Int32 range")
+            })?;
         let end_of_sequence_token_ids = validated_artifact
             .config()
             .end_of_sequence_token_ids()
@@ -244,6 +207,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             persistent_prompt_cache: None,
             speculative_prefill_draft_persistent_prompt_cache: None,
             prefill_chunck_sizer,
+            chunking,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
             mtp_enabled,
@@ -309,6 +273,7 @@ pub struct Qwen3_5InferenceExecution {
     pub(in super::super) speculative_prefill_draft_persistent_prompt_cache:
         Option<Arc<PersistentPromptCacheDiskStore>>,
     prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+    chunking: WorkerChunkingConfiguration,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
     vocabulary_size: u32,
     /// User preference: whether MTP is enabled.

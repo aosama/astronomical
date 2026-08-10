@@ -28,10 +28,10 @@ impl Qwen3_5EngineState {
         )>,
         Qwen3_5ExecutionError,
     > {
-        let Some(target_state_contract) = self.speculative_prefill_target_state_contract() else {
+        let Some(target_persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() else {
             return Ok(None);
         };
-        let Some(target_persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() else {
+        let Some(target_state_contract) = self.speculative_prefill_target_state_contract() else {
             return Ok(None);
         };
         let target_model = self
@@ -104,6 +104,11 @@ impl Qwen3_5EngineState {
         if !active_request.should_use_speculative_prefill {
             return Ok(());
         }
+        let (Some(target_persistent_prompt_cache), Some(target_model)) =
+            (self.persistent_prompt_cache.as_ref(), self.model.as_ref())
+        else {
+            return Ok(());
+        };
         let Some(target_state_contract) = self.speculative_prefill_target_state_contract() else {
             return Err(
                 super::speculative_prefill_failure::configured_speculative_prefill_failure(
@@ -112,11 +117,6 @@ impl Qwen3_5EngineState {
                     "the target-state contract is unavailable",
                 ),
             );
-        };
-        let (Some(target_persistent_prompt_cache), Some(target_model)) =
-            (self.persistent_prompt_cache.as_ref(), self.model.as_ref())
-        else {
-            return Ok(());
         };
         if active_request.take_forced_speculative_prefill_failure_for_tests(
             Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetStatePersistence,

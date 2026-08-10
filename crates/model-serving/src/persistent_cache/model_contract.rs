@@ -23,6 +23,7 @@ pub struct PersistentPromptCacheModelContract {
     maximum_context_token_count: usize,
     effective_mlx_memory_ceiling_bytes: u64,
     block_token_count: usize,
+    common_prefix_checkpoint_stride_blocks: u32,
     sequence_state_payload_bytes_per_token: usize,
     sequence_state_payload_bytes_per_block: usize,
     boundary_state_payload_bytes: usize,
@@ -44,6 +45,8 @@ impl PersistentPromptCacheModelContract {
         maximum_context_token_count: usize,
         effective_mlx_memory_ceiling_bytes: u64,
         global_ssd_quota_bytes: u64,
+        configured_block_token_count: Option<usize>,
+        common_prefix_checkpoint_stride_blocks: u32,
     ) -> Result<Self, PersistentPromptCacheModelContractError> {
         if model_id.is_empty() {
             return Err(PersistentPromptCacheModelContractError::EmptyModelId);
@@ -53,6 +56,11 @@ impl PersistentPromptCacheModelContract {
         }
         if maximum_context_token_count == 0 {
             return Err(PersistentPromptCacheModelContractError::ZeroMaximumContextTokenCount);
+        }
+        if common_prefix_checkpoint_stride_blocks == 0 {
+            return Err(
+                PersistentPromptCacheModelContractError::ZeroCommonPrefixCheckpointStrideBlocks,
+            );
         }
         if !decoder_cache_layout.has_sequence_state() && !decoder_cache_layout.has_boundary_state()
         {
@@ -69,19 +77,40 @@ impl PersistentPromptCacheModelContract {
         // tuning constant. Matching append-only allocation growth avoids capture boundaries that
         // force incompatible state reshaping, while the quota-derived size prevents a laptop
         // with less SSD capacity from accepting a state block it can never retain.
-        let mut block_token_count = derive_block_token_count(
-            maximum_context_token_count,
-            persistence_alignment_token_count,
-            sequence_state_payload_bytes_per_token,
-            boundary_state_payload_bytes,
-            global_ssd_quota_bytes,
-        )?;
+        let block_token_count_is_user_configured = configured_block_token_count.is_some();
+        let mut block_token_count = match configured_block_token_count {
+            Some(configured_block_token_count)
+                if configured_block_token_count > 0
+                    && configured_block_token_count <= maximum_context_token_count
+                    && configured_block_token_count
+                        .is_multiple_of(persistence_alignment_token_count) =>
+            {
+                configured_block_token_count
+            }
+            Some(_) => {
+                return Err(
+                    PersistentPromptCacheModelContractError::InvalidConfiguredBlockTokenCount {
+                        required_alignment_tokens: persistence_alignment_token_count,
+                        maximum_context_tokens: maximum_context_token_count,
+                    },
+                );
+            }
+            None => derive_block_token_count(
+                maximum_context_token_count,
+                persistence_alignment_token_count,
+                sequence_state_payload_bytes_per_token,
+                boundary_state_payload_bytes,
+                global_ssd_quota_bytes,
+            )?,
+        };
         let maximum_block_manifest_file_bytes =
             maximum_block_manifest_file_bytes(maximum_context_token_count)?;
-        // A first-pass block size can still produce too many repeated headers or
-        // recurrent snapshots for one maximum-length chain. Grow by the model's
-        // required alignment until that complete chain fits the configured SSD
-        // quota; never derive a laptop-specific literal.
+        // Automatic sizing may need a larger aligned block to amortize repeated
+        // manifests and recurrent snapshots across a maximum-length chain. An
+        // explicit user block length is different: it is part of the requested
+        // storage topology and must either fit exactly or fail clearly. Silently
+        // changing it would make status, fingerprints, and observed boundaries
+        // disagree with configuration.
         let (sequence_state_file_bytes, boundary_state_file_bytes, maximum_committed_block_bytes) = loop {
             let sequence_state_file_bytes = exact_state_file_bytes(
                 block_token_count,
@@ -107,6 +136,15 @@ impl PersistentPromptCacheModelContract {
                     sequence_state_file_bytes,
                     boundary_state_file_bytes,
                     maximum_committed_block_bytes,
+                );
+            }
+            if block_token_count_is_user_configured {
+                return Err(
+                    PersistentPromptCacheModelContractError::ConfiguredBlockChainExceedsSsdQuota {
+                        configured_block_tokens: block_token_count,
+                        maximum_chain_bytes,
+                        global_ssd_quota_bytes,
+                    },
                 );
             }
             let next_block_token_count = block_token_count
@@ -173,13 +211,15 @@ impl PersistentPromptCacheModelContract {
             );
         }
         // The fingerprint is compatibility identity, not merely model identity.
-        // Any layout, dtype, block-size, format, model, or revision change must
-        // prevent old files from being joined to the new chain.
+        // Any layout, dtype, block size, retained-checkpoint stride, format,
+        // model, or revision change must prevent old files from being joined to
+        // a chain whose capture and retention topology differs.
         let storage_contract_fingerprint = storage_contract_fingerprint(
             &model_id,
             &model_revision,
             &decoder_cache_layout,
             block_token_count,
+            common_prefix_checkpoint_stride_blocks,
         );
 
         Ok(Self {
@@ -189,6 +229,7 @@ impl PersistentPromptCacheModelContract {
             maximum_context_token_count,
             effective_mlx_memory_ceiling_bytes,
             block_token_count,
+            common_prefix_checkpoint_stride_blocks,
             sequence_state_payload_bytes_per_token,
             sequence_state_payload_bytes_per_block,
             boundary_state_payload_bytes,
@@ -225,6 +266,11 @@ impl PersistentPromptCacheModelContract {
     #[must_use]
     pub const fn block_token_count(&self) -> usize {
         self.block_token_count
+    }
+
+    #[must_use]
+    pub const fn common_prefix_checkpoint_stride_blocks(&self) -> u32 {
+        self.common_prefix_checkpoint_stride_blocks
     }
 
     #[must_use]
@@ -377,6 +423,7 @@ fn storage_contract_fingerprint(
     model_revision: &str,
     decoder_cache_layout: &DecoderCacheLayout,
     block_token_count: usize,
+    common_prefix_checkpoint_stride_blocks: u32,
 ) -> [u8; 32] {
     // Every variable-length field is length-prefixed to prevent concatenation
     // ambiguity (`ab` + `c` versus `a` + `bc`). Numeric fields use fixed-width
@@ -389,6 +436,7 @@ fn storage_contract_fingerprint(
     update_length_prefixed_bytes(&mut fingerprint_digest, model_id.as_bytes());
     update_length_prefixed_bytes(&mut fingerprint_digest, model_revision.as_bytes());
     fingerprint_digest.update((block_token_count as u64).to_be_bytes());
+    fingerprint_digest.update(common_prefix_checkpoint_stride_blocks.to_be_bytes());
     update_tensor_layout_fingerprint(
         &mut fingerprint_digest,
         b"sequence",
