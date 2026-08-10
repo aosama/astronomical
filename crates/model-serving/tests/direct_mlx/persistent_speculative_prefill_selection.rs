@@ -338,6 +338,8 @@ fn resolve_model_contract(
         16_384,
         20_000_000_000,
         10_000_000_000,
+        None,
+        4,
     )
     .expect("the drafter storage contract should resolve")
 }

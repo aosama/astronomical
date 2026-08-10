@@ -6,7 +6,7 @@ fn should_require_fixed_prefill_chunck_tokens_when_optimizer_is_disabled() {
     write_config(
         temp_home.path(),
         r#"{
-          "prefill_chunck_size_optimizer_enabled": false
+          "chunking": { "prefill_size_optimizer_enabled": false }
         }"#,
     );
 
@@ -22,8 +22,10 @@ fn should_reject_zero_fixed_prefill_chunck_tokens_when_optimizer_is_disabled() {
     write_config(
         temp_home.path(),
         r#"{
-          "prefill_chunck_size_optimizer_enabled": false,
-          "fixed_prefill_chunck_tokens": 0
+          "chunking": {
+            "prefill_size_optimizer_enabled": false,
+            "fixed_prefill_tokens": 0
+          }
         }"#,
     );
 
@@ -39,9 +41,11 @@ fn should_accept_and_ignore_fixed_prefill_chunck_tokens_when_optimizer_is_enable
     write_config(
         temp_home.path(),
         r#"{
-          "prefill_chunck_size_optimizer_enabled": true,
-          "fixed_prefill_chunck_tokens": 4096,
-          "optimizer_prefill_chunck_token_candidates": [1024, 2048, 4096, 8192]
+          "chunking": {
+            "prefill_size_optimizer_enabled": true,
+            "fixed_prefill_tokens": 4096,
+            "optimizer_prefill_token_candidates": [1024, 2048, 4096, 8192]
+          }
         }"#,
     );
 
@@ -69,8 +73,10 @@ fn should_reject_an_empty_optimizer_prefill_chunck_candidate_array() {
     write_config(
         temp_home.path(),
         r#"{
-          "prefill_chunck_size_optimizer_enabled": true,
-          "optimizer_prefill_chunck_token_candidates": []
+          "chunking": {
+            "prefill_size_optimizer_enabled": true,
+            "optimizer_prefill_token_candidates": []
+          }
         }"#,
     );
 
@@ -85,7 +91,7 @@ fn should_not_report_ignored_fixed_prefill_chunck_tokens_when_only_optimizer_is_
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
-        r#"{ "prefill_chunck_size_optimizer_enabled": true }"#,
+        r#"{ "chunking": { "prefill_size_optimizer_enabled": true } }"#,
     );
 
     let user_config =
@@ -103,7 +109,7 @@ fn should_ignore_fixed_prefill_chunck_tokens_when_optimizer_setting_is_omitted()
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
-        r#"{ "fixed_prefill_chunck_tokens": 4096 }"#,
+        r#"{ "chunking": { "fixed_prefill_tokens": 4096 } }"#,
     );
 
     let user_config = AstronomicalConfig::load_from_home_directory(temp_home.path())
@@ -182,8 +188,10 @@ fn should_reject_zero_duplicate_and_descending_optimizer_candidates() {
             temp_home.path(),
             &format!(
                 r#"{{
-                  "prefill_chunck_size_optimizer_enabled": true,
-                  "optimizer_prefill_chunck_token_candidates": {configured_candidates}
+              "chunking": {{
+                "prefill_size_optimizer_enabled": true,
+                "optimizer_prefill_token_candidates": {configured_candidates}
+              }}
                 }}"#
             ),
         );

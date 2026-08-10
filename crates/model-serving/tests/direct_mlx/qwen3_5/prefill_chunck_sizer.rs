@@ -1,9 +1,21 @@
 use astronomical_model_serving::{Qwen3_5PrefillChunckSizer, Qwen3_5PrefillExecutionContext};
 
+fn optimized_prefill_chunck_sizer(
+    maximum_prefill_chunck_tokens: u32,
+    optimizer_prefill_chunck_token_candidates: Vec<u32>,
+) -> Result<Qwen3_5PrefillChunckSizer, astronomical_model_serving::Qwen3_5PrefillChunckSizerError> {
+    Qwen3_5PrefillChunckSizer::for_optimized_with_behavior(
+        maximum_prefill_chunck_tokens,
+        optimizer_prefill_chunck_token_candidates,
+        5,
+        32_768,
+    )
+}
+
 #[test]
 fn should_use_only_configured_candidates_below_the_validated_model_context_maximum() {
     const VALIDATED_MODEL_MAXIMUM_POSITION_COUNT: u32 = 8_193;
-    let mut prefill_chunck_sizer = Qwen3_5PrefillChunckSizer::production(
+    let mut prefill_chunck_sizer = optimized_prefill_chunck_sizer(
         VALIDATED_MODEL_MAXIMUM_POSITION_COUNT,
         vec![1_024, 2_048, 4_096, 8_192, 16_384],
     )
@@ -30,9 +42,8 @@ fn should_use_only_configured_candidates_below_the_validated_model_context_maxim
 
 #[test]
 fn should_explore_configured_prefill_chunck_tokens_in_non_persisted_optimized_mode() {
-    let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::production(4_096, vec![1_024, 2_048, 4_096])
-            .expect("configured optimizer candidates should initialize");
+    let mut prefill_chunck_sizer = optimized_prefill_chunck_sizer(4_096, vec![1_024, 2_048, 4_096])
+        .expect("configured optimizer candidates should initialize");
 
     assert_full_candidate_exploration_for_one_context(&mut prefill_chunck_sizer);
 }
@@ -42,12 +53,14 @@ fn should_explore_configured_prefill_chunck_tokens_when_the_persisted_optimizer_
     let optimizer_state_directory = tempfile::tempdir()
         .expect("the persisted optimizer test should create a temporary state directory");
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state(
+        Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state_and_behavior(
             4_096,
             vec![1_024, 2_048, 4_096],
             optimizer_state_directory.path().to_path_buf(),
             "test-model".to_owned(),
             "test-revision".to_owned(),
+            5,
+            32_768,
         )
         .expect("the persisted production optimizer should initialize");
     assert_full_candidate_exploration_for_one_context(&mut prefill_chunck_sizer);
@@ -74,11 +87,8 @@ fn assert_full_candidate_exploration_for_one_context(
 #[test]
 fn should_bound_each_prompt_processing_chunck_by_prefill_chunck_tokens_and_prompt_end() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            2_048,
-            vec![128, 256, 512, 1_024, 2_048],
-        )
-        .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        optimized_prefill_chunck_sizer(2_048, vec![128, 256, 512, 1_024, 2_048])
+            .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
 
@@ -94,9 +104,8 @@ fn should_bound_each_prompt_processing_chunck_by_prefill_chunck_tokens_and_promp
 
 #[test]
 fn should_reject_zero_prefill_chunck_tokens() {
-    let prefill_chunck_sizer_error =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(0, vec![1_024])
-            .expect_err("prefill_chunck_tokens must contain at least one token");
+    let prefill_chunck_sizer_error = optimized_prefill_chunck_sizer(0, vec![1_024])
+        .expect_err("prefill_chunck_tokens must contain at least one token");
 
     assert_eq!(
         prefill_chunck_sizer_error.to_string(),
@@ -106,11 +115,7 @@ fn should_reject_zero_prefill_chunck_tokens() {
 
 #[test]
 fn should_use_the_explicit_optimizer_prefill_chunck_tokens_maximum() {
-    let prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            4_096,
-            vec![1_024, 2_048, 4_096],
-        )
+    let prefill_chunck_sizer = optimized_prefill_chunck_sizer(4_096, vec![1_024, 2_048, 4_096])
         .expect("maximum prefill_chunck_tokens should be valid");
 
     assert_eq!(prefill_chunck_sizer.prefill_chunck_tokens(), 4_096);
@@ -119,11 +124,8 @@ fn should_use_the_explicit_optimizer_prefill_chunck_tokens_maximum() {
 #[test]
 fn should_explore_unobserved_candidates_from_largest_to_smallest() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            2_048,
-            vec![128, 256, 512, 1_024, 2_048],
-        )
-        .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        optimized_prefill_chunck_sizer(2_048, vec![128, 256, 512, 1_024, 2_048])
+            .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
 
@@ -159,11 +161,8 @@ fn should_explore_unobserved_candidates_from_largest_to_smallest() {
 #[test]
 fn should_not_consume_the_next_optimizer_decision_when_recording_a_completed_prefill_chunck() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            2_048,
-            vec![128, 256, 512, 1_024, 2_048],
-        )
-        .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        optimized_prefill_chunck_sizer(2_048, vec![128, 256, 512, 1_024, 2_048])
+            .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
 
@@ -205,11 +204,8 @@ fn should_not_consume_the_next_optimizer_decision_when_recording_a_completed_pre
 #[test]
 fn should_retain_final_prompt_tail_transitions() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            2_048,
-            vec![128, 256, 512, 1_024, 2_048],
-        )
-        .expect("the explicit maximum prefill_chunck_tokens should be valid");
+        optimized_prefill_chunck_sizer(2_048, vec![128, 256, 512, 1_024, 2_048])
+            .expect("the explicit maximum prefill_chunck_tokens should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
     assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(0, 64), 64);
@@ -225,11 +221,8 @@ fn should_retain_final_prompt_tail_transitions() {
 #[test]
 fn should_skip_exploration_candidates_larger_than_the_remaining_prompt() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            1_024,
-            vec![128, 256, 512, 1_024],
-        )
-        .expect("the optimizer maximum should be valid");
+        optimized_prefill_chunck_sizer(1_024, vec![128, 256, 512, 1_024])
+            .expect("the optimizer maximum should be valid");
 
     prefill_chunck_sizer.start_prompt_processing_request(0);
     assert_eq!(prefill_chunck_sizer.next_prefill_chunck_end(0, 700), 512);
@@ -247,11 +240,8 @@ fn should_skip_exploration_candidates_larger_than_the_remaining_prompt() {
 #[test]
 fn should_isolate_execution_modes_and_clear_first_after_restore() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            1_024,
-            vec![128, 256, 512, 1_024],
-        )
-        .expect("the optimizer maximum should be valid");
+        optimized_prefill_chunck_sizer(1_024, vec![128, 256, 512, 1_024])
+            .expect("the optimizer maximum should be valid");
     let text_execution_context = Qwen3_5PrefillExecutionContext::default();
     let visual_execution_context = Qwen3_5PrefillExecutionContext::new(true, false, false, false);
 
@@ -293,11 +283,8 @@ fn should_isolate_execution_modes_and_clear_first_after_restore() {
 #[test]
 fn should_enter_a_capacity_reduced_context_after_an_admission_retry() {
     let mut prefill_chunck_sizer =
-        Qwen3_5PrefillChunckSizer::for_optimized_with_maximum_prefill_chunck_tokens(
-            1_024,
-            vec![128, 256, 512, 1_024],
-        )
-        .expect("the optimizer maximum should be valid");
+        optimized_prefill_chunck_sizer(1_024, vec![128, 256, 512, 1_024])
+            .expect("the optimizer maximum should be valid");
     let execution_context = Qwen3_5PrefillExecutionContext::default();
     prefill_chunck_sizer.start_prompt_processing_request(0);
     assert_eq!(

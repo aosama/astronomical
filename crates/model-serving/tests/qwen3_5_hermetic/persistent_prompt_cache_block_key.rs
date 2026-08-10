@@ -111,6 +111,8 @@ fn synthetic_model_contract(
         128,
         1_000_000,
         1_000_000,
+        None,
+        4,
     )
     .expect("the synthetic storage contract should resolve")
 }

@@ -85,7 +85,7 @@ async fn should_return_existing_invalid_config_feedback_when_fixed_prefill_chunc
     let config_home_directory = temp_config_directory.path().to_path_buf();
     write_config_file(
         &config_home_directory,
-        r#"{ "prefill_chunck_size_optimizer_enabled": false }"#,
+        r#"{ "chunking": { "prefill_size_optimizer_enabled": false } }"#,
     );
     let initial_resolved_config = sample_resolved_config();
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
@@ -105,7 +105,7 @@ async fn should_return_existing_invalid_config_feedback_when_fixed_prefill_chunc
     assert_eq!(response_json["status"], "invalid_config");
     assert_eq!(
         response_json["message"],
-        "invalid Astronomical configuration: fixed_prefill_chunck_tokens is required when prefill_chunck_size_optimizer_enabled is false"
+        "invalid Astronomical configuration: chunking.fixed_prefill_tokens is required when chunking.prefill_size_optimizer_enabled is false"
     );
     let live_config = reloadable_config
         .read()

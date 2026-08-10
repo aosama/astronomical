@@ -64,8 +64,8 @@ async fn should_apply_one_ops_based_gated_delta_recurrent_step() {
 }
 
 #[tokio::test]
-async fn should_match_ops_loop_when_applying_fused_gated_delta_sequence() {
-    const TOKEN_COUNT: i32 = 2;
+async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() {
+    const TOKEN_COUNT: i32 = 3;
     const KEY_HEAD_COUNT: i32 = 16;
     const VALUE_HEAD_COUNT: i32 = 32;
     const HEAD_DIMENSION: i32 = 128;

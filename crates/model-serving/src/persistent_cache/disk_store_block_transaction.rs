@@ -402,6 +402,7 @@ impl PersistentPromptCacheDiskStore {
         let parent_block_key = parent_block_key?;
         if persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
             parent_block_key.block_index(),
+            self.model_contract.common_prefix_checkpoint_stride_blocks(),
         ) || self.total_size_bytes().saturating_add(child_size_bytes)
             <= self.global_prompt_cache_maximum_size_bytes
         {

@@ -12,7 +12,6 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5Model, Qwen3_5Tokenizer,
-    RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::{MissedTickBehavior, interval, sleep};
@@ -274,14 +273,20 @@ pub(crate) async fn run_prefill_snapshot(
         test_started_at.elapsed().as_secs_f64()
     );
     let model_load_started_at = Instant::now();
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-        .expect("the complete Ornith model should bind from validated descriptors");
+    let qwen3_5_model = Qwen3_5Model::load(
+        runtime,
+        validated_artifact,
+        &model_directory,
+        false,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the complete Ornith model should bind from validated descriptors");
     eprintln!(
         "[paged-prefill-compare] status=progress phase=model_loaded path={prefill_path_label} load_elapsed_seconds={:.2} total_elapsed_seconds={:.2}",
         model_load_started_at.elapsed().as_secs_f64(),
         test_started_at.elapsed().as_secs_f64()
     );
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(&config);
     let prefill_started_at = Instant::now();
     let final_position_logits = match paged_prefill_execution_mode {
         Some(paged_prefill_execution_mode) => qwen3_5_model

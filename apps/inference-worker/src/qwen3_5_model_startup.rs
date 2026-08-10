@@ -1,12 +1,14 @@
 use std::path::PathBuf;
 
-use astronomical_config::{PrefillChunckSizingPolicy, PromptCacheConfig};
-use astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration;
+use astronomical_config::PromptCacheConfig;
+use astronomical_ipc_protocol::{
+    WorkerChunkingConfiguration, WorkerPrefillChunckSizingPolicy,
+    WorkerSpeculativePrefillConfiguration,
+};
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, PerformanceAttribution,
-    PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
-    PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5GenerationProcessor, Qwen3_5PrefillChunckSizer,
+    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
+    PerformanceOperation, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
+    Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PrefillChunckSizer,
 };
 
 use crate::worker_startup_error::WorkerStartupError;
@@ -17,7 +19,6 @@ pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
-    prefill_chunck_sizing_policy: PrefillChunckSizingPolicy,
     prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
     optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
@@ -26,6 +27,7 @@ pub(crate) fn initialize_qwen3_5_model(
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
+    chunking: WorkerChunkingConfiguration,
 ) -> Result<(Qwen3_5GenerationProcessor, Qwen3_5Engine), WorkerStartupError> {
     let mut model_loading_performance_attribution = if performance_attribution_enabled {
         PerformanceAttribution::enabled()
@@ -109,8 +111,13 @@ pub(crate) fn initialize_qwen3_5_model(
         crate::worker_startup::derive_mlx_memory_limits_from_gpu_wired_limit(
             effective_mlx_memory_ceiling_bytes,
         );
-    let per_model_prompt_cache_config = prompt_cache_config.for_model(&model_id, &model_revision);
+    // Derive the model-specific path only when the user enabled persistent
+    // caching. This keeps disabled operation from touching model/revision cache
+    // identity, opening directories, scanning files, or reserving publication
+    // workspace later in model loading.
     let persistent_prompt_cache_disk_store_config = persistent_prompt_cache_enabled.then(|| {
+        let per_model_prompt_cache_config =
+            prompt_cache_config.for_model(&model_id, &model_revision);
         PersistentPromptCacheDiskStoreConfig::new(
             per_model_prompt_cache_config
                 .active_model_prompt_cache_directory()
@@ -123,27 +130,31 @@ pub(crate) fn initialize_qwen3_5_model(
     });
     let prefill_chunck_sizer_result = match prefill_chunck_sizer_override {
         Some(prefill_chunck_sizer) => Ok(prefill_chunck_sizer),
-        None => match prefill_chunck_sizing_policy {
-            PrefillChunckSizingPolicy::Fixed {
+        None => match &chunking.prefill_sizing_policy {
+            WorkerPrefillChunckSizingPolicy::Fixed {
                 fixed_prefill_chunck_tokens,
             } => Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(
-                fixed_prefill_chunck_tokens,
+                *fixed_prefill_chunck_tokens,
             ),
-            PrefillChunckSizingPolicy::Optimized {
+            WorkerPrefillChunckSizingPolicy::Optimized {
                 optimizer_prefill_chunck_token_candidates,
             } => match optimizer_state_directory {
                 Some(optimizer_directory) => {
-                    Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state(
+                    Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state_and_behavior(
                         maximum_prefill_chunck_tokens,
-                        optimizer_prefill_chunck_token_candidates,
+                        optimizer_prefill_chunck_token_candidates.clone(),
                         optimizer_directory,
                         model_id,
                         model_revision,
+                        chunking.prefill_optimizer_observation_window,
+                        chunking.prefill_optimizer_position_bucket_tokens,
                     )
                 }
-                None => Qwen3_5PrefillChunckSizer::production(
+                None => Qwen3_5PrefillChunckSizer::for_optimized_with_behavior(
                     maximum_prefill_chunck_tokens,
-                    optimizer_prefill_chunck_token_candidates,
+                    optimizer_prefill_chunck_token_candidates.clone(),
+                    chunking.prefill_optimizer_observation_window,
+                    chunking.prefill_optimizer_position_bucket_tokens,
                 ),
             },
         },
@@ -165,7 +176,7 @@ pub(crate) fn initialize_qwen3_5_model(
             ));
         }
     };
-    let qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
@@ -173,7 +184,7 @@ pub(crate) fn initialize_qwen3_5_model(
         prefill_chunck_sizer,
         think_end_token_id,
         model_directory_path.clone(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        chunking,
         true,
         mtp_enabled,
         loaded_model_speculative_prefill_configuration,

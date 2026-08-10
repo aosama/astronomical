@@ -43,6 +43,7 @@ impl Qwen3_5Model {
         validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         bind_mtp_weights: bool,
+        chunking: super::Qwen3_5ModelChunkingConfiguration,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         Self::load_with_performance_attribution(
@@ -51,6 +52,7 @@ impl Qwen3_5Model {
             model_directory,
             bind_mtp_weights,
             true,
+            chunking,
             &mut disabled_performance_attribution,
         )
     }
@@ -70,14 +72,23 @@ impl Qwen3_5Model {
         model_directory: &Path,
         bind_mtp_weights: bool,
         should_bind_vision_weights: bool,
+        chunking: super::Qwen3_5ModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let config = validated_artifact.config().clone();
-        let decoder_cache_layout = crate::qwen3_5::qwen3_5_decoder_cache_layout(&config).map_err(
-            |decoder_cache_layout_error| Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
+        let decoder_cache_layout = crate::qwen3_5::qwen3_5_decoder_cache_layout(
+            &config,
+            usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "full-attention key/value growth tokens exceed the usize range",
+                }
+            })?,
+        )
+        .map_err(|decoder_cache_layout_error| {
+            Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
                 description: decoder_cache_layout_error.to_string(),
-            },
-        )?;
+            }
+        })?;
         let vision_config = validated_artifact.vision_config().cloned();
         let has_separate_vision_sidecar =
             should_bind_vision_weights && validated_artifact.has_separate_vision_sidecar();
@@ -249,6 +260,7 @@ impl Qwen3_5Model {
             target_verification_quantized_linear_kernel,
             compiled_swiglu,
             compiled_elementwise_graphs,
+            chunking,
             inverse_linear_head_dimension_scale,
             inverse_square_root_linear_head_dimension_scale,
         })

@@ -9,13 +9,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_config::{
-    AstronomicalConfig, AstronomicalConfigError, DiscoveredModel, DiscoveredModelError, LogLevel,
-    LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, SpeculativePrefillConfig,
-    discover_models,
+    AstronomicalConfig, AstronomicalConfigError, ChunkingConfig, DiscoveredModel,
+    DiscoveredModelError, LogLevel, LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig,
+    SpeculativePrefillConfig, discover_models,
 };
 use astronomical_ipc_protocol::{
-    WorkerLogLevel, WorkerPrefillChunckSizingPolicy, WorkerSpeculativePrefillConfiguration,
-    WorkerStartupConfiguration,
+    WorkerChunkingConfiguration, WorkerLogLevel, WorkerPrefillChunckSizingPolicy,
+    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
 };
 use thiserror::Error;
 
@@ -38,8 +38,8 @@ pub struct ResolvedRuntimeConfig {
     pub maximum_mlx_memory_bytes: Option<u64>,
     /// Startup config warning text surfaced through `/v1/status`.
     pub config_warning: Option<String>,
-    /// Resolved prefill chunk sizing policy read by the worker at startup.
-    pub prefill_chunck_sizing_policy: PrefillChunckSizingPolicy,
+    /// Every resolved work-partition boundary applied when the worker loads a model.
+    pub chunking: ChunkingConfig,
     /// Persistent prefill optimizer state resolved from the daemon config location.
     pub optimizer_state_directory: PathBuf,
     /// Performance attribution preference captured by the worker at startup.
@@ -127,6 +127,7 @@ impl ResolvedRuntimeConfigResolver {
                 &discovered_models,
             )?;
 
+        let chunking = user_config.chunking()?;
         Ok(ResolvedRuntimeConfig {
             worker_executable_path: self.fallback_worker_executable_path.clone(),
             discovered_models,
@@ -141,7 +142,7 @@ impl ResolvedRuntimeConfigResolver {
                         "Adaptive prefill optimizer is active. The configured fixed prefill fallback of {ignored_fixed_prefill_chunck_tokens} tokens is ignored."
                     )
                 }),
-            prefill_chunck_sizing_policy: user_config.prefill_chunck_sizing_policy()?,
+            chunking,
             optimizer_state_directory: user_config.optimizer_directory()?,
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
@@ -168,18 +169,45 @@ impl ResolvedRuntimeConfig {
                 .prompt_cache_config
                 .global_prompt_cache_maximum_size_bytes(),
             persistent_prompt_cache_enabled: self.persistent_prompt_cache_enabled,
-            prefill_chunck_sizing_policy: match &self.prefill_chunck_sizing_policy {
-                PrefillChunckSizingPolicy::Optimized {
-                    optimizer_prefill_chunck_token_candidates,
-                } => WorkerPrefillChunckSizingPolicy::Optimized {
-                    optimizer_prefill_chunck_token_candidates:
-                        optimizer_prefill_chunck_token_candidates.clone(),
+            chunking: WorkerChunkingConfiguration {
+                // Convert the complete nested policy in one place. No later
+                // worker or model layer is allowed to re-read user config or
+                // invent a default for one of these coupled boundaries.
+                prefill_sizing_policy: match self.chunking.prefill_sizing_policy() {
+                    PrefillChunckSizingPolicy::Optimized {
+                        optimizer_prefill_chunck_token_candidates,
+                    } => WorkerPrefillChunckSizingPolicy::Optimized {
+                        optimizer_prefill_chunck_token_candidates:
+                            optimizer_prefill_chunck_token_candidates.clone(),
+                    },
+                    PrefillChunckSizingPolicy::Fixed {
+                        fixed_prefill_chunck_tokens,
+                    } => WorkerPrefillChunckSizingPolicy::Fixed {
+                        fixed_prefill_chunck_tokens: *fixed_prefill_chunck_tokens,
+                    },
                 },
-                PrefillChunckSizingPolicy::Fixed {
-                    fixed_prefill_chunck_tokens,
-                } => WorkerPrefillChunckSizingPolicy::Fixed {
-                    fixed_prefill_chunck_tokens: *fixed_prefill_chunck_tokens,
-                },
+                full_attention_key_value_growth_tokens: self
+                    .chunking
+                    .full_attention_key_value_growth_tokens(),
+                speculative_prefill_draft_forward_tokens: self
+                    .chunking
+                    .speculative_prefill_draft_forward_tokens(),
+                prefill_graph_submission_layer_interval: self
+                    .chunking
+                    .prefill_graph_submission_layer_interval(),
+                generation_graph_submission_layer_interval: self
+                    .chunking
+                    .generation_graph_submission_layer_interval(),
+                prefill_optimizer_observation_window: self
+                    .chunking
+                    .prefill_optimizer_observation_window(),
+                prefill_optimizer_position_bucket_tokens: self
+                    .chunking
+                    .prefill_optimizer_position_bucket_tokens(),
+                prompt_cache_block_tokens: self.chunking.prompt_cache_block_tokens(),
+                prompt_cache_common_prefix_stride_blocks: self
+                    .chunking
+                    .prompt_cache_common_prefix_stride_blocks(),
             },
             optimizer_state_directory: Some(self.optimizer_state_directory.clone()),
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
@@ -311,8 +339,8 @@ impl ConfigReloadDiff {
         if current.maximum_mlx_memory_bytes != candidate.maximum_mlx_memory_bytes {
             in_place_reloaded_fields.push("maximum_mlx_memory_gb".to_owned());
         }
-        if current.prefill_chunck_sizing_policy != candidate.prefill_chunck_sizing_policy {
-            worker_restart_reloaded_fields.push("prefill_chunck_sizing_policy".to_owned());
+        if current.chunking != candidate.chunking {
+            worker_restart_reloaded_fields.push("chunking".to_owned());
             worker_restart_required = true;
         }
         if current.optimizer_state_directory != candidate.optimizer_state_directory {

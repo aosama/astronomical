@@ -6,9 +6,9 @@ use std::{
 
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    InferenceEngineError, PerformanceAttribution, PerformanceAttributionLog,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    GeneratedToken, InferenceEngine, InferenceEngineError, PerformanceAttribution,
+    PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
+    Qwen3_5PrefillChunckSizer,
 };
 use serde_json::Value;
 use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
@@ -178,7 +178,7 @@ async fn create_automatic_residency_endurance_engine(
     let performance_attribution_log =
         PerformanceAttributionLog::open(&performance_attribution_log_path, true)
             .expect("the endurance test should open its attribution log");
-    let qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -187,9 +187,10 @@ async fn create_automatic_residency_endurance_engine(
             .expect("the production-sized prefill chunck should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
         false,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
         PerformanceAttribution::enabled(),
         performance_attribution_log,
     )

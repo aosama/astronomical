@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
-    Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;
 
@@ -39,8 +38,9 @@ async fn should_generate_the_certified_greedy_continuation_through_the_engine_tr
             .expect("the test prefill_chunck_tokens should be valid"),
         ORNITH_IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         false,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the bounded Ornith engine settings should be valid");
     qwen3_5_engine
@@ -99,8 +99,9 @@ async fn should_generate_the_certified_sampled_continuation_through_the_engine_t
             .expect("the test prefill_chunck_tokens should be valid"),
         ORNITH_IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         false,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the bounded Ornith engine settings should be valid");
     qwen3_5_engine
@@ -157,7 +158,7 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
             .expect("the pinned Ornith artifact should validate before engine loading");
         let mlx_memory_limits = crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
         let mut qwen3_5_engine =
-            Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+            Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
                 validated_artifact,
                 mlx_memory_limits.active_memory_limit_bytes(),
                 mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -166,9 +167,10 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
                     .expect("the production prefill chunck size should be valid"),
                 ORNITH_IMAGE_PAD_TOKEN_ID,
                 model_directory,
-                DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+                crate::common::standard_worker_chunking_configuration(),
                 false,
                 false,
+                crate::common::disabled_worker_speculative_prefill_configuration(),
                 astronomical_model_serving::PerformanceAttribution::disabled(),
                 astronomical_model_serving::PerformanceAttributionLog::disabled(),
             )
@@ -238,7 +240,7 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
         let think_end_token_id = tokenizer.think_end_token_id();
         let image_pad_token_id = tokenizer.image_pad_token_id();
         let mlx_memory_limits = crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-        let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+        let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
             validated_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -247,9 +249,10 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
                 .expect("the test prefill_chunck_tokens should be valid"),
             think_end_token_id,
             model_directory,
-            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+            crate::common::standard_worker_chunking_configuration(),
             false,
             false,
+            crate::common::disabled_worker_speculative_prefill_configuration(),
             astronomical_model_serving::PerformanceAttribution::disabled(),
             astronomical_model_serving::PerformanceAttributionLog::disabled(),
         )
@@ -315,7 +318,7 @@ async fn should_use_the_raised_live_memory_limit_for_adaptive_expert_eviction() 
         let think_end_token_id = tokenizer.think_end_token_id();
         let image_pad_token_id = tokenizer.image_pad_token_id();
         let mut qwen3_5_engine =
-            Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+            Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
                 validated_artifact,
                 LIVE_MEMORY_LIMIT_INITIAL_BYTES,
                 LIVE_MEMORY_LIMIT_INITIAL_BYTES,
@@ -324,9 +327,10 @@ async fn should_use_the_raised_live_memory_limit_for_adaptive_expert_eviction() 
                     .expect("the production prefill chunck size should be valid"),
                 think_end_token_id,
                 model_directory,
-                DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+                crate::common::standard_worker_chunking_configuration(),
                 true,
                 false,
+                crate::common::disabled_worker_speculative_prefill_configuration(),
                 astronomical_model_serving::PerformanceAttribution::disabled(),
                 astronomical_model_serving::PerformanceAttributionLog::disabled(),
             )

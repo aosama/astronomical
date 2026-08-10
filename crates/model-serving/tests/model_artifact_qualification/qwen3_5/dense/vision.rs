@@ -43,9 +43,14 @@ async fn should_load_a_dense_qwen3_5_vision_model_and_project_a_minimum_image() 
                 MlxRuntime::initialize(mlx_memory_limits).expect("MLX runtime should initialize");
 
             eprintln!("[dense-qwen3-5-vision] status=progress phase=model_loading");
-            let dense_qwen3_5_vision_model =
-                Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-                    .expect("the dense Qwen3.5 vision model should load");
+            let dense_qwen3_5_vision_model = Qwen3_5Model::load(
+                runtime,
+                validated_artifact,
+                &model_directory,
+                false,
+                crate::common::standard_qwen3_5_model_chunking_configuration(),
+            )
+            .expect("the dense Qwen3.5 vision model should load");
             let vision_model = dense_qwen3_5_vision_model
                 .vision_model()
                 .expect("the dense Qwen3.5 model should bind its vision tower");

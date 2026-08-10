@@ -2,10 +2,9 @@ use std::{fs, path::Path, time::Duration};
 
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionLog,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5Model,
-    Qwen3_5PrefillChunckSizer, RequestDecoderStateStack,
+    GeneratedToken, InferenceEngine, MlxMemoryTelemetry, PerformanceAttribution,
+    PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
+    Qwen3_5Model, Qwen3_5PrefillChunckSizer,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serde_json::Value;
@@ -57,6 +56,7 @@ async fn assert_exact_final_prefill_logit_parity() {
         validated_artifact,
         &configured_model_directory,
         false,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
     .expect("the configured model should load for final-logit parity qualification");
     let (baseline_greedy_token_id, baseline_final_logits) = final_prefill_logits_for_chunk_size(
@@ -92,7 +92,7 @@ fn final_prefill_logits_for_chunk_size(
     prompt_token_ids: &[u32],
     prefill_chunck_tokens: usize,
 ) -> (u32, Vec<f32>) {
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(qwen3_5_config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(qwen3_5_config);
     let final_prompt_token_index = prompt_token_ids
         .len()
         .checked_sub(1)
@@ -175,7 +175,7 @@ async fn run_native_prefill_capacity_retry_qualification() {
         PerformanceAttributionLog::open(&performance_attribution_log_path, true)
             .expect("the retry qualification should open an attribution log");
     let mut qwen3_5_engine =
-        Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+        Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
             validated_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -186,9 +186,10 @@ async fn run_native_prefill_capacity_retry_qualification() {
             .expect("the retry qualification prefill chunk size should be valid"),
             super::ORNITH_IMAGE_PAD_TOKEN_ID,
             configured_model_directory,
-            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+            crate::common::standard_worker_chunking_configuration(),
             true,
             false,
+            crate::common::disabled_worker_speculative_prefill_configuration(),
             PerformanceAttribution::enabled(),
             performance_attribution_log,
         )

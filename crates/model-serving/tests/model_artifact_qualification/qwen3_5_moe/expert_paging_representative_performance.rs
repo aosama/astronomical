@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use astronomical_model_serving::{Qwen3_5Config, Qwen3_5Model, RequestDecoderStateStack};
+use astronomical_model_serving::{Qwen3_5Config, Qwen3_5Model};
 
 use super::expert_paging_decode::{
     bytes_to_gib, load_paged_qwen3_5_model_for_decode_probe,
@@ -58,7 +58,7 @@ pub(crate) fn run_representative_performance_probe_for_loaded_model(
         prompt_token_ids.len(),
         REPRESENTATIVE_OUTPUT_TOKEN_COUNT
     );
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(config);
     let prefill_chunck_token_count = prompt_token_ids.len() - 1;
     eprintln!(
         "{progress_log_prefix} status=progress phase=prefill prefill_chunck_tokens={prefill_chunck_token_count}"

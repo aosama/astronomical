@@ -11,6 +11,23 @@ pub enum PersistentPromptCacheModelContractError {
     EmptyModelRevision,
     #[error("persistent model-state storage requires a positive maximum context")]
     ZeroMaximumContextTokenCount,
+    #[error("persistent model-state common-prefix checkpoint stride must be positive")]
+    ZeroCommonPrefixCheckpointStrideBlocks,
+    #[error(
+        "configured persistent model-state block tokens must be positive, aligned to {required_alignment_tokens} tokens, and no larger than the {maximum_context_tokens}-token context"
+    )]
+    InvalidConfiguredBlockTokenCount {
+        required_alignment_tokens: usize,
+        maximum_context_tokens: usize,
+    },
+    #[error(
+        "configured {configured_block_tokens}-token persistent model-state blocks require a {maximum_chain_bytes}-byte maximum chain, exceeding the {global_ssd_quota_bytes}-byte global quota"
+    )]
+    ConfiguredBlockChainExceedsSsdQuota {
+        configured_block_tokens: usize,
+        maximum_chain_bytes: u64,
+        global_ssd_quota_bytes: u64,
+    },
     #[error("decoder-cache layout declares neither sequence nor boundary state")]
     NoPersistentState,
     #[error("decoder-cache storage geometry used a zero divisor")]

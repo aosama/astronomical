@@ -1,6 +1,6 @@
 use crate::{
-    DEFAULT_APPEND_ONLY_ATTENTION_CAPACITY_GROWTH_TOKENS, DecoderCacheLayerLayout,
-    DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype,
+    DecoderCacheTensorLayout,
 };
 
 use super::Qwen3_5Config;
@@ -13,6 +13,7 @@ pub(crate) const QWEN_ATTENTION_VALUES_TENSOR_ROLE: &str = "attention.values";
 /// Derives Qwen's live and persistent decoder-state contract from validated model metadata.
 pub fn qwen3_5_decoder_cache_layout(
     qwen3_5_config: &Qwen3_5Config,
+    full_attention_key_value_growth_tokens: usize,
 ) -> Result<DecoderCacheLayout, DecoderCacheLayoutError> {
     let linear_convolution_state_dimension =
         usize::try_from(qwen3_5_config.linear_convolution_state_dimension()).map_err(|_| {
@@ -56,7 +57,7 @@ pub fn qwen3_5_decoder_cache_layout(
                         full_attention_key_value_dimensions.clone(),
                         2,
                     ),
-                    DEFAULT_APPEND_ONLY_ATTENTION_CAPACITY_GROWTH_TOKENS,
+                    full_attention_key_value_growth_tokens,
                 )
             } else {
                 DecoderCacheLayerLayout::composite(vec![

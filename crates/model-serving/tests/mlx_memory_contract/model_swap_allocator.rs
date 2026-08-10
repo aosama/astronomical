@@ -2,9 +2,8 @@ use std::{fs, path::Path, time::Instant};
 
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::Value;
@@ -184,7 +183,7 @@ fn create_engine(
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, VALIDATION_MAXIMUM_OUTPUT_TOKENS)
         .expect("the selected Qwen3.5-MoE artifact should validate before loading");
-    Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+    Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -193,9 +192,10 @@ fn create_engine(
             .expect("the fixed prefill chunck size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
         false,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
         model_loading_performance_attribution,
         performance_attribution_log,
     )
