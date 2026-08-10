@@ -163,7 +163,7 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         .reloadable_config
         .as_ref()
         .and_then(|reloadable_config| reloadable_config.read().ok())
-        .map(|resolved_config| resolved_config.prefill_chunck_sizing_policy.clone());
+        .map(|resolved_config| resolved_config.chunking.prefill_sizing_policy().clone());
     status_json["prefill_optimizer"] = prefill_optimizer_status_document(
         live_prefill_chunck_sizing_policy.as_ref(),
         &worker_health_snapshot.prefill_optimizer_insights,

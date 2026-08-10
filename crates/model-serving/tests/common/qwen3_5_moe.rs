@@ -28,11 +28,13 @@ pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelCon
     PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&certified_ornith_config)
+        qwen3_5_decoder_cache_layout(&certified_ornith_config, 256)
             .expect("the certified Ornith configuration should build a decoder-cache layout"),
         certified_ornith_config.maximum_position_count() as usize,
         20_000_000_000,
         50_000_000_000,
+        None,
+        4,
     )
     .expect("the certified Ornith configuration should resolve a storage contract")
 }

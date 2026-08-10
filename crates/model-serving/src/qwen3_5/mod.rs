@@ -44,8 +44,8 @@ pub use inference_execution::{
 #[cfg(feature = "direct-mlx")]
 pub use model::{
     Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
-    Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput, Qwen3_5Weights,
-    combined_target_and_additional_persistent_growth_bytes,
+    Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput,
+    Qwen3_5Weights, combined_target_and_additional_persistent_growth_bytes,
     context_memory_admission_projected_active_memory_bytes,
     persistent_prompt_cache_restore_temporary_workspace_bytes,
     qwen3_5_aggregate_speculative_prefill_attention_weights, qwen3_5_full_attention_step,

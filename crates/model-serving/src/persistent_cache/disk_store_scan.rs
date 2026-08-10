@@ -423,6 +423,7 @@ fn block_candidate_has_valid_boundary_topology(
         && block_hashes_with_children.contains(&block_hash)
         && !persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
             block_candidate.block_index,
+            persistent_prompt_cache_model_contract.common_prefix_checkpoint_stride_blocks(),
         )
 }
 

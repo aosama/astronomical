@@ -97,8 +97,15 @@ impl Qwen3_5EngineState {
             // Persistent snapshots currently contain target decoder state only. Prefer target-only
             // execution whenever the cache is available so optional prediction artifacts retain
             // prompt reuse without restoring an incompatible shifted history.
-            let mut can_use_persistent_prompt_cache = !has_precomputed_visual_embeddings;
-            let ordered_image_sha256_digests = if has_processed_visual_images {
+            let mut can_use_persistent_prompt_cache =
+                persistent_prompt_cache_is_available && !has_precomputed_visual_embeddings;
+            // Image digests are cache identity only when either persistent
+            // target state or speculative-prefill selection/reuse can consume
+            // them. Ordinary cache-disabled vision generation avoids hashing
+            // and retaining storage-specific request identity.
+            let ordered_image_sha256_digests = if has_processed_visual_images
+                && (persistent_prompt_cache_is_available || self.speculative_prefill.enabled)
+            {
                 inference_request
                     .processed_visual_images()
                     .iter()

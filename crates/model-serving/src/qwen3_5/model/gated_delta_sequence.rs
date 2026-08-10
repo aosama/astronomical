@@ -1,9 +1,11 @@
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntime, MlxRuntimeError,
+    MlxArray, MlxMetalKernel, MlxMetalKernelOutput, MlxRuntime, MlxRuntimeError,
 };
 
-const GATED_DELTA_SEQUENCE_OPERATION: &str = "apply fused Qwen3.5 gated-delta sequence";
+use super::gated_delta_sequence_contract::{
+    GatedDeltaSequenceShape, gated_delta_sequence_error, template_arguments,
+    validate_gated_delta_sequence_shapes,
+};
 const CHECKPOINT_SETUP_MARKER: &str = "/* ASTRONOMICAL_CHECKPOINT_SETUP */";
 const CHECKPOINT_WRITE_MARKER: &str = "/* ASTRONOMICAL_CHECKPOINT_WRITE */";
 const GATED_DELTA_KERNEL_SOURCE: &str = r#"
@@ -193,6 +195,31 @@ pub fn qwen3_5_gated_delta_sequence(
         update_rates,
         recurrent_state,
     )?;
+    apply_qwen3_5_gated_delta_sequence_kernel(
+        runtime,
+        gated_delta_kernel,
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        recurrent_state,
+        sequence_shape,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_qwen3_5_gated_delta_sequence_kernel(
+    runtime: &MlxRuntime,
+    gated_delta_kernel: &MlxMetalKernel,
+    queries: &MlxArray,
+    keys: &MlxArray,
+    values: &MlxArray,
+    decays: &MlxArray,
+    update_rates: &MlxArray,
+    recurrent_state: &MlxArray,
+    sequence_shape: GatedDeltaSequenceShape,
+) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
     let token_count = runtime.array_from_i32(&[sequence_shape.token_count], &[])?;
     let outputs = runtime.apply_metal_kernel(
         gated_delta_kernel,
@@ -233,152 +260,4 @@ pub fn qwen3_5_gated_delta_sequence(
         gated_delta_sequence_error("fused gated-delta kernel did not return recurrent state")
     })?;
     Ok((sequence_outputs, next_recurrent_state))
-}
-
-pub(super) fn template_arguments(
-    sequence_shape: GatedDeltaSequenceShape,
-    input_dtype: MlxDtype,
-    state_dtype: MlxDtype,
-) -> [MlxMetalKernelTemplateArgument; 6] {
-    [
-        MlxMetalKernelTemplateArgument::Dtype {
-            name: "InT",
-            dtype: input_dtype,
-        },
-        MlxMetalKernelTemplateArgument::Dtype {
-            name: "StT",
-            dtype: state_dtype,
-        },
-        MlxMetalKernelTemplateArgument::Integer {
-            name: "Dk",
-            integer_template_argument: sequence_shape.key_head_dimension,
-        },
-        MlxMetalKernelTemplateArgument::Integer {
-            name: "Dv",
-            integer_template_argument: sequence_shape.value_head_dimension,
-        },
-        MlxMetalKernelTemplateArgument::Integer {
-            name: "Hk",
-            integer_template_argument: sequence_shape.key_head_count,
-        },
-        MlxMetalKernelTemplateArgument::Integer {
-            name: "Hv",
-            integer_template_argument: sequence_shape.value_head_count,
-        },
-    ]
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct GatedDeltaSequenceShape {
-    pub(super) batch_size: i32,
-    pub(super) token_count: i32,
-    pub(super) key_head_count: i32,
-    pub(super) value_head_count: i32,
-    pub(super) key_head_dimension: i32,
-    pub(super) value_head_dimension: i32,
-}
-
-pub(super) fn validate_gated_delta_sequence_shapes(
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
-) -> Result<GatedDeltaSequenceShape, MlxRuntimeError> {
-    let query_shape = queries.shape();
-    let key_shape = keys.shape();
-    let value_shape = values.shape();
-    let decay_shape = decays.shape();
-    let update_rate_shape = update_rates.shape();
-    let recurrent_state_shape = recurrent_state.shape();
-    if query_shape.len() != 4
-        || key_shape.len() != 4
-        || value_shape.len() != 4
-        || decay_shape.len() != 3
-        || update_rate_shape.len() != 3
-        || recurrent_state_shape.len() != 4
-    {
-        return Err(gated_delta_sequence_error(
-            "fused gated-delta sequence inputs have invalid ranks",
-        ));
-    }
-    if query_shape != key_shape {
-        return Err(gated_delta_sequence_error(
-            "fused gated-delta queries and keys must have identical shapes",
-        ));
-    }
-    let batch_size = query_shape[0];
-    let token_count = query_shape[1];
-    let key_head_count = query_shape[2];
-    let key_head_dimension = query_shape[3];
-    let value_head_count = value_shape[2];
-    let value_head_dimension = value_shape[3];
-    if batch_size <= 0
-        || token_count <= 0
-        || key_head_count <= 0
-        || value_head_count <= 0
-        || key_head_dimension <= 0
-        || value_head_dimension <= 0
-        || value_head_count % key_head_count != 0
-        || key_head_dimension != 128
-        || value_head_dimension % 32 != 0
-    {
-        return Err(gated_delta_sequence_error(
-            "blocked gated-delta dimensions must be positive, value heads must be a multiple of key heads, key dimension must be 128, and value dimension must divide by 32",
-        ));
-    }
-    if value_shape[0] != batch_size
-        || value_shape[1] != token_count
-        || decay_shape != [batch_size, token_count, value_head_count]
-        || update_rate_shape != decay_shape
-        || recurrent_state_shape
-            != [
-                batch_size,
-                value_head_count,
-                value_head_dimension,
-                key_head_dimension,
-            ]
-    {
-        return Err(gated_delta_sequence_error(
-            "fused gated-delta sequence shapes are incompatible",
-        ));
-    }
-    if recurrent_state.dtype() != MlxDtype::Float32 {
-        return Err(gated_delta_sequence_error(
-            "fused gated-delta recurrent state must use float32",
-        ));
-    }
-    if !is_supported_activation_dtype(queries.dtype())
-        || !is_supported_activation_dtype(keys.dtype())
-        || !is_supported_activation_dtype(values.dtype())
-        || !is_supported_activation_dtype(decays.dtype())
-        || !is_supported_activation_dtype(update_rates.dtype())
-    {
-        return Err(gated_delta_sequence_error(
-            "fused gated-delta inputs must use float16, bfloat16, or float32",
-        ));
-    }
-    Ok(GatedDeltaSequenceShape {
-        batch_size,
-        token_count,
-        key_head_count,
-        value_head_count,
-        key_head_dimension,
-        value_head_dimension,
-    })
-}
-
-fn is_supported_activation_dtype(dtype: MlxDtype) -> bool {
-    matches!(
-        dtype,
-        MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-    )
-}
-
-pub(super) fn gated_delta_sequence_error(description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
-        operation: GATED_DELTA_SEQUENCE_OPERATION,
-        description: description.to_owned(),
-    }
 }

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use astronomical_config::{
-    LogLevel, LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, SpeculativePrefillConfig,
+    ChunkingConfig, LogLevel, LoggingConfig, PromptCacheConfig, SpeculativePrefillConfig,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ConfigReloadDecision, ConfigReloadDiff, GenerationPerformanceLog,
@@ -101,15 +101,26 @@ fn should_classify_max_output_tokens_change_as_worker_restart() {
 fn should_restart_worker_when_optimizer_prefill_chunck_candidates_change() {
     let current = sample_resolved_config();
     let mut candidate = sample_resolved_config();
-    candidate.prefill_chunck_sizing_policy = PrefillChunckSizingPolicy::Optimized {
-        optimizer_prefill_chunck_token_candidates: vec![2_048, 4_096, 8_192],
-    };
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    let configuration_directory = temporary_home_directory.path().join(".astronomical");
+    std::fs::create_dir_all(&configuration_directory).expect("config directory should be created");
+    std::fs::write(
+        configuration_directory.join("config.json"),
+        r#"{ "chunking": { "prefill_size_optimizer_enabled": true, "optimizer_prefill_token_candidates": [2048, 4096, 8192] } }"#,
+    )
+    .expect("config file should be written");
+    candidate.chunking = astronomical_config::AstronomicalConfig::load_from_home_directory(
+        temporary_home_directory.path(),
+    )
+    .expect("candidate config should load")
+    .chunking()
+    .expect("candidate chunking should resolve");
 
     let decision = ConfigReloadDiff::compare(&current, &candidate);
 
     assert!(
         matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
-            if reloaded_fields.contains(&"prefill_chunck_sizing_policy".to_owned())),
+            if reloaded_fields == &["chunking".to_owned()]),
         "changing optimizer candidates must restart the worker, got {decision:?}"
     );
 }
@@ -242,9 +253,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
         config_warning: None,
-        prefill_chunck_sizing_policy: PrefillChunckSizingPolicy::Optimized {
-            optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
-        },
+        chunking: ChunkingConfig::default(),
         optimizer_state_directory: PathBuf::from("/tmp/astronomical-optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
@@ -349,8 +358,18 @@ fn should_resolve_reload_config_from_the_config_file() {
     std::fs::write(
         &config_file_path,
         r#"{
-            "prefill_chunck_size_optimizer_enabled": true,
-            "fixed_prefill_chunck_tokens": 4096,
+            "chunking": {
+                "prefill_size_optimizer_enabled": true,
+                "fixed_prefill_tokens": 4096,
+                "full_attention_key_value_growth_tokens": 192,
+                "speculative_prefill_draft_forward_tokens": 1536,
+                "prefill_graph_submission_layer_interval": 0,
+                "generation_graph_submission_layer_interval": 6,
+                "prefill_optimizer_observation_window": 7,
+                "prefill_optimizer_position_bucket_tokens": 16384,
+                "prompt_cache_block_tokens": 768,
+                "prompt_cache_common_prefix_stride_blocks": 8
+            },
             "supervisor": {
                 "bind_address": "127.0.0.1:6733"
             },
@@ -366,6 +385,24 @@ fn should_resolve_reload_config_from_the_config_file() {
     let resolved_config = resolver.load().expect("the reload config should resolve");
 
     assert_eq!(resolved_config.bind_address, "127.0.0.1:6733");
+    let worker_chunking = resolved_config.worker_startup_configuration().chunking;
+    assert_eq!(worker_chunking.full_attention_key_value_growth_tokens, 192);
+    assert_eq!(
+        worker_chunking.speculative_prefill_draft_forward_tokens,
+        1_536
+    );
+    assert_eq!(worker_chunking.prefill_graph_submission_layer_interval, 0);
+    assert_eq!(
+        worker_chunking.generation_graph_submission_layer_interval,
+        6
+    );
+    assert_eq!(worker_chunking.prefill_optimizer_observation_window, 7);
+    assert_eq!(
+        worker_chunking.prefill_optimizer_position_bucket_tokens,
+        16_384
+    );
+    assert_eq!(worker_chunking.prompt_cache_block_tokens, Some(768));
+    assert_eq!(worker_chunking.prompt_cache_common_prefix_stride_blocks, 8);
     assert_eq!(
         resolved_config.config_warning.as_deref(),
         Some(

@@ -18,11 +18,13 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_meta
     let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&ornith_config)
+        qwen3_5_decoder_cache_layout(&ornith_config, 256)
             .expect("the certified Ornith configuration should build a decoder-cache layout"),
         ornith_config.maximum_position_count() as usize,
         TEST_MLX_MEMORY_CEILING_BYTES,
         TEST_SSD_QUOTA_BYTES,
+        None,
+        4,
     )
     .expect("the certified model should resolve an SSD storage contract");
     let persistent_visual_embedding_model_contract = persistent_visual_embedding_model_contract();
@@ -227,9 +229,89 @@ fn should_reject_a_contract_when_one_exact_capture_exceeds_a_budget() {
         128,
         100,
         1_000_000,
+        None,
+        4,
     );
 
     assert!(rejected_contract.is_err());
+}
+
+#[test]
+fn should_apply_configured_prompt_cache_block_and_common_prefix_boundaries() {
+    let configured_contract = PersistentPromptCacheModelContract::resolve(
+        "fictional-model".to_owned(),
+        "revision".to_owned(),
+        synthetic_hybrid_layout(8),
+        128,
+        1_000_000,
+        1_000_000,
+        Some(16),
+        6,
+    )
+    .expect("aligned configured cache boundaries should resolve");
+
+    assert_eq!(configured_contract.block_token_count(), 16);
+    assert_eq!(
+        configured_contract.common_prefix_checkpoint_stride_blocks(),
+        6
+    );
+}
+
+#[test]
+fn should_reject_a_configured_prompt_cache_block_that_breaks_model_alignment() {
+    let rejected_contract = PersistentPromptCacheModelContract::resolve(
+        "fictional-model".to_owned(),
+        "revision".to_owned(),
+        synthetic_hybrid_layout(8),
+        128,
+        1_000_000,
+        1_000_000,
+        Some(6),
+        4,
+    );
+
+    assert!(rejected_contract.is_err());
+}
+
+#[test]
+fn should_reject_zero_common_prefix_checkpoint_stride_at_the_storage_boundary() {
+    let rejected_contract = PersistentPromptCacheModelContract::resolve(
+        "fictional-model".to_owned(),
+        "revision".to_owned(),
+        synthetic_hybrid_layout(8),
+        128,
+        1_000_000,
+        1_000_000,
+        Some(16),
+        0,
+    );
+
+    assert!(matches!(
+        rejected_contract,
+        Err(astronomical_model_serving::PersistentPromptCacheModelContractError::ZeroCommonPrefixCheckpointStrideBlocks)
+    ));
+}
+
+#[test]
+fn should_reject_an_explicit_block_length_instead_of_silently_resizing_it_for_quota() {
+    let rejected_contract = PersistentPromptCacheModelContract::resolve(
+        "fictional-model".to_owned(),
+        "revision".to_owned(),
+        synthetic_hybrid_layout(8),
+        128,
+        1_000_000,
+        1,
+        Some(16),
+        4,
+    );
+
+    assert!(matches!(
+        rejected_contract,
+        Err(astronomical_model_serving::PersistentPromptCacheModelContractError::ConfiguredBlockChainExceedsSsdQuota {
+            configured_block_tokens: 16,
+            ..
+        })
+    ));
 }
 
 fn resolve_synthetic_contract(
@@ -246,6 +328,8 @@ fn resolve_synthetic_contract(
         maximum_context_token_count,
         effective_mlx_memory_ceiling_bytes,
         global_ssd_quota_bytes,
+        None,
+        4,
     )
     .expect("the synthetic model should resolve an SSD storage contract")
 }

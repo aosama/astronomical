@@ -2,6 +2,7 @@
 
 use std::{env, net::SocketAddr, path::PathBuf};
 
+mod chunking_config;
 mod config_error;
 mod config_file;
 mod logging_config;
@@ -12,6 +13,14 @@ mod model_identity;
 mod prompt_cache_config;
 mod speculative_prefill_config;
 
+pub use chunking_config::{
+    ChunkingConfig, DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
+    DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+    DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL, DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
+    DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
+    DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
+    DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
+};
 pub use config_error::AstronomicalConfigError;
 pub use logging_config::{LogLevel, LoggingConfig};
 pub use maximum_mlx_memory::{
@@ -100,24 +109,25 @@ impl AstronomicalConfig {
     pub fn prefill_chunck_sizing_policy(
         &self,
     ) -> Result<PrefillChunckSizingPolicy, AstronomicalConfigError> {
-        resolve_prefill_chunck_sizing_policy(
-            self.user_config_file.prefill_chunck_size_optimizer_enabled,
-            self.user_config_file.fixed_prefill_chunck_tokens,
-            self.user_config_file
-                .optimizer_prefill_chunck_token_candidates
-                .as_deref(),
-        )
+        Ok(self.chunking()?.prefill_sizing_policy().clone())
     }
 
-    /// Returns the `fixed_prefill_chunck_tokens` value the daemon ignored because
-    /// `prefill_chunck_size_optimizer_enabled` was `true`. The menu bar app flashes a
+    /// Returns the `chunking.fixed_prefill_tokens` value the daemon ignored because
+    /// `chunking.prefill_size_optimizer_enabled` was `true`. The menu bar app flashes a
     /// callout when this is `Some` so the user knows the fixed value has no effect.
     #[must_use]
     pub fn ignored_fixed_prefill_chunck_tokens(&self) -> Option<u32> {
         resolve_ignored_fixed_prefill_chunck_tokens(
-            self.user_config_file.prefill_chunck_size_optimizer_enabled,
-            self.user_config_file.fixed_prefill_chunck_tokens,
+            self.user_config_file
+                .chunking
+                .prefill_size_optimizer_enabled,
+            self.user_config_file.chunking.fixed_prefill_tokens,
         )
+    }
+
+    /// Returns every resolved model-serving work partition from the nested chunking policy.
+    pub fn chunking(&self) -> Result<ChunkingConfig, AstronomicalConfigError> {
+        ChunkingConfig::resolve(&self.user_config_file.chunking)
     }
 
     /// Resolves and validates the loopback-only HTTP bind address.

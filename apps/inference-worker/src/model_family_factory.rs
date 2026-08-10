@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use astronomical_config::{
-    ModelFamily, PrefillChunckSizingPolicy, PromptCacheConfig, classify_model_directory,
+use astronomical_config::{ModelFamily, PromptCacheConfig, classify_model_directory};
+use astronomical_ipc_protocol::{
+    WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration,
 };
-use astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration;
 use astronomical_model_serving::{
     ModelFactory, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
     Qwen3_5PrefillChunckSizer, deepseek_v4_unavailable_reason,
@@ -15,7 +15,6 @@ use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
 pub(crate) struct ModelFamilyFactory {
     pub(crate) effective_mlx_memory_ceiling_bytes: usize,
     pub(crate) prompt_cache_config: PromptCacheConfig,
-    pub(crate) prefill_chunck_sizing_policy: PrefillChunckSizingPolicy,
     pub(crate) optimizer_state_directory: Option<PathBuf>,
     pub(crate) performance_attribution_enabled: bool,
     pub(crate) performance_attribution_log_path: PathBuf,
@@ -23,6 +22,7 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) mtp_enabled: bool,
     pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub(crate) persistent_prompt_cache_enabled: bool,
+    pub(crate) chunking: WorkerChunkingConfiguration,
 }
 
 impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
@@ -36,7 +36,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let model_directory_path = PathBuf::from(model_directory);
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let prompt_cache_config = self.prompt_cache_config.clone();
-        let prefill_chunck_sizing_policy = self.prefill_chunck_sizing_policy.clone();
         let optimizer_state_directory = self.optimizer_state_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
@@ -44,6 +43,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let mtp_enabled = self.mtp_enabled;
         let speculative_prefill = self.speculative_prefill.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
+        let chunking = self.chunking.clone();
 
         tokio::task::spawn_blocking(move || {
             let model_family = classify_model_directory(&model_directory_path)
@@ -54,7 +54,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         model_directory_path,
                         effective_mlx_memory_ceiling_bytes,
                         prompt_cache_config,
-                        prefill_chunck_sizing_policy,
                         prefill_chunck_sizer_override,
                         optimizer_state_directory,
                         max_output_tokens,
@@ -63,6 +62,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         persistent_prompt_cache_enabled,
                         performance_attribution_enabled,
                         performance_attribution_log_path,
+                        chunking,
                     )
                     .map_err(|startup_error| startup_error.public_model_load_failure_reason())?;
                     Ok((

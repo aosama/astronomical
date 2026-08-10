@@ -11,8 +11,6 @@ use super::{
     qwen3_5_aggregate_speculative_prefill_attention_weights,
 };
 
-const SPECULATIVE_PREFILL_DRAFT_FORWARD_CHUNCK_TOKEN_COUNT: usize = 2_048;
-
 /// Draft scoring output with a reusable checkpoint taken before lookahead.
 pub(crate) struct Qwen3_5SpeculativePrefillDraftScoringOutcome {
     pub(crate) importance_scores: MlxArray,
@@ -151,7 +149,7 @@ impl Qwen3_5Model {
         let mut consumed_visual_embedding_count = 0_usize;
 
         for draft_prompt_token_ids in
-            draft_suffix_token_ids.chunks(SPECULATIVE_PREFILL_DRAFT_FORWARD_CHUNCK_TOKEN_COUNT)
+            draft_suffix_token_ids.chunks(self.chunking.speculative_prefill_draft_forward_tokens)
         {
             let draft_forward_output = if let Some((visual_embeddings, image_pad_token_id)) =
                 visual_embedding_input

@@ -420,7 +420,7 @@ async fn mtp_status_document(
 async fn should_report_the_ignored_fixed_prefill_chunck_tokens_warning_in_status() {
     let application = astronomical_supervisor::build_application_with_config_warning(
         ScriptedExecutor::ready(Vec::new()),
-        Some("found fixed_prefill_chunck_tokens defined while prefill_chunck_size_optimizer_enabled = true, will ignore fixed_prefill_chunck_token value".to_owned()),
+        Some("Adaptive prefill optimizer is active. The configured fixed prefill fallback of 4096 tokens is ignored.".to_owned()),
     );
     let response = application
         .oneshot(
@@ -439,7 +439,7 @@ async fn should_report_the_ignored_fixed_prefill_chunck_tokens_warning_in_status
     assert_eq!(status_document["status"], "ready");
     assert_eq!(
         status_document["config_warning"],
-        "found fixed_prefill_chunck_tokens defined while prefill_chunck_size_optimizer_enabled = true, will ignore fixed_prefill_chunck_token value"
+        "Adaptive prefill optimizer is active. The configured fixed prefill fallback of 4096 tokens is ignored."
     );
 }
 

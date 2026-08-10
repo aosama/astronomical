@@ -189,8 +189,12 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "mtp_rejected_draft_state_restoration",
         ),
         (
-            PerformanceOperation::PrefillStateEvaluationSynchronizationWait,
-            "prefill_state_evaluation_synchronization_wait",
+            PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
+            "prefill_state_async_evaluation_submission",
+        ),
+        (
+            PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
+            "prefill_state_graphics_processor_completion_wait",
         ),
         (
             PerformanceOperation::ExpertBoundedSafetensorsLazyPageConstruction,

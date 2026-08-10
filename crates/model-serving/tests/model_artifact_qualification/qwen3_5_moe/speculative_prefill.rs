@@ -7,10 +7,9 @@ use super::speculative_prefill_qualification_support::{
 };
 use astronomical_ipc_protocol::{RequestId, WorkerSpeculativePrefillConfiguration};
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PerformanceAttribution, PerformanceAttributionLog, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
-    Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
 };
 
 const REPRESENTATIVE_OUTPUT_TOKEN_COUNT: u16 = 1_024;
@@ -366,7 +365,7 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
         importance_pooling_kernel_token_count:
             SPECULATIVE_PREFILL_IMPORTANCE_POOLING_KERNEL_TOKEN_COUNT,
     };
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_target_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -375,7 +374,7 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
             .expect("the representative prefill chunk size should be valid"),
         target_think_end_token_id,
         target_model_directory.to_path_buf(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
         false,
         speculative_prefill,

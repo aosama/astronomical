@@ -81,26 +81,30 @@ impl Qwen3_5EngineState {
             usize::try_from(draft_vision_payload_bytes).map_err(|_| {
                 fatal_engine_error("speculative-prefill draft vision payload exceeds usize")
             })?;
-        // A scoring forward can land on a drafter cache boundary. Capturing the
-        // recurrent checkpoint and streaming its largest tensor can overlap with
-        // decoder growth and a resident expert page, so both workspaces belong in
-        // admission even though they are released shortly after publication.
-        let draft_boundary_checkpoint_workspace_bytes = draft_model
-            .decoder_cache_layout()
-            .boundary_snapshot_payload_byte_count()
-            .map_err(|draft_workspace_projection_error| {
-                fatal_engine_error(format!(
-                    "failed to project speculative-prefill draft temporary workspace: {draft_workspace_projection_error}"
-                ))
-            })?;
-        let draft_direct_publication_workspace_bytes = self
-            .speculative_prefill_draft_persistent_prompt_cache
-            .as_ref()
-            .map_or(0, |draft_persistent_prompt_cache| {
-                draft_persistent_prompt_cache
-                    .model_contract_ref()
-                    .direct_publication_workspace_bytes()
-            });
+        // A cache-enabled scoring forward can land on a drafter publication boundary.
+        // Disabled storage performs neither checkpoint capture nor serialization.
+        let (draft_boundary_checkpoint_workspace_bytes, draft_direct_publication_workspace_bytes) =
+            if let Some(draft_persistent_prompt_cache) = self
+                .speculative_prefill_draft_persistent_prompt_cache
+                .as_ref()
+            {
+                let draft_boundary_checkpoint_workspace_bytes = draft_model
+                .decoder_cache_layout()
+                .boundary_snapshot_payload_byte_count()
+                .map_err(|draft_workspace_projection_error| {
+                    fatal_engine_error(format!(
+                        "failed to project speculative-prefill draft temporary workspace: {draft_workspace_projection_error}"
+                    ))
+                })?;
+                (
+                    draft_boundary_checkpoint_workspace_bytes,
+                    draft_persistent_prompt_cache
+                        .model_contract_ref()
+                        .direct_publication_workspace_bytes(),
+                )
+            } else {
+                (0, 0)
+            };
         let draft_scoring_reservation_bytes = speculative_prefill_draft_scoring_reservation_bytes(
             draft_decoder_state_growth_bytes,
             draft_vision_payload_bytes,

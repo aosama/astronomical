@@ -8,6 +8,7 @@ use astronomical_config::{
 
 use super::write_config;
 
+mod chunking;
 mod logging;
 mod maximum_mlx_memory;
 mod optimizer_directory;

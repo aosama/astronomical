@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 
 use astronomical_model_serving::{
     ExpertWeightMemoryCacheStatistics, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5Model,
-    RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::{MissedTickBehavior, interval, sleep};
@@ -193,8 +192,14 @@ pub(crate) async fn load_paged_qwen3_5_model_for_decode_probe(
 
     eprintln!("{log_prefix} status=progress phase=model_load");
     let model_load_started_at = Instant::now();
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-        .expect("the Ornith model should load with automatic expert residency");
+    let qwen3_5_model = Qwen3_5Model::load(
+        runtime,
+        validated_artifact,
+        &model_directory,
+        false,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the Ornith model should load with automatic expert residency");
     eprintln!(
         "{log_prefix} status=progress phase=model_loaded elapsed_seconds={:.2}",
         model_load_started_at.elapsed().as_secs_f64()
@@ -210,7 +215,7 @@ fn run_say_hi_30_token_paged_decode_pass(
     should_print_per_token_progress: bool,
 ) -> PagedDecodePassMeasurements {
     eprintln!("{log_prefix} status=progress pass={decode_pass_label} phase=prefill token_count=14");
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(config);
     let prefill_started_at = Instant::now();
     qwen3_5_model
         .prefill_chunck(

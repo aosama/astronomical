@@ -25,15 +25,13 @@ pub use artifact_validation::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use decoder_cache::{
-    ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate,
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, DecoderCacheState,
+    ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, DecoderCacheState,
     DecoderCacheStateAllocationCheckpoint, FullAttentionKeyValueState,
     FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
 };
 pub use decoder_cache::{
-    DEFAULT_APPEND_ONLY_ATTENTION_CAPACITY_GROWTH_TOKENS, DecoderCacheLayerLayout,
-    DecoderCacheLayout, DecoderCacheLayoutError, DecoderCachePersistedTensorLayout,
-    DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError,
+    DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
 };
 pub use deepseek_v4::{
     DeepSeekV4UnavailableGenerationProcessor, DeepSeekV4UnavailableInferenceEngine,
@@ -130,8 +128,9 @@ pub use qwen3_5::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{
     Qwen3_5Engine, Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
-    Qwen3_5MtpForwardOutput, Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint,
-    Qwen3_5MtpRuntimeState, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5MtpRequestState,
+    Qwen3_5MtpRequestStateAllocationCheckpoint, Qwen3_5MtpRuntimeState,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5PrefillChunckSizer,
     Qwen3_5PrefillChunckSizerError, Qwen3_5PrefillExecutionContext,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5SpeculativePrefillSelectionError,

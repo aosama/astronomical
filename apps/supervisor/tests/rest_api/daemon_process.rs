@@ -247,7 +247,7 @@ async fn spawn_daemon_with_worker_ready_model(
     // they intend to exercise.
     write_config(
         temp_home.path(),
-        r#"{"prefill_chunck_size_optimizer_enabled":true,"supervisor":{"bind_address":"127.0.0.1:0"}}"#,
+        r#"{"chunking":{"prefill_size_optimizer_enabled":true},"supervisor":{"bind_address":"127.0.0.1:0"}}"#,
     );
     let mut daemon_command = Command::new(daemon_executable_path);
     daemon_command

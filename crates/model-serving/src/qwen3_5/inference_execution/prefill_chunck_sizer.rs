@@ -12,8 +12,6 @@ use crate::{
     PrefillChunckSizeOptimizerObservation,
 };
 use std::path::PathBuf;
-const SLIDING_WINDOW_OBSERVATION_COUNT: usize = 5;
-const PROMPT_POSITION_CONTEXT_BUCKET_TOKENS: usize = 32_768;
 const RESTORED_PREFIX_CONTEXT_FLAG: u64 = 1 << 32;
 const FIRST_CHUNCK_AFTER_RESTORE_CONTEXT_FLAG: u64 = 1 << 33;
 
@@ -27,6 +25,7 @@ pub struct Qwen3_5PrefillChunckSizer {
     has_completed_prefill_chunck_in_active_request: bool,
     active_request_has_observed_capacity_reduction: bool,
     latest_prefill_optimizer_insight: Option<PrefillChunckOptimizerInsight>,
+    prompt_position_context_bucket_tokens: Option<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,14 +46,23 @@ struct OptimizerStatePersistence {
 }
 
 impl Qwen3_5PrefillChunckSizer {
-    /// Uses candidates through the validated model context maximum for prompt processing.
-    pub fn production(
+    /// Creates the production optimizer with explicit evidence and position boundaries.
+    pub fn for_optimized_with_behavior(
         maximum_prefill_chunck_tokens: u32,
         optimizer_prefill_chunck_token_candidates: Vec<u32>,
+        sliding_window_observation_count: u32,
+        prompt_position_context_bucket_tokens: u32,
     ) -> Result<Self, Qwen3_5PrefillChunckSizerError> {
-        Self::for_optimized_with_maximum_prefill_chunck_tokens(
+        if sliding_window_observation_count == 0 || prompt_position_context_bucket_tokens == 0 {
+            return Err(Qwen3_5PrefillChunckSizerError::MustBePositive);
+        }
+        Self::for_optimized_with_maximum_prefill_chunck_tokens_and_behavior(
             maximum_prefill_chunck_tokens,
             optimizer_prefill_chunck_token_candidates,
+            usize::try_from(sliding_window_observation_count)
+                .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?,
+            usize::try_from(prompt_position_context_bucket_tokens)
+                .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?,
         )
     }
 
@@ -63,13 +71,25 @@ impl Qwen3_5PrefillChunckSizer {
     /// On construction, attempts to load persisted state from the given directory.
     /// If no state exists or the state is stale/corrupt, starts fresh (no error).
     /// After each full-chunk observation, persists the updated optimizer state.
-    pub fn for_optimized_production_with_persisted_state(
+    /// Creates a persisted optimizer with explicit evidence and position boundaries.
+    #[allow(clippy::too_many_arguments)]
+    pub fn for_optimized_production_with_persisted_state_and_behavior(
         maximum_prefill_chunck_tokens: u32,
         optimizer_prefill_chunck_token_candidates: Vec<u32>,
         optimizer_state_directory: PathBuf,
         model_id: String,
         model_revision: String,
+        sliding_window_observation_count: u32,
+        prompt_position_context_bucket_tokens: u32,
     ) -> Result<Self, Qwen3_5PrefillChunckSizerError> {
+        if sliding_window_observation_count == 0 || prompt_position_context_bucket_tokens == 0 {
+            return Err(Qwen3_5PrefillChunckSizerError::MustBePositive);
+        }
+        let sliding_window_observation_count = usize::try_from(sliding_window_observation_count)
+            .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?;
+        let prompt_position_context_bucket_tokens =
+            usize::try_from(prompt_position_context_bucket_tokens)
+                .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?;
         let prefill_chunck_tokens =
             maximum_prefill_chunck_tokens_from_u32(maximum_prefill_chunck_tokens)?;
         let candidate_prefill_chunck_tokens = configured_candidate_prefill_chunck_tokens(
@@ -83,7 +103,7 @@ impl Qwen3_5PrefillChunckSizer {
             model_id.clone(),
             model_revision.clone(),
             candidate_prefill_chunck_tokens.clone(),
-            SLIDING_WINDOW_OBSERVATION_COUNT,
+            sliding_window_observation_count,
         ) {
             Ok(Some(loaded_optimizer)) => {
                 tracing::info!(
@@ -103,7 +123,7 @@ impl Qwen3_5PrefillChunckSizer {
                 );
                 PrefillChunckSizeOptimizer::new(
                     candidate_prefill_chunck_tokens.clone(),
-                    SLIDING_WINDOW_OBSERVATION_COUNT,
+                    sliding_window_observation_count,
                 )
                 .map_err(|_| Qwen3_5PrefillChunckSizerError::OptimizerRejectedCandidateSet)?
             }
@@ -115,7 +135,7 @@ impl Qwen3_5PrefillChunckSizer {
                 );
                 PrefillChunckSizeOptimizer::new(
                     candidate_prefill_chunck_tokens.clone(),
-                    SLIDING_WINDOW_OBSERVATION_COUNT,
+                    sliding_window_observation_count,
                 )
                 .map_err(|_| Qwen3_5PrefillChunckSizerError::OptimizerRejectedCandidateSet)?
             }
@@ -142,6 +162,7 @@ impl Qwen3_5PrefillChunckSizer {
             has_completed_prefill_chunck_in_active_request: false,
             active_request_has_observed_capacity_reduction: false,
             latest_prefill_optimizer_insight: None,
+            prompt_position_context_bucket_tokens: Some(prompt_position_context_bucket_tokens),
         })
     }
 
@@ -162,13 +183,15 @@ impl Qwen3_5PrefillChunckSizer {
             has_completed_prefill_chunck_in_active_request: false,
             active_request_has_observed_capacity_reduction: false,
             latest_prefill_optimizer_insight: None,
+            prompt_position_context_bucket_tokens: None,
         })
     }
 
-    /// Creates an adaptive optimizer bounded by explicit `prefill_chunck_tokens`.
-    pub fn for_optimized_with_maximum_prefill_chunck_tokens(
+    fn for_optimized_with_maximum_prefill_chunck_tokens_and_behavior(
         maximum_prefill_chunck_tokens: u32,
         optimizer_prefill_chunck_token_candidates: Vec<u32>,
+        sliding_window_observation_count: usize,
+        prompt_position_context_bucket_tokens: usize,
     ) -> Result<Self, Qwen3_5PrefillChunckSizerError> {
         let prefill_chunck_tokens =
             maximum_prefill_chunck_tokens_from_u32(maximum_prefill_chunck_tokens)?;
@@ -178,7 +201,7 @@ impl Qwen3_5PrefillChunckSizer {
         )?;
         let prefill_chunck_size_optimizer = PrefillChunckSizeOptimizer::new(
             candidate_prefill_chunck_tokens,
-            SLIDING_WINDOW_OBSERVATION_COUNT,
+            sliding_window_observation_count,
         )
         .map_err(|_| Qwen3_5PrefillChunckSizerError::OptimizerRejectedCandidateSet)?;
         let active_prefill_chunck_tokens = prefill_chunck_size_optimizer
@@ -198,6 +221,7 @@ impl Qwen3_5PrefillChunckSizer {
             has_completed_prefill_chunck_in_active_request: false,
             active_request_has_observed_capacity_reduction: false,
             latest_prefill_optimizer_insight: None,
+            prompt_position_context_bucket_tokens: Some(prompt_position_context_bucket_tokens),
         })
     }
 
@@ -220,9 +244,13 @@ impl Qwen3_5PrefillChunckSizer {
         prefill_chunck_start: usize,
         prefill_execution_context: Qwen3_5PrefillExecutionContext,
     ) -> u64 {
-        let raw_position_bucket_identifier =
-            u64::try_from(prefill_chunck_start / PROMPT_POSITION_CONTEXT_BUCKET_TOKENS)
-                .unwrap_or(u64::MAX >> 2);
+        let raw_position_bucket_identifier = self
+            .prompt_position_context_bucket_tokens
+            .map(|prompt_position_context_bucket_tokens| {
+                u64::try_from(prefill_chunck_start / prompt_position_context_bucket_tokens)
+                    .unwrap_or(u64::MAX >> 2)
+            })
+            .unwrap_or(0);
         let mut context_identifier = raw_position_bucket_identifier.min((1_u64 << 32) - 1);
         context_identifier |= prefill_execution_context.context_identifier_flags();
         if self.active_request_restored_token_count > 0 {

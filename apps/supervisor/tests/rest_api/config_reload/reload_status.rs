@@ -151,9 +151,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
         config_warning: None,
-        prefill_chunck_sizing_policy: astronomical_config::PrefillChunckSizingPolicy::Fixed {
-            fixed_prefill_chunck_tokens: 2_048,
-        },
+        chunking: astronomical_config::ChunkingConfig::default(),
         optimizer_state_directory: config_home_directory
             .join(".astronomical")
             .join("optimizer"),
@@ -201,7 +199,7 @@ async fn should_apply_only_in_place_reload_fields_when_a_rest_api_restart_is_req
     write_config_file(
         &config_home_directory,
         r#"{
-            "prefill_chunck_size_optimizer_enabled": true,
+            "chunking": { "prefill_size_optimizer_enabled": true },
             "supervisor": { "bind_address": "127.0.0.1:6733" }
         }"#,
     );
@@ -251,7 +249,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
     write_config_file(
         &config_home_directory,
         r#"{
-            "prefill_chunck_size_optimizer_enabled": true
+            "chunking": { "prefill_size_optimizer_enabled": true }
         }"#,
     );
     let reloadable_config = Arc::new(RwLock::new(ResolvedRuntimeConfig {
@@ -262,9 +260,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
         config_warning: Some("ignored fixed prefill setting".to_owned()),
-        prefill_chunck_sizing_policy: astronomical_config::PrefillChunckSizingPolicy::Optimized {
-            optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
-        },
+        chunking: astronomical_config::ChunkingConfig::default(),
         optimizer_state_directory: config_home_directory
             .join(".astronomical")
             .join("optimizer"),

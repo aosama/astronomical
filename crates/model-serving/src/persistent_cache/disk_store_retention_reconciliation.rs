@@ -76,6 +76,7 @@ impl PersistentPromptCacheDiskStore {
             if !block_hashes_with_committed_children.contains(&block_hash)
                 || persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
                     tracked_block.block_index,
+                    self.model_contract.common_prefix_checkpoint_stride_blocks(),
                 )
             {
                 continue;

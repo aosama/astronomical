@@ -21,6 +21,64 @@ pub(crate) mod generation_progress;
 pub(crate) mod qwen3_5;
 pub(crate) mod qwen3_5_moe;
 
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn standard_worker_chunking_configuration()
+-> astronomical_ipc_protocol::WorkerChunkingConfiguration {
+    astronomical_ipc_protocol::WorkerChunkingConfiguration {
+        prefill_sizing_policy:
+            astronomical_ipc_protocol::WorkerPrefillChunckSizingPolicy::Optimized {
+                optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
+            },
+        full_attention_key_value_growth_tokens: 256,
+        speculative_prefill_draft_forward_tokens: 2_048,
+        prefill_graph_submission_layer_interval: 0,
+        generation_graph_submission_layer_interval: 3,
+        prefill_optimizer_observation_window: 5,
+        prefill_optimizer_position_bucket_tokens: 32_768,
+        prompt_cache_block_tokens: None,
+        prompt_cache_common_prefix_stride_blocks: 4,
+    }
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn disabled_worker_speculative_prefill_configuration()
+-> astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration {
+    astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration {
+        enabled: false,
+        target_model_id: None,
+        draft_model_id: None,
+        draft_model_directory: None,
+        minimum_prompt_tokens: 8_192,
+        keep_percentage: 20,
+        selection_chunck_token_count: 32,
+        mandatory_trailing_token_count: 512,
+        lookahead_token_count: 8,
+        importance_pooling_kernel_token_count: 13,
+    }
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn standard_qwen3_5_model_chunking_configuration()
+-> astronomical_model_serving::Qwen3_5ModelChunkingConfiguration {
+    astronomical_model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 3, 2_048)
+        .expect("the standard test model chunking configuration should be valid")
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn standard_request_decoder_state(
+    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+) -> astronomical_model_serving::RequestDecoderStateStack {
+    astronomical_model_serving::RequestDecoderStateStack::empty_from_config_with_full_attention_kv_state_growth_tokens(
+        qwen3_5_config,
+        256,
+    )
+    .expect("the standard test decoder-state growth should be valid")
+}
+
 #[allow(dead_code)]
 pub(crate) fn resolve_model_artifact_qualification_mlx_memory_ceiling_bytes(
     configured_mlx_memory_ceiling_bytes: Option<u64>,

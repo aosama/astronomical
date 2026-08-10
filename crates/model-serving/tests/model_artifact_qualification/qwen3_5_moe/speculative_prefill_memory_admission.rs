@@ -5,10 +5,9 @@ use astronomical_ipc_protocol::{
     RequestId, WorkerPromptProcessingPhase, WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PerformanceAttribution, PerformanceAttributionLog, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
-    Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 
@@ -169,7 +168,7 @@ async fn run_configured_cold_cache_summary_journey(
         importance_pooling_kernel_token_count: resolved_speculative_prefill
             .importance_pooling_kernel_token_count(),
     };
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_target_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -177,7 +176,7 @@ async fn run_configured_cold_cache_summary_journey(
         prefill_chunck_sizer,
         target_tokenizer.think_end_token_id(),
         target_model_directory,
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
         astronomical_config.mtp_enabled(),
         speculative_prefill_configuration,
@@ -328,6 +327,9 @@ fn configured_prefill_chunck_sizer(
     target_model_id: &str,
     target_model_revision: &str,
 ) -> Qwen3_5PrefillChunckSizer {
+    let chunking = astronomical_config
+        .chunking()
+        .expect("the configured chunking policy should resolve");
     match astronomical_config
         .prefill_chunck_sizing_policy()
         .expect("the configured prefill chunk policy should resolve")
@@ -343,12 +345,14 @@ fn configured_prefill_chunck_sizer(
         } => {
             let temporary_optimizer_state_directory = tempfile::tempdir()
                 .expect("the 60K journey should create an isolated optimizer directory");
-            Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state(
+            Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state_and_behavior(
                 target_maximum_position_count,
                 optimizer_prefill_chunck_token_candidates,
                 temporary_optimizer_state_directory.keep(),
                 target_model_id.to_owned(),
                 target_model_revision.to_owned(),
+                chunking.prefill_optimizer_observation_window(),
+                chunking.prefill_optimizer_position_bucket_tokens(),
             )
             .expect("the configured optimized prefill policy should be valid")
         }

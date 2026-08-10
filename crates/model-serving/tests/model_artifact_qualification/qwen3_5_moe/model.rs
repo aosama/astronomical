@@ -1,6 +1,4 @@
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5Model, RequestDecoderStateStack,
-};
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Model};
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::qwen3_5_moe::certified_ornith_config;
@@ -18,10 +16,16 @@ async fn should_match_the_certified_first_greedy_token() {
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
     let runtime = MlxRuntime::initialize(mlx_memory_limits)
         .expect("the direct MLX runtime should initialize");
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-        .expect("the complete Ornith model should bind from validated descriptors");
+    let qwen3_5_model = Qwen3_5Model::load(
+        runtime,
+        validated_artifact,
+        &model_directory,
+        false,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the complete Ornith model should bind from validated descriptors");
     let mut request_decoder_state =
-        RequestDecoderStateStack::empty_from_config(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&certified_ornith_config());
 
     qwen3_5_model
         .prefill_chunck(

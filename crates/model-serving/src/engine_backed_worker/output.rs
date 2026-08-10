@@ -319,6 +319,16 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
+        // Disabled persistent caching is an ownership cut at worker startup,
+        // not merely an engine that happens to report no entries. Avoid even
+        // crossing the engine command channel for cache statistics so disabled
+        // requests perform no cache-specific collection or event work.
+        if self
+            .worker_runtime_feature_configuration
+            .is_some_and(|configuration| !configuration.persistent_prompt_cache_enabled)
+        {
+            return Ok(());
+        }
         let Some(loaded_model) = self.loaded_model.as_ref() else {
             return Ok(());
         };
