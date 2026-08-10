@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
 
 use super::RequestDecoderStateStack;
-use crate::{DecoderCacheState, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT};
+use crate::DecoderCacheState;
 
 /// Bridges persistent prompt-cache block tensors and the live in-memory
 /// request decoder state. The in-memory owners decide how restored tensors
@@ -15,8 +15,16 @@ impl RequestDecoderStateStack {
         runtime: &MlxRuntime,
         block_start_tokens: usize,
         block_end_tokens: usize,
+        persistent_prompt_cache_block_token_count: usize,
     ) -> Result<HashMap<String, MlxArray>, PersistentPromptCacheStateBridgeError> {
-        validate_persistent_prompt_cache_block_range(block_start_tokens, block_end_tokens)?;
+        validate_persistent_prompt_cache_block_range(
+            block_start_tokens,
+            block_end_tokens,
+            persistent_prompt_cache_block_token_count,
+        )?;
+        // Sequence state is sliced only at a contract-derived complete boundary. A partial
+        // slice would produce a valid-looking tensor that cannot participate in the hash chain
+        // or be concatenated with other blocks during a later restore.
         let mut kv_block_tensors = HashMap::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
@@ -235,6 +243,9 @@ impl RequestDecoderStateStack {
             }
         }
 
+        // Evaluate every retained or concatenated array before the next prefill forward. This
+        // places malformed restored state at a single explicit GPU boundary instead of letting
+        // lazy MLX evaluation attribute a later request failure to unrelated model work.
         runtime.evaluate_arrays(&restored_tensors).map_err(
             PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState,
         )
@@ -289,6 +300,7 @@ fn restore_full_attention_blocks(
 fn validate_persistent_prompt_cache_block_range(
     block_start_tokens: usize,
     block_end_tokens: usize,
+    persistent_prompt_cache_block_token_count: usize,
 ) -> Result<(), PersistentPromptCacheStateBridgeError> {
     let block_token_count = block_end_tokens.checked_sub(block_start_tokens).ok_or(
         PersistentPromptCacheStateBridgeError::InvalidBlockRange {
@@ -296,7 +308,9 @@ fn validate_persistent_prompt_cache_block_range(
             block_end_tokens,
         },
     )?;
-    if block_token_count != PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT {
+    if block_token_count != persistent_prompt_cache_block_token_count
+        || persistent_prompt_cache_block_token_count == 0
+    {
         return Err(PersistentPromptCacheStateBridgeError::InvalidBlockRange {
             block_start_tokens,
             block_end_tokens,

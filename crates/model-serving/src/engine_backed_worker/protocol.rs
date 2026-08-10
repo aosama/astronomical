@@ -2,7 +2,8 @@
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, MlxMemorySnapshotSource,
-    ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
+    ProtocolReader, ProtocolWriter, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -71,6 +72,17 @@ where
                     ),
                 )
                 .await?;
+            if let Some(worker_runtime_feature_configuration) = self
+                .worker_runtime_feature_configuration_for_loaded_model(
+                    engine_load_result.speculative_prefill_runtime_state(),
+                )
+            {
+                event_writer
+                    .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                        worker_runtime_feature_configuration,
+                    })
+                    .await?;
+            }
             self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, &mut event_writer)
                 .await?;
             self.emit_persistent_prompt_cache_stats(&mut event_writer)
@@ -83,8 +95,36 @@ where
                     minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,
                 })
                 .await?;
+            if let Some(worker_runtime_feature_configuration) =
+                self.worker_runtime_feature_configuration()
+            {
+                event_writer
+                    .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                        worker_runtime_feature_configuration,
+                    })
+                    .await?;
+            }
         }
         self.serve_protocol(command_reader, event_writer).await
+    }
+
+    pub(super) fn worker_runtime_feature_configuration(
+        &self,
+    ) -> Option<WorkerRuntimeFeatureConfiguration> {
+        self.worker_runtime_feature_configuration
+    }
+
+    fn worker_runtime_feature_configuration_for_loaded_model(
+        &self,
+        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
+    ) -> Option<WorkerRuntimeFeatureConfiguration> {
+        let mut worker_runtime_feature_configuration =
+            self.worker_runtime_feature_configuration()?;
+        worker_runtime_feature_configuration.speculative_prefill_enabled = !matches!(
+            speculative_prefill_runtime_state,
+            SpeculativePrefillRuntimeState::Disabled
+        );
+        Some(worker_runtime_feature_configuration)
     }
 
     async fn serve_protocol<ReadTransport, WriteTransport>(

@@ -115,6 +115,13 @@ pub enum MlxRuntimeError {
         attempted_allocation_bytes: usize,
         allowed_active_memory_bytes: usize,
     },
+    #[error(
+        "MLX safetensors serialization requires {attempted_serialized_byte_count} bytes, above the permitted {maximum_serialized_byte_count} bytes"
+    )]
+    SafetensorsSerializationLimitExceeded {
+        attempted_serialized_byte_count: usize,
+        maximum_serialized_byte_count: usize,
+    },
     #[error("invalid MLX AOT metallib path: {description}")]
     InvalidMetallibPath { description: String },
     #[error("MLX runtime already uses AOT metallib {configured_path:?}")]

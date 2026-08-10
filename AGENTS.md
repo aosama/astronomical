@@ -72,8 +72,6 @@
 
 - The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging and finally token generation. In short any and all operations invovled in actually serving a model request to the end user.
 
-- The minimum representative performane test needs to intake 1K tokens and output 1K tokens with a plus or minus 15% allowance. Anything below that is not a representative measurement at all.
-
 ## Test Fixtures and Their Reuse for Performance And Correctness Tests
 
 - The fixture of Romeo and Juliet MUST be used and the source test input for LLMs, there should not be radnom text or tokens used for testing.

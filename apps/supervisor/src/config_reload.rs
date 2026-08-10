@@ -425,6 +425,9 @@ fn resolve_speculative_prefill_draft_model_directory(
     speculative_prefill_config: &SpeculativePrefillConfig,
     discovered_models: &[DiscoveredModel],
 ) -> Result<Option<PathBuf>, ResolvedRuntimeConfigError> {
+    if !speculative_prefill_config.is_enabled() {
+        return Ok(None);
+    }
     let Some(draft_model_id) = speculative_prefill_config.draft_model_id() else {
         return Ok(None);
     };

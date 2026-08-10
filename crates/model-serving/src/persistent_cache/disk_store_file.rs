@@ -10,7 +10,6 @@ use super::block_format::PersistentPromptCacheBlockHeader;
 use super::block_format_error::PersistentPromptCacheBlockError;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::model_contract::PersistentPromptCacheModelContract;
-use crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
 
 #[derive(Clone, Copy)]
 pub(crate) enum PersistentPromptCacheFileKind {
@@ -46,25 +45,43 @@ impl PersistentPromptCacheSerializedFileWriter
 pub(super) fn serialize_safetensors_file(
     runtime: &MlxRuntime,
     tensors: &HashMap<String, MlxArray>,
-    model_id: &str,
-    model_revision: &str,
+    persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+    maximum_serialized_byte_count: usize,
 ) -> Result<Vec<u8>, PersistentPromptCacheDiskStoreError> {
     let named_arrays: Vec<(&str, &MlxArray)> = tensors
         .iter()
         .map(|(tensor_name, tensor)| (tensor_name.as_str(), tensor))
         .collect();
-    let block_token_count_metadata = PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT.to_string();
-    let metadata_entries: [(&str, &str); 4] = [
+    let block_token_count_metadata = persistent_prompt_cache_model_contract
+        .block_token_count()
+        .to_string();
+    let storage_contract_fingerprint_metadata =
+        persistent_prompt_cache_model_contract.storage_contract_fingerprint_hex();
+    let metadata_entries: [(&str, &str); 5] = [
         (
             "format_version",
             super::block_format::PERSISTENT_PROMPT_CACHE_FORMAT_VERSION,
         ),
-        ("model_id", model_id),
-        ("model_revision", model_revision),
+        (
+            "model_id",
+            persistent_prompt_cache_model_contract.model_id(),
+        ),
+        (
+            "model_revision",
+            persistent_prompt_cache_model_contract.model_revision(),
+        ),
         ("block_token_count", block_token_count_metadata.as_str()),
+        (
+            "storage_contract_fingerprint",
+            storage_contract_fingerprint_metadata.as_str(),
+        ),
     ];
     runtime
-        .serialize_safetensors(&named_arrays, &metadata_entries)
+        .serialize_safetensors_with_maximum_byte_count(
+            &named_arrays,
+            &metadata_entries,
+            maximum_serialized_byte_count,
+        )
         .map_err(|source| PersistentPromptCacheDiskStoreError::SaveSafetensors { source })
 }
 

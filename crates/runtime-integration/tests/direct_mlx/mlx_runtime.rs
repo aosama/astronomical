@@ -26,10 +26,6 @@ fn should_install_the_runtime_and_expose_enforced_memory_limits() {
         ACTIVE_MEMORY_LIMIT_BYTES
     );
     assert_eq!(runtime.memory_limits(), memory_limits);
-    assert_eq!(
-        runtime.configured_wired_memory_limit_bytes(),
-        ACTIVE_MEMORY_LIMIT_BYTES
-    );
     let memory_snapshot = runtime
         .memory_snapshot()
         .expect("runtime memory metrics should be readable");
@@ -42,7 +38,7 @@ fn should_install_the_runtime_and_expose_enforced_memory_limits() {
     .expect("the lowered memory limits should be valid");
     runtime
         .update_memory_limits(lowered_memory_limits)
-        .expect("the runtime should lower all MLX memory limits");
+        .expect("the runtime should lower both MLX memory limits");
     assert_eq!(runtime.memory_limits(), lowered_memory_limits);
     assert_eq!(
         runtime

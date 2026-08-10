@@ -13,7 +13,7 @@ func localSupervisorEndpointURL(path: String) throws -> URL {
 
 protocol SupervisorClient: Sendable {
   func fetchStatus() async throws -> SupervisorStatusDocument
-  func reloadConfiguration() async throws -> String
+  func reloadConfiguration() async throws -> ConfigurationReloadResult
   func requestShutdown() async throws
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String
   func healthIsAvailable() async -> Bool
@@ -35,11 +35,11 @@ struct LocalSupervisorClient: SupervisorClient {
     return try JSONDecoder().decode(SupervisorStatusDocument.self, from: responseBody)
   }
 
-  func reloadConfiguration() async throws -> String {
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
     let responseBody = try await request(
       path: "/v1/config/reload", method: "POST", acceptedStatusCodes: [200, 202]
     )
-    return try JSONDecoder().decode(ConfigReloadResponse.self, from: responseBody).message
+    return try JSONDecoder().decode(ConfigurationReloadResult.self, from: responseBody)
   }
 
   func requestShutdown() async throws {
@@ -52,7 +52,7 @@ struct LocalSupervisorClient: SupervisorClient {
     let responseBody = try await request(
       path: "/v1/config/maximum-mlx-memory", method: "PUT", requestBody: requestBody,
       acceptedStatusCodes: [200, 202], timeoutInterval: maximumMlxMemoryUpdateTimeoutSeconds)
-    return try JSONDecoder().decode(ConfigReloadResponse.self, from: responseBody).message
+    return try JSONDecoder().decode(ConfigurationReloadResult.self, from: responseBody).message
   }
 
   func healthIsAvailable() async -> Bool {
@@ -80,7 +80,7 @@ struct LocalSupervisorClient: SupervisorClient {
       throw SupervisorClientError.unexpectedResponse
     }
     guard acceptedStatusCodes.contains(httpResponse.statusCode) else {
-      let serverMessage = try? JSONDecoder().decode(ConfigReloadResponse.self, from: responseBody)
+      let serverMessage = try? JSONDecoder().decode(ConfigurationReloadResult.self, from: responseBody)
       throw SupervisorClientError.serverRejected(
         serverMessage?.message ?? "Server returned HTTP \(httpResponse.statusCode)"
       )
@@ -89,8 +89,50 @@ struct LocalSupervisorClient: SupervisorClient {
   }
 }
 
-private struct ConfigReloadResponse: Decodable {
+struct ConfigurationReloadResult: Decodable, Equatable {
   let message: String
+  let workerRestartCompleted: Bool
+  let workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration?
+
+  init(
+    message: String,
+    workerRestartCompleted: Bool = false,
+    workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration? = nil
+  ) {
+    self.message = message
+    self.workerRestartCompleted = workerRestartCompleted
+    self.workerRuntimeFeatureConfiguration = workerRuntimeFeatureConfiguration
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case message
+    case workerRestartCompleted = "worker_restart_completed"
+    case workerRuntimeFeatureConfiguration = "worker_runtime_feature_configuration"
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    message = try container.decode(String.self, forKey: .message)
+    workerRestartCompleted = try container.decodeIfPresent(Bool.self, forKey: .workerRestartCompleted) ?? false
+    workerRuntimeFeatureConfiguration = try container.decodeIfPresent(
+      WorkerRuntimeFeatureConfiguration.self, forKey: .workerRuntimeFeatureConfiguration)
+  }
+}
+
+/// Exact feature policy acknowledged by the worker and echoed by local control responses.
+///
+/// This remains Codable because status fixtures also encode SupervisorStatusDocument while
+/// exercising the same localhost wire contract that the menu decodes in production.
+struct WorkerRuntimeFeatureConfiguration: Codable, Equatable {
+  let persistentPromptCacheEnabled: Bool
+  let mtpEnabled: Bool
+  let speculativePrefillEnabled: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case persistentPromptCacheEnabled = "persistent_prompt_cache_enabled"
+    case mtpEnabled = "mtp_enabled"
+    case speculativePrefillEnabled = "speculative_prefill_enabled"
+  }
 }
 
 private struct MaximumMlxMemoryRequest: Encodable {

@@ -3,7 +3,7 @@ use std::{error::Error, process::ExitCode};
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, MlxMemorySnapshotSource,
     MtpRuntimeState, ProtocolReader, ProtocolWriter, SpeculativePrefillRuntimeState, WorkerCommand,
-    WorkerEvent, WorkerMlxMemorySnapshot,
+    WorkerEvent, WorkerMlxMemorySnapshot, WorkerRuntimeFeatureConfiguration,
 };
 
 #[tokio::main]
@@ -30,7 +30,20 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     while let Some(worker_command) = command_reader.next_command().await? {
         match worker_command {
-            WorkerCommand::InitializeWorker(_) => {}
+            WorkerCommand::InitializeWorker(worker_startup_configuration) => {
+                event_writer
+                    .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                        worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
+                            persistent_prompt_cache_enabled: worker_startup_configuration
+                                .persistent_prompt_cache_enabled,
+                            mtp_enabled: worker_startup_configuration.mtp_enabled,
+                            speculative_prefill_enabled: worker_startup_configuration
+                                .speculative_prefill
+                                .enabled,
+                        },
+                    })
+                    .await?;
+            }
             WorkerCommand::SwapModel {
                 model_directory, ..
             } => {

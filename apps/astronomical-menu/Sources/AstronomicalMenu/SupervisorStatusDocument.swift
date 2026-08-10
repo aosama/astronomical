@@ -139,6 +139,14 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let mtpEnabled: Bool
   let mtpRuntimeState: String
   let mtpUnavailableReason: String?
+  let configuredSpeculativePrefillEnabled: Bool
+  let speculativePrefillEnabled: Bool
+  // True only when the current worker has emitted its runtime configuration event; configuration
+  // intent alone is insufficient because a replacement worker can still fail before applying it.
+  let workerRuntimeFeatureConfigurationApplied: Bool
+  // The complete acknowledgement lets control actions compare the exact policy they requested
+  // with the policy currently served, rather than inferring it from one derived feature flag.
+  let workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration?
   let mlxMemorySnapshot: MlxMemorySnapshot?
   let mlxMemoryCeilingBytes: UInt64
   let machineMlxMemoryCeilingBytes: UInt64
@@ -156,6 +164,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
     case mtpEnabled = "mtp_enabled"
     case mtpRuntimeState = "mtp_runtime_state"
     case mtpUnavailableReason = "mtp_unavailable_reason"
+    case configuredSpeculativePrefillEnabled = "configured_speculative_prefill_enabled"
+    case speculativePrefillEnabled = "speculative_prefill_enabled"
+    case workerRuntimeFeatureConfigurationApplied = "worker_runtime_feature_configuration_applied"
+    case workerRuntimeFeatureConfiguration = "worker_runtime_feature_configuration"
     case mlxMemorySnapshot = "mlx_memory_snapshot"
     case mlxMemoryCeilingBytes = "mlx_memory_ceiling_bytes"
     case machineMlxMemoryCeilingBytes = "machine_mlx_memory_ceiling_bytes"
@@ -177,6 +189,13 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mtpEnabled = try container.decodeIfPresent(Bool.self, forKey: .mtpEnabled) ?? false
     mtpRuntimeState = try container.decodeIfPresent(String.self, forKey: .mtpRuntimeState) ?? "disabled"
     mtpUnavailableReason = try container.decodeIfPresent(String.self, forKey: .mtpUnavailableReason)
+    configuredSpeculativePrefillEnabled = try container.decodeIfPresent(
+      Bool.self, forKey: .configuredSpeculativePrefillEnabled) ?? false
+    speculativePrefillEnabled = try container.decodeIfPresent(Bool.self, forKey: .speculativePrefillEnabled) ?? false
+    workerRuntimeFeatureConfigurationApplied = try container.decodeIfPresent(
+      Bool.self, forKey: .workerRuntimeFeatureConfigurationApplied) ?? false
+    workerRuntimeFeatureConfiguration = try container.decodeIfPresent(
+      WorkerRuntimeFeatureConfiguration.self, forKey: .workerRuntimeFeatureConfiguration)
     mlxMemorySnapshot = try container.decodeIfPresent(MlxMemorySnapshot.self, forKey: .mlxMemorySnapshot)
     mlxMemoryCeilingBytes =
       try container.decodeIfPresent(UInt64.self, forKey: .mlxMemoryCeilingBytes) ?? 0
@@ -203,6 +222,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mtpEnabled: Bool = false,
     mtpRuntimeState: String = "disabled",
     mtpUnavailableReason: String? = nil,
+    configuredSpeculativePrefillEnabled: Bool = false,
+    speculativePrefillEnabled: Bool = false,
+    workerRuntimeFeatureConfigurationApplied: Bool = false,
+    workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration? = nil,
     mlxMemorySnapshot: MlxMemorySnapshot? = nil,
     mlxMemoryCeilingBytes: UInt64,
     machineMlxMemoryCeilingBytes: UInt64 = 0,
@@ -221,6 +244,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.mtpEnabled = mtpEnabled
     self.mtpRuntimeState = mtpRuntimeState
     self.mtpUnavailableReason = mtpUnavailableReason
+    self.configuredSpeculativePrefillEnabled = configuredSpeculativePrefillEnabled
+    self.speculativePrefillEnabled = speculativePrefillEnabled
+    self.workerRuntimeFeatureConfigurationApplied = workerRuntimeFeatureConfigurationApplied
+    self.workerRuntimeFeatureConfiguration = workerRuntimeFeatureConfiguration
     self.mlxMemorySnapshot = mlxMemorySnapshot
     self.mlxMemoryCeilingBytes = mlxMemoryCeilingBytes
     self.machineMlxMemoryCeilingBytes = machineMlxMemoryCeilingBytes

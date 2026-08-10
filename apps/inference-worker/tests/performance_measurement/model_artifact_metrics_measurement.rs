@@ -313,10 +313,10 @@ async fn measure_worker_summarization(
             tool_choice: ChatToolChoice::None,
             settings: ChatGenerationSettings {
                 max_output_tokens: metrics_case.maximum_output_tokens,
-                temperature_thousandths: Some(1_000),
-                top_p_thousandths: Some(950),
-                seed: Some(1),
-                thinking_budget: None,
+                temperature_thousandths: None,
+                top_p_thousandths: None,
+                seed: None,
+                thinking_budget: Some(256),
             },
         })
         .await

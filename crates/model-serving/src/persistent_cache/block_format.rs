@@ -1,4 +1,4 @@
-//! Bounded, MLX-free validator for persisted Qwen3.5-MoE prompt-cache files.
+//! Bounded, MLX-free validator for persisted model-state files.
 //!
 //! Version 7 derives decoder-state tensor validation from the model-owned,
 //! architecture-neutral cache layout. Version 8 invalidates snapshots written
@@ -12,8 +12,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
-use crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-use crate::decoder_cache::{DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype};
+use crate::decoder_cache::DecoderCachePersistedTensorLayout;
 use crate::safetensors::SafetensorsTensorView;
 
 use super::block_format_error::PersistentPromptCacheBlockError;
@@ -32,9 +31,9 @@ use super::persistent_safetensors_header::{
 /// shape-safe variable-length compiled decay execution.
 /// Version 8: invalidates state produced before the complete-layer rollback
 /// corrected macOS-pressure expert residency.
-/// Version 9: requires exact F32 attention, F16 convolution, and F32
-/// gated-delta recurrent state so every restored block preserves execution math.
-pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "9";
+/// Version 10: binds model-derived block geometry and the complete storage
+/// contract fingerprint while allowing each declared state kind independently.
+pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "10";
 
 /// Parsed and validated metadata for one Qwen3.5-MoE persistent prompt-cache block on disk.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,6 +41,7 @@ pub struct PersistentPromptCacheBlockHeader {
     format_version: String,
     model_id: String,
     model_revision: String,
+    storage_contract_fingerprint: String,
     block_token_count: usize,
     tensor_count: usize,
 }
@@ -92,7 +92,11 @@ impl PersistentPromptCacheBlockHeader {
             extract_required_metadata(&parsed_header.metadata, persistent_prompt_cache_block_path)?;
         // Model identity and format validation occur before tensor checks so a
         // directory shared with another model revision remains harmless.
-        validate_metadata(&metadata, persistent_prompt_cache_model_contract)?;
+        validate_metadata(
+            &metadata,
+            persistent_prompt_cache_block_path,
+            persistent_prompt_cache_model_contract,
+        )?;
         validate_tensor_layout(
             &parsed_header.tensor_views,
             metadata.block_token_count,
@@ -110,6 +114,7 @@ impl PersistentPromptCacheBlockHeader {
             format_version: metadata.format_version,
             model_id: metadata.model_id,
             model_revision: metadata.model_revision,
+            storage_contract_fingerprint: metadata.storage_contract_fingerprint,
             block_token_count: metadata.block_token_count,
             tensor_count: parsed_header.tensor_views.len(),
         })
@@ -139,6 +144,12 @@ impl PersistentPromptCacheBlockHeader {
         self.block_token_count
     }
 
+    /// Returns the exact model storage-contract fingerprint stamped into the file.
+    #[must_use]
+    pub fn storage_contract_fingerprint(&self) -> &str {
+        &self.storage_contract_fingerprint
+    }
+
     /// Returns the number of tensors declared in the block header.
     #[must_use]
     pub fn tensor_count(&self) -> usize {
@@ -156,6 +167,7 @@ struct RequiredMetadata {
     format_version: String,
     model_id: String,
     model_revision: String,
+    storage_contract_fingerprint: String,
     block_token_count: usize,
 }
 
@@ -184,6 +196,13 @@ fn extract_required_metadata(
             field_name: "model_revision",
         })?
         .clone();
+    let storage_contract_fingerprint = metadata
+        .get("storage_contract_fingerprint")
+        .ok_or_else(|| PersistentPromptCacheBlockError::MissingMetadata {
+            persistent_prompt_cache_block_path: persistent_prompt_cache_block_path.to_path_buf(),
+            field_name: "storage_contract_fingerprint",
+        })?
+        .clone();
     let block_token_count_text = metadata.get("block_token_count").ok_or_else(|| {
         PersistentPromptCacheBlockError::MissingMetadata {
             persistent_prompt_cache_block_path: persistent_prompt_cache_block_path.to_path_buf(),
@@ -201,12 +220,14 @@ fn extract_required_metadata(
         format_version,
         model_id,
         model_revision,
+        storage_contract_fingerprint,
         block_token_count,
     })
 }
 
 fn validate_metadata(
     metadata: &RequiredMetadata,
+    persistent_prompt_cache_block_path: &Path,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
 ) -> Result<(), PersistentPromptCacheBlockError> {
     // A content hash proves prompt ancestry, not tensor compatibility. These
@@ -227,11 +248,23 @@ fn validate_metadata(
             actual_model_revision: metadata.model_revision.clone(),
         });
     }
-    if metadata.block_token_count != PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT {
+    if metadata.block_token_count != persistent_prompt_cache_model_contract.block_token_count() {
         return Err(PersistentPromptCacheBlockError::BlockTokenCountMismatch {
             actual_block_token_count: metadata.block_token_count,
-            expected_block_token_count: PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
+            expected_block_token_count: persistent_prompt_cache_model_contract.block_token_count(),
         });
+    }
+    if metadata.storage_contract_fingerprint
+        != persistent_prompt_cache_model_contract.storage_contract_fingerprint_hex()
+    {
+        return Err(
+            PersistentPromptCacheBlockError::InvalidModelSpecificArtifact {
+                persistent_prompt_cache_block_path: persistent_prompt_cache_block_path
+                    .to_path_buf(),
+                description: "persistent model-state storage contract fingerprint does not match"
+                    .to_owned(),
+            },
+        );
     }
     Ok(())
 }
@@ -288,11 +321,10 @@ fn validate_expected_tensor_layout(
             tensor_name: tensor_name.clone(),
         }
     })?;
-    let expected_dtype = match expected_tensor_layout.tensor_layout().dtype() {
-        DecoderCacheTensorDtype::Float16 => "F16",
-        DecoderCacheTensorDtype::BFloat16 => "BF16",
-        DecoderCacheTensorDtype::Float32 => "F32",
-    };
+    let expected_dtype = expected_tensor_layout
+        .tensor_layout()
+        .dtype()
+        .safetensors_dtype_name();
     if tensor_view.dtype != expected_dtype {
         return Err(PersistentPromptCacheBlockError::TensorDtypeMismatch {
             persistent_prompt_cache_block_path: persistent_prompt_cache_block_path.to_path_buf(),
@@ -343,6 +375,36 @@ fn validate_tensor_offsets(
                 tensor_name: tensor_name.clone(),
                 start_offset,
                 end_offset,
+            });
+        }
+        let scalar_byte_count = match tensors
+            .get(tensor_name)
+            .map(|tensor_view| tensor_view.dtype.as_str())
+        {
+            Some("F16") | Some("BF16") => 2_u64,
+            Some("F32") => 4_u64,
+            Some(_) | None => 0_u64,
+        };
+        let expected_payload_byte_count = tensors
+            .get(tensor_name)
+            .map(|tensor_view| {
+                tensor_view.shape.iter().try_fold(
+                    scalar_byte_count,
+                    |payload_byte_count, tensor_dimension| {
+                        payload_byte_count.checked_mul(*tensor_dimension as u64)
+                    },
+                )
+            })
+            .flatten();
+        if let Some(expected_payload_byte_count) = expected_payload_byte_count
+            && end_offset.saturating_sub(start_offset) != expected_payload_byte_count
+        {
+            return Err(PersistentPromptCacheBlockError::TensorPayloadSizeMismatch {
+                persistent_prompt_cache_block_path: persistent_prompt_cache_block_path
+                    .to_path_buf(),
+                tensor_name: tensor_name.clone(),
+                expected_payload_byte_count,
+                actual_payload_byte_count: end_offset.saturating_sub(start_offset),
             });
         }
         let absolute_end_offset = data_section_start.checked_add(end_offset).ok_or_else(|| {

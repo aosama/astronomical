@@ -189,7 +189,10 @@ impl Qwen3_5Model {
                                 model_directory.to_path_buf(),
                                 &tensor_name_to_shard_file_name,
                                 &config,
-                                runtime.configured_wired_memory_limit_bytes(),
+                                // The live configurable MLX active-memory ceiling is the only
+                                // paging budget. Reading the runtime policy here lets reloads
+                                // apply on every machine without copying a stale wired limit.
+                                runtime.memory_limits().active_memory_limit_bytes(),
                                 mtp_weights.is_some(),
                             )
                         },

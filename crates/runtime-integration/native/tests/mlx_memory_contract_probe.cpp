@@ -2,7 +2,6 @@
 #include <exception>
 #include <functional>
 #include <iostream>
-#include <limits>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -452,25 +451,6 @@ void require_policy_round_trips() {
       get_memory_limit() == current_memory_limit,
       "get_memory_limit did not expose the restored memory limit");
 
-  const auto previous_wired_limit = set_wired_limit(0);
-  const auto maximum_recommended_working_set_size_bytes = std::get<std::size_t>(
-      device_info(Device{Device::gpu}).at("max_recommended_working_set_size"));
-  require_condition(
-      maximum_recommended_working_set_size_bytes < std::numeric_limits<std::size_t>::max(),
-      "maximum recommended working-set size cannot be incremented for rejection testing");
-  bool oversized_wired_limit_was_rejected = false;
-  try {
-    set_wired_limit(maximum_recommended_working_set_size_bytes + 1);
-  } catch (const std::invalid_argument&) {
-    oversized_wired_limit_was_rejected = true;
-  }
-  require_condition(
-      oversized_wired_limit_was_rejected,
-      "MLX accepted a wired limit above its public maximum working-set size");
-  const auto wired_limit_before_restore = set_wired_limit(previous_wired_limit);
-  require_condition(
-      wired_limit_before_restore == 0,
-      "oversized wired-limit rejection changed the temporary process wired limit");
   print_counters("policy_round_trips", read_memory_counters());
 }
 

@@ -4,6 +4,8 @@ pub struct EngineBackedWorker<Processor, Engine, Factory = ()> {
     pub(crate) machine_mlx_memory_ceiling_bytes: u64,
     pub(crate) effective_mlx_memory_ceiling_bytes: u64,
     pub(crate) minimum_mlx_memory_ceiling_bytes: u64,
+    pub(crate) worker_runtime_feature_configuration:
+        Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
 }
 
 pub(crate) struct LoadedModel<Processor, Engine> {

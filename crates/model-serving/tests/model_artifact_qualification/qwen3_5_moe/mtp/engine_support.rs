@@ -147,10 +147,10 @@ pub(super) fn configured_mtp_artifact_test_inputs(
                 tool_choice: ChatToolChoice::None,
                 settings: ChatGenerationSettings {
                     max_output_tokens: 128,
-                    temperature_thousandths: Some(0),
-                    top_p_thousandths: Some(1_000),
+                    temperature_thousandths: None,
+                    top_p_thousandths: None,
                     seed: None,
-                    thinking_budget: None,
+                    thinking_budget: Some(256),
                 },
             },
             false,

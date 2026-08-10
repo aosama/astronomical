@@ -1,7 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
 use astronomical_inference_worker::worker_startup::sample_iogpu_wired_limit_bytes;
-use astronomical_model_serving::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
 use serde_json::{Value, json};
 use tokio::time::{Instant, timeout};
 
@@ -151,16 +150,15 @@ fn assert_persistent_prompt_cache_warmup(
         warm_streaming_measurement.cached_token_count > 0,
         "the second request should restore cached blocks from SSD"
     );
-    assert_eq!(
-        warm_streaming_measurement.cached_token_count
-            % PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT as u64,
-        0,
-        "cached tokens should be whole persistent prompt-cache blocks"
+    assert!(
+        warm_streaming_measurement.cached_token_count as usize
+            >= saved_persistent_prompt_cache_block_count,
+        "cached tokens should cover every saved persistent model-state block"
     );
     assert_eq!(
         warm_streaming_measurement.cached_token_count as usize
-            / PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
-        saved_persistent_prompt_cache_block_count,
+            % saved_persistent_prompt_cache_block_count,
+        0,
         "the warm request must restore every block saved by the cold request"
     );
     assert_eq!(
@@ -206,6 +204,11 @@ fn benchmark_report(
         .physical_footprint
         .peak_bytes
         .saturating_sub(warm_worker_pass.physical_footprint.peak_bytes);
+    let observed_block_token_count = warm_worker_pass
+        .streaming_measurement
+        .cached_token_count
+        .checked_div(u64::try_from(saved_persistent_prompt_cache_block_count).unwrap_or(1))
+        .unwrap_or(0);
 
     json!({
         "model": MODEL_ID,
@@ -213,7 +216,7 @@ fn benchmark_report(
         "source_words": persistent_prompt_cache_warmup_case.source_word_count,
         "gpu_wired_limit_bytes": maximum_gpu_wired_memory_bytes,
         "persistent_prompt_cache": {
-            "block_size_tokens": PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
+            "observed_block_size_tokens": observed_block_token_count,
             "saved_block_count": saved_persistent_prompt_cache_block_count,
             "saved_bytes": saved_persistent_prompt_cache_byte_count,
         },

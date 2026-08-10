@@ -17,6 +17,20 @@ impl MlxRuntime {
         named_arrays: &[(&str, &MlxArray)],
         metadata_entries: &[(&str, &str)],
     ) -> Result<Vec<u8>, MlxRuntimeError> {
+        self.serialize_safetensors_with_maximum_byte_count(
+            named_arrays,
+            metadata_entries,
+            usize::MAX,
+        )
+    }
+
+    /// Serializes named arrays without exceeding Rust-owned output capacity.
+    pub fn serialize_safetensors_with_maximum_byte_count(
+        &self,
+        named_arrays: &[(&str, &MlxArray)],
+        metadata_entries: &[(&str, &str)],
+        maximum_serialized_byte_count: usize,
+    ) -> Result<Vec<u8>, MlxRuntimeError> {
         if named_arrays.is_empty() {
             return Err(writer_error(
                 "serialize safetensors",
@@ -26,7 +40,7 @@ impl MlxRuntime {
 
         let tensor_map = OwnedTensorMap::from_entries(named_arrays)?;
         let metadata_map = OwnedMetadataMap::from_entries(metadata_entries)?;
-        let memory_writer = OwnedMemoryWriter::new()?;
+        let memory_writer = OwnedMemoryWriter::new(maximum_serialized_byte_count)?;
         // SAFETY: The writer and both maps remain live for this synchronous serialization.
         let save_status = unsafe {
             raw::mlx_save_safetensors_writer(memory_writer.raw_writer, tensor_map.0, metadata_map.0)
@@ -42,11 +56,13 @@ struct OwnedMemoryWriter {
 }
 
 impl OwnedMemoryWriter {
-    fn new() -> Result<Self, MlxRuntimeError> {
+    fn new(maximum_serialized_byte_count: usize) -> Result<Self, MlxRuntimeError> {
         let writer_state = Box::into_raw(Box::new(Mutex::new(MemoryWriterState {
             output_bytes: Vec::new(),
             position_bytes: 0,
             is_good: true,
+            maximum_serialized_byte_count,
+            attempted_serialized_byte_count: None,
         })));
         let writer_vtable = raw::mlx_io_vtable {
             is_open: Some(memory_writer_is_open),
@@ -82,6 +98,13 @@ impl OwnedMemoryWriter {
         let mut writer_state = writer_mutex
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(attempted_serialized_byte_count) = writer_state.attempted_serialized_byte_count
+        {
+            return Err(MlxRuntimeError::SafetensorsSerializationLimitExceeded {
+                attempted_serialized_byte_count,
+                maximum_serialized_byte_count: writer_state.maximum_serialized_byte_count,
+            });
+        }
         if !writer_state.is_good {
             return Err(writer_error(
                 "serialize safetensors into bounded memory",
@@ -105,6 +128,8 @@ struct MemoryWriterState {
     output_bytes: Vec<u8>,
     position_bytes: usize,
     is_good: bool,
+    maximum_serialized_byte_count: usize,
+    attempted_serialized_byte_count: Option<usize>,
 }
 
 unsafe extern "C" fn memory_writer_is_open(descriptor: *mut c_void) -> bool {
@@ -180,6 +205,11 @@ unsafe extern "C" fn memory_writer_write(
                 writer_state.is_good = false;
                 return;
             };
+            if write_end_bytes > writer_state.maximum_serialized_byte_count {
+                writer_state.attempted_serialized_byte_count = Some(write_end_bytes);
+                writer_state.is_good = false;
+                return;
+            }
             if write_end_bytes > writer_state.output_bytes.len() {
                 writer_state.output_bytes.resize(write_end_bytes, 0);
             }

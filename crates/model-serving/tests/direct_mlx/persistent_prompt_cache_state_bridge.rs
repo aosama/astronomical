@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
-use astronomical_model_serving::{
-    DecoderCacheState, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, RequestDecoderStateStack,
-};
+use astronomical_model_serving::{DecoderCacheState, RequestDecoderStateStack};
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
 
-use crate::common::qwen3_5_moe::certified_ornith_config;
+use crate::common::qwen3_5_moe::{certified_ornith_config, persistent_prompt_cache_model_contract};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -14,6 +12,7 @@ use crate::common::{
 async fn should_extract_split_persistent_prompt_cache_tensors_from_populated_decoder_state() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();
+    let block_token_count = persistent_prompt_cache_model_contract().block_token_count();
     let ornith_config = certified_ornith_config();
     let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&ornith_config);
     populate_request_decoder_state(&runtime, &mut request_decoder_state);
@@ -22,7 +21,8 @@ async fn should_extract_split_persistent_prompt_cache_tensors_from_populated_dec
         .extract_persistent_prompt_cache_kv_block_tensors(
             &runtime,
             0,
-            PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
+            block_token_count,
+            block_token_count,
         )
         .expect("populated request decoder state should extract a KV block");
     let recurrent_snapshot_tensors = request_decoder_state
@@ -71,19 +71,21 @@ async fn should_extract_split_persistent_prompt_cache_tensors_from_populated_dec
 async fn should_extract_only_the_requested_full_attention_kv_slice_from_longer_model_state() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();
+    let block_token_count = persistent_prompt_cache_model_contract().block_token_count();
     let ornith_config = certified_ornith_config();
     let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&ornith_config);
     populate_request_decoder_state_with_full_attention_tokens(
         &runtime,
         &mut request_decoder_state,
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2,
+        block_token_count * 2,
     );
 
     let kv_block_tensors = request_decoder_state
         .extract_persistent_prompt_cache_kv_block_tensors(
             &runtime,
-            PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
-            PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2,
+            block_token_count,
+            block_token_count * 2,
+            block_token_count,
         )
         .expect("request decoder state should extract the requested KV block slice");
 
@@ -95,10 +97,7 @@ async fn should_extract_only_the_requested_full_attention_kv_slice_from_longer_m
             let values = kv_block_tensors
                 .get(&format!("layer_{layer_index}_attention.values"))
                 .expect("the KV block should contain full-attention values");
-            assert_eq!(
-                keys.shape(),
-                vec![1, 2, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT as i32, 256]
-            );
+            assert_eq!(keys.shape(), vec![1, 2, block_token_count as i32, 256]);
             assert_eq!(keys.shape(), values.shape());
         }
     }
@@ -367,7 +366,7 @@ fn populate_request_decoder_state(
     populate_request_decoder_state_with_full_attention_tokens(
         runtime,
         request_decoder_state,
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
+        persistent_prompt_cache_model_contract().block_token_count(),
     );
 }
 

@@ -1,13 +1,16 @@
 use std::time::Instant;
 
 use crate::{
-    AdaptiveRamGrowthContext, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PerformanceCounter,
-    PerformanceOperation, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    AdaptiveRamGrowthContext, PerformanceCounter, PerformanceOperation,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
 };
 use astronomical_ipc_protocol::RequestId;
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests};
+use super::persistent_prompt_cache_capture::{
+    PromptStatePersistenceOwner, required_prompt_state_persistence_failure,
+};
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::{
     PromptPrefillChunckAttemptError, configured_speculative_prefill_execution_error,
@@ -67,13 +70,22 @@ impl Qwen3_5EngineState {
             );
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
-            && !active_request.persistent_prompt_cache_capture_has_stopped
             && !active_request.has_optional_prediction_session()
             && !speculative_prefill_sparse_conversation_range_is_active;
+        let persistent_prompt_cache_block_token_count = self
+            .persistent_prompt_cache
+            .as_ref()
+            .map(|persistent_prompt_cache| {
+                persistent_prompt_cache
+                    .model_contract_ref()
+                    .block_token_count()
+            })
+            .unwrap_or(1);
         let planned_completed_prefill_chunck_tokens = if capture_is_eligible {
             persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
                 prefill_start,
                 prefill_end,
+                persistent_prompt_cache_block_token_count,
             )
         } else {
             Vec::new()
@@ -81,7 +93,7 @@ impl Qwen3_5EngineState {
         let projected_single_capture_tensor_payload_bytes = model
             .decoder_cache_layout()
             .persistent_prompt_cache_block_payload_byte_count(
-                PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
+                persistent_prompt_cache_block_token_count,
             )
             .map_err(|error| {
                 fatal_engine_error(format!(
@@ -102,18 +114,13 @@ impl Qwen3_5EngineState {
             && !planned_completed_prefill_chunck_tokens.is_empty()
             && !writer_can_accept_projected_captures
         {
-            if active_request.should_use_speculative_prefill {
-                return Err(configured_speculative_prefill_failure(
-                    active_request.request_id,
-                    "exact target prompt-state persistence admission",
-                    "the SSD writer cannot accept every completed protected-prefix boundary",
-                )
-                .into());
-            }
-            active_request.persistent_prompt_cache_capture_has_stopped = true;
-            tracing::info!(
-                "persistent prompt-cache capture stopped before forward because projected boundaries could not be accepted"
-            );
+            return Err(required_prompt_state_persistence_failure(
+                PromptStatePersistenceOwner::for_active_request(active_request),
+                active_request,
+                "exact target prompt-state persistence admission",
+                "the SSD writer cannot accept every completed protected-prefix boundary",
+            )
+            .into());
         }
         let all_completed_prefill_chunck_tokens = if capture_is_active {
             planned_completed_prefill_chunck_tokens
@@ -198,7 +205,6 @@ impl Qwen3_5EngineState {
                         model.sparse_experts_are_paged(),
                         self.persistent_prompt_cache.is_some()
                             && active_request.can_use_persistent_prompt_cache
-                            && !active_request.persistent_prompt_cache_capture_has_stopped
                             && !active_request.has_optional_prediction_session(),
                     )
                     .with_target_only_prefix(matches!(
@@ -360,7 +366,7 @@ impl Qwen3_5EngineState {
                     &mut active_request.request_decoder_state,
                     active_request.image_pad_token_id,
                     intermediate_completed_prefill_chunck_tokens.clone(),
-                    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
+                    persistent_prompt_cache_block_token_count,
                     &mut active_request.performance_attribution,
                 )
                     .map(|checkpoint_outcome| {
@@ -431,7 +437,7 @@ impl Qwen3_5EngineState {
                                 active_request.next_position_tokens,
                                 &mut active_request.request_decoder_state,
                                 intermediate_completed_prefill_chunck_tokens,
-                                PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT,
+                                persistent_prompt_cache_block_token_count,
                                 &mut active_request.performance_attribution,
                             )
                             .map(|checkpoint_outcome| checkpoint_outcome.boundary_checkpoints)

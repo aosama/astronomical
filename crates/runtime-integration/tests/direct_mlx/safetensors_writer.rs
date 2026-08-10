@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 
-use astronomical_runtime_integration::MlxDtype;
+use astronomical_runtime_integration::{MlxDtype, MlxRuntimeError};
 
 #[test]
 fn should_save_multiple_arrays_and_metadata_through_a_retained_file_descriptor() {
@@ -92,4 +92,45 @@ fn should_serialize_safetensors_to_memory_before_background_file_writing() {
             .expect("the serialized tensor should evaluate"),
         vec![2.0, 4.0, 6.0, 8.0]
     );
+}
+
+#[test]
+fn should_bound_mlx_owned_safetensors_output_without_guessing_header_bytes() {
+    let runtime = crate::common::runtime_test_support::runtime();
+    let source_tensor = runtime
+        .array_from_f32(&[1.0, 3.0, 5.0, 7.0], &[2, 2])
+        .expect("the test should create a source tensor");
+    let metadata_entries = [
+        ("format_version", "11"),
+        (
+            "storage_contract_fingerprint",
+            "0123456789abcdef0123456789abcdef",
+        ),
+    ];
+    let unbounded_serialized_bytes = runtime
+        .serialize_safetensors(
+            &[("arbitrary.tensor_name", &source_tensor)],
+            &metadata_entries,
+        )
+        .expect("MLX should serialize the arbitrary tensor");
+    let exact_serialized_bytes = runtime
+        .serialize_safetensors_with_maximum_byte_count(
+            &[("arbitrary.tensor_name", &source_tensor)],
+            &metadata_entries,
+            unbounded_serialized_bytes.len(),
+        )
+        .expect("the exact MLX-produced byte count should fit");
+    assert_eq!(exact_serialized_bytes, unbounded_serialized_bytes);
+
+    let bounded_serialization_error = runtime
+        .serialize_safetensors_with_maximum_byte_count(
+            &[("arbitrary.tensor_name", &source_tensor)],
+            &metadata_entries,
+            unbounded_serialized_bytes.len() - 1,
+        )
+        .expect_err("one byte below the MLX-produced size must be rejected");
+    assert!(matches!(
+        bounded_serialization_error,
+        MlxRuntimeError::SafetensorsSerializationLimitExceeded { .. }
+    ));
 }

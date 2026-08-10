@@ -32,6 +32,7 @@ mod disk_store_visual_embeddings;
 #[cfg(feature = "direct-mlx")]
 mod disk_store_write;
 mod model_contract;
+mod model_contract_error;
 pub(crate) mod persistent_safetensors_header;
 mod prefill_boundary;
 mod prefix_lookup;
@@ -45,13 +46,12 @@ mod visual_embedding_key;
 mod visual_embedding_model_contract;
 #[cfg(feature = "direct-mlx")]
 mod write_queue;
+#[cfg(feature = "direct-mlx")]
+mod write_queue_writer;
 
 pub use block_format::PersistentPromptCacheBlockHeader;
 pub use block_format_error::PersistentPromptCacheBlockError;
-pub use block_key::{
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PersistentPromptCacheBlockKey,
-    PersistentPromptCacheBlockKeyError,
-};
+pub use block_key::{PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError};
 pub use counters::PersistentPromptCacheCounters;
 #[cfg(feature = "direct-mlx")]
 pub use counters::build_persistent_prompt_cache_stats_event;
@@ -62,15 +62,14 @@ pub use disk_store_error::PersistentPromptCacheDiskStoreError;
 #[cfg(feature = "direct-mlx")]
 pub use disk_store_speculative_prefill_policy_purge::PersistentSpeculativePrefillPolicyPurgeOutcome;
 pub use model_contract::PersistentPromptCacheModelContract;
+pub use model_contract_error::PersistentPromptCacheModelContractError;
 pub use prefill_boundary::persistent_prompt_cache_boundary_completed_prefill_chunck_tokens;
 pub use prefix_lookup::{
     PersistentPromptCacheLookupDiagnostics, PersistentPromptCacheMissReason,
     PersistentPromptCachePrefixLookup, PersistentPromptCachePrefixLookupResult,
 };
 pub use save_admission::{
-    PersistentPromptCacheBlockSaveAdmission,
-    persistent_prompt_cache_recurrent_snapshot_is_common_prefix_checkpoint,
-    persistent_prompt_cache_save_admission,
+    PersistentPromptCacheBlockSaveAdmission, persistent_prompt_cache_save_admission,
 };
 pub use speculative_prefill_policy::PersistentSpeculativePrefillPolicyIdentity;
 pub use speculative_prefill_selection::{

@@ -32,6 +32,15 @@ pub(super) fn handle_worker_event(
     performance_log: &mut GenerationPerformanceLog,
 ) -> Result<(), WorkerControlError> {
     match worker_event {
+        WorkerEvent::RuntimeFeatureConfigurationApplied {
+            worker_runtime_feature_configuration,
+        } => {
+            let Ok(mut worker_health_snapshot) = health_snapshot.write() else {
+                return Err(protocol_violation("worker health lock is unavailable"));
+            };
+            worker_health_snapshot.worker_runtime_feature_configuration =
+                Some(worker_runtime_feature_configuration);
+        }
         WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
             publish_expert_memory_mode(health_snapshot, expert_memory_mode);
         }

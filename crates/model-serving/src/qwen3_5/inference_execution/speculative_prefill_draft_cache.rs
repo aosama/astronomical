@@ -98,12 +98,7 @@ impl Qwen3_5EngineState {
                 PerformanceOperation::PersistentPromptCachePrefixLookup,
                 |_performance_attribution| {
                     PersistentPromptCachePrefixLookup::for_prompt_with_image_digests(
-                        draft_persistent_prompt_cache
-                            .model_contract_ref()
-                            .model_id(),
-                        draft_persistent_prompt_cache
-                            .model_contract_ref()
-                            .model_revision(),
+                        draft_persistent_prompt_cache.model_contract_ref(),
                         prompt_token_ids,
                         ordered_image_sha256_digests,
                         |block_hash| draft_persistent_prompt_cache.has_kv_block(block_hash),
@@ -119,8 +114,10 @@ impl Qwen3_5EngineState {
             return Ok(None);
         }
 
-        let complete_block_count =
-            restored_token_count / crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
+        let complete_block_count = restored_token_count
+            / draft_persistent_prompt_cache
+                .model_contract_ref()
+                .block_token_count();
         let mut persistent_prompt_cache_kv_block_tensors = Vec::with_capacity(complete_block_count);
         let mut last_restored_persistent_prompt_cache_block_key = None;
         for block_index in 0..complete_block_count {
@@ -218,12 +215,15 @@ impl Qwen3_5EngineState {
         let block_token_count = persistent_prompt_cache_block
             .block_end_tokens
             .saturating_sub(persistent_prompt_cache_block.block_start_tokens);
-        if block_token_count != crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
+        let expected_block_token_count = draft_persistent_prompt_cache
+            .model_contract_ref()
+            .block_token_count();
+        if block_token_count != expected_block_token_count
             || persistent_prompt_cache_block.block_end_tokens > prompt_token_ids.len()
             || persistent_prompt_cache_block.block_start_tokens
                 != persistent_prompt_cache_block
                     .block_end_tokens
-                    .saturating_sub(crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+                    .saturating_sub(expected_block_token_count)
         {
             return Err(Qwen3_5ExecutionError::InvalidInput {
                 description: "speculative-prefill drafter cache block range is invalid",
@@ -245,12 +245,7 @@ impl Qwen3_5EngineState {
                     )
                 }
                 None => PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
-                    draft_persistent_prompt_cache
-                        .model_contract_ref()
-                        .model_id(),
-                    draft_persistent_prompt_cache
-                        .model_contract_ref()
-                        .model_revision(),
+                    draft_persistent_prompt_cache.model_contract_ref(),
                     &prompt_token_ids[persistent_prompt_cache_block.block_start_tokens
                         ..persistent_prompt_cache_block.block_end_tokens],
                     ordered_image_sha256_digests,
@@ -313,13 +308,16 @@ fn draft_prompt_cache_block_key(
     block_index: usize,
     parent_persistent_prompt_cache_block_key: Option<&PersistentPromptCacheBlockKey>,
 ) -> Result<PersistentPromptCacheBlockKey, Qwen3_5ExecutionError> {
+    let persistent_prompt_cache_block_token_count = draft_persistent_prompt_cache
+        .model_contract_ref()
+        .block_token_count();
     let block_start_tokens = block_index
-        .checked_mul(crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+        .checked_mul(persistent_prompt_cache_block_token_count)
         .ok_or(Qwen3_5ExecutionError::InvalidInput {
             description: "speculative-prefill drafter cache block start overflowed",
         })?;
     let block_end_tokens = block_start_tokens
-        .checked_add(crate::PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT)
+        .checked_add(persistent_prompt_cache_block_token_count)
         .ok_or(Qwen3_5ExecutionError::InvalidInput {
             description: "speculative-prefill drafter cache block end overflowed",
         })?;
@@ -335,12 +333,7 @@ fn draft_prompt_cache_block_key(
                 description: "speculative-prefill drafter child cache block identity failed",
             }),
         None => PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
-            draft_persistent_prompt_cache
-                .model_contract_ref()
-                .model_id(),
-            draft_persistent_prompt_cache
-                .model_contract_ref()
-                .model_revision(),
+            draft_persistent_prompt_cache.model_contract_ref(),
             block_tokens,
             ordered_image_sha256_digests,
         )

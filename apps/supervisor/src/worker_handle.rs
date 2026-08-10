@@ -12,8 +12,11 @@ use crate::{
     GenerationStartError, WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus,
     WorkerProcess, WorkerTerminationOutcome,
 };
-use astronomical_ipc_protocol::{ChatGenerationCommand, WorkerStartupConfiguration};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
+};
 use tokio::sync::{Semaphore, mpsc, oneshot};
+use tokio::time::sleep;
 
 use crate::worker::run_worker;
 use crate::worker_loop_types::WorkerLoopCommand;
@@ -267,6 +270,35 @@ impl WorkerHandle {
         restart_receiver
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
+    }
+
+    /// Waits for the replacement worker to acknowledge its runtime feature policy.
+    pub async fn wait_for_worker_runtime_feature_configuration(
+        &self,
+        acknowledgement_timeout: Duration,
+    ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
+        tokio::time::timeout(acknowledgement_timeout, async {
+            loop {
+                let worker_health_snapshot = self.worker_health_snapshot();
+                // Restart publishes Loading before the new process can send any event, so an
+                // old worker acknowledgement cannot satisfy this wait. Ready plus the explicit
+                // configuration event is the one complete replacement handshake.
+                if worker_health_snapshot.status == WorkerHealthStatus::Unavailable {
+                    return Err(WorkerControlError::MissingActiveWorker);
+                }
+                if worker_health_snapshot.status == WorkerHealthStatus::Ready
+                    && let Some(worker_runtime_feature_configuration) =
+                        worker_health_snapshot.worker_runtime_feature_configuration
+                {
+                    return Ok(worker_runtime_feature_configuration);
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .map_err(|_| WorkerControlError::ModelLoadTimeout {
+            model_load_timeout_millis: acknowledgement_timeout.as_millis(),
+        })?
     }
 
     /// Applies an idle MLX ceiling immediately or queues it behind one active request.

@@ -108,7 +108,7 @@ fn should_prepare_a_validated_structured_chat_command_for_ornith_prefill() {
             temperature_thousandths: Some(600),
             top_p_thousandths: Some(950),
             seed: Some(7),
-            thinking_budget: None,
+            thinking_budget: Some(256),
         },
     };
 
@@ -151,7 +151,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
             temperature_thousandths: Some(0),
             top_p_thousandths: Some(950),
             seed: None,
-            thinking_budget: None,
+            thinking_budget: Some(256),
         },
     };
 

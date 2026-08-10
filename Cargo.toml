@@ -29,6 +29,7 @@ rust-version = "1.97.1"
 version = "0.1.0"
 
 [workspace.dependencies]
+async-openai = { version = "0.41.3", default-features = false, features = ["byot", "chat-completion"] }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
 base64 = "0.23"
 bytes = "1"

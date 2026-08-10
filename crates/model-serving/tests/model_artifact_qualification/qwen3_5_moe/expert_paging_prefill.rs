@@ -233,10 +233,10 @@ pub(crate) fn prepare_reproduced_prompt_token_ids() -> Vec<u32> {
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
             max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
+            temperature_thousandths: None,
+            top_p_thousandths: None,
             seed: None,
-            thinking_budget: None,
+            thinking_budget: Some(256),
         },
     };
     tokenizer
