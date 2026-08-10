@@ -10,6 +10,7 @@ mod persistent_prompt_cache_disk_store_support;
 mod persistent_prompt_cache_global_quota_topology;
 mod persistent_prompt_cache_layout_topology;
 mod persistent_prompt_cache_publication_retry;
+mod persistent_prompt_cache_startup_cleanup_evidence;
 mod persistent_prompt_cache_state_bridge;
 mod persistent_prompt_cache_visual_embeddings;
 mod persistent_speculative_prefill_selection;

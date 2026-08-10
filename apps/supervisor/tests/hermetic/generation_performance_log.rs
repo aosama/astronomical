@@ -3,6 +3,8 @@ use std::fs;
 use astronomical_ipc_protocol::{
     WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
     WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerPersistentPromptCacheStartupCleanupCategory,
+    WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
 use astronomical_supervisor::{GenerationPerformanceLog, GenerationPerformanceRecord};
 
@@ -108,6 +110,29 @@ fn should_open_and_append_to_performance_log() {
             first_missing_sequence_state_block_index: None,
             miss_reason: None,
             expected_block_hash_prefix: None,
+            startup_cleanup_evidence: Some(WorkerPersistentPromptCacheStartupCleanupEvidence {
+                interrupted_transaction_recovery:
+                    WorkerPersistentPromptCacheStartupCleanupCategory {
+                        artifact_count: 1,
+                        block_count: 0,
+                        byte_count: 128,
+                    },
+                obsolete_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+                    artifact_count: 2,
+                    block_count: 0,
+                    byte_count: 256,
+                },
+                corrupt_current_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+                    artifact_count: 0,
+                    block_count: 1,
+                    byte_count: 512,
+                },
+                quota_eviction: WorkerPersistentPromptCacheStartupCleanupCategory {
+                    artifact_count: 0,
+                    block_count: 2,
+                    byte_count: 1_024,
+                },
+            }),
             published_block_count: 1,
             allocator_bytes_cleared_for_publication: 4096,
             expert_bytes_reclaimed_for_publication: 8192,
@@ -145,6 +170,14 @@ fn should_open_and_append_to_performance_log() {
         parsed["persistent_prompt_cache_diagnostics"]["published_block_count"],
         1
     );
+    assert_eq!(
+        parsed["persistent_prompt_cache_diagnostics"]["startup_cleanup_evidence"]["obsolete_format"]
+            ["artifact_count"],
+        2
+    );
+    let serialized_line = lines[0];
+    assert!(!serialized_line.contains("/fictional/"));
+    assert!(!serialized_line.contains("model_directory"));
 }
 
 #[test]
@@ -238,6 +271,7 @@ fn should_serialize_null_for_optional_fields() {
             expected_block_hash_prefix: Some(
                 WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash([1_u8; 32]),
             ),
+            startup_cleanup_evidence: None,
             published_block_count: 1,
             allocator_bytes_cleared_for_publication: 0,
             expert_bytes_reclaimed_for_publication: 0,

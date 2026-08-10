@@ -20,11 +20,13 @@ use super::disk_store_index::{
 };
 use super::model_contract::PersistentPromptCacheModelContract;
 use super::retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint;
+use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 
 pub(crate) fn scan_current_format_directory<HeaderValidator>(
     directory: &Path,
     file_kind: PersistentPromptCacheFileKind,
     tracked_files: &mut PersistentPromptCacheDiskStoreIndex,
+    startup_cleanup_evidence: &mut PersistentPromptCacheStartupCleanupEvidence,
     header_validator: HeaderValidator,
 ) -> Result<(), PersistentPromptCacheDiskStoreError>
 where
@@ -54,7 +56,11 @@ where
             .extension()
             .is_some_and(|extension| extension == "tmp")
         {
+            let removed_byte_count = cache_owned_file_byte_count(&entry_path)?;
             remove_cache_owned_file_or_confirm_absent(&entry_path)?;
+            startup_cleanup_evidence
+                .interrupted_transaction_recovery
+                .record_artifact(removed_byte_count);
             continue;
         }
         if !entry_file_type.is_file()
@@ -67,7 +73,11 @@ where
         let Some(persistent_prompt_cache_file_hash) =
             parse_persistent_prompt_cache_file_hash_from_path(&entry_path)
         else {
+            let removed_byte_count = cache_owned_file_byte_count(&entry_path)?;
             remove_cache_owned_file_or_confirm_absent(&entry_path)?;
+            startup_cleanup_evidence
+                .corrupt_current_format
+                .record_artifact(removed_byte_count);
             continue;
         };
         let file_size_bytes = std::fs::symlink_metadata(&entry_path)
@@ -86,6 +96,9 @@ where
         })?;
         if !header_validator(&file, &entry_path) {
             remove_cache_owned_file_or_confirm_absent(&entry_path)?;
+            startup_cleanup_evidence
+                .corrupt_current_format
+                .record_artifact(file_size_bytes);
             continue;
         }
         tracked_files.insert_file(
@@ -104,6 +117,7 @@ pub(crate) fn scan_current_format_block_directories(
     blocks_directory: &Path,
     tracked_files: &mut PersistentPromptCacheDiskStoreIndex,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+    startup_cleanup_evidence: &mut PersistentPromptCacheStartupCleanupEvidence,
 ) -> Result<(), PersistentPromptCacheDiskStoreError> {
     // Phase one validates each directory in isolation and builds candidates.
     // Phase two below validates cross-directory ancestry before indexing any of
@@ -136,19 +150,31 @@ pub(crate) fn scan_current_format_block_directories(
             .file_name()
             .and_then(|name| name.to_str())
         else {
+            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
             remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
+            startup_cleanup_evidence
+                .corrupt_current_format
+                .record_block(removed_byte_count);
             continue;
         };
         // A staging name proves publication never reached its atomic directory
         // rename. Remove the whole transaction; individual files are not salvageable.
         if block_directory_name.contains(".staging-") {
+            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
             remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
+            startup_cleanup_evidence
+                .interrupted_transaction_recovery
+                .record_block(removed_byte_count);
             continue;
         }
         let Some(block_hash_from_directory) =
             parse_persistent_prompt_cache_file_hash_from_path(&block_directory_path)
         else {
+            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
             remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
+            startup_cleanup_evidence
+                .corrupt_current_format
+                .record_block(removed_byte_count);
             continue;
         };
         let block_manifest = match PersistentPromptCacheBlockManifest::read_from_block_directory(
@@ -157,12 +183,20 @@ pub(crate) fn scan_current_format_block_directories(
         ) {
             Ok(block_manifest) => block_manifest,
             Err(_) => {
+                let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
                 remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
+                startup_cleanup_evidence
+                    .corrupt_current_format
+                    .record_block(removed_byte_count);
                 continue;
             }
         };
         if block_manifest.block_hash().ok() != Some(block_hash_from_directory) {
+            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
             remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
+            startup_cleanup_evidence
+                .corrupt_current_format
+                .record_block(removed_byte_count);
             continue;
         }
         // Missing or invalid state remains `None` until topology reconciliation.
@@ -201,6 +235,7 @@ pub(crate) fn scan_current_format_block_directories(
         block_candidate_by_hash,
         tracked_files,
         persistent_prompt_cache_model_contract,
+        startup_cleanup_evidence,
     )?;
     Ok(())
 }
@@ -257,6 +292,7 @@ fn reconcile_block_topology(
     mut block_candidate_by_hash: HashMap<[u8; 32], BlockDirectoryCandidate>,
     tracked_files: &mut PersistentPromptCacheDiskStoreIndex,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+    startup_cleanup_evidence: &mut PersistentPromptCacheStartupCleanupEvidence,
 ) -> Result<(), PersistentPromptCacheDiskStoreError> {
     // Sequence ancestry is transitive. Removing one invalid parent can orphan a
     // child that looked valid in the previous pass, so iterate to a fixed point.
@@ -275,7 +311,11 @@ fn reconcile_block_topology(
         if invalid_block_hashes.is_empty() {
             break;
         }
-        remove_invalid_block_candidates(&invalid_block_hashes, &mut block_candidate_by_hash)?;
+        remove_invalid_block_candidates(
+            &invalid_block_hashes,
+            &mut block_candidate_by_hash,
+            startup_cleanup_evidence,
+        )?;
     }
 
     // Boundary retention is intentionally asymmetric: a non-checkpoint parent
@@ -296,7 +336,11 @@ fn reconcile_block_topology(
             .then_some(*block_hash)
         })
         .collect::<Vec<_>>();
-    remove_invalid_block_candidates(&invalid_boundary_block_hashes, &mut block_candidate_by_hash)?;
+    remove_invalid_block_candidates(
+        &invalid_boundary_block_hashes,
+        &mut block_candidate_by_hash,
+        startup_cleanup_evidence,
+    )?;
     // Boundary removals can create new sequence orphans. Prune those descendants
     // to a fixed point before exposing the surviving graph to lookup.
     loop {
@@ -313,7 +357,11 @@ fn reconcile_block_topology(
         if orphan_block_hashes.is_empty() {
             break;
         }
-        remove_invalid_block_candidates(&orphan_block_hashes, &mut block_candidate_by_hash)?;
+        remove_invalid_block_candidates(
+            &orphan_block_hashes,
+            &mut block_candidate_by_hash,
+            startup_cleanup_evidence,
+        )?;
     }
 
     for (block_hash, block_candidate) in block_candidate_by_hash {
@@ -381,13 +429,69 @@ fn block_candidate_has_valid_boundary_topology(
 fn remove_invalid_block_candidates(
     invalid_block_hashes: &[[u8; 32]],
     block_candidate_by_hash: &mut HashMap<[u8; 32], BlockDirectoryCandidate>,
+    startup_cleanup_evidence: &mut PersistentPromptCacheStartupCleanupEvidence,
 ) -> Result<(), PersistentPromptCacheDiskStoreError> {
     for invalid_block_hash in invalid_block_hashes {
         if let Some(invalid_block_candidate) = block_candidate_by_hash.remove(invalid_block_hash) {
+            let removed_byte_count =
+                cache_owned_directory_byte_count(&invalid_block_candidate.block_directory_path)?;
             remove_cache_owned_directory_or_confirm_absent(
                 &invalid_block_candidate.block_directory_path,
             )?;
+            startup_cleanup_evidence
+                .corrupt_current_format
+                .record_block(removed_byte_count);
         }
     }
     Ok(())
+}
+
+fn cache_owned_file_byte_count(
+    file_path: &Path,
+) -> Result<u64, PersistentPromptCacheDiskStoreError> {
+    std::fs::symlink_metadata(file_path)
+        .map(|file_metadata| file_metadata.len())
+        .map_err(
+            |source| PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
+                block_file_path: file_path.to_path_buf(),
+                source,
+            },
+        )
+}
+
+fn cache_owned_directory_byte_count(
+    directory_path: &Path,
+) -> Result<u64, PersistentPromptCacheDiskStoreError> {
+    let mut pending_directories = vec![directory_path.to_path_buf()];
+    let mut total_byte_count = 0_u64;
+    while let Some(pending_directory) = pending_directories.pop() {
+        let directory_entries = std::fs::read_dir(&pending_directory).map_err(|source| {
+            PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
+                persistent_prompt_cache_directory: pending_directory.clone(),
+                source,
+            }
+        })?;
+        for directory_entry_result in directory_entries {
+            let directory_entry = directory_entry_result.map_err(|source| {
+                PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
+                    persistent_prompt_cache_directory: pending_directory.clone(),
+                    source,
+                }
+            })?;
+            let entry_path = directory_entry.path();
+            let entry_file_type = directory_entry.file_type().map_err(|source| {
+                PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
+                    block_file_path: entry_path.clone(),
+                    source,
+                }
+            })?;
+            if entry_file_type.is_dir() {
+                pending_directories.push(entry_path);
+            } else {
+                total_byte_count =
+                    total_byte_count.saturating_add(cache_owned_file_byte_count(&entry_path)?);
+            }
+        }
+    }
+    Ok(total_byte_count)
 }

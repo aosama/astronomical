@@ -13,6 +13,7 @@ use super::disk_store_file::{
 };
 use super::disk_store_index::TrackedPersistentPromptCacheFile;
 use super::disk_store_scan::scan_current_format_directory;
+use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 use super::{
     PersistentVisualEmbeddingFileHeader, PersistentVisualEmbeddingKey,
     PersistentVisualEmbeddingModelContract,
@@ -140,12 +141,14 @@ impl PersistentPromptCacheDiskStore {
         &self,
         persistent_visual_embedding_model_contract: &PersistentVisualEmbeddingModelContract,
     ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        let mut startup_cleanup_evidence = PersistentPromptCacheStartupCleanupEvidence::default();
         {
             let mut tracked_files = self.lock_tracked_files();
             scan_current_format_directory(
                 &self.visual_embeddings_directory,
                 PersistentPromptCacheFileKind::VisualEmbedding,
                 &mut tracked_files,
+                &mut startup_cleanup_evidence,
                 |visual_embedding_file, visual_embedding_file_path| {
                     PersistentVisualEmbeddingFileHeader::read_from_file(
                         visual_embedding_file,
@@ -156,7 +159,8 @@ impl PersistentPromptCacheDiskStore {
                 },
             )?;
         }
-        self.enforce_global_prompt_cache_quota()
+        self.record_startup_cleanup_evidence(startup_cleanup_evidence);
+        self.enforce_startup_global_prompt_cache_quota(&[])
     }
 }
 

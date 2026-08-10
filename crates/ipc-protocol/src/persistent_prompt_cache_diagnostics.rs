@@ -24,6 +24,28 @@ pub enum WorkerPersistentPromptCacheMissReason {
     BoundaryStateSnapshotMissing,
 }
 
+/// Count and byte total for one startup-cleanup reason.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerPersistentPromptCacheStartupCleanupCategory {
+    /// Standalone files removed for this reason.
+    pub artifact_count: u64,
+    /// Atomic block directories removed for this reason.
+    pub block_count: u64,
+    /// Total non-directory bytes removed for this reason.
+    pub byte_count: u64,
+}
+
+/// Bounded reason-separated evidence retained from prompt-cache startup.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerPersistentPromptCacheStartupCleanupEvidence {
+    pub interrupted_transaction_recovery: WorkerPersistentPromptCacheStartupCleanupCategory,
+    pub obsolete_format: WorkerPersistentPromptCacheStartupCleanupCategory,
+    pub corrupt_current_format: WorkerPersistentPromptCacheStartupCleanupCategory,
+    pub quota_eviction: WorkerPersistentPromptCacheStartupCleanupCategory,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct WorkerPersistentPromptCacheExpectedBlockHashPrefix(String);
@@ -89,6 +111,8 @@ pub struct WorkerPersistentPromptCacheRequestDiagnostics {
     pub miss_reason: Option<WorkerPersistentPromptCacheMissReason>,
     /// Bounded correlation hint for the first expected missing block.
     pub expected_block_hash_prefix: Option<WorkerPersistentPromptCacheExpectedBlockHashPrefix>,
+    /// Startup cleanup that can explain this first structural cold miss.
+    pub startup_cleanup_evidence: Option<WorkerPersistentPromptCacheStartupCleanupEvidence>,
     /// Blocks physically committed by this request; idempotent reuse is excluded.
     pub published_block_count: u64,
     /// Allocator cache released before direct tensor materialization.

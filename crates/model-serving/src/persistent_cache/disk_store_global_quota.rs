@@ -15,8 +15,11 @@ use super::disk_store_file::{
     PersistentPromptCacheFileKind, remove_cache_owned_directory_or_confirm_absent,
     remove_cache_owned_file_or_confirm_absent,
 };
-use super::disk_store_global_quota_candidate::GlobalPromptCacheEvictionCandidate;
+use super::disk_store_global_quota_candidate::{
+    GlobalPromptCacheCleanupClassification, GlobalPromptCacheEvictionCandidate,
+};
 use super::disk_store_global_quota_scan::scan_global_prompt_cache_quota;
+use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 
 pub(super) fn prepare_prompt_cache_directory_tree(
     global_prompt_cache_root_directory: &Path,
@@ -132,25 +135,37 @@ fn verify_real_directory(
 }
 
 impl PersistentPromptCacheDiskStore {
-    pub(super) fn remove_stale_global_prompt_cache_transaction_artifacts(
+    pub(super) fn remove_unconditionally_reclaimable_startup_artifacts(
         &self,
     ) -> Result<(), PersistentPromptCacheDiskStoreError> {
-        // Cleanup is unconditional, not pressure-dependent. Staging artifacts
-        // are never readable cache value and should not survive a clean startup.
+        // Interrupted transactions and obsolete formats have no readable
+        // current-format value, so cleanup is not pressure-dependent.
         let global_quota_scan =
             scan_global_prompt_cache_quota(&self.global_prompt_cache_root_directory, None)?;
+        let mut startup_cleanup_evidence = PersistentPromptCacheStartupCleanupEvidence::default();
         for stale_transaction_artifact in global_quota_scan
             .eviction_candidates_oldest_written_first
             .into_iter()
-            .filter(GlobalPromptCacheEvictionCandidate::is_stale_transaction_artifact)
+            .filter(GlobalPromptCacheEvictionCandidate::is_unconditionally_removable)
         {
+            let Some(cleanup_classification) =
+                stale_transaction_artifact.unconditional_cleanup_classification()
+            else {
+                continue;
+            };
             remove_global_prompt_cache_eviction_candidate(&stale_transaction_artifact)?;
+            record_removed_startup_candidate(
+                &mut startup_cleanup_evidence,
+                cleanup_classification,
+                &stale_transaction_artifact,
+            );
             self.lock_tracked_files()
                 .remove_files_by_path(stale_transaction_artifact.tracked_file_paths());
             self.lock_tracked_files().remove_blocks_by_directory_paths(
                 stale_transaction_artifact.block_directory_paths(),
             );
         }
+        self.record_startup_cleanup_evidence(startup_cleanup_evidence);
         self.refresh_global_prompt_cache_accounting()
     }
 
@@ -228,12 +243,42 @@ impl PersistentPromptCacheDiskStore {
         self.enforce_global_prompt_cache_quota_for_commit(0, 0, &[], None)
     }
 
+    pub(super) fn enforce_startup_global_prompt_cache_quota(
+        &self,
+        protected_block_directory_paths: &[PathBuf],
+    ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        self.enforce_global_prompt_cache_quota_for_commit_internal(
+            0,
+            0,
+            protected_block_directory_paths,
+            None,
+            true,
+        )
+    }
+
     pub(crate) fn enforce_global_prompt_cache_quota_for_commit(
         &self,
         additional_committed_size_bytes: u64,
         post_commit_reclaimable_size_bytes: u64,
         protected_block_directory_paths: &[PathBuf],
         excluded_directory: Option<&Path>,
+    ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        self.enforce_global_prompt_cache_quota_for_commit_internal(
+            additional_committed_size_bytes,
+            post_commit_reclaimable_size_bytes,
+            protected_block_directory_paths,
+            excluded_directory,
+            false,
+        )
+    }
+
+    fn enforce_global_prompt_cache_quota_for_commit_internal(
+        &self,
+        additional_committed_size_bytes: u64,
+        post_commit_reclaimable_size_bytes: u64,
+        protected_block_directory_paths: &[PathBuf],
+        excluded_directory: Option<&Path>,
+        should_record_startup_cleanup: bool,
     ) -> Result<(), PersistentPromptCacheDiskStoreError> {
         // Exclude the current staging directory because `additional_committed_size_bytes`
         // already accounts for it. Counting both would charge the transaction twice.
@@ -249,6 +294,7 @@ impl PersistentPromptCacheDiskStore {
         self.global_visual_embedding_total_size_bytes
             .store(global_visual_embedding_total_size_bytes, Ordering::Relaxed);
         let mut removed_eviction_paths = HashSet::<PathBuf>::new();
+        let mut startup_cleanup_evidence = PersistentPromptCacheStartupCleanupEvidence::default();
         for global_prompt_cache_eviction_candidate in
             global_quota_scan.eviction_candidates_oldest_written_first
         {
@@ -258,10 +304,9 @@ impl PersistentPromptCacheDiskStore {
             ) {
                 continue;
             }
-            // Stale transactions are removed even when the committed projection
-            // already fits. They carry no valid cache value and otherwise grow
-            // forever after repeated crashes.
-            if !global_prompt_cache_eviction_candidate.is_stale_transaction_artifact()
+            // Interrupted transactions and obsolete formats are removed even
+            // when the committed projection already fits.
+            if !global_prompt_cache_eviction_candidate.is_unconditionally_removable()
                 && global_prompt_cache_eviction_candidate
                     .contains_protected_block_directory(protected_block_directory_paths)
             {
@@ -270,7 +315,7 @@ impl PersistentPromptCacheDiskStore {
             // Stop deleting committed value once the post-commit projection
             // fits. `post_commit_reclaimable_size_bytes` is subtracted only in
             // arithmetic; its actual file remains until commit becomes durable.
-            if !global_prompt_cache_eviction_candidate.is_stale_transaction_artifact()
+            if !global_prompt_cache_eviction_candidate.is_unconditionally_removable()
                 && committed_size_after_addition(
                     global_prompt_cache_total_size_bytes,
                     additional_committed_size_bytes,
@@ -281,6 +326,15 @@ impl PersistentPromptCacheDiskStore {
                 continue;
             }
             remove_global_prompt_cache_eviction_candidate(&global_prompt_cache_eviction_candidate)?;
+            if should_record_startup_cleanup {
+                record_removed_startup_candidate(
+                    &mut startup_cleanup_evidence,
+                    global_prompt_cache_eviction_candidate
+                        .unconditional_cleanup_classification()
+                        .unwrap_or(GlobalPromptCacheCleanupClassification::QuotaEviction),
+                    &global_prompt_cache_eviction_candidate,
+                );
+            }
             self.lock_tracked_files()
                 .remove_files_by_path(global_prompt_cache_eviction_candidate.tracked_file_paths());
             self.lock_tracked_files().remove_blocks_by_directory_paths(
@@ -321,8 +375,36 @@ impl PersistentPromptCacheDiskStore {
                 },
             );
         }
+        if should_record_startup_cleanup {
+            self.record_startup_cleanup_evidence(startup_cleanup_evidence);
+        }
         Ok(())
     }
+}
+
+fn record_removed_startup_candidate(
+    startup_cleanup_evidence: &mut PersistentPromptCacheStartupCleanupEvidence,
+    cleanup_classification: GlobalPromptCacheCleanupClassification,
+    removed_candidate: &GlobalPromptCacheEvictionCandidate,
+) {
+    let cleanup_category = match cleanup_classification {
+        GlobalPromptCacheCleanupClassification::InterruptedTransactionRecovery => {
+            &mut startup_cleanup_evidence.interrupted_transaction_recovery
+        }
+        GlobalPromptCacheCleanupClassification::ObsoleteFormat => {
+            &mut startup_cleanup_evidence.obsolete_format
+        }
+        GlobalPromptCacheCleanupClassification::QuotaEviction => {
+            &mut startup_cleanup_evidence.quota_eviction
+        }
+    };
+    for _removed_artifact_index in 0..removed_candidate.removed_artifact_count() {
+        cleanup_category.record_artifact(0);
+    }
+    cleanup_category.record_blocks(removed_candidate.removed_block_count(), 0);
+    cleanup_category.byte_count = cleanup_category
+        .byte_count
+        .saturating_add(removed_candidate.file_size_bytes());
 }
 
 fn eviction_candidate_was_already_removed(
