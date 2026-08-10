@@ -22,7 +22,9 @@ final class DaemonControlTests: XCTestCase {
 private struct StuckExternalSupervisorClient: SupervisorClient {
   func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
 
-  func reloadConfiguration() async throws -> String { "Config reloaded" }
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded")
+  }
 
   func requestShutdown() async throws {}
 

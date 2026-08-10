@@ -17,6 +17,12 @@ pub enum PersistentPromptCacheDiskStoreError {
         #[source]
         source: std::io::Error,
     },
+    #[error("persistent prompt-cache writer stopped before publication acknowledgement")]
+    WriterPublicationAcknowledgementLost,
+    #[error(
+        "persistent prompt-cache parent state was not published before child block {block_index}"
+    )]
+    ParentStateNotPublished { block_index: u32 },
     #[error(
         "failed to create persistent prompt-cache directory at {persistent_prompt_cache_directory:?}"
     )]
@@ -69,6 +75,11 @@ pub enum PersistentPromptCacheDiskStoreError {
         #[source]
         source: MlxRuntimeError,
     },
+    #[error("failed to read MLX memory for persistent model-state admission")]
+    ReadMlxMemorySnapshot {
+        #[source]
+        source: MlxRuntimeError,
+    },
     #[error("failed to rename temp file {temp_file_path:?} to {block_file_path:?}")]
     RenameTempFile {
         temp_file_path: PathBuf,
@@ -88,7 +99,7 @@ pub enum PersistentPromptCacheDiskStoreError {
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to validate block at {block_file_path:?}")]
+    #[error("failed to validate block at {block_file_path:?}: {source}")]
     ValidateBlock {
         block_file_path: PathBuf,
         #[source]
@@ -111,6 +122,20 @@ pub enum PersistentPromptCacheDiskStoreError {
     SizeBoundExceeded {
         maximum_size_bytes: u64,
         estimated_block_bytes: u64,
+    },
+    #[error(
+        "persistent model-state {state_kind} tensors do not match the storage contract: expected_present={expected_present} actual_tensor_count={actual_tensor_count}"
+    )]
+    StateKindTensorPresenceMismatch {
+        state_kind: &'static str,
+        expected_present: bool,
+        actual_tensor_count: usize,
+    },
+    #[error(
+        "persistent model-state serialization exhausted its {maximum_capture_serialized_byte_count}-byte live capture limit"
+    )]
+    SerializedCaptureByteLimitExceeded {
+        maximum_capture_serialized_byte_count: usize,
     },
     #[error(
         "failed to remove persistent prompt-cache file at {persistent_prompt_cache_file_path:?}"

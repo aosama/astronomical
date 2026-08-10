@@ -107,17 +107,37 @@ final class TelemetryStore: ObservableObject {
     let configurationReloadFeedbackGeneration = presentControlActionFeedback(
       .inProgress("Reloading configuration…"))
     do {
-      let configurationReloadMessage = try await supervisorClient.reloadConfiguration()
+      let configurationReloadResult = try await supervisorClient.reloadConfiguration()
       guard controlActionFeedbackGeneration == configurationReloadFeedbackGeneration else {
         return
       }
-      presentControlActionFeedback(.success(configurationReloadMessage))
+      // A restart response proves the replacement worker acknowledged its startup policy, but
+      // the menu must also observe that exact policy in a fresh status document. Otherwise a
+      // poll racing with worker replacement could turn stale readiness into a false success.
+      if configurationReloadResult.workerRestartCompleted {
+        await refresh()
+        guard controlActionFeedbackGeneration == configurationReloadFeedbackGeneration else {
+          return
+        }
+        guard statusDocument.workerRuntimeFeatureConfigurationApplied,
+          statusDocument.workerRuntimeFeatureConfiguration
+          == configurationReloadResult.workerRuntimeFeatureConfiguration
+        else {
+          presentControlActionFeedback(
+            .failure("Worker restart completed, but its applied configuration was not confirmed")
+          )
+          return
+        }
+      }
+      presentControlActionFeedback(.success(configurationReloadResult.message))
     } catch {
       guard controlActionFeedbackGeneration == configurationReloadFeedbackGeneration else {
         return
       }
       presentControlActionFeedback(.failure(controlActionErrorMessage(error)))
     }
+    // Non-restart edits still refresh telemetry, while restart edits already refreshed above
+    // before success feedback was allowed.
     await refresh()
   }
 

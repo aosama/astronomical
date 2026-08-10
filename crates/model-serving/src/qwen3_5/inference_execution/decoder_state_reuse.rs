@@ -1,8 +1,8 @@
 use astronomical_ipc_protocol::RequestId;
 
 use crate::{
-    InferenceEngineError, PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PerformanceAttribution,
-    PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
+    InferenceEngineError, PerformanceAttribution, PerformanceOperation,
+    PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
     PersistentPromptCachePrefixLookup,
 };
 
@@ -47,8 +47,7 @@ impl Qwen3_5EngineState {
             PerformanceOperation::PersistentPromptCachePrefixLookup,
             |_performance_attribution| {
                 PersistentPromptCachePrefixLookup::for_prompt_with_image_digests(
-                    persistent_prompt_cache.model_contract.model_id(),
-                    persistent_prompt_cache.model_contract.model_revision(),
+                    &persistent_prompt_cache.model_contract,
                     prompt_token_ids,
                     ordered_image_sha256_digests,
                     |block_hash| persistent_prompt_cache.has_kv_block(block_hash),
@@ -114,15 +113,17 @@ impl Qwen3_5EngineState {
         let mut last_restored_persistent_prompt_cache_block_key = lookup_result
             .last_restored_persistent_prompt_cache_block_key()
             .cloned();
-        let complete_block_count = restored_token_count / PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
+        let persistent_prompt_cache_block_token_count =
+            persistent_prompt_cache.model_contract.block_token_count();
+        let complete_block_count = restored_token_count / persistent_prompt_cache_block_token_count;
         // Load every matched block before mutating request state. If a later
         // disk read fails, this function returns an error and the caller drops
         // the entire attempt instead of running with a partially restored
         // chain of recurrent and attention state.
         let mut persistent_prompt_cache_kv_block_tensors = Vec::with_capacity(complete_block_count);
         for block_index in 0..complete_block_count {
-            let block_start = block_index * PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-            let block_end = block_start + PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
+            let block_start = block_index * persistent_prompt_cache_block_token_count;
+            let block_end = block_start + persistent_prompt_cache_block_token_count;
             let persistent_prompt_cache_block_key = restored_persistent_prompt_cache_block_key(
                 prompt_token_ids,
                 block_start,
@@ -300,8 +301,7 @@ fn restored_persistent_prompt_cache_block_key(
         // Root blocks are explicitly bound to the pinned model identity. Child
         // keys inherit that binding through their parent hash chain.
         return PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
-            persistent_prompt_cache_model_contract.model_id(),
-            persistent_prompt_cache_model_contract.model_revision(),
+            persistent_prompt_cache_model_contract,
             &prompt_token_ids[block_start..block_end],
             ordered_image_sha256_digests,
         )

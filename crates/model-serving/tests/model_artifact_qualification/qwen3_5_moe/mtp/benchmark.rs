@@ -293,10 +293,10 @@ fn prepare_benchmark_prompt_cases(model_directory: &Path) -> Vec<BenchmarkPrompt
             tool_choice: ChatToolChoice::None,
             settings: ChatGenerationSettings {
                 max_output_tokens: BENCHMARK_OUTPUT_TOKEN_COUNT,
-                temperature_thousandths: Some(0),
-                top_p_thousandths: Some(1_000),
+                temperature_thousandths: None,
+                top_p_thousandths: None,
                 seed: None,
-                thinking_budget: None,
+                thinking_budget: Some(256),
             },
         };
         let inference_request = tokenizer

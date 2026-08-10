@@ -1,15 +1,15 @@
 use astronomical_model_serving::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PersistentPromptCacheBlockKey,
-    PersistentPromptCacheMissReason, PersistentPromptCachePrefixLookup,
+    PersistentPromptCacheBlockKey, PersistentPromptCacheMissReason,
+    PersistentPromptCacheModelContract, PersistentPromptCachePrefixLookup,
 };
+
+use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
 
 #[test]
 fn should_report_no_cache_hit_when_no_complete_blocks_exist() {
     let prompt_tokens: Vec<u32> = (0..1_500).map(|token_index| token_index as u32).collect();
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         |_block_hash| false,
         |_block_hash| false,
@@ -31,8 +31,7 @@ fn should_restore_through_the_chain_tip_when_its_recurrent_snapshot_exists() {
     let chain_tip_block_hash = block_keys[1].block_hash();
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         |block_hash| {
             block_keys
@@ -44,7 +43,7 @@ fn should_restore_through_the_chain_tip_when_its_recurrent_snapshot_exists() {
 
     assert_eq!(
         lookup_result.restored_token_count(),
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2
+        persistent_prompt_cache_block_token_count() * 2
     );
     assert_eq!(lookup_result.remaining_tokens().len(), 100);
     assert_eq!(
@@ -63,8 +62,7 @@ fn should_walk_back_to_the_latest_available_recurrent_snapshot() {
     let first_block_hash = block_keys[0].block_hash();
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         |block_hash| {
             block_keys
@@ -76,11 +74,11 @@ fn should_walk_back_to_the_latest_available_recurrent_snapshot() {
 
     assert_eq!(
         lookup_result.restored_token_count(),
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
+        persistent_prompt_cache_block_token_count()
     );
     assert_eq!(
         lookup_result.remaining_tokens().len(),
-        prompt_tokens.len() - PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
+        prompt_tokens.len() - persistent_prompt_cache_block_token_count()
     );
     assert_eq!(
         lookup_result
@@ -104,8 +102,7 @@ fn should_return_a_cold_miss_when_kv_blocks_exist_without_any_recurrent_snapshot
     let block_keys = persistent_prompt_cache_block_keys_for_prompt(&prompt_tokens, 2);
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         |block_hash| {
             block_keys
@@ -147,8 +144,7 @@ fn should_keep_the_final_block_for_forward_processing_when_prompt_ends_on_a_bloc
     let first_block_hash = first_block_key.block_hash();
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         |_block_hash| true,
         |block_hash| *block_hash == first_block_hash,
@@ -156,11 +152,11 @@ fn should_keep_the_final_block_for_forward_processing_when_prompt_ends_on_a_bloc
 
     assert_eq!(
         lookup_result.restored_token_count(),
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
+        persistent_prompt_cache_block_token_count()
     );
     assert_eq!(
         lookup_result.remaining_tokens().len(),
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
+        persistent_prompt_cache_block_token_count()
     );
     assert_eq!(
         lookup_result
@@ -178,8 +174,7 @@ fn should_restore_a_complete_exact_boundary_when_the_caller_only_needs_decoder_s
     let final_block_hash = block_keys[1].block_hash();
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_complete_prefix(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         |block_hash| {
             block_keys
@@ -191,7 +186,7 @@ fn should_restore_a_complete_exact_boundary_when_the_caller_only_needs_decoder_s
 
     assert_eq!(
         lookup_result.restored_token_count(),
-        PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2
+        persistent_prompt_cache_block_token_count() * 2
     );
     assert!(lookup_result.remaining_tokens().is_empty());
     assert_eq!(
@@ -209,15 +204,13 @@ fn should_not_match_blocks_when_the_root_block_differs() {
     let mut modified_prompt_tokens = original_prompt_tokens.clone();
     modified_prompt_tokens[0] = 999_u32;
     let original_root_block_key = PersistentPromptCacheBlockKey::for_root_block(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-        &original_prompt_tokens[..PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT],
+        persistent_prompt_cache_model_contract_ref(),
+        &original_prompt_tokens[..persistent_prompt_cache_block_token_count()],
     )
     .expect("the test should hash the original root block");
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &modified_prompt_tokens,
         |block_hash| *block_hash == original_root_block_key.block_hash(),
         |block_hash| *block_hash == original_root_block_key.block_hash(),
@@ -247,22 +240,20 @@ fn should_not_restore_image_prompt_state_for_a_different_image_digest() {
     let cached_image_sha256 = [1_u8; 32];
     let requested_image_sha256 = [2_u8; 32];
     let cached_root_block_key = PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-        &prompt_tokens[..PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT],
+        persistent_prompt_cache_model_contract_ref(),
+        &prompt_tokens[..persistent_prompt_cache_block_token_count()],
         &[cached_image_sha256],
     )
     .expect("the image-aware root block should hash");
     let cached_child_block_key = cached_root_block_key
         .for_child_block(
-            &prompt_tokens[PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
-                ..PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 2],
+            &prompt_tokens[persistent_prompt_cache_block_token_count()
+                ..persistent_prompt_cache_block_token_count() * 2],
         )
         .expect("the image-aware child block should hash");
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt_with_image_digests(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         &[requested_image_sha256],
         |block_hash| {
@@ -287,8 +278,7 @@ fn should_report_missing_recurrent_snapshot_before_missing_child_when_matched_pr
     let first_block_hash = block_keys[0].block_hash();
 
     let lookup_result = PersistentPromptCachePrefixLookup::for_prompt(
-        ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-        ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+        persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
         |block_hash| *block_hash == first_block_hash,
         |_block_hash| false,
@@ -318,7 +308,7 @@ fn prompt_tokens_with_complete_blocks_and_trailing_tokens(
     trailing_token_count: usize,
 ) -> Vec<u32> {
     let prompt_token_count =
-        complete_block_count * PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT + trailing_token_count;
+        complete_block_count * persistent_prompt_cache_block_token_count() + trailing_token_count;
     (0..prompt_token_count)
         .map(|token_index| token_index as u32)
         .collect()
@@ -331,8 +321,8 @@ fn persistent_prompt_cache_block_keys_for_prompt(
     let mut block_keys = Vec::with_capacity(requested_block_count);
     let mut parent_persistent_prompt_cache_block_key: Option<PersistentPromptCacheBlockKey> = None;
     for block_index in 0..requested_block_count {
-        let block_start = block_index * PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
-        let block_end = block_start + PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT;
+        let block_start = block_index * persistent_prompt_cache_block_token_count();
+        let block_end = block_start + persistent_prompt_cache_block_token_count();
         let persistent_prompt_cache_block_key = match parent_persistent_prompt_cache_block_key {
             Some(ref parent_persistent_prompt_cache_block_key) => {
                 parent_persistent_prompt_cache_block_key
@@ -340,8 +330,7 @@ fn persistent_prompt_cache_block_keys_for_prompt(
                     .expect("the test should hash a child block")
             }
             None => PersistentPromptCacheBlockKey::for_root_block(
-                ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-                ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+                persistent_prompt_cache_model_contract_ref(),
                 &prompt_tokens[block_start..block_end],
             )
             .expect("the test should hash the root block"),
@@ -350,4 +339,15 @@ fn persistent_prompt_cache_block_keys_for_prompt(
         block_keys.push(persistent_prompt_cache_block_key);
     }
     block_keys
+}
+
+fn persistent_prompt_cache_model_contract_ref() -> &'static PersistentPromptCacheModelContract {
+    static PERSISTENT_PROMPT_CACHE_MODEL_CONTRACT: std::sync::OnceLock<
+        PersistentPromptCacheModelContract,
+    > = std::sync::OnceLock::new();
+    PERSISTENT_PROMPT_CACHE_MODEL_CONTRACT.get_or_init(persistent_prompt_cache_model_contract)
+}
+
+fn persistent_prompt_cache_block_token_count() -> usize {
+    persistent_prompt_cache_model_contract_ref().block_token_count()
 }

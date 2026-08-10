@@ -53,12 +53,33 @@ impl Qwen3_5InferenceRequest {
         top_p_thousandths: u16,
         seed: Option<u64>,
     ) -> Self {
+        Self::new_sampling_with_top_k(
+            request_id,
+            input_token_ids,
+            max_output_tokens,
+            temperature_thousandths,
+            20,
+            top_p_thousandths,
+            seed,
+        )
+    }
+
+    /// Creates a token-level request using the model's complete sampling configuration.
+    pub fn new_sampling_with_top_k(
+        request_id: RequestId,
+        input_token_ids: Vec<u32>,
+        max_output_tokens: u16,
+        temperature_thousandths: u16,
+        top_k: u16,
+        top_p_thousandths: u16,
+        seed: Option<u64>,
+    ) -> Self {
         let sampling_strategy = if temperature_thousandths == 0 {
             Qwen3_5SamplingStrategy::Greedy
         } else {
             Qwen3_5SamplingStrategy::TopKTopP {
                 temperature_thousandths,
-                top_k: 20,
+                top_k,
                 top_p_thousandths,
                 seed,
             }

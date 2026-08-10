@@ -12,6 +12,7 @@ mod layout;
 mod layout_error;
 #[cfg(feature = "direct-mlx")]
 mod live_state;
+mod storage_geometry;
 
 #[cfg(feature = "direct-mlx")]
 pub use append_only_attention_state::{

@@ -1,7 +1,8 @@
 //! Internal localhost `POST /v1/config/reload` endpoint.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
+use astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration;
 use axum::{
     Json,
     extract::State,
@@ -21,11 +22,12 @@ use crate::{
 struct ConfigReloadResponse {
     status: &'static str,
     message: String,
-    worker_restart_started: bool,
+    worker_restart_completed: bool,
     rest_api_restart_required: bool,
     restart_required_fields: Vec<String>,
     reloaded_fields: Vec<String>,
     discovered_model_count: usize,
+    worker_runtime_feature_configuration: Option<WorkerRuntimeFeatureConfiguration>,
 }
 
 impl ConfigReloadResponse {
@@ -33,11 +35,12 @@ impl ConfigReloadResponse {
         Self {
             status: "reloaded",
             message: "Config reloaded".to_owned(),
-            worker_restart_started: false,
+            worker_restart_completed: false,
             rest_api_restart_required: false,
             restart_required_fields: Vec::new(),
             reloaded_fields,
             discovered_model_count,
+            worker_runtime_feature_configuration: None,
         }
     }
 
@@ -49,23 +52,29 @@ impl ConfigReloadResponse {
         Self {
             status: "restart_required",
             message: "Config is valid, but a full server restart is required".to_owned(),
-            worker_restart_started: false,
+            worker_restart_completed: false,
             rest_api_restart_required: true,
             restart_required_fields,
             reloaded_fields,
             discovered_model_count,
+            worker_runtime_feature_configuration: None,
         }
     }
 
-    fn worker_restart_started(reloaded_fields: Vec<String>, discovered_model_count: usize) -> Self {
+    fn worker_restart_completed(
+        reloaded_fields: Vec<String>,
+        discovered_model_count: usize,
+        worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration,
+    ) -> Self {
         Self {
-            status: "worker_restart_started",
-            message: "Config reloaded; restarting the worker".to_owned(),
-            worker_restart_started: true,
+            status: "reloaded",
+            message: "Config reloaded and applied by the worker".to_owned(),
+            worker_restart_completed: true,
             rest_api_restart_required: false,
             restart_required_fields: Vec::new(),
             reloaded_fields,
             discovered_model_count,
+            worker_runtime_feature_configuration: Some(worker_runtime_feature_configuration),
         }
     }
 
@@ -73,11 +82,12 @@ impl ConfigReloadResponse {
         Self {
             status: "invalid_config",
             message: validation_error,
-            worker_restart_started: false,
+            worker_restart_completed: false,
             rest_api_restart_required: false,
             restart_required_fields: Vec::new(),
             reloaded_fields: Vec::new(),
             discovered_model_count: 0,
+            worker_runtime_feature_configuration: None,
         }
     }
 
@@ -85,11 +95,12 @@ impl ConfigReloadResponse {
         Self {
             status: "busy",
             message: "A generation is active or queued; reload aborted".to_owned(),
-            worker_restart_started: false,
+            worker_restart_completed: false,
             rest_api_restart_required: false,
             restart_required_fields: Vec::new(),
             reloaded_fields: Vec::new(),
             discovered_model_count: 0,
+            worker_runtime_feature_configuration: None,
         }
     }
 
@@ -97,11 +108,12 @@ impl ConfigReloadResponse {
         Self {
             status: "failed",
             message,
-            worker_restart_started: false,
+            worker_restart_completed: false,
             rest_api_restart_required: false,
             restart_required_fields: Vec::new(),
             reloaded_fields: Vec::new(),
             discovered_model_count,
+            worker_runtime_feature_configuration: None,
         }
     }
 }
@@ -281,16 +293,28 @@ async fn restart_worker(
         )
             .into_response();
     };
-    match worker_handle
+    let worker_restart_result = worker_handle
         .restart_worker_with_startup_configuration(
             candidate_resolved.worker_executable_path.clone(),
             Arc::clone(&candidate_resolved.model_directories),
             candidate_resolved.max_output_tokens,
             candidate_resolved.worker_startup_configuration(),
         )
-        .await
-    {
+        .await;
+    // Process replacement only proves a child was launched. Wait for the child to report its
+    // own resolved policy before replacing the supervisor's live configuration or telling the
+    // menu that reload succeeded. This keeps candidate configuration from becoming observable
+    // when startup, protocol initialization, or policy acknowledgement later fails.
+    let worker_runtime_feature_configuration_result = match worker_restart_result {
         Ok(()) => {
+            worker_handle
+                .wait_for_worker_runtime_feature_configuration(Duration::from_secs(60))
+                .await
+        }
+        Err(worker_restart_error) => Err(worker_restart_error),
+    };
+    match worker_runtime_feature_configuration_result {
+        Ok(worker_runtime_feature_configuration) => {
             let Some(reloadable_config) = application_state.reloadable_config.as_ref() else {
                 return internal_config_lock_error_response(discovered_model_count);
             };
@@ -299,10 +323,11 @@ async fn restart_worker(
             };
             *live_config = candidate_resolved;
             (
-                StatusCode::ACCEPTED,
-                Json(ConfigReloadResponse::worker_restart_started(
+                StatusCode::OK,
+                Json(ConfigReloadResponse::worker_restart_completed(
                     reloaded_fields,
                     discovered_model_count,
+                    worker_runtime_feature_configuration,
                 )),
             )
                 .into_response()

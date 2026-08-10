@@ -11,6 +11,7 @@ use super::{
     Qwen3_5ImageProcessor, Qwen3_5ProcessedImage, Qwen3_5PromptRenderer, ValidatedQwen3_5Artifact,
 };
 
+use super::sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
 use super::token_ids::{Qwen3_5TokenIds, discover_token_ids};
 use super::tokenizer_error::Qwen3_5TokenizerError;
 
@@ -21,6 +22,7 @@ pub struct Qwen3_5Tokenizer {
     tokenizer_vocabulary_size: u32,
     model_vocabulary_size: u32,
     maximum_position_count: u32,
+    model_sampler_config: Qwen3_5SamplerConfig,
     token_ids: Qwen3_5TokenIds,
     model_id: String,
     image_processor: Option<Qwen3_5ImageProcessor>,
@@ -92,6 +94,7 @@ impl Qwen3_5Tokenizer {
             tokenizer_vocabulary_size,
             model_vocabulary_size,
             maximum_position_count,
+            model_sampler_config: discover_sampler_config(None),
             token_ids,
             model_id: String::new(),
             image_processor,
@@ -115,7 +118,14 @@ impl Qwen3_5Tokenizer {
             image_processor,
         )?;
         tokenizer.model_id = validated_artifact.model_id().to_owned();
+        tokenizer.model_sampler_config =
+            discover_sampler_config(validated_artifact.generation_config_bytes());
         Ok(tokenizer)
+    }
+
+    #[must_use]
+    pub const fn model_sampler_config(&self) -> &Qwen3_5SamplerConfig {
+        &self.model_sampler_config
     }
 
     #[must_use]
@@ -287,18 +297,23 @@ impl Qwen3_5Tokenizer {
             usize::from(chat_generation_command.settings.max_output_tokens),
             self.maximum_position_count as usize,
         )?;
-        let mut inference_request = Qwen3_5InferenceRequest::new_sampling(
+        let model_certified_top_k = match u16::try_from(self.model_sampler_config.certified_top_k) {
+            Ok(model_certified_top_k) if model_certified_top_k > 0 => model_certified_top_k,
+            _ => 20,
+        };
+        let mut inference_request = Qwen3_5InferenceRequest::new_sampling_with_top_k(
             chat_generation_command.request_id,
             input_token_ids,
             chat_generation_command.settings.max_output_tokens,
             chat_generation_command
                 .settings
                 .temperature_thousandths
-                .unwrap_or(1_000),
+                .unwrap_or(self.model_sampler_config.temperature_thousandths),
+            model_certified_top_k,
             chat_generation_command
                 .settings
                 .top_p_thousandths
-                .unwrap_or(950),
+                .unwrap_or(self.model_sampler_config.top_p_thousandths),
             chat_generation_command.settings.seed,
         )
         .with_ordinary_target_prefill_control_span_token_count(

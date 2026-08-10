@@ -2,7 +2,7 @@
 
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, MtpRuntimeState, ProtocolReader, ProtocolWriter,
-    SpeculativePrefillRuntimeState, WorkerEvent,
+    SpeculativePrefillRuntimeState, WorkerEvent, WorkerRuntimeFeatureConfiguration,
 };
 
 #[tokio::main]
@@ -26,6 +26,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 max_output_tokens: 20_480,
                 context_window: 262_144,
             },
+        })
+        .await?;
+    event_writer
+        .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+            worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration::default(),
         })
         .await?;
 

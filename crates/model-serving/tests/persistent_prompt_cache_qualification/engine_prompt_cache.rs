@@ -1,16 +1,18 @@
 use std::{future::Future, path::Path, time::Duration};
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerEvent,
-};
+use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use astronomical_model_serving::{
     DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT, PersistentPromptCacheDiskStoreConfig,
+    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
     PersistentPromptCachePrefixLookup, Qwen3_5ArtifactValidator, Qwen3_5Engine,
     Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    qwen3_5_decoder_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
+
+use super::large_prefill_prompt::{
+    LARGE_PREFILL_QUALIFICATION_OUTPUT_TOKEN_COUNT, representative_long_generation_prompt_token_ids,
+};
 
 const PERSISTENT_PROMPT_CACHE_QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
 const SAY_HI_PROMPT_TOKEN_IDS: [u32; 15] = [
@@ -18,8 +20,6 @@ const SAY_HI_PROMPT_TOKEN_IDS: [u32; 15] = [
     248_069, 271,
 ];
 const MAXIMUM_GREEDY_OUTPUT_TOKEN_COUNT: usize = 10;
-const MINIMUM_LARGE_PREFILL_QUALIFICATION_PROMPT_TOKEN_COUNT: usize = 16_384;
-const LARGE_PREFILL_QUALIFICATION_OUTPUT_TOKEN_COUNT: usize = 1_024;
 
 struct PersistentPromptCacheParityQualificationOutcome {
     cold_generated_token_ids: Vec<u32>,
@@ -107,7 +107,11 @@ async fn run_persistent_prompt_cache_restore_qualification() {
     let qualification_outcome = run_persistent_prompt_cache_greedy_parity_qualification(
         &model_directory,
         persistent_prompt_cache_eligible_prompt_token_ids(
-            PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT + 16,
+            persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplier(
+                &model_directory,
+                1,
+            )
+            .await,
         ),
         1,
         None,
@@ -130,7 +134,11 @@ async fn should_preserve_ornith_greedy_tokens_after_persistent_prompt_cache_rest
         let qualification_outcome = run_persistent_prompt_cache_greedy_parity_qualification(
             &model_directory,
             persistent_prompt_cache_eligible_prompt_token_ids(
-                PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT * 4 + 16,
+                persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplier(
+                    &model_directory,
+                    4,
+                )
+                .await,
             ),
             MAXIMUM_GREEDY_OUTPUT_TOKEN_COUNT,
             None,
@@ -219,47 +227,6 @@ async fn should_qualify_one_selected_large_prefill_size_with_exact_cache_restore
     .await;
 }
 
-fn representative_long_generation_prompt_token_ids(
-    prompt_tokenizer: &Qwen3_5Tokenizer,
-    model_id: &str,
-) -> Vec<u32> {
-    let public_domain_context_sentence = "The observer records the changing sky, compares each measurement, and explains the evidence. ";
-    for context_sentence_repetition_count in (1_024..=4_096).step_by(256) {
-        let prompt_content = format!(
-            "Background notes:\n\n{}\n\nWrite a numbered study guide with at least 2,000 distinct entries. Each entry must contain one complete explanatory sentence. Continue until every entry is present and do not conclude early.",
-            public_domain_context_sentence.repeat(context_sentence_repetition_count),
-        );
-        let prepared_request = prompt_tokenizer
-            .prepare_chat(
-                &ChatGenerationCommand {
-                    request_id: RequestId::new(9_000),
-                    model: model_id.to_owned(),
-                    messages: vec![ChatMessage::User {
-                        content: prompt_content,
-                        images: Vec::new(),
-                    }],
-                    tools: Vec::new(),
-                    tool_choice: ChatToolChoice::None,
-                    settings: ChatGenerationSettings {
-                        max_output_tokens: LARGE_PREFILL_QUALIFICATION_OUTPUT_TOKEN_COUNT as u16,
-                        temperature_thousandths: Some(0),
-                        top_p_thousandths: Some(950),
-                        seed: Some(1),
-                        thinking_budget: None,
-                    },
-                },
-                false,
-            )
-            .expect("the representative qualification prompt should prepare");
-        if prepared_request.input_token_ids().len()
-            >= MINIMUM_LARGE_PREFILL_QUALIFICATION_PROMPT_TOKEN_COUNT
-        {
-            return prepared_request.input_token_ids().to_vec();
-        }
-    }
-    panic!("the representative qualification prompt did not reach 16,384 input tokens")
-}
-
 async fn run_persistent_prompt_cache_greedy_parity_qualification(
     model_directory: &Path,
     prompt_token_ids: Vec<u32>,
@@ -270,7 +237,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         tempfile::tempdir().expect("the test should create a prompt-cache directory");
 
     // First run: cold prefill, should populate the persistent prompt cache.
-    let (mut qwen3_5_engine, model_id, model_revision) =
+    let (mut qwen3_5_engine, _model_id, _model_revision, persistent_prompt_cache_model_contract) =
         load_persistent_prompt_cache_qualification_engine(
             model_directory,
             persistent_prompt_cache_directory.path(),
@@ -296,7 +263,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
     let minimum_expected_sequence_state_block_count = fixed_prefill_chunck_tokens
         .map(|fixed_prefill_chunck_tokens| {
             usize::try_from(fixed_prefill_chunck_tokens).unwrap_or(usize::MAX)
-                / PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT
+                / persistent_prompt_cache_model_contract.block_token_count()
         })
         .unwrap_or(1);
     wait_for_persistent_prompt_cache_blocks(
@@ -305,8 +272,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
     )
     .await;
     let direct_prefix_lookup = PersistentPromptCachePrefixLookup::for_prompt(
-        &model_id,
-        &model_revision,
+        &persistent_prompt_cache_model_contract,
         &prompt_token_ids,
         |persistent_prompt_cache_block_hash| {
             persistent_prompt_cache_file_exists(
@@ -347,7 +313,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         .expect("the second engine should accept the request");
     assert!(
         second_generation_start.cached_token_count()
-            >= PERSISTENT_PROMPT_CACHE_BLOCK_TOKEN_COUNT as u32,
+            >= persistent_prompt_cache_model_contract.block_token_count() as u32,
         "the second run should report at least one restored prompt-cache block"
     );
     let restored_cached_token_count = second_generation_start.cached_token_count();
@@ -370,7 +336,12 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
     model_directory: &Path,
     persistent_prompt_cache_directory: &Path,
     fixed_prefill_chunck_tokens: Option<u32>,
-) -> (Qwen3_5Engine, String, String) {
+) -> (
+    Qwen3_5Engine,
+    String,
+    String,
+    PersistentPromptCacheModelContract,
+) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
@@ -390,6 +361,16 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
     };
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+    let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
+        model_id.clone(),
+        model_revision.clone(),
+        qwen3_5_decoder_cache_layout(validated_artifact.config())
+            .expect("the validated artifact should provide a decoder-cache layout"),
+        validated_artifact.config().maximum_position_count() as usize,
+        mlx_memory_limits.active_memory_limit_bytes() as u64,
+        crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
+    )
+    .expect("the qualification model should resolve a persistent storage contract");
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
@@ -410,7 +391,40 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
         .load()
         .await
         .expect("the engine should load the model");
-    (qwen3_5_engine, model_id, model_revision)
+    (
+        qwen3_5_engine,
+        model_id,
+        model_revision,
+        persistent_prompt_cache_model_contract,
+    )
+}
+
+async fn persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplier(
+    model_directory: &Path,
+    block_multiplier: usize,
+) -> usize {
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(model_directory, 20_480)
+        .expect("the model-artifact checkpoint should validate before sizing the prompt");
+    let mlx_memory_limits =
+        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+    let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
+        validated_artifact.model_id().to_owned(),
+        validated_artifact.revision().to_owned(),
+        qwen3_5_decoder_cache_layout(validated_artifact.config())
+            .expect("the validated artifact should provide a decoder-cache layout"),
+        validated_artifact.config().maximum_position_count() as usize,
+        mlx_memory_limits.active_memory_limit_bytes() as u64,
+        crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
+    )
+    .expect("the model should resolve a persistent storage contract");
+    persistent_prompt_cache_eligible_prompt_token_ids(
+        persistent_prompt_cache_model_contract
+            .block_token_count()
+            .saturating_mul(block_multiplier)
+            .saturating_add(16),
+    )
+    .len()
 }
 
 fn persistent_prompt_cache_file_exists(

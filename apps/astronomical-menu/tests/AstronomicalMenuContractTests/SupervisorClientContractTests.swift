@@ -12,11 +12,11 @@ final class SupervisorClientContractTests: XCTestCase {
     XCTAssertEqual(statusURL.absoluteString, "http://127.0.0.1:6732/v1/status")
   }
 
-  func test_should_accept_a_worker_restart_configuration_reload_response() async throws {
+  func test_should_decode_a_worker_applied_configuration_reload_response() async throws {
     StubSupervisorURLProtocol.responseConfiguration = .init(
       statusCode: 202,
       responseBody: Data(
-        #"{"status":"worker_restart_started","message":"Config reloaded; restarting the worker"}"#.utf8)
+        #"{"status":"reloaded","message":"Config reloaded and applied by the worker","worker_restart_completed":true,"worker_runtime_feature_configuration":{"persistent_prompt_cache_enabled":true,"mtp_enabled":true,"speculative_prefill_enabled":false}}"#.utf8)
     )
     defer { StubSupervisorURLProtocol.responseConfiguration = nil }
 
@@ -24,9 +24,14 @@ final class SupervisorClientContractTests: XCTestCase {
       urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
     )
 
-    let configurationReloadMessage = try await localSupervisorClient.reloadConfiguration()
+    let configurationReloadResult = try await localSupervisorClient.reloadConfiguration()
 
-    XCTAssertEqual(configurationReloadMessage, "Config reloaded; restarting the worker")
+    XCTAssertEqual(configurationReloadResult.message, "Config reloaded and applied by the worker")
+    XCTAssertTrue(configurationReloadResult.workerRestartCompleted)
+    XCTAssertEqual(
+      configurationReloadResult.workerRuntimeFeatureConfiguration?.speculativePrefillEnabled,
+      false
+    )
   }
 
   func test_should_preserve_the_server_message_when_configuration_reload_is_rejected() async {

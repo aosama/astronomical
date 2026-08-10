@@ -55,7 +55,6 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) ordered_image_sha256_digests: Vec<[u8; 32]>,
     pub(super) next_position_tokens: u32,
     pub(super) pending_generated_token: Option<MlxArray>,
-    pub(super) persistent_prompt_cache_capture_has_stopped: bool,
     pub(super) prefill_cursor: usize,
     /// Largest chunk proven to fit after a capacity-driven retry in this request.
     pub(super) maximum_successful_prefill_chunck_tokens: Option<usize>,

@@ -20,7 +20,7 @@ const BINDGEN_FUNCTION_ALLOWLIST: &str = concat!(
     "mlx_(set_error_handler|metal_set_metallib_path|version|string_(new|data|free)|clear_cache|",
     "device_(new_type|free)|device_info_(new|get|get_size|free)|",
     "compile|closure_(new|new_func|free|apply)|",
-    "get_(active_memory|cache_memory|memory_limit|peak_memory)|reset_peak_memory|set_(cache|memory|wired)_limit|",
+    "get_(active_memory|cache_memory|memory_limit|peak_memory)|reset_peak_memory|set_(cache|memory)_limit|",
     "array_(new|new_data|free|eval|shape|ndim|dtype|size|nbytes|data_(float32|uint32)|item_uint32|set)|",
     "default_(cpu|gpu)_stream_new|stream_free|synchronize|",
     "(add(mm)?|arange|argmax_axis|argpartition_axis|argsort_axis|astype|broadcast_to|concatenate_axis|contiguous|conv(1d|3d)|cos|cumsum|dequantize|divide|erf|exp|expand_dims|floor_divide|gather_(mm|qmm)|greater|greater_equal|log1p|logaddexp|matmul|power|",

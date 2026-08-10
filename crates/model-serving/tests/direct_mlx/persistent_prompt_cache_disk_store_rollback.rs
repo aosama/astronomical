@@ -88,7 +88,7 @@ async fn should_rollback_a_new_visual_embedding_when_global_eviction_fails() {
 }
 
 #[tokio::test]
-async fn should_rollback_both_new_split_files_when_parent_snapshot_deletion_fails() {
+async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pressure() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let persistent_prompt_cache_directory =
@@ -145,7 +145,7 @@ async fn should_rollback_both_new_split_files_when_parent_snapshot_deletion_fail
     fs::remove_file(&child_recurrent_snapshot_file_path)
         .expect("the test should remove the child snapshot file");
     fs::create_dir(&child_recurrent_snapshot_file_path)
-        .expect("the test should replace the child snapshot with an undeletable directory");
+        .expect("the test should replace the parent snapshot with a deletion sentinel");
 
     let save_result = persistent_prompt_cache.save_kv_block_and_recurrent_snapshot(
         &runtime,
@@ -155,39 +155,39 @@ async fn should_rollback_both_new_split_files_when_parent_snapshot_deletion_fail
         &recurrent_snapshot_tensors,
     );
 
-    assert!(matches!(
-        save_result,
-        Err(PersistentPromptCacheDiskStoreError::RemovePromptCacheFile {
-            persistent_prompt_cache_file_path,
-            ..
-        }) if persistent_prompt_cache_file_path == child_recurrent_snapshot_file_path
-    ));
+    // Parent retention is the normal case. The directory sentinel makes this a filesystem-level
+    // regression: an accidental eager parent cleanup would fail here instead of quietly turning
+    // a reusable branch point into a missing cache snapshot.
     assert!(
-        !persistent_prompt_cache
+        save_result.is_ok(),
+        "a fitting child must retain its parent: {save_result:?}"
+    );
+    assert!(
+        persistent_prompt_cache
             .has_kv_block(&grandchild_persistent_prompt_cache_block_key.block_hash())
     );
     assert!(
-        !persistent_prompt_cache
+        persistent_prompt_cache
             .has_recurrent_snapshot(&grandchild_persistent_prompt_cache_block_key.block_hash())
     );
     assert!(
-        !persistent_prompt_cache_directory
+        persistent_prompt_cache_directory
             .path()
             .join("kv_blocks")
             .join(format!(
                 "{}.safetensors",
                 hex::encode(grandchild_persistent_prompt_cache_block_key.block_hash())
             ))
-            .exists()
+            .is_file()
     );
     assert!(
-        !persistent_prompt_cache_directory
+        persistent_prompt_cache_directory
             .path()
             .join("recurrent_snapshots")
             .join(format!(
                 "{}.safetensors",
                 hex::encode(grandchild_persistent_prompt_cache_block_key.block_hash())
             ))
-            .exists()
+            .is_file()
     );
 }
