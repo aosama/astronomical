@@ -111,12 +111,15 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'third-party/native-dependency-manifest.cmake', 'third-party/pins/**', 'third-party/patches/**', 'crates/runtime-integration/build.rs', 'crates/runtime-integration/native/**') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-rust-
-      - name: Install Rust compiler cache
+      - name: Install verification tools
         run: |
           case "$(brew tap)" in
             *aws/tap*) brew untap aws/tap ;;
           esac
-          brew install sccache
+          brew install cargo-about sccache
+      - name: Verify Rust dependency notices
+        run: scripts/generate-rust-dependency-notices.sh --check
+        timeout-minutes: 2
       - name: Provision verified native dependencies
         run: scripts/bootstrap-native-dependencies.sh
       - name: Set maximum parallel build jobs
