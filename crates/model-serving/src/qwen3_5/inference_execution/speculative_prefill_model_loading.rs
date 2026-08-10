@@ -240,6 +240,7 @@ pub(super) fn load_speculative_prefill_draft_model(
         draft_model_directory,
         false,
         true,
+        target_model.chunking,
         performance_attribution,
     ) {
         Ok(draft_model) => match draft_model.materialize_target_weights() {

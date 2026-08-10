@@ -7,8 +7,10 @@ fn should_load_supported_runtime_settings_from_user_config_file() {
         temporary_home_directory.path(),
         r#"{
           "model_directories": ["/models/ornith", "/models/qwen"],
-          "prefill_chunck_size_optimizer_enabled": false,
-          "fixed_prefill_chunck_tokens": 2048,
+          "chunking": {
+            "prefill_size_optimizer_enabled": false,
+            "fixed_prefill_tokens": 2048
+          },
           "mtp_enabled": true,
           "supervisor": { "bind_address": "127.0.0.1:7000" },
           "logging": { "level": "debug", "retained_files": 3 }
@@ -109,7 +111,9 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
         Some(true)
     );
     assert_eq!(
-        generated_config_json.get("optimizer_prefill_chunck_token_candidates"),
+        generated_config_json
+            .get("chunking")
+            .and_then(|chunking| chunking.get("optimizer_prefill_token_candidates")),
         Some(&serde_json::json!([1_024, 2_048, 4_096, 8_192]))
     );
     assert!(astronomical_config.mtp_enabled());

@@ -50,15 +50,18 @@ impl Qwen3_5EngineState {
                 .ok_or_else(|| {
                     fatal_engine_error("visual suffix plan refers to a missing image")
                 })?;
-            let visual_embedding_key = PersistentVisualEmbeddingKey::for_image(
-                processed_visual_image.encoded_image_sha256,
-                persistent_visual_embedding_model_contract.model_id(),
-                persistent_visual_embedding_model_contract.model_revision(),
-            );
             let persistent_prompt_cache_visual_embedding_lookup_was_attempted =
                 self.persistent_prompt_cache.is_some();
             let loaded_visual_embeddings = match self.persistent_prompt_cache.as_ref() {
                 Some(persistent_prompt_cache) => {
+                    // Construct disk identity only after proving a cache owner
+                    // exists. The cache-disabled path proceeds directly to
+                    // projection without model/revision key construction.
+                    let visual_embedding_key = PersistentVisualEmbeddingKey::for_image(
+                        processed_visual_image.encoded_image_sha256,
+                        persistent_visual_embedding_model_contract.model_id(),
+                        persistent_visual_embedding_model_contract.model_revision(),
+                    );
                     match persistent_prompt_cache.load_visual_embedding(
                         runtime,
                         &visual_embedding_key,
@@ -114,12 +117,18 @@ impl Qwen3_5EngineState {
                     persistent_prompt_cache_visual_embedding_miss_count =
                         persistent_prompt_cache_visual_embedding_miss_count.saturating_add(1);
                 }
-                tracing::debug!(
-                    request_id = request_id.value(),
-                    image_ordinal = required_image.image_index(),
-                    visual_embedding_row_count = required_image.image_visual_embedding_row_count(),
-                    "persistent visual embedding cache miss"
-                );
+                if persistent_prompt_cache_visual_embedding_lookup_was_attempted {
+                    // A projected embedding is ordinary inference work when
+                    // caching is disabled, not a cache miss. Emit cache-specific
+                    // diagnostics only for a real lookup attempt.
+                    tracing::debug!(
+                        request_id = request_id.value(),
+                        image_ordinal = required_image.image_index(),
+                        visual_embedding_row_count =
+                            required_image.image_visual_embedding_row_count(),
+                        "persistent visual embedding cache miss"
+                    );
+                }
                 missing_required_image_indexes.push(required_image_index);
                 missing_processed_visual_images.push(processed_visual_image.clone());
             }

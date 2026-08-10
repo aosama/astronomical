@@ -24,6 +24,7 @@ mod gated_delta;
 mod gated_delta_boundary_checkpoints;
 #[cfg(feature = "direct-mlx")]
 mod gated_delta_sequence;
+mod gated_delta_sequence_contract;
 #[cfg(feature = "direct-mlx")]
 mod live_memory_limit;
 #[cfg(feature = "direct-mlx")]
@@ -32,6 +33,8 @@ pub(crate) mod memory_admission;
 mod memory_breakdown;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
+#[cfg(feature = "direct-mlx")]
+mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill;
 #[cfg(feature = "direct-mlx")]
@@ -76,6 +79,8 @@ pub use memory_admission::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::Qwen3_5Model;
+#[cfg(feature = "direct-mlx")]
+pub use model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use speculative_prefill::{
     Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,

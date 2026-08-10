@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, Qwen3_5ArtifactValidator, Qwen3_5Model,
-    Qwen3_5MtpRequestState, RequestDecoderStateStack,
-};
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Model, Qwen3_5MtpRequestState};
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::model_artifact_qualification::qwen3_5::SAY_HI_PROMPT_TOKEN_IDS;
@@ -31,10 +28,16 @@ pub(crate) async fn run_one_layer_mtp_head_forward_qualification(
     let runtime = MlxRuntime::initialize(mlx_memory_limits)
         .expect("the direct MLX runtime should initialize for the oQ4e MTP head");
     eprintln!("[{progress_log_prefix}] status=progress phase=model_load");
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, true)
-        .expect("the complete local oQ4e MTP model should bind from validated descriptors");
+    let qwen3_5_model = Qwen3_5Model::load(
+        runtime,
+        validated_artifact,
+        &model_directory,
+        true,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the complete local oQ4e MTP model should bind from validated descriptors");
 
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&qwen3_5_config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(&qwen3_5_config);
     eprintln!("[{progress_log_prefix}] status=progress phase=target_forward");
     let first_prompt_target_forward_output = qwen3_5_model
         .forward_chunk_with_pre_final_normalization_hidden_states(
@@ -47,7 +50,8 @@ pub(crate) async fn run_one_layer_mtp_head_forward_qualification(
         .runtime()
         .array_from_u32(&[SAY_HI_PROMPT_TOKEN_IDS[1]], &[1, 1])
         .expect("the shifted prompt token should fit the direct MLX index representation");
-    let mut mtp_request_state = Qwen3_5MtpRequestState::empty();
+    let mut mtp_request_state = Qwen3_5MtpRequestState::empty_with_growth_tokens(256)
+        .expect("the test MTP growth should be valid");
     qwen3_5_model
         .prefill_mtp_history(
             first_prompt_target_forward_output.pre_final_normalization_hidden_states(),
@@ -91,7 +95,7 @@ pub(crate) async fn run_one_layer_mtp_head_forward_qualification(
     );
     assert_eq!(mtp_request_state.committed_token_count(), 2);
     mtp_request_state
-        .reset_with_growth_tokens(DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS)
+        .reset_with_growth_tokens(256)
         .expect("injected-input reset should replace MTP history with empty state");
     assert_eq!(mtp_request_state.committed_token_count(), 0);
     eprintln!(

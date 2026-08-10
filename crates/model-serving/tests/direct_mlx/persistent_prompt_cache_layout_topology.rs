@@ -161,6 +161,8 @@ fn sequence_only_contract() -> PersistentPromptCacheModelContract {
         128,
         1_000_000,
         1_000_000,
+        None,
+        4,
     )
     .expect("the sequence-only contract should resolve")
 }
@@ -182,6 +184,8 @@ fn boundary_only_contract() -> PersistentPromptCacheModelContract {
         100,
         1_000_000,
         10_000,
+        None,
+        4,
     )
     .expect("the boundary-only contract should resolve")
 }

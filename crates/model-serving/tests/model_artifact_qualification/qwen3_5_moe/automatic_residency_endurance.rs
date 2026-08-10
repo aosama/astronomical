@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
 };
 use tokio::time::timeout;
 
@@ -26,7 +25,7 @@ async fn should_serve_consecutive_large_requests_when_adaptive_growth_is_disable
             .expect("the local Ornith eight-bit artifact should validate");
         let mlx_memory_limits = crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
         let mut qwen3_5_engine =
-            Qwen3_5Engine::new_with_prefill_chunck_sizer_and_performance_attribution(
+            Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
                 validated_artifact,
                 mlx_memory_limits.active_memory_limit_bytes(),
                 mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -37,9 +36,10 @@ async fn should_serve_consecutive_large_requests_when_adaptive_growth_is_disable
                 .expect("the production prefill chunck size should be valid"),
                 IMAGE_PAD_TOKEN_ID,
                 model_directory,
-                DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+                crate::common::standard_worker_chunking_configuration(),
                 false,
                 false,
+                crate::common::disabled_worker_speculative_prefill_configuration(),
                 PerformanceAttribution::disabled(),
                 PerformanceAttributionLog::disabled(),
             )

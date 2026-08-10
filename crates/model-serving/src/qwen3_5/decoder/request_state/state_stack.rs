@@ -1,7 +1,6 @@
 use crate::decoder_cache::{
-    ConvolutionState, DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, DecoderCacheLayerLayout,
-    DecoderCacheLayout, DecoderCacheState, DecoderCacheStateAllocationCheckpoint,
-    DecoderCacheStateCheckpoint, FullAttentionKeyValueState, GatedDeltaRecurrentState,
+    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheState,
+    DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint,
 };
 use crate::qwen3_5::Qwen3_5Config;
 use astronomical_runtime_integration::MlxRuntimeError;
@@ -79,17 +78,6 @@ impl RequestDecoderStateStack {
         Ok(Self { layers })
     }
 
-    /// Creates empty decoder-layer state entries from the validated Qwen3.5
-    /// config layer schedule. No MLX arrays are allocated until the first
-    /// forward pass touches a layer.
-    #[must_use]
-    pub fn empty_from_config(qwen3_5_config: &Qwen3_5Config) -> Self {
-        Self::empty_from_config_with_validated_full_attention_kv_state_growth_tokens(
-            qwen3_5_config,
-            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
-        )
-    }
-
     /// Creates empty decoder-layer state entries using an explicit
     /// full-attention KV capacity-growth granularity.
     pub fn empty_from_config_with_full_attention_kv_state_growth_tokens(
@@ -105,6 +93,11 @@ impl RequestDecoderStateStack {
         let decoder_cache_layout =
             crate::qwen3_5::decoder::cache_layout::qwen3_5_decoder_cache_layout(
                 qwen3_5_config,
+                usize::try_from(full_attention_kv_state_growth_tokens).map_err(|_| {
+                    request_decoder_state_error(
+                        "full-attention key/value growth tokens exceed the usize range",
+                    )
+                })?,
             )
             .map_err(|decoder_cache_layout_error| {
                 request_decoder_state_error_from_string(format!(
@@ -115,42 +108,6 @@ impl RequestDecoderStateStack {
             &decoder_cache_layout,
             full_attention_kv_state_growth_tokens,
         )
-    }
-
-    fn empty_from_config_with_validated_full_attention_kv_state_growth_tokens(
-        qwen3_5_config: &Qwen3_5Config,
-        full_attention_kv_state_growth_tokens: i32,
-    ) -> Self {
-        let linear_convolution_kernel_dimension =
-            qwen3_5_config.linear_convolution_kernel_dimension() as i32;
-        let linear_convolution_dimension = qwen3_5_config.linear_convolution_state_dimension();
-        let linear_value_head_count = qwen3_5_config.linear_value_head_count() as i32;
-        let linear_value_head_dimension = qwen3_5_config.linear_value_head_dimension() as i32;
-        let linear_key_head_dimension = qwen3_5_config.linear_key_head_dimension() as i32;
-        let layers = (0..qwen3_5_config.layer_count() as usize)
-            .map(|decoder_layer_index| {
-                if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
-                    DecoderCacheState::AppendOnlyAttention {
-                        attention: FullAttentionKeyValueState::empty_with_validated_growth_tokens(
-                            full_attention_kv_state_growth_tokens,
-                        ),
-                    }
-                } else {
-                    DecoderCacheState::Composite {
-                        convolution: ConvolutionState::empty_with_shape(
-                            linear_convolution_kernel_dimension,
-                            linear_convolution_dimension,
-                        ),
-                        recurrent: GatedDeltaRecurrentState::empty_with_shape(
-                            linear_value_head_count,
-                            linear_value_head_dimension,
-                            linear_key_head_dimension,
-                        ),
-                    }
-                }
-            })
-            .collect();
-        Self { layers }
     }
 
     #[must_use]

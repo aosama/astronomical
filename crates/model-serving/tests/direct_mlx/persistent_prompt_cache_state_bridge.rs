@@ -14,7 +14,7 @@ async fn should_extract_split_persistent_prompt_cache_tensors_from_populated_dec
     let runtime = shared_runtime();
     let block_token_count = persistent_prompt_cache_model_contract().block_token_count();
     let ornith_config = certified_ornith_config();
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&ornith_config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(&ornith_config);
     populate_request_decoder_state(&runtime, &mut request_decoder_state);
 
     let kv_block_tensors = request_decoder_state
@@ -73,7 +73,7 @@ async fn should_extract_only_the_requested_full_attention_kv_slice_from_longer_m
     let runtime = shared_runtime();
     let block_token_count = persistent_prompt_cache_model_contract().block_token_count();
     let ornith_config = certified_ornith_config();
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&ornith_config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(&ornith_config);
     populate_request_decoder_state_with_full_attention_tokens(
         &runtime,
         &mut request_decoder_state,
@@ -114,7 +114,7 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
     let kv_block_tensors = vec![first_kv_block_tensors, second_kv_block_tensors];
 
     let mut restored_request_decoder_state =
-        RequestDecoderStateStack::empty_from_config(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&certified_ornith_config());
     restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
@@ -186,7 +186,7 @@ async fn should_round_trip_compact_sparse_target_decoder_state_without_dense_rec
     let runtime = shared_runtime();
     let ornith_config = certified_ornith_config();
     let mut sparse_target_decoder_state =
-        RequestDecoderStateStack::empty_from_config(&ornith_config);
+        crate::common::standard_request_decoder_state(&ornith_config);
     populate_request_decoder_state_with_full_attention_tokens(
         &runtime,
         &mut sparse_target_decoder_state,
@@ -197,7 +197,7 @@ async fn should_round_trip_compact_sparse_target_decoder_state_without_dense_rec
         .extract_speculative_prefill_target_state_tensors(&runtime)
         .expect("sparse target state should extract every decoder layer");
     let mut restored_sparse_target_decoder_state =
-        RequestDecoderStateStack::empty_from_config(&ornith_config);
+        crate::common::standard_request_decoder_state(&ornith_config);
     restored_sparse_target_decoder_state
         .restore_speculative_prefill_target_state_tensors(&compact_target_state_tensors, 7)
         .expect("compact sparse target tensors should restore without target forwarding");
@@ -233,7 +233,7 @@ async fn should_materialize_restored_split_persistent_prompt_cache_state_before_
         tiny_persistent_prompt_cache_recurrent_snapshot_tensors(&runtime, 30.0);
 
     let mut restored_request_decoder_state =
-        RequestDecoderStateStack::empty_from_config(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&certified_ornith_config());
     restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
@@ -257,7 +257,7 @@ async fn should_reject_a_kv_block_tensor_map_missing_a_required_tensor() {
         tiny_persistent_prompt_cache_recurrent_snapshot_tensors(&runtime, 30.0);
 
     let mut restored_request_decoder_state =
-        RequestDecoderStateStack::empty_from_config(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&certified_ornith_config());
     let restore_result = restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
@@ -280,7 +280,7 @@ async fn should_reject_a_recurrent_snapshot_tensor_map_missing_a_required_tensor
     recurrent_snapshot_tensors.remove("layer_0_linear.gated_delta_recurrent");
 
     let mut restored_request_decoder_state =
-        RequestDecoderStateStack::empty_from_config(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&certified_ornith_config());
     let restore_result = restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,

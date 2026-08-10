@@ -8,6 +8,7 @@ mod protocol_error;
 mod protocol_message;
 mod protocol_reader;
 mod protocol_writer;
+mod worker_chunking_configuration;
 
 pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
@@ -27,11 +28,14 @@ pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpRuntimeState, RequestId,
     SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerLogLevel,
-    WorkerMlxMemorySnapshot, WorkerPrefillChunckSizingPolicy,
-    WorkerPrefillOptimizerCandidateEvidence, WorkerPrefillOptimizerContext,
-    WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse, WorkerRuntimeFeatureConfiguration,
-    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
+    WorkerMlxMemorySnapshot, WorkerPrefillOptimizerCandidateEvidence,
+    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
+    WorkerPrefillOptimizerInsight, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,
+    WorkerStartupConfiguration,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
+pub use worker_chunking_configuration::{
+    WorkerChunkingConfiguration, WorkerPrefillChunckSizingPolicy,
+};

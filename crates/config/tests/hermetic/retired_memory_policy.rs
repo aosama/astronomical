@@ -8,7 +8,7 @@ fn should_reject_retired_expert_paging_enabled_field() {
     write_config(
         temporary_home_directory.path(),
         r#"{
-          "prefill_chunck_size_optimizer_enabled": true,
+          "chunking": { "prefill_size_optimizer_enabled": true },
           "expert_paging_enabled": true
         }"#,
     );
@@ -34,7 +34,7 @@ fn should_reject_retired_expert_weight_memory_cache_maximum_size_field() {
     write_config(
         temporary_home_directory.path(),
         r#"{
-          "prefill_chunck_size_optimizer_enabled": true,
+          "chunking": { "prefill_size_optimizer_enabled": true },
           "expert_weight_memory_cache_maximum_size_gb": 4
         }"#,
     );

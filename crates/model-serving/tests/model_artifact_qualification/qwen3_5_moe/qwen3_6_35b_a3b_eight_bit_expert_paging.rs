@@ -1,8 +1,6 @@
 use std::time::Instant;
 
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5Model, RequestDecoderStateStack,
-};
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5Model};
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::super::qwen3_5::SAY_HI_PROMPT_TOKEN_IDS;
@@ -50,7 +48,7 @@ async fn run_one_token_expert_paging_smoke_test() {
         bytes_to_gib(loaded_memory_snapshot.allocator_cache_memory_bytes() as u64)
     );
 
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&config);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(&config);
     qwen3_5_model
         .prefill_chunck(
             &SAY_HI_PROMPT_TOKEN_IDS[..SAY_HI_PROMPT_TOKEN_IDS.len() - 1],
@@ -156,7 +154,13 @@ async fn load_paged_model() -> (Qwen3_5Model, Qwen3_5Config) {
     let runtime = MlxRuntime::initialize(mlx_memory_limits)
         .expect("the MLX runtime should initialize for Qwen3.6 expert paging");
     eprintln!("{PAGED_TEST_PROGRESS_LOG_PREFIX} status=progress phase=model_load");
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-        .expect("the Qwen3.6-35B-A3B eight-bit model should load with automatic expert residency");
+    let qwen3_5_model = Qwen3_5Model::load(
+        runtime,
+        validated_artifact,
+        &model_directory,
+        false,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the Qwen3.6-35B-A3B eight-bit model should load with automatic expert residency");
     (qwen3_5_model, config)
 }

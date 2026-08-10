@@ -11,6 +11,7 @@
 //! cargo qualify-qwen3-5-persistent-prompt-cache
 //! ```
 
+mod cache_disabled;
 #[cfg(feature = "direct-mlx")]
 mod cache_interaction_matrix;
 mod engine_prompt_cache;

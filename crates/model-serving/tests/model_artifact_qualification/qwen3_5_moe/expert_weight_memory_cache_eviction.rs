@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use astronomical_model_serving::{
     ExpertWeightMemoryCacheStatistics, Qwen3_5ArtifactValidator, Qwen3_5ExpertWeightMemoryCache,
-    Qwen3_5Model, RequestDecoderStateStack,
+    Qwen3_5Model,
 };
 use astronomical_runtime_integration::MlxRuntime;
 
@@ -289,9 +289,15 @@ async fn load_model_decode_one_token_and_read_cache_statistics(
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
     let runtime = MlxRuntime::initialize(mlx_memory_limits)
         .expect("the MLX runtime should initialize for automatic cache-budget testing");
-    let qwen3_5_model = Qwen3_5Model::load(runtime, validated_artifact, &model_directory, false)
-        .expect("the model-artifact checkpoint should load with automatic expert residency");
-    let mut request_decoder_state = RequestDecoderStateStack::empty_from_config(&config);
+    let qwen3_5_model = Qwen3_5Model::load(
+        runtime,
+        validated_artifact,
+        &model_directory,
+        false,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the model-artifact checkpoint should load with automatic expert residency");
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(&config);
     qwen3_5_model
         .prefill_chunck(
             &SAY_HI_PROMPT_TOKEN_IDS[..SAY_HI_PROMPT_TOKEN_IDS.len() - 1],

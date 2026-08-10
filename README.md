@@ -80,7 +80,9 @@ On first launch Astronomical creates ~/.astronomical/config.json. Add one or mor
       "model_directories": ["/path/to/models"],
       "maximum_mlx_memory_gb": 16,
       "persistent_prompt_cache_enabled": true,
-      "prefill_chunck_size_optimizer_enabled": true,
+      "chunking": {
+        "prefill_size_optimizer_enabled": true
+      },
       "prompt_cache_max_size_gb": 50
     }
 

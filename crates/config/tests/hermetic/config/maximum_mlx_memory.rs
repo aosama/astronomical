@@ -69,7 +69,7 @@ fn should_atomically_update_maximum_mlx_memory_without_losing_other_config_field
     let original_config_bytes = br#"{
       "model_directories": ["/models/astronomical"],
       "mtp_enabled": true,
-      "prefill_chunck_size_optimizer_enabled": true
+      "chunking": {"prefill_size_optimizer_enabled": true}
     }"#;
     write_config(
         temporary_home_directory.path(),
@@ -115,7 +115,7 @@ fn should_atomically_update_maximum_mlx_memory_without_losing_other_config_field
 #[test]
 fn should_remove_maximum_mlx_memory_override_when_reset_to_automatic() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    let original_config_bytes = br#"{"maximum_mlx_memory_gb": 32, "mtp_enabled": true, "prefill_chunck_size_optimizer_enabled": true}"#;
+    let original_config_bytes = br#"{"maximum_mlx_memory_gb": 32, "mtp_enabled": true, "chunking": {"prefill_size_optimizer_enabled": true}}"#;
     write_config(
         temporary_home_directory.path(),
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),
@@ -148,7 +148,7 @@ fn should_remove_maximum_mlx_memory_override_when_reset_to_automatic() {
 fn should_leave_original_config_unchanged_when_candidate_validation_fails() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     let original_config_bytes =
-        br#"{"unexpected_field": true, "prefill_chunck_size_optimizer_enabled": true}"#;
+        br#"{"unexpected_field": true, "chunking": {"prefill_size_optimizer_enabled": true}}"#;
     write_config(
         temporary_home_directory.path(),
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),
@@ -176,7 +176,7 @@ fn should_leave_original_config_unchanged_when_candidate_validation_fails() {
 fn should_restore_the_previous_config_bytes_after_a_persisted_change() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     let original_config_bytes =
-        br#"{"mtp_enabled": true, "prefill_chunck_size_optimizer_enabled": true}"#;
+        br#"{"mtp_enabled": true, "chunking": {"prefill_size_optimizer_enabled": true}}"#;
     write_config(
         temporary_home_directory.path(),
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),

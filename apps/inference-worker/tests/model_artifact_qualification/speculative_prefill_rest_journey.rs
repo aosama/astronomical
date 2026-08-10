@@ -150,8 +150,10 @@ fn write_enabled_speculative_prefill_config(
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": 50,
         "performance_attribution_enabled": true,
-        "prefill_chunck_size_optimizer_enabled": false,
-        "fixed_prefill_chunck_tokens": 32,
+        "chunking": {
+            "prefill_size_optimizer_enabled": false,
+            "fixed_prefill_tokens": 32,
+        },
         "speculative_prefill": {
             "enabled": true,
             "target_model_id": target_model_id,

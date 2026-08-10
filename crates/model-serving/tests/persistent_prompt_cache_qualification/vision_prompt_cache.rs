@@ -6,9 +6,8 @@ use astronomical_ipc_protocol::{
     RequestId, WorkerEvent,
 };
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, PersistentPromptCacheDiskStoreConfig,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
 };
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 use tokio::time::{Instant, sleep, timeout};
@@ -66,8 +65,9 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
         .expect("the visual qualification prefill size should be valid"),
         tokenizer.think_end_token_id(),
         model_directory,
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the visual qualification engine should construct");
     eprintln!("[visual-prompt-cache-qualification] status=loading-model");

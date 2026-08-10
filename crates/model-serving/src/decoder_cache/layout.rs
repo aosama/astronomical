@@ -43,9 +43,6 @@ impl DecoderCacheTensorDtype {
     }
 }
 
-/// Default allocation granularity for append-only attention state.
-pub const DEFAULT_APPEND_ONLY_ATTENTION_CAPACITY_GROWTH_TOKENS: usize = 256;
-
 /// Static tensor contract for one named decoder-cache state component.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecoderCacheTensorLayout {

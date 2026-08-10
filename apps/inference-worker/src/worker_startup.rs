@@ -1,7 +1,7 @@
-use astronomical_config::{PrefillChunckSizingPolicy, PromptCacheConfig};
+use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{
-    ProtocolReader, ProtocolWriter, WorkerCommand, WorkerPrefillChunckSizingPolicy,
-    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
+    ProtocolReader, ProtocolWriter, WorkerCommand, WorkerRuntimeFeatureConfiguration,
+    WorkerStartupConfiguration,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
@@ -106,19 +106,10 @@ where
     ReadTransport: AsyncRead + Unpin,
     WriteTransport: AsyncWrite + Unpin,
 {
-    let prefill_chunck_sizing_policy =
-        match worker_startup_configuration.prefill_chunck_sizing_policy {
-            WorkerPrefillChunckSizingPolicy::Optimized {
-                optimizer_prefill_chunck_token_candidates,
-            } => PrefillChunckSizingPolicy::Optimized {
-                optimizer_prefill_chunck_token_candidates,
-            },
-            WorkerPrefillChunckSizingPolicy::Fixed {
-                fixed_prefill_chunck_tokens,
-            } => PrefillChunckSizingPolicy::Fixed {
-                fixed_prefill_chunck_tokens,
-            },
-        };
+    // Destructure the one authoritative chunking contract before constructing
+    // model ownership. The sizing policy and every supporting boundary crossed
+    // the same validated IPC boundary and therefore cannot disagree.
+    let chunking = worker_startup_configuration.chunking;
     let prompt_cache_config = PromptCacheConfig::new(
         worker_startup_configuration
             .global_prompt_cache_root_directory
@@ -152,7 +143,7 @@ where
     );
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
-        prefill_chunck_sizing_policy = ?prefill_chunck_sizing_policy,
+        prefill_chunck_sizing_policy = ?chunking.prefill_sizing_policy,
         optimizer_state_directory = ?optimizer_state_directory
             .as_ref()
             .map(|optimizer_state_directory| optimizer_state_directory.display()),
@@ -163,12 +154,12 @@ where
         mtp_enabled,
         speculative_prefill = ?worker_startup_configuration.speculative_prefill,
         persistent_prompt_cache_enabled,
+        chunking = ?chunking,
         "starting idle inference worker"
     );
     let model_factory = ModelFamilyFactory {
         effective_mlx_memory_ceiling_bytes,
         prompt_cache_config,
-        prefill_chunck_sizing_policy,
         optimizer_state_directory,
         performance_attribution_enabled,
         performance_attribution_log_path,
@@ -176,6 +167,7 @@ where
         mtp_enabled,
         speculative_prefill: worker_startup_configuration.speculative_prefill.clone(),
         persistent_prompt_cache_enabled,
+        chunking,
     };
     let engine_worker: EngineBackedWorker<
         ModelFamilyGenerationProcessor,

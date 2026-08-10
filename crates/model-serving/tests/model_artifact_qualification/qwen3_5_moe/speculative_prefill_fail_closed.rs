@@ -4,10 +4,9 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::{RequestId, WorkerSpeculativePrefillConfiguration};
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    InferenceEngineError, PerformanceAttribution, PerformanceAttributionLog,
-    PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    GeneratedToken, InferenceEngine, InferenceEngineError, PerformanceAttribution,
+    PerformanceAttributionLog, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
+    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5Tokenizer,
 };
 
@@ -34,7 +33,7 @@ async fn should_stop_model_activation_when_the_configured_drafter_is_unavailable
             .expect("the unavailable-drafter journey should create an empty draft directory");
         let mlx_memory_limits =
             crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-        let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+        let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
             validated_target_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -43,7 +42,7 @@ async fn should_stop_model_activation_when_the_configured_drafter_is_unavailable
                 .expect("the unavailable-drafter prefill chunk size should be valid"),
             target_tokenizer.think_end_token_id(),
             target_model_directory,
-            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+            crate::common::standard_worker_chunking_configuration(),
             true,
             false,
             WorkerSpeculativePrefillConfiguration {
@@ -115,7 +114,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
             persistent_prompt_cache_directory.path().to_path_buf(),
             crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
         );
-        let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+        let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
             validated_target_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -124,7 +123,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
                 .expect("the memory-recovery prefill chunk size should be valid"),
             target_tokenizer.think_end_token_id(),
             target_model_directory,
-            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+            crate::common::standard_worker_chunking_configuration(),
             true,
             false,
             WorkerSpeculativePrefillConfiguration {
@@ -287,7 +286,7 @@ async fn should_stop_every_forced_speculative_prefill_execution_stage_without_ta
             lookahead_token_count: 8,
             importance_pooling_kernel_token_count: 13,
         };
-        let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+        let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
             validated_target_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -296,7 +295,7 @@ async fn should_stop_every_forced_speculative_prefill_execution_stage_without_ta
                 .expect("the fail-closed prefill chunk size should be valid"),
             target_tokenizer.think_end_token_id(),
             target_model_directory,
-            DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+            crate::common::standard_worker_chunking_configuration(),
             true,
             false,
             speculative_prefill_configuration,

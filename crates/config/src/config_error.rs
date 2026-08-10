@@ -4,6 +4,11 @@ use std::path::PathBuf;
 /// Failure while loading or resolving Astronomical runtime configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum AstronomicalConfigError {
+    #[error("invalid {field_name}: {description}")]
+    InvalidChunkingValue {
+        field_name: &'static str,
+        description: &'static str,
+    },
     #[error("failed to read Astronomical config file at {config_file_path:?}")]
     ReadConfigFile {
         config_file_path: PathBuf,
@@ -22,16 +27,16 @@ pub enum AstronomicalConfigError {
         configured_path: PathBuf,
     },
     #[error(
-        "fixed_prefill_chunck_tokens is required when prefill_chunck_size_optimizer_enabled is false"
+        "chunking.fixed_prefill_tokens is required when chunking.prefill_size_optimizer_enabled is false"
     )]
     FixedPrefillChunckTokensRequiredWhenOptimizerDisabled,
-    #[error("fixed_prefill_chunck_tokens must be positive")]
+    #[error("chunking.fixed_prefill_tokens must be positive")]
     InvalidFixedPrefillChunckTokens,
-    #[error("optimizer_prefill_chunck_token_candidates must not be empty")]
+    #[error("chunking.optimizer_prefill_token_candidates must not be empty")]
     OptimizerPrefillChunckTokenCandidatesMustNotBeEmpty,
-    #[error("optimizer_prefill_chunck_token_candidates must contain only positive values")]
+    #[error("chunking.optimizer_prefill_token_candidates must contain only positive values")]
     OptimizerPrefillChunckTokenCandidatesMustBePositive,
-    #[error("optimizer_prefill_chunck_token_candidates must be strictly increasing")]
+    #[error("chunking.optimizer_prefill_token_candidates must be strictly increasing")]
     OptimizerPrefillChunckTokenCandidatesMustBeStrictlyIncreasing,
     #[error("failed to parse supervisor bind address '{raw_bind_address}'")]
     ParseBindAddress {

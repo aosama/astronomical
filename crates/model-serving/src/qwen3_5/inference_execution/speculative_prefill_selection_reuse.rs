@@ -54,19 +54,14 @@ impl Qwen3_5EngineState {
             return Ok(true);
         }
         if !is_visual_speculative_prefill_request
-            && let (
-                Some(selection_contract),
-                Some(target_model),
-                Some(draft_persistent_prompt_cache),
-            ) = (
-                self.speculative_prefill_selection_contract(
-                    scoring_start_position_tokens_u32,
-                    active_request.input_token_ids.len(),
-                ),
-                self.model.as_ref(),
-                self.speculative_prefill_draft_persistent_prompt_cache
-                    .as_ref(),
+            && let Some(draft_persistent_prompt_cache) = self
+                .speculative_prefill_draft_persistent_prompt_cache
+                .as_ref()
+            && let Some(selection_contract) = self.speculative_prefill_selection_contract(
+                scoring_start_position_tokens_u32,
+                active_request.input_token_ids.len(),
             )
+            && let Some(target_model) = self.model.as_ref()
         {
             let persistent_selection_load_result =
                 active_request.performance_attribution.measure_operation(

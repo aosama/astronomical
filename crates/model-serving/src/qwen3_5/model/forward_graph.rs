@@ -7,9 +7,6 @@ use super::model::Qwen3_5Model;
 use super::{Qwen3_5AttentionCapture, Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
-// Bounded submissions overlap host graph construction without per-layer scheduler overhead.
-const FORWARD_ASYNC_SUBMISSION_LAYER_INTERVAL: usize = 3;
-
 /// Target-model graph outputs retained for optional specialized consumers.
 pub struct Qwen3_5TargetForwardOutput {
     final_logits: MlxArray,
@@ -301,6 +298,15 @@ impl Qwen3_5Model {
             }
         })?;
         let decoder_layer_count = self.config.layer_count() as usize;
+        // Prompt and generation shapes have different scheduling economics.
+        // A zero prefill interval intentionally leaves each configured prompt
+        // chunk as one lazy MLX graph, while generation can submit bounded
+        // layer groups to overlap later host graph construction with execution.
+        let graph_submission_layer_interval = if token_count == 1 {
+            self.chunking.generation_graph_submission_layer_interval
+        } else {
+            self.chunking.prefill_graph_submission_layer_interval
+        };
         for layer_index in 0..decoder_layer_count {
             let decoder_layer_weights = self
                 .weights
@@ -332,9 +338,13 @@ impl Qwen3_5Model {
                 paged_prefill_execution_mode,
                 performance_attribution,
             )?;
-            if (layer_index + 1).is_multiple_of(FORWARD_ASYNC_SUBMISSION_LAYER_INTERVAL)
+            if graph_submission_layer_interval > 0
+                && (layer_index + 1).is_multiple_of(graph_submission_layer_interval)
                 && layer_index + 1 < decoder_layer_count
             {
+                // Do not submit after the final decoder layer: final
+                // normalization and logits extend that same graph and the
+                // caller owns the terminal evaluation boundary.
                 self.runtime.async_eval_arrays(&[&hidden_states])?;
             }
         }

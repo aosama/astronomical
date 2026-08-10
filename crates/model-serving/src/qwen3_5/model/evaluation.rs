@@ -82,9 +82,23 @@ impl Qwen3_5Model {
         if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
             evaluation_arrays.extend(boundary_checkpoint_collector.evaluation_arrays());
         }
+        // mlx_async_eval is asynchronous only with respect to the submitted
+        // graphics-processor work. Before returning, MLX still traverses the
+        // lazy graph, resolves dependencies, compiles first-use Metal libraries
+        // and pipelines, and encodes commands. Keep that host-side submission
+        // boundary separate from the remaining stream completion wait so cold
+        // compilation cannot be misreported as graphics-processor execution.
         performance_attribution.measure_operation(
-            PerformanceOperation::PrefillStateEvaluationSynchronizationWait,
-            |_performance_attribution| self.runtime.evaluate_arrays(&evaluation_arrays),
+            PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
+            |_performance_attribution| self.runtime.async_eval_arrays(&evaluation_arrays),
+        )?;
+        // Prefill state and optional cache boundary checkpoints must be fully
+        // materialized before allocator cleanup or publication can observe
+        // their buffers. This explicit barrier measures only work still in
+        // flight after async evaluation submission returned.
+        performance_attribution.measure_operation(
+            PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
+            |_performance_attribution| self.runtime.synchronize_gpu_stream(),
         )?;
         Ok(())
     }

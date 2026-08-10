@@ -6,9 +6,9 @@ use astronomical_ipc_protocol::{
     RequestId, WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
-    DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS, GeneratedToken, InferenceEngine,
-    PerformanceAttribution, PerformanceAttributionLog, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
@@ -94,7 +94,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         lookahead_token_count: 8,
         importance_pooling_kernel_token_count: 13,
     };
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         validated_target_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -103,7 +103,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
             .expect("the visual qualification prefill chunk size should be valid"),
         tokenizer.think_end_token_id(),
         target_model_directory.clone(),
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
         false,
         speculative_prefill,
@@ -257,7 +257,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         lookahead_token_count: 8,
         importance_pooling_kernel_token_count: 13,
     };
-    let mut restored_qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer_and_speculative_prefill_and_performance_attribution(
+    let mut restored_qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
         restored_target_artifact,
         restored_mlx_memory_limits.active_memory_limit_bytes(),
         restored_mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -266,7 +266,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
             .expect("the restored visual qualification prefill chunk size should be valid"),
         tokenizer.think_end_token_id(),
         target_model_directory,
-        DEFAULT_FULL_ATTENTION_KV_STATE_GROWTH_TOKENS,
+        crate::common::standard_worker_chunking_configuration(),
         true,
         false,
         restored_speculative_prefill,

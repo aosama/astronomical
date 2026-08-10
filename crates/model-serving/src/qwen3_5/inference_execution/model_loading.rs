@@ -10,6 +10,7 @@ use crate::{
 use super::{
     Qwen3_5EngineState, Qwen3_5MtpRuntimeState, fatal_engine_error, qwen3_5_runtime_error,
 };
+use crate::qwen3_5::model::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5::multi_token_prediction::{
     materialize_optional_weights, qwen3_5_mtp_runtime_state_after_load,
 };
@@ -77,12 +78,24 @@ impl Qwen3_5EngineState {
                     |_performance_attribution| runtime.clear_allocator_cache(),
                 )
                 .map_err(qwen3_5_runtime_error)?;
+            let model_chunking = Qwen3_5ModelChunkingConfiguration::new(
+                self.chunking.full_attention_key_value_growth_tokens,
+                self.chunking.prefill_graph_submission_layer_interval,
+                self.chunking.generation_graph_submission_layer_interval,
+                self.chunking.speculative_prefill_draft_forward_tokens,
+            )
+            .map_err(|configuration_error| {
+                fatal_engine_error(format!(
+                    "failed to validate model chunking configuration: {configuration_error}"
+                ))
+            })?;
             let mut model = Qwen3_5Model::load_with_performance_attribution(
                 runtime,
                 validated_artifact,
                 &self.model_directory,
                 self.mtp_enabled,
                 true,
+                model_chunking,
                 &mut model_loading_performance_attribution,
             )
             .map_err(qwen3_5_runtime_error)?;
@@ -160,27 +173,12 @@ impl Qwen3_5EngineState {
             let resolved_model_revision = model_revision.clone().ok_or_else(|| {
                 fatal_engine_error("model loading lost the validated model revision")
             })?;
-            let decoder_cache_layout = model.decoder_cache_layout().clone();
-            let global_prompt_cache_maximum_size_bytes = self
-                .persistent_prompt_cache_disk_store_config
-                .as_ref()
-                .map(|disk_store_config| disk_store_config.global_prompt_cache_maximum_size_bytes())
-                .unwrap_or(u64::MAX);
-            let model_contract = PersistentPromptCacheModelContract::resolve(
-                resolved_model_id.clone(),
-                resolved_model_revision.clone(),
-                decoder_cache_layout,
-                model.config().maximum_position_count() as usize,
-                model.runtime().memory_limits().active_memory_limit_bytes() as u64,
-                global_prompt_cache_maximum_size_bytes,
-            )
-            .map_err(|model_contract_error| {
-                fatal_engine_error(format!(
-                    "could not resolve persistent model-state storage contract: {model_contract_error}"
-                ))
-            })?;
             let persistent_visual_embedding_model_contract =
                 qwen3_5_vision_config.as_ref().map(|vision_config| {
+                    // This object is in-memory vision tensor geometry used to
+                    // validate both direct visual embeddings and optional disk
+                    // entries. It creates no storage owner. Scanning and all
+                    // other disk work remain inside the cache-enabled branch.
                     let qwen3_5_image_processor =
                         Qwen3_5ImageProcessor::from_vision_config(vision_config);
                     PersistentVisualEmbeddingModelContract::new(
@@ -190,12 +188,35 @@ impl Qwen3_5EngineState {
                         qwen3_5_image_processor.maximum_image_token_count_after_spatial_merge(),
                     )
                 });
-            let persistent_prompt_cache = if let Some(persistent_prompt_cache_disk_store_config) =
+            let (persistent_prompt_cache_model_contract, persistent_prompt_cache) = if let Some(
+                persistent_prompt_cache_disk_store_config,
+            ) =
                 self.persistent_prompt_cache_disk_store_config.clone()
             {
+                // Contract derivation is intentionally inside the same
+                // branch as store ownership. A disabled cache therefore
+                // cannot fail model loading because of storage alignment,
+                // quota, stale files, or filesystem availability.
                 let global_prompt_cache_maximum_size_bytes =
                     persistent_prompt_cache_disk_store_config
                         .global_prompt_cache_maximum_size_bytes();
+                let model_contract = PersistentPromptCacheModelContract::resolve(
+                        resolved_model_id.clone(),
+                        resolved_model_revision.clone(),
+                        model.decoder_cache_layout().clone(),
+                        model.config().maximum_position_count() as usize,
+                        model.runtime().memory_limits().active_memory_limit_bytes() as u64,
+                        global_prompt_cache_maximum_size_bytes,
+                        self.chunking
+                            .prompt_cache_block_tokens
+                            .map(|block_token_count| block_token_count as usize),
+                        self.chunking.prompt_cache_common_prefix_stride_blocks,
+                    )
+                    .map_err(|model_contract_error| {
+                        fatal_engine_error(format!(
+                            "could not resolve persistent model-state storage contract: {model_contract_error}"
+                        ))
+                    })?;
                 match model_loading_performance_attribution.measure_operation(
                     PerformanceOperation::PersistentPromptCacheOpenAndScan,
                     |_performance_attribution| {
@@ -228,7 +249,10 @@ impl Qwen3_5EngineState {
                             maximum_size_bytes = global_prompt_cache_maximum_size_bytes,
                             "opened Qwen3.5 persistent prompt cache"
                         );
-                        Some(Arc::new(persistent_prompt_cache))
+                        (
+                            Some(model_contract),
+                            Some(Arc::new(persistent_prompt_cache)),
+                        )
                     }
                     Err(persistent_prompt_cache_error) => {
                         return Err(fatal_engine_error(format!(
@@ -237,7 +261,7 @@ impl Qwen3_5EngineState {
                     }
                 }
             } else {
-                None
+                (None, None)
             };
             let speculative_prefill_draft_persistent_prompt_cache = if let Some((
                 draft_model,
@@ -267,6 +291,10 @@ impl Qwen3_5EngineState {
                         .active_memory_limit_bytes() as u64,
                     persistent_prompt_cache_disk_store_config
                         .global_prompt_cache_maximum_size_bytes(),
+                    self.chunking
+                        .prompt_cache_block_tokens
+                        .map(|block_token_count| block_token_count as usize),
+                    self.chunking.prompt_cache_common_prefix_stride_blocks,
                 )
                 .map_err(|draft_model_contract_error| {
                     configured_speculative_prefill_activation_failure(
@@ -325,7 +353,7 @@ impl Qwen3_5EngineState {
             )?;
             Ok((
                 model,
-                model_contract,
+                persistent_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
                 speculative_prefill_draft_persistent_prompt_cache,
@@ -339,7 +367,7 @@ impl Qwen3_5EngineState {
         match model_loading_result {
             Ok((
                 model,
-                model_contract,
+                persistent_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
                 speculative_prefill_draft_persistent_prompt_cache,
@@ -347,7 +375,8 @@ impl Qwen3_5EngineState {
             )) => {
                 self.model_id = model_id.clone();
                 self.model_revision = model_revision.clone();
-                self.persistent_prompt_cache_model_contract = Some(model_contract);
+                self.persistent_prompt_cache_model_contract =
+                    persistent_prompt_cache_model_contract;
                 self.persistent_visual_embedding_model_contract =
                     persistent_visual_embedding_model_contract;
                 self.persistent_prompt_cache = persistent_prompt_cache;
