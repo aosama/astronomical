@@ -1,7 +1,7 @@
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
-    PersistentPromptCachePrefixLookup, PersistentPromptCacheWriteQueueOutcome,
+    PersistentPromptCachePrefixLookup, PersistentPromptCachePublicationOutcome,
     Qwen3_5ExecutionError,
 };
 
@@ -56,7 +56,7 @@ impl Qwen3_5EngineState {
         draft_persistent_prefix_block_key: Option<&PersistentPromptCacheBlockKey>,
     ) -> Result<bool, InferenceEngineError> {
         let should_capture_persistent_prompt_cache_blocks = self
-            .speculative_prefill_draft_persistent_prompt_cache_write_queue
+            .speculative_prefill_draft_persistent_prompt_cache
             .is_some()
             && (restored_draft_prefix_token_count == 0
                 || draft_persistent_prefix_block_key.is_some());
@@ -189,7 +189,7 @@ impl Qwen3_5EngineState {
         ))
     }
 
-    /// Enqueues one dense drafter state block completed during draft prompt scoring.
+    /// Durably publishes one dense drafter state block completed during draft prompt scoring.
     pub(super) fn save_speculative_prefill_draft_persistent_prompt_cache_block(
         &self,
         draft_model: &Qwen3_5Model,
@@ -199,12 +199,10 @@ impl Qwen3_5EngineState {
         persistent_prompt_cache_block: Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<PersistentPromptCacheBlockKey, Qwen3_5ExecutionError> {
-        let (Some(draft_persistent_prompt_cache), Some(draft_persistent_prompt_cache_write_queue)) = (
-            self.speculative_prefill_draft_persistent_prompt_cache
-                .as_ref(),
-            self.speculative_prefill_draft_persistent_prompt_cache_write_queue
-                .as_ref(),
-        ) else {
+        let Some(draft_persistent_prompt_cache) = self
+            .speculative_prefill_draft_persistent_prompt_cache
+            .as_ref()
+        else {
             return Err(Qwen3_5ExecutionError::InvalidInput {
                 description: "speculative-prefill drafter cache is unavailable for block persistence",
             });
@@ -261,29 +259,60 @@ impl Qwen3_5EngineState {
         };
         let mut block_performance_attribution =
             std::mem::replace(performance_attribution, PerformanceAttribution::disabled());
-        let write_queue_outcome = draft_persistent_prompt_cache_write_queue.serialize_and_enqueue(
-            draft_model.runtime(),
-            &persistent_prompt_cache_block_key,
-            previous_persistent_prompt_cache_block_key.as_ref(),
-            &persistent_prompt_cache_block.kv_block_tensors,
-            &persistent_prompt_cache_block.recurrent_snapshot_tensors,
-            &mut block_performance_attribution,
-        );
+        draft_model
+            .runtime()
+            .synchronize_gpu_stream_and_clear_allocator_cache()?;
+        let publication_outcome = draft_persistent_prompt_cache
+            .publish_block_with_performance_attribution(
+                draft_model.runtime(),
+                &persistent_prompt_cache_block_key,
+                previous_persistent_prompt_cache_block_key.as_ref(),
+                &persistent_prompt_cache_block.kv_block_tensors,
+                &persistent_prompt_cache_block.recurrent_snapshot_tensors,
+                &mut block_performance_attribution,
+            );
         *performance_attribution = block_performance_attribution;
-        match write_queue_outcome {
-            Ok(PersistentPromptCacheWriteQueueOutcome::Queued)
-            | Ok(PersistentPromptCacheWriteQueueOutcome::AlreadyQueued) => {
+        let publication_outcome = match publication_outcome {
+            Err(publication_error) if publication_error.active_memory_deficit_bytes().is_some() => {
+                let active_memory_deficit_bytes =
+                    publication_error.active_memory_deficit_bytes().unwrap_or(0);
+                performance_attribution.measure_operation(
+                    crate::PerformanceOperation::ExpertWeightMemoryCacheEviction,
+                    |_performance_attribution| {
+                        if let Some(target_model) = self.model.as_ref() {
+                            target_model.limit_expert_retention_for_request_memory_pressure(
+                                active_memory_deficit_bytes,
+                            );
+                        }
+                        draft_model.limit_expert_retention_for_request_memory_pressure(
+                            active_memory_deficit_bytes,
+                        );
+                        draft_model
+                            .runtime()
+                            .synchronize_gpu_stream_and_clear_allocator_cache()
+                    },
+                )?;
+                let mut retry_performance_attribution =
+                    std::mem::replace(performance_attribution, PerformanceAttribution::disabled());
+                let retry_outcome = draft_persistent_prompt_cache
+                    .publish_block_with_performance_attribution(
+                        draft_model.runtime(),
+                        &persistent_prompt_cache_block_key,
+                        previous_persistent_prompt_cache_block_key.as_ref(),
+                        &persistent_prompt_cache_block.kv_block_tensors,
+                        &persistent_prompt_cache_block.recurrent_snapshot_tensors,
+                        &mut retry_performance_attribution,
+                    );
+                *performance_attribution = retry_performance_attribution;
+                retry_outcome
+            }
+            publication_outcome => publication_outcome,
+        };
+        match publication_outcome {
+            Ok(PersistentPromptCachePublicationOutcome::Published)
+            | Ok(PersistentPromptCachePublicationOutcome::AlreadyPublished) => {
                 previous_persistent_prompt_cache_block_key =
                     Some(persistent_prompt_cache_block_key);
-            }
-            Ok(write_queue_outcome) => {
-                tracing::error!(
-                    outcome = ?write_queue_outcome,
-                    "configured SpecPrefill drafter cache rejected a captured block"
-                );
-                return Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "speculative-prefill drafter cache rejected a captured block",
-                });
             }
             Err(write_error) => {
                 tracing::error!(

@@ -1,9 +1,7 @@
-//! SSD-backed persistent prompt cache for the validated Qwen3.5-MoE artifact.
+//! SSD-backed, architecture-neutral persistent decoder-state cache.
 //!
-//! Version 6 stores sliceable full-attention key/value blocks separately from
-//! fixed-size GatedDeltaNet recurrent snapshots and rejects state from older
-//! execution math. The split avoids writing the large recurrent state into
-//! every KV block.
+//! Current-format state is published as complete atomic block directories with
+//! manifest-bound ancestry and contract-derived sequence and boundary files.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,13 +15,14 @@ use super::disk_store_file::{
 };
 use super::disk_store_global_quota::prepare_prompt_cache_directory_tree;
 use super::disk_store_index::PersistentPromptCacheDiskStoreIndex;
-use super::disk_store_scan::scan_current_format_directory;
+use super::disk_store_scan::{
+    scan_current_format_block_directories, scan_current_format_directory,
+};
 use super::model_contract::PersistentPromptCacheModelContract;
 use astronomical_runtime_integration::{MlxArray, MlxRuntime, PositionalFileReadMetrics};
 use std::collections::HashMap;
 
-const KV_BLOCKS_DIRECTORY_NAME: &str = "kv_blocks";
-const RECURRENT_SNAPSHOTS_DIRECTORY_NAME: &str = "recurrent_snapshots";
+const BLOCKS_DIRECTORY_NAME: &str = "blocks";
 const VISUAL_EMBEDDINGS_DIRECTORY_NAME: &str = "visual_embeddings";
 const SPECULATIVE_PREFILL_SELECTIONS_DIRECTORY_NAME: &str = "speculative_prefill_selections";
 const SPECULATIVE_PREFILL_TARGET_STATES_DIRECTORY_NAME: &str = "speculative_prefill_target_states";
@@ -34,7 +33,6 @@ pub struct PersistentPromptCacheDiskStoreConfig {
     active_model_prompt_cache_directory: PathBuf,
     pub(super) global_prompt_cache_root_directory: PathBuf,
     global_prompt_cache_maximum_size_bytes: u64,
-    ssd_write_rate_megabytes_per_second: Option<u64>,
 }
 
 impl PersistentPromptCacheDiskStoreConfig {
@@ -44,39 +42,22 @@ impl PersistentPromptCacheDiskStoreConfig {
         global_prompt_cache_root_directory: PathBuf,
         global_prompt_cache_maximum_size_bytes: u64,
     ) -> Self {
-        Self::new_with_ssd_write_rate(
-            active_model_prompt_cache_directory,
-            global_prompt_cache_root_directory,
-            global_prompt_cache_maximum_size_bytes,
-            None,
-        )
-    }
-
-    #[must_use]
-    pub fn new_with_ssd_write_rate(
-        active_model_prompt_cache_directory: PathBuf,
-        global_prompt_cache_root_directory: PathBuf,
-        global_prompt_cache_maximum_size_bytes: u64,
-        ssd_write_rate_megabytes_per_second: Option<u64>,
-    ) -> Self {
         Self {
             active_model_prompt_cache_directory,
             global_prompt_cache_root_directory,
             global_prompt_cache_maximum_size_bytes,
-            ssd_write_rate_megabytes_per_second,
         }
     }
 
     /// Derives an isolated cache namespace while retaining the shared global quota.
     #[must_use]
     pub fn for_model(&self, model_id: &str, model_revision: &str) -> Self {
-        Self::new_with_ssd_write_rate(
+        Self::new(
             self.global_prompt_cache_root_directory
                 .join(model_id)
                 .join(model_revision),
             self.global_prompt_cache_root_directory.clone(),
             self.global_prompt_cache_maximum_size_bytes,
-            self.ssd_write_rate_megabytes_per_second,
         )
     }
 
@@ -84,18 +65,12 @@ impl PersistentPromptCacheDiskStoreConfig {
     pub const fn global_prompt_cache_maximum_size_bytes(&self) -> u64 {
         self.global_prompt_cache_maximum_size_bytes
     }
-
-    #[must_use]
-    pub const fn ssd_write_rate_megabytes_per_second(&self) -> Option<u64> {
-        self.ssd_write_rate_megabytes_per_second
-    }
 }
 
 /// Persistent, descriptor-backed SSD cache for Qwen3.5-MoE prompt-cache files.
 pub struct PersistentPromptCacheDiskStore {
     active_model_prompt_cache_directory: PathBuf,
-    pub(super) kv_blocks_directory: PathBuf,
-    pub(super) recurrent_snapshots_directory: PathBuf,
+    pub(super) blocks_directory: PathBuf,
     pub(crate) visual_embeddings_directory: PathBuf,
     pub(crate) speculative_prefill_selections_directory: PathBuf,
     pub(crate) speculative_prefill_target_states_directory: PathBuf,
@@ -120,54 +95,31 @@ impl PersistentPromptCacheDiskStore {
             disk_store_config.global_prompt_cache_root_directory;
         let global_prompt_cache_maximum_size_bytes =
             disk_store_config.global_prompt_cache_maximum_size_bytes;
-        let kv_blocks_directory = persistent_prompt_cache_directory.join(KV_BLOCKS_DIRECTORY_NAME);
-        let recurrent_snapshots_directory =
-            persistent_prompt_cache_directory.join(RECURRENT_SNAPSHOTS_DIRECTORY_NAME);
+        let blocks_directory = persistent_prompt_cache_directory.join(BLOCKS_DIRECTORY_NAME);
         let visual_embeddings_directory =
             persistent_prompt_cache_directory.join(VISUAL_EMBEDDINGS_DIRECTORY_NAME);
         let speculative_prefill_selections_directory =
             persistent_prompt_cache_directory.join(SPECULATIVE_PREFILL_SELECTIONS_DIRECTORY_NAME);
         let speculative_prefill_target_states_directory = persistent_prompt_cache_directory
             .join(SPECULATIVE_PREFILL_TARGET_STATES_DIRECTORY_NAME);
+        // Open order is a recovery protocol: establish trusted directories,
+        // rebuild the active-model index from valid committed artifacts, remove
+        // abandoned global transactions, then reconcile retention and quota.
         prepare_prompt_cache_directory_tree(
             &global_prompt_cache_root_directory,
             &persistent_prompt_cache_directory,
             &[
-                &kv_blocks_directory,
-                &recurrent_snapshots_directory,
+                &blocks_directory,
                 &visual_embeddings_directory,
                 &speculative_prefill_selections_directory,
                 &speculative_prefill_target_states_directory,
             ],
         )?;
         let mut tracked_files = PersistentPromptCacheDiskStoreIndex::default();
-        scan_current_format_directory(
-            &kv_blocks_directory,
-            PersistentPromptCacheFileKind::SequenceStateBlock,
+        scan_current_format_block_directories(
+            &blocks_directory,
             &mut tracked_files,
-            |file, file_path| {
-                validate_current_file_header(
-                    PersistentPromptCacheFileKind::SequenceStateBlock,
-                    file,
-                    file_path,
-                    &model_contract,
-                )
-                .is_ok()
-            },
-        )?;
-        scan_current_format_directory(
-            &recurrent_snapshots_directory,
-            PersistentPromptCacheFileKind::BoundaryStateSnapshot,
-            &mut tracked_files,
-            |file, file_path| {
-                validate_current_file_header(
-                    PersistentPromptCacheFileKind::BoundaryStateSnapshot,
-                    file,
-                    file_path,
-                    &model_contract,
-                )
-                .is_ok()
-            },
+            &model_contract,
         )?;
         scan_current_format_directory(
             &speculative_prefill_selections_directory,
@@ -199,8 +151,7 @@ impl PersistentPromptCacheDiskStore {
         )?;
         let disk_store = Self {
             active_model_prompt_cache_directory: persistent_prompt_cache_directory,
-            kv_blocks_directory,
-            recurrent_snapshots_directory,
+            blocks_directory,
             visual_embeddings_directory,
             speculative_prefill_selections_directory,
             speculative_prefill_target_states_directory,
@@ -212,7 +163,11 @@ impl PersistentPromptCacheDiskStore {
             tracked_files: Mutex::new(tracked_files),
             write_operations: Mutex::new(()),
         };
-        disk_store.enforce_global_prompt_cache_quota()?;
+        // Stale bytes must disappear before quota considers deleting useful
+        // content. Retention reconciliation then protects the validated active
+        // chain while evicting unrelated content and completing crash cleanup.
+        disk_store.remove_stale_global_prompt_cache_transaction_artifacts()?;
+        disk_store.reconcile_startup_retention_and_global_quota()?;
         Ok(disk_store)
     }
 
@@ -295,6 +250,9 @@ impl PersistentPromptCacheDiskStore {
         let Some(tracked_file_path) = tracked_file_path else {
             return false;
         };
+        // `NotFound` is authoritative and updates telemetry immediately. Other
+        // metadata errors are left for the actual load path to report with full
+        // typed context rather than turning a permission fault into a cache miss.
         match std::fs::symlink_metadata(&tracked_file_path) {
             Ok(_) => true,
             Err(metadata_error) if metadata_error.kind() == std::io::ErrorKind::NotFound => {
@@ -315,8 +273,7 @@ impl PersistentPromptCacheDiskStore {
             &self.global_prompt_cache_root_directory,
             &self.active_model_prompt_cache_directory,
             &[
-                &self.kv_blocks_directory,
-                &self.recurrent_snapshots_directory,
+                &self.blocks_directory,
                 &self.visual_embeddings_directory,
                 &self.speculative_prefill_selections_directory,
                 &self.speculative_prefill_target_states_directory,
@@ -359,6 +316,8 @@ impl PersistentPromptCacheDiskStore {
         file_kind: PersistentPromptCacheFileKind,
         positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Option<HashMap<String, MlxArray>>, PersistentPromptCacheDiskStoreError> {
+        // Clone the path while holding the short index lock, then perform disk
+        // and MLX work unlocked so unrelated cache lookups are not serialized.
         let block_file_path = {
             let tracked_files = self.lock_tracked_files();
             let tracked_file =
@@ -402,6 +361,8 @@ impl PersistentPromptCacheDiskStore {
                 source: validation_error,
             });
         }
+        // Header validation happens before MLX maps payloads. This rejects wrong
+        // model geometry and malformed offsets without allocating decoder arrays.
         let loaded_safetensors = runtime
             .load_safetensors(block_file, positional_file_read_metrics)
             .map_err(|source| PersistentPromptCacheDiskStoreError::LoadSafetensors { source })?;

@@ -3,6 +3,7 @@ mod config_reload;
 mod generation_performance_log;
 mod logging;
 mod model_load_timeout;
+mod persistent_prompt_cache_diagnostics;
 mod request_queue;
 mod worker_cancellation;
 mod worker_health_snapshot;

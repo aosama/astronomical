@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::{
     EngineLoadResult, InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
     PerformanceOperation, PersistentPromptCacheDiskStore, PersistentPromptCacheModelContract,
-    PersistentPromptCacheWriteQueue, PersistentVisualEmbeddingModelContract,
+    PersistentVisualEmbeddingModelContract,
 };
 
 use super::{
@@ -189,16 +189,12 @@ impl Qwen3_5EngineState {
                         qwen3_5_image_processor.maximum_image_token_count_after_spatial_merge(),
                     )
                 });
-            let (persistent_prompt_cache, persistent_prompt_cache_write_queue) = if let Some(
-                persistent_prompt_cache_disk_store_config,
-            ) =
+            let persistent_prompt_cache = if let Some(persistent_prompt_cache_disk_store_config) =
                 self.persistent_prompt_cache_disk_store_config.clone()
             {
                 let global_prompt_cache_maximum_size_bytes =
                     persistent_prompt_cache_disk_store_config
                         .global_prompt_cache_maximum_size_bytes();
-                let ssd_write_rate_megabytes_per_second =
-                    persistent_prompt_cache_disk_store_config.ssd_write_rate_megabytes_per_second();
                 match model_loading_performance_attribution.measure_operation(
                     PerformanceOperation::PersistentPromptCacheOpenAndScan,
                     |_performance_attribution| {
@@ -227,23 +223,7 @@ impl Qwen3_5EngineState {
                             maximum_size_bytes = global_prompt_cache_maximum_size_bytes,
                             "opened Qwen3.5 persistent prompt cache"
                         );
-                        let persistent_prompt_cache = Arc::new(persistent_prompt_cache);
-                        let persistent_prompt_cache_write_queue =
-                            match PersistentPromptCacheWriteQueue::new(
-                                Arc::clone(&persistent_prompt_cache),
-                                ssd_write_rate_megabytes_per_second,
-                            ) {
-                                Ok(write_queue) => Some(write_queue),
-                                Err(write_queue_error) => {
-                                    return Err(fatal_engine_error(format!(
-                                        "required target prompt-state writer initialization failed: {write_queue_error}"
-                                    )));
-                                }
-                            };
-                        (
-                            Some(persistent_prompt_cache),
-                            persistent_prompt_cache_write_queue,
-                        )
+                        Some(Arc::new(persistent_prompt_cache))
                     }
                     Err(persistent_prompt_cache_error) => {
                         return Err(fatal_engine_error(format!(
@@ -252,12 +232,12 @@ impl Qwen3_5EngineState {
                     }
                 }
             } else {
-                (None, None)
+                None
             };
-            let (
-                speculative_prefill_draft_persistent_prompt_cache,
-                speculative_prefill_draft_persistent_prompt_cache_write_queue,
-            ) = if let Some((draft_model, draft_model_revision)) =
+            let speculative_prefill_draft_persistent_prompt_cache = if let Some((
+                draft_model,
+                draft_model_revision,
+            )) =
                 speculative_prefill_draft_model.as_ref()
                 && let Some(persistent_prompt_cache_disk_store_config) =
                     self.persistent_prompt_cache_disk_store_config.as_ref()
@@ -293,8 +273,6 @@ impl Qwen3_5EngineState {
                     .for_model(&draft_model_id, draft_model_revision);
                 let draft_prompt_cache_maximum_size_bytes =
                     draft_prompt_cache_config.global_prompt_cache_maximum_size_bytes();
-                let draft_ssd_write_rate_megabytes_per_second =
-                    draft_prompt_cache_config.ssd_write_rate_megabytes_per_second();
                 match model_loading_performance_attribution.measure_operation(
                     PerformanceOperation::PersistentPromptCacheOpenAndScan,
                     |_performance_attribution| {
@@ -316,23 +294,7 @@ impl Qwen3_5EngineState {
                             maximum_size_bytes = draft_prompt_cache_maximum_size_bytes,
                             "opened speculative-prefill drafter persistent prompt cache"
                         );
-                        let draft_persistent_prompt_cache = Arc::new(draft_persistent_prompt_cache);
-                        let draft_persistent_prompt_cache_write_queue =
-                            match PersistentPromptCacheWriteQueue::new(
-                                Arc::clone(&draft_persistent_prompt_cache),
-                                draft_ssd_write_rate_megabytes_per_second,
-                            ) {
-                                Ok(write_queue) => Some(write_queue),
-                                Err(write_queue_error) => {
-                                    return Err(fatal_engine_error(format!(
-                                        "required drafter prompt-state writer initialization failed: {write_queue_error}"
-                                    )));
-                                }
-                            };
-                        (
-                            Some(draft_persistent_prompt_cache),
-                            draft_persistent_prompt_cache_write_queue,
-                        )
+                        Some(Arc::new(draft_persistent_prompt_cache))
                     }
                     Err(draft_persistent_prompt_cache_error) => {
                         return Err(fatal_engine_error(format!(
@@ -341,7 +303,7 @@ impl Qwen3_5EngineState {
                     }
                 }
             } else {
-                (None, None)
+                None
             };
             self.purge_obsolete_speculative_prefill_policy_state(
                 &resolved_model_id,
@@ -357,9 +319,7 @@ impl Qwen3_5EngineState {
                 model_contract,
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
-                persistent_prompt_cache_write_queue,
                 speculative_prefill_draft_persistent_prompt_cache,
-                speculative_prefill_draft_persistent_prompt_cache_write_queue,
                 (
                     speculative_prefill_draft_model,
                     speculative_prefill_unavailable_reason,
@@ -373,9 +333,7 @@ impl Qwen3_5EngineState {
                 model_contract,
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
-                persistent_prompt_cache_write_queue,
                 speculative_prefill_draft_persistent_prompt_cache,
-                speculative_prefill_draft_persistent_prompt_cache_write_queue,
                 (speculative_prefill_draft_model, speculative_prefill_unavailable_reason),
             )) => {
                 self.model_id = model_id.clone();
@@ -384,11 +342,8 @@ impl Qwen3_5EngineState {
                 self.persistent_visual_embedding_model_contract =
                     persistent_visual_embedding_model_contract;
                 self.persistent_prompt_cache = persistent_prompt_cache;
-                self.persistent_prompt_cache_write_queue = persistent_prompt_cache_write_queue;
                 self.speculative_prefill_draft_persistent_prompt_cache =
                     speculative_prefill_draft_persistent_prompt_cache;
-                self.speculative_prefill_draft_persistent_prompt_cache_write_queue =
-                    speculative_prefill_draft_persistent_prompt_cache_write_queue;
                 let speculative_prefill_draft_is_available =
                     speculative_prefill_draft_model.is_some();
                 let speculative_prefill_draft_supports_processed_visual_images =

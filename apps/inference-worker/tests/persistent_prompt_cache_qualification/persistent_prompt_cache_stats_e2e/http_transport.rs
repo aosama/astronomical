@@ -1,17 +1,8 @@
 use super::*;
 
 pub(super) fn log_cache_directory_contents(cache_directory: &std::path::Path, context: &str) {
-    let kv_blocks_directory = cache_directory.join("kv_blocks");
-    let recurrent_snapshots_directory = cache_directory.join("recurrent_snapshots");
-    let kv_block_files = std::fs::read_dir(&kv_blocks_directory)
-        .map(|directory_entries| {
-            directory_entries
-                .filter_map(Result::ok)
-                .map(|directory_entry| directory_entry.file_name().to_string_lossy().to_string())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    let recurrent_snapshot_files = std::fs::read_dir(&recurrent_snapshots_directory)
+    let blocks_directory = cache_directory.join("blocks");
+    let block_directories = std::fs::read_dir(&blocks_directory)
         .map(|directory_entries| {
             directory_entries
                 .filter_map(Result::ok)
@@ -20,13 +11,10 @@ pub(super) fn log_cache_directory_contents(cache_directory: &std::path::Path, co
         })
         .unwrap_or_default();
     eprintln!(
-        "{context}: kv_blocks={} ({} files: {:?}), recurrent_snapshots={} ({} files: {:?})",
-        kv_blocks_directory.display(),
-        kv_block_files.len(),
-        kv_block_files,
-        recurrent_snapshots_directory.display(),
-        recurrent_snapshot_files.len(),
-        recurrent_snapshot_files
+        "{context}: blocks={} ({} directories: {:?})",
+        blocks_directory.display(),
+        block_directories.len(),
+        block_directories,
     );
 }
 

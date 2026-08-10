@@ -1,21 +1,31 @@
 //! One global prompt-cache byte ceiling across every model and revision.
+//!
+//! The quota owner operates on scan-produced units. Abandoned transactions are
+//! always removed first; committed blocks are removed only as complete subtrees;
+//! and directories belonging to the active publication ancestry are protected.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
 
 use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
-    PersistentPromptCacheFileKind, remove_cache_owned_file_or_confirm_absent,
+    PersistentPromptCacheFileKind, remove_cache_owned_directory_or_confirm_absent,
+    remove_cache_owned_file_or_confirm_absent,
 };
+use super::disk_store_global_quota_candidate::GlobalPromptCacheEvictionCandidate;
+use super::disk_store_global_quota_scan::scan_global_prompt_cache_quota;
 
 pub(super) fn prepare_prompt_cache_directory_tree(
     global_prompt_cache_root_directory: &Path,
     active_model_prompt_cache_directory: &Path,
     active_model_storage_directories: &[&Path],
 ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+    // Deletion helpers recurse, so directory creation is also the trust boundary:
+    // reject lexical escapes and verify every created component is a real
+    // directory rather than following a symlink into user-owned data.
     reject_parent_directory_components(global_prompt_cache_root_directory)?;
     reject_parent_directory_components(active_model_prompt_cache_directory)?;
     fs::create_dir_all(global_prompt_cache_root_directory).map_err(|source| {
@@ -121,130 +131,29 @@ fn verify_real_directory(
     Ok(())
 }
 
-#[derive(Debug)]
-pub(super) struct GlobalPromptCacheFile {
-    pub(super) file_path: PathBuf,
-    pub(super) file_size_bytes: u64,
-    pub(super) modified_at: SystemTime,
-    pub(super) is_visual_embedding: bool,
-    pub(super) is_stale_writer_temp_file: bool,
-}
-
-pub(super) struct GlobalPromptCacheQuotaScan {
-    pub(super) files_oldest_written_first: Vec<GlobalPromptCacheFile>,
-    pub(super) total_size_bytes: u64,
-    pub(super) visual_embedding_total_size_bytes: u64,
-}
-
-pub(super) fn scan_global_prompt_cache_quota(
-    global_prompt_cache_root_directory: &Path,
-) -> Result<GlobalPromptCacheQuotaScan, PersistentPromptCacheDiskStoreError> {
-    let mut global_prompt_cache_files =
-        scan_global_prompt_cache_files(global_prompt_cache_root_directory)?;
-    let global_prompt_cache_total_size_bytes = global_prompt_cache_files.iter().try_fold(
-        0_u64,
-        |accumulated_size_bytes, prompt_cache_file| {
-            accumulated_size_bytes
-                .checked_add(prompt_cache_file.file_size_bytes)
-                .ok_or_else(
-                    || PersistentPromptCacheDiskStoreError::GlobalPromptCacheSizeOverflow {
-                        global_prompt_cache_root_directory: global_prompt_cache_root_directory
-                            .to_path_buf(),
-                    },
-                )
-        },
-    )?;
-    let global_visual_embedding_total_size_bytes = global_prompt_cache_files
-        .iter()
-        .filter(|prompt_cache_file| prompt_cache_file.is_visual_embedding)
-        .try_fold(0_u64, |accumulated_size_bytes, prompt_cache_file| {
-            accumulated_size_bytes
-                .checked_add(prompt_cache_file.file_size_bytes)
-                .ok_or_else(
-                    || PersistentPromptCacheDiskStoreError::GlobalPromptCacheSizeOverflow {
-                        global_prompt_cache_root_directory: global_prompt_cache_root_directory
-                            .to_path_buf(),
-                    },
-                )
-        })?;
-
-    global_prompt_cache_files.sort_by(|left_file, right_file| {
-        left_file
-            .modified_at
-            .cmp(&right_file.modified_at)
-            .then_with(|| left_file.file_path.cmp(&right_file.file_path))
-    });
-
-    Ok(GlobalPromptCacheQuotaScan {
-        files_oldest_written_first: global_prompt_cache_files,
-        total_size_bytes: global_prompt_cache_total_size_bytes,
-        visual_embedding_total_size_bytes: global_visual_embedding_total_size_bytes,
-    })
-}
-
-fn scan_global_prompt_cache_files(
-    global_prompt_cache_root_directory: &Path,
-) -> Result<Vec<GlobalPromptCacheFile>, PersistentPromptCacheDiskStoreError> {
-    let mut pending_directories = vec![global_prompt_cache_root_directory.to_path_buf()];
-    let mut global_prompt_cache_files = Vec::new();
-    while let Some(pending_directory) = pending_directories.pop() {
-        let directory_entries = fs::read_dir(&pending_directory).map_err(|source| {
-            PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
-                persistent_prompt_cache_directory: pending_directory.clone(),
-                source,
-            }
-        })?;
-        for directory_entry_result in directory_entries {
-            let directory_entry = directory_entry_result.map_err(|source| {
-                PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
-                    persistent_prompt_cache_directory: pending_directory.clone(),
-                    source,
-                }
-            })?;
-            let file_path = directory_entry.path();
-            let file_type = directory_entry.file_type().map_err(|source| {
-                PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
-                    block_file_path: file_path.clone(),
-                    source,
-                }
-            })?;
-            if file_type.is_dir() {
-                pending_directories.push(file_path);
-                continue;
-            }
-            let file_metadata = fs::symlink_metadata(&file_path).map_err(|source| {
-                PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
-                    block_file_path: file_path.clone(),
-                    source,
-                }
-            })?;
-            let modified_at = file_metadata.modified().map_err(|source| {
-                PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
-                    block_file_path: file_path.clone(),
-                    source,
-                }
-            })?;
-            let is_visual_embedding = file_path.parent().is_some_and(|parent_directory| {
-                parent_directory
-                    .file_name()
-                    .is_some_and(|directory_name| directory_name == "visual_embeddings")
-            });
-            let is_stale_writer_temp_file = file_path
-                .extension()
-                .is_some_and(|extension| extension == "tmp");
-            global_prompt_cache_files.push(GlobalPromptCacheFile {
-                file_path,
-                file_size_bytes: file_metadata.len(),
-                modified_at,
-                is_visual_embedding,
-                is_stale_writer_temp_file,
-            });
-        }
-    }
-    Ok(global_prompt_cache_files)
-}
-
 impl PersistentPromptCacheDiskStore {
+    pub(super) fn remove_stale_global_prompt_cache_transaction_artifacts(
+        &self,
+    ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        // Cleanup is unconditional, not pressure-dependent. Staging artifacts
+        // are never readable cache value and should not survive a clean startup.
+        let global_quota_scan =
+            scan_global_prompt_cache_quota(&self.global_prompt_cache_root_directory, None)?;
+        for stale_transaction_artifact in global_quota_scan
+            .eviction_candidates_oldest_written_first
+            .into_iter()
+            .filter(GlobalPromptCacheEvictionCandidate::is_stale_transaction_artifact)
+        {
+            remove_global_prompt_cache_eviction_candidate(&stale_transaction_artifact)?;
+            self.lock_tracked_files()
+                .remove_files_by_path(stale_transaction_artifact.tracked_file_paths());
+            self.lock_tracked_files().remove_blocks_by_directory_paths(
+                stale_transaction_artifact.block_directory_paths(),
+            );
+        }
+        self.refresh_global_prompt_cache_accounting()
+    }
+
     pub(crate) fn untrack_file_and_subtract_global_accounting(
         &self,
         persistent_prompt_cache_file_kind: PersistentPromptCacheFileKind,
@@ -275,8 +184,11 @@ impl PersistentPromptCacheDiskStore {
     pub(super) fn refresh_global_prompt_cache_accounting(
         &self,
     ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        // Atomic counters are telemetry snapshots, not the source of truth.
+        // Re-scan after recovery or rollback because another cleanup path may
+        // have changed disk state without incrementally updating every counter.
         let global_quota_scan =
-            scan_global_prompt_cache_quota(&self.global_prompt_cache_root_directory)?;
+            scan_global_prompt_cache_quota(&self.global_prompt_cache_root_directory, None)?;
         self.global_prompt_cache_total_size_bytes
             .store(global_quota_scan.total_size_bytes, Ordering::Relaxed);
         self.global_visual_embedding_total_size_bytes.store(
@@ -313,8 +225,22 @@ impl PersistentPromptCacheDiskStore {
     pub(crate) fn enforce_global_prompt_cache_quota(
         &self,
     ) -> Result<(), PersistentPromptCacheDiskStoreError> {
-        let global_quota_scan =
-            scan_global_prompt_cache_quota(&self.global_prompt_cache_root_directory)?;
+        self.enforce_global_prompt_cache_quota_for_commit(0, 0, &[], None)
+    }
+
+    pub(crate) fn enforce_global_prompt_cache_quota_for_commit(
+        &self,
+        additional_committed_size_bytes: u64,
+        post_commit_reclaimable_size_bytes: u64,
+        protected_block_directory_paths: &[PathBuf],
+        excluded_directory: Option<&Path>,
+    ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        // Exclude the current staging directory because `additional_committed_size_bytes`
+        // already accounts for it. Counting both would charge the transaction twice.
+        let global_quota_scan = scan_global_prompt_cache_quota(
+            &self.global_prompt_cache_root_directory,
+            excluded_directory,
+        )?;
         let mut global_prompt_cache_total_size_bytes = global_quota_scan.total_size_bytes;
         let mut global_visual_embedding_total_size_bytes =
             global_quota_scan.visual_embedding_total_size_bytes;
@@ -322,37 +248,134 @@ impl PersistentPromptCacheDiskStore {
             .store(global_prompt_cache_total_size_bytes, Ordering::Relaxed);
         self.global_visual_embedding_total_size_bytes
             .store(global_visual_embedding_total_size_bytes, Ordering::Relaxed);
-        for global_prompt_cache_file in global_quota_scan.files_oldest_written_first {
-            if !global_prompt_cache_file.is_stale_writer_temp_file
-                && global_prompt_cache_total_size_bytes
-                    <= self.global_prompt_cache_maximum_size_bytes
+        let mut removed_eviction_paths = HashSet::<PathBuf>::new();
+        for global_prompt_cache_eviction_candidate in
+            global_quota_scan.eviction_candidates_oldest_written_first
+        {
+            if eviction_candidate_was_already_removed(
+                &global_prompt_cache_eviction_candidate,
+                &removed_eviction_paths,
+            ) {
+                continue;
+            }
+            // Stale transactions are removed even when the committed projection
+            // already fits. They carry no valid cache value and otherwise grow
+            // forever after repeated crashes.
+            if !global_prompt_cache_eviction_candidate.is_stale_transaction_artifact()
+                && global_prompt_cache_eviction_candidate
+                    .contains_protected_block_directory(protected_block_directory_paths)
             {
                 continue;
             }
-            remove_cache_owned_file_or_confirm_absent(&global_prompt_cache_file.file_path)?;
+            // Stop deleting committed value once the post-commit projection
+            // fits. `post_commit_reclaimable_size_bytes` is subtracted only in
+            // arithmetic; its actual file remains until commit becomes durable.
+            if !global_prompt_cache_eviction_candidate.is_stale_transaction_artifact()
+                && committed_size_after_addition(
+                    global_prompt_cache_total_size_bytes,
+                    additional_committed_size_bytes,
+                    post_commit_reclaimable_size_bytes,
+                    &self.global_prompt_cache_root_directory,
+                )? <= self.global_prompt_cache_maximum_size_bytes
+            {
+                continue;
+            }
+            remove_global_prompt_cache_eviction_candidate(&global_prompt_cache_eviction_candidate)?;
             self.lock_tracked_files()
-                .remove_files_by_path(std::slice::from_ref(&global_prompt_cache_file.file_path));
+                .remove_files_by_path(global_prompt_cache_eviction_candidate.tracked_file_paths());
+            self.lock_tracked_files().remove_blocks_by_directory_paths(
+                global_prompt_cache_eviction_candidate.block_directory_paths(),
+            );
             global_prompt_cache_total_size_bytes = global_prompt_cache_total_size_bytes
-                .saturating_sub(global_prompt_cache_file.file_size_bytes);
-            if global_prompt_cache_file.is_visual_embedding {
-                global_visual_embedding_total_size_bytes = global_visual_embedding_total_size_bytes
-                    .saturating_sub(global_prompt_cache_file.file_size_bytes);
+                .saturating_sub(global_prompt_cache_eviction_candidate.file_size_bytes());
+            global_visual_embedding_total_size_bytes = global_visual_embedding_total_size_bytes
+                .saturating_sub(
+                    global_prompt_cache_eviction_candidate.visual_embedding_size_bytes(),
+                );
+            removed_eviction_paths.insert(
+                global_prompt_cache_eviction_candidate
+                    .tie_breaker_path()
+                    .to_path_buf(),
+            );
+            for removed_block_directory_path in
+                global_prompt_cache_eviction_candidate.block_directory_paths()
+            {
+                removed_eviction_paths.insert(removed_block_directory_path.clone());
             }
             self.global_prompt_cache_total_size_bytes
                 .store(global_prompt_cache_total_size_bytes, Ordering::Relaxed);
             self.global_visual_embedding_total_size_bytes
                 .store(global_visual_embedding_total_size_bytes, Ordering::Relaxed);
         }
-        if global_prompt_cache_total_size_bytes > self.global_prompt_cache_maximum_size_bytes {
+        let final_committed_size_bytes = committed_size_after_addition(
+            global_prompt_cache_total_size_bytes,
+            additional_committed_size_bytes,
+            post_commit_reclaimable_size_bytes,
+            &self.global_prompt_cache_root_directory,
+        )?;
+        if final_committed_size_bytes > self.global_prompt_cache_maximum_size_bytes {
             return Err(
                 PersistentPromptCacheDiskStoreError::GlobalPromptCacheQuotaNotSatisfied {
                     maximum_size_bytes: self.global_prompt_cache_maximum_size_bytes,
-                    remaining_size_bytes: global_prompt_cache_total_size_bytes,
+                    remaining_size_bytes: final_committed_size_bytes,
                 },
             );
         }
         Ok(())
     }
+}
+
+fn eviction_candidate_was_already_removed(
+    global_prompt_cache_eviction_candidate: &GlobalPromptCacheEvictionCandidate,
+    removed_eviction_paths: &HashSet<PathBuf>,
+) -> bool {
+    // Subtree candidates overlap by construction. A removed ancestor can cover
+    // a later candidate even when their root paths differ, hence the member scan.
+    removed_eviction_paths.contains(global_prompt_cache_eviction_candidate.tie_breaker_path())
+        || global_prompt_cache_eviction_candidate
+            .block_directory_paths()
+            .iter()
+            .any(|block_directory_path| removed_eviction_paths.contains(block_directory_path))
+}
+
+fn remove_global_prompt_cache_eviction_candidate(
+    global_prompt_cache_eviction_candidate: &GlobalPromptCacheEvictionCandidate,
+) -> Result<(), PersistentPromptCacheDiskStoreError> {
+    match global_prompt_cache_eviction_candidate {
+        GlobalPromptCacheEvictionCandidate::StandaloneFile(global_prompt_cache_file) => {
+            remove_cache_owned_file_or_confirm_absent(&global_prompt_cache_file.file_path)
+        }
+        GlobalPromptCacheEvictionCandidate::StaleDirectory(global_prompt_cache_stale_directory) => {
+            remove_cache_owned_directory_or_confirm_absent(
+                &global_prompt_cache_stale_directory.directory_path,
+            )
+        }
+        GlobalPromptCacheEvictionCandidate::BlockSubtree(global_prompt_cache_block_subtree) => {
+            for block_directory_path in &global_prompt_cache_block_subtree.block_directory_paths {
+                remove_cache_owned_directory_or_confirm_absent(block_directory_path)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn committed_size_after_addition(
+    current_committed_size_bytes: u64,
+    additional_committed_size_bytes: u64,
+    post_commit_reclaimable_size_bytes: u64,
+    global_prompt_cache_root_directory: &Path,
+) -> Result<u64, PersistentPromptCacheDiskStoreError> {
+    current_committed_size_bytes
+        .checked_add(additional_committed_size_bytes)
+        .map(|size_before_post_commit_reclamation| {
+            size_before_post_commit_reclamation.saturating_sub(post_commit_reclaimable_size_bytes)
+        })
+        .ok_or_else(
+            || PersistentPromptCacheDiskStoreError::GlobalPromptCacheSizeOverflow {
+                global_prompt_cache_root_directory: global_prompt_cache_root_directory
+                    .to_path_buf(),
+            },
+        )
 }
 
 fn subtract_atomic_size_bytes(atomic_size_bytes: &AtomicU64, removed_size_bytes: u64) {

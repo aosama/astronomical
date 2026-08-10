@@ -82,6 +82,8 @@ pub use mlx_runtime_types::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError}
 #[cfg(feature = "mlx")]
 pub use mlx_safetensors::{BoundedReadInterval, MlxSafetensors, SafetensorsLoadResult};
 #[cfg(feature = "mlx")]
+pub use mlx_safetensors_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
+#[cfg(feature = "mlx")]
 pub use positional_file_read_metrics::{
     PositionalFileReadMetrics, PositionalFileReadMetricsSnapshot,
 };

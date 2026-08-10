@@ -24,6 +24,22 @@ pub(crate) async fn launch_test_executor(
     .await
 }
 
+pub(crate) async fn launch_test_executor_with_performance_log_directory(
+    worker_executable_path: impl AsRef<Path>,
+    performance_log_directory: &Path,
+) -> Result<WorkerHandle, WorkerControlError> {
+    let performance_log = GenerationPerformanceLog::open(performance_log_directory)
+        .expect("test performance log file should be created");
+    WorkerHandle::launch(
+        worker_executable_path,
+        DEFAULT_TEST_MODEL_LOAD_TIMEOUT,
+        performance_log,
+        Arc::new(HashMap::new()),
+        DEFAULT_TEST_MAX_OUTPUT_TOKENS,
+    )
+    .await
+}
+
 pub(crate) async fn launch_test_executor_with_cancellation_acknowledgement_timeout(
     worker_executable_path: impl AsRef<Path>,
     worker_cancellation_acknowledgement_timeout: Duration,

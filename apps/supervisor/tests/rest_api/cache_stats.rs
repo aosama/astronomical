@@ -14,6 +14,7 @@ const POPULATED_PERSISTENT_PROMPT_CACHE_STATS_EVENT: WorkerEvent =
         persistent_prompt_cache_hits: 12,
         persistent_prompt_cache_misses: 3,
         persistent_prompt_cache_tokens_saved: 95_000,
+        persistent_prompt_cache_block_token_count: 2_048,
         persistent_prompt_cache_sequence_state_block_count: 87,
         persistent_prompt_cache_boundary_state_snapshot_count: 1,
         persistent_prompt_cache_visual_embedding_count: 5,
@@ -63,6 +64,10 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
     assert_eq!(
         status_document["persistent_prompt_cache_tokens_saved"],
         95_000
+    );
+    assert_eq!(
+        status_document["persistent_prompt_cache_block_token_count"],
+        2_048
     );
     assert_eq!(
         status_document["persistent_prompt_cache_sequence_state_block_count"],
@@ -210,6 +215,7 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
         persistent_prompt_cache_hits: 2,
         persistent_prompt_cache_misses: 1,
         persistent_prompt_cache_tokens_saved: 6_144,
+        persistent_prompt_cache_block_token_count: 2_048,
         persistent_prompt_cache_sequence_state_block_count: 5,
         persistent_prompt_cache_boundary_state_snapshot_count: 1,
         persistent_prompt_cache_visual_embedding_count: 2,

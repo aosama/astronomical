@@ -296,6 +296,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
+            .join("../../third-party/patches/mlx-0.32.0-streaming-safetensors-writer.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
             .join("../../third-party/patches/mlx-c-0.6.0-metallib-path.patch")
             .display()
     );

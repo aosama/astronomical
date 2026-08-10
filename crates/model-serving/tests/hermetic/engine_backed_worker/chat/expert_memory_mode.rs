@@ -78,6 +78,7 @@ async fn should_emit_only_changed_expert_memory_modes_without_losing_token_outpu
     assert!(matches!(
         next_event(&mut supervisor_reader).await,
         WorkerEvent::Completed {
+            persistent_prompt_cache_diagnostics: None,
             generated_token_count: 1,
             ..
         }
@@ -240,6 +241,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
             generated_token_count: 0,
             reasoning_token_count: 0,
             cached_token_count: 0,
+            persistent_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::Cancelled,
         }
     );

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs;
 use std::fs::FileTimes;
 use std::os::unix::fs::PermissionsExt;
@@ -105,20 +104,10 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
     let grandchild_persistent_prompt_cache_block_key = child_persistent_prompt_cache_block_key
         .for_child_block(&block_tokens_for_seed(20_000))
         .expect("the test should hash the grandchild block");
-    let kv_block_tensors = HashMap::from([(
-        "filesystem_rollback_kv".to_owned(),
-        runtime
-            .zeros(&[1], MlxDtype::BFloat16)
-            .expect("the test should create one tiny KV tensor"),
-    )]);
-    let recurrent_snapshot_tensors = HashMap::from([(
-        "filesystem_rollback_recurrent".to_owned(),
-        runtime
-            .zeros(&[1], MlxDtype::Float32)
-            .expect("the test should create one tiny recurrent tensor"),
-    )]);
+    let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
+    let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     persistent_prompt_cache
-        .save_kv_block_and_recurrent_snapshot(
+        .publish_block(
             &runtime,
             &root_persistent_prompt_cache_block_key,
             None,
@@ -127,7 +116,7 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
         )
         .expect("the root split files should save");
     persistent_prompt_cache
-        .save_kv_block_and_recurrent_snapshot(
+        .publish_block(
             &runtime,
             &child_persistent_prompt_cache_block_key,
             Some(&root_persistent_prompt_cache_block_key),
@@ -137,17 +126,17 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
         .expect("the child split files should save");
     let child_recurrent_snapshot_file_path = persistent_prompt_cache_directory
         .path()
-        .join("recurrent_snapshots")
-        .join(format!(
-            "{}.safetensors",
-            hex::encode(child_persistent_prompt_cache_block_key.block_hash())
-        ));
+        .join("blocks")
+        .join(hex::encode(
+            child_persistent_prompt_cache_block_key.block_hash(),
+        ))
+        .join("boundary.safetensors");
     fs::remove_file(&child_recurrent_snapshot_file_path)
         .expect("the test should remove the child snapshot file");
     fs::create_dir(&child_recurrent_snapshot_file_path)
         .expect("the test should replace the parent snapshot with a deletion sentinel");
 
-    let save_result = persistent_prompt_cache.save_kv_block_and_recurrent_snapshot(
+    let save_result = persistent_prompt_cache.publish_block(
         &runtime,
         &grandchild_persistent_prompt_cache_block_key,
         Some(&child_persistent_prompt_cache_block_key),
@@ -173,21 +162,21 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
     assert!(
         persistent_prompt_cache_directory
             .path()
-            .join("kv_blocks")
-            .join(format!(
-                "{}.safetensors",
-                hex::encode(grandchild_persistent_prompt_cache_block_key.block_hash())
+            .join("blocks")
+            .join(hex::encode(
+                grandchild_persistent_prompt_cache_block_key.block_hash()
             ))
+            .join("sequence.safetensors")
             .is_file()
     );
     assert!(
         persistent_prompt_cache_directory
             .path()
-            .join("recurrent_snapshots")
-            .join(format!(
-                "{}.safetensors",
-                hex::encode(grandchild_persistent_prompt_cache_block_key.block_hash())
+            .join("blocks")
+            .join(hex::encode(
+                grandchild_persistent_prompt_cache_block_key.block_hash()
             ))
+            .join("boundary.safetensors")
             .is_file()
     );
 }

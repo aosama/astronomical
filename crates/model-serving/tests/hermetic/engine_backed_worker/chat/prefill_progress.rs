@@ -9,6 +9,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             3,
             vec![
                 GeneratedToken::PrefillProgress {
+                    persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 2,
                     elapsed_millis: 400,
                     forward_prefill_chunck_elapsed_millis: 350,
@@ -45,6 +46,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     },
                 },
                 GeneratedToken::PrefillProgress {
+                    persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 3,
                     elapsed_millis: 600,
                     forward_prefill_chunck_elapsed_millis: 525,
@@ -221,6 +223,7 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
             10,
             vec![
                 GeneratedToken::PrefillProgress {
+                    persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 2,
                     elapsed_millis: 400,
                     forward_prefill_chunck_elapsed_millis: 350,
@@ -306,6 +309,7 @@ async fn should_report_only_the_confirmed_active_prompt_processing_phase() {
                     total_token_count: 16,
                 },
                 GeneratedToken::PrefillProgress {
+                    persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 8,
                     elapsed_millis: 400,
                     forward_prefill_chunck_elapsed_millis: 350,

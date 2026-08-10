@@ -1,5 +1,9 @@
 use std::fs;
 
+use astronomical_ipc_protocol::{
+    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
+    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
+};
 use astronomical_supervisor::{GenerationPerformanceLog, GenerationPerformanceRecord};
 
 #[test]
@@ -94,6 +98,20 @@ fn should_open_and_append_to_performance_log() {
         generation_tok_per_second: Some(100.0),
         mlx_peak_memory_bytes: Some(40_000_000_000),
         mlx_active_memory_bytes: Some(31_000_000_000),
+        persistent_prompt_cache_diagnostics: Some(WorkerPersistentPromptCacheRequestDiagnostics {
+            lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Hit,
+            block_token_count: 2_048,
+            complete_prompt_block_count: 5,
+            maximum_restorable_block_count: 4,
+            matched_sequence_state_block_count: 4,
+            restored_block_count: 4,
+            first_missing_sequence_state_block_index: None,
+            miss_reason: None,
+            expected_block_hash_prefix: None,
+            published_block_count: 1,
+            allocator_bytes_cleared_for_publication: 4096,
+            expert_bytes_reclaimed_for_publication: 8192,
+        }),
     };
 
     performance_log.record(&record);
@@ -119,6 +137,14 @@ fn should_open_and_append_to_performance_log() {
     assert_eq!(parsed["generation_tok_per_second"], 100.0);
     assert_eq!(parsed["mlx_peak_memory_bytes"], 40_000_000_000_i64);
     assert_eq!(parsed["mlx_active_memory_bytes"], 31_000_000_000_i64);
+    assert_eq!(
+        parsed["persistent_prompt_cache_diagnostics"]["matched_sequence_state_block_count"],
+        4
+    );
+    assert_eq!(
+        parsed["persistent_prompt_cache_diagnostics"]["published_block_count"],
+        1
+    );
 }
 
 #[test]
@@ -142,6 +168,7 @@ fn should_append_multiple_records_to_performance_log() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
         mlx_active_memory_bytes: None,
+        persistent_prompt_cache_diagnostics: None,
     };
 
     let second_record = GenerationPerformanceRecord {
@@ -159,6 +186,7 @@ fn should_append_multiple_records_to_performance_log() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: Some(35_000_000_000),
         mlx_active_memory_bytes: Some(28_000_000_000),
+        persistent_prompt_cache_diagnostics: None,
     };
 
     performance_log.record(&first_record);
@@ -198,6 +226,22 @@ fn should_serialize_null_for_optional_fields() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
         mlx_active_memory_bytes: None,
+        persistent_prompt_cache_diagnostics: Some(WorkerPersistentPromptCacheRequestDiagnostics {
+            lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Miss,
+            block_token_count: 2_048,
+            complete_prompt_block_count: 1,
+            maximum_restorable_block_count: 1,
+            matched_sequence_state_block_count: 0,
+            restored_block_count: 0,
+            first_missing_sequence_state_block_index: Some(0),
+            miss_reason: Some(WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing),
+            expected_block_hash_prefix: Some(
+                WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash([1_u8; 32]),
+            ),
+            published_block_count: 1,
+            allocator_bytes_cleared_for_publication: 0,
+            expert_bytes_reclaimed_for_publication: 0,
+        }),
     };
 
     let json = serde_json::to_string(&record).expect("should serialize");
