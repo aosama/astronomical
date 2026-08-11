@@ -1,3 +1,8 @@
+//! Serial request advancement with one-token-ahead graphics-processor submission.
+//!
+//! The token returned to the user is normally the predecessor of the token
+//! already being evaluated.
+
 use astronomical_ipc_protocol::RequestId;
 
 use crate::{
@@ -335,7 +340,8 @@ impl Qwen3_5EngineState {
                 )
                 .map_err(InferenceEngineError::from)?;
             active_request.advance_position(1)?;
-            active_request.build_generated_token(model, &next_logits)?
+            let next_generated_token = active_request.build_generated_token(model, &next_logits)?;
+            next_generated_token
         };
         active_request
             .performance_attribution
@@ -371,6 +377,8 @@ impl Qwen3_5EngineState {
                 generated_token_emission.generated_token,
             ))
         } else {
+            // Keep the asynchronously submitted successor private until the
+            // next call synchronizes it. The current token alone is observable.
             active_request.pending_generated_token = Some(next_generated_token);
             Ok(ActiveRequestAdvance::Continue(
                 generated_token_emission.generated_token,

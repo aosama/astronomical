@@ -7,10 +7,7 @@ use astronomical_runtime_integration::{
     MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime,
 };
 
-use crate::expert_paging::ExpertWeightMemoryCache;
-use crate::qwen3_5_moe::{
-    Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
-};
+use crate::qwen3_5_moe::{Qwen3_5ExpertPager, qwen3_5_moe_sorted_expert_weighted_sum_kernel};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::model::Qwen3_5Model;
@@ -21,22 +18,6 @@ use super::{
 use crate::qwen3_5::multi_token_prediction::bind_optional_weights;
 
 impl Qwen3_5Model {
-    pub(crate) fn prewarm_complete_expert_layers_with_performance_attribution(
-        &self,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        let Some(expert_pager) = self.expert_pager.as_ref() else {
-            return Ok(());
-        };
-        let expert_weight_memory_cache = self.sparse_expert_weight_memory_cache()?;
-        expert_pager.prewarm_complete_layers_with_performance_attribution(
-            &self.runtime,
-            expert_weight_memory_cache,
-            performance_attribution,
-        )?;
-        Ok(())
-    }
-
     /// Loads a model without diagnostic performance attribution.
     pub fn load(
         runtime: MlxRuntime,
@@ -181,9 +162,9 @@ impl Qwen3_5Model {
                 Ok((weights, vision_model, mtp_weights))
             },
         )?;
-        let (expert_pager, expert_weight_memory_cache, sorted_expert_weighted_sum_kernel) =
+        let (expert_pager, sorted_expert_weighted_sum_kernel) =
             match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
+                Qwen3_5FeedForwardArchitecture::Dense => (None, None),
                 Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
                     let tensor_name_to_shard_file_name: HashMap<String, String> = shard_index
                         .language_tensor_name_to_shard_file_name()
@@ -197,6 +178,7 @@ impl Qwen3_5Model {
                         PerformanceOperation::ExpertPagerPlanConstruction,
                         |_performance_attribution| {
                             Qwen3_5ExpertPager::new(
+                                &runtime,
                                 model_directory.to_path_buf(),
                                 &tensor_name_to_shard_file_name,
                                 &config,
@@ -208,24 +190,9 @@ impl Qwen3_5Model {
                             )
                         },
                     )?;
-                    let minimum_decode_route_payload_byte_count_by_layer = expert_pager
-                        .minimum_decode_route_payload_byte_count_by_layer(
-                            config.experts_per_token(),
-                        )?;
-                    let expert_layer_count = minimum_decode_route_payload_byte_count_by_layer.len();
-                    let expert_weight_memory_cache = std::cell::RefCell::new(
-                        ExpertWeightMemoryCache::<Qwen3_5PagedExpertWeights>::new(
-                            expert_layer_count,
-                            minimum_decode_route_payload_byte_count_by_layer,
-                        ),
-                    );
                     let sorted_expert_weighted_sum_kernel =
                         qwen3_5_moe_sorted_expert_weighted_sum_kernel()?;
-                    (
-                        Some(expert_pager),
-                        Some(expert_weight_memory_cache),
-                        Some(sorted_expert_weighted_sum_kernel),
-                    )
+                    (Some(expert_pager), Some(sorted_expert_weighted_sum_kernel))
                 }
             };
         let gated_delta_kernel = super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?;
@@ -253,7 +220,6 @@ impl Qwen3_5Model {
             mtp_weights,
             vision_model,
             expert_pager,
-            expert_weight_memory_cache,
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,

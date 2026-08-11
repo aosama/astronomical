@@ -77,6 +77,11 @@ impl AdaptiveRamGrowthContext {
         self.sparse_experts_are_paged = sparse_experts_are_paged;
         self
     }
+
+    #[must_use]
+    pub const fn sparse_experts_are_paged(self) -> bool {
+        self.sparse_experts_are_paged
+    }
 }
 
 /// Protects a machine-derived MLX active-memory limit with exact workload evidence.
@@ -91,6 +96,7 @@ pub struct AdaptiveRamGrowthGuard {
 pub struct AdaptiveRamGrowthProjection {
     current_active_memory_bytes: usize,
     exact_persistent_growth_bytes: usize,
+    routed_expert_page_reservation_bytes: usize,
     exact_temporary_workspace_bytes: usize,
     observed_transient_high_water_bytes: usize,
     stable_projected_bytes: usize,
@@ -109,6 +115,11 @@ impl AdaptiveRamGrowthProjection {
     #[must_use]
     pub const fn exact_persistent_growth_bytes(&self) -> usize {
         self.exact_persistent_growth_bytes
+    }
+
+    #[must_use]
+    pub const fn routed_expert_page_reservation_bytes(&self) -> usize {
+        self.routed_expert_page_reservation_bytes
     }
 
     #[must_use]
@@ -246,6 +257,7 @@ impl AdaptiveRamGrowthGuard {
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         current_active_memory_bytes: usize,
         exact_persistent_growth_bytes: usize,
+        routed_expert_page_reservation_bytes: usize,
         exact_temporary_workspace_bytes: usize,
     ) -> Result<AdaptiveRamGrowthProjection, AdaptiveRamGrowthGuardError> {
         let observed_transient_high_water_bytes = self
@@ -255,6 +267,9 @@ impl AdaptiveRamGrowthGuard {
             .unwrap_or(0);
         let stable_projected_bytes = current_active_memory_bytes
             .checked_add(exact_persistent_growth_bytes)
+            .and_then(|projected_bytes| {
+                projected_bytes.checked_add(routed_expert_page_reservation_bytes)
+            })
             .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
         let predicted_transient_bytes = exact_temporary_workspace_bytes
             .checked_add(observed_transient_high_water_bytes)
@@ -273,6 +288,7 @@ impl AdaptiveRamGrowthGuard {
         Ok(AdaptiveRamGrowthProjection {
             current_active_memory_bytes,
             exact_persistent_growth_bytes,
+            routed_expert_page_reservation_bytes,
             exact_temporary_workspace_bytes,
             observed_transient_high_water_bytes,
             stable_projected_bytes,

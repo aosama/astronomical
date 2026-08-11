@@ -513,13 +513,13 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
         mtp_accepted_draft_count: performance_counter_amount("mtp_accepted_draft_count"),
         mtp_rejected_draft_count: performance_counter_amount("mtp_rejected_draft_count"),
         expert_weight_disk_page_load_count: performance_counter_amount(
-            "expert_weight_disk_page_load_count",
+            "native_expert_cache_disk_page_load_count",
         ),
         expert_weight_memory_cache_miss_count: performance_counter_amount(
-            "expert_weight_memory_cache_miss_count",
+            "native_expert_cache_miss_count",
         ),
         expert_weight_memory_cache_eviction_count: performance_counter_amount(
-            "expert_weight_memory_cache_eviction_count",
+            "native_expert_cache_eviction_count",
         ),
         maximum_active_memory_bytes,
         maximum_peak_memory_bytes,

@@ -1,4 +1,9 @@
-use std::time::Instant;
+//! One terminal cleanup path for success, rejection, cancellation, and failure.
+//!
+//! Request-owned lazy arrays are dropped before expert-retention policy resumes
+//! and before allocator cleanup. This ordering lets completed native snapshots
+//! release page ownership and guarantees that published idle telemetry reflects
+//! post-request memory rather than the final token's in-flight graph.
 
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
@@ -74,18 +79,21 @@ impl Qwen3_5EngineState {
         let configured_maximum_output_tokens = active_request.maximum_output_tokens;
         let expert_weight_memory_cache_statistics_at_request_start =
             active_request.expert_weight_memory_cache_statistics_at_request_start;
+        // Attribution must outlive the request because cleanup and the final
+        // memory snapshot are part of the user-visible request cost.
         let mut performance_attribution = std::mem::replace(
             &mut active_request.performance_attribution,
             PerformanceAttribution::disabled(),
         );
+        // Drop pending tokens, decoder state, and all
+        // request-local snapshot references before lifting the pressure ceiling.
+        // Otherwise newly admitted pages could compete with memory that is only
+        // logically dead but still owned by this request.
         drop(active_request);
         let resumed_after_request_memory_pressure = self
             .model
             .as_ref()
             .is_some_and(|model| model.resume_expert_retention_after_request_memory_pressure());
-        let should_recover_complete_expert_layers = self.model.as_ref().is_some_and(|model| {
-            model.expert_memory_mode() != astronomical_ipc_protocol::ExpertMemoryMode::Resident
-        });
         if let Some(model) = self.model.as_ref() {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();
@@ -93,8 +101,6 @@ impl Qwen3_5EngineState {
                 request_id = request_id.value(),
                 resumed_after_request_memory_pressure,
                 expert_memory_mode = ?model.expert_memory_mode(),
-                retained_complete_layer_count =
-                    expert_weight_memory_cache_statistics.complete_layer_count,
                 retained_expert_payload_bytes =
                     expert_weight_memory_cache_statistics.resident_payload_byte_count,
                 maximum_retained_expert_payload_bytes =
@@ -102,69 +108,14 @@ impl Qwen3_5EngineState {
                 "released request-scoped expert retention ceiling"
             );
         }
+        // `release_request_memory` synchronizes the model stream before clearing
+        // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
             PerformanceOperation::MlxAllocatorCacheCleanup,
             |_performance_attribution| {
-                self.release_request_memory(
-                    request_id,
-                    self.adaptive_ram_growth_guard_enabled || should_recover_complete_expert_layers,
-                )
+                self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
-        if should_recover_complete_expert_layers && mlx_memory_snapshot.is_none() {
-            tracing::warn!(
-                request_id = request_id.value(),
-                "skipped complete expert-layer recovery because request-memory cleanup was not confirmed"
-            );
-        }
-        if should_recover_complete_expert_layers
-            && mlx_memory_snapshot.is_some()
-            && let Some(model) = self.model.as_ref()
-        {
-            let expert_layer_recovery_started_at = Instant::now();
-            let expert_weight_memory_cache_statistics_before_recovery =
-                model.expert_weight_memory_cache_statistics();
-            tracing::info!(
-                request_id = request_id.value(),
-                retained_complete_layer_count_before =
-                    expert_weight_memory_cache_statistics_before_recovery.complete_layer_count,
-                retained_expert_payload_bytes_before =
-                    expert_weight_memory_cache_statistics_before_recovery
-                        .resident_payload_byte_count,
-                "started complete expert-layer recovery after request-memory cleanup"
-            );
-            let expert_layer_recovery_outcome = model
-                .prewarm_complete_expert_layers_with_performance_attribution(
-                    &mut performance_attribution,
-                );
-            let expert_weight_memory_cache_statistics_after_recovery =
-                model.expert_weight_memory_cache_statistics();
-            tracing::info!(
-                request_id = request_id.value(),
-                recovery_succeeded = expert_layer_recovery_outcome.is_ok(),
-                recovery_elapsed_millis =
-                    expert_layer_recovery_started_at.elapsed().as_millis(),
-                expert_memory_mode_after_recovery = ?model.expert_memory_mode(),
-                retained_complete_layer_count_before =
-                    expert_weight_memory_cache_statistics_before_recovery.complete_layer_count,
-                retained_complete_layer_count_after =
-                    expert_weight_memory_cache_statistics_after_recovery.complete_layer_count,
-                retained_expert_payload_bytes_before =
-                    expert_weight_memory_cache_statistics_before_recovery.resident_payload_byte_count,
-                retained_expert_payload_bytes_after =
-                    expert_weight_memory_cache_statistics_after_recovery.resident_payload_byte_count,
-                maximum_retained_expert_payload_bytes_after =
-                    expert_weight_memory_cache_statistics_after_recovery.maximum_resident_payload_byte_count,
-                "finished complete expert-layer recovery after request-memory cleanup"
-            );
-            if let Err(expert_layer_recovery_error) = expert_layer_recovery_outcome {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    error = %expert_layer_recovery_error,
-                    "could not recover complete expert layers after request memory was released"
-                );
-            }
-        }
         if performance_attribution.is_enabled()
             && let Some(model) = self.model.as_ref()
         {
@@ -271,14 +222,6 @@ impl Qwen3_5EngineState {
                         ),
                 )
                 .unwrap_or(u64::MAX),
-                retained_complete_expert_layer_count: self.model.as_ref().map_or(0, |model| {
-                    u64::try_from(
-                        model
-                            .expert_weight_memory_cache_statistics()
-                            .complete_layer_count,
-                    )
-                    .unwrap_or(u64::MAX)
-                }),
                 request_id: request_id.value(),
                 configured_maximum_output_tokens,
                 mlx_active_memory_bytes: mlx_memory_snapshot
@@ -314,22 +257,18 @@ fn record_final_expert_weight_memory_cache_counters(
     expert_weight_memory_cache_statistics_at_request_end:
         crate::expert_paging::ExpertWeightMemoryCacheStatistics,
 ) {
+    // Native statistics are process-lifetime totals. Subtract the request-start
+    // snapshot so each generation report owns only activity caused while that
+    // request was active; saturating subtraction keeps diagnostics fail-safe if
+    // a future cache replacement resets cumulative counters.
     performance_attribution.record_counter(
-        PerformanceCounter::ExpertWeightMemoryCacheHitCount,
+        PerformanceCounter::NativeExpertCacheHitCount,
         expert_weight_memory_cache_statistics_at_request_end
             .cache_hit_count
             .saturating_sub(expert_weight_memory_cache_statistics_at_request_start.cache_hit_count),
     );
     performance_attribution.record_counter(
-        PerformanceCounter::ExpertWeightMemoryCacheCompleteLayerHitCount,
-        expert_weight_memory_cache_statistics_at_request_end
-            .complete_layer_hit_count
-            .saturating_sub(
-                expert_weight_memory_cache_statistics_at_request_start.complete_layer_hit_count,
-            ),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::ExpertWeightMemoryCacheMissCount,
+        PerformanceCounter::NativeExpertCacheMissCount,
         expert_weight_memory_cache_statistics_at_request_end
             .cache_miss_count
             .saturating_sub(
@@ -337,13 +276,13 @@ fn record_final_expert_weight_memory_cache_counters(
             ),
     );
     performance_attribution.record_counter(
-        PerformanceCounter::ExpertWeightMemoryCacheEvictionCount,
+        PerformanceCounter::NativeExpertCacheEvictionCount,
         expert_weight_memory_cache_statistics_at_request_end
             .eviction_count
             .saturating_sub(expert_weight_memory_cache_statistics_at_request_start.eviction_count),
     );
     performance_attribution.record_counter(
-        PerformanceCounter::ExpertWeightDiskPageLoadCount,
+        PerformanceCounter::NativeExpertCacheDiskPageLoadCount,
         expert_weight_memory_cache_statistics_at_request_end
             .disk_page_load_count
             .saturating_sub(
@@ -351,7 +290,7 @@ fn record_final_expert_weight_memory_cache_counters(
             ),
     );
     performance_attribution.record_counter(
-        PerformanceCounter::ExpertWeightDiskBatchLoadCount,
+        PerformanceCounter::NativeExpertCacheDiskBatchLoadCount,
         expert_weight_memory_cache_statistics_at_request_end
             .disk_batch_load_count
             .saturating_sub(

@@ -277,19 +277,20 @@ impl Qwen3_5EngineState {
                 let active_memory_deficit_bytes =
                     publication_error.active_memory_deficit_bytes().unwrap_or(0);
                 performance_attribution.measure_operation(
-                    crate::PerformanceOperation::ExpertWeightMemoryCacheEviction,
+                    crate::PerformanceOperation::NativeExpertCacheReclamation,
                     |_performance_attribution| {
                         if let Some(target_model) = self.model.as_ref() {
                             target_model.limit_expert_retention_for_request_memory_pressure(
                                 active_memory_deficit_bytes,
-                            );
+                            )?;
                         }
                         draft_model.limit_expert_retention_for_request_memory_pressure(
                             active_memory_deficit_bytes,
-                        );
+                        )?;
                         draft_model
                             .runtime()
                             .synchronize_gpu_stream_and_clear_allocator_cache()
+                            .map_err(Qwen3_5ExecutionError::from)
                     },
                 )?;
                 let mut retry_performance_attribution =

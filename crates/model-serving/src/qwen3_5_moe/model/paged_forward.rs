@@ -2,29 +2,25 @@
 //!
 //! When expert paging is enabled, prefill and decode steps route experts using resident
 //! router weights, retrieve the top-K selected expert weights, and compute the
-//! MoE output using those paged weights. A retained complete layer keeps routing
-//! indices on the graphics processor; otherwise prefill uses a direct page and
-//! decode uses independently retained one-expert pages.
+//! MoE output using those paged weights. Production prefill and decode retain
+//! only independently owned, router-requested one-expert pages.
 
 use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
-use super::super::expert_paging::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
+use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::feed_forward_weights::{Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights};
 use super::routing::qwen3_5_moe_route_experts;
-
-const FULL_LAYER_PAGE_MINIMUM_SELECTED_EXPERT_NUMERATOR: usize = 3;
-const FULL_LAYER_PAGE_MINIMUM_SELECTED_EXPERT_DENOMINATOR: usize = 4;
 
 impl Qwen3_5Model {
     /// Paged MoE forward pass for prefill and decode steps.
     ///
     /// Routes experts using resident router weights, extracts the selected expert
-    /// IDs, retrieves those experts through direct prefill pages or the decode
-    /// memory cache, then computes the MoE output using pre-computed routing.
+    /// IDs, retrieves production experts through the one-expert memory cache,
+    /// then computes the MoE output using pre-computed routing.
     // Paged execution inputs stay explicit rather than introducing a parameter facade.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn forward_qwen3_5_moe_with_paging(
@@ -102,44 +98,22 @@ impl Qwen3_5Model {
             },
         )?;
 
-        if paged_prefill_execution_mode
-            != Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic
-            && paged_prefill_execution_mode
-                != Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic
-        {
-            let mut expert_weight_memory_cache =
-                self.sparse_expert_weight_memory_cache()?.borrow_mut();
-            if let Some(complete_layer_expert_weights) =
-                expert_weight_memory_cache.record_complete_layer_hit(layer_index)
-            {
-                if paged_prefill_execution_mode
-                    == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
-                {
-                    return self
-                        .forward_moe_with_complete_layer_target_verification_and_performance_attribution(
-                            hidden_states,
-                            mixture_of_experts_weights,
-                            complete_layer_expert_weights,
-                            &selected_indices,
-                            &selected_scores,
-                            performance_attribution,
-                        );
-                }
-                return self.forward_moe_with_complete_layer_paging_and_performance_attribution(
-                    hidden_states,
-                    mixture_of_experts_weights,
-                    complete_layer_expert_weights,
-                    &selected_indices,
-                    &selected_scores,
-                    should_use_compiled_elementwise_graphs,
-                    performance_attribution,
-                );
-            }
-        }
-
         if token_count > 1 {
-            let should_allow_full_layer_page = match paged_prefill_execution_mode {
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault => true,
+            match paged_prefill_execution_mode {
+                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault => {
+                    return self.forward_moe_with_cached_paging(
+                        hidden_states,
+                        mixture_of_experts_weights,
+                        expert_pager,
+                        layer_index,
+                        token_count,
+                        &selected_indices,
+                        &selected_scores,
+                        should_use_compiled_elementwise_graphs,
+                        false,
+                        performance_attribution,
+                    );
+                }
                 Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow => {
                     return self.forward_moe_with_cached_paging(
                         hidden_states,
@@ -154,7 +128,18 @@ impl Qwen3_5Model {
                         performance_attribution,
                     );
                 }
-                Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic => false,
+                Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic => {
+                    return self.forward_moe_with_direct_prefill_paging(
+                        hidden_states,
+                        mixture_of_experts_weights,
+                        expert_pager,
+                        layer_index,
+                        &selected_indices,
+                        &selected_scores,
+                        should_use_compiled_elementwise_graphs,
+                        performance_attribution,
+                    );
+                }
                 Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic => {
                     return self.forward_moe_with_per_token_paging(
                         hidden_states,
@@ -167,18 +152,7 @@ impl Qwen3_5Model {
                         performance_attribution,
                     );
                 }
-            };
-            return self.forward_moe_with_direct_prefill_paging(
-                hidden_states,
-                mixture_of_experts_weights,
-                expert_pager,
-                layer_index,
-                &selected_indices,
-                &selected_scores,
-                should_use_compiled_elementwise_graphs,
-                should_allow_full_layer_page,
-                performance_attribution,
-            );
+            }
         }
 
         self.forward_moe_with_cached_paging(
@@ -210,52 +184,51 @@ impl Qwen3_5Model {
         should_execute_token_projections_separately: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let sorted_unique_expert_ids =
-            self.copy_sorted_unique_expert_ids(selected_indices, performance_attribution)?;
-        performance_attribution.record_previous_token_expert_route_reuse(
-            layer_index,
-            route_token_count,
-            &sorted_unique_expert_ids,
+        let _ = route_token_count;
+        let collect_native_performance_metrics = performance_attribution.is_enabled();
+        let (native_expert_cache_snapshot, native_expert_cache_request_report) =
+            performance_attribution.measure_operation(
+                PerformanceOperation::NativeExpertCacheRoutePreparation,
+                |_performance_attribution| {
+                    expert_pager.prepare_native_expert_snapshot(
+                        &self.runtime,
+                        layer_index,
+                        selected_indices,
+                        collect_native_performance_metrics,
+                    )
+                },
+            )?;
+        record_native_expert_cache_request(
+            performance_attribution,
+            native_expert_cache_request_report,
         );
-
-        // Load paged expert weights through the model-owned memory cache.
-        let (paged_weights, page_manifest, expert_weight_memory_cache_request_report) = {
-            let mut expert_weight_memory_cache =
-                self.sparse_expert_weight_memory_cache()?.borrow_mut();
-            expert_pager.load_selected_experts_through_memory_cache_with_performance_attribution(
-                &self.runtime,
-                layer_index,
-                &sorted_unique_expert_ids,
-                &mut expert_weight_memory_cache,
-                performance_attribution,
-            )?
-        };
         performance_attribution.measure_operation(
             PerformanceOperation::ExpertPagingDiagnosticLogging,
             |_performance_attribution| {
                 tracing::debug!(
                     layer_index,
                     expert_weight_memory_cache_hits =
-                        expert_weight_memory_cache_request_report.cache_hit_count,
+                        native_expert_cache_request_report.cache_hit_count(),
                     expert_weight_memory_cache_misses =
-                        expert_weight_memory_cache_request_report.cache_miss_count,
+                        native_expert_cache_request_report.cache_miss_count(),
                     expert_weight_disk_page_loads =
-                        expert_weight_memory_cache_request_report.disk_page_load_count,
+                        native_expert_cache_request_report.disk_page_load_count(),
                     expert_weight_disk_batch_loads =
-                        expert_weight_memory_cache_request_report.disk_batch_load_count,
-                    "expert memory cache request completed"
+                        native_expert_cache_request_report.disk_batch_load_count(),
+                    "native expert memory cache request completed"
                 );
             },
         );
 
+        // MTP verifies two target positions in one forward. Its unsorted,
+        // token-local shape intentionally avoids the large sorted prefill
+        // matrix path so first-row rollback state remains exact.
         if should_execute_token_projections_separately {
             self.forward_moe_paged_target_verification_with_performance_attribution(
                 hidden_states,
                 mixture_of_experts_weights,
-                &paged_weights,
-                &page_manifest,
+                &native_expert_cache_snapshot,
                 selected_indices,
-                &sorted_unique_expert_ids,
                 selected_scores,
                 performance_attribution,
             )
@@ -263,10 +236,8 @@ impl Qwen3_5Model {
             self.forward_moe_paged_with_performance_attribution(
                 hidden_states,
                 mixture_of_experts_weights,
-                &paged_weights,
-                &page_manifest,
+                &native_expert_cache_snapshot,
                 selected_indices,
-                &sorted_unique_expert_ids,
                 selected_scores,
                 should_use_compiled_elementwise_graphs,
                 performance_attribution,
@@ -285,180 +256,46 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
-        should_allow_full_layer_page: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let sorted_unique_expert_ids =
-            self.copy_sorted_unique_expert_ids(selected_indices, performance_attribution)?;
         let sparse_expert_count = usize::try_from(self.config.expert_count()).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "paged prefill expert count exceeds the host integer range",
             }
         })?;
-        let has_high_selected_expert_density = sorted_unique_expert_ids
-            .len()
-            .saturating_mul(FULL_LAYER_PAGE_MINIMUM_SELECTED_EXPERT_DENOMINATOR)
-            >= sparse_expert_count
-                .saturating_mul(FULL_LAYER_PAGE_MINIMUM_SELECTED_EXPERT_NUMERATOR);
-        let should_load_full_layer_page_for_retention = if should_allow_full_layer_page {
-            let expert_weight_memory_cache = self.sparse_expert_weight_memory_cache()?;
-            let (complete_layer_expert_payload_byte_count, complete_layer_memory_budget_snapshot) =
-                expert_pager.complete_layer_retention_memory_budget_snapshot(
-                    &self.runtime,
-                    layer_index,
-                    performance_attribution,
-                )?;
+        let collect_native_performance_metrics = performance_attribution.is_enabled();
+        let (native_expert_cache_snapshot, native_expert_cache_request_report) =
             performance_attribution.measure_operation(
-                PerformanceOperation::ExpertWeightMemoryCacheEviction,
+                PerformanceOperation::NativeExpertCacheRoutePreparation,
                 |_performance_attribution| {
-                    let mut expert_weight_memory_cache = expert_weight_memory_cache.borrow_mut();
-                    expert_weight_memory_cache
-                        .update_from_memory_budget_snapshot_while_protecting_selected_experts(
-                            &complete_layer_memory_budget_snapshot,
-                            layer_index,
-                            &[],
-                            complete_layer_expert_payload_byte_count,
-                        );
-                    complete_layer_memory_budget_snapshot.within_cap()
-                        && expert_weight_memory_cache
-                            .can_physically_retain_complete_layer_expert_payload(
-                                layer_index,
-                                complete_layer_expert_payload_byte_count,
-                            )
-                },
-            )
-        } else {
-            false
-        };
-        let should_load_full_layer_page = should_allow_full_layer_page
-            && (has_high_selected_expert_density || should_load_full_layer_page_for_retention);
-        let all_sparse_expert_ids_for_layer =
-            should_load_full_layer_page.then(|| (0..sparse_expert_count).collect::<Vec<_>>());
-        let (paged_expert_weights, page_manifest, memory_budget_snapshot, did_load_full_layer_page) =
-            match all_sparse_expert_ids_for_layer.as_ref() {
-                Some(all_sparse_expert_ids_for_layer) => {
-                    match expert_pager.load_selected_experts_with_performance_attribution(
+                    expert_pager.prepare_native_expert_snapshot(
                         &self.runtime,
                         layer_index,
-                        all_sparse_expert_ids_for_layer,
-                        None,
-                        performance_attribution,
-                    ) {
-                        Ok((paged_expert_weights, page_manifest, memory_budget_snapshot)) => (
-                            paged_expert_weights,
-                            page_manifest,
-                            memory_budget_snapshot,
-                            true,
-                        ),
-                        Err(ExpertPagingError::MemoryBudget(memory_budget_error)) => {
-                            performance_attribution.measure_operation(
-                                PerformanceOperation::ExpertPagingDiagnosticLogging,
-                                |_performance_attribution| {
-                                    tracing::debug!(
-                                        layer_index,
-                                        selected_expert_count = sorted_unique_expert_ids.len(),
-                                        error = %memory_budget_error,
-                                        "full-layer prefill page exceeded the live memory budget; loading a compact page"
-                                    );
-                                },
-                            );
-                            let (paged_expert_weights, page_manifest, memory_budget_snapshot) = {
-                                let mut expert_weight_memory_cache =
-                                    self.sparse_expert_weight_memory_cache()?.borrow_mut();
-                                expert_pager.load_selected_experts_with_performance_attribution(
-                                    &self.runtime,
-                                    layer_index,
-                                    &sorted_unique_expert_ids,
-                                    Some(&mut expert_weight_memory_cache),
-                                    performance_attribution,
-                                )?
-                            };
-                            (
-                                paged_expert_weights,
-                                page_manifest,
-                                memory_budget_snapshot,
-                                false,
-                            )
-                        }
-                        Err(expert_paging_error) => return Err(expert_paging_error.into()),
-                    }
-                }
-                None => {
-                    let (paged_expert_weights, page_manifest, memory_budget_snapshot) = {
-                        let mut expert_weight_memory_cache =
-                            self.sparse_expert_weight_memory_cache()?.borrow_mut();
-                        expert_pager.load_selected_experts_with_performance_attribution(
-                            &self.runtime,
-                            layer_index,
-                            &sorted_unique_expert_ids,
-                            Some(&mut expert_weight_memory_cache),
-                            performance_attribution,
-                        )?
-                    };
-                    (
-                        paged_expert_weights,
-                        page_manifest,
-                        memory_budget_snapshot,
-                        false,
+                        selected_indices,
+                        collect_native_performance_metrics,
                     )
-                }
-            };
+                },
+            )?;
+        record_native_expert_cache_request(
+            performance_attribution,
+            native_expert_cache_request_report,
+        );
         performance_attribution.measure_operation(
             PerformanceOperation::ExpertPagingDiagnosticLogging,
             |_performance_attribution| {
                 tracing::debug!(
                     layer_index,
-                    selected_expert_count = sorted_unique_expert_ids.len(),
+                    selected_expert_assignment_count = selected_indices.element_count(),
                     sparse_expert_count,
-                    did_load_full_layer_page,
-                    "loaded direct paged prefill experts"
+                    "loaded diagnostic direct paged prefill experts"
                 );
             },
         );
-        if did_load_full_layer_page {
-            let mixture_of_experts_output = self
-                .forward_moe_with_complete_layer_paging_and_performance_attribution(
-                    hidden_states,
-                    mixture_of_experts_weights,
-                    &paged_expert_weights,
-                    selected_indices,
-                    selected_scores,
-                    should_use_compiled_elementwise_graphs,
-                    performance_attribution,
-                )?;
-            let expert_weight_memory_cache = self.sparse_expert_weight_memory_cache()?;
-            let should_retain_complete_layer = performance_attribution.measure_operation(
-                PerformanceOperation::ExpertWeightMemoryCacheEviction,
-                |_performance_attribution| {
-                    let mut expert_weight_memory_cache = expert_weight_memory_cache.borrow_mut();
-                    expert_weight_memory_cache
-                        .update_from_memory_budget_snapshot_while_protecting_selected_experts(
-                            &memory_budget_snapshot,
-                            layer_index,
-                            &[],
-                            page_manifest.payload_byte_count,
-                        );
-                    expert_weight_memory_cache.can_physically_retain_complete_layer_expert_payload(
-                        layer_index,
-                        page_manifest.payload_byte_count,
-                    )
-                },
-            );
-            if should_retain_complete_layer {
-                self.sparse_expert_weight_memory_cache()?
-                    .borrow_mut()
-                    .remember_complete_layer_expert_weights(layer_index, paged_expert_weights);
-            }
-            return Ok(mixture_of_experts_output);
-        }
-
         self.forward_moe_paged_with_performance_attribution(
             hidden_states,
             mixture_of_experts_weights,
-            &paged_expert_weights,
-            &page_manifest,
+            &native_expert_cache_snapshot,
             selected_indices,
-            &sorted_unique_expert_ids,
             selected_scores,
             should_use_compiled_elementwise_graphs,
             performance_attribution,
@@ -532,4 +369,62 @@ impl Qwen3_5Model {
             .runtime
             .concatenate_axis(&token_moe_output_references, 1)?)
     }
+}
+
+fn record_native_expert_cache_request(
+    performance_attribution: &mut PerformanceAttribution,
+    request_report: astronomical_runtime_integration::MlxNativeExpertCacheRequestReport,
+) {
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheHitCount,
+        request_report.cache_hit_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheMissCount,
+        request_report.cache_miss_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheDiskPageLoadCount,
+        request_report.disk_page_load_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheDiskBatchLoadCount,
+        request_report.disk_batch_load_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheSuccessfulSourceReadCount,
+        request_report.successful_source_read_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheSuccessfulSourceReadByteCount,
+        request_report.successful_source_read_byte_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheSuccessfulSourceReadElapsedNanoseconds,
+        request_report.successful_source_read_elapsed_nanoseconds(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationCount,
+        request_report.route_dependency_synchronization_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationElapsedNanoseconds,
+        request_report.route_dependency_synchronization_elapsed_nanoseconds(),
+    );
+    performance_attribution.record_maximum_counter(
+        PerformanceCounter::NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds,
+        request_report.maximum_route_dependency_synchronization_elapsed_nanoseconds(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCacheSnapshotPublicationCount,
+        request_report.page_table_publication_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::NativeExpertCachePayloadCopyByteCount,
+        request_report.payload_copy_byte_count(),
+    );
+    performance_attribution.record_counter(
+        PerformanceCounter::CompleteLayerRouteSynchronizationElisionCount,
+        request_report.complete_layer_route_synchronization_elision_count(),
+    );
 }

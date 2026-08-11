@@ -222,8 +222,8 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
 }
 
 #[tokio::test]
-#[ignore = "loads a configured depth-one MTP checkpoint and verifies automatic full residency"]
-async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient() {
+#[ignore = "loads a configured depth-one MTP checkpoint and verifies demand-only expert paging"]
+async fn should_keep_sparse_experts_paged_even_when_idle_memory_is_sufficient() {
     timeout(Duration::from_secs(120), async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let model_directory = super::configured_depth_one_mtp_model_artifact_directory();
@@ -231,7 +231,7 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
             model_directory.is_dir(),
             "the configured depth-one MTP checkpoint must be available"
         );
-        eprintln!("[automatic-residency 0/4] status=progress phase=artifact_validation");
+        eprintln!("[one-expert-cache 0/4] status=progress phase=artifact_validation");
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
             .expect("the configured depth-one MTP artifact should validate");
@@ -256,15 +256,15 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
             astronomical_model_serving::PerformanceAttribution::disabled(),
             astronomical_model_serving::PerformanceAttributionLog::disabled(),
         )
-        .expect("the automatic-residency engine settings should be valid");
+        .expect("the one-expert-cache engine settings should be valid");
 
-        eprintln!("[automatic-residency 1/4] status=progress phase=model_load ETA_seconds=90");
+        eprintln!("[one-expert-cache 1/4] status=progress phase=model_load ETA_seconds=90");
         qwen3_5_engine
             .load()
             .await
-            .expect("the automatic-residency model should load");
+            .expect("the one-expert-cache model should load");
         let request_id = RequestId::new(1_003);
-        eprintln!("[automatic-residency 2/4] status=progress phase=short_generation");
+        eprintln!("[one-expert-cache 2/4] status=progress phase=short_generation");
         qwen3_5_engine
             .start_generation(
                 Qwen3_5InferenceRequest::new(
@@ -275,12 +275,12 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
                 .with_image_pad_token_id(image_pad_token_id),
             )
             .await
-            .expect("the resident model should accept a short request");
+            .expect("the demand-paged model should accept a short request");
         loop {
             match qwen3_5_engine
                 .decode_next_token(request_id)
                 .await
-                .expect("the resident model should generate without SSD expert streaming")
+                .expect("the demand-paged model should generate through one-expert pages")
             {
                 GeneratedToken::PrefillProgress { .. } => {}
                 GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
@@ -290,18 +290,18 @@ async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient(
         let generation_finalization = qwen3_5_engine
             .cancel_generation(request_id)
             .await
-            .expect("the automatic-residency request should finalize cleanly");
+            .expect("the one-expert-cache request should finalize cleanly");
 
-        eprintln!("[automatic-residency 3/4] status=progress phase=residency_assertion");
+        eprintln!("[one-expert-cache 3/4] status=progress phase=paging_assertion");
         assert_eq!(
             generation_finalization.expert_memory_mode(),
-            Some(ExpertMemoryMode::Resident),
-            "automatic residency must not wait for adaptive-growth observations before using ample idle memory"
+            Some(ExpertMemoryMode::Paged),
+            "one-expert-only caching must never promote unrouted experts into complete-layer residency"
         );
-        eprintln!("[automatic-residency 4/4] status=success");
+        eprintln!("[one-expert-cache 4/4] status=success");
     })
     .await
-    .expect("the automatic-residency regression must finish within 120 seconds");
+    .expect("the one-expert-cache regression must finish within 120 seconds");
 }
 
 #[tokio::test]

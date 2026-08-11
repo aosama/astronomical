@@ -1,3 +1,10 @@
+//! Exact two-token target verification for depth-one multi-token prediction.
+//!
+//! The target advances through current plus draft token in one graph, while a
+//! first-row recurrent checkpoint preserves the valid prefix if the draft is
+//! rejected. Sparse expert execution uses its dedicated unsorted two-row mode
+//! so token order and rollback state remain unambiguous.
+
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use crate::qwen3_5::decoder::{
@@ -50,6 +57,9 @@ pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_at
         .runtime()
         .array_from_i32(&signed_token_ids, &[1, token_count])?;
     let recurrent_boundary_tensor_count = model.decoder_cache_layout().boundary_tensor_count();
+    // Attention-only models need only truncate append-only key/value state.
+    // Hybrid models additionally capture recurrent and convolution state after
+    // the first verified row so rejection never approximates a rollback.
     let mut verified_prefix_boundary_checkpoint_collector = if recurrent_boundary_tensor_count == 0
     {
         None

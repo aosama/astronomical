@@ -215,7 +215,6 @@ fn record_failed_model_loading_performance_attribution(
             model_revision,
             prefill_transient_observation_completed: false,
             prefill_observed_transient_high_water_bytes: 0,
-            retained_complete_expert_layer_count: 0,
             total_artifact_payload_bytes,
             resident_model_payload_bytes: None,
             model_shard_count,

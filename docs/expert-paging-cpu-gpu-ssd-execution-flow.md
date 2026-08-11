@@ -1,194 +1,78 @@
 # Expert Paging CPU, GPU, and SSD Execution Flow
 
-This document records the verified Qwen3.5 and Qwen3.6 mixture-of-experts paging path. Shared storage geometry, bounded loading, memory budgets, retention, and cache accounting now live in expert_paging; Qwen layer plans, quantization interpretation, page assembly, routing, and pager coordination remain under qwen3_5_moe. It distinguishes host control work, graphics-processor execution, solid-state-drive reads, and expert-weight memory-cache least-recently-used policy. Every placement below is derived from the cited implementation; timing attribution alone is not used to infer where work executes.
+This records the verified demand-only Qwen3.5 and Qwen3.6 affine and native bfloat16 expert path.
 
-## Label contract
+## Labels
 
-- CPU means Rust or C++ code executing on a host thread.
-- GPU means an MLX primitive encoded for the Metal graphics-processor stream and executed by the Apple graphics processor.
-- SSD and MLX I/O worker means an MLX lazy Load primitive performs bounded positional file reads through MLX input/output workers when the graph is evaluated.
-- Graph construction on the CPU creates lazy MLX arrays. It does not prove that the represented arithmetic has executed.
-- A synchronous MLX evaluation wait includes host dependency traversal and submission plus waiting for required device work. It does not identify one graphics-processor kernel as the elapsed-time owner.
+- CPU means central processing unit host work in Rust or native C++.
+- GPU means graphics processing unit work encoded through Metal.
+- SSD means solid-state-drive storage.
+- MLX means Machine Learning framework for Apple silicon.
+- I/O means input/output work.
+- ID means identifier.
+- NAX is MLX's internal name for its Metal 4 matrix kernels.
+- Graph construction creates lazy MLX arrays; it does not prove execution.
 
-## Verified flow
+## Production flow
 
-    CPU: Astronomical inference engine thread
-        |
-        | Constructs a lazy router graph on the MLX GPU stream:
-        | - quantized linear or matrix multiplication
-        | - softmax
-        | - argpartition
-        | - selected-index slice
-        | - selected-score gather and optional normalization
-        |
-        | No router arithmetic is guaranteed to have executed here.
-        v
-    CPU: Complete-layer expert-weight memory-cache lookup
-        |
-        | Looks up the current layer by layer index.
-        | A hit increments the access sequence and updates that layer's
-        | least-recently-used position.
-        |
-        +---- COMPLETE-LAYER HIT -----------------------------------------+
-        |                                                                 |
-        | No selected-expert ID copy to CPU is required.                  |
-        | No expert-weight SSD read is required.                          |
-        | Lazy selected indices remain MLX arrays and are passed          |
-        | directly into complete-layer mixture-of-experts graph building. |
-        |                                                                 v
-        |                                                GPU: Later MLX evaluation
-        |                                                    |
-        |                                                    | Executes router and
-        |                                                    | complete-layer gathered
-        |                                                    | expert calculations.
-        |                                                    v
-        |                                                GPU: Next hidden state
-        |
-        +---- COMPLETE-LAYER MISS ----------------------------------------+
-        |
-        | Constructs a lazy contiguous selected-expert ID array.
-        | Calls the synchronous MLX-C API mlx_array_eval.
-        v
-    CPU: MLX-C and MLX core scheduler
-        |
-        | mlx_array_eval calls mlx::core::array::eval.
-        | MLX traverses every unscheduled dependency needed to produce
-        | the contiguous selected-expert ID array.
-        | MLX encodes GPU primitives and commits the relevant Metal work.
-        v
-    GPU: Apple graphics processor
-        |
-        | Executes the required dependency chain for the current hidden state.
-        | Executes router projection, softmax, argpartition, slicing,
-        | selected-score operations, and the contiguous selected-ID copy.
-        | Signals the MLX Metal shared event after required work completes.
-        v
-    CPU: Astronomical inference engine thread
-        |
-        | Waits through MLX on the Metal shared event.
-        | Resumes only when the selected IDs are readable.
-        | Reads the evaluated UInt32 values from MLX unified memory.
-        | Copies those small values into a Rust vector.
-        | Sorts and deduplicates the selected global expert IDs.
-        v
-    CPU: Expert page policy
-        |
-        | Builds the exact selected-page manifest.
-        | Chooses one of the verified branches below according to execution
-        | mode, retained capacity, live memory budget, and storage availability.
-        |
-        +---- RETAINED ONE-EXPERT MEMORY-CACHE PATH ----------------------+
-        |                                                                 |
-        | CPU: Looks up each selected expert by layer and expert ID.       |
-        |      A hit increments the access sequence and updates that       |
-        |      expert's least-recently-used position.                      |
-        |                                                                 |
-        |      Before admitting missing experts, protects the currently   |
-        |      selected IDs and removes oldest unselected experts until   |
-        |      the incoming retained payload fits.                        |
-        |                                                                 |
-        |      Cache hit: reuses retained MLX expert arrays; no SSD read.  |
-        |                                                                 |
-        |      Cache miss: constructs lazy bounded safetensors Load arrays |
-        |      and separates those lazy arrays into independently owned    |
-        |      one-expert page owners retained by the memory cache.        |
-        |                                                                 v
-        | SSD and MLX I/O workers: During later MLX evaluation, perform    |
-        |      bounded positional reads for missing expert tensor ranges. |
-        |                                                                 |
-        +---- TEMPORARY OR DIRECT PAGE PATH ------------------------------+
-        |                                                                 |
-        | CPU: Builds the selected-page manifest and samples the live      |
-        |      MLX memory budget. If necessary, reconciles retained        |
-        |      expert pages before admitting the temporary page.          |
-        |                                                                 |
-        |      Constructs lazy bounded safetensors Load arrays backed by   |
-        |      exact source intervals from the selected-page manifest.     |
-        |      The arrays remain lazy until dependent graph evaluation.    |
-        |                                                                 v
-        | SSD and MLX I/O workers: During later MLX evaluation, perform    |
-        |      bounded positional reads for the selected expert ranges.    |
-        |                                                                 |
-        +-----------------------------------------------------------------+
-        |
-        v
-    CPU: Paged mixture-of-experts graph construction
-        |
-        | Retains only the sorted unique host IDs required to select files
-        | and retained expert owners. The assignment-sized selected-index
-        | array remains in MLX.
-        | Verifies that those sorted unique routed IDs exactly match the
-        | compact page manifest before graph construction.
-        | The manifest stores a dense fixed-capacity lookup from every global
-        | expert ID to its compact page slot. IDs absent from the page contain
-        | a UInt32 maximum sentinel that validated production routing cannot use.
-        | Creates an MLX array from that lookup for the current page execution.
-        | Builds a lazy MLX take_axis operation from the lookup array and the
-        | existing device-side selected indices. The output preserves the
-        | selected-index shape while replacing global IDs with compact slots.
-        | Builds gathered quantized matrix multiplication, expert activation,
-        | routing-score weighting, and sparse/shared combination operations.
-        | These remain lazy MLX operations at construction time.
-        v
-    GPU: Apple graphics processor
-        |
-        | Executes take_axis to remap each global expert assignment to its
-        | compact page slot without constructing remapped assignments in Rust.
-        | No second selected-index synchronization or assignment-sized host
-        | upload occurs for page-slot remapping.
-        | Executes gathered expert matrix operations and combination graphs.
-        v
-    GPU: Next hidden state
+1. **CPU: build routing graph.** Rust builds lazy router projection, softmax, top-K selection, score gathering, and normalization operations.
+2. **CPU: reserve the possible route.** Before lazy route synchronization, Rust bounds distinct experts by route assignments and layer capacity, projects that payload against live MLX memory, and lowers optional retention when needed. The separate initial request reserve remains one model-derived top-K page.
+3. **Rust to C++: pass the route unchanged.** Rust gives the lazy selected-index MLX array to the native cache. Original indices remain available for projection and score alignment.
+4. **GPU: reduce route evidence.** Native C++ builds a fixed bitmap. One thread per assignment atomically marks one expert bit and records an out-of-range value in a guard word.
+5. **CPU and GPU: synchronize when needed.** An incomplete layer evaluates and copies the bitmap once. Evaluation executes required router dependencies. A fully resident layer defers that synchronization and retains the lazy bitmap as pending recency evidence.
+6. **CPU: apply cache policy.** Native C++ looks up `(layer index, expert ID)` entries, updates recency, and protects the routed set. It first evicts the current layer's oldest unprotected slots until that layer fits its proportional share, then prefers globally oldest entries from layers above their shares if the global ceiling still requires space. Pending complete-layer evidence is reconciled before eviction.
+7. **CPU and SSD: fill missing slots.** Each missing expert receives one aligned MLX `PagedBufferSlot`. One batched `read_paged_buffer_ranges` call reads its gate, up, and down tensor ranges directly into the slot. The slot is committed before immutable typed views are created.
+8. **CPU: publish immutable snapshots.** Changed layers rebuild metadata snapshots over retained slots. A snapshot contains no copied expert payload and keeps every referenced slot alive through lazy GPU execution.
+9. **GPU: execute gathered projections.** Native affine or bfloat16 gathered matrix multiplication consumes original global expert IDs. Prompt processing uses sorted assignments; decode can use unsorted assignments. Affine execution applies MLX's common activation, scale, and bias output type without widening retained page storage.
+10. **GPU: select the projection kernel.** Large sorted affine work uses NAX matrix kernels when available and all operands share its supported type. Other affine work uses generic matrix or gathered matrix-vector kernels that promote independently typed scale and bias values while loading compute tiles. Native bfloat16 uses paged gathered matrix kernels.
+11. **GPU: combine outputs.** Existing activation, weighted-sum, shared-expert, and sparse/shared combination operations produce the next hidden state.
 
-## Least-recently-used policy location
+## Route larger than retention capacity
 
-The expert-weight memory-cache least-recently-used policy executes on the CPU. It uses monotonically increasing access sequence numbers rather than clock reads.
+The cache reuses routed hits, loads only missing routed experts, and returns an immutable ephemeral snapshot without evicting retained pages. Ephemeral slots remain alive through lazy GPU execution but never enter recency or retained-payload accounting.
 
-- A complete-layer hit updates the complete layer's last access sequence.
-- A retained one-expert hit updates that expert's last access sequence.
-- Insertion counts as an access.
-- Selected experts are protected while making room for an incoming page.
-- Global partial-page eviction selects the unprotected expert with the smallest last access sequence, then uses layer index and expert ID as deterministic tie-breakers.
-- Same-layer selected-page admission selects the oldest unselected expert in that layer, using expert ID as the deterministic tie-breaker.
-- Complete-layer prewarm preserves the exact one-token route payload for every layer that remains paged when those route floors fit the live retention ceiling.
-- Decode reconciles existing complete layers against those route floors before selected-route admission. After a demotion, it synchronizes the graphics-processor stream, clears released allocator storage once, and resamples the live budget.
-- Direct multi-token prompt processing admits complete layers against physical retained capacity without reserving decode-route payload.
-- Temporary direct-page admission can reconcile retained pages when the live memory budget is insufficient.
+## Cache policy
 
-The policy does not read expert payload bytes and does not execute mixture-of-experts arithmetic.
+- Cache identity is `(layer index, expert ID)`.
+- Only router-requested experts can enter the cache.
+- Hits and insertions advance one monotonic access sequence.
+- The in-flight route is protected during admission.
+- One byte ceiling covers all layers and is divided into proportional layer shares rounded to complete expert pages.
+- Per-layer eviction protects each layer's decode working set. Global fallback prefers layers above their proportional shares, then uses access sequence, layer index, and expert ID.
+- A route larger than its layer share executes ephemerally and cannot displace another layer's retained working set.
+- Request pressure can freeze growth, lower the ceiling, reclaim exact bytes, and later resume retention. While frozen, a lower route-specific ceiling evicts immediately; only a higher ceiling is deferred. Resume installs the newest configured ceiling, and resident payload never remains above the active ceiling.
+- Startup, cleanup, and memory-limit changes never prewarm experts.
 
-## File-read locations
+## Storage and validation
 
-Production has one expert file-read mechanism. The CPU constructs lazy MLX Load arrays backed by bounded positional readers over standard safetensors shards. Host positional reads occur later on MLX input/output workers when evaluation requires the arrays. The operating-system page cache may satisfy them, so these timings do not prove physical solid-state-drive service. Temporary pages and retained one-expert population use the same mechanism.
+- MLX core owns paged-buffer allocation, direct range reads, commit state, immutable typed views, and shared-buffer lifetime.
+- MLX-C exposes product-neutral opaque paged-slot and file-reader handles for direct Rust boundary tests.
+- Astronomical C++ owns model tensor geometry, layer-balanced recency, retention, pressure policy, snapshot publication, and gathered projection execution.
+- Construction validates source files, intervals, data types, shapes, packed geometry, affine widths, group sizes, and layer compatibility.
+- Source reads fail on truncation or any incomplete positional read.
+- Supported affine widths are 2, 3, 4, 5, 6, and 8 bits. Supported group sizes are 32, 64, and 128. Gate, up, and down projections retain independent affine profiles. Scale and bias types may independently be float16, bfloat16, or float32.
+- Native bfloat16 experts contain uncompressed gate, up, and down weights without affine companions.
 
-## Attribution interpretation
+## Attribution
 
-The selected_expert_id_evaluation_synchronization_wait operation wraps the synchronous evaluation call that makes selected IDs readable to the CPU. Its elapsed time can include:
+- `native_expert_cache_route_preparation` covers route evaluation, cache policy, source reads, and snapshot preparation.
+- Native request reports count hits, misses, disk pages, disk batches, successful source reads, source bytes, optional source-read elapsed time, publications, payload copies, and complete-layer synchronization elisions. Cumulative native statistics also count evictions.
+- Native request reports separately count and time route-dependency synchronization. This wait can execute the preceding lazy projection and router graph, so it must not be labeled as cache-policy or solid-state-drive time.
+- Source-read elapsed time is collected only when performance attribution is enabled.
+- `native_paged_expert_projection_graph_count` reports native paged gathered projection graphs.
+- `paged_moe_graph_construction` measures paged projection and combination graph construction, not GPU completion.
+- Positional-read timing measures host file-service work; the operating-system page cache may satisfy it.
 
-- CPU dependency-graph traversal and Metal command encoding.
-- Required graphics-processor work inherited through the current hidden state.
-- Router and selected-ID graphics-processor operations.
-- Waiting for the MLX Metal shared event.
+## Source map
 
-It does not include the separately measured host copy of evaluated selected IDs. It also does not prove how much of the wait belongs to any individual graphics-processor kernel.
-
-## Verified source map
-
-- Router graph and complete-layer branch: crates/model-serving/src/qwen3_5_moe/model/paged_moe_forward.rs, lines 47-94.
-- Selected-ID evaluation, host copy, sorting, and deduplication: crates/model-serving/src/qwen3_5_moe/model/paged_moe_execution.rs, lines 217-243.
-- Router operations: crates/model-serving/src/qwen3_5_moe/model/moe.rs, lines 35-67.
-- Complete-layer and one-expert access sequence updates: crates/model-serving/src/expert_paging/expert_cache.rs, lines 90-117.
-- Complete-layer admission and partial route-floor allocation: crates/model-serving/src/expert_paging/expert_cache_capacity.rs.
-- One-expert lookup, protection, eviction, loading, and assembly: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/memory_cache.rs, lines 39-262.
-- Global partial-page eviction: crates/model-serving/src/expert_paging/expert_cache_eviction.rs, lines 4-64.
-- Same-layer deterministic oldest-unselected eviction: crates/model-serving/src/expert_paging/expert_cache.rs, lines 258-287.
-- Direct-page memory admission and Qwen page assembly: crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/direct_page.rs, lines 37-122.
-- Bounded expert-page reader and exact source-interval mapping: crates/model-serving/src/expert_paging/bounded_expert_reader.rs, lines 18-101.
-- Shared manifest and contiguous source-run construction: crates/model-serving/src/expert_paging/source_manifests.rs.
-- Runtime bounded safetensors loading boundary: crates/runtime-integration/src/mlx_runtime/safetensors.rs and crates/runtime-integration/src/mlx_safetensors.rs.
-- Rust synchronous MLX-C evaluation call: crates/runtime-integration/src/mlx_array.rs, lines 217-223.
-- MLX-C array evaluation boundary: mlx-c/mlx/c/array.cpp, lines 348-355 in the pinned upstream source.
-- MLX dependency traversal and synchronous wait: mlx/mlx/transforms.cpp, lines 80-350 in the pinned upstream source.
-- MLX Metal shared-event host wait: mlx/mlx/backend/metal/event.cpp, lines 28-31 and 55-72 in the pinned upstream source.
-- Dense global-expert-ID to page-slot manifest construction: crates/model-serving/src/qwen3_5_moe/expert_paging/quantized_expert_manifest.rs, lines 239-323.
-- Complete-layer and compact-page mixture-of-experts graph construction plus device-side page-slot remapping: crates/model-serving/src/qwen3_5_moe/model/paged_moe_execution.rs, lines 20-253.
+- Routing and native preparation: `crates/model-serving/src/qwen3_5_moe/model/paged_forward.rs`.
+- Native projection orchestration: `crates/model-serving/src/qwen3_5_moe/model/paged_execution.rs`.
+- Pager ownership and pressure integration: `crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/native_cache.rs`.
+- Source descriptor construction: `crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager_construction.rs`.
+- Rust native ownership: `crates/runtime-integration/src/mlx_native_expert_cache.rs`.
+- Product-neutral MLX-C wrappers: `crates/runtime-integration/src/mlx_paged_buffer_store.rs`.
+- Native cache and policy: `crates/runtime-integration/native/expert_cache/`.
+- Native projection kernels: `crates/runtime-integration/native/paged_expert_execution/`.
+- MLX core paged storage: `third-party/patches/mlx-0.32.0-paged-buffer-store.patch`.
+- MLX positional short-read fix: `third-party/patches/mlx-0.32.0-paged-buffer-short-read.patch`.
+- MLX-C handles: `third-party/patches/mlx-c-0.6.0-paged-buffer-store.patch`.

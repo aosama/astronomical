@@ -14,10 +14,7 @@ use crate::qwen3_5::model::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5::multi_token_prediction::{
     materialize_optional_weights, qwen3_5_mtp_runtime_state_after_load,
 };
-use crate::qwen3_5::{
-    Qwen3_5FeedForwardArchitecture, Qwen3_5ImageProcessor, Qwen3_5Model,
-    Qwen3_5MtpArtifactCapability,
-};
+use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model, Qwen3_5MtpArtifactCapability};
 use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
 
 use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup;
@@ -136,37 +133,6 @@ impl Qwen3_5EngineState {
                     self.memory_limits,
                     &mut model_loading_performance_attribution,
                 )?;
-            match model.config().feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => {}
-                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
-                    let expert_residency_started_at = std::time::Instant::now();
-                    tracing::info!("started filling idle memory with complete expert layers");
-                    let expert_residency_outcome = model
-                        .prewarm_complete_expert_layers_with_performance_attribution(
-                            &mut model_loading_performance_attribution,
-                        );
-                    let expert_weight_memory_cache_statistics =
-                        model.expert_weight_memory_cache_statistics();
-                    tracing::info!(
-                        residency_succeeded = expert_residency_outcome.is_ok(),
-                        residency_elapsed_millis = expert_residency_started_at.elapsed().as_millis(),
-                        expert_memory_mode = ?model.expert_memory_mode(),
-                        retained_complete_layer_count =
-                            expert_weight_memory_cache_statistics.complete_layer_count,
-                        retained_expert_payload_bytes =
-                            expert_weight_memory_cache_statistics.resident_payload_byte_count,
-                        maximum_retained_expert_payload_bytes =
-                            expert_weight_memory_cache_statistics.maximum_resident_payload_byte_count,
-                        "finished filling idle memory with complete expert layers"
-                    );
-                    if let Err(expert_residency_error) = expert_residency_outcome {
-                        tracing::warn!(
-                            error = %expert_residency_error,
-                            "could not finish automatic expert residency; serving with the admitted layers"
-                        );
-                    }
-                }
-            }
             let resolved_model_id = model_id.clone().ok_or_else(|| {
                 fatal_engine_error("model loading lost the validated model identifier")
             })?;

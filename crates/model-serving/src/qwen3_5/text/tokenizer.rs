@@ -58,12 +58,14 @@ impl Qwen3_5Tokenizer {
     /// Loads and certifies tokenizer JSON bytes retained by artifact validation.
     pub fn from_json_bytes(
         tokenizer_bytes: &[u8],
+        model_id: &str,
         model_vocabulary_size: u32,
         maximum_position_count: u32,
         image_processor: Qwen3_5ImageProcessor,
     ) -> Result<Self, Qwen3_5TokenizerError> {
         Self::from_json_bytes_with_optional_image_processor(
             tokenizer_bytes,
+            model_id,
             model_vocabulary_size,
             maximum_position_count,
             Some(image_processor),
@@ -72,6 +74,7 @@ impl Qwen3_5Tokenizer {
 
     fn from_json_bytes_with_optional_image_processor(
         tokenizer_bytes: &[u8],
+        model_id: &str,
         model_vocabulary_size: u32,
         maximum_position_count: u32,
         image_processor: Option<Qwen3_5ImageProcessor>,
@@ -96,7 +99,7 @@ impl Qwen3_5Tokenizer {
             maximum_position_count,
             model_sampler_config: discover_sampler_config(None),
             token_ids,
-            model_id: String::new(),
+            model_id: model_id.to_owned(),
             image_processor,
         })
     }
@@ -113,11 +116,11 @@ impl Qwen3_5Tokenizer {
             .map(Qwen3_5ImageProcessor::from_vision_config);
         let mut tokenizer = Self::from_json_bytes_with_optional_image_processor(
             tokenizer_bytes,
+            validated_artifact.model_id(),
             validated_artifact.config().vocabulary_size(),
             validated_artifact.config().maximum_position_count(),
             image_processor,
         )?;
-        tokenizer.model_id = validated_artifact.model_id().to_owned();
         tokenizer.model_sampler_config =
             discover_sampler_config(validated_artifact.generation_config_bytes());
         Ok(tokenizer)
@@ -319,10 +322,11 @@ impl Qwen3_5Tokenizer {
         .with_ordinary_target_prefill_control_span_token_count(
             ordinary_target_prefill_control_span_token_count,
         )
-        .with_image_pad_token_id(self.image_pad_token_id());
-        if let Some(thinking_budget) = chat_generation_command.settings.thinking_budget {
-            inference_request = inference_request.with_thinking_budget(thinking_budget);
-        }
+        .with_image_pad_token_id(self.image_pad_token_id())
+        .with_thinking_configuration(
+            enable_thinking,
+            chat_generation_command.settings.thinking_budget,
+        );
         if !prepared_chat_images.processed_visual_images.is_empty() {
             inference_request = inference_request
                 .with_processed_visual_images(prepared_chat_images.processed_visual_images);

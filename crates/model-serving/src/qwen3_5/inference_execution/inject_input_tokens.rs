@@ -93,6 +93,9 @@ impl Qwen3_5EngineState {
             self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
         )?;
 
+        // External feedback changes the continuation frontier. Discard both the
+        // one-token-ahead successor and its rollback verdict before forwarding
+        // feedback; neither belongs to the newly injected token sequence.
         active_request.pending_generated_token = None;
         let mut should_reseed_prediction_after_injection = reset_prediction_after_injection(
             active_request,

@@ -59,6 +59,24 @@ impl MlxMetalKernel {
         kernel_header: &str,
         kernel_source: &str,
     ) -> Result<Self, MlxRuntimeError> {
+        Self::new_with_options(
+            kernel_name,
+            input_names,
+            output_names,
+            kernel_header,
+            kernel_source,
+            false,
+        )
+    }
+
+    fn new_with_options(
+        kernel_name: &str,
+        input_names: &[&str],
+        output_names: &[&str],
+        kernel_header: &str,
+        kernel_source: &str,
+        has_atomic_outputs: bool,
+    ) -> Result<Self, MlxRuntimeError> {
         const OPERATION: &str = "create an MLX custom Metal kernel";
         if input_names.is_empty() || output_names.is_empty() {
             return Err(MlxRuntimeError::RuntimeOperation {
@@ -73,7 +91,7 @@ impl MlxMetalKernel {
         let input_name_vector = MlxStringVector::new(input_names, OPERATION)?;
         let output_name_vector = MlxStringVector::new(output_names, OPERATION)?;
         // SAFETY: C strings and vectors stay live through this copying constructor;
-        // Row-contiguous inputs and non-atomic outputs match this kernel contract.
+        // Row-contiguous inputs and the explicit atomic-output contract match this kernel.
         let raw_kernel = unsafe {
             raw::mlx_fast_metal_kernel_new(
                 kernel_name.as_ptr(),
@@ -82,7 +100,7 @@ impl MlxMetalKernel {
                 kernel_source.as_ptr(),
                 kernel_header.as_ptr(),
                 true,
-                false,
+                has_atomic_outputs,
             )
         };
         if raw_kernel.ctx.is_null() {
@@ -119,10 +137,33 @@ impl MlxRuntime {
         thread_group: [i32; 3],
         template_arguments: &[MlxMetalKernelTemplateArgument],
     ) -> Result<Vec<MlxArray>, MlxRuntimeError> {
+        self.apply_metal_kernel_with_output_initialization(
+            kernel,
+            input_arrays,
+            output_specs,
+            grid,
+            thread_group,
+            template_arguments,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn apply_metal_kernel_with_output_initialization(
+        &self,
+        kernel: &MlxMetalKernel,
+        input_arrays: &[&MlxArray],
+        output_specs: &[MlxMetalKernelOutput],
+        grid: [i32; 3],
+        thread_group: [i32; 3],
+        template_arguments: &[MlxMetalKernelTemplateArgument],
+        output_initial_value: Option<f32>,
+    ) -> Result<Vec<MlxArray>, MlxRuntimeError> {
         const OPERATION: &str = "apply an MLX custom Metal kernel";
         validate_kernel_launch(input_arrays, output_specs, grid, thread_group)?;
         let input_vector = MlxArrayVector::new(input_arrays)?;
-        let kernel_config = MlxMetalKernelConfig::new(output_specs, grid, thread_group)?;
+        let kernel_config =
+            MlxMetalKernelConfig::new(output_specs, grid, thread_group, output_initial_value)?;
         kernel_config.add_template_arguments(template_arguments)?;
         let mut output_vector = MlxArrayVector::empty(OPERATION)?;
         // SAFETY: Kernel, input vector, config, stream, and output vector are live;
@@ -163,6 +204,7 @@ impl MlxMetalKernelConfig {
         output_specs: &[MlxMetalKernelOutput],
         grid: [i32; 3],
         thread_group: [i32; 3],
+        output_initial_value: Option<f32>,
     ) -> Result<Self, MlxRuntimeError> {
         const OPERATION: &str = "configure an MLX custom Metal kernel";
         // SAFETY: The runtime error handler is installed before model loading,
@@ -175,6 +217,16 @@ impl MlxMetalKernelConfig {
             });
         }
         let kernel_config = Self { raw_config };
+        if let Some(output_initial_value) = output_initial_value {
+            // SAFETY: The scalar initialization value is copied by MLX.
+            let status = unsafe {
+                raw::mlx_fast_metal_kernel_config_set_init_value(
+                    kernel_config.raw(),
+                    output_initial_value,
+                )
+            };
+            check_status(status, OPERATION)?;
+        }
         for output_spec in output_specs {
             // SAFETY: The shape slice remains live for this copying call.
             let status = unsafe {

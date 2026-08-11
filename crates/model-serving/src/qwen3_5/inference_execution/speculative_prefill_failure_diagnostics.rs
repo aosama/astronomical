@@ -160,7 +160,6 @@ impl Qwen3_5EngineState {
             draft_phase_target_context_state_payload_bytes = draft_active_memory_breakdown.context_state_payload_bytes,
             draft_phase_drafter_memory_bytes = draft_active_memory_breakdown.speculative_prefill_draft_memory_bytes,
             target_expert_entry_count = target_expert_memory_statistics.entry_count,
-            target_expert_complete_layer_count = target_expert_memory_statistics.complete_layer_count,
             target_expert_payload_bytes_at_request_start,
             target_expert_resident_payload_bytes = target_expert_memory_statistics.resident_payload_byte_count,
             target_expert_reclaimed_payload_bytes = target_expert_payload_bytes_at_request_start

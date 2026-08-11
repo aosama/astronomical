@@ -105,6 +105,18 @@ fn should_aggregate_performance_counters_with_saturation() {
 }
 
 #[test]
+fn should_retain_the_largest_maximum_counter_observation() {
+    let mut performance_attribution = PerformanceAttribution::enabled();
+    let maximum_counter =
+        PerformanceCounter::NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds;
+    performance_attribution.record_maximum_counter(maximum_counter, 40);
+    performance_attribution.record_maximum_counter(maximum_counter, 10);
+    performance_attribution.record_maximum_counter(maximum_counter, 80);
+
+    assert_eq!(performance_attribution.counter_value(maximum_counter), 80);
+}
+
+#[test]
 fn should_saturate_each_mtp_outcome_counter_independently() {
     let mut performance_attribution = PerformanceAttribution::enabled();
 
