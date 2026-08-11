@@ -2,6 +2,8 @@ pub(crate) mod artifacts;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_paging;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod expert_residency;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
 
 #[cfg(feature = "direct-mlx")]
@@ -13,9 +15,13 @@ pub use expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
+pub(crate) use expert_residency::Qwen3_5ResidentExpertWeights;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use model::feed_forward_weights::bind_qwen3_5_moe_feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use model::reclaim_retained_experts_for_request_memory_pressure;
+pub(crate) use model::{
+    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
+};
 #[cfg(feature = "direct-mlx")]
 pub use model::{
     Qwen3_5MoEPagedPrefillExecutionMode, qwen3_5_moe_combine_experts,

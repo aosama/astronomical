@@ -19,6 +19,8 @@ mod prefill_optimizer_insight;
 mod prompt_prefill;
 mod prompt_prefill_counters;
 mod prompt_prefill_errors;
+mod request_memory_release;
+mod resident_memory_pressure;
 mod speculative_prefill;
 mod speculative_prefill_control_span;
 mod speculative_prefill_draft_cache;

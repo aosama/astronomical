@@ -49,7 +49,10 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
     let prompt_cache_directory = tempfile::tempdir()
         .expect("the visual qualification should create a prompt-cache directory");
     let mlx_memory_limits =
-        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+        crate::common::sample_machine_model_artifact_qualification_mlx_memory_limits().await;
+    let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
+    worker_chunking_configuration.prompt_cache_block_tokens =
+        Some(VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS);
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
@@ -65,7 +68,7 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
         .expect("the visual qualification prefill size should be valid"),
         tokenizer.think_end_token_id(),
         model_directory,
-        crate::common::standard_worker_chunking_configuration(),
+        worker_chunking_configuration,
         true,
         crate::common::disabled_worker_speculative_prefill_configuration(),
     )
@@ -89,11 +92,19 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
     }
     let (cold_token_id, cold_prefill_chunck_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_100)).await;
-    assert!(
-        cold_prefill_chunck_token_counts.contains(&VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS),
-        "the visual request must complete one 8192-token forward"
-    );
-    wait_for_four_prompt_cache_blocks(&qwen3_5_engine).await;
+    if force_prefill_retry {
+        assert_eq!(
+            cold_prefill_chunck_token_counts.first().copied(),
+            Some(VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS / 2),
+            "the forced 8192-token rejection must retry from the restored checkpoint at half size"
+        );
+    } else {
+        assert!(
+            cold_prefill_chunck_token_counts.contains(&VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS),
+            "the visual request must complete one 8192-token forward"
+        );
+    }
+    wait_for_visual_prompt_cache_block(&qwen3_5_engine).await;
 
     let restored_request = representative_visual_request(&tokenizer, RequestId::new(9_101));
     let restored_generation_start = qwen3_5_engine
@@ -106,6 +117,9 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
     );
     let (restored_token_id, _restored_prefill_chunck_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_101)).await;
+    eprintln!(
+        "[visual-prompt-cache-qualification] status=parity cold_token_id={cold_token_id} restored_token_id={restored_token_id} forced_retry={force_prefill_retry}"
+    );
     assert_eq!(cold_token_id, restored_token_id);
     eprintln!("[visual-prompt-cache-qualification] status=success");
 }
@@ -136,7 +150,7 @@ fn representative_visual_request(
                     tool_choice: ChatToolChoice::None,
                     settings: ChatGenerationSettings {
                         max_output_tokens: 1,
-                        temperature_thousandths: None,
+                        temperature_thousandths: Some(0),
                         top_p_thousandths: None,
                         seed: None,
                         thinking_budget: Some(256),
@@ -168,10 +182,17 @@ async fn generate_one_token(
             }
             GeneratedToken::PrefillProgress {
                 completed_prefill_chunck_tokens,
+                mlx_memory_telemetry,
                 ..
             } => {
                 eprintln!(
-                    "[visual-prompt-cache-qualification] completed_prefill_chunck_tokens={completed_prefill_chunck_tokens}"
+                    "[visual-prompt-cache-qualification] completed_prefill_chunck_tokens={completed_prefill_chunck_tokens} active_memory_bytes={:?} peak_memory_bytes={:?}",
+                    mlx_memory_telemetry
+                        .as_ref()
+                        .map(|telemetry| telemetry.active_memory_bytes),
+                    mlx_memory_telemetry
+                        .as_ref()
+                        .map(|telemetry| telemetry.peak_memory_bytes),
                 );
                 completed_prefill_chunck_token_counts.push(completed_prefill_chunck_tokens);
             }
@@ -183,17 +204,17 @@ async fn generate_one_token(
     }
 }
 
-async fn wait_for_four_prompt_cache_blocks(qwen3_5_engine: &Qwen3_5Engine) {
+async fn wait_for_visual_prompt_cache_block(qwen3_5_engine: &Qwen3_5Engine) {
     let wait_started_at = Instant::now();
     loop {
         let persistent_prompt_cache_sequence_state_block_count =
             prompt_cache_sequence_state_block_count(qwen3_5_engine).await;
-        if persistent_prompt_cache_sequence_state_block_count >= 4 {
+        if persistent_prompt_cache_sequence_state_block_count >= 1 {
             return;
         }
         assert!(
             wait_started_at.elapsed() < Duration::from_secs(10),
-            "the visual qualification did not publish four prompt-cache blocks"
+            "the visual qualification did not publish its 8192-token prompt-cache block"
         );
         eprintln!(
             "[visual-prompt-cache-qualification] status=waiting-for-cache published_blocks={persistent_prompt_cache_sequence_state_block_count}"

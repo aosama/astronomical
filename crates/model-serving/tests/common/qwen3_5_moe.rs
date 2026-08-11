@@ -3,9 +3,10 @@
 use astronomical_model_serving::PersistentPromptCacheModelContract;
 use astronomical_model_serving::qwen3_5_decoder_cache_layout;
 use astronomical_model_serving::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    PersistentVisualEmbeddingModelContract, Qwen3_5Config, Qwen3_5ImageProcessor,
-    Qwen3_5VisionConfig, TensorProfile, qwen3_5_language_tensor_profiles,
+    DecoderCacheTensorDtype, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
+    ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingModelContract, Qwen3_5Config,
+    Qwen3_5DecoderLayerCacheDtypes, Qwen3_5ImageProcessor, Qwen3_5VisionConfig, TensorProfile,
+    qwen3_5_language_tensor_profiles,
 };
 use serde_json::{Value, json};
 
@@ -25,10 +26,14 @@ pub fn certified_ornith_image_processor() -> Qwen3_5ImageProcessor {
 
 pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelContract {
     let certified_ornith_config = certified_ornith_config();
+    // This hermetic fixture has no bound MLX arrays. Supply its certified BF16
+    // state contract explicitly; real engine qualifications use load-derived
+    // dtypes and read the resulting block geometry back from the engine.
+    let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&certified_ornith_config);
     PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&certified_ornith_config, 256)
+        qwen3_5_decoder_cache_layout(&certified_ornith_config, 256, &decoder_layer_cache_dtypes)
             .expect("the certified Ornith configuration should build a decoder-cache layout"),
         certified_ornith_config.maximum_position_count() as usize,
         20_000_000_000,
@@ -37,6 +42,38 @@ pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelCon
         4,
     )
     .expect("the certified Ornith configuration should resolve a storage contract")
+}
+
+pub fn bfloat16_decoder_layer_cache_dtypes(
+    qwen3_5_config: &Qwen3_5Config,
+) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
+    decoder_layer_cache_dtypes(qwen3_5_config, DecoderCacheTensorDtype::BFloat16)
+}
+
+pub fn float32_decoder_layer_cache_dtypes(
+    qwen3_5_config: &Qwen3_5Config,
+) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
+    decoder_layer_cache_dtypes(qwen3_5_config, DecoderCacheTensorDtype::Float32)
+}
+
+fn decoder_layer_cache_dtypes(
+    qwen3_5_config: &Qwen3_5Config,
+    activation_state_dtype: DecoderCacheTensorDtype,
+) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
+    (0..qwen3_5_config.layer_count() as usize)
+        .map(|decoder_layer_index| {
+            if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
+                Qwen3_5DecoderLayerCacheDtypes::FullAttention {
+                    keys: activation_state_dtype,
+                    values: activation_state_dtype,
+                }
+            } else {
+                Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
+                    convolution: activation_state_dtype,
+                }
+            }
+        })
+        .collect()
 }
 
 pub fn persistent_visual_embedding_model_contract() -> PersistentVisualEmbeddingModelContract {

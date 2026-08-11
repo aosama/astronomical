@@ -33,6 +33,11 @@ impl Qwen3_5Model {
     }
 
     pub(crate) fn resume_expert_retention_after_request_memory_pressure(&self) -> bool {
+        // Complete residency has no page-growth ceiling to release. Promotion
+        // already froze native retention, which must remain dormant in this mode.
+        if self.resident_expert_weights.is_some() {
+            return false;
+        }
         let Some(expert_pager) = self.expert_pager.as_ref() else {
             return false;
         };

@@ -5,6 +5,17 @@ use thiserror::Error;
 pub enum DecoderCacheLayoutError {
     #[error("model configuration {dimension_name} dimension does not fit usize")]
     ModelConfigurationDimensionOutsideUsizeRange { dimension_name: &'static str },
+    #[error(
+        "decoder-cache execution dtype count {actual_layer_count} differs from model layer count {expected_layer_count}"
+    )]
+    ExecutionDtypeLayerCountMismatch {
+        expected_layer_count: usize,
+        actual_layer_count: usize,
+    },
+    #[error(
+        "decoder-cache layer {layer_index} execution dtype family differs from model attention family"
+    )]
+    ExecutionDtypeLayerFamilyMismatch { layer_index: usize },
     #[error("decoder-cache layer {layer_index} has no composite components")]
     EmptyComposite { layer_index: usize },
     #[error("decoder-cache layer {layer_index} append-only attention has zero capacity growth")]
@@ -78,7 +89,7 @@ pub enum DecoderCacheLayoutError {
     #[error("persistent prompt-cache block payload byte count overflowed")]
     PersistentPromptCacheBlockPayloadByteCountOverflow,
     #[error(
-        "decoder-cache layer {layer_index} append-only attention keys and values have different contracts"
+        "decoder-cache layer {layer_index} append-only attention keys and values have different geometry"
     )]
     AttentionTensorContractMismatch { layer_index: usize },
 }

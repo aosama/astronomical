@@ -1,9 +1,10 @@
 //! One terminal cleanup path for success, rejection, cancellation, and failure.
 //!
 //! Request-owned lazy arrays are dropped before expert-retention policy resumes
-//! and before allocator cleanup. This ordering lets completed native snapshots
-//! release page ownership and guarantees that published idle telemetry reflects
-//! post-request memory rather than the final token's in-flight graph.
+//! and before allocator cleanup. The cleaned idle baseline can then attempt
+//! complete residency. Final telemetry is sampled only after that attempt, so it
+//! reports the owner that will serve the next request rather than the final
+//! token's in-flight graph or a transient paged state.
 
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
@@ -13,6 +14,7 @@ use crate::{
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
+use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 
 impl Qwen3_5EngineState {
     pub(super) fn collect_current_mlx_memory_telemetry(
@@ -116,6 +118,21 @@ impl Qwen3_5EngineState {
                 self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
+        // Promotion is an idle optimization, not a condition for completing the
+        // user's request. A failure remains visible in logs while the transition
+        // helper restores a usable paged fallback.
+        if let Some(model) = self.model.as_mut()
+            && let Err(resident_promotion_error) = model.try_promote_experts_to_resident(
+                Qwen3_5ExpertResidencyTransitionReason::RequestFinalization,
+                &mut performance_attribution,
+            )
+        {
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %resident_promotion_error,
+                "could not restore complete expert residency after request cleanup"
+            );
+        }
         if performance_attribution.is_enabled()
             && let Some(model) = self.model.as_ref()
         {

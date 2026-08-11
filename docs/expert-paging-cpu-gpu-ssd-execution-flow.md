@@ -1,6 +1,6 @@
-# Expert Paging CPU, GPU, and SSD Execution Flow
+# Expert Residency and Paging CPU, GPU, and SSD Execution Flow
 
-This records the verified demand-only Qwen3.5 and Qwen3.6 affine and native bfloat16 expert path.
+This records the verified automatic Qwen3.5 and Qwen3.6 affine and native bfloat16 expert paths.
 
 ## Labels
 
@@ -8,24 +8,74 @@ This records the verified demand-only Qwen3.5 and Qwen3.6 affine and native bflo
 - GPU means graphics processing unit work encoded through Metal.
 - SSD means solid-state-drive storage.
 - MLX means Machine Learning framework for Apple silicon.
+- MTP means multi-token prediction.
 - I/O means input/output work.
 - ID means identifier.
 - NAX is MLX's internal name for its Metal 4 matrix kernels.
 - Graph construction creates lazy MLX arrays; it does not prove execution.
 
-## Production flow
+## Automatic mode selection
+
+- Every sparse model retains one validated native pager as its fallback.
+- After core model loading and allocator cleanup, admission compares fresh MLX active bytes plus the exact complete expert payload with the stable memory ceiling.
+- `Resident` installs every target and optional multi-token-prediction expert layer as complete contiguous MLX arrays. `Paged` leaves the native cache demand-only.
+- Selection uses artifact geometry and live memory, never model names or quantization labels.
+
+## Ownership invariants
+
+- Every sparse model keeps the validated pager for fallback, including while complete arrays are resident.
+- `resident_expert_weights = Some` means every target and optional MTP sparse layer is resident. `None` means every sparse layer uses paging.
+- Pager plan order is target decoder layers followed by the optional MTP layer. Both owners use those indices and the router's global expert IDs unchanged.
+- The complete owner contains packed or native weights plus every required scale and bias. Its payload count excludes MLX allocator metadata and temporary graph work.
+- Source descriptors remain open with the pager. Each promotion clones descriptors for one attempt, so failure cannot consume paging fallback ownership.
+
+## Admission arithmetic
+
+- Idle promotion projects `fresh active MLX bytes + exact complete expert payload bytes` against the stable ceiling.
+- Resident request admission projects current active bytes, exact context reservation, direct cache-publication workspace when enabled, and any draft page reserve. Target page reserve is zero because the complete owner is already active.
+- If that projection fails, admission demotes the complete owner and repeats from fresh active bytes with one largest target top-K expert page reserved.
+- Later prefill or decode growth uses exact persistent-state growth, exact temporary workspace, and a target page reserve only in paged mode. It demotes and reprojects before page-level reclamation or rejection.
+- No formula contains a model-name threshold or laptop-specific memory constant.
+
+## Resident production flow
+
+1. **CPU: materialize complete layers.** Rust clones validated source descriptors into transition-scoped safetensors maps, binds exact source data types and affine profiles, evaluates one complete layer at a time, and publishes the owner only after every layer succeeds.
+2. **CPU: build common routing.** Router projection, softmax, top-K selection, sorting, score normalization, activation, weighted sum, and shared-expert combination remain common with paging.
+3. **GPU: execute contiguous projections.** Standard MLX gathered dense or affine matrix multiplication consumes original global expert identifiers against complete gate, up, and down arrays.
+4. **CPU and SSD: remain dormant.** Resident inference performs no native cache preparation, page publication, or expert source read.
+
+## Paged production flow
 
 1. **CPU: build routing graph.** Rust builds lazy router projection, softmax, top-K selection, score gathering, and normalization operations.
 2. **CPU: reserve the possible route.** Before lazy route synchronization, Rust bounds distinct experts by route assignments and layer capacity, projects that payload against live MLX memory, and lowers optional retention when needed. The separate initial request reserve remains one model-derived top-K page.
 3. **Rust to C++: pass the route unchanged.** Rust gives the lazy selected-index MLX array to the native cache. Original indices remain available for projection and score alignment.
 4. **GPU: reduce route evidence.** Native C++ builds a fixed bitmap. One thread per assignment atomically marks one expert bit and records an out-of-range value in a guard word.
-5. **CPU and GPU: synchronize when needed.** An incomplete layer evaluates and copies the bitmap once. Evaluation executes required router dependencies. A fully resident layer defers that synchronization and retains the lazy bitmap as pending recency evidence.
+5. **CPU and GPU: synchronize when needed.** An incomplete native-cache layer evaluates and copies the bitmap once. Evaluation executes required router dependencies. A completely retained native-cache layer defers that synchronization and retains the lazy bitmap as pending recency evidence.
 6. **CPU: apply cache policy.** Native C++ looks up `(layer index, expert ID)` entries, updates recency, and protects the routed set. It first evicts the current layer's oldest unprotected slots until that layer fits its proportional share, then prefers globally oldest entries from layers above their shares if the global ceiling still requires space. Pending complete-layer evidence is reconciled before eviction.
 7. **CPU and SSD: fill missing slots.** Each missing expert receives one aligned MLX `PagedBufferSlot`. One batched `read_paged_buffer_ranges` call reads its gate, up, and down tensor ranges directly into the slot. The slot is committed before immutable typed views are created.
 8. **CPU: publish immutable snapshots.** Changed layers rebuild metadata snapshots over retained slots. A snapshot contains no copied expert payload and keeps every referenced slot alive through lazy GPU execution.
 9. **GPU: execute gathered projections.** Native affine or bfloat16 gathered matrix multiplication consumes original global expert IDs. Prompt processing uses sorted assignments; decode can use unsorted assignments. Affine execution applies MLX's common activation, scale, and bias output type without widening retained page storage.
 10. **GPU: select the projection kernel.** Large sorted affine work uses NAX matrix kernels when available and all operands share its supported type. Other affine work uses generic matrix or gathered matrix-vector kernels that promote independently typed scale and bias values while loading compute tiles. Native bfloat16 uses paged gathered matrix kernels.
 11. **GPU: combine outputs.** Existing activation, weighted-sum, shared-expert, and sparse/shared combination operations produce the next hidden state.
+
+## Whole-model transitions
+
+- Promotion synchronizes the model stream, freezes and empties native retention, clears reclaimable allocator storage, checks the exact complete payload, materializes a local candidate, then publishes `Resident` atomically.
+- A non-fitting or source-validation-failed promotion resumes native retention and keeps mode `Paged`. Runtime cleanup failures remain fatal.
+- Demotion synchronizes the model stream, drops the complete resident owner, clears allocator storage, then resumes native retention.
+- Startup, request admission, later request pressure, request finalization, speculative-prefill draft loading, and live ceiling changes use these same boundaries. No partial resident model exists.
+
+| Trigger | Transition rule | Published state |
+| --- | --- | --- |
+| Startup | Clean allocator storage, then attempt exact complete-payload admission. | `Resident` when the candidate fits; otherwise `Paged`. |
+| Initial request admission | Keep residency when the exact request fits; otherwise demote before request arrays are allocated. | Mode used by the first sparse forward. |
+| Later request pressure | Demote and repeat the unchanged growth projection from a fresh paged baseline. | `Paged` for the remaining pressured request. |
+| Request finalization | Drop request arrays, synchronize, clear allocator storage, then attempt promotion. | Idle mode prepared for the next request. |
+| Ceiling decrease | Demote first when current resident active bytes exceed the requested ceiling, then reduce native retention before changing MLX limits. | Safe mode beneath the accepted ceiling. |
+| Ceiling increase | Increase MLX and native capacity first, then attempt promotion. | `Resident` only after complete publication. |
+| Request-scoped draft loading | Demote the target or empty its pages, load the draft, and attempt draft residency only for the copy that performs scoring. | Target remains paged until finalization recovery. |
+
+Readiness, model-swap, memory-limit, generation-finalization, and idle telemetry publish the selected state directly. Consumers do not infer mode from byte totals.
 
 ## Route larger than retention capacity
 
@@ -41,7 +91,7 @@ The cache reuses routed hits, loads only missing routed experts, and returns an 
 - Per-layer eviction protects each layer's decode working set. Global fallback prefers layers above their proportional shares, then uses access sequence, layer index, and expert ID.
 - A route larger than its layer share executes ephemerally and cannot displace another layer's retained working set.
 - Request pressure can freeze growth, lower the ceiling, reclaim exact bytes, and later resume retention. While frozen, a lower route-specific ceiling evicts immediately; only a higher ceiling is deferred. Resume installs the newest configured ceiling, and resident payload never remains above the active ceiling.
-- Startup, cleanup, and memory-limit changes never prewarm experts.
+- The paged native cache never prewarms experts; only router-requested pages enter it.
 
 ## Storage and validation
 
@@ -61,12 +111,17 @@ The cache reuses routed hits, loads only missing routed experts, and returns an 
 - Source-read elapsed time is collected only when performance attribution is enabled.
 - `native_paged_expert_projection_graph_count` reports native paged gathered projection graphs.
 - `paged_moe_graph_construction` measures paged projection and combination graph construction, not GPU completion.
+- `resident_moe_graph_construction` measures contiguous resident projection and combination graph construction.
+- `resident_weight_materialization_synchronization_wait` covers attributed complete-weight materialization.
 - Positional-read timing measures host file-service work; the operating-system page cache may satisfy it.
 
 ## Source map
 
-- Routing and native preparation: `crates/model-serving/src/qwen3_5_moe/model/paged_forward.rs`.
+- Common routing and mode selection: `crates/model-serving/src/qwen3_5_moe/model/forward.rs`.
+- Resident projection execution: `crates/model-serving/src/qwen3_5_moe/model/resident_execution.rs`.
 - Native projection orchestration: `crates/model-serving/src/qwen3_5_moe/model/paged_execution.rs`.
+- Whole-model transitions: `crates/model-serving/src/qwen3_5_moe/model/expert_residency_transition.rs`.
+- Resident ownership and loading: `crates/model-serving/src/qwen3_5_moe/expert_residency/`.
 - Pager ownership and pressure integration: `crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager/native_cache.rs`.
 - Source descriptor construction: `crates/model-serving/src/qwen3_5_moe/expert_paging/expert_pager_construction.rs`.
 - Rust native ownership: `crates/runtime-integration/src/mlx_native_expert_cache.rs`.

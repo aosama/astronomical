@@ -116,6 +116,7 @@
 - A slice may retain a large backing allocation. Copy small long-lived convolution state into contiguous storage, as upstream MLX does.
 - Full-attention key-value storage should grow by a visible configured step, defaulting to 256 tokens, update only the new slice, and expose only the used prefix to attention. Per-token concatenation causes quadratic copying and device starvation.
 - Persistent decoder-cache sequence-state files must save only tensors with a declared token axis; fixed or circular state must store the exact block-boundary snapshot separately. Do not fake a one-token rollback for recurrent state.
+- Derive persistent decoder-cache dtypes after binding model weights. Machine Learning framework for Apple silicon promotes activations, affine scales, affine biases, and normalization weights through `result_type`; a configuration-level BF16 activation label can therefore produce FP32 key, value, or convolution state. Using the live per-layer dtype flow keeps serialization validation, block sizing, memory admission, and restoration exact without hidden casts.
 - Emit persistent prompt-cache lookup counters immediately after request admission, before long prompt processing begins. Completion-only publication leaves the prior request's miss ratio visible during an active hit and misrepresents reuse performance even though the engine restored state correctly.
 - Persistent prompt-cache reuse requires an exact token prefix. Qwen tool definitions occupy the leading system preamble, so changing the tool inventory invalidates every later key-value state even when chat messages are unchanged. Clients should freeze tool definitions for a conversation.
 - Post-build validation must wait for active serving to become idle, run its probe in an isolated daemon session, then start a clean interactive daemon. Otherwise deployment interrupts requests and exposes validation misses as user traffic.
@@ -159,13 +160,14 @@
 - Bound on-demand model loading and report a recoverable failure over inter-process communication. A bad discovered artifact must not stall the request queue or force a healthy idle worker to exit.
 - Preserve the model-load cause chain across the worker boundary and return a dedicated local application programming interface error. A generic worker-unavailable response hides correctable artifact or quantization failures and encourages unnecessary worker restarts.
 - Keep disabled diagnostic state pointer-sized. Inline fixed arrays enlarge every variant of a command enum and make each decode command pay for diagnostics; allocate the bounded accumulator only when attribution is enabled.
+- Handle valid process-scoped telemetry and configuration events while waiting for a model-swap acknowledgement. Periodic idle sampling can be queued before the swap command; rejecting it terminates a healthy worker and repeats model loading.
 
 ## Expert paging
 
 - Cache each expert in one aligned Machine Learning framework for Apple silicon paged-buffer slot. Typed views must retain that slot without copying payload bytes or retaining a larger multi-expert allocation.
 - Pass the lazy router-selected array directly to native cache preparation. Extract distinct expert identifiers once in C++, preserve the original array for score alignment and gathered products, and keep Rust outside the routed payload path.
 - Submit all cold tensor ranges for one expert through one product-neutral Machine Learning framework for Apple silicon range-read batch. Reopening files or allocating one buffer per tensor repeats setup and fragments residency.
-- A demand-only expert-cache experiment must route both prompt processing and decode through ExpertPager and admit only router-requested `(layer, expert)` owners. Startup, request finalization, and memory-limit changes must not populate unrelated experts, or the experiment no longer isolates route-driven caching.
+- A demand-only native expert-cache experiment must route both prompt processing and decode through ExpertPager and admit only router-requested `(layer, expert)` owners. Whole-model resident arrays are a separate owner and must not populate native cache slots.
 - When an optional MTP layer shares the expert pager, construct its page plan from the validated MTP tensor-to-shard map as well as the language-trunk map. Keeping those inventories separate for artifact validation does not make the trunk map sufficient for MTP page loading.
 - Put paged-buffer allocation, direct range reads, immutable views, and shared-buffer lifetime in Machine Learning framework for Apple silicon core. Keep model-specific projection names, layer-balanced recency, and retention policy in Astronomical C++.
 - MLX-C managed-data constructors can let MLX wrap page-aligned memory with a shared Metal buffer, but a memory map is not automatically a valid typed tensor. Safetensors payload starts need not be aligned to the tensor dtype.
@@ -214,7 +216,14 @@
 - A soft transient-recovery reserve must freeze new one-expert admission for the active request because asynchronous prefill pages can consume the only recovery room. Request finalization releases that ceiling; it does not proactively load experts.
 - A frozen retention ceiling may defer growth but must never defer a reduction. Apply a lower route-specific ceiling immediately, reconcile pending recency evidence, evict to the new limit, and publish replacement snapshots before loading more pages. Deferring the reduction can leave reported resident payload above policy and consume the allocation room reserved for the next routed page.
 - Scripted REST executors prove HTTP serialization, not deployability. Keep one ignored release-model REST litmus that sends consecutive long Chat and Responses requests through the public TCP surface to the same worker, includes representative tool schemas and prompt-cache reuse, and requires the worker to remain ready afterward. A soft learned-transient shortfall must freeze optional retention growth for that request even when some layers are already paged; finalization releases the request ceiling before normal live recovery.
-- Expert-memory logs must report one-expert entry count, payload bytes, hits, misses, evictions, disk page loads, and disk batch loads. Sparse models remain paged because future router choices can always require an uncached expert.
+- Expert-memory logs must report mode, one-expert entry count, payload bytes, hits, misses, evictions, disk page loads, and disk batch loads. A sparse model may use complete contiguous resident arrays when its exact idle footprint fits; otherwise it uses demand-only paging.
+- Prefer complete contiguous MLX expert arrays over prefilled indirect cache slots when the whole sparse payload fits. Standard gathered matrix multiplication avoids native route synchronization, page metadata, and solid-state-drive reads.
+- Make resident-to-paged transitions whole-model and stream-safe. Drop the complete owner before allocator cleanup and native retention resumption; partial resident layers create two competing policies.
+- Select residency from fresh active memory plus exact artifact-derived payload, never model identity, bit labels, or machine-specific thresholds.
+- Load resident candidates from transition-scoped clones of validated source descriptors. Evaluating arrays obtained from long-lived shard maps can leave demoted expert buffers owned and make memory reclamation ineffective.
+- Every failed promotion must resume native retention. A typed source or capacity failure must leave a usable paged model rather than a frozen cache.
+- Do not keep an immutable model borrow across memory admission. Admission may demote the complete owner; graph construction must re-read the model afterward and observe the selected mode.
+- Do not materialize complete experts for a speculative-prefill draft loaded only for startup compatibility validation. Promote the request-scoped copy that performs scoring after target expert memory is released.
 - Emit one final post-cleanup MLX snapshot after releasing a request pressure ceiling so the menu does not retain obsolete request-context memory.
 - Cancellation also finalizes engine state. Preserve and publish its final residency and memory snapshot rather than discarding it, and attribute the snapshot timing independently when performance attribution is enabled.
 - Avoid the “1978 Volvo” policy: do not sacrifice hot retained experts merely to maximize a generic safety reserve. Reclaim only measured allocation shortfall after reclaimable allocator memory is cleared, keep the reason and exact bytes observable, and preserve performance whenever the next operation can fit beneath the machine-derived cap.
@@ -345,8 +354,8 @@
 
 - A user-selected MLX memory ceiling must remain one authority: update the MLX wired, active, and allocator-cache process limits together, then update request admission, adaptive growth, and expert paging from that same exact byte cap. Decimal configuration gigabytes use 1,000,000,000 bytes.
 
-- When lowering a live ceiling, evict retained one-expert payload first, synchronize the model graphics-processor stream, clear reclaimable allocator memory, and verify active bytes before lowering native MLX limits.
+- When lowering a live ceiling, demote a complete resident owner or evict retained one-expert payload first, synchronize the model graphics-processor stream, clear reclaimable allocator memory, and verify active bytes before lowering native MLX limits.
 
-- When raising a live ceiling, change native MLX limits before expanding one-expert admission capacity. Do not prewarm experts; later router selections should populate the additional capacity.
+- When raising a live ceiling, change native MLX limits before attempting exact whole-model promotion. If the model still does not fit, keep individual native pages demand-only.
 
 When native MLX is slower than the Python reference, assume graph or kernel-path divergence first. Compare source, disable one reference optimization, inspect compiled feature gates, and profile evaluation before redesigning architecture.

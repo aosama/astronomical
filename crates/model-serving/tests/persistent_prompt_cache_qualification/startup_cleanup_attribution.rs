@@ -52,7 +52,7 @@ async fn run_startup_cleanup_attribution_journey() {
     )
     .expect("the qualification should seed one obsolete format artifact");
 
-    let (mut qwen3_5_engine, _, _, persistent_prompt_cache_model_contract) =
+    let (mut qwen3_5_engine, _, _, prompt_cache_block_token_count) =
         load_persistent_prompt_cache_qualification_engine(
             &model_directory,
             persistent_prompt_cache_directory.path(),
@@ -128,10 +128,7 @@ async fn run_startup_cleanup_attribution_journey() {
         )
         .await
         .expect("the warm Romeo and Juliet request should start");
-    assert!(
-        warm_generation_start.cached_token_count()
-            >= persistent_prompt_cache_model_contract.block_token_count() as u32
-    );
+    assert!(warm_generation_start.cached_token_count() >= prompt_cache_block_token_count as u32);
     let warm_diagnostics = warm_generation_start
         .persistent_prompt_cache_diagnostics()
         .expect("the warm request should report prompt-cache diagnostics");

@@ -90,6 +90,25 @@ impl RequestDecoderStateStack {
                 description: "full-attention KV-state growth tokens must be positive".to_owned(),
             });
         }
+        // This config-only constructor is retained for synthetic tests that have
+        // no bound weights to inspect. Production model loading derives each
+        // layer's exact dtype from the live affine graph before creating state.
+        let configured_activation_cache_dtype =
+            crate::decoder_cache::DecoderCacheTensorDtype::BFloat16;
+        let decoder_layer_cache_dtypes = (0..qwen3_5_config.layer_count() as usize)
+            .map(|decoder_layer_index| {
+                if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
+                    crate::qwen3_5::decoder::Qwen3_5DecoderLayerCacheDtypes::FullAttention {
+                        keys: configured_activation_cache_dtype,
+                        values: configured_activation_cache_dtype,
+                    }
+                } else {
+                    crate::qwen3_5::decoder::Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
+                        convolution: configured_activation_cache_dtype,
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
         let decoder_cache_layout =
             crate::qwen3_5::decoder::cache_layout::qwen3_5_decoder_cache_layout(
                 qwen3_5_config,
@@ -98,6 +117,7 @@ impl RequestDecoderStateStack {
                         "full-attention key/value growth tokens exceed the usize range",
                     )
                 })?,
+                &decoder_layer_cache_dtypes,
             )
             .map_err(|decoder_cache_layout_error| {
                 request_decoder_state_error_from_string(format!(

@@ -22,7 +22,7 @@ pub use artifacts::{
 pub use configuration::{
     ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
 };
-pub use decoder::qwen3_5_decoder_cache_layout;
+pub use decoder::{Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout};
 #[cfg(feature = "direct-mlx")]
 pub use decoder::{
     Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint,

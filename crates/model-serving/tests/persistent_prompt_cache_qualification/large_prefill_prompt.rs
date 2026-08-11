@@ -5,16 +5,18 @@ use astronomical_model_serving::Qwen3_5Tokenizer;
 
 pub(super) const LARGE_PREFILL_QUALIFICATION_OUTPUT_TOKEN_COUNT: usize = 1_024;
 const MINIMUM_LARGE_PREFILL_QUALIFICATION_PROMPT_TOKEN_COUNT: usize = 16_384;
+const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
+    "../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+);
 
 pub(super) fn representative_long_generation_prompt_token_ids(
     prompt_tokenizer: &Qwen3_5Tokenizer,
     model_id: &str,
 ) -> Vec<u32> {
-    let public_domain_context_sentence = "The observer records the changing sky, compares each measurement, and explains the evidence. ";
-    for context_sentence_repetition_count in (1_024..=4_096).step_by(256) {
+    for source_repetition_count in 3..=8 {
         let prompt_content = format!(
-            "Background notes:\n\n{}\n\nWrite a numbered study guide with at least 2,000 distinct entries. Each entry must contain one complete explanatory sentence. Continue until every entry is present and do not conclude early.",
-            public_domain_context_sentence.repeat(context_sentence_repetition_count),
+            "Romeo and Juliet source material:\n\n{}\n\nWrite a detailed study guide that preserves the characters, relationships, major events, and tragic ending.",
+            ROMEO_AND_JULIET_SOURCE.repeat(source_repetition_count),
         );
         let prepared_request = prompt_tokenizer
             .prepare_chat(
@@ -44,5 +46,5 @@ pub(super) fn representative_long_generation_prompt_token_ids(
             return prepared_request.input_token_ids().to_vec();
         }
     }
-    panic!("the representative qualification prompt did not reach 16,384 input tokens")
+    panic!("the Romeo and Juliet qualification prompt did not reach 16,384 input tokens")
 }

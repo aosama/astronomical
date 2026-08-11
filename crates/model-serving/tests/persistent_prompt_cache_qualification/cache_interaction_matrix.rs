@@ -116,16 +116,15 @@ async fn run_qualification_cell(qualification_cell: CacheInteractionQualificatio
         PrefillSizingMode::Fixed => Some(FIXED_PREFILL_CHUNCK_TOKENS),
         PrefillSizingMode::Optimized => None,
     };
-    let (mut qwen3_5_engine, _, _, persistent_prompt_cache_model_contract) =
+    let (mut qwen3_5_engine, _, _, prompt_cache_block_token_count) =
         load_persistent_prompt_cache_qualification_engine(
             &model_directory,
             persistent_prompt_cache_directory.path(),
             fixed_prefill_chunck_tokens,
         )
         .await;
-    let prompt_token_ids = persistent_prompt_cache_eligible_prompt_token_ids(
-        persistent_prompt_cache_model_contract.block_token_count() * 2 + 16,
-    );
+    let prompt_token_ids =
+        persistent_prompt_cache_eligible_prompt_token_ids(prompt_cache_block_token_count * 2 + 16);
 
     let (cold_cached_token_count, cold_generated_token_ids) = run_one_token_request(
         &mut qwen3_5_engine,
@@ -179,8 +178,7 @@ async fn run_qualification_cell(qualification_cell: CacheInteractionQualificatio
     let (warm_cached_token_count, warm_generated_token_ids) =
         run_one_token_request(&mut qwen3_5_engine, warm_request_id, &prompt_token_ids).await;
     assert!(
-        warm_cached_token_count
-            >= (persistent_prompt_cache_model_contract.block_token_count() * 2) as u32,
+        warm_cached_token_count >= (prompt_cache_block_token_count * 2) as u32,
         "the pre-existing cache restored {warm_cached_token_count} tokens but must restore both complete prompt blocks"
     );
     assert_eq!(

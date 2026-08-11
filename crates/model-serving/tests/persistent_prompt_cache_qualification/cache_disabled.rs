@@ -25,7 +25,7 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");
     let mlx_memory_limits =
-        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+        crate::common::sample_machine_model_artifact_qualification_mlx_memory_limits().await;
     let mut cache_disabled_chunking_configuration =
         crate::common::standard_worker_chunking_configuration();
     // This value deliberately violates the model's persistent-state alignment. Disabled cache

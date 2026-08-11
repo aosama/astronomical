@@ -15,6 +15,7 @@ use crate::qwen3_5::multi_token_prediction::{
     materialize_optional_weights, qwen3_5_mtp_runtime_state_after_load,
 };
 use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model, Qwen3_5MtpArtifactCapability};
+use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
 
 use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup;
@@ -131,6 +132,7 @@ impl Qwen3_5EngineState {
                     resolved_target_token_identifier_mapping_digest,
                     target_max_output_tokens,
                     self.memory_limits,
+                    false,
                     &mut model_loading_performance_attribution,
                 )?;
             let resolved_model_id = model_id.clone().ok_or_else(|| {
@@ -317,16 +319,47 @@ impl Qwen3_5EngineState {
                 persistent_prompt_cache.as_deref(),
                 speculative_prefill_draft_persistent_prompt_cache.as_deref(),
             )?;
+            let speculative_prefill_draft_is_available = speculative_prefill_draft_model.is_some();
+            let speculative_prefill_draft_supports_processed_visual_images =
+                speculative_prefill_draft_model.as_ref().is_some_and(
+                    |(draft_model, _draft_model_revision)| {
+                        draft_model
+                            .vision_model()
+                            .is_some_and(|draft_vision_model| {
+                                model.vision_model().is_some_and(|target_vision_model| {
+                                    draft_vision_model
+                                        .accepts_processed_images_from(target_vision_model)
+                                })
+                            })
+                    },
+                );
+            let loaded_draft_model_revision =
+                speculative_prefill_draft_model.map(|(draft_model, draft_model_revision)| {
+                    drop(draft_model);
+                    draft_model_revision
+                });
+            model
+                .runtime()
+                .synchronize_gpu_stream_and_clear_allocator_cache()
+                .map_err(qwen3_5_runtime_error)?;
+            // Core, vision, and optional draft loading are complete. Only now is
+            // active memory a stable baseline for exact complete-expert admission.
+            model
+                .try_promote_experts_to_resident(
+                    Qwen3_5ExpertResidencyTransitionReason::Startup,
+                    &mut model_loading_performance_attribution,
+                )
+                .map_err(qwen3_5_runtime_error)?;
             Ok((
                 model,
                 persistent_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
                 speculative_prefill_draft_persistent_prompt_cache,
-                (
-                    speculative_prefill_draft_model,
-                    speculative_prefill_unavailable_reason,
-                ),
+                speculative_prefill_draft_is_available,
+                speculative_prefill_draft_supports_processed_visual_images,
+                loaded_draft_model_revision,
+                speculative_prefill_unavailable_reason,
             ))
         })();
 
@@ -337,7 +370,10 @@ impl Qwen3_5EngineState {
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
                 speculative_prefill_draft_persistent_prompt_cache,
-                (speculative_prefill_draft_model, speculative_prefill_unavailable_reason),
+                speculative_prefill_draft_is_available,
+                speculative_prefill_draft_supports_processed_visual_images,
+                loaded_draft_model_revision,
+                speculative_prefill_unavailable_reason,
             )) => {
                 self.model_id = model_id.clone();
                 self.model_revision = model_revision.clone();
@@ -348,39 +384,12 @@ impl Qwen3_5EngineState {
                 self.persistent_prompt_cache = persistent_prompt_cache;
                 self.speculative_prefill_draft_persistent_prompt_cache =
                     speculative_prefill_draft_persistent_prompt_cache;
-                let speculative_prefill_draft_is_available =
-                    speculative_prefill_draft_model.is_some();
-                let speculative_prefill_draft_supports_processed_visual_images =
-                    speculative_prefill_draft_model.as_ref().is_some_and(
-                        |(draft_model, _draft_model_revision)| {
-                            draft_model
-                                .vision_model()
-                                .is_some_and(|draft_vision_model| {
-                                    model.vision_model().is_some_and(|target_vision_model| {
-                                        draft_vision_model
-                                            .accepts_processed_images_from(target_vision_model)
-                                    })
-                                })
-                        },
-                    );
-                let (speculative_prefill_draft_model, loaded_draft_model_revision) =
-                    speculative_prefill_draft_model.map_or(
-                        (None, None),
-                        |(draft_model, draft_model_revision)| {
-                            drop(draft_model);
-                            (None, Some(draft_model_revision))
-                        },
-                    );
-                self.speculative_prefill_draft_model = speculative_prefill_draft_model;
+                self.speculative_prefill_draft_model = None;
                 self.speculative_prefill_draft_model_revision = loaded_draft_model_revision;
                 self.speculative_prefill_draft_is_available =
                     speculative_prefill_draft_is_available;
                 self.speculative_prefill_draft_supports_processed_visual_images =
                     speculative_prefill_draft_supports_processed_visual_images;
-                model
-                    .runtime()
-                    .synchronize_gpu_stream_and_clear_allocator_cache()
-                    .map_err(qwen3_5_runtime_error)?;
                 self.speculative_prefill_token_identifier_mapping_digest =
                     target_token_identifier_mapping_digest;
                 self.speculative_prefill_runtime_state = if !self.speculative_prefill.enabled {

@@ -15,12 +15,14 @@ Read the product story and public engineering reports at [aosama.github.io/astro
 A mixture-of-experts model may contain many expert weights while activating only a small selection for each token. Astronomical takes advantage of that structure instead of treating the complete model as one permanent RAM allocation.
 
 - **Choose one model-memory ceiling.** On a 32 GB Mac, for example, a lower ceiling such as 16 GB can leave room for macOS and everyday applications.
-- **Stream selected experts from SSD.** Router-selected expert pages move into MLX memory when needed instead of requiring every sparse expert to remain resident.
-- **Keep hot work hot.** Complete expert layers remain resident when they safely fit; fine-grained pages are reclaimed first when context needs memory.
+- **Stream selected experts from SSD.** When the complete sparse payload does not fit, router-selected expert pages move into MLX memory on demand.
+- **Keep the complete model hot when it fits.** All sparse experts use contiguous resident arrays when safe; context pressure switches the whole model to paging and idle recovery can restore residency.
 - **Adapt automatically.** Resident and RAM plus SSD streaming are observed outcomes, not modes the user has to tune.
 - **See the truth.** The menu reports the effective ceiling, expert residency, model core, runtime work, live context, headroom, GPU utilization, prompt progress, and prompt reuse.
 
 The model core, active context, selected expert pages, and temporary execution work must still fit within the configured ceiling. Model compatibility and practical speed therefore depend on the artifact, context length, SSD, and available memory. Astronomical is designed to adapt rather than promise that every model fits every Mac.
+
+Expert mode always describes the complete sparse payload, never a mixture of resident and paged layers. A model can be resident while idle, switch to paging before or during a large request, and return to resident after synchronized request cleanup when the complete payload fits again.
 
 ## Performance from the whole stack
 
@@ -28,7 +30,7 @@ Astronomical is not a generic server wrapped around an off-the-shelf model loop.
 
 | Optimization | What it does for the user |
 | --- | --- |
-| Automatic sparse-expert paging | Uses SSD capacity to reduce the amount of sparse expert weight data that must remain in model RAM. |
+| Automatic sparse-expert residency and paging | Keeps the complete sparse model resident when safe and uses SSD capacity when memory is needed elsewhere. |
 | Adaptive memory admission | Projects context growth and observed transient work before allocation, then reclaims only the expert memory required for the next operation. |
 | Online prefill chunk optimization | Learns useful prompt-processing chunk sizes by context bucket instead of hardwiring one value for every model and Mac. |
 | Persistent prompt reuse | Restores validated prompt state, recurrent snapshots, and projected image embeddings from a bounded SSD store so repeated prefixes need less work. |

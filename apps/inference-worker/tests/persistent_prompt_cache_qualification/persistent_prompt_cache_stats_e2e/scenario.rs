@@ -3,7 +3,7 @@ use super::live_progress::{post_chat_completion_with_live_progress, wait_until_r
 use super::*;
 
 /// Parameterizes the E2E cache stats test so the same runner covers both the
-/// 2K-word and 50K-word scenarios without duplicating logic.
+/// representative Romeo and Juliet scenarios without duplicating logic.
 pub(super) struct CacheStatsE2eCase {
     /// Short label used in all `eprintln!` log lines, e.g. `"2k"` or `"50k"`.
     test_name: &'static str,
@@ -14,20 +14,16 @@ pub(super) struct CacheStatsE2eCase {
     /// Maximum output tokens requested. Kept small so generation finishes fast;
     /// the test cares about prefill and cache behavior, not generation quality.
     maximum_output_tokens: u16,
-    /// Minimum `persistent_prompt_cache_tokens_saved` the second request must
-    /// report to prove a cache hit restored at least one block.
-    expected_minimum_tokens_saved: u64,
     /// Wall-clock timeout for the entire test (model load + two requests).
     timeout: Duration,
 }
 
-pub(super) fn two_thousand_word_case() -> CacheStatsE2eCase {
+pub(super) fn five_thousand_word_case() -> CacheStatsE2eCase {
     CacheStatsE2eCase {
-        test_name: "2k",
-        prompt: TWO_THOUSAND_WORD_PROMPT,
-        prompt_word_count: 2_000,
+        test_name: "romeo-and-juliet-5k",
+        prompt: FIVE_THOUSAND_WORD_ROMEO_AND_JULIET_PROMPT,
+        prompt_word_count: 5_000,
         maximum_output_tokens: 16,
-        expected_minimum_tokens_saved: 2_048,
         timeout: Duration::from_secs(115),
     }
 }
@@ -173,6 +169,10 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         cache_stats_after_first_request["persistent_prompt_cache_hits"]
             .as_u64()
             .expect("the cache stats should report hits");
+    let persistent_prompt_cache_block_token_count =
+        cache_stats_after_first_request["persistent_prompt_cache_block_token_count"]
+            .as_u64()
+            .expect("the cache stats should report the exact block token count");
     eprintln!(
         "{log_prefix} phase 1 complete in {:.1}s: hits={} misses={}",
         phase_one_started_at.elapsed().as_secs_f64(),
@@ -304,10 +304,10 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
     );
     assert!(
         persistent_prompt_cache_tokens_saved_after_second_request
-            >= cache_stats_e2e_case.expected_minimum_tokens_saved,
+            >= persistent_prompt_cache_block_token_count,
         "the cache hit should have restored at least {} tokens; \
          tokens_saved={persistent_prompt_cache_tokens_saved_after_second_request}",
-        cache_stats_e2e_case.expected_minimum_tokens_saved
+        persistent_prompt_cache_block_token_count
     );
     assert!(
         persistent_prompt_cache_sequence_state_block_count_after_second_request >= 1,

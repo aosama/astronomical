@@ -3,7 +3,8 @@ use astronomical_ipc_protocol::RequestId;
 use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
 
 use super::super::model::memory_admission::{
-    invalid_request_error, validate_context_memory_admission,
+    context_memory_admission_fits_without_expert_reclamation, invalid_request_error,
+    validate_context_memory_admission,
 };
 use super::memory_admission::record_completed_adaptive_ram_growth;
 use super::{Qwen3_5EngineState, fatal_engine_error};
@@ -12,6 +13,7 @@ use crate::qwen3_5::multi_token_prediction::{
     projected_injected_prediction_growth_bytes, reseed_prediction_after_injected_prefix,
     reset_prediction_after_injection, restore_queued_prediction_prefix_before_injection,
 };
+use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 
 impl Qwen3_5EngineState {
     pub(super) fn inject_input_tokens(
@@ -65,10 +67,6 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         input_token_ids: &[u32],
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         restore_queued_prediction_prefix_before_injection(active_request)?;
         let remaining_output_tokens = active_request
             .maximum_output_tokens
@@ -84,14 +82,50 @@ impl Qwen3_5EngineState {
             ));
         }
 
-        validate_context_memory_admission(
-            model,
-            self.memory_limits,
-            self.context_memory_reservation_bytes_per_token,
-            projected_context_tokens,
-            0,
-            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
-        )?;
+        // Injection extends the same live context as ordinary request admission.
+        // Re-run binary residency admission before mutating decoder state so a
+        // rejection leaves the continuation frontier unchanged.
+        let additional_maximum_expert_page_reservation_bytes =
+            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
+        let resident_model_requires_demotion = {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            model.resident_expert_weights.is_some()
+                && !context_memory_admission_fits_without_expert_reclamation(
+                    model,
+                    self.memory_limits,
+                    self.context_memory_reservation_bytes_per_token,
+                    projected_context_tokens,
+                    0,
+                    additional_maximum_expert_page_reservation_bytes,
+                )?
+        };
+        if resident_model_requires_demotion {
+            self.model
+                .as_mut()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                .demote_resident_experts_to_paging(
+                    Qwen3_5ExpertResidencyTransitionReason::RequestAdmission,
+                    &mut active_request.performance_attribution,
+                )
+                .map_err(InferenceEngineError::from)?;
+        }
+        {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            validate_context_memory_admission(
+                model,
+                self.memory_limits,
+                self.context_memory_reservation_bytes_per_token,
+                projected_context_tokens,
+                0,
+                additional_maximum_expert_page_reservation_bytes,
+            )?;
+        }
 
         // External feedback changes the continuation frontier. Discard both the
         // one-token-ahead successor and its rollback verdict before forwarding
@@ -103,6 +137,10 @@ impl Qwen3_5EngineState {
         )?;
         let final_input_token_position = input_token_ids.len() - 1;
         if final_input_token_position > 0 {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
             let additional_persistent_state_growth_bytes =
                 projected_injected_prediction_growth_bytes(
@@ -138,6 +176,10 @@ impl Qwen3_5EngineState {
                     additional_persistent_state_growth_bytes,
                     0,
                 )?;
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             if should_reseed_prediction_after_injection {
                 let shifted_feedback_token_ids = &input_token_ids[1..];
                 if let Err(prediction_history_error) = reseed_prediction_after_injected_prefix(
@@ -177,10 +219,15 @@ impl Qwen3_5EngineState {
             )?;
         }
         let final_input_token_id = input_token_ids[final_input_token_position];
+        let sparse_experts_are_paged = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .sparse_experts_are_paged();
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
             1,
             should_reseed_prediction_after_injection,
-            model.sparse_experts_are_paged(),
+            sparse_experts_are_paged,
         );
         let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
             adaptive_ram_growth_context,
@@ -189,6 +236,10 @@ impl Qwen3_5EngineState {
             0,
             0,
         )?;
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let next_generated_token = if should_reseed_prediction_after_injection {
             forward_final_injected_prediction_token(model, active_request, final_input_token_id)?
                 .ok_or_else(|| {

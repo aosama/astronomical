@@ -384,10 +384,7 @@ fn validate_layer_layout(
             }
             validate_sequence_tensor(keys, layer_index, layer_tensor_role_names)?;
             validate_sequence_tensor(values, layer_index, layer_tensor_role_names)?;
-            if keys.dtype != values.dtype
-                || keys.dimensions != values.dimensions
-                || keys.sequence_axis != values.sequence_axis
-            {
+            if keys.dimensions != values.dimensions || keys.sequence_axis != values.sequence_axis {
                 return Err(DecoderCacheLayoutError::AttentionTensorContractMismatch {
                     layer_index,
                 });

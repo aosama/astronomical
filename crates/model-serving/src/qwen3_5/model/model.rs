@@ -5,7 +5,9 @@ use astronomical_runtime_integration::{
 };
 
 use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
-use crate::qwen3_5_moe::{Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode};
+use crate::qwen3_5_moe::{
+    Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5ResidentExpertWeights,
+};
 use crate::{DecoderCacheLayout, DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 
 use super::decoder_layer_weights::{
@@ -33,6 +35,8 @@ pub struct Qwen3_5Model {
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
+    /// Complete contiguous expert arrays when the whole sparse payload fits.
+    pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
@@ -55,19 +59,40 @@ impl Qwen3_5Model {
         &self.runtime
     }
 
-    /// Returns cumulative expert memory-cache counters for low-level performance tests.
+    /// Returns one mode-neutral expert-memory snapshot.
+    ///
+    /// Resident mode reports complete-owner entries and payload while retaining
+    /// native cumulative page counters at their prior values. Paged mode reports
+    /// the native cache directly. This lets telemetry change ownership without
+    /// resetting process-lifetime paging evidence.
     #[must_use]
     pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
         let Some(expert_pager) = self.expert_pager.as_ref() else {
             return ExpertWeightMemoryCacheStatistics::default();
         };
         let native_statistics = expert_pager.native_expert_cache_statistics();
+        let (entry_count, resident_payload_byte_count, maximum_resident_payload_byte_count) =
+            self.resident_expert_weights.as_ref().map_or_else(
+                || {
+                    (
+                        usize::try_from(native_statistics.resident_expert_count())
+                            .unwrap_or(usize::MAX),
+                        native_statistics.resident_payload_byte_count(),
+                        native_statistics.maximum_resident_payload_byte_count(),
+                    )
+                },
+                |resident_expert_weights| {
+                    (
+                        resident_expert_weights.expert_entry_count(),
+                        resident_expert_weights.payload_byte_count(),
+                        resident_expert_weights.payload_byte_count(),
+                    )
+                },
+            );
         ExpertWeightMemoryCacheStatistics {
-            entry_count: usize::try_from(native_statistics.resident_expert_count())
-                .unwrap_or(usize::MAX),
-            resident_payload_byte_count: native_statistics.resident_payload_byte_count(),
-            maximum_resident_payload_byte_count: native_statistics
-                .maximum_resident_payload_byte_count(),
+            entry_count,
+            resident_payload_byte_count,
+            maximum_resident_payload_byte_count,
             eviction_count: native_statistics.eviction_count(),
             cache_hit_count: native_statistics.cache_hit_count(),
             cache_miss_count: native_statistics.cache_miss_count(),
@@ -369,7 +394,7 @@ impl Qwen3_5Model {
                         tensor_name: "sparse model expert pager".to_owned(),
                     }
                 })?;
-                self.forward_qwen3_5_moe_with_paging(
+                self.forward_qwen3_5_moe(
                     &normalized_attention,
                     mixture_of_experts_weights,
                     expert_pager,

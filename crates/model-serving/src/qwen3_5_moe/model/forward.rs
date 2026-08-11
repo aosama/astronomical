@@ -1,9 +1,10 @@
-//! Paged MoE forward pass for prefill and decode with expert paging.
+//! Shared sparse routing followed by one binary expert-weight owner.
 //!
-//! When expert paging is enabled, prefill and decode steps route experts using resident
-//! router weights, retrieve the top-K selected expert weights, and compute the
-//! MoE output using those paged weights. Production prefill and decode retain
-//! only independently owned, router-requested one-expert pages.
+//! Routing is identical in both modes and keeps global expert identifiers. In
+//! production modes, a published complete resident owner selects ordinary MLX
+//! gathered projections; otherwise the retained pager prepares native one-expert
+//! pages on demand. Diagnostic paging modes intentionally bypass resident arrays
+//! so they continue to qualify the native fallback rather than the selected mode.
 
 use astronomical_runtime_integration::MlxArray;
 
@@ -16,14 +17,10 @@ use super::feed_forward_weights::{Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouter
 use super::routing::qwen3_5_moe_route_experts;
 
 impl Qwen3_5Model {
-    /// Paged MoE forward pass for prefill and decode steps.
-    ///
-    /// Routes experts using resident router weights, extracts the selected expert
-    /// IDs, retrieves production experts through the one-expert memory cache,
-    /// then computes the MoE output using pre-computed routing.
+    /// Routes once, then selects contiguous resident arrays or native paging.
     // Paged execution inputs stay explicit rather than introducing a parameter facade.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn forward_qwen3_5_moe_with_paging(
+    pub(crate) fn forward_qwen3_5_moe(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
@@ -44,7 +41,17 @@ impl Qwen3_5Model {
         // experts to load from disk and to provide routing scores for the
         // weighted combination step.
         let (selected_indices, selected_scores) = performance_attribution.measure_operation(
-            PerformanceOperation::PagedRouterGraphConstruction,
+            if self.resident_expert_weights.is_some()
+                && matches!(
+                    paged_prefill_execution_mode,
+                    Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
+                        | Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
+                )
+            {
+                PerformanceOperation::ResidentMoeGraphConstruction
+            } else {
+                PerformanceOperation::PagedRouterGraphConstruction
+            },
             |_performance_attribution| {
                 let router_logits = match &mixture_of_experts_weights.router_projection {
                     Qwen3_5MoERouterGateWeights::Affine(quantized_weights) => self
@@ -98,6 +105,33 @@ impl Qwen3_5Model {
             },
         )?;
 
+        // Target verification is a production MTP path and therefore follows
+        // the loaded owner. The two diagnostic modes force paging by design.
+        let should_use_loaded_model_mode = matches!(
+            paged_prefill_execution_mode,
+            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
+                | Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
+        );
+        if should_use_loaded_model_mode
+            && let Some(resident_expert_layer_weights) = self
+                .resident_expert_weights
+                .as_ref()
+                .and_then(|resident_expert_weights| resident_expert_weights.layer(layer_index))
+        {
+            return self.forward_moe_resident_with_performance_attribution(
+                hidden_states,
+                mixture_of_experts_weights,
+                resident_expert_layer_weights,
+                &selected_indices,
+                &selected_scores,
+                should_use_compiled_elementwise_graphs,
+                paged_prefill_execution_mode,
+                performance_attribution,
+            );
+        }
+
+        // Reaching this branch means there is no eligible complete resident
+        // owner. Every path below prepares weights through the same native pager.
         if token_count > 1 {
             match paged_prefill_execution_mode {
                 Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault => {

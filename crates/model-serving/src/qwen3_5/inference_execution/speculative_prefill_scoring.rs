@@ -26,7 +26,7 @@ pub(super) enum SpeculativePrefillSelectionPreparation {
 #[cfg(feature = "direct-mlx")]
 impl Qwen3_5EngineState {
     pub(super) fn prepare_speculative_prefill_selection(
-        &self,
+        &mut self,
         active_request: &mut Qwen3_5EngineRequest,
         scoring_start_position_tokens: usize,
         final_prompt_index: usize,

@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use astronomical_ipc_protocol::WorkerEvent;
 use tokio::time::Instant;
 
-use crate::worker_event_handler::{handle_worker_event, protocol_violation};
+use crate::worker_event_handler::handle_worker_event;
 use crate::worker_health::publish_health;
 use crate::worker_loop_types::ActiveGeneration;
 use crate::{GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot, WorkerProcess};
@@ -15,6 +15,10 @@ pub(super) enum ModelSwapWaitOutcome {
 }
 
 /// Drains worker events until the model swap succeeds or is rejected.
+///
+/// Process-scoped telemetry and configuration events may have been queued
+/// before `SwapModel`. They remain valid while the swap acknowledgement is
+/// pending and must update supervisor health rather than terminate the worker.
 pub(super) async fn wait_for_model_swap(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -26,10 +30,12 @@ pub(super) async fn wait_for_model_swap(
     loop {
         let worker_event_outcome = worker_process.next_event().await;
         match worker_event_outcome {
-            Ok(Some(worker_event)) => match &worker_event {
-                WorkerEvent::ModelSwapped { .. } => {
+            Ok(Some(worker_event)) => match worker_event {
+                // Let the shared handler publish all replacement metadata before
+                // releasing the queued generation to the newly loaded model.
+                model_swapped_event @ WorkerEvent::ModelSwapped { .. } => {
                     handle_worker_event(
-                        worker_event,
+                        model_swapped_event,
                         health_snapshot,
                         is_ready,
                         model_load_deadline,
@@ -42,6 +48,9 @@ pub(super) async fn wait_for_model_swap(
                     loaded_model_remains_ready,
                     model_load_failure_reason,
                 } => {
+                    // A failed first load leaves a healthy model-less worker. A
+                    // failed replacement may leave the prior model ready; its
+                    // existing health snapshot must remain intact in that case.
                     if !loaded_model_remains_ready {
                         let mlx_memory_ceilings = health_snapshot
                             .read()
@@ -68,14 +77,27 @@ pub(super) async fn wait_for_model_swap(
                         "worker rejected the requested model while remaining responsive"
                     );
                     return Ok(ModelSwapWaitOutcome::Rejected {
-                        model_load_failure_reason: model_load_failure_reason.clone(),
+                        model_load_failure_reason,
                     });
                 }
-                WorkerEvent::PersistentPromptCacheStats { .. } => {}
-                _ => {
-                    return Err(protocol_violation(
-                        "unexpected worker event during model swap",
-                    ));
+                interleaved_worker_event => {
+                    // Do not enumerate supposedly harmless events here. The
+                    // central handler accepts process-scoped updates and rejects
+                    // generation events whose active-request contract is absent.
+                    let interleaved_worker_event_summary =
+                        interleaved_worker_event.diagnostic_summary();
+                    handle_worker_event(
+                        interleaved_worker_event,
+                        health_snapshot,
+                        is_ready,
+                        model_load_deadline,
+                        active_generation,
+                        performance_log,
+                    )?;
+                    tracing::debug!(
+                        worker_event = interleaved_worker_event_summary,
+                        "processed interleaved worker event while awaiting model swap"
+                    );
                 }
             },
             Ok(None) => return Err(WorkerControlError::WorkerEventStreamClosed),

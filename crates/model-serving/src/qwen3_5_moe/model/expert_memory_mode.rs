@@ -3,10 +3,10 @@ use astronomical_ipc_protocol::ExpertMemoryMode;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
-    /// Returns whether the model uses demand-loaded sparse experts.
+    /// Returns whether complete sparse experts are installed or demand-paged.
     #[must_use]
     pub fn expert_memory_mode(&self) -> ExpertMemoryMode {
-        if self.expert_pager.is_some() {
+        if self.expert_pager.is_some() && self.resident_expert_weights.is_none() {
             ExpertMemoryMode::Paged
         } else {
             ExpertMemoryMode::Resident

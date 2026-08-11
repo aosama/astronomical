@@ -109,9 +109,10 @@ pub use prefill_chunck_size_optimizer::{
 pub use qwen3_5::{
     ModelWeightStorage, OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile,
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5Config,
-    Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture, Qwen3_5GenerationProcessor,
-    Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,
-    Qwen3_5InferenceRequest, Qwen3_5MtpArtifactCapability, Qwen3_5OutputEvent, Qwen3_5OutputParser,
+    Qwen3_5ConfigError, Qwen3_5DecoderLayerCacheDtypes, Qwen3_5FeedForwardArchitecture,
+    Qwen3_5GenerationProcessor, Qwen3_5ImageDimensions, Qwen3_5ImageGrid,
+    Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5InferenceRequest,
+    Qwen3_5MtpArtifactCapability, Qwen3_5OutputEvent, Qwen3_5OutputParser,
     Qwen3_5OutputParserError, Qwen3_5ProcessedImage, Qwen3_5PromptError, Qwen3_5PromptRenderer,
     Qwen3_5RenderedPrompt, Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig,
     Qwen3_5SamplingStrategy, Qwen3_5ShardIndex, Qwen3_5TokenDecoder, Qwen3_5TokenIds,
