@@ -22,24 +22,6 @@ mod prompt_prefill_errors;
 mod request_memory_release;
 mod resident_memory_pressure;
 mod speculative_prefill;
-mod speculative_prefill_control_span;
-mod speculative_prefill_draft_cache;
-mod speculative_prefill_eligibility;
-mod speculative_prefill_failure;
-mod speculative_prefill_failure_diagnostics;
-mod speculative_prefill_gpu_input;
-mod speculative_prefill_memory_admission;
-mod speculative_prefill_model_loading;
-mod speculative_prefill_policy_activation;
-mod speculative_prefill_scoring;
-mod speculative_prefill_selection;
-#[cfg(feature = "direct-mlx")]
-mod speculative_prefill_selection_gpu;
-mod speculative_prefill_selection_persistence;
-mod speculative_prefill_selection_reuse;
-mod speculative_prefill_store;
-mod speculative_prefill_target_cache;
-mod speculative_prefill_visual_embedding;
 mod start_generation;
 mod test_controls;
 
@@ -67,15 +49,11 @@ use crate::{
 use self::engine_request::Qwen3_5EngineRequest;
 pub use self::engine_request::Qwen3_5SpeculativePrefillFailureStageForTests;
 pub use self::speculative_prefill::{
-    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
-};
-pub use self::speculative_prefill_control_span::{
+    Qwen3_5SpeculativePrefillChunckMode, Qwen3_5SpeculativePrefillSelectionError,
     qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
-    qwen3_5_speculative_prefill_sparse_target_is_active,
-};
-pub use self::speculative_prefill_selection::{
-    Qwen3_5SpeculativePrefillSelectionError, qwen3_5_select_speculative_prefill_token_positions,
+    qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_selected_speculative_prefill_positions_for_range,
+    qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
@@ -259,12 +237,12 @@ pub struct Qwen3_5InferenceExecution {
     pub(super) speculative_prefill_draft_model: Option<Qwen3_5Model>,
     /// Bounded worker-local selection store keyed by the exact draft-scored prompt.
     pub(super) speculative_prefill_selection_store:
-        RefCell<HashMap<speculative_prefill_store::Qwen3_5SpeculativePrefillStoreKey, Vec<usize>>>,
+        RefCell<HashMap<speculative_prefill::Qwen3_5SpeculativePrefillStoreKey, Vec<usize>>>,
     /// Bounded worker-local draft decoder checkpoints isolated from target state.
     pub(super) speculative_prefill_draft_prefix_store: RefCell<
         HashMap<
-            speculative_prefill_store::Qwen3_5SpeculativePrefillStoreKey,
-            speculative_prefill_store::Qwen3_5SpeculativePrefillDraftPrefixStoreEntry,
+            speculative_prefill::Qwen3_5SpeculativePrefillStoreKey,
+            speculative_prefill::Qwen3_5SpeculativePrefillDraftPrefixStoreEntry,
         >,
     >,
     pub(crate) persistent_prompt_cache_model_contract: Option<PersistentPromptCacheModelContract>,

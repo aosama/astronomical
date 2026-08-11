@@ -12,20 +12,24 @@ use crate::{
 };
 
 use super::engine_request::Qwen3_5EngineRequest;
-use super::speculative_prefill_failure::configured_speculative_prefill_failure;
+use super::speculative_prefill::configured_speculative_prefill_failure;
 use super::{Qwen3_5EngineState, Qwen3_5Model, qwen3_5_runtime_error};
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
 /// Owns the user-visible failure contract for one required prompt-state write.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum PromptStatePersistenceOwner {
+    /// Ordinary dense prompt-cache state; failure names that user-visible feature.
     PersistentPromptCache,
+    /// Selection-bound state created while configured SpecPrefill is active.
     SpeculativePrefill,
 }
 
 impl PromptStatePersistenceOwner {
     #[must_use]
     pub(super) const fn for_active_request(active_request: &Qwen3_5EngineRequest) -> Self {
+        // Both paths use the same synchronous publication machinery, but their
+        // no-fallback error contracts must remain distinguishable to the user.
         if active_request.should_use_speculative_prefill {
             return Self::SpeculativePrefill;
         }
@@ -40,6 +44,8 @@ pub(super) fn required_prompt_state_persistence_failure(
     failure_stage: &'static str,
     internal_error: impl std::fmt::Display,
 ) -> InferenceEngineError {
+    // Translate only at this shared boundary; low-level storage code remains
+    // independent of whichever prompt-processing policy requested publication.
     match prompt_state_persistence_owner {
         PromptStatePersistenceOwner::SpeculativePrefill => configured_speculative_prefill_failure(
             active_request.request_id,

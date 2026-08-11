@@ -19,8 +19,8 @@ use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
 
 use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup;
-use super::speculative_prefill_failure::configured_speculative_prefill_activation_failure;
-use super::speculative_prefill_model_loading::{
+use super::speculative_prefill::configured_speculative_prefill_activation_failure;
+use super::speculative_prefill::{
     load_speculative_prefill_draft_model, token_identifier_mapping_digest,
 };
 
@@ -135,6 +135,9 @@ impl Qwen3_5EngineState {
                     false,
                     &mut model_loading_performance_attribution,
                 )?;
+            // This startup drafter exists only to prove compatibility and derive
+            // its revision/storage geometry. It is dropped below before target
+            // expert residency is admitted; requests load their own temporary copy.
             let resolved_model_id = model_id.clone().ok_or_else(|| {
                 fatal_engine_error("model loading lost the validated model identifier")
             })?;
@@ -239,6 +242,8 @@ impl Qwen3_5EngineState {
                 && let Some(persistent_prompt_cache_disk_store_config) =
                     self.persistent_prompt_cache_disk_store_config.as_ref()
             {
+                // Drafter dense state has different tensor geometry from target
+                // state and therefore owns a separate model/revision namespace.
                 let draft_model_id =
                     self.speculative_prefill
                         .draft_model_id
@@ -335,6 +340,8 @@ impl Qwen3_5EngineState {
                 );
             let loaded_draft_model_revision =
                 speculative_prefill_draft_model.map(|(draft_model, draft_model_revision)| {
+                    // Release all startup drafter ownership before allocator
+                    // cleanup and exact target expert-residency admission.
                     drop(draft_model);
                     draft_model_revision
                 });

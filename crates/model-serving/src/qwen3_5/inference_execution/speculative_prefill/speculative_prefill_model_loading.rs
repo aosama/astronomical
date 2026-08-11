@@ -1,3 +1,14 @@
+//! Validates and materializes the optional Qwen3.5 drafter model.
+//!
+//! Startup performs a short-lived load to prove artifact, tokenizer, vocabulary,
+//! runtime, and weight compatibility. That model is dropped before target expert
+//! residency admission. A later eligible request repeats the validated load as a
+//! request-scoped owner, optionally promotes its experts, scores the prompt, and
+//! drops every drafter allocation before target execution resumes.
+//!
+//! This deliberate reload trades load work for a much smaller steady-state
+//! footprint: the target and complete drafter are never permanent co-residents.
+
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration;
@@ -11,16 +22,21 @@ use crate::{
     },
 };
 
-use super::Qwen3_5EngineState;
-use super::ValidatedQwen3_5Artifact;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::super::Qwen3_5EngineState;
+use super::super::ValidatedQwen3_5Artifact;
+use super::super::engine_request::Qwen3_5EngineRequest;
 
 impl Qwen3_5EngineState {
-    pub(super) fn speculative_prefill_draft_memory_telemetry(
+    /// Captures a best-effort process-wide MLX snapshot with the live drafter
+    /// represented as one logical memory category.
+    ///
+    /// Returning `None` is intentional telemetry behavior: inability to inspect
+    /// memory must not replace the request's real scoring outcome.
+    pub(crate) fn speculative_prefill_draft_memory_telemetry(
         &self,
         active_request: &Qwen3_5EngineRequest,
         draft_model: &Qwen3_5Model,
-        draft_request_decoder_state: &super::super::RequestDecoderStateStack,
+        draft_request_decoder_state: &super::super::super::RequestDecoderStateStack,
         draft_visual_embeddings: Option<&astronomical_runtime_integration::MlxArray>,
     ) -> Option<MlxMemoryTelemetry> {
         let target_model = self.model.as_ref()?;
@@ -44,7 +60,12 @@ impl Qwen3_5EngineState {
         ))
     }
 
-    pub(super) fn speculative_prefill_draft_maximum_expert_page_reservation_bytes(&self) -> usize {
+    /// Returns the largest single routed expert page a paged drafter may need.
+    ///
+    /// Dense and fully resident models have no pager and therefore reserve zero.
+    /// Conversion overflow saturates so memory admission fails safely rather
+    /// than under-reserving an unrepresentable page.
+    pub(crate) fn speculative_prefill_draft_maximum_expert_page_reservation_bytes(&self) -> usize {
         self.speculative_prefill_draft_model
             .as_ref()
             .and_then(|draft_model| draft_model.expert_pager.as_ref())
@@ -53,7 +74,8 @@ impl Qwen3_5EngineState {
             })
     }
 
-    pub(super) fn speculative_prefill_draft_supports_processed_visual_images(&self) -> bool {
+    /// Reports startup-validated visual compatibility between target and drafter.
+    pub(crate) fn speculative_prefill_draft_supports_processed_visual_images(&self) -> bool {
         self.speculative_prefill_draft_supports_processed_visual_images
     }
 
@@ -62,12 +84,14 @@ impl Qwen3_5EngineState {
     /// A complete target owner is demoted as one unit; an already paged target is
     /// emptied page by page. The draft may then promote inside the capacity made
     /// available, and all of its MLX ownership ends after prompt selection.
-    pub(super) fn load_request_scoped_speculative_prefill_draft_model(
+    pub(crate) fn load_request_scoped_speculative_prefill_draft_model(
         &mut self,
         request_id: u64,
         draft_maximum_output_tokens: u32,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5Model, InferenceEngineError> {
+        // Record target retention before making room so diagnostics can attribute
+        // how much expert payload draft loading displaced.
         let target_expert_payload_bytes_before = self
             .model
             .as_ref()
@@ -81,6 +105,8 @@ impl Qwen3_5EngineState {
             .as_ref()
             .is_some_and(|target_model| target_model.resident_expert_weights.is_some());
         if target_model_is_resident {
+            // Resident expert ownership is all-or-nothing. Demote the complete
+            // owner to paging instead of creating an unsupported partial mode.
             self.model
                 .as_mut()
                 .ok_or_else(|| InferenceEngineError::Fatal {
@@ -92,6 +118,8 @@ impl Qwen3_5EngineState {
                 )
                 .map_err(InferenceEngineError::from)?;
         } else if target_expert_payload_bytes_before > 0 {
+            // A paged target can still retain cache entries from earlier work.
+            // Reclaim the full reported payload before loading another model.
             let target_model = self
                 .model
                 .as_ref()
@@ -119,6 +147,9 @@ impl Qwen3_5EngineState {
             .map_err(|runtime_error| InferenceEngineError::Fatal {
                 reason: runtime_error.to_string(),
             })?;
+        // Synchronization ensures no submitted target work still references
+        // reclaimed buffers; allocator cleanup makes those bytes reusable by the
+        // request-scoped draft load.
         let target_expert_payload_bytes_after = target_model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
@@ -133,6 +164,8 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "Qwen3.5 engine lost the target tokenizer compatibility digest".to_owned(),
             })?;
+        // Startup recorded compatibility, but the request load validates the
+        // current artifact again and receives the request's output-token bound.
         let (request_scoped_draft_model, draft_unavailable_reason) = performance_attribution
             .measure_operation(
                 PerformanceOperation::SpeculativePrefillRequestScopedDraftLoad,
@@ -159,7 +192,12 @@ impl Qwen3_5EngineState {
     }
 }
 
-pub(super) fn token_identifier_mapping_digest(
+/// Computes a canonical digest of tokenizer token-to-identifier semantics.
+///
+/// File-byte equality is intentionally insufficient: two valid tokenizer files
+/// may serialize the same mapping differently. Conversely, equal vocabulary
+/// sizes do not prove that an identifier means the same token in both models.
+pub(crate) fn token_identifier_mapping_digest(
     validated_artifact: &ValidatedQwen3_5Artifact,
 ) -> Result<[u8; 32], InferenceEngineError> {
     let tokenizer_bytes =
@@ -177,7 +215,13 @@ pub(super) fn token_identifier_mapping_digest(
     )
 }
 
-pub(super) fn load_speculative_prefill_draft_model(
+/// Loads one compatible drafter or returns a typed activation failure.
+///
+/// The tuple shape separates an available `(model, revision)` from an optional
+/// unavailable reason retained for worker status. Configured incompatibility is
+/// currently fail-closed, so validation failures return `Err` rather than a
+/// silent target-only `Ok((None, reason))`.
+pub(crate) fn load_speculative_prefill_draft_model(
     target_model: &Qwen3_5Model,
     speculative_prefill: &WorkerSpeculativePrefillConfiguration,
     target_token_identifier_mapping_digest: [u8; 32],
@@ -186,6 +230,8 @@ pub(super) fn load_speculative_prefill_draft_model(
     should_attempt_complete_expert_residency: bool,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(Option<(Qwen3_5Model, String)>, Option<String>), InferenceEngineError> {
+    // Disabled mode performs no draft-directory access, artifact validation, or
+    // MLX initialization.
     if !speculative_prefill.enabled {
         return Ok((None, None));
     }
@@ -194,6 +240,8 @@ pub(super) fn load_speculative_prefill_draft_model(
             "draft model directory resolution",
         ));
     };
+    // Validate bounded artifact structure before constructing an MLX runtime or
+    // allocating model tensors.
     let draft_validated_artifact = match Qwen3_5ArtifactValidator::new()
         .validate(draft_model_directory, target_max_output_tokens)
     {
@@ -208,6 +256,8 @@ pub(super) fn load_speculative_prefill_draft_model(
             ));
         }
     };
+    // Configuration identity and artifact identity must agree. This prevents a
+    // directory change from silently activating a different configured model.
     if speculative_prefill.draft_model_id.as_deref() != Some(draft_validated_artifact.model_id()) {
         tracing::warn!(
             configured_draft_model_id = ?speculative_prefill.draft_model_id,
@@ -232,6 +282,8 @@ pub(super) fn load_speculative_prefill_draft_model(
             ));
         }
     };
+    // Semantic tokenizer equality is mandatory because the drafter's selected
+    // positions are later interpreted using target token identifiers.
     if draft_token_identifier_mapping_digest != target_token_identifier_mapping_digest {
         tracing::warn!(
             "configured SpecPrefill draft and target tokenizers do not have the same contract; stopping model loading"
@@ -243,6 +295,8 @@ pub(super) fn load_speculative_prefill_draft_model(
     if draft_validated_artifact.config().vocabulary_size()
         != target_model.config().vocabulary_size()
     {
+        // Digest equality is the strong semantic contract; vocabulary equality
+        // is retained as an explicit shape contract for output-score operations.
         tracing::warn!(
             draft_vocabulary_size = draft_validated_artifact.config().vocabulary_size(),
             target_vocabulary_size = target_model.config().vocabulary_size(),
@@ -253,6 +307,8 @@ pub(super) fn load_speculative_prefill_draft_model(
         ));
     }
     let draft_model_revision = draft_validated_artifact.revision().to_owned();
+    // The runtime receives the same resolved machine/user limits as the target;
+    // request-scoped loading must not invent a second memory ceiling.
     let draft_runtime = match performance_attribution.measure_operation(
         PerformanceOperation::MlxRuntimeInitialization,
         |_performance_attribution| MlxRuntime::initialize(memory_limits),
@@ -278,8 +334,12 @@ pub(super) fn load_speculative_prefill_draft_model(
         performance_attribution,
     ) {
         Ok(draft_model) => match draft_model.materialize_target_weights() {
+            // Materialize lazy core weights now so a nominally loaded but invalid
+            // draft cannot survive startup compatibility validation.
             Ok(()) => draft_model,
             Err(draft_materialization_error) => {
+                // Cleanup is best effort because the materialization error is the
+                // causal failure that must be returned.
                 if let Err(draft_allocator_cleanup_error) = draft_model
                     .runtime()
                     .synchronize_gpu_stream_and_clear_allocator_cache()
@@ -299,6 +359,8 @@ pub(super) fn load_speculative_prefill_draft_model(
             }
         },
         Err(draft_load_error) => {
+            // MLX allocation is process-global; clear any partial draft load from
+            // the shared runtime before reporting activation failure.
             if let Err(draft_allocator_cleanup_error) = target_model
                 .runtime()
                 .synchronize_gpu_stream_and_clear_allocator_cache()
@@ -319,6 +381,8 @@ pub(super) fn load_speculative_prefill_draft_model(
     // target admission, so resident materialization there would be wasted work.
     // The request-scoped load executes scoring and can benefit from residency.
     if should_attempt_complete_expert_residency {
+        // Only request-scoped loads execute scoring. Startup validation skips
+        // promotion because the draft is immediately dropped afterward.
         draft_model
             .runtime()
             .synchronize_gpu_stream_and_clear_allocator_cache()
@@ -345,6 +409,7 @@ pub(super) fn load_speculative_prefill_draft_model(
     Ok((Some((draft_model, draft_model_revision)), None))
 }
 
+/// Produces the one bounded fatal error used for configured drafter activation.
 fn configured_draft_loading_failure(failure_stage: &'static str) -> InferenceEngineError {
     InferenceEngineError::Fatal {
         reason: format!(

@@ -15,6 +15,7 @@ use super::{
     Qwen3_5EngineState, fatal_engine_error,
     qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary, qwen3_5_runtime_error,
     qwen3_5_speculative_prefill_sparse_target_is_active,
+    speculative_prefill::SpeculativePrefillSelectionPreparation,
 };
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
@@ -33,6 +34,9 @@ impl Qwen3_5EngineState {
             active_request.prefill_cursor,
             active_request.ordinary_target_prefill_control_span_token_count,
         ) {
+            // Preparation first attempts cheap exact selection reuse. On a miss,
+            // it becomes a two-call state machine: this call yields a stream-visible
+            // Drafter phase event and the next performs request-scoped scoring.
             let speculative_prefill_selection_preparation = match self
                 .prepare_speculative_prefill_selection(
                     active_request,
@@ -43,13 +47,15 @@ impl Qwen3_5EngineState {
                     speculative_prefill_selection_preparation
                 }
                 Err(speculative_prefill_failure) => {
+                    // Capture complete target/drafter/cache evidence while request
+                    // state still exists, then preserve the original error.
                     self.log_speculative_prefill_drafter_failure_diagnostics(active_request);
                     return Err(speculative_prefill_failure);
                 }
             };
             if matches!(
                 speculative_prefill_selection_preparation,
-                super::speculative_prefill_scoring::SpeculativePrefillSelectionPreparation::DrafterPhaseStarted
+                SpeculativePrefillSelectionPreparation::DrafterPhaseStarted
             ) {
                 return Ok(Some(GeneratedToken::PromptProcessingPhaseStarted {
                     prompt_processing_phase:
@@ -95,6 +101,8 @@ impl Qwen3_5EngineState {
                 active_request.ordinary_target_prefill_control_span_token_count,
             )
             .ok_or_else(|| fatal_engine_error("prompt-processing chunk did not advance"))?;
+        // The control-span clamp guarantees this chunk is wholly dense or wholly
+        // sparse; execute_prompt_prefill_chunck never receives a mixed contract.
         // Required publication is synchronous, so do not let one forward cross
         // multiple durable boundaries. A successful forward produces one exact
         // checkpoint, publishes it, and only then advances the request cursor.
@@ -489,6 +497,8 @@ impl Qwen3_5EngineState {
             speculative_prefill_draft_memory_telemetry: active_request
                 .speculative_prefill_draft_memory_telemetry
                 .take(),
+            // Drafter telemetry is emitted once on the next completed target
+            // progress item, then removed so later chunks cannot duplicate it.
             expert_memory_mode: Some(model.expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
             persistent_prompt_cache_diagnostics: active_request
