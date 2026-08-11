@@ -31,7 +31,7 @@ impl Qwen3_5EngineState {
     /// Failure does not degrade to an ephemeral selection because that would hide
     /// a configured storage contract failure and make reuse behavior unpredictable.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn persist_speculative_prefill_selection(
+    pub(in crate::qwen3_5) fn persist_speculative_prefill_selection(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
         draft_model: &crate::Qwen3_5Model,

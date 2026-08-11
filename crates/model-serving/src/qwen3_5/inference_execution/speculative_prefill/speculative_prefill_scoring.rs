@@ -9,11 +9,11 @@
 #[cfg(feature = "direct-mlx")]
 use super::super::super::model::Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer;
 #[cfg(feature = "direct-mlx")]
+use super::super::Qwen3_5EngineState;
+#[cfg(feature = "direct-mlx")]
 use super::super::engine_request::{
     Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests,
 };
-#[cfg(feature = "direct-mlx")]
-use super::super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 #[cfg(feature = "direct-mlx")]
@@ -42,7 +42,7 @@ impl Qwen3_5EngineState {
     /// subsequent prefill advances return `Ready` without loading another draft.
     /// Any failure after configured work starts is translated by the caller into
     /// a request failure; there is intentionally no target-only retry.
-    pub(crate) fn prepare_speculative_prefill_selection(
+    pub(in crate::qwen3_5) fn prepare_speculative_prefill_selection(
         &mut self,
         active_request: &mut Qwen3_5EngineRequest,
         scoring_start_position_tokens: usize,
@@ -471,34 +471,12 @@ impl Qwen3_5EngineState {
                 })
             },
         );
-        // Capture telemetry while draft decoder/vision/model owners are all live;
-        // after the drops below their logical memory category must return to zero.
-        active_request.speculative_prefill_draft_memory_telemetry = self
-            .speculative_prefill_draft_memory_telemetry(
-                active_request,
-                &draft_model,
-                &draft_request_decoder_state,
-                draft_visual_embeddings.as_ref(),
-            );
-        drop(draft_request_decoder_state);
-        // Synchronize before persistence/release so no lazy scoring graph still
-        // references draft decoder buffers being dropped.
-        if let Err(draft_allocator_cleanup_error) =
-            active_request.performance_attribution.measure_operation(
-                PerformanceOperation::MlxAllocatorCacheCleanup,
-                |_performance_attribution| {
-                    draft_model
-                        .runtime()
-                        .synchronize_gpu_stream_and_clear_allocator_cache()
-                },
-            )
-        {
-            return Err(configured_speculative_prefill_failure(
-                active_request.request_id,
-                "drafter cleanup",
-                draft_allocator_cleanup_error,
-            ));
-        }
+        self.capture_speculative_prefill_draft_memory_and_release_decoder_state(
+            active_request,
+            &draft_model,
+            draft_request_decoder_state,
+            draft_visual_embeddings.as_ref(),
+        )?;
         self.persist_speculative_prefill_selection(
             active_request,
             &draft_model,
@@ -511,40 +489,11 @@ impl Qwen3_5EngineState {
             restored_draft_prefix_token_count,
             draft_prompt_state_persistence_failed,
         )?;
-        let target_model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| qwen3_5_runtime_error("Qwen3.5 engine lost its loaded target model"))?;
-        active_request
-            .performance_attribution
-            .measure_operation(
-                PerformanceOperation::SpeculativePrefillRequestScopedDraftRelease,
-                |_performance_attribution| {
-                    // Drop host owners inside the measured release span, then
-                    // synchronize/clear the shared allocator before target reuse.
-                    drop(draft_visual_embeddings);
-                    drop(draft_model);
-                    target_model
-                        .runtime()
-                        .synchronize_gpu_stream_and_clear_allocator_cache()
-                },
-            )
-            .map_err(|draft_release_error| {
-                configured_speculative_prefill_failure(
-                    active_request.request_id,
-                    "drafter release",
-                    draft_release_error,
-                )
-            })?;
-        // Draft admission may have frozen or reduced target expert retention.
-        // Resume it only after every draft allocation has been released.
-        let resumed_target_expert_retention =
-            target_model.resume_expert_retention_after_request_memory_pressure();
-        tracing::info!(
-            request_id = active_request.request_id.value(),
-            resumed_target_expert_retention,
-            "released request-scoped speculative-prefill draft before target expert paging"
-        );
+        self.release_speculative_prefill_draft_and_restore_target_residency(
+            active_request,
+            draft_visual_embeddings,
+            draft_model,
+        )?;
         Ok(SpeculativePrefillSelectionPreparation::Ready)
     }
 }

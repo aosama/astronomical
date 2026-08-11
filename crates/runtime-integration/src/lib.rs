@@ -80,8 +80,9 @@ pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
 pub use mlx_metal_kernel::{MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
 #[cfg(feature = "mlx")]
 pub use mlx_native_expert_cache::{
-    MlxNativeExpertCache, MlxNativeExpertCacheSnapshot, MlxNativeExpertLayerDescriptor,
-    MlxNativeExpertParameter, MlxNativeExpertProjection, MlxNativeExpertTensorSourceDescriptor,
+    MlxNativeExpertCache, MlxNativeExpertCacheRouteAnalysis, MlxNativeExpertCacheSnapshot,
+    MlxNativeExpertLayerDescriptor, MlxNativeExpertParameter, MlxNativeExpertProjection,
+    MlxNativeExpertTensorSourceDescriptor,
 };
 #[cfg(feature = "mlx")]
 pub use mlx_native_expert_cache_report::{

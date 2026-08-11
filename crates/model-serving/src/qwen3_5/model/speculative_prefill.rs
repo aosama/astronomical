@@ -6,6 +6,7 @@ use astronomical_runtime_integration::{MlxArray, MlxDtype};
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation, Qwen3_5TargetForwardOutput};
 
+use super::speculative_prefill_draft_forward::qwen3_5_speculative_prefill_draft_forward_end;
 use super::{
     Qwen3_5AttentionCapture, Qwen3_5ExecutionError, Qwen3_5Model, RequestDecoderStateStack,
     qwen3_5_aggregate_speculative_prefill_attention_weights,
@@ -148,9 +149,41 @@ impl Qwen3_5Model {
         let mut final_draft_logits = None;
         let mut consumed_visual_embedding_count = 0_usize;
 
-        for draft_prompt_token_ids in
-            draft_suffix_token_ids.chunks(self.chunking.speculative_prefill_draft_forward_tokens)
-        {
+        let mut draft_suffix_start_index = 0_usize;
+        while draft_suffix_start_index < draft_suffix_token_ids.len() {
+            let draft_forward_start_token_count = usize::try_from(draft_forward_position_tokens)
+                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "speculative-prefill draft position exceeds usize",
+                })?;
+            let remaining_draft_suffix_token_count =
+                draft_suffix_token_ids.len() - draft_suffix_start_index;
+            let capture_cache_block_token_count = persistent_prompt_cache_block_consumer
+                .as_ref()
+                .map(|_| persistent_prompt_cache_block_token_count);
+            let draft_forward_end_token_count = qwen3_5_speculative_prefill_draft_forward_end(
+                draft_forward_start_token_count,
+                remaining_draft_suffix_token_count,
+                self.chunking.speculative_prefill_draft_forward_tokens,
+                capture_cache_block_token_count,
+            )
+            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                description: "speculative-prefill draft forward range is invalid",
+            })?;
+            let draft_forward_token_count = draft_forward_end_token_count
+                .checked_sub(draft_forward_start_token_count)
+                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "speculative-prefill draft forward range moved backwards",
+                })?;
+            let draft_suffix_end_index = draft_suffix_start_index
+                .checked_add(draft_forward_token_count)
+                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "speculative-prefill draft suffix range overflowed",
+                })?;
+            let draft_prompt_token_ids = draft_suffix_token_ids
+                .get(draft_suffix_start_index..draft_suffix_end_index)
+                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "speculative-prefill draft suffix range exceeds the prompt",
+                })?;
             let draft_forward_output = if let Some((visual_embeddings, image_pad_token_id)) =
                 visual_embedding_input
             {
@@ -181,15 +214,13 @@ impl Qwen3_5Model {
                 )?
             };
             final_draft_logits = Some(draft_forward_output.final_logits().retain()?);
-            draft_forward_position_tokens = draft_forward_position_tokens
-                .checked_add(u32::try_from(draft_prompt_token_ids.len()).map_err(|_| {
+            draft_forward_position_tokens =
+                u32::try_from(draft_forward_end_token_count).map_err(|_| {
                     Qwen3_5ExecutionError::InvalidInput {
                         description: "speculative-prefill draft prompt exceeds the u32 range",
                     }
-                })?)
-                .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "speculative-prefill draft position counter overflowed",
                 })?;
+            draft_suffix_start_index = draft_suffix_end_index;
             if persistent_prompt_cache_block_consumer.is_some()
                 && usize::try_from(draft_forward_position_tokens).is_ok_and(
                     |completed_prompt_token_count| {
@@ -440,64 +471,5 @@ impl Qwen3_5Model {
         )?;
         self.evaluate_forward_state(target_forward_output.final_logits(), request_decoder_state)?;
         Ok(target_forward_output)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn forward_visual_chunk_with_speculative_prefill_attention_capture_and_performance_attribution(
-        &self,
-        token_ids: &[u32],
-        starting_position_tokens: u32,
-        visual_embeddings: &MlxArray,
-        starting_visual_embedding_index: usize,
-        image_pad_token_id: u32,
-        request_decoder_state: &mut RequestDecoderStateStack,
-        attention_capture: &mut Qwen3_5AttentionCapture,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(Qwen3_5TargetForwardOutput, usize), Qwen3_5ExecutionError> {
-        let token_count = super::forward_contract::validate_forward_input(
-            token_ids,
-            starting_position_tokens,
-            None,
-            request_decoder_state.layer_count(),
-            self.config.layer_count() as usize,
-            self.config.vocabulary_size(),
-            self.config.maximum_position_count(),
-        )?;
-        let signed_token_ids = token_ids
-            .iter()
-            .map(|token_id| {
-                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                    description: "token ID exceeds the MLX int32 range",
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let token_indices = self
-            .runtime
-            .array_from_i32(&signed_token_ids, &[1, token_count])?;
-        let text_embeddings = self.embedding_lookup(&token_indices)?;
-        let (injected_embeddings, consumed_visual_embedding_count) =
-            super::visual_embedding_injection::qwen3_5_inject_visual_embeddings(
-                &self.runtime,
-                &text_embeddings,
-                token_ids,
-                visual_embeddings,
-                starting_visual_embedding_index,
-                image_pad_token_id,
-            )?;
-        let target_forward_output = self
-            .build_target_forward_graph_from_embeddings_with_attention_capture(
-                injected_embeddings,
-                token_count,
-                starting_position_tokens,
-                None,
-                request_decoder_state,
-                Some(attention_capture),
-                None,
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
-                performance_attribution,
-                false,
-            )?;
-        self.evaluate_forward_state(target_forward_output.final_logits(), request_decoder_state)?;
-        Ok((target_forward_output, consumed_visual_embedding_count))
     }
 }

@@ -84,7 +84,7 @@ impl Qwen3_5EngineState {
     /// A fresh score can begin a root chain. A disk-restored score can append to
     /// its known tail. An in-memory checkpoint has no durable parent identity, so
     /// it must not publish children that disk restoration could never traverse.
-    pub(crate) fn prepare_speculative_prefill_draft_cache_capture(
+    pub(in crate::qwen3_5) fn prepare_speculative_prefill_draft_cache_capture(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
         restored_draft_prefix_token_count: usize,

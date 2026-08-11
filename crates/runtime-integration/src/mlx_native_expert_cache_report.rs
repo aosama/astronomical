@@ -6,7 +6,12 @@
 
 use crate::raw;
 
-/// Activity attributable to one ordinary native route preparation.
+/// Plain numerical evidence for one route from analysis through commit.
+///
+/// Assignment count can be much larger than distinct count because many tokens
+/// select the same expert. Missing count is the subset that needs disk-backed
+/// page allocation. Comparing those values explains why exact admission avoids
+/// the former worst-case reservation.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MlxNativeExpertCacheRequestReport {
     cache_hit_count: u64,
@@ -22,6 +27,14 @@ pub struct MlxNativeExpertCacheRequestReport {
     payload_copy_byte_count: u64,
     page_table_publication_count: u64,
     complete_layer_route_synchronization_elision_count: u64,
+    selected_expert_assignment_count: u64,
+    distinct_route_expert_count: u64,
+    missing_route_expert_count: u64,
+    selected_route_payload_byte_count: u64,
+    missing_route_payload_byte_count: u64,
+    evicted_payload_byte_count: u64,
+    retention_ceiling_before_byte_count: u64,
+    retention_ceiling_after_byte_count: u64,
 }
 
 impl MlxNativeExpertCacheRequestReport {
@@ -88,6 +101,46 @@ impl MlxNativeExpertCacheRequestReport {
     #[must_use]
     pub const fn complete_layer_route_synchronization_elision_count(self) -> u64 {
         self.complete_layer_route_synchronization_elision_count
+    }
+
+    #[must_use]
+    pub const fn distinct_route_expert_count(self) -> u64 {
+        self.distinct_route_expert_count
+    }
+
+    #[must_use]
+    pub const fn selected_expert_assignment_count(self) -> u64 {
+        self.selected_expert_assignment_count
+    }
+
+    #[must_use]
+    pub const fn missing_route_expert_count(self) -> u64 {
+        self.missing_route_expert_count
+    }
+
+    #[must_use]
+    pub const fn selected_route_payload_byte_count(self) -> u64 {
+        self.selected_route_payload_byte_count
+    }
+
+    #[must_use]
+    pub const fn missing_route_payload_byte_count(self) -> u64 {
+        self.missing_route_payload_byte_count
+    }
+
+    #[must_use]
+    pub const fn evicted_payload_byte_count(self) -> u64 {
+        self.evicted_payload_byte_count
+    }
+
+    #[must_use]
+    pub const fn retention_ceiling_before_byte_count(self) -> u64 {
+        self.retention_ceiling_before_byte_count
+    }
+
+    #[must_use]
+    pub const fn retention_ceiling_after_byte_count(self) -> u64 {
+        self.retention_ceiling_after_byte_count
     }
 }
 
@@ -162,6 +215,14 @@ pub(crate) const fn zero_raw_request_report() -> raw::astronomical_native_expert
         payload_copy_byte_count: 0,
         page_table_publication_count: 0,
         complete_layer_route_synchronization_elision_count: 0,
+        selected_expert_assignment_count: 0,
+        distinct_route_expert_count: 0,
+        missing_route_expert_count: 0,
+        selected_route_payload_byte_count: 0,
+        missing_route_payload_byte_count: 0,
+        evicted_payload_byte_count: 0,
+        retention_ceiling_before_byte_count: 0,
+        retention_ceiling_after_byte_count: 0,
     }
 }
 
@@ -186,6 +247,14 @@ pub(crate) const fn request_report_from_raw(
         page_table_publication_count: report.page_table_publication_count,
         complete_layer_route_synchronization_elision_count: report
             .complete_layer_route_synchronization_elision_count,
+        selected_expert_assignment_count: report.selected_expert_assignment_count,
+        distinct_route_expert_count: report.distinct_route_expert_count,
+        missing_route_expert_count: report.missing_route_expert_count,
+        selected_route_payload_byte_count: report.selected_route_payload_byte_count,
+        missing_route_payload_byte_count: report.missing_route_payload_byte_count,
+        evicted_payload_byte_count: report.evicted_payload_byte_count,
+        retention_ceiling_before_byte_count: report.retention_ceiling_before_byte_count,
+        retention_ceiling_after_byte_count: report.retention_ceiling_after_byte_count,
     }
 }
 

@@ -1,20 +1,13 @@
 use std::fs;
 
 use astronomical_runtime_integration::{
-    MlxDtype, MlxNativeExpertCache, MlxNativeExpertLayerDescriptor, MlxNativeExpertParameter,
-    MlxNativeExpertProjection, MlxNativeExpertTensorSourceDescriptor,
+    MlxNativeExpertCache, MlxNativeExpertLayerDescriptor, MlxNativeExpertProjection,
 };
 
+use super::native_expert_cache_fixture::{
+    EXPERT_CAPACITY, INPUT_DIMENSION, build_stacked_reference, build_two_expert_source_fixture,
+};
 use crate::common::runtime_test_support::runtime;
-
-pub(super) const EXPERT_CAPACITY: usize = 2;
-pub(super) const INPUT_DIMENSION: i32 = 64;
-pub(super) const OUTPUT_DIMENSION: i32 = 64;
-const QUANTIZATION_GROUP_SIZE: i32 = 64;
-const QUANTIZATION_BITS: i32 = 4;
-const PACKED_WORDS_PER_OUTPUT_ROW: i32 = INPUT_DIMENSION * QUANTIZATION_BITS / i32::BITS as i32;
-const PACKED_WORDS_PER_EXPERT: usize = (OUTPUT_DIMENSION * PACKED_WORDS_PER_OUTPUT_ROW) as usize;
-const QUANTIZATION_VALUES_PER_EXPERT: usize = OUTPUT_DIMENSION as usize;
 
 #[test]
 fn should_stream_router_requested_source_ranges_directly_into_reusable_native_slots() {
@@ -384,129 +377,49 @@ fn should_discard_a_partial_candidate_after_a_short_read_and_serve_the_next_rout
     assert_eq!(native_expert_cache.statistics().resident_expert_count(), 1);
 }
 
-pub(super) fn build_two_expert_source_fixture(
-    source_file_path: &std::path::Path,
-) -> (Vec<u8>, Vec<MlxNativeExpertTensorSourceDescriptor>) {
-    let mut source_file_bytes = Vec::new();
-    let mut source_descriptors = Vec::new();
-    for projection in [
-        MlxNativeExpertProjection::Gate,
-        MlxNativeExpertProjection::Up,
-        MlxNativeExpertProjection::Down,
-    ] {
-        let packed_weight_offset = source_file_bytes.len() as u64;
-        append_u32_values(
-            &mut source_file_bytes,
-            &[
-                vec![0x1111_1111; PACKED_WORDS_PER_EXPERT],
-                vec![0x3333_3333; PACKED_WORDS_PER_EXPERT],
-            ]
-            .concat(),
-        );
-        source_descriptors.push(MlxNativeExpertTensorSourceDescriptor::new(
-            projection,
-            MlxNativeExpertParameter::PackedWeight,
-            QUANTIZATION_GROUP_SIZE,
-            QUANTIZATION_BITS,
-            source_file_path.to_path_buf(),
-            packed_weight_offset,
-            PACKED_WORDS_PER_EXPERT * u32::BITS as usize / 8,
-            vec![1, OUTPUT_DIMENSION, PACKED_WORDS_PER_OUTPUT_ROW],
-            MlxDtype::UInt32,
-        ));
+#[test]
+fn should_discard_every_new_page_when_a_later_page_in_the_same_route_has_a_short_read() {
+    let runtime = runtime();
+    let fixture_directory =
+        tempfile::tempdir().expect("the multi-page short-read fixture should exist");
+    let source_file_path = fixture_directory.path().join("expert-source.bin");
+    let (source_file_bytes, source_descriptors) =
+        build_two_expert_source_fixture(&source_file_path);
+    fs::write(&source_file_path, &source_file_bytes)
+        .expect("the complete multi-page source fixture should be writable");
+    let native_expert_cache = MlxNativeExpertCache::new(
+        &runtime,
+        &[MlxNativeExpertLayerDescriptor::new(
+            EXPERT_CAPACITY,
+            source_descriptors,
+        )],
+        source_file_bytes.len() as u64,
+    )
+    .expect("the complete multi-page source inventory should validate");
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&source_file_path)
+        .and_then(|source_file| source_file.set_len(source_file_bytes.len() as u64 - 1))
+        .expect("the second expert source should truncate after startup validation");
+    let both_expert_indices = runtime
+        .array_from_i32(&[0, 1], &[1, 2])
+        .expect("the two-expert route should be valid");
 
-        let scales_offset = source_file_bytes.len() as u64;
-        append_f32_values(
-            &mut source_file_bytes,
-            &vec![1.0; QUANTIZATION_VALUES_PER_EXPERT * EXPERT_CAPACITY],
-        );
-        source_descriptors.push(MlxNativeExpertTensorSourceDescriptor::new(
-            projection,
-            MlxNativeExpertParameter::Scales,
-            QUANTIZATION_GROUP_SIZE,
-            QUANTIZATION_BITS,
-            source_file_path.to_path_buf(),
-            scales_offset,
-            QUANTIZATION_VALUES_PER_EXPERT * size_of::<f32>(),
-            vec![1, OUTPUT_DIMENSION, 1],
-            MlxDtype::Float32,
-        ));
+    native_expert_cache
+        .prepare_layer(&runtime, 0, &both_expert_indices, true)
+        .expect_err("a later short read must reject the complete route transaction");
+    assert_eq!(
+        native_expert_cache.statistics().resident_expert_count(),
+        0,
+        "no newly loaded page may enter cache ownership until every route page is complete",
+    );
 
-        let biases_offset = source_file_bytes.len() as u64;
-        append_f32_values(
-            &mut source_file_bytes,
-            &vec![0.0; QUANTIZATION_VALUES_PER_EXPERT * EXPERT_CAPACITY],
-        );
-        source_descriptors.push(MlxNativeExpertTensorSourceDescriptor::new(
-            projection,
-            MlxNativeExpertParameter::Biases,
-            QUANTIZATION_GROUP_SIZE,
-            QUANTIZATION_BITS,
-            source_file_path.to_path_buf(),
-            biases_offset,
-            QUANTIZATION_VALUES_PER_EXPERT * size_of::<f32>(),
-            vec![1, OUTPUT_DIMENSION, 1],
-            MlxDtype::Float32,
-        ));
-    }
-    (source_file_bytes, source_descriptors)
-}
-
-pub(super) fn build_stacked_reference(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
-    activations: &astronomical_runtime_integration::MlxArray,
-    selected_expert_indices: &astronomical_runtime_integration::MlxArray,
-) -> astronomical_runtime_integration::MlxArray {
-    let stacked_packed_weights = runtime
-        .array_from_u32(
-            &[
-                vec![0x1111_1111; PACKED_WORDS_PER_EXPERT],
-                vec![0x3333_3333; PACKED_WORDS_PER_EXPERT],
-            ]
-            .concat(),
-            &[
-                EXPERT_CAPACITY as i32,
-                OUTPUT_DIMENSION,
-                PACKED_WORDS_PER_OUTPUT_ROW,
-            ],
-        )
-        .expect("the stacked packed weights should be valid");
-    let stacked_scales = runtime
-        .array_from_f32(
-            &vec![1.0; QUANTIZATION_VALUES_PER_EXPERT * EXPERT_CAPACITY],
-            &[EXPERT_CAPACITY as i32, OUTPUT_DIMENSION, 1],
-        )
-        .expect("the stacked scales should be valid");
-    let stacked_biases = runtime
-        .array_from_f32(
-            &vec![0.0; QUANTIZATION_VALUES_PER_EXPERT * EXPERT_CAPACITY],
-            &[EXPERT_CAPACITY as i32, OUTPUT_DIMENSION, 1],
-        )
-        .expect("the stacked biases should be valid");
-    runtime
-        .gather_quantized_matmul_affine(
-            activations,
-            &stacked_packed_weights,
-            &stacked_scales,
-            &stacked_biases,
-            None,
-            Some(selected_expert_indices),
-            true,
-            QUANTIZATION_GROUP_SIZE,
-            QUANTIZATION_BITS,
-            false,
-        )
-        .expect("the stacked affine reference should build")
-}
-
-fn append_u32_values(destination: &mut Vec<u8>, values: &[u32]) {
-    for value in values {
-        destination.extend_from_slice(&value.to_ne_bytes());
-    }
-}
-
-fn append_f32_values(destination: &mut Vec<u8>, values: &[f32]) {
-    for value in values {
-        destination.extend_from_slice(&value.to_ne_bytes());
-    }
+    fs::write(&source_file_path, &source_file_bytes)
+        .expect("the complete multi-page source should be restorable");
+    let (_snapshot, recovered_report) = native_expert_cache
+        .prepare_layer(&runtime, 0, &both_expert_indices, true)
+        .expect("the complete route should load after its source is restored");
+    assert_eq!(recovered_report.cache_miss_count(), 2);
+    assert_eq!(recovered_report.disk_page_load_count(), 2);
+    assert_eq!(native_expert_cache.statistics().resident_expert_count(), 2);
 }

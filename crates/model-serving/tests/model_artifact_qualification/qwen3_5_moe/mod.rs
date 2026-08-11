@@ -48,6 +48,8 @@ mod speculative_prefill;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_fail_closed;
 #[cfg(feature = "direct-mlx")]
+mod speculative_prefill_full_retention;
+#[cfg(feature = "direct-mlx")]
 mod speculative_prefill_memory_admission;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_persistent_cache;

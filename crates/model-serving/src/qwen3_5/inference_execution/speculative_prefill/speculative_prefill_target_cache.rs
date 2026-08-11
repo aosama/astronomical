@@ -120,7 +120,7 @@ impl Qwen3_5EngineState {
 
     /// Saves the active request's sparse target prefix before the final
     /// generation-kickoff token is forwarded.
-    pub(crate) fn save_speculative_prefill_target_prefix(
+    pub(in crate::qwen3_5) fn save_speculative_prefill_target_prefix(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
     ) -> Result<(), crate::InferenceEngineError> {

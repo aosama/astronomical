@@ -24,14 +24,14 @@ const BINDGEN_FUNCTION_ALLOWLIST: &str = concat!(
     "paged_(buffer_slot_(new|commit|is_committed|view|free)|file_reader_(new|free))|read_paged_buffer_ranges|",
     "map_string_to_array_insert|map_string_to_string_(new|free|insert))|",
     "astronomical_metal_expert_loader_(start|wait|free)|",
-    "astronomical_native_expert_(cache_(new|prepare_layer|update_maximum_resident_payload_bytes|freeze_retention_growth|reclaim_retained_payload_bytes|resume_retention_growth|get_statistics|free)|snapshot_(gather_matmul|free))",
+    "astronomical_native_expert_(cache_(new|prepare_layer|analyze_layer|commit_layer|update_maximum_resident_payload_bytes|freeze_retention_growth|reclaim_retained_payload_bytes|resume_retention_growth|get_statistics|free)|route_analysis_free|snapshot_(gather_matmul|free))",
 );
 
 const BINDGEN_TYPE_ALLOWLIST: &str = concat!(
     "(mlx_(error_handler_func|string|array|dtype|stream|closure|device|device_info|device_type|io_reader|io_vtable|",
     "optional_(dtype|float|int)|vector_array|vector_string|fast_metal_kernel(_config)?|map_string_to_array|map_string_to_string|paged_buffer_slot|paged_file_reader|paged_buffer_read_range)|",
     "astronomical_metal_expert_loader_(output_tensor|load_range|metrics|handle)|",
-    "astronomical_native_expert_(cache|snapshot|projection|parameter|tensor_source|layer_descriptor|cache_request_report|cache_statistics))",
+    "astronomical_native_expert_(cache|snapshot|route_analysis|projection|parameter|tensor_source|layer_descriptor|cache_request_report|cache_statistics))",
 );
 
 pub fn generate_bindings(

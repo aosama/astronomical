@@ -1,10 +1,16 @@
 #include "native_expert_cache_internal.h"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <tuple>
 
 namespace astronomical::native_expert_cache {
+
+static_assert(combined_payload_exceeds_byte_ceiling(
+    std::numeric_limits<uint64_t>::max(),
+    1,
+    std::numeric_limits<uint64_t>::max()));
 
 // Cache policy is separate from input/output. It owns layer-balanced recency,
 // byte ceilings, eviction, and immutable page-table publication; no function
@@ -20,8 +26,10 @@ uint64_t NativeExpertCache::proportional_retention_share_byte_count(
   return base_share + (layer_index < remainder_byte_count ? 1 : 0);
 }
 
-uint64_t NativeExpertCache::maximum_retained_payload_byte_count_for_layer(
+uint64_t NativeExpertCache::protected_retention_floor_byte_count_for_layer(
     size_t layer_index) const {
+  // A page is indivisible. Round the fair byte share up to a complete expert so
+  // a small layer share can still protect one useful decode page.
   const uint64_t proportional_share =
       proportional_retention_share_byte_count(layer_index);
   const uint64_t payload_bytes_per_expert =
@@ -38,6 +46,38 @@ uint64_t NativeExpertCache::maximum_retained_payload_byte_count_for_layer(
     return maximum_resident_payload_byte_count_;
   }
   return rounded_expert_count * payload_bytes_per_expert;
+}
+
+uint64_t NativeExpertCache::maximum_borrowable_retained_payload_byte_count_for_route(
+    size_t layer_index) const {
+  // Imagine every other populated layer reserving a small parking space. This
+  // route may use everything left over. Empty layers reserve nothing, so a hot
+  // layer can borrow their unused bytes instead of wasting global capacity.
+  uint64_t protected_other_layer_payload_byte_count = 0;
+  for (size_t candidate_layer_index = 0;
+       candidate_layer_index < layer_profiles_.size();
+       ++candidate_layer_index) {
+    if (candidate_layer_index == layer_index) {
+      continue;
+    }
+    const uint64_t layer_floor_payload_byte_count =
+        protected_retention_floor_byte_count_for_layer(candidate_layer_index);
+    const uint64_t protected_layer_payload_byte_count = std::min(
+        layer_profiles_[candidate_layer_index].resident_payload_byte_count,
+        layer_floor_payload_byte_count);
+    if (protected_layer_payload_byte_count >
+        std::numeric_limits<uint64_t>::max() -
+            protected_other_layer_payload_byte_count) {
+      return 0;
+    }
+    protected_other_layer_payload_byte_count +=
+        protected_layer_payload_byte_count;
+  }
+  return maximum_resident_payload_byte_count_ >=
+          protected_other_layer_payload_byte_count
+      ? maximum_resident_payload_byte_count_ -
+            protected_other_layer_payload_byte_count
+      : 0;
 }
 
 std::shared_ptr<const paged::PageTableSnapshot> build_page_table_snapshot(
@@ -81,12 +121,17 @@ void NativeExpertCache::evict_to_fit(
     size_t protected_layer_index,
     const std::vector<size_t>& protected_expert_ids,
     uint64_t pending_payload_byte_count,
-    std::vector<size_t>& changed_layer_indices) {
-  // Recency is global across layer-qualified entries. Protecting the complete
-  // incoming route prevents admission from evicting one page it is about to
-  // reference. Layer and expert IDs provide deterministic ties only.
-  while (resident_payload_byte_count_ + pending_payload_byte_count >
-         maximum_resident_payload_byte_count_) {
+    std::vector<size_t>& changed_layer_indices,
+    uint64_t* evicted_payload_byte_count_output) {
+  // There is one hard rule: retained bytes plus incoming bytes must fit the one
+  // global ceiling. Layer floors only choose a sensible victim. First remove the
+  // oldest page from a layer using more than its floor; if no such page exists,
+  // remove the globally oldest unprotected page. Never remove this route's page.
+  // Layer and expert IDs make equal-recency choices deterministic.
+  while (combined_payload_exceeds_byte_ceiling(
+      resident_payload_byte_count_,
+      pending_payload_byte_count,
+      maximum_resident_payload_byte_count_)) {
     auto overrepresented_layer_eviction_candidate = cache_entries_.end();
     auto fallback_eviction_candidate = cache_entries_.end();
     for (auto iterator = cache_entries_.begin();
@@ -117,7 +162,7 @@ void NativeExpertCache::evict_to_fit(
                ? pending_payload_byte_count
                : 0);
       if (projected_layer_resident_payload_byte_count <=
-          proportional_retention_share_byte_count(candidate_layer_index)) {
+          protected_retention_floor_byte_count_for_layer(candidate_layer_index)) {
         continue;
       }
       if (overrepresented_layer_eviction_candidate == cache_entries_.end() ||
@@ -149,52 +194,9 @@ void NativeExpertCache::evict_to_fit(
     layer_profiles_[evicted_layer_index].resident_expert_count -= 1;
     changed_layer_indices.push_back(evicted_layer_index);
     cache_entries_.erase(eviction_candidate);
-    cumulative_statistics_.eviction_count += 1;
-  }
-}
-
-void NativeExpertCache::evict_layer_to_fit(
-    size_t layer_index,
-    const std::vector<size_t>& protected_expert_ids,
-    uint64_t pending_payload_byte_count,
-    std::vector<size_t>& changed_layer_indices) {
-  auto& layer_profile = layer_profiles_.at(layer_index);
-  const uint64_t maximum_retained_payload_byte_count =
-      maximum_retained_payload_byte_count_for_layer(layer_index);
-  while (layer_profile.resident_payload_byte_count +
-             pending_payload_byte_count >
-         maximum_retained_payload_byte_count) {
-    auto eviction_candidate = cache_entries_.end();
-    for (auto iterator = cache_entries_.begin();
-         iterator != cache_entries_.end();
-         ++iterator) {
-      if (iterator->first.layer_index != layer_index ||
-          std::binary_search(
-              protected_expert_ids.begin(),
-              protected_expert_ids.end(),
-              iterator->first.expert_id)) {
-        continue;
-      }
-      if (eviction_candidate == cache_entries_.end() ||
-          std::tie(
-              iterator->second.last_access_sequence_number,
-              iterator->first.expert_id) <
-              std::tie(
-                  eviction_candidate->second.last_access_sequence_number,
-                  eviction_candidate->first.expert_id)) {
-        eviction_candidate = iterator;
-      }
+    if (evicted_payload_byte_count_output != nullptr) {
+      *evicted_payload_byte_count_output += evicted_payload_byte_count;
     }
-    if (eviction_candidate == cache_entries_.end()) {
-      break;
-    }
-    const auto evicted_payload_byte_count =
-        eviction_candidate->second.slot->payload_byte_count;
-    resident_payload_byte_count_ -= evicted_payload_byte_count;
-    layer_profile.resident_payload_byte_count -= evicted_payload_byte_count;
-    layer_profile.resident_expert_count -= 1;
-    changed_layer_indices.push_back(layer_index);
-    cache_entries_.erase(eviction_candidate);
     cumulative_statistics_.eviction_count += 1;
   }
 }
@@ -255,10 +257,9 @@ void NativeExpertCache::enforce_maximum_resident_payload_byte_count(
   maximum_resident_payload_byte_count_ =
       maximum_resident_payload_byte_count;
   std::vector<size_t> changed_layer_indices;
-  for (size_t layer_index = 0; layer_index < layer_profiles_.size();
-       ++layer_index) {
-    evict_layer_to_fit(layer_index, {}, 0, changed_layer_indices);
-  }
+  // Example: the new ceiling is 100 bytes and the cache already holds 90 bytes.
+  // Nothing must be evicted, even if one layer owns most of those 90 bytes. The
+  // old per-layer pre-pass could evict in that situation. One global loop cannot.
   evict_to_fit(0, {}, 0, changed_layer_indices);
   publish_changed_layers(changed_layer_indices);
 }

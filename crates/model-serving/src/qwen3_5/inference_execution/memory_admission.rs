@@ -244,9 +244,46 @@ impl Qwen3_5EngineState {
                 );
             }
         } else {
-            // Later forwards can outgrow an initially safe resident request.
-            // Retry from a fresh paged baseline before evicting individual pages
-            // or rejecting, preserving the same growth evidence and user work.
+            // A large prefill forward is divisible work. For example, a 2,048
+            // token forward can retry as 1,024 tokens while keeping every expert
+            // resident. Demoting 25 GB of experts before trying the smaller work
+            // would turn a temporary workspace shortage into sustained disk I/O.
+            // Decode and one-token prefill are already minimum work and continue
+            // to the safe whole-owner demotion path below.
+            let resident_model_can_retry_smaller_forward = self
+                .model
+                .as_ref()
+                .is_some_and(|model| model.resident_expert_weights.is_some())
+                && adaptive_ram_growth_context.adaptive_ram_growth_phase()
+                    == crate::AdaptiveRamGrowthPhase::Prefill
+                && adaptive_ram_growth_context.forward_token_count() > 1;
+            if resident_model_can_retry_smaller_forward {
+                tracing::info!(
+                    forward_token_count = adaptive_ram_growth_context.forward_token_count(),
+                    stable_projected_bytes =
+                        initial_adaptive_ram_growth_projection.stable_projected_bytes(),
+                    peak_projected_bytes =
+                        initial_adaptive_ram_growth_projection.peak_projected_bytes(),
+                    active_memory_limit_bytes =
+                        initial_adaptive_ram_growth_projection.active_memory_limit_bytes(),
+                    allowed_active_memory_bytes =
+                        initial_adaptive_ram_growth_projection.allowed_active_memory_bytes(),
+                    action = "retry_smaller_resident_forward",
+                    "preserved complete resident experts before adaptive prefill retry"
+                );
+                return Err(
+                    AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
+                        reason: format!(
+                            "resident adaptive RAM growth requires a smaller forward than {} tokens before expert demotion",
+                            adaptive_ram_growth_context.forward_token_count(),
+                        ),
+                    },
+                );
+            }
+            // The minimum operation still does not fit beside complete experts.
+            // There is no physically useful partial-resident owner: views would
+            // keep the complete backing allocation alive. Release the complete
+            // owner, take a fresh memory sample, and retry in paged mode instead.
             if let Some(resident_demotion) = self.demote_resident_experts_for_adaptive_growth(
                 adaptive_ram_growth_context,
                 exact_persistent_growth_bytes,

@@ -9,11 +9,12 @@
 use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::feed_forward_weights::{Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights};
+use super::native_expert_cache_attribution::record_native_expert_cache_request;
 use super::routing::qwen3_5_moe_route_experts;
 
 impl Qwen3_5Model {
@@ -403,62 +404,4 @@ impl Qwen3_5Model {
             .runtime
             .concatenate_axis(&token_moe_output_references, 1)?)
     }
-}
-
-fn record_native_expert_cache_request(
-    performance_attribution: &mut PerformanceAttribution,
-    request_report: astronomical_runtime_integration::MlxNativeExpertCacheRequestReport,
-) {
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheHitCount,
-        request_report.cache_hit_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheMissCount,
-        request_report.cache_miss_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheDiskPageLoadCount,
-        request_report.disk_page_load_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheDiskBatchLoadCount,
-        request_report.disk_batch_load_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheSuccessfulSourceReadCount,
-        request_report.successful_source_read_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheSuccessfulSourceReadByteCount,
-        request_report.successful_source_read_byte_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheSuccessfulSourceReadElapsedNanoseconds,
-        request_report.successful_source_read_elapsed_nanoseconds(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationCount,
-        request_report.route_dependency_synchronization_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationElapsedNanoseconds,
-        request_report.route_dependency_synchronization_elapsed_nanoseconds(),
-    );
-    performance_attribution.record_maximum_counter(
-        PerformanceCounter::NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds,
-        request_report.maximum_route_dependency_synchronization_elapsed_nanoseconds(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheSnapshotPublicationCount,
-        request_report.page_table_publication_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCachePayloadCopyByteCount,
-        request_report.payload_copy_byte_count(),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::CompleteLayerRouteSynchronizationElisionCount,
-        request_report.complete_layer_route_synchronization_elision_count(),
-    );
 }

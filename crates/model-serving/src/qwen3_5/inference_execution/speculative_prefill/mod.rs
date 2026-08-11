@@ -22,7 +22,8 @@
 //! 5. Every image-pad position and the configured trailing window are mandatory;
 //!    importance ranking may remove neither.
 //! 6. The drafter and all drafter-owned MLX state are released before sparse
-//!    target execution resumes. Target expert retention is then re-enabled.
+//!    target execution resumes. Complete target residency is restored when the
+//!    live request state and exact expert payload fit together.
 //! 7. A successful sparse target prefix can be persisted under the complete
 //!    target/drafter/policy/prompt identity for exact later reuse.
 //!
@@ -44,7 +45,9 @@
 mod chunk_mode;
 mod speculative_prefill_control_span;
 // Drafter-state restoration and synchronous block publication.
+mod speculative_prefill_draft_artifact_loading;
 mod speculative_prefill_draft_cache;
+mod speculative_prefill_draft_release;
 // Request-specific policy gate evaluated after any target prefix restore.
 mod speculative_prefill_eligibility;
 // Bounded public errors and rich local failure evidence.
@@ -53,6 +56,7 @@ mod speculative_prefill_failure_diagnostics;
 // MLX input assembly and exact memory admission for the drafter phase.
 mod speculative_prefill_gpu_input;
 mod speculative_prefill_memory_admission;
+mod speculative_prefill_memory_admission_policy;
 // Startup/request-scoped drafter validation, loading, and policy activation.
 mod speculative_prefill_model_loading;
 mod speculative_prefill_policy_activation;
@@ -83,14 +87,14 @@ pub use self::speculative_prefill_selection::{
 };
 
 // Runtime orchestration details remain crate-visible rather than public API.
+pub(crate) use self::speculative_prefill_draft_artifact_loading::{
+    load_speculative_prefill_draft_model, token_identifier_mapping_digest,
+};
 pub(crate) use self::speculative_prefill_eligibility::{
     Qwen3_5SpeculativePrefillRequestEligibility, qwen3_5_speculative_prefill_request_eligibility,
 };
 pub(crate) use self::speculative_prefill_failure::{
     configured_speculative_prefill_activation_failure, configured_speculative_prefill_failure,
-};
-pub(crate) use self::speculative_prefill_model_loading::{
-    load_speculative_prefill_draft_model, token_identifier_mapping_digest,
 };
 pub(crate) use self::speculative_prefill_scoring::SpeculativePrefillSelectionPreparation;
 pub(crate) use self::speculative_prefill_store::{

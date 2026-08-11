@@ -20,7 +20,7 @@ impl Qwen3_5EngineState {
     ///
     /// MLX indexing uses Int32 at this boundary. Every length and identifier is
     /// checked before allocation so a lossy cast can never select another token.
-    pub(crate) fn prepare_speculative_prefill_prompt_token_indices_on_gpu(
+    pub(in crate::qwen3_5) fn prepare_speculative_prefill_prompt_token_indices_on_gpu(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
     ) -> Result<(), Qwen3_5ExecutionError> {

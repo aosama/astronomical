@@ -12,7 +12,7 @@ impl Qwen3_5EngineState {
     ///
     /// Diagnostics are best effort so telemetry collection can never replace the
     /// original fail-closed SpecPrefill error.
-    pub(crate) fn log_speculative_prefill_drafter_failure_diagnostics(
+    pub(in crate::qwen3_5) fn log_speculative_prefill_drafter_failure_diagnostics(
         &self,
         active_request: &Qwen3_5EngineRequest,
     ) {

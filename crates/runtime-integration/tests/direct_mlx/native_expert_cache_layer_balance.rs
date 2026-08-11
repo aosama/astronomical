@@ -2,8 +2,12 @@ use std::fs;
 
 use astronomical_runtime_integration::{MlxNativeExpertCache, MlxNativeExpertLayerDescriptor};
 
-use super::native_expert_cache::{EXPERT_CAPACITY, build_two_expert_source_fixture};
+use super::native_expert_cache_fixture::{EXPERT_CAPACITY, build_two_expert_source_fixture};
 use crate::common::runtime_test_support::runtime;
+
+// These tests distinguish the one hard global byte ceiling from per-layer
+// fairness. A layer may borrow unused bytes, but it may not destroy another
+// populated layer's protected decode working set merely to retain a broad route.
 
 #[test]
 fn should_preserve_each_layers_decode_working_set_when_a_broad_route_exceeds_its_proportional_share()
@@ -56,6 +60,83 @@ fn should_preserve_each_layers_decode_working_set_when_a_broad_route_exceeds_its
     assert_eq!(second_layer_report.cache_hit_count(), 1);
     assert_eq!(second_layer_report.cache_miss_count(), 0);
     assert_eq!(second_layer_report.disk_page_load_count(), 0);
+}
+
+#[test]
+fn should_not_rebalance_layers_when_the_global_ceiling_still_fits() {
+    let runtime = runtime();
+    let fixture_directory =
+        tempfile::tempdir().expect("the layer-balanced cache fixture should exist");
+    let source_file_path = fixture_directory.path().join("expert-source.bin");
+    let (source_file_bytes, source_descriptors) =
+        build_two_expert_source_fixture(&source_file_path);
+    fs::write(&source_file_path, &source_file_bytes)
+        .expect("the layer-balanced source fixture should be writable");
+    let bytes_per_expert = source_file_bytes.len() as u64 / EXPERT_CAPACITY as u64;
+    let layer_descriptor = MlxNativeExpertLayerDescriptor::new(EXPERT_CAPACITY, source_descriptors);
+    let native_expert_cache = MlxNativeExpertCache::new(
+        &runtime,
+        &[layer_descriptor.clone(), layer_descriptor],
+        bytes_per_expert * 4,
+    )
+    .expect("the two-layer cache should accept the initial ceiling");
+    let both_first_layer_experts = runtime
+        .array_from_i32(&[0, 1], &[1, 2])
+        .expect("the complete first-layer route should be valid");
+
+    native_expert_cache
+        .prepare_layer(&runtime, 0, &both_first_layer_experts, true)
+        .expect("both first-layer experts should enter retention");
+    assert_eq!(native_expert_cache.statistics().resident_expert_count(), 2);
+
+    native_expert_cache
+        .update_maximum_resident_payload_byte_count(bytes_per_expert * 2)
+        .expect("the lower global ceiling should fit the existing payload");
+
+    let statistics_after_global_ceiling_update = native_expert_cache.statistics();
+    assert_eq!(
+        statistics_after_global_ceiling_update.resident_expert_count(),
+        2,
+        "global enforcement must not evict a page when total resident bytes already fit",
+    );
+    assert_eq!(
+        statistics_after_global_ceiling_update.resident_payload_byte_count(),
+        bytes_per_expert * 2,
+    );
+}
+
+#[test]
+fn should_borrow_unused_layer_capacity_for_a_hot_route() {
+    let runtime = runtime();
+    let fixture_directory = tempfile::tempdir().expect("the layer-borrowing fixture should exist");
+    let source_file_path = fixture_directory.path().join("expert-source.bin");
+    let (source_file_bytes, source_descriptors) =
+        build_two_expert_source_fixture(&source_file_path);
+    fs::write(&source_file_path, &source_file_bytes)
+        .expect("the layer-borrowing source fixture should be writable");
+    let bytes_per_expert = source_file_bytes.len() as u64 / EXPERT_CAPACITY as u64;
+    let layer_descriptor = MlxNativeExpertLayerDescriptor::new(EXPERT_CAPACITY, source_descriptors);
+    let native_expert_cache = MlxNativeExpertCache::new(
+        &runtime,
+        &[layer_descriptor.clone(), layer_descriptor],
+        bytes_per_expert * 2,
+    )
+    .expect("the cache should provide two globally available expert slots");
+    let both_first_layer_experts = runtime
+        .array_from_i32(&[0, 1], &[1, 2])
+        .expect("the broad first-layer route should be valid");
+
+    let (_snapshot, cold_report) = native_expert_cache
+        .prepare_layer(&runtime, 0, &both_first_layer_experts, true)
+        .expect("the hot layer should borrow the unused second-layer capacity");
+    assert_eq!(cold_report.disk_page_load_count(), 2);
+    assert_eq!(native_expert_cache.statistics().resident_expert_count(), 2);
+
+    let (_warm_snapshot, warm_report) = native_expert_cache
+        .prepare_layer(&runtime, 0, &both_first_layer_experts, true)
+        .expect("the borrowed hot route should remain warm");
+    assert_eq!(warm_report.disk_page_load_count(), 0);
+    assert_eq!(native_expert_cache.statistics().resident_expert_count(), 2);
 }
 
 #[test]

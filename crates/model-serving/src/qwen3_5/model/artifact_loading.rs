@@ -238,6 +238,7 @@ impl Qwen3_5Model {
             // Publication occurs only after core materialization and a fresh idle
             // memory sample in the engine loading path.
             resident_expert_weights: None,
+            should_defer_next_request_finalization_resident_promotion: false,
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,

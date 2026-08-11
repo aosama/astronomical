@@ -35,7 +35,7 @@ This records the verified automatic Qwen3.5 and Qwen3.6 affine and native bfloat
 - Resident request admission projects current active bytes, exact context reservation, direct cache-publication workspace when enabled, and any draft page reserve. Target page reserve is zero because the complete owner is already active.
 - If that projection fails, admission demotes the complete owner and repeats from fresh active bytes with one largest target top-K expert page reserved.
 - Persistent prompt-cache restoration repeats this mutable admission with one loaded-prefix key/value overlap before reading arrays, then re-admits only the remaining context after dropping loaded owners.
-- Later prefill or decode growth uses exact persistent-state growth, exact temporary workspace, and a target page reserve only in paged mode. It demotes and reprojects before page-level reclamation or rejection.
+- Later prefill or decode growth uses exact persistent-state growth, exact temporary workspace, and a target page reserve only in paged mode. A multi-token resident prefill retries a smaller chunk before demotion; one-token work demotes and reprojects before page-level reclamation or rejection.
 - No formula contains a model-name threshold or laptop-specific memory constant.
 
 ## Resident production flow
@@ -48,11 +48,11 @@ This records the verified automatic Qwen3.5 and Qwen3.6 affine and native bfloat
 ## Paged production flow
 
 1. **CPU: build routing graph.** Rust builds lazy router projection, softmax, top-K selection, score gathering, and normalization operations.
-2. **CPU: reserve the possible route.** Before lazy route synchronization, Rust bounds distinct experts by route assignments and layer capacity, projects that payload against live MLX memory, and lowers optional retention when needed. The separate initial request reserve remains one model-derived top-K page.
-3. **Rust to C++: pass the route unchanged.** Rust gives the lazy selected-index MLX array to the native cache. Original indices remain available for projection and score alignment.
-4. **GPU: reduce route evidence.** Native C++ builds a fixed bitmap. One thread per assignment atomically marks one expert bit and records an out-of-range value in a guard word.
-5. **CPU and GPU: synchronize when needed.** An incomplete native-cache layer evaluates and copies the bitmap once. Evaluation executes required router dependencies. A completely retained native-cache layer defers that synchronization and retains the lazy bitmap as pending recency evidence.
-6. **CPU: apply cache policy.** Native C++ looks up `(layer index, expert ID)` entries, updates recency, and protects the routed set. It first evicts the current layer's oldest unprotected slots until that layer fits its proportional share, then prefers globally oldest entries from layers above their shares if the global ceiling still requires space. Pending complete-layer evidence is reconciled before eviction.
+2. **Rust to C++: pass the route unchanged.** Rust gives the lazy selected-index MLX array to native analysis. Original indices remain available for projection and score alignment.
+3. **GPU: reduce route evidence.** Native C++ builds a fixed bitmap. One thread per assignment atomically marks one expert bit and records an out-of-range value in a guard word.
+4. **CPU and GPU: synchronize when needed.** An incomplete layer evaluates the bitmap once and reports exact distinct, missing, and payload counts before disk reads. A complete layer defers synchronization and retains the bitmap as pending recency evidence.
+5. **CPU: admit exact misses.** Rust samples MLX memory after route evaluation, reserves exact missing payload plus the model-derived future-page reserve, and derives the route ceiling.
+6. **CPU: commit cache policy.** Native C++ atomically installs the ceiling with route protection, updates recency, and evicts only the global deficit. It prefers entries above proportional layer floors, then global least-recently-used entries. Unused layer capacity is borrowable.
 7. **CPU and SSD: fill missing slots.** Each missing expert receives one aligned MLX `PagedBufferSlot`. One batched `read_paged_buffer_ranges` call reads its gate, up, and down tensor ranges directly into the slot. The slot is committed before immutable typed views are created.
 8. **CPU: publish immutable snapshots.** Changed layers rebuild metadata snapshots over retained slots. A snapshot contains no copied expert payload and keeps every referenced slot alive through lazy GPU execution.
 9. **GPU: execute gathered projections.** Native affine or bfloat16 gathered matrix multiplication consumes original global expert IDs. Prompt processing uses sorted assignments; decode can use unsorted assignments. Affine execution applies MLX's common activation, scale, and bias output type without widening retained page storage.
@@ -64,24 +64,24 @@ This records the verified automatic Qwen3.5 and Qwen3.6 affine and native bfloat
 - Promotion synchronizes the model stream, freezes and empties native retention, clears reclaimable allocator storage, checks the exact complete payload, materializes a local candidate, then publishes `Resident` atomically.
 - A non-fitting or source-validation-failed promotion resumes native retention and keeps mode `Paged`. Runtime cleanup failures remain fatal.
 - Demotion synchronizes the model stream, drops the complete resident owner, clears allocator storage, then resumes native retention.
-- Startup, request admission, prompt-cache restoration, later request pressure, request finalization, speculative-prefill draft loading, and live ceiling changes use these same boundaries. No partial resident model exists.
+- Startup, request admission, prompt-cache restoration, later request pressure, request finalization, speculative-prefill draft loading, and live ceiling changes use these same boundaries. No partial resident model exists. The first finalization after request-driven demotion defers promotion to avoid same-request unload/reload churn.
 
 | Trigger | Transition rule | Published state |
 | --- | --- | --- |
 | Startup | Clean allocator storage, then attempt exact complete-payload admission. | `Resident` when the candidate fits; otherwise `Paged`. |
 | Initial request admission | Keep residency when the exact request fits; otherwise demote before request arrays are allocated. | Mode used by the first sparse forward. |
 | Prompt-cache restoration | Demote before reading cached arrays when exact reconstruction overlap does not fit, then re-admit remaining context after reconstruction cleanup. | `Paged` during the pressured request. |
-| Later request pressure | Demote and repeat the unchanged growth projection from a fresh paged baseline. | `Paged` for the remaining pressured request. |
-| Request finalization | Drop request arrays, synchronize, clear allocator storage, then attempt promotion. | Idle mode prepared for the next request. |
+| Later request pressure | Retry smaller multi-token prefill work, then demote only when minimum work still requires it. | `Paged` for the remaining pressured request. |
+| Request finalization | Drop request arrays, synchronize, and clear allocator storage. Skip the first promotion after request-driven demotion. | `Paged` without immediate full-payload reload, or the prior idle mode. |
 | Ceiling decrease | Demote first when current resident active bytes exceed the requested ceiling, then reduce native retention before changing MLX limits. | Safe mode beneath the accepted ceiling. |
 | Ceiling increase | Increase MLX and native capacity first, then attempt promotion. | `Resident` only after complete publication. |
-| Request-scoped draft loading | Demote the target or empty its pages, load the draft, and attempt draft residency only for the copy that performs scoring. | Target remains paged until finalization recovery. |
+| Request-scoped draft loading | Project current target active memory plus exact draft artifact payload. Preserve complete target residency when both fit; otherwise demote or reclaim only the required target payload. Recheck scoring workspace after loading. | After draft release, restore complete target residency before target execution whenever the live request state fits. |
 
 Readiness, model-swap, memory-limit, generation-finalization, and idle telemetry publish the selected state directly. Consumers do not infer mode from byte totals.
 
 ## Route larger than retention capacity
 
-The cache reuses routed hits, loads only missing routed experts, and returns an immutable ephemeral snapshot without evicting retained pages. Ephemeral slots remain alive through lazy GPU execution but never enter recency or retained-payload accounting.
+The cache reuses routed hits, loads only missing routed experts, and returns an immutable ephemeral snapshot without admitting misses or displacing another layer’s floor. Ephemeral slots remain alive through lazy graphics-processor execution but never enter recency or retained-payload accounting.
 
 ## Cache policy
 
@@ -89,9 +89,9 @@ The cache reuses routed hits, loads only missing routed experts, and returns an 
 - Only router-requested experts can enter the cache.
 - Hits and insertions advance one monotonic access sequence.
 - The in-flight route is protected during admission.
-- One byte ceiling covers all layers and is divided into proportional layer shares rounded to complete expert pages.
-- Per-layer eviction protects each layer's decode working set. Global fallback prefers layers above their proportional shares, then uses access sequence, layer index, and expert ID.
-- A route larger than its layer share executes ephemerally and cannot displace another layer's retained working set.
+- One byte ceiling covers all layers. Proportional shares rounded to complete pages are eviction floors and preferences, not independent hard ceilings.
+- A layer borrows unused global capacity. Global eviction prefers extras above layer floors, then uses access sequence, layer index, and expert ID.
+- A route larger than its borrowable capacity executes ephemerally and cannot displace another layer's retained floor.
 - Request pressure can freeze growth, lower the ceiling, reclaim exact bytes, and later resume retention. While frozen, a lower route-specific ceiling evicts immediately; only a higher ceiling is deferred. Resume installs the newest configured ceiling, and resident payload never remains above the active ceiling.
 - The paged native cache never prewarms experts; only router-requested pages enter it.
 
@@ -108,7 +108,7 @@ The cache reuses routed hits, loads only missing routed experts, and returns an 
 ## Attribution
 
 - `native_expert_cache_route_preparation` covers route evaluation, cache policy, source reads, and snapshot preparation.
-- Native request reports count hits, misses, disk pages, disk batches, successful source reads, source bytes, optional source-read elapsed time, publications, payload copies, and complete-layer synchronization elisions. Cumulative native statistics also count evictions.
+- Native request reports count assignments, exact distinct and missing experts, selected and missing payload bytes, ceiling before and after commit, evicted payload bytes, hits, misses, disk pages, disk batches, successful source reads, source bytes, optional source-read elapsed time, publications, payload copies, and complete-layer synchronization elisions. A complete-layer elision reports zero missing bytes without synchronizing distinct-route evidence. Cumulative native statistics also count evictions.
 - Native request reports separately count and time route-dependency synchronization. This wait can execute the preceding lazy projection and router graph, so it must not be labeled as cache-policy or solid-state-drive time.
 - Source-read elapsed time is collected only when performance attribution is enabled.
 - `native_paged_expert_projection_graph_count` reports native paged gathered projection graphs.

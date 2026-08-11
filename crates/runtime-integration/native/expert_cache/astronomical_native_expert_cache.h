@@ -19,6 +19,10 @@ typedef struct astronomical_native_expert_cache_
 // gathered product can dereference, independently of later cache eviction.
 typedef struct astronomical_native_expert_snapshot_
     astronomical_native_expert_snapshot;
+// Exact route evidence evaluated before cache policy or disk reads. The handle
+// is consumed by the matching commit call and must be freed by the caller.
+typedef struct astronomical_native_expert_route_analysis_
+    astronomical_native_expert_route_analysis;
 
 typedef enum astronomical_native_expert_projection_ {
   ASTRONOMICAL_NATIVE_EXPERT_GATE = 0,
@@ -54,8 +58,11 @@ typedef struct astronomical_native_expert_layer_descriptor_ {
 } astronomical_native_expert_layer_descriptor;
 
 typedef struct astronomical_native_expert_cache_request_report_ {
-  // Request-local route evidence. Wall-clock timing fields remain zero when
-  // collection is disabled; counts and bytes still describe cache behavior.
+  // One route's complete explanation in numbers: what the router asked for,
+  // what was already cached, what had to be loaded or evicted, and how the
+  // ceiling changed. Timing stays zero when collection is disabled; counts and
+  // byte values remain available because they are needed for correctness.
+  // Reuse and storage effects.
   uint64_t cache_hit_count;
   uint64_t cache_miss_count;
   uint64_t disk_page_load_count;
@@ -69,6 +76,16 @@ typedef struct astronomical_native_expert_cache_request_report_ {
   uint64_t payload_copy_byte_count;
   uint64_t page_table_publication_count;
   uint64_t complete_layer_route_synchronization_elision_count;
+  // Router request: assignments may repeat; distinct experts never do.
+  uint64_t selected_expert_assignment_count;
+  uint64_t distinct_route_expert_count;
+  uint64_t missing_route_expert_count;
+  uint64_t selected_route_payload_byte_count;
+  uint64_t missing_route_payload_byte_count;
+  // Policy result: what was removed and the global limit before and after.
+  uint64_t evicted_payload_byte_count;
+  uint64_t retention_ceiling_before_byte_count;
+  uint64_t retention_ceiling_after_byte_count;
 } astronomical_native_expert_cache_request_report;
 
 typedef struct astronomical_native_expert_cache_statistics_ {
@@ -102,8 +119,36 @@ int astronomical_native_expert_cache_prepare_layer(
     astronomical_native_expert_snapshot** output_snapshot,
     astronomical_native_expert_cache_request_report* output_report);
 
-// Replaces the configured and active retention ceiling, rebalancing layer
-// shares and evicting least-recently-used entries when growth is not frozen.
+// Phase 1 of ordinary serving: reduce repeated router assignments to exact
+// unique experts and report exact missing bytes. This performs no weight read
+// and admits no new cache page.
+int astronomical_native_expert_cache_analyze_layer(
+    astronomical_native_expert_cache* cache,
+    size_t layer_index,
+    mlx_array selected_expert_indices,
+    mlx_stream stream,
+    int collect_performance_metrics,
+    astronomical_native_expert_route_analysis** output_analysis,
+    astronomical_native_expert_cache_request_report* output_report);
+
+// Phase 2 of ordinary serving: atomically apply Rust's safe byte ceiling while
+// protecting this route, load only its missing experts, and publish a snapshot.
+// Splitting the phases prevents a worst-case assignment estimate from evicting
+// useful pages before the exact route is known.
+int astronomical_native_expert_cache_commit_layer(
+    astronomical_native_expert_cache* cache,
+    astronomical_native_expert_route_analysis* route_analysis,
+    uint64_t maximum_resident_payload_byte_count,
+    mlx_stream stream,
+    int collect_performance_metrics,
+    astronomical_native_expert_snapshot** output_snapshot,
+    astronomical_native_expert_cache_request_report* output_report);
+
+void astronomical_native_expert_route_analysis_free(
+    astronomical_native_expert_route_analysis* route_analysis);
+
+// Replaces the configured and active global retention ceiling. Eviction removes
+// only the global byte deficit; layer shares decide which victim is fairest.
 int astronomical_native_expert_cache_update_maximum_resident_payload_bytes(
     astronomical_native_expert_cache* cache,
     uint64_t maximum_resident_payload_byte_count);

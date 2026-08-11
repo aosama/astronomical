@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -85,6 +86,21 @@ struct PendingRouteEvidence {
   mx::array selected_expert_bitmap;
 };
 
+// Think of this as a shopping list, not a shopping cart. Analysis answers
+// "which experts does this layer need?" and "which are missing?" without
+// loading any weight bytes. Rust can therefore measure memory and choose a safe
+// cache ceiling before commit spends memory or reads the solid-state drive.
+struct NativeExpertRouteAnalysis {
+  size_t layer_index;
+  // Ordinary incomplete layers have exact, sorted, unique expert IDs here.
+  // A complete layer leaves this empty so its lazy bitmap need not synchronize.
+  std::optional<std::vector<size_t>> selected_expert_ids;
+  std::optional<mx::array> selected_expert_bitmap;
+  // If a complete layer's ceiling shrinks between analysis and commit, this
+  // snapshot keeps the already-valid route alive while cache ownership changes.
+  std::shared_ptr<const paged::PageTableSnapshot> complete_layer_snapshot;
+};
+
 struct PreparedExpertRoute {
   // This shared snapshot is captured by lazy MLX primitives. Later cache policy
   // may publish a new generation without invalidating this route's addresses.
@@ -93,6 +109,17 @@ struct PreparedExpertRoute {
   // is reserved for an entirely resident layer.
   std::optional<std::vector<size_t>> selected_expert_ids;
 };
+
+// Compares two independently owned payloads without adding them first. Unsigned
+// wraparound must fail closed rather than make an impossible route appear small.
+constexpr bool combined_payload_exceeds_byte_ceiling(
+    uint64_t resident_payload_byte_count,
+    uint64_t pending_payload_byte_count,
+    uint64_t payload_byte_ceiling) {
+  return pending_payload_byte_count > payload_byte_ceiling ||
+      resident_payload_byte_count >
+          payload_byte_ceiling - pending_payload_byte_count;
+}
 
 struct CacheKey {
   size_t layer_index;
@@ -131,6 +158,20 @@ class NativeExpertCache {
       bool collect_performance_metrics,
       astronomical_native_expert_cache_request_report& report);
 
+  NativeExpertRouteAnalysis analyze_layer(
+      size_t layer_index,
+      const mx::array& selected_expert_indices,
+      mx::Stream stream,
+      bool collect_performance_metrics,
+      astronomical_native_expert_cache_request_report& report);
+
+  PreparedExpertRoute commit_layer(
+      NativeExpertRouteAnalysis route_analysis,
+      uint64_t maximum_resident_payload_byte_count,
+      mx::Stream stream,
+      bool collect_performance_metrics,
+      astronomical_native_expert_cache_request_report& report);
+
   astronomical_native_expert_cache_statistics statistics() const;
   void update_maximum_resident_payload_byte_count(
       uint64_t maximum_resident_payload_byte_count);
@@ -149,9 +190,13 @@ class NativeExpertCache {
       bool collect_performance_metrics,
       astronomical_native_expert_cache_request_report* report) const;
   bool layer_is_fully_resident(size_t layer_index) const;
+  // Layer shares are fairness guides. They are not separate hard cache limits.
+  // A busy layer may borrow bytes that other layers are not using.
   uint64_t proportional_retention_share_byte_count(
       size_t layer_index) const;
-  uint64_t maximum_retained_payload_byte_count_for_layer(
+  uint64_t protected_retention_floor_byte_count_for_layer(
+      size_t layer_index) const;
+  uint64_t maximum_borrowable_retained_payload_byte_count_for_route(
       size_t layer_index) const;
   void enforce_maximum_resident_payload_byte_count(
       uint64_t maximum_resident_payload_byte_count);
@@ -167,21 +212,25 @@ class NativeExpertCache {
       size_t protected_layer_index,
       const std::vector<size_t>& protected_expert_ids,
       uint64_t pending_payload_byte_count,
-      std::vector<size_t>& changed_layer_indices);
-  void evict_layer_to_fit(
-      size_t layer_index,
-      const std::vector<size_t>& protected_expert_ids,
-      uint64_t pending_payload_byte_count,
-      std::vector<size_t>& changed_layer_indices);
+      std::vector<size_t>& changed_layer_indices,
+      uint64_t* evicted_payload_byte_count_output = nullptr);
   uint64_t publish_changed_layers(
       const std::vector<size_t>& changed_layer_indices);
   void publish_layer(size_t layer_index);
+  uint64_t payload_byte_count_for_expert_ids(
+      size_t layer_index,
+      const std::vector<size_t>& expert_ids) const;
+  std::vector<size_t> missing_expert_ids_for_route(
+      size_t layer_index,
+      const std::vector<size_t>& selected_expert_ids) const;
 
   std::vector<LayerProfile> layer_profiles_;
   std::unordered_map<std::string, std::shared_ptr<OpenedSourceFile>>
       opened_source_files_;
   std::unordered_map<CacheKey, CacheEntry, CacheKeyHash> cache_entries_;
   uint64_t resident_payload_byte_count_{0};
+  // configured_ remembers the newest long-lived policy. maximum_ is the active
+  // request ceiling and may be temporarily lower while growth is frozen.
   uint64_t configured_maximum_resident_payload_byte_count_;
   uint64_t maximum_resident_payload_byte_count_;
   bool retention_growth_frozen_{false};
@@ -195,6 +244,13 @@ class NativeExpertCache {
 
 struct astronomical_native_expert_cache_ {
   std::unique_ptr<astronomical::native_expert_cache::NativeExpertCache> cache;
+};
+
+struct astronomical_native_expert_route_analysis_ {
+  astronomical_native_expert_cache* owner;
+  std::unique_ptr<astronomical::native_expert_cache::NativeExpertRouteAnalysis>
+      route;
+  astronomical_native_expert_cache_request_report report{};
 };
 
 struct astronomical_native_expert_snapshot_ {

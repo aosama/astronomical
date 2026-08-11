@@ -16,7 +16,15 @@ pub enum PerformanceCounter {
     PrefillCapacityRetryCount,
     NativeExpertCacheHitCount,
     NativeExpertCacheMissCount,
+    NativeExpertCacheSelectedExpertAssignmentCount,
+    NativeExpertCacheDistinctRouteExpertCount,
+    NativeExpertCacheMissingRouteExpertCount,
+    NativeExpertCacheSelectedRoutePayloadByteCount,
+    NativeExpertCacheMissingRoutePayloadByteCount,
     NativeExpertCacheEvictionCount,
+    NativeExpertCacheEvictedPayloadByteCount,
+    NativeExpertCacheMaximumRetentionCeilingBeforeByteCount,
+    NativeExpertCacheMaximumRetentionCeilingAfterByteCount,
     NativeExpertCacheDiskPageLoadCount,
     NativeExpertCacheDiskBatchLoadCount,
     NativeExpertCacheSuccessfulSourceReadCount,
@@ -83,7 +91,15 @@ impl PerformanceCounter {
         Self::PrefillCapacityRetryCount,
         Self::NativeExpertCacheHitCount,
         Self::NativeExpertCacheMissCount,
+        Self::NativeExpertCacheSelectedExpertAssignmentCount,
+        Self::NativeExpertCacheDistinctRouteExpertCount,
+        Self::NativeExpertCacheMissingRouteExpertCount,
+        Self::NativeExpertCacheSelectedRoutePayloadByteCount,
+        Self::NativeExpertCacheMissingRoutePayloadByteCount,
         Self::NativeExpertCacheEvictionCount,
+        Self::NativeExpertCacheEvictedPayloadByteCount,
+        Self::NativeExpertCacheMaximumRetentionCeilingBeforeByteCount,
+        Self::NativeExpertCacheMaximumRetentionCeilingAfterByteCount,
         Self::NativeExpertCacheDiskPageLoadCount,
         Self::NativeExpertCacheDiskBatchLoadCount,
         Self::NativeExpertCacheSuccessfulSourceReadCount,
@@ -149,7 +165,31 @@ impl PerformanceCounter {
             Self::PrefillCapacityRetryCount => "prefill_capacity_retry_count",
             Self::NativeExpertCacheHitCount => "native_expert_cache_hit_count",
             Self::NativeExpertCacheMissCount => "native_expert_cache_miss_count",
+            Self::NativeExpertCacheSelectedExpertAssignmentCount => {
+                "native_expert_cache_selected_expert_assignment_count"
+            }
+            Self::NativeExpertCacheDistinctRouteExpertCount => {
+                "native_expert_cache_distinct_route_expert_count"
+            }
+            Self::NativeExpertCacheMissingRouteExpertCount => {
+                "native_expert_cache_missing_route_expert_count"
+            }
+            Self::NativeExpertCacheSelectedRoutePayloadByteCount => {
+                "native_expert_cache_selected_route_payload_byte_count"
+            }
+            Self::NativeExpertCacheMissingRoutePayloadByteCount => {
+                "native_expert_cache_missing_route_payload_byte_count"
+            }
             Self::NativeExpertCacheEvictionCount => "native_expert_cache_eviction_count",
+            Self::NativeExpertCacheEvictedPayloadByteCount => {
+                "native_expert_cache_evicted_payload_byte_count"
+            }
+            Self::NativeExpertCacheMaximumRetentionCeilingBeforeByteCount => {
+                "native_expert_cache_maximum_retention_ceiling_before_byte_count"
+            }
+            Self::NativeExpertCacheMaximumRetentionCeilingAfterByteCount => {
+                "native_expert_cache_maximum_retention_ceiling_after_byte_count"
+            }
             Self::NativeExpertCacheDiskPageLoadCount => "native_expert_cache_disk_page_load_count",
             Self::NativeExpertCacheDiskBatchLoadCount => {
                 "native_expert_cache_disk_batch_load_count"

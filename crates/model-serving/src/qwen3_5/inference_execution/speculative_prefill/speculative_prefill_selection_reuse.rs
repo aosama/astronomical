@@ -24,7 +24,7 @@ impl Qwen3_5EngineState {
     /// Visual requests bypass both stores here. The in-memory key does not include
     /// image digests, and persisted selection contracts intentionally represent
     /// text selection only; reusing either could bind positions to different images.
-    pub(crate) fn reuse_speculative_prefill_selection_if_available(
+    pub(in crate::qwen3_5) fn reuse_speculative_prefill_selection_if_available(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
         selection_store_token_key: &Qwen3_5SpeculativePrefillStoreKey,
