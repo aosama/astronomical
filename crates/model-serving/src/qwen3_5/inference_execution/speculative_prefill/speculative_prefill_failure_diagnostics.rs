@@ -1,15 +1,24 @@
-use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+//! Best-effort diagnostic snapshot for request-scoped drafter failures.
+//!
+//! MLX does not expose physical allocation ownership tags. The breakdown here is
+//! therefore a reconciliation of known logical owners against one process-wide
+//! active-memory snapshot, not a claim that each category was measured alone.
+
+use super::super::Qwen3_5EngineState;
+use super::super::engine_request::Qwen3_5EngineRequest;
 
 impl Qwen3_5EngineState {
     /// Emits one complete request and MLX snapshot after drafter work fails.
     ///
     /// Diagnostics are best effort so telemetry collection can never replace the
     /// original fail-closed SpecPrefill error.
-    pub(super) fn log_speculative_prefill_drafter_failure_diagnostics(
+    pub(crate) fn log_speculative_prefill_drafter_failure_diagnostics(
         &self,
         active_request: &Qwen3_5EngineRequest,
     ) {
+        // Snapshot through the target runtime because target and request-scoped
+        // drafter share process-global MLX accounting. Every conversion saturates
+        // or falls back so diagnostics cannot panic while handling another error.
         let current_mlx_memory_snapshot_attempt = self.model.as_ref().map(|target_model| {
             target_model
                 .runtime()
@@ -44,12 +53,18 @@ impl Qwen3_5EngineState {
             .and_then(Result::ok)
             .unwrap_or_default();
         let current_active_memory_breakdown = current_mlx_memory.3;
+        // Known target categories are derived from model/request geometry. The
+        // remainder includes runtime graph work and any still-live drafter work;
+        // it must remain explicitly unclassified rather than falsely attributed.
         let current_unclassified_runtime_work_bytes = current_mlx_memory
             .0
             .saturating_sub(current_active_memory_breakdown.expert_payload_bytes)
             .saturating_sub(current_active_memory_breakdown.model_core_payload_bytes)
             .saturating_sub(current_active_memory_breakdown.context_state_payload_bytes);
 
+        // The request captures a standalone drafter-phase snapshot before draft
+        // owners are dropped. Absence means capture itself was unavailable, not
+        // that the drafter necessarily consumed zero bytes.
         let draft_memory_telemetry = active_request.speculative_prefill_draft_memory_telemetry;
         let draft_memory_snapshot_available = draft_memory_telemetry.is_some();
         let draft_memory_telemetry = draft_memory_telemetry.unwrap_or(
@@ -57,6 +72,9 @@ impl Qwen3_5EngineState {
         );
         let draft_active_memory_breakdown = draft_memory_telemetry.active_memory_breakdown;
 
+        // Expert-cache statistics provide a relational before/after view. They
+        // are reliable for retained payload changes even though process-wide MLX
+        // active memory can include unrelated graph allocations.
         let target_expert_memory_statistics = self
             .model
             .as_ref()
@@ -65,6 +83,8 @@ impl Qwen3_5EngineState {
         let draft_persistent_prompt_cache_available = self
             .speculative_prefill_draft_persistent_prompt_cache
             .is_some();
+        // Cache counts describe durable logical content and are safe to collect
+        // without opening a new store or changing request state.
         let draft_persistent_prompt_cache_sequence_state_count = self
             .speculative_prefill_draft_persistent_prompt_cache
             .as_ref()
@@ -89,6 +109,8 @@ impl Qwen3_5EngineState {
             .map_or(0, |restored_target_token_positions| {
                 restored_target_token_positions.shape()[0].max(0) as usize
             });
+        // Scored suffix is derived from work-reuse counters so diagnostics remain
+        // meaningful even if scoring failed before a selection vector existed.
         let selected_target_position_count = active_request
             .speculative_prefill_selected_token_positions
             .as_ref()
@@ -105,6 +127,9 @@ impl Qwen3_5EngineState {
             .expert_weight_memory_cache_statistics_at_request_start
             .resident_payload_byte_count;
 
+        // Emit one event rather than a sequence of partial events. Correlating
+        // all fields by request ID lets a later investigation reconstruct the
+        // exact lifecycle point without changing the error returned to the user.
         tracing::error!(
             request_id = active_request.request_id.value(),
             target_model_id = self.model_id.as_deref().unwrap_or("unavailable"),
