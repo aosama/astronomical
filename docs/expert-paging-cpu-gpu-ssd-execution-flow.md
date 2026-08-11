@@ -34,6 +34,7 @@ This records the verified automatic Qwen3.5 and Qwen3.6 affine and native bfloat
 - Idle promotion projects `fresh active MLX bytes + exact complete expert payload bytes` against the stable ceiling.
 - Resident request admission projects current active bytes, exact context reservation, direct cache-publication workspace when enabled, and any draft page reserve. Target page reserve is zero because the complete owner is already active.
 - If that projection fails, admission demotes the complete owner and repeats from fresh active bytes with one largest target top-K expert page reserved.
+- Persistent prompt-cache restoration repeats this mutable admission with one loaded-prefix key/value overlap before reading arrays, then re-admits only the remaining context after dropping loaded owners.
 - Later prefill or decode growth uses exact persistent-state growth, exact temporary workspace, and a target page reserve only in paged mode. It demotes and reprojects before page-level reclamation or rejection.
 - No formula contains a model-name threshold or laptop-specific memory constant.
 
@@ -63,12 +64,13 @@ This records the verified automatic Qwen3.5 and Qwen3.6 affine and native bfloat
 - Promotion synchronizes the model stream, freezes and empties native retention, clears reclaimable allocator storage, checks the exact complete payload, materializes a local candidate, then publishes `Resident` atomically.
 - A non-fitting or source-validation-failed promotion resumes native retention and keeps mode `Paged`. Runtime cleanup failures remain fatal.
 - Demotion synchronizes the model stream, drops the complete resident owner, clears allocator storage, then resumes native retention.
-- Startup, request admission, later request pressure, request finalization, speculative-prefill draft loading, and live ceiling changes use these same boundaries. No partial resident model exists.
+- Startup, request admission, prompt-cache restoration, later request pressure, request finalization, speculative-prefill draft loading, and live ceiling changes use these same boundaries. No partial resident model exists.
 
 | Trigger | Transition rule | Published state |
 | --- | --- | --- |
 | Startup | Clean allocator storage, then attempt exact complete-payload admission. | `Resident` when the candidate fits; otherwise `Paged`. |
 | Initial request admission | Keep residency when the exact request fits; otherwise demote before request arrays are allocated. | Mode used by the first sparse forward. |
+| Prompt-cache restoration | Demote before reading cached arrays when exact reconstruction overlap does not fit, then re-admit remaining context after reconstruction cleanup. | `Paged` during the pressured request. |
 | Later request pressure | Demote and repeat the unchanged growth projection from a fresh paged baseline. | `Paged` for the remaining pressured request. |
 | Request finalization | Drop request arrays, synchronize, clear allocator storage, then attempt promotion. | Idle mode prepared for the next request. |
 | Ceiling decrease | Demote first when current resident active bytes exceed the requested ceiling, then reduce native retention before changing MLX limits. | Safe mode beneath the accepted ceiling. |

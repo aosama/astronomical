@@ -1,18 +1,21 @@
 //! Request-time escape from a resident model that no longer fits projected growth.
 //!
-//! The first projection is allowed to observe resident ownership. If it fails,
-//! this owner demotes the complete sparse payload, samples the resulting paged
-//! baseline, reserves one routed expert page, and repeats the same exact growth
-//! projection. Callers continue into page-level reclamation only if needed.
+//! Context and adaptive-growth admission first observe resident ownership. If
+//! that projection fails, this owner demotes the complete sparse payload and
+//! repeats the same exact projection from the resulting paged baseline. Callers
+//! continue into page-level reclamation only if needed.
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
 use crate::qwen3_5::model::adaptive_ram_growth_logging::log_adaptive_ram_growth_pressure;
-use crate::qwen3_5::model::memory_admission::invalid_request_error;
+use crate::qwen3_5::model::memory_admission::{
+    context_memory_admission_fits_without_expert_reclamation, invalid_request_error,
+    validate_context_memory_admission,
+};
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthProjection, InferenceEngineError,
-    PerformanceAttribution,
+    PerformanceAttribution, PerformanceOperation,
 };
 
 use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
@@ -26,6 +29,75 @@ pub(super) struct Qwen3_5ResidentAdaptiveGrowthDemotion {
 }
 
 impl Qwen3_5EngineState {
+    /// Applies the binary resident-to-paged transition before every context
+    /// admission boundary, including cache restoration and injected feedback.
+    pub(super) fn validate_context_memory_admission_with_resident_expert_demotion(
+        &mut self,
+        context_token_count_requiring_reservation: usize,
+        temporary_workspace_reservation_bytes: usize,
+        additional_maximum_expert_page_reservation_bytes: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<u64, InferenceEngineError> {
+        let target_expert_payload_bytes_before_context_admission = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        // Demote only when this exact operation would otherwise fail. Smaller
+        // operations retain the faster complete-model resident path.
+        let resident_model_requires_demotion = {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            model.resident_expert_weights.is_some()
+                && !context_memory_admission_fits_without_expert_reclamation(
+                    model,
+                    self.memory_limits,
+                    self.context_memory_reservation_bytes_per_token,
+                    context_token_count_requiring_reservation,
+                    temporary_workspace_reservation_bytes,
+                    additional_maximum_expert_page_reservation_bytes,
+                )?
+        };
+        if resident_model_requires_demotion {
+            self.model
+                .as_mut()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                .demote_resident_experts_to_paging(
+                    Qwen3_5ExpertResidencyTransitionReason::RequestAdmission,
+                    performance_attribution,
+                )
+                .map_err(InferenceEngineError::from)?;
+        }
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let context_admission_outcome = performance_attribution.measure_operation(
+            PerformanceOperation::MemoryAdmissionSnapshot,
+            |_performance_attribution| {
+                validate_context_memory_admission(
+                    model,
+                    self.memory_limits,
+                    self.context_memory_reservation_bytes_per_token,
+                    context_token_count_requiring_reservation,
+                    temporary_workspace_reservation_bytes,
+                    additional_maximum_expert_page_reservation_bytes,
+                )
+            },
+        );
+        let target_expert_payload_bytes_after_context_admission = model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        let target_expert_payload_bytes_reclaimed_during_context_admission =
+            target_expert_payload_bytes_before_context_admission
+                .saturating_sub(target_expert_payload_bytes_after_context_admission);
+        context_admission_outcome?;
+        Ok(target_expert_payload_bytes_reclaimed_during_context_admission)
+    }
+
     pub(super) fn demote_resident_experts_for_adaptive_growth(
         &mut self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,

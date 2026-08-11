@@ -30,6 +30,7 @@ fn should_round_trip_bounded_persistent_prompt_cache_request_diagnostics_on_comp
             published_block_count: 19,
             allocator_bytes_cleared_for_publication: 4_096,
             expert_bytes_reclaimed_for_publication: 8_192,
+            expert_bytes_reclaimed_for_restore: 16_384,
         }),
         reason: ChatGenerationCompletionReason::EndOfSequence,
     };
@@ -63,7 +64,8 @@ fn should_reject_unknown_startup_cleanup_evidence_fields() {
         },
         "published_block_count": 0,
         "allocator_bytes_cleared_for_publication": 0,
-        "expert_bytes_reclaimed_for_publication": 0
+        "expert_bytes_reclaimed_for_publication": 0,
+        "expert_bytes_reclaimed_for_restore": 0
     });
 
     let deserialization_error = serde_json::from_value::<
@@ -93,7 +95,8 @@ fn should_round_trip_null_startup_cleanup_evidence() {
         "startup_cleanup_evidence": null,
         "published_block_count": 0,
         "allocator_bytes_cleared_for_publication": 0,
-        "expert_bytes_reclaimed_for_publication": 0
+        "expert_bytes_reclaimed_for_publication": 0,
+        "expert_bytes_reclaimed_for_restore": 0
     });
 
     let diagnostics: WorkerPersistentPromptCacheRequestDiagnostics =

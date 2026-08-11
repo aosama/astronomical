@@ -161,5 +161,6 @@ fn accepted_cache_diagnostics() -> WorkerPersistentPromptCacheRequestDiagnostics
         published_block_count: 1,
         allocator_bytes_cleared_for_publication: 512,
         expert_bytes_reclaimed_for_publication: 1_024,
+        expert_bytes_reclaimed_for_restore: 0,
     }
 }

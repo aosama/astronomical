@@ -2,10 +2,7 @@ use astronomical_ipc_protocol::RequestId;
 
 use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
 
-use super::super::model::memory_admission::{
-    context_memory_admission_fits_without_expert_reclamation, invalid_request_error,
-    validate_context_memory_admission,
-};
+use super::super::model::memory_admission::invalid_request_error;
 use super::memory_admission::record_completed_adaptive_ram_growth;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 use crate::qwen3_5::multi_token_prediction::{
@@ -13,7 +10,6 @@ use crate::qwen3_5::multi_token_prediction::{
     projected_injected_prediction_growth_bytes, reseed_prediction_after_injected_prefix,
     reset_prediction_after_injection, restore_queued_prediction_prefix_before_injection,
 };
-use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 
 impl Qwen3_5EngineState {
     pub(super) fn inject_input_tokens(
@@ -87,44 +83,19 @@ impl Qwen3_5EngineState {
         // rejection leaves the continuation frontier unchanged.
         let additional_maximum_expert_page_reservation_bytes =
             self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
-        let resident_model_requires_demotion = {
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            model.resident_expert_weights.is_some()
-                && !context_memory_admission_fits_without_expert_reclamation(
-                    model,
-                    self.memory_limits,
-                    self.context_memory_reservation_bytes_per_token,
-                    projected_context_tokens,
-                    0,
-                    additional_maximum_expert_page_reservation_bytes,
-                )?
-        };
-        if resident_model_requires_demotion {
-            self.model
-                .as_mut()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-                .demote_resident_experts_to_paging(
-                    Qwen3_5ExpertResidencyTransitionReason::RequestAdmission,
-                    &mut active_request.performance_attribution,
-                )
-                .map_err(InferenceEngineError::from)?;
-        }
-        {
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            validate_context_memory_admission(
-                model,
-                self.memory_limits,
-                self.context_memory_reservation_bytes_per_token,
+        let target_expert_payload_bytes_reclaimed_during_injection = self
+            .validate_context_memory_admission_with_resident_expert_demotion(
                 projected_context_tokens,
                 0,
                 additional_maximum_expert_page_reservation_bytes,
+                &mut active_request.performance_attribution,
             )?;
+        if target_expert_payload_bytes_reclaimed_during_injection > 0 {
+            tracing::info!(
+                request_id = active_request.request_id.value(),
+                target_expert_payload_bytes_reclaimed_during_injection,
+                "admitted injected model feedback after reclaiming target experts"
+            );
         }
 
         // External feedback changes the continuation frontier. Discard both the

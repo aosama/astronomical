@@ -19,9 +19,7 @@ use crate::{
 };
 
 use super::super::RequestDecoderStateStack;
-use super::super::model::memory_admission::{
-    persistent_prompt_cache_restore_temporary_workspace_bytes, validate_context_memory_admission,
-};
+use super::super::model::memory_admission::persistent_prompt_cache_restore_temporary_workspace_bytes;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 /// The cache-specific portion of a newly admitted request's starting state.
 ///
@@ -49,10 +47,6 @@ impl Qwen3_5EngineState {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<PersistentPromptCacheRestoreOutcome, InferenceEngineError> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         // First decide the longest usable prefix using only the store's small
         // in-memory index. No MLX array is allocated until a whole contiguous
         // prefix is known to be available.
@@ -132,19 +126,19 @@ impl Qwen3_5EngineState {
                     "persistent prompt-cache restore workspace reservation overflowed",
                 )
             })?;
-        performance_attribution.measure_operation(
-            PerformanceOperation::MemoryAdmissionSnapshot,
-            |_performance_attribution| {
-                validate_context_memory_admission(
-                    model,
-                    self.memory_limits,
-                    self.context_memory_reservation_bytes_per_token,
-                    total_context_tokens,
-                    persistent_prompt_cache_restore_temporary_workspace_bytes,
-                    self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
-                )
-            },
-        )?;
+        let additional_maximum_expert_page_reservation_bytes =
+            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
+        let target_expert_payload_bytes_reclaimed_before_restore = self
+            .validate_context_memory_admission_with_resident_expert_demotion(
+                total_context_tokens,
+                persistent_prompt_cache_restore_temporary_workspace_bytes,
+                additional_maximum_expert_page_reservation_bytes,
+                performance_attribution,
+            )?;
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
 
         let mut last_restored_persistent_prompt_cache_block_key = lookup_result
             .last_restored_persistent_prompt_cache_block_key()
@@ -287,19 +281,18 @@ impl Qwen3_5EngineState {
                     "persistent prompt-cache restore exceeded the generation context",
                 )
             })?;
-        performance_attribution.measure_operation(
-            PerformanceOperation::MemoryAdmissionSnapshot,
-            |_performance_attribution| {
-                validate_context_memory_admission(
-                    model,
-                    self.memory_limits,
-                    self.context_memory_reservation_bytes_per_token,
-                    remaining_context_token_count,
-                    0,
-                    self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
-                )
-            },
-        )?;
+        let target_expert_payload_bytes_reclaimed_after_restore = self
+            .validate_context_memory_admission_with_resident_expert_demotion(
+                remaining_context_token_count,
+                0,
+                additional_maximum_expert_page_reservation_bytes,
+                performance_attribution,
+            )?;
+        let target_expert_payload_bytes_reclaimed_during_restore =
+            target_expert_payload_bytes_reclaimed_before_restore
+                .saturating_add(target_expert_payload_bytes_reclaimed_after_restore);
+        persistent_prompt_cache_diagnostics.expert_bytes_reclaimed_for_restore =
+            target_expert_payload_bytes_reclaimed_during_restore;
         tracing::info!(
             request_id = request_id.value(),
             prompt_token_count = prompt_token_ids.len(),
@@ -316,6 +309,7 @@ impl Qwen3_5EngineState {
             unrestored_matched_sequence_state_block_count = lookup_diagnostics
                 .matched_sequence_state_block_count()
                 .saturating_sub(complete_block_count),
+            target_expert_payload_bytes_reclaimed_during_restore,
             "persistent prompt-cache hit: restored prefix from disk"
         );
         let persistent_prompt_cache_token_count =
@@ -373,6 +367,7 @@ fn persistent_prompt_cache_request_diagnostics(
         published_block_count: 0,
         allocator_bytes_cleared_for_publication: 0,
         expert_bytes_reclaimed_for_publication: 0,
+        expert_bytes_reclaimed_for_restore: 0,
     }
 }
 

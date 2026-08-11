@@ -119,6 +119,8 @@ pub struct WorkerPersistentPromptCacheRequestDiagnostics {
     pub allocator_bytes_cleared_for_publication: u64,
     /// Pageable expert payload evicted to satisfy publication memory pressure.
     pub expert_bytes_reclaimed_for_publication: u64,
+    /// Expert payload reclaimed to admit cache reconstruction and remaining context.
+    pub expert_bytes_reclaimed_for_restore: u64,
 }
 
 impl WorkerPersistentPromptCacheRequestDiagnostics {
