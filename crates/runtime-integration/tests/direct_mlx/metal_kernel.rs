@@ -84,3 +84,42 @@ fn should_apply_a_custom_metal_kernel_with_a_scalar_integer_input() {
         &[4.0, 5.0, 6.0, 7.0],
     );
 }
+
+#[test]
+fn should_apply_a_custom_metal_kernel_with_a_small_uint32_output() {
+    let runtime = runtime();
+    let source_values = runtime
+        .array_from_u32(&[u32::MAX, 0, 0], &[3])
+        .expect("the uint32 source values should be valid");
+    let copy_kernel = MlxMetalKernel::new(
+        "astronomical_uint32_copy_kernel_test",
+        &["source_values"],
+        &["copied_values"],
+        r#"
+            for (uint element_index = 0; element_index < 3; ++element_index) {
+                copied_values[element_index] = source_values[element_index];
+            }
+        "#,
+    )
+    .expect("the uint32 custom Metal kernel should be constructed");
+    let mut copied_outputs = runtime
+        .apply_metal_kernel(
+            &copy_kernel,
+            &[&source_values],
+            &[MlxMetalKernelOutput::new(vec![3], MlxDtype::UInt32)],
+            [1, 1, 1],
+            [1, 1, 1],
+            &[],
+        )
+        .expect("the uint32 custom Metal kernel should build a valid graph");
+    let copied_values = copied_outputs
+        .pop()
+        .expect("the uint32 custom Metal kernel should return one output");
+
+    assert_eq!(
+        copied_values
+            .to_vec_u32()
+            .expect("the uint32 custom Metal output should evaluate"),
+        vec![u32::MAX, 0, 0]
+    );
+}

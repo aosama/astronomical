@@ -92,6 +92,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
         LazyScriptedModelFactory {
             model_factory_call_count: Arc::clone(&model_factory_call_count),
             mlx_memory_ceiling_bytes,
+            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
         },
         0,
     );
@@ -126,7 +127,10 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
 
     assert!(matches!(
         next_event(&mut supervisor_reader).await,
-        WorkerEvent::ModelSwapped { .. }
+        WorkerEvent::ModelSwapped {
+            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
+            ..
+        }
     ));
     assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 1);
 
@@ -141,6 +145,7 @@ async fn should_update_the_model_factory_memory_ceiling_after_a_loaded_engine_ch
         LazyScriptedModelFactory {
             model_factory_call_count,
             mlx_memory_ceiling_bytes: Arc::clone(&mlx_memory_ceiling_bytes),
+            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Paged),
         },
         40_000_000_000,
     );

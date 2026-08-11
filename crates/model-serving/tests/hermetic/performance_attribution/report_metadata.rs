@@ -31,14 +31,10 @@ fn should_serialize_unobserved_prefill_state_in_model_loading_report() {
         performance_attribution_json["prefill_observed_transient_high_water_bytes"],
         0
     );
-    assert_eq!(
-        performance_attribution_json["retained_complete_expert_layer_count"],
-        0
-    );
 }
 
 #[test]
-fn should_serialize_prefill_evidence_and_retained_layers_in_generation_report() {
+fn should_serialize_prefill_evidence_in_generation_report() {
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -51,10 +47,6 @@ fn should_serialize_prefill_evidence_and_retained_layers_in_generation_report() 
     assert_eq!(
         performance_attribution_json["prefill_observed_transient_high_water_bytes"],
         ATTRIBUTED_PREFILL_TRANSIENT_HIGH_WATER_BYTES
-    );
-    assert_eq!(
-        performance_attribution_json["retained_complete_expert_layer_count"],
-        ATTRIBUTED_RETAINED_COMPLETE_EXPERT_LAYER_COUNT
     );
 }
 

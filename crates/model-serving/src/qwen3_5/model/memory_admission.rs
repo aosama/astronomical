@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxMemoryLimits;
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxMemorySnapshot};
 
 use crate::InferenceEngineError;
 
@@ -6,8 +6,11 @@ use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5Model;
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
-/// Rejects a context before request cache allocation when its model-derived
-/// reservation would cross the machine-derived request admission budget.
+/// Admits context against the current expert owner, then reclaims paged retention.
+///
+/// Whole-owner demotion is orchestrated by the mutable engine before this model
+/// helper runs. Once paged, this helper can reclaim the exact native deficit and
+/// retry the unchanged projection before rejecting the user's request.
 pub(crate) fn validate_context_memory_admission(
     model: &Qwen3_5Model,
     memory_limits: MlxMemoryLimits,
@@ -16,35 +19,20 @@ pub(crate) fn validate_context_memory_admission(
     temporary_workspace_reservation_bytes: usize,
     additional_maximum_expert_page_reservation_bytes: usize,
 ) -> Result<(), InferenceEngineError> {
-    let initial_memory_snapshot = model
-        .runtime()
-        .memory_snapshot()
-        .map_err(qwen3_5_runtime_error)?;
-    let context_reservation_bytes = context_token_count_requiring_reservation
-        .checked_mul(context_memory_reservation_bytes_per_token)
-        .ok_or_else(|| invalid_request_error("generation context memory reservation overflowed"))?;
-    let maximum_expert_page_reservation_bytes = model
-        .expert_pager
-        .as_ref()
-        .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes());
+    let initial_projection = build_context_memory_admission_projection(
+        model,
+        memory_limits,
+        context_memory_reservation_bytes_per_token,
+        context_token_count_requiring_reservation,
+        temporary_workspace_reservation_bytes,
+        additional_maximum_expert_page_reservation_bytes,
+    )?;
+    let initial_memory_snapshot = initial_projection.memory_snapshot;
+    let context_reservation_bytes = initial_projection.context_reservation_bytes;
     let maximum_expert_page_reservation_bytes =
-        usize::try_from(maximum_expert_page_reservation_bytes)
-            .map_err(|_| {
-                invalid_request_error("maximum expert page reservation exceeds the platform range")
-            })?
-            .checked_add(additional_maximum_expert_page_reservation_bytes)
-            .ok_or_else(|| invalid_request_error("combined expert page reservation overflowed"))?;
-    let initial_projected_active_memory_bytes =
-        context_memory_admission_projected_active_memory_bytes(
-            initial_memory_snapshot.active_memory_bytes(),
-            context_reservation_bytes,
-            maximum_expert_page_reservation_bytes,
-        )
-        .and_then(|projected_active_memory_bytes| {
-            projected_active_memory_bytes.checked_add(temporary_workspace_reservation_bytes)
-        })
-        .ok_or_else(|| invalid_request_error("generation memory projection overflowed"))?;
-    let configured_mlx_memory_limit_bytes = memory_limits.active_memory_limit_bytes();
+        initial_projection.maximum_expert_page_reservation_bytes;
+    let initial_projected_active_memory_bytes = initial_projection.projected_active_memory_bytes;
+    let configured_mlx_memory_limit_bytes = initial_projection.configured_mlx_memory_limit_bytes;
     if initial_projected_active_memory_bytes <= configured_mlx_memory_limit_bytes {
         return Ok(());
     }
@@ -154,6 +142,83 @@ pub(crate) fn validate_context_memory_admission(
     Err(invalid_request_error(
         "generation context exceeds available GPU wired memory",
     ))
+}
+
+pub(crate) fn context_memory_admission_fits_without_expert_reclamation(
+    model: &Qwen3_5Model,
+    memory_limits: MlxMemoryLimits,
+    context_memory_reservation_bytes_per_token: usize,
+    context_token_count_requiring_reservation: usize,
+    temporary_workspace_reservation_bytes: usize,
+    additional_maximum_expert_page_reservation_bytes: usize,
+) -> Result<bool, InferenceEngineError> {
+    let projection = build_context_memory_admission_projection(
+        model,
+        memory_limits,
+        context_memory_reservation_bytes_per_token,
+        context_token_count_requiring_reservation,
+        temporary_workspace_reservation_bytes,
+        additional_maximum_expert_page_reservation_bytes,
+    )?;
+    Ok(projection.projected_active_memory_bytes <= projection.configured_mlx_memory_limit_bytes)
+}
+
+struct ContextMemoryAdmissionProjection {
+    memory_snapshot: MlxMemorySnapshot,
+    context_reservation_bytes: usize,
+    maximum_expert_page_reservation_bytes: usize,
+    projected_active_memory_bytes: usize,
+    configured_mlx_memory_limit_bytes: usize,
+}
+
+fn build_context_memory_admission_projection(
+    model: &Qwen3_5Model,
+    memory_limits: MlxMemoryLimits,
+    context_memory_reservation_bytes_per_token: usize,
+    context_token_count_requiring_reservation: usize,
+    temporary_workspace_reservation_bytes: usize,
+    additional_maximum_expert_page_reservation_bytes: usize,
+) -> Result<ContextMemoryAdmissionProjection, InferenceEngineError> {
+    let memory_snapshot = model
+        .runtime()
+        .memory_snapshot()
+        .map_err(qwen3_5_runtime_error)?;
+    let context_reservation_bytes = context_token_count_requiring_reservation
+        .checked_mul(context_memory_reservation_bytes_per_token)
+        .ok_or_else(|| invalid_request_error("generation context memory reservation overflowed"))?;
+    // Resident forwards need no route reserve because all expert arrays already
+    // contribute to active memory. Paged forwards reserve one largest top-K page.
+    let maximum_target_expert_page_reservation_bytes = if model.sparse_experts_are_paged() {
+        model
+            .expert_pager
+            .as_ref()
+            .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes())
+    } else {
+        0
+    };
+    let maximum_expert_page_reservation_bytes =
+        usize::try_from(maximum_target_expert_page_reservation_bytes)
+            .map_err(|_| {
+                invalid_request_error("maximum expert page reservation exceeds the platform range")
+            })?
+            .checked_add(additional_maximum_expert_page_reservation_bytes)
+            .ok_or_else(|| invalid_request_error("combined expert page reservation overflowed"))?;
+    let projected_active_memory_bytes = context_memory_admission_projected_active_memory_bytes(
+        memory_snapshot.active_memory_bytes(),
+        context_reservation_bytes,
+        maximum_expert_page_reservation_bytes,
+    )
+    .and_then(|projected_active_memory_bytes| {
+        projected_active_memory_bytes.checked_add(temporary_workspace_reservation_bytes)
+    })
+    .ok_or_else(|| invalid_request_error("generation memory projection overflowed"))?;
+    Ok(ContextMemoryAdmissionProjection {
+        memory_snapshot,
+        context_reservation_bytes,
+        maximum_expert_page_reservation_bytes,
+        projected_active_memory_bytes,
+        configured_mlx_memory_limit_bytes: memory_limits.active_memory_limit_bytes(),
+    })
 }
 
 /// Returns the duplicated full-attention key/value payload retained while

@@ -7,10 +7,7 @@ use astronomical_runtime_integration::{
     MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime,
 };
 
-use crate::expert_paging::ExpertWeightMemoryCache;
-use crate::qwen3_5_moe::{
-    Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
-};
+use crate::qwen3_5_moe::{Qwen3_5ExpertPager, qwen3_5_moe_sorted_expert_weighted_sum_kernel};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::model::Qwen3_5Model;
@@ -21,22 +18,6 @@ use super::{
 use crate::qwen3_5::multi_token_prediction::bind_optional_weights;
 
 impl Qwen3_5Model {
-    pub(crate) fn prewarm_complete_expert_layers_with_performance_attribution(
-        &self,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        let Some(expert_pager) = self.expert_pager.as_ref() else {
-            return Ok(());
-        };
-        let expert_weight_memory_cache = self.sparse_expert_weight_memory_cache()?;
-        expert_pager.prewarm_complete_layers_with_performance_attribution(
-            &self.runtime,
-            expert_weight_memory_cache,
-            performance_attribution,
-        )?;
-        Ok(())
-    }
-
     /// Loads a model without diagnostic performance attribution.
     pub fn load(
         runtime: MlxRuntime,
@@ -76,19 +57,6 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let config = validated_artifact.config().clone();
-        let decoder_cache_layout = crate::qwen3_5::qwen3_5_decoder_cache_layout(
-            &config,
-            usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "full-attention key/value growth tokens exceed the usize range",
-                }
-            })?,
-        )
-        .map_err(|decoder_cache_layout_error| {
-            Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
-                description: decoder_cache_layout_error.to_string(),
-            }
-        })?;
         let vision_config = validated_artifact.vision_config().cloned();
         let has_separate_vision_sidecar =
             should_bind_vision_weights && validated_artifact.has_separate_vision_sidecar();
@@ -181,9 +149,9 @@ impl Qwen3_5Model {
                 Ok((weights, vision_model, mtp_weights))
             },
         )?;
-        let (expert_pager, expert_weight_memory_cache, sorted_expert_weighted_sum_kernel) =
+        let (expert_pager, sorted_expert_weighted_sum_kernel) =
             match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
+                Qwen3_5FeedForwardArchitecture::Dense => (None, None),
                 Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
                     let tensor_name_to_shard_file_name: HashMap<String, String> = shard_index
                         .language_tensor_name_to_shard_file_name()
@@ -197,6 +165,7 @@ impl Qwen3_5Model {
                         PerformanceOperation::ExpertPagerPlanConstruction,
                         |_performance_attribution| {
                             Qwen3_5ExpertPager::new(
+                                &runtime,
                                 model_directory.to_path_buf(),
                                 &tensor_name_to_shard_file_name,
                                 &config,
@@ -208,26 +177,39 @@ impl Qwen3_5Model {
                             )
                         },
                     )?;
-                    let minimum_decode_route_payload_byte_count_by_layer = expert_pager
-                        .minimum_decode_route_payload_byte_count_by_layer(
-                            config.experts_per_token(),
-                        )?;
-                    let expert_layer_count = minimum_decode_route_payload_byte_count_by_layer.len();
-                    let expert_weight_memory_cache = std::cell::RefCell::new(
-                        ExpertWeightMemoryCache::<Qwen3_5PagedExpertWeights>::new(
-                            expert_layer_count,
-                            minimum_decode_route_payload_byte_count_by_layer,
-                        ),
-                    );
                     let sorted_expert_weighted_sum_kernel =
                         qwen3_5_moe_sorted_expert_weighted_sum_kernel()?;
-                    (
-                        Some(expert_pager),
-                        Some(expert_weight_memory_cache),
-                        Some(sorted_expert_weighted_sum_kernel),
-                    )
+                    (Some(expert_pager), Some(sorted_expert_weighted_sum_kernel))
                 }
             };
+        // Cache geometry cannot be finalized before weights and sparse plans are
+        // bound: their source dtypes determine MLX result-type promotion. Derive
+        // the persistence contract at that boundary without evaluating tensors.
+        let decoder_cache_layout = performance_attribution.measure_operation(
+            PerformanceOperation::ModelTensorBinding,
+            |_performance_attribution| {
+                let decoder_layer_cache_dtypes =
+                    super::decoder_cache_dtype_flow::derive_decoder_layer_cache_dtypes(
+                        &weights,
+                        expert_pager.as_ref(),
+                    )?;
+                crate::qwen3_5::qwen3_5_decoder_cache_layout(
+                    &config,
+                    usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(
+                        |_| Qwen3_5ExecutionError::InvalidInput {
+                            description:
+                                "full-attention key/value growth tokens exceed the usize range",
+                        },
+                    )?,
+                    &decoder_layer_cache_dtypes,
+                )
+                .map_err(|decoder_cache_layout_error| {
+                    Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
+                        description: decoder_cache_layout_error.to_string(),
+                    }
+                })
+            },
+        )?;
         let gated_delta_kernel = super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?;
         let gated_delta_checkpoint_kernel =
             super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?;
@@ -253,7 +235,9 @@ impl Qwen3_5Model {
             mtp_weights,
             vision_model,
             expert_pager,
-            expert_weight_memory_cache,
+            // Publication occurs only after core materialization and a fresh idle
+            // memory sample in the engine loading path.
+            resident_expert_weights: None,
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,

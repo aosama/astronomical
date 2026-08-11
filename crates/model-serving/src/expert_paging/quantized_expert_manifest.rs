@@ -7,14 +7,11 @@
 //! repack the checkpoint on disk.
 //!
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use thiserror::Error;
 
-use super::quantized_expert_validation::{
-    validate_expert_ids, validate_source_intervals, validate_virtual_intervals,
-};
+use super::quantized_expert_validation::validate_expert_ids;
 use super::safetensors_header::{SafetensorsDtype, SafetensorsHeaderError};
 use super::source_manifests::build_source_manifests;
 
@@ -117,6 +114,13 @@ pub enum ExpertManifestError {
     ReaderError { description: String },
     #[error("failed to serialize a bounded expert safetensors header: {0}")]
     HeaderSerialization(#[from] serde_json::Error),
+    #[error(
+        "complete expert payload byte count overflowed for layer {layer_prefix:?}, tensor {tensor_name:?}"
+    )]
+    CompleteExpertPayloadByteCountOverflow {
+        layer_prefix: String,
+        tensor_name: String,
+    },
 }
 
 /// One selected expert run copied from one original quantized tensor.
@@ -234,6 +238,36 @@ pub struct QuantizedExpertLayerPlan {
     pub quantization_mode: QuantizationMode,
 }
 
+impl QuantizedExpertLayerPlan {
+    /// Returns the exact source payload needed to retain every expert in this layer.
+    ///
+    /// Each source covers one projection parameter across the complete leading
+    /// expert axis. Summing `bytes_per_expert * expert_capacity` therefore counts
+    /// packed weights, scales, and biases independently without estimating from
+    /// a nominal quantization label.
+    pub fn complete_expert_payload_byte_count(&self) -> Result<u64, ExpertManifestError> {
+        self.tensor_sources
+            .iter()
+            .try_fold(0_u64, |complete_layer_payload_bytes, tensor_source| {
+                let tensor_payload_overflow =
+                    || ExpertManifestError::CompleteExpertPayloadByteCountOverflow {
+                        layer_prefix: self.layer_prefix.clone(),
+                        tensor_name: tensor_source.tensor_name.clone(),
+                    };
+                let bytes_per_expert = u64::try_from(tensor_source.bytes_per_expert)
+                    .map_err(|_| tensor_payload_overflow())?;
+                let expert_capacity = u64::try_from(tensor_source.expert_capacity)
+                    .map_err(|_| tensor_payload_overflow())?;
+                let tensor_payload_bytes = bytes_per_expert
+                    .checked_mul(expert_capacity)
+                    .ok_or_else(tensor_payload_overflow)?;
+                complete_layer_payload_bytes
+                    .checked_add(tensor_payload_bytes)
+                    .ok_or_else(tensor_payload_overflow)
+            })
+    }
+}
+
 /// Supported quantization modes for expert weight loading.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QuantizationMode {
@@ -252,51 +286,6 @@ pub fn build_quantized_expert_page_manifest_from_plan(
     let payload_byte_count = source_manifests.iter().map(|m| m.payload_byte_count).sum();
     let page_slot_by_global_expert_id =
         build_page_slot_by_global_expert_id(&normalized_expert_ids, layer_plan.expert_capacity)?;
-    Ok(QuantizedExpertPageManifest {
-        expert_ids: normalized_expert_ids,
-        page_slot_by_global_expert_id,
-        source_manifests,
-        payload_byte_count,
-    })
-}
-
-/// Build a cache-population page that returns one `[1, ...]` tensor set per expert.
-///
-/// This manifest keeps expert tensors independent in MLX, so the cache can store
-/// complete one-expert arrays without retaining lazy slices from a larger page.
-/// It still batches cold I/O into one bounded safetensors load per source shard.
-pub fn build_quantized_expert_cache_population_manifest_from_plan(
-    layer_plan: &QuantizedExpertLayerPlan,
-    expert_ids: &[usize],
-) -> Result<QuantizedExpertPageManifest, ExpertManifestError> {
-    let normalized_expert_ids = validate_expert_ids(expert_ids, layer_plan.expert_capacity)?;
-    let mut builders_by_source_file: BTreeMap<PathBuf, CachePopulationShardManifestBuilder> =
-        BTreeMap::new();
-
-    for &expert_id in &normalized_expert_ids {
-        let single_expert_manifest =
-            build_quantized_expert_page_manifest_from_plan(layer_plan, &[expert_id])?;
-        for source_manifest in single_expert_manifest.source_manifests {
-            builders_by_source_file
-                .entry(source_manifest.source_file.clone())
-                .or_insert_with(|| {
-                    CachePopulationShardManifestBuilder::new(source_manifest.source_file.clone())
-                })
-                .append_expert_manifest(expert_id, source_manifest);
-        }
-    }
-
-    let source_manifests = builders_by_source_file
-        .into_values()
-        .map(CachePopulationShardManifestBuilder::finish)
-        .collect::<Result<Vec<_>, _>>()?;
-    let payload_byte_count = source_manifests
-        .iter()
-        .map(|source_manifest| source_manifest.payload_byte_count)
-        .sum();
-    let page_slot_by_global_expert_id =
-        build_page_slot_by_global_expert_id(&normalized_expert_ids, layer_plan.expert_capacity)?;
-
     Ok(QuantizedExpertPageManifest {
         expert_ids: normalized_expert_ids,
         page_slot_by_global_expert_id,
@@ -325,67 +314,4 @@ fn build_page_slot_by_global_expert_id(
             .map_err(|_| ExpertManifestError::PageSlotExceedsU32 { page_slot })?;
     }
     Ok(page_slot_by_global_expert_id)
-}
-
-struct CachePopulationShardManifestBuilder {
-    source_file: PathBuf,
-    tensor_ranges: Vec<QuantizedExpertTensorRange>,
-    source_intervals: Vec<QuantizedExpertSourceInterval>,
-    payload_byte_count: u64,
-}
-
-impl CachePopulationShardManifestBuilder {
-    fn new(source_file: PathBuf) -> Self {
-        Self {
-            source_file,
-            tensor_ranges: Vec::new(),
-            source_intervals: Vec::new(),
-            payload_byte_count: 0,
-        }
-    }
-
-    fn append_expert_manifest(
-        &mut self,
-        expert_id: usize,
-        source_manifest: QuantizedExpertShardManifest,
-    ) {
-        let appended_payload_offset = self.payload_byte_count;
-        for tensor_range in source_manifest.tensor_ranges {
-            self.tensor_ranges.push(QuantizedExpertTensorRange {
-                tensor_name: format!("expert_{expert_id}.{}", tensor_range.tensor_name),
-                projection_name: tensor_range.projection_name,
-                parameter_name: tensor_range.parameter_name,
-                dtype: tensor_range.dtype,
-                shape: tensor_range.shape,
-                virtual_payload_offset: appended_payload_offset
-                    + tensor_range.virtual_payload_offset,
-                byte_count: tensor_range.byte_count,
-            });
-        }
-        for source_interval in source_manifest.source_intervals {
-            self.source_intervals.push(QuantizedExpertSourceInterval {
-                tensor_name: source_interval.tensor_name,
-                expert_start: source_interval.expert_start,
-                expert_count: source_interval.expert_count,
-                source_file_offset: source_interval.source_file_offset,
-                source_byte_count: source_interval.source_byte_count,
-                virtual_payload_offset: appended_payload_offset
-                    + source_interval.virtual_payload_offset,
-            });
-        }
-        self.payload_byte_count += source_manifest.payload_byte_count;
-    }
-
-    fn finish(self) -> Result<QuantizedExpertShardManifest, ExpertManifestError> {
-        let mut source_intervals_sorted_by_source = self.source_intervals;
-        source_intervals_sorted_by_source.sort_by_key(|interval| interval.source_file_offset);
-        validate_source_intervals(&source_intervals_sorted_by_source, 0)?;
-        validate_virtual_intervals(&source_intervals_sorted_by_source, self.payload_byte_count)?;
-        Ok(QuantizedExpertShardManifest {
-            source_file: self.source_file,
-            tensor_ranges: self.tensor_ranges,
-            source_intervals: source_intervals_sorted_by_source,
-            payload_byte_count: self.payload_byte_count,
-        })
-    }
 }

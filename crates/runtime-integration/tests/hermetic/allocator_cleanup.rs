@@ -1,7 +1,8 @@
 const MLX_RUNTIME_MEMORY_POLICY_SOURCE: &str =
     include_str!("../../src/mlx_runtime/memory_policy.rs");
-const QWEN_MEMORY_ADMISSION_SOURCE: &str =
-    include_str!("../../../model-serving/src/qwen3_5/inference_execution/memory_admission.rs");
+const QWEN_REQUEST_MEMORY_RELEASE_SOURCE: &str = include_str!(
+    "../../../model-serving/src/qwen3_5/inference_execution/request_memory_release.rs"
+);
 const EXPERT_PAGING_MEMORY_BUDGET_SOURCE: &str =
     include_str!("../../../model-serving/src/expert_paging/memory_budget.rs");
 const QWEN_PREFILL_ADVANCE_SOURCE: &str =
@@ -46,10 +47,10 @@ fn should_synchronize_gpu_stream_before_clearing_allocator_cache() {
 
 #[test]
 fn should_use_synchronized_cleanup_when_releasing_request_memory() {
-    let request_cleanup_start = QWEN_MEMORY_ADMISSION_SOURCE
+    let request_cleanup_start = QWEN_REQUEST_MEMORY_RELEASE_SOURCE
         .find("fn release_request_memory")
         .expect("the Qwen engine must retain request-boundary cleanup");
-    let request_cleanup_source = &QWEN_MEMORY_ADMISSION_SOURCE[request_cleanup_start..];
+    let request_cleanup_source = &QWEN_REQUEST_MEMORY_RELEASE_SOURCE[request_cleanup_start..];
 
     assert!(
         request_cleanup_source.contains("synchronize_gpu_stream_and_clear_allocator_cache"),

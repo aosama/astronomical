@@ -436,7 +436,7 @@ impl Qwen3_5EngineState {
                 image_pad_token_id,
                 thinking_budget: inference_request.thinking_budget(),
                 thinking_token_count: 0,
-                is_inside_thinking: true,
+                is_inside_thinking: inference_request.generation_starts_inside_thinking_block(),
                 expert_weight_memory_cache_statistics_at_request_start,
                 performance_attribution,
                 optional_prediction_session,

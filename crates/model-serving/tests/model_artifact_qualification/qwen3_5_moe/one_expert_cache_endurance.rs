@@ -13,7 +13,7 @@ const PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 const DETERMINISTIC_PROMPT_TOKEN_ID: u32 = 198;
 const IMAGE_PAD_TOKEN_ID: u32 = 248_069;
 #[tokio::test]
-#[ignore = "loads Ornith-1.0-35B-8bit and verifies consecutive automatic-residency requests"]
+#[ignore = "loads Ornith-1.0-35B-8bit and verifies consecutive one-expert-cache requests"]
 async fn should_serve_consecutive_large_requests_when_adaptive_growth_is_disabled() {
     timeout(ENDURANCE_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -43,9 +43,9 @@ async fn should_serve_consecutive_large_requests_when_adaptive_growth_is_disable
                 PerformanceAttribution::disabled(),
                 PerformanceAttributionLog::disabled(),
             )
-            .expect("the automatic-residency engine settings should be valid");
+            .expect("the one-expert-cache engine settings should be valid");
 
-        eprintln!("[automatic-residency-endurance 0/3] status=progress phase=model_load");
+        eprintln!("[one-expert-cache-endurance 0/3] status=progress phase=model_load");
         qwen3_5_engine
             .load()
             .await
@@ -70,10 +70,10 @@ async fn should_serve_consecutive_large_requests_when_adaptive_growth_is_disable
             "without measured transient evidence, request finalization must not increase expert residency from {expert_payload_bytes_after_load} to {expert_payload_bytes_after_first_request} bytes"
         );
         run_large_request(&mut qwen3_5_engine, RequestId::new(41_002), 2).await;
-        eprintln!("[automatic-residency-endurance 3/3] status=success");
+        eprintln!("[one-expert-cache-endurance 3/3] status=success");
     })
     .await
-    .expect("the consecutive automatic-residency regression must finish within 120 seconds");
+    .expect("the consecutive one-expert-cache regression must finish within 120 seconds");
 }
 
 async fn run_large_request(
@@ -82,7 +82,7 @@ async fn run_large_request(
     request_number: usize,
 ) {
     eprintln!(
-        "[automatic-residency-endurance {request_number}/3] status=progress phase=large_request input_tokens={INPUT_TOKEN_COUNT}"
+        "[one-expert-cache-endurance {request_number}/3] status=progress phase=large_request input_tokens={INPUT_TOKEN_COUNT}"
     );
     qwen3_5_engine
         .start_generation(
@@ -94,18 +94,18 @@ async fn run_large_request(
             .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID),
         )
         .await
-        .expect("the automatic-residency engine should admit the large request");
+        .expect("the one-expert-cache engine should admit the large request");
     loop {
         match qwen3_5_engine
             .decode_next_token(request_id)
             .await
-            .expect("automatic residency must not exhaust Metal memory during prefill")
+            .expect("one-expert caching must not exhaust Metal memory during prefill")
         {
             GeneratedToken::PrefillProgress {
                 processed_token_count,
                 ..
             } => eprintln!(
-                "[automatic-residency-endurance {request_number}/3] status=progress phase=prefill processed_tokens={processed_token_count}"
+                "[one-expert-cache-endurance {request_number}/3] status=progress phase=prefill processed_tokens={processed_token_count}"
             ),
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => return,

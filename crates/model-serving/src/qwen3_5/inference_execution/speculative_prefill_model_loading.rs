@@ -5,7 +5,10 @@ use astronomical_ipc_protocol::WorkerSpeculativePrefillConfiguration;
 use crate::{
     InferenceEngineError, MlxMemoryTelemetry, PerformanceAttribution, PerformanceOperation,
     Qwen3_5ArtifactValidator, Qwen3_5Model, Qwen3_5Tokenizer,
-    qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure,
+    qwen3_5_moe::{
+        Qwen3_5ExpertResidencyTransitionReason,
+        reclaim_retained_experts_for_request_memory_pressure,
+    },
 };
 
 use super::Qwen3_5EngineState;
@@ -54,24 +57,47 @@ impl Qwen3_5EngineState {
         self.speculative_prefill_draft_supports_processed_visual_images
     }
 
-    /// Releases every retained target-expert page, then materializes a draft
-    /// whose MLX ownership ends when the request's prompt selection completes.
+    /// Releases target experts, then materializes one request-scoped draft.
+    ///
+    /// A complete target owner is demoted as one unit; an already paged target is
+    /// emptied page by page. The draft may then promote inside the capacity made
+    /// available, and all of its MLX ownership ends after prompt selection.
     pub(super) fn load_request_scoped_speculative_prefill_draft_model(
-        &self,
+        &mut self,
         request_id: u64,
         draft_maximum_output_tokens: u32,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5Model, InferenceEngineError> {
-        let target_model = self
+        let target_expert_payload_bytes_before = self
             .model
             .as_ref()
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "Qwen3.5 engine lost its loaded target model".to_owned(),
-            })?;
-        let target_expert_payload_bytes_before = target_model
+            })?
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
-        if target_expert_payload_bytes_before > 0 {
+        let target_model_is_resident = self
+            .model
+            .as_ref()
+            .is_some_and(|target_model| target_model.resident_expert_weights.is_some());
+        if target_model_is_resident {
+            self.model
+                .as_mut()
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: "Qwen3.5 engine lost its loaded target model".to_owned(),
+                })?
+                .demote_resident_experts_to_paging(
+                    Qwen3_5ExpertResidencyTransitionReason::SpeculativePrefillDraftLoading,
+                    performance_attribution,
+                )
+                .map_err(InferenceEngineError::from)?;
+        } else if target_expert_payload_bytes_before > 0 {
+            let target_model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: "Qwen3.5 engine lost its loaded target model".to_owned(),
+                })?;
             reclaim_retained_experts_for_request_memory_pressure(
                 target_model,
                 usize::try_from(target_expert_payload_bytes_before).unwrap_or(usize::MAX),
@@ -81,6 +107,12 @@ impl Qwen3_5EngineState {
                     .to_owned(),
             })?;
         }
+        let target_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| InferenceEngineError::Fatal {
+                reason: "Qwen3.5 engine lost its loaded target model".to_owned(),
+            })?;
         target_model
             .runtime()
             .synchronize_gpu_stream_and_clear_allocator_cache()
@@ -111,6 +143,7 @@ impl Qwen3_5EngineState {
                         target_token_identifier_mapping_digest,
                         draft_maximum_output_tokens,
                         self.memory_limits,
+                        true,
                         performance_attribution,
                     )
                 },
@@ -150,6 +183,7 @@ pub(super) fn load_speculative_prefill_draft_model(
     target_token_identifier_mapping_digest: [u8; 32],
     target_max_output_tokens: u32,
     memory_limits: MlxMemoryLimits,
+    should_attempt_complete_expert_residency: bool,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(Option<(Qwen3_5Model, String)>, Option<String>), InferenceEngineError> {
     if !speculative_prefill.enabled {
@@ -234,7 +268,7 @@ pub(super) fn load_speculative_prefill_draft_model(
             ));
         }
     };
-    let draft_model = match Qwen3_5Model::load_with_performance_attribution(
+    let mut draft_model = match Qwen3_5Model::load_with_performance_attribution(
         draft_runtime,
         draft_validated_artifact,
         draft_model_directory,
@@ -281,6 +315,33 @@ pub(super) fn load_speculative_prefill_draft_model(
             return Err(configured_draft_loading_failure("draft weight loading"));
         }
     };
+    // Startup loads the draft only to validate compatibility and drops it before
+    // target admission, so resident materialization there would be wasted work.
+    // The request-scoped load executes scoring and can benefit from residency.
+    if should_attempt_complete_expert_residency {
+        draft_model
+            .runtime()
+            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .map_err(|draft_cleanup_error| {
+                tracing::warn!(
+                    error = %draft_cleanup_error,
+                    "request-scoped speculative prefill draft cleanup failed before residency admission"
+                );
+                configured_draft_loading_failure("draft expert residency cleanup")
+            })?;
+        draft_model
+            .try_promote_experts_to_resident(
+                Qwen3_5ExpertResidencyTransitionReason::SpeculativePrefillDraftLoading,
+                performance_attribution,
+            )
+            .map_err(|draft_residency_error| {
+                tracing::warn!(
+                    error = %draft_residency_error,
+                    "request-scoped speculative prefill draft expert residency failed"
+                );
+                configured_draft_loading_failure("draft expert residency")
+            })?;
+    }
     Ok((Some((draft_model, draft_model_revision)), None))
 }
 

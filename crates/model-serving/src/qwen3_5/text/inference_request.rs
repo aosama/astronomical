@@ -16,6 +16,7 @@ pub struct Qwen3_5InferenceRequest {
     max_output_tokens: u16,
     request_id: RequestId,
     sampling_strategy: Qwen3_5SamplingStrategy,
+    generation_starts_inside_thinking_block: bool,
     thinking_budget: Option<u16>,
     performance_attribution: PerformanceAttribution,
 }
@@ -39,6 +40,7 @@ impl Qwen3_5InferenceRequest {
             max_output_tokens,
             request_id,
             sampling_strategy: Qwen3_5SamplingStrategy::Greedy,
+            generation_starts_inside_thinking_block: true,
             thinking_budget: None,
             performance_attribution: PerformanceAttribution::disabled(),
         }
@@ -94,6 +96,7 @@ impl Qwen3_5InferenceRequest {
             max_output_tokens,
             request_id,
             sampling_strategy,
+            generation_starts_inside_thinking_block: true,
             thinking_budget: None,
             performance_attribution: PerformanceAttribution::disabled(),
         }
@@ -143,10 +146,22 @@ impl Qwen3_5InferenceRequest {
         self
     }
 
-    /// Sets the maximum number of tokens the model may spend in its thinking block.
+    /// Carries the prompt's resolved thinking mode into native generation state.
+    /// A disabled or zero-budget request starts in visible-text mode and has no
+    /// active thinking-token budget.
     #[must_use]
-    pub const fn with_thinking_budget(mut self, thinking_budget: u16) -> Self {
-        self.thinking_budget = Some(thinking_budget);
+    pub const fn with_thinking_configuration(
+        mut self,
+        enable_thinking: bool,
+        thinking_budget: Option<u16>,
+    ) -> Self {
+        self.generation_starts_inside_thinking_block =
+            enable_thinking && !matches!(thinking_budget, Some(0));
+        self.thinking_budget = if self.generation_starts_inside_thinking_block {
+            thinking_budget
+        } else {
+            None
+        };
         self
     }
 
@@ -173,6 +188,12 @@ impl Qwen3_5InferenceRequest {
     #[must_use]
     pub const fn thinking_budget(&self) -> Option<u16> {
         self.thinking_budget
+    }
+
+    /// Returns whether generated tokens initially continue a prompt-opened thinking block.
+    #[must_use]
+    pub const fn generation_starts_inside_thinking_block(&self) -> bool {
+        self.generation_starts_inside_thinking_block
     }
 
     /// Returns whether pre-computed visual embeddings are attached.

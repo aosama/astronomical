@@ -6,9 +6,7 @@
 use std::future::Future;
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ExpertWeightMemoryCache, Qwen3_5Model,
-};
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Model};
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::{MissedTickBehavior, interval, sleep};
 
@@ -45,33 +43,16 @@ async fn should_load_selected_expert_weights_with_correct_manifest() {
 
     // Select 8 experts for layer 0 (matching experts_per_token from config)
     let experts_per_token = config.experts_per_token() as usize;
-    let selected_expert_ids: Vec<usize> = (0..experts_per_token).collect();
-
-    let (_paged_weights, page_manifest, _budget_snapshot) = expert_pager
-        .load_selected_experts(&runtime, 0, &selected_expert_ids)
+    let selected_expert_ids = (0..experts_per_token as i32).collect::<Vec<_>>();
+    let selected_expert_indices = runtime
+        .array_from_i32(&selected_expert_ids, &[1, experts_per_token as i32])
+        .expect("the selected expert route should be valid");
+    let (_native_snapshot, request_report) = expert_pager
+        .prepare_native_expert_snapshot(&runtime, 0, &selected_expert_indices, true)
         .expect("should load selected expert weights for layer 0");
-
-    // Verify page manifest expert IDs match selection
-    assert_eq!(
-        page_manifest.expert_ids.len(),
-        experts_per_token,
-        "page manifest should have {experts_per_token} expert IDs"
-    );
-
-    // Verify dense global-expert-ID to page-slot mapping.
-    for (page_slot, &expert_id) in page_manifest.expert_ids.iter().enumerate() {
-        assert_eq!(
-            page_manifest.page_slot_by_global_expert_id[expert_id],
-            u32::try_from(page_slot).expect("the expert page slot should fit UInt32"),
-            "expert {expert_id} should map to page slot {page_slot}"
-        );
-    }
-
-    // Verify payload bytes is non-zero (we loaded real data)
-    assert!(
-        page_manifest.payload_byte_count > 0,
-        "page manifest should have non-zero payload bytes"
-    );
+    assert_eq!(request_report.cache_miss_count(), experts_per_token as u64);
+    assert!(request_report.successful_source_read_byte_count() > 0);
+    assert_eq!(request_report.payload_copy_byte_count(), 0);
 }
 
 /// Verifies that loading different expert selections produces correct page slots.
@@ -83,18 +64,18 @@ async fn should_map_non_contiguous_expert_selections_to_correct_page_slots() {
         super::construct_model_artifact_expert_pager("[expert-pager]").await;
 
     // Select non-contiguous experts: [0, 42, 100, 200, 255]
-    let selected_expert_ids: Vec<usize> = vec![0, 42, 100, 200, 255];
-
-    let (_paged_weights, page_manifest, _budget_snapshot) = expert_pager
-        .load_selected_experts(&runtime, 0, &selected_expert_ids)
-        .expect("should load selected expert weights for layer 0");
-
-    // Verify page slots are assigned in order
-    assert_eq!(page_manifest.page_slot_by_global_expert_id[0], 0);
-    assert_eq!(page_manifest.page_slot_by_global_expert_id[42], 1);
-    assert_eq!(page_manifest.page_slot_by_global_expert_id[100], 2);
-    assert_eq!(page_manifest.page_slot_by_global_expert_id[200], 3);
-    assert_eq!(page_manifest.page_slot_by_global_expert_id[255], 4);
+    let selected_expert_ids = [0, 42, 100, 200, 255];
+    let selected_expert_indices = runtime
+        .array_from_i32(&selected_expert_ids, &[1, selected_expert_ids.len() as i32])
+        .expect("the non-contiguous route should be valid");
+    let (_native_snapshot, request_report) = expert_pager
+        .prepare_native_expert_snapshot(&runtime, 0, &selected_expert_indices, true)
+        .expect("should load non-contiguous expert weights for layer 0");
+    assert_eq!(
+        request_report.cache_miss_count(),
+        selected_expert_ids.len() as u64
+    );
+    assert_eq!(request_report.payload_copy_byte_count(), 0);
 }
 
 /// Lowest-level performance-design proof for expert paging cache behavior.
@@ -118,12 +99,18 @@ async fn should_load_top_8_experts_once_then_hit_memory_cache_without_second_dis
     require_expert_paging_test_completion(run_top_8_expert_cache_proof()).await;
 }
 
+#[tokio::test]
+#[ignore = "loads two routed Ornith experts from different layers and proves one-expert-only retention"]
+async fn should_cache_only_routed_one_expert_pages_across_layers() {
+    require_expert_paging_test_completion(run_cross_layer_one_expert_cache_proof()).await;
+}
+
 /// Direct model-level proof that paged decode is wired to the expert memory cache.
 ///
 /// This still avoids REST, the supervisor, the worker process, the macOS app,
 /// and shell scripts. It runs the same prompt twice through the loaded model.
-/// The first pass may retain complete layers or individual expert pages; the
-/// second identical pass should reuse that model-owned memory and add no disk loads.
+/// The first pass retains only routed one-expert pages; the second identical pass
+/// should reuse that model-owned memory and add no disk loads.
 #[tokio::test]
 #[ignore = "loads the full Ornith model and proves direct paged decode reuses expert cache"]
 async fn should_reuse_expert_memory_cache_across_direct_paged_decodes() {
@@ -160,7 +147,7 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
         false,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the Ornith model should load with automatic expert residency");
+    .expect("the Ornith model should load with demand-only one-expert caching");
     eprintln!(
         "[direct-cache-proof] status=progress phase=model_loaded elapsed_seconds={:.2}",
         model_load_started_at.elapsed().as_secs_f64()
@@ -177,16 +164,15 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
         .expect("first direct paged decode should complete");
     let after_first_decode_statistics = qwen3_5_model.expert_weight_memory_cache_statistics();
     eprintln!(
-        "[direct-cache-proof] status=progress phase=first_decode_done cache_entries={} disk_page_loads={} partial_page_hits={} complete_layer_hits={} cache_misses={}",
+        "[direct-cache-proof] status=progress phase=first_decode_done cache_entries={} disk_page_loads={} one_expert_page_hits={} cache_misses={}",
         after_first_decode_statistics.entry_count,
         after_first_decode_statistics.disk_page_load_count,
         after_first_decode_statistics.cache_hit_count,
-        after_first_decode_statistics.complete_layer_hit_count,
         after_first_decode_statistics.cache_miss_count
     );
     assert!(
         after_first_decode_statistics.entry_count > initial_cache_statistics.entry_count,
-        "first paged pass should retain complete layers or individual expert pages"
+        "first paged pass should retain routed one-expert pages"
     );
 
     eprintln!("[direct-cache-proof] status=progress phase=second_identical_decode");
@@ -194,11 +180,10 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
         .expect("second direct paged decode should complete");
     let after_second_decode_statistics = qwen3_5_model.expert_weight_memory_cache_statistics();
     eprintln!(
-        "[direct-cache-proof] status=progress phase=second_decode_done cache_entries={} disk_page_loads={} partial_page_hits={} complete_layer_hits={} cache_misses={}",
+        "[direct-cache-proof] status=progress phase=second_decode_done cache_entries={} disk_page_loads={} one_expert_page_hits={} cache_misses={}",
         after_second_decode_statistics.entry_count,
         after_second_decode_statistics.disk_page_load_count,
         after_second_decode_statistics.cache_hit_count,
-        after_second_decode_statistics.complete_layer_hit_count,
         after_second_decode_statistics.cache_miss_count
     );
     assert_eq!(
@@ -206,15 +191,11 @@ async fn run_direct_paged_decode_cache_reuse_proof() {
         after_first_decode_statistics.disk_page_load_count,
         "second identical paged decode should not add disk page loads"
     );
-    let first_pass_reuse_hit_count = after_first_decode_statistics
-        .cache_hit_count
-        .saturating_add(after_first_decode_statistics.complete_layer_hit_count);
-    let second_pass_reuse_hit_count = after_second_decode_statistics
-        .cache_hit_count
-        .saturating_add(after_second_decode_statistics.complete_layer_hit_count);
+    let first_pass_reuse_hit_count = after_first_decode_statistics.cache_hit_count;
+    let second_pass_reuse_hit_count = after_second_decode_statistics.cache_hit_count;
     assert!(
         second_pass_reuse_hit_count > first_pass_reuse_hit_count,
-        "second identical paged pass should add individual-expert or complete-layer reuse hits"
+        "second identical paged pass should add one-expert-page reuse hits"
     );
     eprintln!(
         "[direct-cache-proof] status=success elapsed_seconds={:.2}",
@@ -261,6 +242,43 @@ async fn run_top_8_expert_cache_proof() {
     run_selected_experts_cache_proof("top_8", (0usize..8).collect()).await;
 }
 
+async fn run_cross_layer_one_expert_cache_proof() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let (runtime, _config, expert_pager) =
+        super::construct_model_artifact_expert_pager("[cross-layer-one-expert-cache]").await;
+    let routed_layer_and_expert_ids = [(0usize, 42usize), (1usize, 7usize)];
+
+    for (layer_index, expert_id) in routed_layer_and_expert_ids {
+        let selected_expert_indices = runtime
+            .array_from_i32(&[expert_id as i32], &[1])
+            .expect("the layer-qualified route should be valid");
+        let (_, cold_request_report) = expert_pager
+            .prepare_native_expert_snapshot(&runtime, layer_index, &selected_expert_indices, true)
+            .expect("a routed expert should populate exactly one layer-qualified cache entry");
+        assert_eq!(cold_request_report.cache_miss_count(), 1);
+        assert_eq!(cold_request_report.disk_page_load_count(), 1);
+    }
+
+    assert_eq!(
+        expert_pager
+            .native_expert_cache_statistics()
+            .resident_expert_count(),
+        routed_layer_and_expert_ids.len() as u64,
+        "only the two explicitly routed layer-qualified experts should be retained"
+    );
+
+    for (layer_index, expert_id) in routed_layer_and_expert_ids {
+        let selected_expert_indices = runtime
+            .array_from_i32(&[expert_id as i32], &[1])
+            .expect("the repeated layer-qualified route should be valid");
+        let (_, warm_request_report) = expert_pager
+            .prepare_native_expert_snapshot(&runtime, layer_index, &selected_expert_indices, true)
+            .expect("each routed layer-qualified expert should remain independently reusable");
+        assert_eq!(warm_request_report.cache_hit_count(), 1);
+        assert_eq!(warm_request_report.disk_page_load_count(), 0);
+    }
+}
+
 async fn run_selected_experts_cache_proof(
     cache_case_label: &'static str,
     selected_expert_ids: Vec<usize>,
@@ -273,113 +291,117 @@ async fn run_selected_experts_cache_proof(
     let (runtime, _config, expert_pager) =
         super::construct_model_artifact_expert_pager("[expert-cache-proof]").await;
 
-    let mut expert_weight_memory_cache = Qwen3_5ExpertWeightMemoryCache::new(
-        expert_pager.layer_count(),
-        vec![0; expert_pager.layer_count()],
-    );
     let layer_index = 0usize;
     let expected_disk_page_load_count = selected_expert_ids.len();
+    let selected_expert_indices = runtime
+        .array_from_i32(
+            &selected_expert_ids
+                .iter()
+                .map(|expert_id| *expert_id as i32)
+                .collect::<Vec<_>>(),
+            &[1, selected_expert_ids.len() as i32],
+        )
+        .expect("the selected route should be valid");
 
     eprintln!(
         "[expert-cache-proof] status=progress case={cache_case_label} phase=cold_selected_experts_load layer_index={layer_index} selected_expert_ids={selected_expert_ids:?}"
     );
     let cold_load_start = Instant::now();
-    let (_cold_weights, cold_manifest, cold_report) = expert_pager
-        .load_selected_experts_through_memory_cache(
-            &runtime,
-            layer_index,
-            &selected_expert_ids,
-            &mut expert_weight_memory_cache,
-        )
+    let (_cold_snapshot, cold_report) = expert_pager
+        .prepare_native_expert_snapshot(&runtime, layer_index, &selected_expert_indices, true)
         .expect("cold expert request should load one expert from disk and cache it");
     let cold_elapsed = cold_load_start.elapsed();
     eprintln!(
         "[expert-cache-proof] status=progress case={cache_case_label} phase=cold_done elapsed_ms={:.2} disk_page_loads={} disk_batch_loads={} cache_hits={} cache_misses={} payload_bytes={}",
         cold_elapsed.as_secs_f64() * 1000.0,
-        cold_report.disk_page_load_count,
-        cold_report.disk_batch_load_count,
-        cold_report.cache_hit_count,
-        cold_report.cache_miss_count,
-        cold_manifest.payload_byte_count
+        cold_report.disk_page_load_count(),
+        cold_report.disk_batch_load_count(),
+        cold_report.cache_hit_count(),
+        cold_report.cache_miss_count(),
+        cold_report.successful_source_read_byte_count()
     );
     assert_eq!(
-        cold_report.disk_page_load_count, expected_disk_page_load_count,
+        cold_report.disk_page_load_count(),
+        expected_disk_page_load_count as u64,
         "the first request should perform one disk page load per selected uncached expert"
     );
     assert_eq!(
-        cold_report.cache_hit_count, 0,
+        cold_report.cache_hit_count(),
+        0,
         "the first request should not report a cache hit"
     );
     assert_eq!(
-        cold_report.cache_miss_count, expected_disk_page_load_count,
+        cold_report.cache_miss_count(),
+        expected_disk_page_load_count as u64,
         "the first request should report one cache miss per selected expert"
     );
-    assert_eq!(
-        cold_report.disk_batch_load_count,
-        cold_manifest.source_manifests.len(),
-        "the cold request should batch missing expert I/O into one bounded safetensors load per source shard"
+    assert!(
+        cold_report.disk_batch_load_count() > 0,
+        "the cold request should issue at least one native range-read batch"
     );
 
     eprintln!(
         "[expert-cache-proof] status=progress case={cache_case_label} phase=warm_selected_experts_load layer_index={layer_index} selected_expert_ids={selected_expert_ids:?}"
     );
     let warm_load_start = Instant::now();
-    let (_warm_weights, warm_manifest, warm_report) = expert_pager
-        .load_selected_experts_through_memory_cache(
-            &runtime,
-            layer_index,
-            &selected_expert_ids,
-            &mut expert_weight_memory_cache,
-        )
+    let (_warm_snapshot, warm_report) = expert_pager
+        .prepare_native_expert_snapshot(&runtime, layer_index, &selected_expert_indices, true)
         .expect("warm expert request should use the in-memory cache");
     let warm_elapsed = warm_load_start.elapsed();
     eprintln!(
         "[expert-cache-proof] status=progress case={cache_case_label} phase=warm_done elapsed_ms={:.2} disk_page_loads={} disk_batch_loads={} cache_hits={} cache_misses={} payload_bytes={}",
         warm_elapsed.as_secs_f64() * 1000.0,
-        warm_report.disk_page_load_count,
-        warm_report.disk_batch_load_count,
-        warm_report.cache_hit_count,
-        warm_report.cache_miss_count,
-        warm_manifest.payload_byte_count
+        warm_report.disk_page_load_count(),
+        warm_report.disk_batch_load_count(),
+        warm_report.cache_hit_count(),
+        warm_report.cache_miss_count(),
+        warm_report.successful_source_read_byte_count()
     );
     assert_eq!(
-        warm_report.disk_page_load_count, 0,
+        warm_report.disk_page_load_count(),
+        0,
         "the second request for the same selected experts must not perform another disk page load"
     );
     assert_eq!(
-        warm_report.disk_batch_load_count, 0,
+        warm_report.disk_batch_load_count(),
+        0,
         "the warm request should not perform a disk batch load"
     );
     assert_eq!(
-        warm_report.cache_hit_count, expected_disk_page_load_count,
+        warm_report.cache_hit_count(),
+        expected_disk_page_load_count as u64,
         "the second request should report one cache hit per selected expert"
     );
     assert_eq!(
-        warm_report.cache_miss_count, 0,
+        warm_report.cache_miss_count(),
+        0,
         "the second request should report zero cache misses"
     );
 
-    let cache_statistics = expert_weight_memory_cache.statistics();
+    let cache_statistics = expert_pager.native_expert_cache_statistics();
     eprintln!(
         "[expert-cache-proof] status=success case={cache_case_label} elapsed_seconds={:.2} cache_entries={} resident_payload_bytes={} total_disk_page_loads={} total_cache_hits={} total_cache_misses={}",
         started_at.elapsed().as_secs_f64(),
-        cache_statistics.entry_count,
-        cache_statistics.resident_payload_byte_count,
-        cache_statistics.disk_page_load_count,
-        cache_statistics.cache_hit_count,
-        cache_statistics.cache_miss_count
+        cache_statistics.resident_expert_count(),
+        cache_statistics.resident_payload_byte_count(),
+        cache_statistics.disk_page_load_count(),
+        cache_statistics.cache_hit_count(),
+        cache_statistics.cache_miss_count()
     );
     assert_eq!(
-        cache_statistics.entry_count, expected_disk_page_load_count,
-        "the cache should hold one complete layer/expert entry per selected expert"
+        cache_statistics.resident_expert_count(),
+        expected_disk_page_load_count as u64,
+        "the cache should hold exactly one independent entry per selected expert"
     );
     assert_eq!(
-        cache_statistics.disk_page_load_count, expected_disk_page_load_count as u64,
+        cache_statistics.disk_page_load_count(),
+        expected_disk_page_load_count as u64,
         "only the cold request should have touched disk"
     );
     assert_eq!(
-        cache_statistics.resident_payload_byte_count, cold_manifest.payload_byte_count,
-        "resident payload bytes should match the selected cold page payload for this isolated proof"
+        cache_statistics.resident_payload_byte_count(),
+        cold_report.successful_source_read_byte_count(),
+        "resident payload bytes should match the selected native source ranges"
     );
 }
 

@@ -2,13 +2,10 @@ pub(crate) mod artifacts;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_paging;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod expert_residency;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
 
-#[cfg(feature = "direct-mlx")]
-pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
-#[cfg(feature = "direct-mlx")]
-pub type Qwen3_5ExpertWeightMemoryCache =
-    crate::expert_paging::ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>;
 #[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::build_source_manifests;
 #[cfg(feature = "direct-mlx")]
@@ -16,15 +13,21 @@ pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
 #[cfg(feature = "direct-mlx")]
+pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use expert_residency::Qwen3_5ResidentExpertWeights;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use model::feed_forward_weights::bind_qwen3_5_moe_feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use model::reclaim_retained_experts_for_request_memory_pressure;
+pub(crate) use model::{
+    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
+};
 #[cfg(feature = "direct-mlx")]
 pub use model::{
     Qwen3_5MoEPagedPrefillExecutionMode, qwen3_5_moe_combine_experts,
-    qwen3_5_moe_remap_expert_page_slots, qwen3_5_moe_restore_expert_assignment_order,
-    qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
-    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
+    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
+    qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
 
 /// Model identity constants retained for sparse-artifact test fixtures.

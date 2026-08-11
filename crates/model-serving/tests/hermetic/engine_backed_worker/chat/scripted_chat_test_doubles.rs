@@ -8,6 +8,8 @@ pub(super) struct ScriptedChatProcessor {
 pub(super) struct LazyScriptedModelFactory {
     pub(super) model_factory_call_count: Arc<AtomicUsize>,
     pub(super) mlx_memory_ceiling_bytes: Arc<AtomicU64>,
+    /// Lets lifecycle tests prove readiness propagation without model-serving.
+    pub(super) expert_memory_mode: Option<ExpertMemoryMode>,
 }
 
 pub(super) struct FirstCreationFailsScriptedModelFactory {
@@ -21,7 +23,9 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
         _max_output_tokens: u32,
     ) -> Result<(ScriptedChatProcessor, ScriptedChatEngine), String> {
         self.model_factory_call_count.fetch_add(1, Ordering::SeqCst);
-        Ok((ScriptedChatProcessor::new(), ScriptedChatEngine::new()))
+        let mut scripted_engine = ScriptedChatEngine::new();
+        scripted_engine.initial_expert_memory_mode = self.expert_memory_mode;
+        Ok((ScriptedChatProcessor::new(), scripted_engine))
     }
 
     fn update_mlx_memory_ceiling_bytes(&mut self, effective_mlx_memory_ceiling_bytes: u64) {
@@ -451,6 +455,7 @@ impl InferenceEngine for ScriptedChatEngine {
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         let mut engine_load_result = EngineLoadResult::new()
+            .with_expert_memory_mode(self.initial_expert_memory_mode)
             .with_mtp_runtime_state(self.mtp_runtime_state)
             .with_speculative_prefill_runtime(
                 self.speculative_prefill_runtime_state,

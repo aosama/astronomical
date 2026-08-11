@@ -34,6 +34,7 @@ fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_gr
             700,
             target_persistent_state_growth_bytes,
             0,
+            0,
         )
         .expect("the target-only projection should not overflow");
     let combined_growth_bytes = combined_target_and_additional_persistent_growth_bytes(
@@ -46,6 +47,7 @@ fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_gr
             AdaptiveRamGrowthContext::decode(1, false, false),
             700,
             combined_growth_bytes,
+            0,
             0,
         )
         .expect("the combined projection should not overflow");

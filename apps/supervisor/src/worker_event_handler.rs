@@ -21,6 +21,12 @@ use crate::{
     worker_prefill_progress::handle_worker_prefill_progress,
 };
 
+/// Applies one typed worker event to supervisor-owned request and health state.
+///
+/// Process-scoped events such as memory samples are valid whenever their own
+/// payload is valid. Generation-scoped events additionally require a matching
+/// active request. Model-swap waiting delegates here so both loops enforce the
+/// same protocol rules instead of maintaining competing event allowlists.
 pub(super) fn handle_worker_event(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -130,6 +136,7 @@ pub(super) fn handle_worker_event(
         WorkerEvent::ModelSwapped {
             model_id,
             capabilities,
+            expert_memory_mode,
             minimum_mlx_memory_ceiling_bytes,
             mtp_runtime_state,
             mtp_unavailable_reason,
@@ -142,7 +149,7 @@ pub(super) fn handle_worker_event(
                 return Err(protocol_violation("model swapped before initial readiness"));
             }
             tracing::info!(model = %model_id, "worker model swapped");
-            let ready_worker_health_snapshot =
+            let mut ready_worker_health_snapshot =
                 if let Ok(previous_health_snapshot) = health_snapshot.read() {
                     WorkerHealthSnapshot::ready_with_replacement_model(
                         model_id,
@@ -176,6 +183,7 @@ pub(super) fn handle_worker_event(
                         minimum_mlx_memory_ceiling_bytes;
                     replacement_health_snapshot
                 };
+            ready_worker_health_snapshot.expert_memory_mode = expert_memory_mode;
             publish_health(health_snapshot, ready_worker_health_snapshot);
         }
         WorkerEvent::ModelSwapFailed { .. } => {

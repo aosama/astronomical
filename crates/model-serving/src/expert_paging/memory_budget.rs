@@ -101,11 +101,28 @@ fn projected_mlx_memory_bytes_after_allocator_reuse(
         .checked_add(additional_system_gpu_memory_bytes)
 }
 
+/// Bounds one routed page before lazy router output becomes host-visible.
+///
+/// A multi-token route can select at most one distinct expert per assignment,
+/// while repeated assignments and the layer's finite capacity can only reduce
+/// that count. Returning `None` preserves fail-closed behavior on arithmetic
+/// overflow.
+#[must_use]
+pub fn maximum_possible_expert_route_payload_bytes(
+    payload_bytes_per_expert: u64,
+    expert_capacity: usize,
+    selected_expert_assignment_count: usize,
+) -> Option<u64> {
+    let maximum_distinct_expert_count = expert_capacity.min(selected_expert_assignment_count);
+    let maximum_distinct_expert_count = u64::try_from(maximum_distinct_expert_count).ok()?;
+    payload_bytes_per_expert.checked_mul(maximum_distinct_expert_count)
+}
+
 /// Computes the expert-weight retention ceiling from current MLX residency.
 ///
 /// The configured cap first reserves local MLX residency and either a temporary
 /// current page or both an
-/// incoming retained allocation and one future decode page. The incoming
+/// incoming retained allocation and one future routed page. The incoming
 /// retained payload is added once to the post-load target. The process-local
 /// total already includes retained expert arrays. Any remaining bytes can grow
 /// the retained payload. If those reservations already exceed the cap,
@@ -146,7 +163,7 @@ pub fn automatic_expert_weight_memory_cache_maximum_size_bytes(
     // `active_bytes` already includes retained expert arrays. Add the current
     // retained payload back after subtracting total live residency. If the
     // pending page will become retained after this load, include it once in the
-    // post-load target while retaining a distinct future decode-page reserve.
+    // post-load target while retaining a distinct future routed-page reserve.
     let automatic_maximum_size_bytes =
         if live_reserved_bytes <= memory_budget_snapshot.configured_cap_bytes {
             post_load_retained_expert_payload_bytes

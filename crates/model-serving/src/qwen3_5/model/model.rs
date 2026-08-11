@@ -4,11 +4,9 @@ use astronomical_runtime_integration::{
     MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
 };
 
-use std::cell::RefCell;
-
-use crate::expert_paging::{ExpertWeightMemoryCache, ExpertWeightMemoryCacheStatistics};
+use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
 use crate::qwen3_5_moe::{
-    Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5PagedExpertWeights,
+    Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5ResidentExpertWeights,
 };
 use crate::{DecoderCacheLayout, DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 
@@ -37,8 +35,8 @@ pub struct Qwen3_5Model {
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
-    pub(crate) expert_weight_memory_cache:
-        Option<RefCell<ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>>>,
+    /// Complete contiguous expert arrays when the whole sparse payload fits.
+    pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
@@ -61,24 +59,46 @@ impl Qwen3_5Model {
         &self.runtime
     }
 
-    /// Returns cumulative expert memory-cache counters for low-level performance tests.
+    /// Returns one mode-neutral expert-memory snapshot.
+    ///
+    /// Resident mode reports complete-owner entries and payload while retaining
+    /// native cumulative page counters at their prior values. Paged mode reports
+    /// the native cache directly. This lets telemetry change ownership without
+    /// resetting process-lifetime paging evidence.
     #[must_use]
     pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
-        self.expert_weight_memory_cache.as_ref().map_or_else(
-            ExpertWeightMemoryCacheStatistics::default,
-            |expert_weight_memory_cache| expert_weight_memory_cache.borrow().statistics(),
-        )
-    }
-
-    pub(crate) fn sparse_expert_weight_memory_cache(
-        &self,
-    ) -> Result<&RefCell<ExpertWeightMemoryCache<Qwen3_5PagedExpertWeights>>, Qwen3_5ExecutionError>
-    {
-        self.expert_weight_memory_cache
-            .as_ref()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                description: "sparse Qwen3.5 execution requires an expert weight memory cache",
-            })
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
+            return ExpertWeightMemoryCacheStatistics::default();
+        };
+        let native_statistics = expert_pager.native_expert_cache_statistics();
+        let (entry_count, resident_payload_byte_count, maximum_resident_payload_byte_count) =
+            self.resident_expert_weights.as_ref().map_or_else(
+                || {
+                    (
+                        usize::try_from(native_statistics.resident_expert_count())
+                            .unwrap_or(usize::MAX),
+                        native_statistics.resident_payload_byte_count(),
+                        native_statistics.maximum_resident_payload_byte_count(),
+                    )
+                },
+                |resident_expert_weights| {
+                    (
+                        resident_expert_weights.expert_entry_count(),
+                        resident_expert_weights.payload_byte_count(),
+                        resident_expert_weights.payload_byte_count(),
+                    )
+                },
+            );
+        ExpertWeightMemoryCacheStatistics {
+            entry_count,
+            resident_payload_byte_count,
+            maximum_resident_payload_byte_count,
+            eviction_count: native_statistics.eviction_count(),
+            cache_hit_count: native_statistics.cache_hit_count(),
+            cache_miss_count: native_statistics.cache_miss_count(),
+            disk_page_load_count: native_statistics.disk_page_load_count(),
+            disk_batch_load_count: native_statistics.disk_batch_load_count(),
+        }
     }
 
     pub(crate) fn sorted_expert_weighted_sum_kernel(
@@ -374,7 +394,7 @@ impl Qwen3_5Model {
                         tensor_name: "sparse model expert pager".to_owned(),
                     }
                 })?;
-                self.forward_qwen3_5_moe_with_paging(
+                self.forward_qwen3_5_moe(
                     &normalized_attention,
                     mixture_of_experts_weights,
                     expert_pager,
@@ -417,45 +437,6 @@ impl Qwen3_5Model {
                 true,
                 *quantization_group_size,
                 *quantization_bits,
-            )?),
-        }
-    }
-
-    pub(crate) fn quantized_expert_linear(
-        &self,
-        activations: &MlxArray,
-        affine_weights: &Qwen3_5AffineWeights,
-        selected_indices: &MlxArray,
-        sorted_indices: bool,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        match affine_weights {
-            Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                let transposed_expert_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
-                Ok(self.runtime.gather_dense_matmul(
-                    activations,
-                    &transposed_expert_weights,
-                    None,
-                    Some(selected_indices),
-                    sorted_indices,
-                )?)
-            }
-            Qwen3_5AffineWeights::Quantized {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                quantization_group_size,
-                quantization_bits,
-            } => Ok(self.runtime.gather_quantized_matmul_affine(
-                activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                None,
-                Some(selected_indices),
-                true,
-                *quantization_group_size,
-                *quantization_bits,
-                sorted_indices,
             )?),
         }
     }

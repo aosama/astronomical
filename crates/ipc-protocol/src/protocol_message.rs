@@ -43,9 +43,9 @@ pub struct WorkerPromptWorkReuse {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpertMemoryMode {
-    /// Every decoder layer has complete sparse-expert weights resident.
+    /// Every target and optional MTP layer has complete sparse experts resident.
     Resident,
-    /// At least one decoder layer must source sparse experts through paging.
+    /// No complete owner is installed; every sparse layer uses demand paging.
     Paged,
 }
 
@@ -400,6 +400,8 @@ pub enum WorkerEvent {
     ModelSwapped {
         model_id: String,
         capabilities: ChatModelCapabilities,
+        /// Expert-memory mode selected before the model became ready.
+        expert_memory_mode: Option<ExpertMemoryMode>,
         /// Safe idle lower bound for the newly loaded model.
         minimum_mlx_memory_ceiling_bytes: u64,
         /// Actual MTP runtime state reported by the worker after the swap.

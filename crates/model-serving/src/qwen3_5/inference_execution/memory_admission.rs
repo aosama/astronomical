@@ -5,10 +5,13 @@ use crate::qwen3_5::decoder::RequestDecoderStateStack;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::qwen3_5::model::adaptive_ram_growth_logging::log_adaptive_ram_growth_pressure;
 use crate::qwen3_5::model::memory_admission::{
-    combined_target_and_additional_persistent_growth_bytes, invalid_request_error,
+    combined_target_and_additional_persistent_growth_bytes,
+    context_memory_admission_fits_without_expert_reclamation, invalid_request_error,
     validate_context_memory_admission,
 };
-use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
+use crate::qwen3_5_moe::{
+    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
+};
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, PerformanceAttribution,
     PerformanceAttributionOutcome, PerformanceCounter, PerformanceOperation,
@@ -58,6 +61,18 @@ impl Qwen3_5EngineState {
         ) {
             Ok(reclaimed_expert_payload_bytes) => Ok(reclaimed_expert_payload_bytes),
             Err(context_admission_error) => {
+                if let Some(model) = self.model.as_mut()
+                    && let Err(resident_restoration_error) = model.try_promote_experts_to_resident(
+                        Qwen3_5ExpertResidencyTransitionReason::RequestFinalization,
+                        performance_attribution,
+                    )
+                {
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        error = %resident_restoration_error,
+                        "could not restore idle expert residency after request admission rejection"
+                    );
+                }
                 self.record_generation_performance_attribution(
                     std::mem::replace(performance_attribution, PerformanceAttribution::disabled()),
                     PerformanceAttributionOutcome::Rejected,
@@ -72,40 +87,70 @@ impl Qwen3_5EngineState {
     }
 
     pub(super) fn validate_initial_generation_context_memory_admission(
-        &self,
+        &mut self,
         total_context_tokens: usize,
         can_use_persistent_prompt_cache: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<u64, InferenceEngineError> {
+        let target_expert_payload_bytes_before_context_admission = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        let direct_publication_workspace_bytes = if can_use_persistent_prompt_cache {
+            self.persistent_prompt_cache_model_contract
+                .as_ref()
+                .map_or(0, |model_contract| {
+                    model_contract.direct_publication_workspace_bytes()
+                })
+        } else {
+            0
+        };
+        let additional_maximum_expert_page_reservation_bytes =
+            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
+        // First ask whether exact context, publication workspace, and any draft
+        // page fit beside the complete owner. Demote only when that same request
+        // would otherwise fail; small requests keep the faster resident path.
+        let resident_model_requires_demote = {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            model.resident_expert_weights.is_some()
+                && !context_memory_admission_fits_without_expert_reclamation(
+                    model,
+                    self.memory_limits,
+                    self.context_memory_reservation_bytes_per_token,
+                    total_context_tokens,
+                    direct_publication_workspace_bytes,
+                    additional_maximum_expert_page_reservation_bytes,
+                )?
+        };
+        if resident_model_requires_demote {
+            self.model
+                .as_mut()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                .demote_resident_experts_to_paging(
+                    Qwen3_5ExpertResidencyTransitionReason::RequestAdmission,
+                    performance_attribution,
+                )
+                .map_err(InferenceEngineError::from)?;
+        }
         let model = self
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let target_expert_payload_bytes_before_context_admission = model
-            .expert_weight_memory_cache_statistics()
-            .resident_payload_byte_count;
         let context_admission_outcome = performance_attribution.measure_operation(
             PerformanceOperation::MemoryAdmissionSnapshot,
             |_performance_attribution| {
-                // Cache capture already owns decoder-state arrays. Admission adds
-                // only the largest one-at-a-time native serialization workspace,
-                // and only for requests eligible to publish persistent state.
-                let direct_publication_workspace_bytes = if can_use_persistent_prompt_cache {
-                    self.persistent_prompt_cache_model_contract
-                        .as_ref()
-                        .map_or(0, |model_contract| {
-                            model_contract.direct_publication_workspace_bytes()
-                        })
-                } else {
-                    0
-                };
                 validate_context_memory_admission(
                     model,
                     self.memory_limits,
                     self.context_memory_reservation_bytes_per_token,
                     total_context_tokens,
                     direct_publication_workspace_bytes,
-                    self.speculative_prefill_draft_maximum_expert_page_reservation_bytes(),
+                    additional_maximum_expert_page_reservation_bytes,
                 )
             },
         );
@@ -131,7 +176,7 @@ impl Qwen3_5EngineState {
 
     /// Attributes adaptive admission, including any retained-expert reclamation.
     pub(in crate::qwen3_5) fn measure_adaptive_ram_growth_memory_admission(
-        &self,
+        &mut self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         performance_attribution: &mut PerformanceAttribution,
         request_decoder_state: &RequestDecoderStateStack,
@@ -156,36 +201,62 @@ impl Qwen3_5EngineState {
 
     /// Admits one forward pass and starts an operation-local MLX peak sample.
     fn begin_adaptive_ram_growth(
-        &self,
-        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        &mut self,
+        mut adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         request_decoder_state: &RequestDecoderStateStack,
         additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
     ) -> Result<usize, AdaptiveRamGrowthMemoryAdmissionError> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let target_persistent_state_growth_bytes = request_decoder_state
-            .projected_persistent_state_growth_bytes(
-                model.decoder_cache_layout(),
-                adaptive_ram_growth_context.forward_token_count(),
+        let (
+            target_persistent_state_growth_bytes,
+            mut routed_expert_page_reservation_bytes,
+            mut memory_snapshot_before_growth,
+        ) = {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            let target_persistent_state_growth_bytes = request_decoder_state
+                .projected_persistent_state_growth_bytes(
+                    model.decoder_cache_layout(),
+                    adaptive_ram_growth_context.forward_token_count(),
+                )
+                .map_err(qwen3_5_runtime_error)?;
+            let routed_expert_page_reservation_bytes = if model.sparse_experts_are_paged() {
+                model
+                    .expert_pager
+                    .as_ref()
+                    .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes())
+                    .try_into()
+                    .map_err(|_| {
+                        invalid_request_error(
+                            "routed expert page reservation exceeds the platform range",
+                        )
+                    })?
+            } else {
+                0
+            };
+            let memory_snapshot_before_growth = model
+                .runtime()
+                .memory_snapshot()
+                .map_err(qwen3_5_runtime_error)?;
+            (
+                target_persistent_state_growth_bytes,
+                routed_expert_page_reservation_bytes,
+                memory_snapshot_before_growth,
             )
-            .map_err(qwen3_5_runtime_error)?;
+        };
         let exact_persistent_growth_bytes = combined_target_and_additional_persistent_growth_bytes(
             target_persistent_state_growth_bytes,
             additional_persistent_state_growth_bytes,
         )?;
-        let mut memory_snapshot_before_growth = model
-            .runtime()
-            .memory_snapshot()
-            .map_err(qwen3_5_runtime_error)?;
-        let initial_adaptive_ram_growth_projection = self
+        let mut initial_adaptive_ram_growth_projection = self
             .adaptive_ram_growth_guard
             .project_growth_for_context(
                 adaptive_ram_growth_context,
                 memory_snapshot_before_growth.active_memory_bytes(),
                 exact_persistent_growth_bytes,
+                routed_expert_page_reservation_bytes,
                 exact_temporary_workspace_bytes,
             )
             .map_err(|adaptive_ram_growth_projection_error| {
@@ -204,6 +275,10 @@ impl Qwen3_5EngineState {
 
         if initial_adaptive_ram_growth_projection.fits_stable_and_peak_limits() {
             if !initial_adaptive_ram_growth_projection.has_full_recovery_reserve() {
+                let model = self
+                    .model
+                    .as_ref()
+                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
                 let expert_weight_memory_cache_statistics =
                     model.expert_weight_memory_cache_statistics();
                 let pressure_action =
@@ -222,6 +297,38 @@ impl Qwen3_5EngineState {
                 );
             }
         } else {
+            // Later forwards can outgrow an initially safe resident request.
+            // Retry from a fresh paged baseline before evicting individual pages
+            // or rejecting, preserving the same growth evidence and user work.
+            if let Some(resident_demotion) = self.demote_resident_experts_for_adaptive_growth(
+                adaptive_ram_growth_context,
+                exact_persistent_growth_bytes,
+                exact_temporary_workspace_bytes,
+            )? {
+                adaptive_ram_growth_context = resident_demotion.adaptive_ram_growth_context;
+                memory_snapshot_before_growth = resident_demotion.memory_snapshot;
+                routed_expert_page_reservation_bytes =
+                    resident_demotion.routed_expert_page_reservation_bytes;
+                initial_adaptive_ram_growth_projection = resident_demotion.projection;
+                if initial_adaptive_ram_growth_projection.fits_stable_and_peak_limits() {
+                    let model_after_demotion = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
+                    if !initial_adaptive_ram_growth_projection.has_full_recovery_reserve() {
+                        model_after_demotion
+                            .freeze_expert_retention_growth_for_request_memory_pressure();
+                    }
+                    model_after_demotion
+                        .runtime()
+                        .reset_peak_memory()
+                        .map_err(qwen3_5_runtime_error)?;
+                    return Ok(memory_snapshot_before_growth.active_memory_bytes());
+                }
+            }
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let expert_weight_memory_cache_statistics_before_reclamation =
                 model.expert_weight_memory_cache_statistics();
             let required_reclamation_bytes =
@@ -268,6 +375,7 @@ impl Qwen3_5EngineState {
                     adaptive_ram_growth_context,
                     memory_snapshot_after_reclamation.active_memory_bytes(),
                     exact_persistent_growth_bytes,
+                    routed_expert_page_reservation_bytes,
                     exact_temporary_workspace_bytes,
                 )
                 .map_err(|adaptive_ram_growth_projection_error| {
@@ -317,54 +425,13 @@ impl Qwen3_5EngineState {
         // MLX's peak counter is process-global. Reset it only after admission so
         // the next sample measures this one forward pass rather than model loading
         // or an earlier prefill chunk.
-        model
+        self.model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .runtime()
             .reset_peak_memory()
             .map_err(qwen3_5_runtime_error)?;
         Ok(memory_snapshot_before_growth.active_memory_bytes())
-    }
-
-    /// Drops request-owned arrays before asking MLX to return cached allocations.
-    ///
-    /// Clearing here is deliberately request-scoped: allocator reuse remains
-    /// available inside prefill and decode, while completed work cannot leave a
-    /// large cache resident indefinitely on a memory-constrained laptop.
-    pub(crate) fn release_request_memory(
-        &self,
-        request_id: RequestId,
-        should_capture_memory_snapshot: bool,
-    ) -> Option<MlxMemorySnapshot> {
-        let model = self.model.as_ref()?;
-        if let Err(allocator_cache_error) = model
-            .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
-        {
-            tracing::warn!(request_id = request_id.value(), error = %allocator_cache_error,
-                "failed to release reclaimable MLX request memory");
-            return None;
-        }
-        if !should_capture_memory_snapshot {
-            return None;
-        }
-        match model.runtime().memory_snapshot() {
-            Ok(mlx_memory_snapshot) => {
-                tracing::info!(
-                    request_id = request_id.value(),
-                    mlx_active_bytes = mlx_memory_snapshot.active_memory_bytes(),
-                    mlx_allocator_cache_bytes = mlx_memory_snapshot.allocator_cache_memory_bytes(),
-                    mlx_peak_bytes = mlx_memory_snapshot.peak_memory_bytes(),
-                    "released reclaimable MLX request memory"
-                );
-                Some(mlx_memory_snapshot)
-            }
-            Err(snapshot_error) => {
-                tracing::warn!(
-                    request_id = request_id.value(), error = %snapshot_error,
-                    "released MLX request memory but could not sample allocator metrics"
-                );
-                None
-            }
-        }
     }
 }
 
