@@ -103,17 +103,19 @@ pub(super) async fn send_streaming_chat_request(
     prepared_romeo_and_juliet_prompt: &PreparedRomeoAndJulietPrompt,
     qualification_log_prefix: &str,
     request_phase_name: &str,
+    maximum_output_token_count: u16,
+    thinking_budget_token_count: u16,
 ) -> StreamedAssistantResponse {
     let request_document = json!({
         "model": PINNED_MODEL_ID,
         "messages": messages,
         "stream": true,
         "stream_options": { "include_usage": true },
-        "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
+        "max_tokens": maximum_output_token_count,
         "temperature": prepared_romeo_and_juliet_prompt.temperature,
         "top_p": prepared_romeo_and_juliet_prompt.top_p,
         "seed": QUALIFICATION_SAMPLING_SEED,
-        "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
+        "thinking_budget": thinking_budget_token_count,
     });
     let mut streamed_chat_completion: StreamResponse<Value> = openai_client
         .chat()
