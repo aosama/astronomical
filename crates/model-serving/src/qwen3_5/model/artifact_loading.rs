@@ -57,19 +57,6 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let config = validated_artifact.config().clone();
-        let decoder_cache_layout = crate::qwen3_5::qwen3_5_decoder_cache_layout(
-            &config,
-            usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "full-attention key/value growth tokens exceed the usize range",
-                }
-            })?,
-        )
-        .map_err(|decoder_cache_layout_error| {
-            Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
-                description: decoder_cache_layout_error.to_string(),
-            }
-        })?;
         let vision_config = validated_artifact.vision_config().cloned();
         let has_separate_vision_sidecar =
             should_bind_vision_weights && validated_artifact.has_separate_vision_sidecar();
@@ -195,6 +182,34 @@ impl Qwen3_5Model {
                     (Some(expert_pager), Some(sorted_expert_weighted_sum_kernel))
                 }
             };
+        // Cache geometry cannot be finalized before weights and sparse plans are
+        // bound: their source dtypes determine MLX result-type promotion. Derive
+        // the persistence contract at that boundary without evaluating tensors.
+        let decoder_cache_layout = performance_attribution.measure_operation(
+            PerformanceOperation::ModelTensorBinding,
+            |_performance_attribution| {
+                let decoder_layer_cache_dtypes =
+                    super::decoder_cache_dtype_flow::derive_decoder_layer_cache_dtypes(
+                        &weights,
+                        expert_pager.as_ref(),
+                    )?;
+                crate::qwen3_5::qwen3_5_decoder_cache_layout(
+                    &config,
+                    usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(
+                        |_| Qwen3_5ExecutionError::InvalidInput {
+                            description:
+                                "full-attention key/value growth tokens exceed the usize range",
+                        },
+                    )?,
+                    &decoder_layer_cache_dtypes,
+                )
+                .map_err(|decoder_cache_layout_error| {
+                    Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
+                        description: decoder_cache_layout_error.to_string(),
+                    }
+                })
+            },
+        )?;
         let gated_delta_kernel = super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?;
         let gated_delta_checkpoint_kernel =
             super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?;
@@ -220,6 +235,9 @@ impl Qwen3_5Model {
             mtp_weights,
             vision_model,
             expert_pager,
+            // Publication occurs only after core materialization and a fresh idle
+            // memory sample in the engine loading path.
+            resident_expert_weights: None,
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,

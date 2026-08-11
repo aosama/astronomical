@@ -114,6 +114,13 @@ pub enum ExpertManifestError {
     ReaderError { description: String },
     #[error("failed to serialize a bounded expert safetensors header: {0}")]
     HeaderSerialization(#[from] serde_json::Error),
+    #[error(
+        "complete expert payload byte count overflowed for layer {layer_prefix:?}, tensor {tensor_name:?}"
+    )]
+    CompleteExpertPayloadByteCountOverflow {
+        layer_prefix: String,
+        tensor_name: String,
+    },
 }
 
 /// One selected expert run copied from one original quantized tensor.
@@ -229,6 +236,36 @@ pub struct QuantizedExpertLayerPlan {
     pub quantization_bits: i32,
     pub quantization_group_size: i32,
     pub quantization_mode: QuantizationMode,
+}
+
+impl QuantizedExpertLayerPlan {
+    /// Returns the exact source payload needed to retain every expert in this layer.
+    ///
+    /// Each source covers one projection parameter across the complete leading
+    /// expert axis. Summing `bytes_per_expert * expert_capacity` therefore counts
+    /// packed weights, scales, and biases independently without estimating from
+    /// a nominal quantization label.
+    pub fn complete_expert_payload_byte_count(&self) -> Result<u64, ExpertManifestError> {
+        self.tensor_sources
+            .iter()
+            .try_fold(0_u64, |complete_layer_payload_bytes, tensor_source| {
+                let tensor_payload_overflow =
+                    || ExpertManifestError::CompleteExpertPayloadByteCountOverflow {
+                        layer_prefix: self.layer_prefix.clone(),
+                        tensor_name: tensor_source.tensor_name.clone(),
+                    };
+                let bytes_per_expert = u64::try_from(tensor_source.bytes_per_expert)
+                    .map_err(|_| tensor_payload_overflow())?;
+                let expert_capacity = u64::try_from(tensor_source.expert_capacity)
+                    .map_err(|_| tensor_payload_overflow())?;
+                let tensor_payload_bytes = bytes_per_expert
+                    .checked_mul(expert_capacity)
+                    .ok_or_else(tensor_payload_overflow)?;
+                complete_layer_payload_bytes
+                    .checked_add(tensor_payload_bytes)
+                    .ok_or_else(tensor_payload_overflow)
+            })
+    }
 }
 
 /// Supported quantization modes for expert weight loading.

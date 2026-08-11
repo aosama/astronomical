@@ -277,7 +277,7 @@ impl Qwen3_5Model {
                 // layer in the shared pager. It participates in the same global
                 // byte ceiling and recency policy without pretending to belong
                 // to the language trunk's artifact namespace.
-                self.forward_qwen3_5_moe_with_paging(
+                self.forward_qwen3_5_moe(
                     &normalized_attention,
                     mixture_of_experts_weights,
                     expert_pager,

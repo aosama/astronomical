@@ -38,7 +38,7 @@ pub(super) struct PromptPrefillChunckOutcome {
 
 impl Qwen3_5EngineState {
     pub(super) fn execute_prompt_prefill_chunck(
-        &self,
+        &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
         prefill_start: usize,
@@ -214,6 +214,9 @@ impl Qwen3_5EngineState {
         let target_expert_payload_bytes_before_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
+        // Admission has mutable access because this exact chunk can trigger a
+        // Resident -> Paged transition. Reborrow the model afterward so graph
+        // construction cannot accidentally retain the pre-transition owner.
         let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
             adaptive_ram_growth_context,
             &mut active_request.performance_attribution,
@@ -221,6 +224,10 @@ impl Qwen3_5EngineState {
             additional_persistent_state_growth_bytes,
             exact_temporary_workspace_bytes,
         )?;
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let target_expert_payload_bytes_after_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;

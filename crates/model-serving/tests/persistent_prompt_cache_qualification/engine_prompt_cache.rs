@@ -3,9 +3,9 @@ use std::{future::Future, path::Path, time::Duration};
 use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheModelContract, PersistentPromptCachePrefixLookup,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
-    Qwen3_5Tokenizer, qwen3_5_decoder_cache_layout,
+    PersistentPromptCacheModelContract, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    qwen3_5_decoder_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 
@@ -45,7 +45,7 @@ async fn run_persistent_prompt_cache_restore_qualification() {
         persistent_prompt_cache_eligible_prompt_token_ids(
             persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplier(
                 &model_directory,
-                1,
+                2,
             )
             .await,
         ),
@@ -173,7 +173,10 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         tempfile::tempdir().expect("the test should create a prompt-cache directory");
 
     // First run: cold prefill, should populate the persistent prompt cache.
-    let (mut qwen3_5_engine, _model_id, _model_revision, persistent_prompt_cache_model_contract) =
+    // The exact storage contract now depends on bound affine dtypes. Read block
+    // geometry from the loaded engine rather than reconstructing a config-only
+    // contract that could disagree with production serialization.
+    let (mut qwen3_5_engine, _model_id, _model_revision, prompt_cache_block_token_count) =
         load_persistent_prompt_cache_qualification_engine(
             model_directory,
             persistent_prompt_cache_directory.path(),
@@ -199,7 +202,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
     let minimum_expected_sequence_state_block_count = fixed_prefill_chunck_tokens
         .map(|fixed_prefill_chunck_tokens| {
             usize::try_from(fixed_prefill_chunck_tokens).unwrap_or(usize::MAX)
-                / persistent_prompt_cache_model_contract.block_token_count()
+                / prompt_cache_block_token_count
         })
         .unwrap_or(1);
     wait_for_persistent_prompt_cache_blocks(
@@ -207,30 +210,6 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         minimum_expected_sequence_state_block_count,
     )
     .await;
-    let direct_prefix_lookup = PersistentPromptCachePrefixLookup::for_prompt(
-        &persistent_prompt_cache_model_contract,
-        &prompt_token_ids,
-        |persistent_prompt_cache_block_hash| {
-            persistent_prompt_cache_file_exists(
-                persistent_prompt_cache_directory.path(),
-                "sequence.safetensors",
-                persistent_prompt_cache_block_hash,
-            )
-        },
-        |persistent_prompt_cache_block_hash| {
-            persistent_prompt_cache_file_exists(
-                persistent_prompt_cache_directory.path(),
-                "boundary.safetensors",
-                persistent_prompt_cache_block_hash,
-            )
-        },
-    );
-    eprintln!(
-        "[persistent-prompt-cache-qualification] direct_lookup_restored_tokens={} diagnostics={:?}",
-        direct_prefix_lookup.restored_token_count(),
-        direct_prefix_lookup.diagnostics(),
-    );
-
     // Second run: same prompt, same loaded engine, same prompt-cache directory. The
     // prompt is longer than one persistent prompt-cache block, so the second start
     // must report a hit without paying another full model load in this proof.
@@ -248,8 +227,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
         .await
         .expect("the second engine should accept the request");
     assert!(
-        second_generation_start.cached_token_count()
-            >= persistent_prompt_cache_model_contract.block_token_count() as u32,
+        second_generation_start.cached_token_count() >= prompt_cache_block_token_count as u32,
         "the second run should report at least one restored prompt-cache block"
     );
     let restored_cached_token_count = second_generation_start.cached_token_count();
@@ -272,12 +250,7 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
     model_directory: &Path,
     persistent_prompt_cache_directory: &Path,
     fixed_prefill_chunck_tokens: Option<u32>,
-) -> (
-    Qwen3_5Engine,
-    String,
-    String,
-    PersistentPromptCacheModelContract,
-) {
+) -> (Qwen3_5Engine, String, String, usize) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
@@ -298,26 +271,9 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
         .expect("the configured candidates should configure the optimizer"),
     };
     let mlx_memory_limits =
-        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
-        model_id.clone(),
-        model_revision.clone(),
-        qwen3_5_decoder_cache_layout(
-            validated_artifact.config(),
-            crate::common::standard_worker_chunking_configuration()
-                .full_attention_key_value_growth_tokens as usize,
-        )
-        .expect("the validated artifact should provide a decoder-cache layout"),
-        validated_artifact.config().maximum_position_count() as usize,
-        mlx_memory_limits.active_memory_limit_bytes() as u64,
-        crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
-        crate::common::standard_worker_chunking_configuration()
-            .prompt_cache_block_tokens
-            .map(|block_token_count| block_token_count as usize),
-        crate::common::standard_worker_chunking_configuration()
-            .prompt_cache_common_prefix_stride_blocks,
-    )
-    .expect("the qualification model should resolve a persistent storage contract");
+        crate::common::sample_machine_model_artifact_qualification_mlx_memory_limits().await;
+    let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
+    worker_chunking_configuration.prompt_cache_block_tokens = fixed_prefill_chunck_tokens;
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
@@ -330,7 +286,7 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
         prefill_chunck_sizer,
         248_069,
         model_directory.to_path_buf(),
-        crate::common::standard_worker_chunking_configuration(),
+        worker_chunking_configuration,
         true,
         crate::common::disabled_worker_speculative_prefill_configuration(),
     )
@@ -339,11 +295,12 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
         .load()
         .await
         .expect("the engine should load the model");
+    let prompt_cache_block_token_count = prompt_cache_block_token_count(&qwen3_5_engine).await;
     (
         qwen3_5_engine,
         model_id,
         model_revision,
-        persistent_prompt_cache_model_contract,
+        prompt_cache_block_token_count,
     )
 }
 
@@ -355,7 +312,10 @@ async fn persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplie
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before sizing the prompt");
     let mlx_memory_limits =
-        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+        crate::common::sample_machine_model_artifact_qualification_mlx_memory_limits().await;
+    // This pre-load helper needs only a prompt comfortably beyond a boundary.
+    // Use the widest supported state dtype and a caller-supplied multiplier for
+    // sizing; hit assertions later use the exact block count reported after load.
     let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
         validated_artifact.model_id().to_owned(),
         validated_artifact.revision().to_owned(),
@@ -363,6 +323,9 @@ async fn persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplie
             validated_artifact.config(),
             crate::common::standard_worker_chunking_configuration()
                 .full_attention_key_value_growth_tokens as usize,
+            &crate::common::qwen3_5_moe::float32_decoder_layer_cache_dtypes(
+                validated_artifact.config(),
+            ),
         )
         .expect("the validated artifact should provide a decoder-cache layout"),
         validated_artifact.config().maximum_position_count() as usize,
@@ -384,22 +347,24 @@ async fn persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplie
     .len()
 }
 
-fn persistent_prompt_cache_file_exists(
-    persistent_prompt_cache_directory: &Path,
-    state_file_name: &str,
-    persistent_prompt_cache_block_hash: &[u8; 32],
-) -> bool {
-    let persistent_prompt_cache_block_hash_hex = persistent_prompt_cache_block_hash
-        .iter()
-        .map(|block_hash_byte| format!("{block_hash_byte:02x}"))
-        .collect::<String>();
-    persistent_prompt_cache_directory
-        .join("blocks")
-        .join(persistent_prompt_cache_block_hash_hex)
-        .join(state_file_name)
-        .is_file()
+async fn prompt_cache_block_token_count(qwen3_5_engine: &Qwen3_5Engine) -> usize {
+    // Stats are emitted from the engine-owned, load-derived cache contract and
+    // therefore share the exact geometry used by lookup and publication.
+    let cache_stats = qwen3_5_engine
+        .collect_persistent_prompt_cache_stats()
+        .await
+        .expect("the engine should report persistent prompt-cache stats")
+        .expect("the qualification engine should have persistent prompt caching enabled");
+    let WorkerEvent::PersistentPromptCacheStats {
+        persistent_prompt_cache_block_token_count,
+        ..
+    } = cache_stats
+    else {
+        panic!("the engine returned an unexpected prompt-cache stats event")
+    };
+    usize::try_from(persistent_prompt_cache_block_token_count)
+        .expect("the prompt-cache block token count should fit usize")
 }
-
 pub(super) async fn wait_for_persistent_prompt_cache_blocks(
     qwen3_5_engine: &Qwen3_5Engine,
     expected_sequence_state_block_count: usize,
@@ -412,6 +377,7 @@ pub(super) async fn wait_for_persistent_prompt_cache_blocks(
             .expect("the engine should report persistent prompt-cache stats")
             .expect("the qualification engine should have persistent prompt caching enabled");
         let WorkerEvent::PersistentPromptCacheStats {
+            persistent_prompt_cache_block_token_count,
             persistent_prompt_cache_sequence_state_block_count,
             persistent_prompt_cache_boundary_state_snapshot_count,
             ..
@@ -432,7 +398,7 @@ pub(super) async fn wait_for_persistent_prompt_cache_blocks(
             "only {persistent_prompt_cache_sequence_state_block_count} of {expected_sequence_state_block_count} expected prompt-cache blocks were published"
         );
         eprintln!(
-            "[persistent-prompt-cache-qualification] status=waiting-for-cache published_blocks={persistent_prompt_cache_sequence_state_block_count} expected_blocks={expected_sequence_state_block_count}"
+            "[persistent-prompt-cache-qualification] status=waiting-for-cache block_tokens={persistent_prompt_cache_block_token_count} published_blocks={persistent_prompt_cache_sequence_state_block_count} expected_blocks={expected_sequence_state_block_count}"
         );
         sleep(Duration::from_millis(250)).await;
     }

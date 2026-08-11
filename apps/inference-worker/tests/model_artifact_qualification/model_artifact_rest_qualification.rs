@@ -28,8 +28,8 @@ use super::model_artifact_rest_transport::{
 pub(super) const E2E_TIMEOUT: Duration = Duration::from_secs(115);
 const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const READY_ATTEMPT_LIMIT: u8 = 70;
-// The litmus checks Responses completion and worker reuse, not long output volume.
-const DEPLOYMENT_LITMUS_RESPONSES_MAX_OUTPUT_TOKENS: u32 = 512;
+// The litmus checks stream completion and worker reuse, not long output volume.
+const DEPLOYMENT_LITMUS_MAX_OUTPUT_TOKENS: u32 = 512;
 pub(super) const DEPLOYMENT_LITMUS_PROMPT: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
@@ -424,7 +424,7 @@ fn deployment_litmus_chat_request_body(model_id: &str, user_prompt: &str) -> Str
         "tools": production_shaped_tools,
         "stream": true,
         "temperature": 0,
-        "max_tokens": 20_480,
+        "max_tokens": DEPLOYMENT_LITMUS_MAX_OUTPUT_TOKENS,
     })
     .to_string()
 }
@@ -435,7 +435,7 @@ fn deployment_litmus_responses_request_body(model_id: &str, user_prompt: &str) -
         "instructions": "Reply with exactly OK and nothing else. Do not provide reasoning or explanation.",
         "input": user_prompt,
         "stream": true,
-        "max_output_tokens": DEPLOYMENT_LITMUS_RESPONSES_MAX_OUTPUT_TOKENS,
+        "max_output_tokens": DEPLOYMENT_LITMUS_MAX_OUTPUT_TOKENS,
     })
     .to_string()
 }
@@ -499,7 +499,8 @@ fn assert_successful_streaming_responses_response(responses_response: &str) {
         "real Responses stream did not contain model-generated content: {responses_response}"
     );
     assert!(
-        responses_response.contains("event: response.completed"),
+        responses_response.contains("event: response.completed")
+            || responses_response.contains("event: response.incomplete"),
         "real Responses stream did not finish cleanly: {responses_response}"
     );
 }

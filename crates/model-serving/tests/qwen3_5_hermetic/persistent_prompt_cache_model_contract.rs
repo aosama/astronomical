@@ -1,7 +1,8 @@
 use astronomical_model_serving::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    PersistentPromptCacheModelContract, qwen3_5_decoder_cache_layout,
+    PersistentPromptCacheModelContract, Qwen3_5DecoderLayerCacheDtypes,
+    qwen3_5_decoder_cache_layout,
 };
 
 const TEST_MLX_MEMORY_CEILING_BYTES: u64 = 20_000_000_000;
@@ -14,11 +15,12 @@ use crate::common::qwen3_5_moe::{
 #[test]
 fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_metadata() {
     let ornith_config = certified_ornith_config();
+    let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
 
     let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&ornith_config, 256)
+        qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes)
             .expect("the certified Ornith configuration should build a decoder-cache layout"),
         ornith_config.maximum_position_count() as usize,
         TEST_MLX_MEMORY_CEILING_BYTES,
@@ -125,6 +127,103 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_meta
         persistent_prompt_cache_model_contract.storage_contract_fingerprint(),
         [0_u8; 32]
     );
+}
+
+#[test]
+fn should_preserve_mixed_execution_dtypes_in_persistent_prompt_cache_geometry() {
+    let ornith_config = certified_ornith_config();
+    let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
+    decoder_layer_cache_dtypes[0] = Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
+        convolution: DecoderCacheTensorDtype::Float32,
+    };
+    decoder_layer_cache_dtypes[3] = Qwen3_5DecoderLayerCacheDtypes::FullAttention {
+        keys: DecoderCacheTensorDtype::Float32,
+        values: DecoderCacheTensorDtype::Float32,
+    };
+
+    let decoder_cache_layout =
+        qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes)
+            .expect("mixed execution dtypes should build an exact decoder-cache layout");
+
+    let first_boundary_tensor = decoder_cache_layout
+        .boundary_tensor_layouts()
+        .into_iter()
+        .find(|persisted_tensor_layout| persisted_tensor_layout.decoder_layer_index() == 0)
+        .expect("the first linear-attention layer should have boundary state");
+    assert_eq!(
+        first_boundary_tensor.tensor_layout().dtype(),
+        DecoderCacheTensorDtype::Float32
+    );
+    let first_full_attention_tensors = decoder_cache_layout
+        .sequence_tensor_layouts()
+        .into_iter()
+        .filter(|persisted_tensor_layout| persisted_tensor_layout.decoder_layer_index() == 3)
+        .collect::<Vec<_>>();
+    assert_eq!(first_full_attention_tensors.len(), 2);
+    assert!(
+        first_full_attention_tensors
+            .iter()
+            .all(|persisted_tensor_layout| {
+                persisted_tensor_layout.tensor_layout().dtype() == DecoderCacheTensorDtype::Float32
+            })
+    );
+}
+
+#[test]
+fn should_reject_decoder_cache_execution_dtypes_with_a_missing_layer() {
+    let ornith_config = certified_ornith_config();
+    let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
+    decoder_layer_cache_dtypes.pop();
+
+    let rejection = qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes);
+
+    assert!(matches!(
+        rejection,
+        Err(
+            astronomical_model_serving::DecoderCacheLayoutError::ExecutionDtypeLayerCountMismatch {
+                expected_layer_count: 40,
+                actual_layer_count: 39,
+            }
+        )
+    ));
+}
+
+#[test]
+fn should_reject_decoder_cache_execution_dtypes_for_the_wrong_attention_family() {
+    let ornith_config = certified_ornith_config();
+    let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
+    decoder_layer_cache_dtypes[0] = Qwen3_5DecoderLayerCacheDtypes::FullAttention {
+        keys: DecoderCacheTensorDtype::BFloat16,
+        values: DecoderCacheTensorDtype::BFloat16,
+    };
+
+    let rejection = qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes);
+
+    assert!(matches!(
+        rejection,
+        Err(astronomical_model_serving::DecoderCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
+            layer_index: 0,
+        })
+    ));
+}
+
+fn bfloat16_decoder_layer_cache_dtypes(
+    ornith_config: &astronomical_model_serving::Qwen3_5Config,
+) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
+    (0..ornith_config.layer_count() as usize)
+        .map(|decoder_layer_index| {
+            if ornith_config.decoder_layer_is_full_attention(decoder_layer_index) {
+                Qwen3_5DecoderLayerCacheDtypes::FullAttention {
+                    keys: DecoderCacheTensorDtype::BFloat16,
+                    values: DecoderCacheTensorDtype::BFloat16,
+                }
+            } else {
+                Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
+                    convolution: DecoderCacheTensorDtype::BFloat16,
+                }
+            }
+        })
+        .collect()
 }
 
 #[test]

@@ -83,18 +83,21 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
+        // Keep model borrows operation-local. Memory admission may demote the
+        // complete resident owner through `&mut self`; every forward must borrow
+        // the model again afterward and observe the newly selected mode.
         if let Some(prefill_progress) =
             self.advance_prompt_prefill_if_pending(request_id, active_request)?
         {
             return Ok(ActiveRequestAdvance::Continue(prefill_progress));
         }
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 
         if let Some(queued_prediction_token_id) = take_queued_prediction_token(active_request) {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let mlx_memory_snapshot = if !self.adaptive_ram_growth_guard_enabled {
                 None
             } else {
@@ -126,10 +129,15 @@ impl Qwen3_5EngineState {
             Some(pending_generated_token) => pending_generated_token,
             None => {
                 let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
+                let sparse_experts_are_paged = self
+                    .model
+                    .as_ref()
+                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                    .sparse_experts_are_paged();
                 let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
                     1,
                     active_request.has_optional_prediction_session(),
-                    model.sparse_experts_are_paged(),
+                    sparse_experts_are_paged,
                 );
                 let active_memory_bytes_before_growth = self
                     .measure_adaptive_ram_growth_memory_admission(
@@ -140,6 +148,10 @@ impl Qwen3_5EngineState {
                         0,
                     )?;
                 self.save_speculative_prefill_target_prefix(active_request)?;
+                let model = self
+                    .model
+                    .as_ref()
+                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
                 let first_generated_token = if let Some(prediction_token) =
                     forward_initial_target_token_with_prediction_state(
                         model,
@@ -188,6 +200,10 @@ impl Qwen3_5EngineState {
         let current_generated_token_id =
             synchronize_generated_token_id(active_request, &current_generated_token)?;
         if self.generated_token_will_be_terminal(active_request, current_generated_token_id) {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let mlx_memory_snapshot = if self.adaptive_ram_growth_guard_enabled {
                 Some(
                     model
@@ -210,12 +226,21 @@ impl Qwen3_5EngineState {
         }
 
         if prediction_verification_is_eligible(active_request, self.maximum_position_count) {
-            let prediction_history_growth_bytes =
-                projected_verification_window_memory_growth_bytes(model, active_request)?;
-            let target_verification_boundary_workspace_bytes =
-                verification_window_workspace_bytes(model)?;
-            let adaptive_ram_growth_context =
-                AdaptiveRamGrowthContext::decode(2, true, model.sparse_experts_are_paged());
+            let (
+                prediction_history_growth_bytes,
+                target_verification_boundary_workspace_bytes,
+                adaptive_ram_growth_context,
+            ) = {
+                let model = self
+                    .model
+                    .as_ref()
+                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                (
+                    projected_verification_window_memory_growth_bytes(model, active_request)?,
+                    verification_window_workspace_bytes(model)?,
+                    AdaptiveRamGrowthContext::decode(2, true, model.sparse_experts_are_paged()),
+                )
+            };
             let memory_admission_outcome = self.measure_adaptive_ram_growth_memory_admission(
                 adaptive_ram_growth_context,
                 &mut active_request.performance_attribution,
@@ -236,6 +261,9 @@ impl Qwen3_5EngineState {
                     return Err(memory_admission_error);
                 }
                 Ok(active_memory_bytes_before_growth) => {
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
                     let prediction_attempt_outcome = attempt_prediction_proposal_and_verification(
                         model,
                         active_request,
@@ -311,10 +339,15 @@ impl Qwen3_5EngineState {
             }
         }
 
+        let sparse_experts_are_paged = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .sparse_experts_are_paged();
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
             1,
             active_request.has_optional_prediction_session(),
-            model.sparse_experts_are_paged(),
+            sparse_experts_are_paged,
         );
         let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
             adaptive_ram_growth_context,
@@ -323,6 +356,10 @@ impl Qwen3_5EngineState {
             0,
             0,
         )?;
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let next_generated_token = if let Some(prediction_token) =
             forward_next_target_token_with_prediction_state(
                 model,

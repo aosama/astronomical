@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatImageInput,
-    ChatMessage, ChatToolChoice, MAX_IPC_FRAME_BYTES, RequestId,
+    ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, RequestId,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
@@ -93,6 +93,11 @@ async fn should_load_the_requested_model_only_after_the_first_generation_request
             .worker_health_snapshot()
             .minimum_mlx_memory_ceiling_bytes,
         3_000_000_000
+    );
+    assert_eq!(
+        worker_handle.worker_health_snapshot().expert_memory_mode,
+        Some(ExpertMemoryMode::Resident),
+        "health must publish the expert mode selected before the replacement model became ready"
     );
     worker_handle
         .shutdown()

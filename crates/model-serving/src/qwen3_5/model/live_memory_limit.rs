@@ -1,14 +1,15 @@
-//! Atomic coordination of a live MLX ceiling and native expert retention.
+//! Atomic coordination of a live MLX ceiling and binary expert ownership.
 //!
-//! Lowering the ceiling must evict elastic expert pages before MLX begins
-//! enforcing the smaller active-memory limit. Raising it reverses that order so
-//! future routes can safely expand retention. Every failed transition restores
-//! the pager's previous configured ceiling.
+//! Lowering first demotes a complete resident owner when necessary, then reduces
+//! native page retention before MLX enforces the smaller limit. Raising reverses
+//! the order: MLX accepts capacity, native policy expands, and complete residency
+//! is attempted. A failed transition restores the pager's prior ceiling.
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::expert_paging::automatic_expert_weight_memory_cache_maximum_size_bytes;
-use crate::{InferenceEngineError, safe_minimum_mlx_memory_ceiling_bytes};
+use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
+use crate::{InferenceEngineError, PerformanceAttribution, safe_minimum_mlx_memory_ceiling_bytes};
 
 use super::Qwen3_5Model;
 
@@ -25,6 +26,8 @@ impl Qwen3_5Model {
                 )
             })?;
         let expert_weight_memory_cache_statistics = self.expert_weight_memory_cache_statistics();
+        // Sparse expert payload is elastic in either mode: the complete owner can
+        // demote, while paged mode can evict retained slots. Dense weights are not.
         let evictable_retained_expert_payload_bytes = if self.expert_pager.is_some() {
             expert_weight_memory_cache_statistics.resident_payload_byte_count
         } else {
@@ -125,6 +128,12 @@ impl Qwen3_5Model {
             self.update_expert_residency_for_live_mlx_memory_limit(
                 requested_mlx_memory_ceiling_bytes,
             )?;
+            let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+            self.try_promote_experts_to_resident(
+                Qwen3_5ExpertResidencyTransitionReason::CeilingRaise,
+                &mut disabled_performance_attribution,
+            )
+            .map_err(InferenceEngineError::from)?;
         }
         Ok((
             minimum_mlx_memory_ceiling_bytes,
@@ -136,6 +145,22 @@ impl Qwen3_5Model {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
+        let current_active_memory_bytes = self
+            .runtime
+            .memory_snapshot()
+            .map_err(super::super::inference_execution::qwen3_5_runtime_error)?
+            .active_memory_bytes();
+        let resident_owner_exceeds_requested_ceiling = self.resident_expert_weights.is_some()
+            && u64::try_from(current_active_memory_bytes).unwrap_or(u64::MAX)
+                > requested_mlx_memory_ceiling_bytes;
+        if resident_owner_exceeds_requested_ceiling {
+            let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+            self.demote_resident_experts_to_paging(
+                Qwen3_5ExpertResidencyTransitionReason::CeilingLower,
+                &mut disabled_performance_attribution,
+            )
+            .map_err(InferenceEngineError::from)?;
+        }
         let Some(expert_pager) = self.expert_pager.as_mut() else {
             return Ok(());
         };
@@ -190,6 +215,12 @@ impl Qwen3_5Model {
     ) -> Result<(), InferenceEngineError> {
         if let Some(previous_memory_ceiling_bytes) = previous_memory_ceiling_bytes {
             self.update_expert_residency_for_live_mlx_memory_limit(previous_memory_ceiling_bytes)?;
+            let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+            self.try_promote_experts_to_resident(
+                Qwen3_5ExpertResidencyTransitionReason::CeilingRaise,
+                &mut disabled_performance_attribution,
+            )
+            .map_err(InferenceEngineError::from)?;
         }
         Ok(())
     }

@@ -63,8 +63,12 @@ where
                     model_load_failure_reason: "model engine initialization failed".to_owned(),
                 }
             })?;
+        // Capture every readiness field from the completed engine transition
+        // before publishing the replacement. This keeps supervisor health from
+        // briefly combining the new model identity with stale runtime mode.
         let minimum_mlx_memory_ceiling_bytes =
             engine_load_result.minimum_mlx_memory_ceiling_bytes();
+        let expert_memory_mode = engine_load_result.expert_memory_mode();
         let mtp_runtime_state = engine_load_result.mtp_runtime_state();
         let mtp_unavailable_reason = engine_load_result
             .mtp_unavailable_reason()
@@ -95,6 +99,7 @@ where
             } => WorkerEvent::ModelSwapped {
                 model_id,
                 capabilities,
+                expert_memory_mode,
                 minimum_mlx_memory_ceiling_bytes,
                 mtp_runtime_state,
                 mtp_unavailable_reason,

@@ -1,6 +1,7 @@
 //! Startup construction of validated expert layer plans and memory admission.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+use std::fs::File;
 use std::path::PathBuf;
 
 use astronomical_runtime_integration::{
@@ -117,12 +118,37 @@ impl Qwen3_5ExpertPager {
         .map_err(|error| ExpertPagingError::Runtime {
             description: error.to_string(),
         })?;
+        let resident_expert_source_files = retain_resident_expert_source_files(&layer_plans)?;
         Ok(Self {
             layer_plans,
             memory_budget,
             native_expert_cache,
+            resident_expert_source_files,
         })
     }
+}
+
+fn retain_resident_expert_source_files(
+    layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<Vec<(PathBuf, File)>, ExpertPagingError> {
+    // Open once while artifact paths are known-valid. BTreeSet deduplicates and
+    // stabilizes descriptor order; later promotions clone these open handles and
+    // do not depend on path lookup or native cache descriptor lifetimes.
+    layer_plans
+        .iter()
+        .flat_map(|layer_plan| layer_plan.tensor_sources.iter())
+        .map(|tensor_source| tensor_source.source_file.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|source_file_path| {
+            File::open(&source_file_path)
+                .map(|source_file| (source_file_path.clone(), source_file))
+                .map_err(|source| ExpertPagingError::ResidentSourceOpen {
+                    source_file: source_file_path,
+                    source,
+                })
+        })
+        .collect()
 }
 
 fn native_layer_descriptor(

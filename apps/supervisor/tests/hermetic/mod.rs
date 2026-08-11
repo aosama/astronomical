@@ -8,3 +8,4 @@ mod request_queue;
 mod worker_cancellation;
 mod worker_health_snapshot;
 mod worker_launch;
+mod worker_model_swap;
