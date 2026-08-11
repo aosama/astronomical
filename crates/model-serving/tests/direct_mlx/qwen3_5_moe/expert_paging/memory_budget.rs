@@ -59,7 +59,7 @@ fn should_count_an_incoming_complete_layer_once_when_sizing_post_load_retention(
 }
 
 #[test]
-fn should_reserve_every_possible_distinct_expert_in_a_multi_token_route() {
+fn should_compute_a_fail_closed_route_upper_bound_when_exact_evidence_is_unavailable() {
     assert_eq!(
         maximum_possible_expert_route_payload_bytes(7_077_888, 512, 180),
         Some(1_274_019_840),
@@ -83,22 +83,36 @@ fn should_fail_closed_when_the_possible_route_payload_overflows() {
 }
 
 #[test]
-fn should_reduce_retention_before_a_multi_token_route_dependency_synchronizes() {
-    let possible_multi_token_route_payload_bytes =
-        maximum_possible_expert_route_payload_bytes(100, 100, 20)
-            .expect("the representative route payload should fit");
+fn should_preserve_warm_retention_when_exact_route_analysis_has_no_missing_pages() {
+    let memory_budget_snapshot =
+        memory_budget_snapshot_with_pending_allocation(10_000, 9_000, 0, 500, 0);
+
+    assert_eq!(
+        automatic_expert_weight_memory_cache_maximum_size_bytes(&memory_budget_snapshot, 7_000, 0,),
+        7_500,
+        "an exact warm route should reserve only the future page and must not evict as if assignments were missing",
+    );
+}
+
+#[test]
+fn should_retain_exact_missing_route_payload_while_reserving_one_future_page() {
+    let exact_missing_route_payload_bytes = 2_000;
     let memory_budget_snapshot = memory_budget_snapshot_with_pending_allocation(
         10_000,
         9_000,
         0,
         500,
-        possible_multi_token_route_payload_bytes,
+        exact_missing_route_payload_bytes,
     );
 
     assert_eq!(
-        automatic_expert_weight_memory_cache_maximum_size_bytes(&memory_budget_snapshot, 7_000, 0,),
-        6_000,
-        "the route must reclaim retained experts before lazy route dependencies increase active memory",
+        automatic_expert_weight_memory_cache_maximum_size_bytes(
+            &memory_budget_snapshot,
+            7_000,
+            exact_missing_route_payload_bytes,
+        ),
+        7_500,
+        "admission should evict only enough old retention to hold exact misses and one future page",
     );
 }
 

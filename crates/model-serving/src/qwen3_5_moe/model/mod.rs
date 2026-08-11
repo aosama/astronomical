@@ -9,6 +9,8 @@ pub(crate) mod feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
 mod forward;
 #[cfg(feature = "direct-mlx")]
+mod native_expert_cache_attribution;
+#[cfg(feature = "direct-mlx")]
 mod output_combination;
 #[cfg(feature = "direct-mlx")]
 mod paged_execution;

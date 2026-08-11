@@ -273,8 +273,8 @@ async fn should_transition_the_complete_sparse_model_across_live_memory_limits()
 }
 
 #[tokio::test]
-#[ignore = "loads one fitting sparse model and verifies pre-request pressure demotion and idle recovery"]
-async fn should_page_for_a_large_request_then_recover_complete_idle_residency() {
+#[ignore = "loads one fitting sparse model and verifies request-pressure demotion without immediate resident reload"]
+async fn should_page_for_a_large_request_without_immediate_resident_repromotion() {
     timeout(Duration::from_secs(120), async {
         initialize_automatic_residency_tracing();
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -365,8 +365,8 @@ async fn should_page_for_a_large_request_then_recover_complete_idle_residency() 
 
         assert_eq!(
             generation_finalization.expert_memory_mode(),
-            Some(ExpertMemoryMode::Resident),
-            "request cleanup must restore a model that fits at idle"
+            Some(ExpertMemoryMode::Paged),
+            "request cleanup must not immediately reload the complete owner released for this request"
         );
         assert!(
             expert_statistics_after_request.disk_page_load_count

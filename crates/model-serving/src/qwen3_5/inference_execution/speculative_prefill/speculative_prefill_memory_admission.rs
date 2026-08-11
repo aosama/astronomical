@@ -6,49 +6,15 @@
 //! Model-core weights, active target decoder state, and the configured ceiling
 //! are never reduced as part of this operation.
 
-/// Returns the target expert-retention payload that must be reclaimed before
-/// drafter scoring can allocate its remaining decoder state and one expert page.
-#[must_use]
-pub(crate) const fn speculative_prefill_draft_scoring_reclamation_target_bytes(
-    current_active_memory_bytes: usize,
-    draft_scoring_reservation_bytes: usize,
-    allowed_active_memory_bytes: usize,
-) -> usize {
-    // Saturating arithmetic makes the formula total: an already-over-limit
-    // snapshot requests at least the excess, while a fitting projection returns
-    // exactly zero instead of underflowing.
-    current_active_memory_bytes
-        .saturating_add(draft_scoring_reservation_bytes)
-        .saturating_sub(allowed_active_memory_bytes)
-}
-
-/// Combines the independently owned drafter allocations required before its
-/// scoring graph can run.
-///
-/// Decoder growth and visual payload are long-lived for scoring. The expert page,
-/// boundary checkpoint, and direct-publication workspace are transient but may
-/// overlap at a cache boundary, so admission must reserve all five categories.
-#[must_use]
-pub(crate) fn speculative_prefill_draft_scoring_reservation_bytes(
-    draft_decoder_state_growth_bytes: usize,
-    draft_vision_payload_bytes: usize,
-    draft_maximum_expert_page_reservation_bytes: usize,
-    draft_boundary_checkpoint_workspace_bytes: usize,
-    draft_direct_publication_workspace_bytes: usize,
-) -> Option<usize> {
-    // Overflow means admission cannot prove the request fits and must fail
-    // closed. `Option` keeps the pure formula independent of engine error types.
-    draft_decoder_state_growth_bytes
-        .checked_add(draft_vision_payload_bytes)?
-        .checked_add(draft_maximum_expert_page_reservation_bytes)?
-        .checked_add(draft_boundary_checkpoint_workspace_bytes)?
-        .checked_add(draft_direct_publication_workspace_bytes)
-}
-
 #[cfg(feature = "direct-mlx")]
 use super::super::super::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
 use super::super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+#[cfg(feature = "direct-mlx")]
+use super::speculative_prefill_memory_admission_policy::{
+    speculative_prefill_draft_scoring_reservation_bytes,
+    speculative_prefill_required_target_expert_reclamation_bytes,
+};
 #[cfg(feature = "direct-mlx")]
 use crate::{
     InferenceEngineError, PerformanceAttribution, Qwen3_5Model,
@@ -61,7 +27,7 @@ impl Qwen3_5EngineState {
     /// needs additional GPU state, retaining the target model core and the
     /// configured MLX ceiling.
     pub(crate) fn admit_speculative_prefill_draft_scoring_memory(
-        &self,
+        &mut self,
         request_id: u64,
         draft_model: &Qwen3_5Model,
         draft_request_decoder_state: &RequestDecoderStateStack,
@@ -69,22 +35,18 @@ impl Qwen3_5EngineState {
         should_reserve_draft_vision_payload: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
-        // Target runtime accounting is the process-wide baseline against which
-        // all request-scoped drafter ownership must fit.
-        let target_model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded target model"))?;
         let draft_decoder_state_growth_bytes = draft_request_decoder_state
             .projected_persistent_state_growth_bytes(
                 draft_model.decoder_cache_layout(),
                 draft_suffix_token_count,
             )
             .map_err(qwen3_5_runtime_error)?;
-        // Paged drafts can transiently require their largest routed expert page;
-        // resident/dense drafts report zero through this helper.
+        // Read the request-scoped model directly: the startup compatibility
+        // drafter has already been dropped and is not retained on engine state.
         let draft_maximum_expert_page_reservation_bytes =
-            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
+            draft_model.expert_pager.as_ref().map_or(0, |expert_pager| {
+                usize::try_from(expert_pager.maximum_expert_page_bytes()).unwrap_or(usize::MAX)
+            });
         let draft_vision_payload_bytes = if should_reserve_draft_vision_payload {
             // Reserve the drafter tower's projected output, not the target's:
             // hidden widths are allowed to differ.
@@ -134,14 +96,17 @@ impl Qwen3_5EngineState {
         .ok_or_else(|| {
             fatal_engine_error("speculative-prefill draft scoring reservation overflowed")
         })?;
-        let memory_snapshot_before_draft_scoring = target_model
+        let mut memory_snapshot_before_draft_scoring = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded target model"))?
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
         // Only pageable target experts are reclaimable here. Target core weights,
         // active request state, and the configured ceiling remain unchanged.
-        let required_target_expert_reclamation_bytes =
-            speculative_prefill_draft_scoring_reclamation_target_bytes(
+        let mut required_target_expert_reclamation_bytes =
+            speculative_prefill_required_target_expert_reclamation_bytes(
                 memory_snapshot_before_draft_scoring.active_memory_bytes(),
                 draft_scoring_reservation_bytes,
                 self.memory_limits.allowed_active_memory_bytes(),
@@ -167,9 +132,69 @@ impl Qwen3_5EngineState {
             return Ok(());
         }
 
-        // Capture relational expert statistics around reclamation. MLX active
-        // memory can include graph work, while this payload delta precisely
-        // identifies retained target experts released for the drafter.
+        // Complete target ownership is all-or-nothing. Demote only after the
+        // exact scoring reservation proves that keeping it cannot fit.
+        let target_expert_statistics_before_reclamation = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded target model"))?
+            .expert_weight_memory_cache_statistics();
+        let target_has_complete_resident_expert_owner = self
+            .model
+            .as_ref()
+            .is_some_and(|target_model| target_model.resident_expert_weights.is_some());
+        if target_has_complete_resident_expert_owner {
+            self.model
+                .as_mut()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded target model"))?
+                .demote_resident_experts_to_paging(
+                    crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason::SpeculativePrefillDraftLoading,
+                    performance_attribution,
+                )
+                .map_err(InferenceEngineError::from)?;
+            memory_snapshot_before_draft_scoring = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded target model"))?
+                .runtime()
+                .memory_snapshot()
+                .map_err(qwen3_5_runtime_error)?;
+            required_target_expert_reclamation_bytes =
+                speculative_prefill_required_target_expert_reclamation_bytes(
+                    memory_snapshot_before_draft_scoring.active_memory_bytes(),
+                    draft_scoring_reservation_bytes,
+                    self.memory_limits.allowed_active_memory_bytes(),
+                );
+            let target_expert_statistics_after_complete_owner_demotion = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded target model"))?
+                .expert_weight_memory_cache_statistics();
+            performance_attribution.record_counter(
+                crate::PerformanceCounter::SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes,
+                target_expert_statistics_before_reclamation
+                    .resident_payload_byte_count
+                    .saturating_sub(
+                        target_expert_statistics_after_complete_owner_demotion
+                            .resident_payload_byte_count,
+                    ),
+            );
+            if required_target_expert_reclamation_bytes == 0 {
+                tracing::info!(
+                    request_id,
+                    draft_scoring_reservation_bytes,
+                    active_memory_bytes_after_target_demotion =
+                        memory_snapshot_before_draft_scoring.active_memory_bytes(),
+                    "demoted complete target experts only after drafter scoring required the capacity"
+                );
+                return Ok(());
+            }
+        }
+
+        let target_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded target model"))?;
         let expert_weight_memory_cache_statistics_before_reclamation =
             target_model.expert_weight_memory_cache_statistics();
         let Some(memory_snapshot_after_target_expert_reclamation) =
@@ -187,7 +212,7 @@ impl Qwen3_5EngineState {
             });
         };
         let remaining_target_expert_reclamation_bytes =
-            speculative_prefill_draft_scoring_reclamation_target_bytes(
+            speculative_prefill_required_target_expert_reclamation_bytes(
                 memory_snapshot_after_target_expert_reclamation.active_memory_bytes(),
                 draft_scoring_reservation_bytes,
                 self.memory_limits.allowed_active_memory_bytes(),

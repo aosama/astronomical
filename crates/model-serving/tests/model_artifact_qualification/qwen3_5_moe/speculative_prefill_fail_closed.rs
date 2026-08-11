@@ -16,6 +16,7 @@ use super::speculative_prefill::{
 
 const FORCED_FAILURE_QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
 const RECOVERY_PROGRESS_LOG_INTERVAL: usize = 64;
+const KEEP_EVERY_SPECULATIVE_PREFILL_TOKEN_PERCENTAGE: u32 = 100;
 
 #[tokio::test]
 #[ignore = "loads the target and proves an unavailable configured drafter stops model activation"]
@@ -280,7 +281,7 @@ async fn should_stop_every_forced_speculative_prefill_execution_stage_without_ta
             draft_model_id: Some(draft_model_id),
             draft_model_directory: Some(draft_model_directory),
             minimum_prompt_tokens: 8_192,
-            keep_percentage: SPECULATIVE_PREFILL_KEEP_PERCENTAGE,
+            keep_percentage: KEEP_EVERY_SPECULATIVE_PREFILL_TOKEN_PERCENTAGE,
             selection_chunck_token_count: 32,
             mandatory_trailing_token_count: 512,
             lookahead_token_count: 8,
@@ -342,7 +343,7 @@ async fn should_stop_every_forced_speculative_prefill_execution_stage_without_ta
             persisted_speculative_prefill_file_contents(persistent_prompt_cache_directory.path());
         assert!(
             !valid_persisted_speculative_prefill_files.is_empty(),
-            "the valid baseline request must publish selection and sparse target state before forced failures",
+            "the 100-percent keep baseline must complete and publish selection and target state before forced failures",
         );
 
         for (failure_number, failure_stage, expected_failure_stage_text) in [

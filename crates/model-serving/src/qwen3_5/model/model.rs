@@ -37,6 +37,10 @@ pub struct Qwen3_5Model {
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
+    /// True after request pressure forced the complete expert owner out.
+    /// Finalization consumes this one-shot flag and stays paged instead of
+    /// immediately reading the same complete payload back into memory.
+    pub(crate) should_defer_next_request_finalization_resident_promotion: bool,
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,

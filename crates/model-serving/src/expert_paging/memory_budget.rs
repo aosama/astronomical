@@ -120,13 +120,12 @@ pub fn maximum_possible_expert_route_payload_bytes(
 
 /// Computes the expert-weight retention ceiling from current MLX residency.
 ///
-/// The configured cap first reserves local MLX residency and either a temporary
-/// current page or both an
-/// incoming retained allocation and one future routed page. The incoming
-/// retained payload is added once to the post-load target. The process-local
-/// total already includes retained expert arrays. Any remaining bytes can grow
-/// the retained payload. If those reservations already exceed the cap,
-/// the retained payload shrinks by the overage.
+/// In plain terms: keep non-expert memory, make room for the exact expert pages
+/// this route is missing, and still leave room for one ordinary future route.
+/// Existing retained pages are the only elastic category. If everything fits,
+/// retention can grow. If it does not, shrink old retention by only the deficit.
+/// Incoming pages are counted once as future retained payload, never once as an
+/// allocation and again as retained memory.
 #[must_use]
 pub fn automatic_expert_weight_memory_cache_maximum_size_bytes(
     memory_budget_snapshot: &MemoryBudgetSnapshot,
