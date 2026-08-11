@@ -1,14 +1,21 @@
+//! Finalizes fresh drafter selection and publishes reusable artifacts.
+//!
+//! A successful scoring result becomes request-owned absolute target positions,
+//! a complete GPU prompt-token array, optional durable selection state, and an
+//! optional in-memory drafter prefix checkpoint. Visual selections remain
+//! request-local because the worker-memory key does not carry image digests.
+
 #[cfg(feature = "direct-mlx")]
 use crate::{PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError};
 
 #[cfg(feature = "direct-mlx")]
-use super::super::model::Qwen3_5SpeculativePrefillDraftScoringOutcome;
+use super::super::super::model::Qwen3_5SpeculativePrefillDraftScoringOutcome;
 #[cfg(feature = "direct-mlx")]
-use super::Qwen3_5EngineState;
+use super::super::Qwen3_5EngineState;
 #[cfg(feature = "direct-mlx")]
-use super::engine_request::Qwen3_5EngineRequest;
+use super::super::engine_request::Qwen3_5EngineRequest;
 #[cfg(feature = "direct-mlx")]
-use super::engine_request::Qwen3_5SpeculativePrefillFailureStageForTests;
+use super::super::engine_request::Qwen3_5SpeculativePrefillFailureStageForTests;
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 #[cfg(feature = "direct-mlx")]
@@ -18,8 +25,13 @@ use super::speculative_prefill_store::Qwen3_5SpeculativePrefillStoreKey;
 
 #[cfg(feature = "direct-mlx")]
 impl Qwen3_5EngineState {
+    /// Validates, installs, attributes, and optionally persists one fresh selection.
+    ///
+    /// Persistence is required when its configured preconditions are present.
+    /// Failure does not degrade to an ephemeral selection because that would hide
+    /// a configured storage contract failure and make reuse behavior unpredictable.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn persist_speculative_prefill_selection(
+    pub(crate) fn persist_speculative_prefill_selection(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
         draft_model: &crate::Qwen3_5Model,
@@ -37,6 +49,8 @@ impl Qwen3_5EngineState {
     ) -> Result<(), crate::InferenceEngineError> {
         match draft_scoring_outcome {
             Ok((absolute_selected_token_positions, draft_scoring_outcome)) => {
+                // Draft ranking may omit low-scoring text, but target visual
+                // execution must consume every image-pad row in prompt order.
                 let absolute_selected_token_positions = if is_visual_speculative_prefill_request {
                     let mandatory_visual_token_count = active_request.input_token_ids
                         [scoring_start_position_tokens..final_prompt_index]
@@ -76,6 +90,8 @@ impl Qwen3_5EngineState {
                 } else {
                     absolute_selected_token_positions
                 };
+                // Upload the complete prompt-token vector before exposing the
+                // host selection. Sparse target assembly needs both owners.
                 if let Err(prompt_token_indices_error) =
                     self.prepare_speculative_prefill_prompt_token_indices_on_gpu(active_request)
                 {
@@ -87,6 +103,9 @@ impl Qwen3_5EngineState {
                 }
                 active_request.speculative_prefill_selected_token_positions =
                     Some(absolute_selected_token_positions.clone());
+                // Eligible target work counts actual target rows: any restored or
+                // dense prefix, newly selected sparse rows, and the one final token
+                // reserved for generation kickoff.
                 let target_prefix_work_token_count = active_request
                     .speculative_prefill_restored_target_token_positions
                     .as_ref()
@@ -111,6 +130,9 @@ impl Qwen3_5EngineState {
                         active_request.input_token_ids.len(),
                     )
                 {
+                    // Durable selections are bound by the full contract and exact
+                    // prompt token vector. Visual requests are excluded here
+                    // because this selection contract has no image identity.
                     if active_request.take_forced_speculative_prefill_failure_for_tests(
                         Qwen3_5SpeculativePrefillFailureStageForTests::SelectionPersistence,
                     ) {
@@ -153,6 +175,8 @@ impl Qwen3_5EngineState {
                                 selection_array_error,
                             )
                         })?;
+                    // The disk API consumes an MLX array directly, avoiding a
+                    // second host serialization of the already materialized list.
                     if let Err(selection_save_error) = active_request
                         .performance_attribution
                         .measure_operation(
@@ -182,6 +206,8 @@ impl Qwen3_5EngineState {
                     }
                 }
                 if !is_visual_speculative_prefill_request {
+                    // Populate the tiny worker-local hot cache after durable
+                    // publication succeeds (or when disk persistence is disabled).
                     self.store_speculative_prefill_selection(
                         selection_store_token_key,
                         absolute_selected_token_positions.clone(),
@@ -190,6 +216,9 @@ impl Qwen3_5EngineState {
                 if !is_visual_speculative_prefill_request
                     && (scoring_start_position_tokens == 0 || restored_draft_prefix_token_count > 0)
                 {
+                    // The scoring outcome captures decoder state for the complete
+                    // prompt. Store it only when the checkpoint has valid ancestry:
+                    // a root score or a score extended from a restored prefix.
                     let scored_prompt_token_count =
                         u32::try_from(active_request.input_token_ids.len()).unwrap_or(u32::MAX);
                     let scored_prompt_prefix_store_key = self.speculative_prefill_store_key(
@@ -219,6 +248,8 @@ impl Qwen3_5EngineState {
                 );
             }
             Err(speculative_prefill_error) => {
+                // The persistence callback reports through the same model scoring
+                // result. Its side-band flag preserves the precise failure stage.
                 let failure_stage = if draft_prompt_state_persistence_failed {
                     "drafter prompt-state persistence"
                 } else {

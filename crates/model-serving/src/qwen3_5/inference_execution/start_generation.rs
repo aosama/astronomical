@@ -11,11 +11,11 @@ use super::super::{RequestDecoderStateStack, plan_qwen3_5_visual_embedding_suffi
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{
     Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error,
-    speculative_prefill_eligibility::{
+    speculative_prefill::configured_speculative_prefill_failure,
+    speculative_prefill::{
         Qwen3_5SpeculativePrefillRequestEligibility,
         qwen3_5_speculative_prefill_request_eligibility,
     },
-    speculative_prefill_failure::configured_speculative_prefill_failure,
 };
 use crate::qwen3_5::multi_token_prediction::create_optional_prediction_session;
 
@@ -268,6 +268,10 @@ impl Qwen3_5EngineState {
                 && self.speculative_prefill_draft_is_available
                 && !has_precomputed_visual_embeddings
             {
+                // Selection-bound sparse target state can advance farther than an
+                // ordinary dense cache hit. Restore it only after ordinary lookup
+                // so the engine can require a strict improvement and avoid
+                // replacing useful state with an equivalent/shorter prefix.
                 match self.restore_longest_speculative_prefill_target_prefix(
                     &prompt_token_ids,
                     &ordered_image_sha256_digests,
@@ -283,6 +287,8 @@ impl Qwen3_5EngineState {
                             )
                         })?;
                         last_restored_persistent_prompt_cache_block_key = None;
+                        // Sparse state has its own contract and ancestry. It must
+                        // not append ordinary dense prompt-cache blocks.
                         restored_target_work_token_count = restored_target_prefix
                             .selected_target_token_positions
                             .shape()[0]
@@ -308,6 +314,8 @@ impl Qwen3_5EngineState {
                     fatal_engine_error("speculative-prefill minimum prompt length overflowed")
                 })?;
             let restored_target_prompt_prefix_token_count = prefill_cursor;
+            // Eligibility is intentionally evaluated after both restore systems.
+            // The threshold applies to remaining prompt work, not original size.
             let speculative_prefill_request_eligibility =
                 qwen3_5_speculative_prefill_request_eligibility(
                     self.speculative_prefill.enabled,
@@ -373,6 +381,8 @@ impl Qwen3_5EngineState {
             };
             let speculative_prefill_processed_visual_images =
                 if should_use_speculative_prefill && has_processed_visual_images {
+                    // Transfer processed pixels into the request so the temporary
+                    // drafter can project embeddings at its own hidden width.
                     inference_request.take_processed_visual_images()
                 } else {
                     Vec::new()
@@ -467,6 +477,8 @@ impl Qwen3_5EngineState {
                 || restored_sparse_target_state
                 || prefill_cursor < ordinary_target_prefill_control_span_token_count)
                 .then_some(astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target);
+            // A fresh eligible request already at the sparse boundary announces
+            // Drafter on its first advance instead; all other paths begin in Target.
             Ok(EngineGenerationStart::with_expert_memory_mode(
                 persistent_prompt_cache_token_count,
                 self.model

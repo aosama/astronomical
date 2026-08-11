@@ -20,7 +20,7 @@ use super::{
     },
     qwen3_5_runtime_error, qwen3_5_selected_speculative_prefill_positions_for_range,
     qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
-    speculative_prefill_failure::configured_speculative_prefill_failure,
+    speculative_prefill::configured_speculative_prefill_failure,
 };
 use crate::qwen3_5::multi_token_prediction::{
     execute_terminal_optional_history_capture_with_performance_attribution,
@@ -65,6 +65,8 @@ impl Qwen3_5EngineState {
                 prefill_start,
                 active_request.ordinary_target_prefill_control_span_token_count,
             );
+        // Dense persistent-cache capture and sparse target execution represent
+        // different decoder-state contracts and may never share one checkpoint.
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
             && !active_request.has_optional_prediction_session()
@@ -155,6 +157,8 @@ impl Qwen3_5EngineState {
             } else {
                 Vec::new()
             };
+        // Global selection positions are ascending absolute offsets. Slice them
+        // to this logical chunk without changing their original prompt positions.
         let speculative_prefill_target_token_count =
             selected_speculative_prefill_positions_for_current_chunck.len();
         let speculative_prefill_target_is_active =
@@ -163,6 +167,8 @@ impl Qwen3_5EngineState {
                     speculative_prefill_chunck_mode,
                     Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
                 );
+        // Terminal optional-history capture needs dense target hidden rows, so it
+        // deliberately overrides sparse execution for that one final prefill chunk.
         let additional_persistent_state_growth_bytes = match (
             speculative_prefill_chunck_mode,
             active_request.optional_prediction_session(),
@@ -257,6 +263,9 @@ impl Qwen3_5EngineState {
         let mut terminal_history_token_count = 0;
         if speculative_prefill_target_is_active {
             if !selected_speculative_prefill_positions_for_current_chunck.is_empty() {
+                // A sparse logical chunk may contain zero selected rows. In that
+                // case advancing the logical cursor is correct and no empty MLX
+                // forward should be submitted.
                 let sparse_target_gpu_inputs = if active_request
                     .take_forced_speculative_prefill_failure_for_tests(
                         Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetInputAssembly,
@@ -308,6 +317,9 @@ impl Qwen3_5EngineState {
                         PerformanceOperation::SpeculativePrefillSparseTargetForward,
                         |performance_attribution| {
                             if let Some(visual_embeddings) = active_request.visual_embeddings.as_ref() {
+                                // Selected token IDs are compact, but explicit
+                                // offsets preserve original rotary positions and
+                                // image rows preserve visual consumption order.
                                 model
                                     .prefill_chunck_with_speculative_prefill_gpu_token_indices_and_visual_embeddings_and_position_offsets_and_performance_attribution(
                                         &sparse_target_gpu_inputs.selected_token_indices_on_gpu,

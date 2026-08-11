@@ -1,15 +1,15 @@
 #[allow(dead_code)]
 #[path = "../../src/qwen3_5/inference_execution/prefill_execution_context.rs"]
 mod prefill_execution_context;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill.rs"]
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill/chunk_mode.rs"]
 mod speculative_prefill_chunck_policy;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_control_span.rs"]
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_control_span.rs"]
 mod speculative_prefill_control_span;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_eligibility.rs"]
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_eligibility.rs"]
 mod speculative_prefill_eligibility;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_failure.rs"]
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_failure.rs"]
 mod speculative_prefill_failure;
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_selection.rs"]
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_selection.rs"]
 mod speculative_prefill_policy;
 
 use astronomical_model_serving::InferenceEngineError;

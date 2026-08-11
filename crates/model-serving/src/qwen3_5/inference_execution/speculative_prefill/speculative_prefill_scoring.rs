@@ -1,7 +1,21 @@
+//! Coordinates one request's complete drafter phase.
+//!
+//! This is the central SpecPrefill state machine. It first attempts cheap exact
+//! selection reuse. On a miss it yields once to announce the Drafter phase; the
+//! next call performs draft loading, prefix restoration, memory admission,
+//! optional vision projection, scoring, selection, persistence, and complete
+//! drafter release. No drafter owner may survive the `Ready` outcome.
+
 #[cfg(feature = "direct-mlx")]
-use super::super::model::Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer;
+use super::super::super::model::Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer;
 #[cfg(feature = "direct-mlx")]
-use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests};
+use super::super::engine_request::{
+    Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests,
+};
+#[cfg(feature = "direct-mlx")]
+use super::super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+#[cfg(feature = "direct-mlx")]
+use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_selection::{
     qwen3_5_speculative_prefill_scoring_plan,
@@ -10,27 +24,32 @@ use super::speculative_prefill_selection::{
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_selection_gpu::select_absolute_speculative_prefill_positions_from_draft_scores;
 #[cfg(feature = "direct-mlx")]
-use super::{
-    Qwen3_5EngineState, qwen3_5_runtime_error,
-    speculative_prefill_failure::configured_speculative_prefill_failure,
-};
-#[cfg(feature = "direct-mlx")]
 use crate::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
 use crate::{PerformanceCounter, PerformanceOperation, Qwen3_5ExecutionError};
 #[cfg(feature = "direct-mlx")]
-pub(super) enum SpeculativePrefillSelectionPreparation {
+pub(crate) enum SpeculativePrefillSelectionPreparation {
+    /// Selection is installed (or SpecPrefill does not need one) and target work may continue.
     Ready,
+    /// The caller must emit the phase transition and invoke preparation again.
     DrafterPhaseStarted,
 }
 #[cfg(feature = "direct-mlx")]
 impl Qwen3_5EngineState {
-    pub(super) fn prepare_speculative_prefill_selection(
+    /// Installs the absolute target positions selected for this request.
+    ///
+    /// The method is idempotent at its call boundary: once scoring was attempted,
+    /// subsequent prefill advances return `Ready` without loading another draft.
+    /// Any failure after configured work starts is translated by the caller into
+    /// a request failure; there is intentionally no target-only retry.
+    pub(crate) fn prepare_speculative_prefill_selection(
         &mut self,
         active_request: &mut Qwen3_5EngineRequest,
         scoring_start_position_tokens: usize,
         final_prompt_index: usize,
     ) -> Result<SpeculativePrefillSelectionPreparation, crate::InferenceEngineError> {
+        // Ordinary requests and already-prepared requests must never repeat
+        // selection side effects.
         if !active_request.should_use_speculative_prefill
             || active_request.speculative_prefill_scoring_attempted
         {
@@ -44,6 +63,9 @@ impl Qwen3_5EngineState {
         } else {
             scoring_start_position_tokens
         };
+        // The final prompt token is reserved for generation kickoff. Planning
+        // scores the complete prompt but marks only the uncached conversation
+        // interval before that token as selectable.
         let Some((draft_scoring_token_range, selectable_importance_score_count)) =
             qwen3_5_speculative_prefill_scoring_plan(
                 scoring_start_position_tokens,
@@ -98,10 +120,14 @@ impl Qwen3_5EngineState {
             scoring_start_position_tokens_u32,
             is_visual_speculative_prefill_request,
         )? {
+            // Reuse installs both host selection positions and the complete GPU
+            // prompt-token array, exactly as fresh selection would.
             active_request.speculative_prefill_scoring_attempted = true;
             return Ok(SpeculativePrefillSelectionPreparation::Ready);
         }
         if !active_request.speculative_prefill_draft_phase_announced {
+            // Yield before expensive drafter work so streaming clients can
+            // observe an accurate phase transition rather than a late event.
             active_request.speculative_prefill_draft_phase_announced = true;
             return Ok(SpeculativePrefillSelectionPreparation::DrafterPhaseStarted);
         }
@@ -128,6 +154,8 @@ impl Qwen3_5EngineState {
                     draft_loading_error,
                 )
             })?;
+        // Decoder state is request-local even though compatible draft weights
+        // are reconstructed from the configured artifact each time.
         let mut draft_request_decoder_state =
             match RequestDecoderStateStack::empty_from_decoder_cache_layout(
                 draft_model.decoder_cache_layout(),
@@ -150,6 +178,8 @@ impl Qwen3_5EngineState {
                 description: "forced speculative-prefill draft-prefix restore failure",
             })
         } else if is_visual_speculative_prefill_request {
+            // In-memory checkpoints intentionally exclude visual requests because
+            // their key lacks ordered image digests. Disk roots bind those digests.
             self.restore_speculative_prefill_draft_persistent_prefix(
                 &draft_model,
                 &active_request.input_token_ids,
@@ -173,6 +203,8 @@ impl Qwen3_5EngineState {
                 )
             })
         } else {
+            // Worker memory is fastest. On a miss, fall through to the durable
+            // block chain; both restore the same dense decoder-state semantics.
             match self.restore_longest_speculative_prefill_draft_prefix_checkpoint(
                 &active_request.input_token_ids,
                 &mut draft_request_decoder_state,
@@ -220,6 +252,8 @@ impl Qwen3_5EngineState {
                 ));
             }
         };
+        // Work-reuse counters describe logical prompt work, independent of
+        // whether restored state came from worker memory or disk.
         if draft_prefix_store_hit {
             active_request.performance_attribution.record_counter(
                 PerformanceCounter::SpeculativePrefillDraftPrefixStoreHitCount,
@@ -262,6 +296,9 @@ impl Qwen3_5EngineState {
                 }
             };
         let draft_importance_score_start_position_tokens = 0_usize;
+        // Scoring output is indexed from the complete logical draft prompt, while
+        // target selection may start after a restored/dense target prefix. Map
+        // the target interval explicitly before slicing GPU scores.
         let scored_draft_prompt_token_count = active_request.input_token_ids.len();
         let Some(selectable_importance_score_range) =
             qwen3_5_speculative_prefill_selectable_importance_score_range(
@@ -283,6 +320,8 @@ impl Qwen3_5EngineState {
                 restored_draft_prefix_token_count,
                 draft_persistent_prefix_block_key.as_ref(),
             )?;
+        // Admission occurs before visual projection and scoring so all long-lived
+        // and boundary-overlap allocations are covered by one exact reservation.
         let draft_memory_admission_result =
             active_request.performance_attribution.measure_operation(
                 PerformanceOperation::SpeculativePrefillDraftMemoryAdmission,
@@ -319,6 +358,8 @@ impl Qwen3_5EngineState {
                 )
             })?;
         if !active_request.should_use_speculative_prefill {
+            // Defensive guard for future orchestration that may disable the
+            // policy during visual preparation. Current paths normally stay true.
             return Ok(SpeculativePrefillSelectionPreparation::Ready);
         }
         let should_force_draft_scoring_failure = active_request
@@ -341,6 +382,8 @@ impl Qwen3_5EngineState {
             &mut Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer<'_>,
         > = should_capture_persistent_prompt_cache_blocks
             .then_some(&mut persist_completed_draft_block);
+        // A disabled store uses one as an inert boundary value because no
+        // consumer exists; the model will never publish a block in that case.
         let persistent_prompt_cache_block_token_count = self
             .speculative_prefill_draft_persistent_prompt_cache
             .as_ref()
@@ -358,7 +401,9 @@ impl Qwen3_5EngineState {
                             description: "forced speculative-prefill draft scoring failure",
                         });
                     }
-                    if let Some(draft_visual_embeddings) = draft_visual_embeddings.as_ref() {
+                     if let Some(draft_visual_embeddings) = draft_visual_embeddings.as_ref() {
+                         // Visual and text-only scoring share position/policy
+                         // parameters; only embedding injection differs.
                         draft_model.score_speculative_prefill_importance_with_visual_embeddings_and_performance_attribution(
                             draft_suffix_token_ids,
                             draft_forward_start_position_tokens,
@@ -397,6 +442,8 @@ impl Qwen3_5EngineState {
                     }
                 },
              );
+        // End closure borrows before reading the side-band persistence flag or
+        // moving scoring output into GPU selection.
         drop(persistent_prompt_cache_block_consumer);
         drop(persist_completed_draft_block);
         let should_force_selection_failure = active_request
@@ -424,6 +471,8 @@ impl Qwen3_5EngineState {
                 })
             },
         );
+        // Capture telemetry while draft decoder/vision/model owners are all live;
+        // after the drops below their logical memory category must return to zero.
         active_request.speculative_prefill_draft_memory_telemetry = self
             .speculative_prefill_draft_memory_telemetry(
                 active_request,
@@ -432,6 +481,8 @@ impl Qwen3_5EngineState {
                 draft_visual_embeddings.as_ref(),
             );
         drop(draft_request_decoder_state);
+        // Synchronize before persistence/release so no lazy scoring graph still
+        // references draft decoder buffers being dropped.
         if let Err(draft_allocator_cleanup_error) =
             active_request.performance_attribution.measure_operation(
                 PerformanceOperation::MlxAllocatorCacheCleanup,
@@ -469,6 +520,8 @@ impl Qwen3_5EngineState {
             .measure_operation(
                 PerformanceOperation::SpeculativePrefillRequestScopedDraftRelease,
                 |_performance_attribution| {
+                    // Drop host owners inside the measured release span, then
+                    // synchronize/clear the shared allocator before target reuse.
                     drop(draft_visual_embeddings);
                     drop(draft_model);
                     target_model
@@ -483,6 +536,8 @@ impl Qwen3_5EngineState {
                     draft_release_error,
                 )
             })?;
+        // Draft admission may have frozen or reduced target expert retention.
+        // Resume it only after every draft allocation has been released.
         let resumed_target_expert_retention =
             target_model.resume_expert_retention_after_request_memory_pressure();
         tracing::info!(

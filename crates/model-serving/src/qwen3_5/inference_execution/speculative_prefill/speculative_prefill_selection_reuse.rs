@@ -1,10 +1,17 @@
+//! Reuses an exact prior selection before loading the request-scoped drafter.
+//!
+//! Lookup order is intentionally cheapest-first: worker memory, then persistent
+//! storage, then fresh scoring in the caller. A hit must still prepare the current
+//! request's GPU prompt-token array because that array is not part of selection
+//! storage and may not outlive the request that created the selection.
+
 #[cfg(feature = "direct-mlx")]
 use crate::{PerformanceCounter, PerformanceOperation};
 
 #[cfg(feature = "direct-mlx")]
-use super::Qwen3_5EngineState;
+use super::super::Qwen3_5EngineState;
 #[cfg(feature = "direct-mlx")]
-use super::engine_request::Qwen3_5EngineRequest;
+use super::super::engine_request::Qwen3_5EngineRequest;
 #[cfg(feature = "direct-mlx")]
 use super::speculative_prefill_failure::configured_speculative_prefill_failure;
 #[cfg(feature = "direct-mlx")]
@@ -12,7 +19,12 @@ use super::speculative_prefill_store::Qwen3_5SpeculativePrefillStoreKey;
 
 #[cfg(feature = "direct-mlx")]
 impl Qwen3_5EngineState {
-    pub(super) fn reuse_speculative_prefill_selection_if_available(
+    /// Installs an exact reusable selection and returns whether scoring can be skipped.
+    ///
+    /// Visual requests bypass both stores here. The in-memory key does not include
+    /// image digests, and persisted selection contracts intentionally represent
+    /// text selection only; reusing either could bind positions to different images.
+    pub(crate) fn reuse_speculative_prefill_selection_if_available(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
         selection_store_token_key: &Qwen3_5SpeculativePrefillStoreKey,
@@ -20,6 +32,9 @@ impl Qwen3_5EngineState {
         scoring_start_position_tokens_u32: u32,
         is_visual_speculative_prefill_request: bool,
     ) -> Result<bool, crate::InferenceEngineError> {
+        // Worker-memory lookup is allocation-light and avoids all disk/MLX
+        // selection work. Clone the tiny position vector out of the RefCell before
+        // mutating other request state.
         if !is_visual_speculative_prefill_request
             && let Some(selected_token_positions) = self
                 .speculative_prefill_selection_store
@@ -53,6 +68,8 @@ impl Qwen3_5EngineState {
             );
             return Ok(true);
         }
+        // A disk lookup requires every identity component to be available: store,
+        // policy contract, target runtime, and exact prompt tokens.
         if !is_visual_speculative_prefill_request
             && let Some(draft_persistent_prompt_cache) = self
                 .speculative_prefill_draft_persistent_prompt_cache
@@ -76,6 +93,8 @@ impl Qwen3_5EngineState {
                     },
                 );
             if let Err(selection_load_error) = &persistent_selection_load_result {
+                // Configured storage errors are not cache misses. Fail closed so
+                // corruption or I/O failure is visible rather than masked by scoring.
                 return Err(configured_speculative_prefill_failure(
                     active_request.request_id,
                     "selection restoration",
@@ -83,6 +102,8 @@ impl Qwen3_5EngineState {
                 ));
             }
             if let Ok(Some(selected_token_positions_on_gpu)) = persistent_selection_load_result {
+                // Copy once, then validate before installing. Persisted bytes are
+                // untrusted boundary data even though the store validated framing.
                 let selected_token_positions = target_model
                     .runtime()
                     .copy_u32_values(&selected_token_positions_on_gpu)
@@ -96,6 +117,9 @@ impl Qwen3_5EngineState {
                             .collect::<Option<Vec<_>>>()
                     })
                     .filter(|selected_token_positions| {
+                        // Sparse execution assumes strictly increasing absolute
+                        // positions inside the selectable range and before the
+                        // final generation-kickoff token.
                         selected_token_positions
                             .windows(2)
                             .all(|position_pair| position_pair[0] < position_pair[1])
@@ -121,6 +145,8 @@ impl Qwen3_5EngineState {
                         selection_store_token_key.clone(),
                         selected_token_positions.clone(),
                     );
+                    // Promote a validated disk hit into the worker hot cache so a
+                    // repeat in this process avoids another disk read.
                     active_request.speculative_prefill_selected_token_positions =
                         Some(selected_token_positions);
                     active_request.performance_attribution.record_counter(
@@ -149,6 +175,8 @@ impl Qwen3_5EngineState {
                 ));
             }
         }
+        // No exact reusable selection exists; the caller may proceed to fresh
+        // request-scoped drafter scoring.
         Ok(false)
     }
 }

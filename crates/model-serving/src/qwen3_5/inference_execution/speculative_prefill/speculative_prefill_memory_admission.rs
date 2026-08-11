@@ -1,3 +1,11 @@
+//! Exact memory admission for request-scoped drafter scoring.
+//!
+//! Target and drafter share one process-wide MLX active-memory ceiling. Before
+//! loading/scoring the drafter, the engine projects every drafter allocation that
+//! can overlap and reclaims only pageable target expert payload needed to fit.
+//! Model-core weights, active target decoder state, and the configured ceiling
+//! are never reduced as part of this operation.
+
 /// Returns the target expert-retention payload that must be reclaimed before
 /// drafter scoring can allocate its remaining decoder state and one expert page.
 #[must_use]
@@ -6,6 +14,9 @@ pub(crate) const fn speculative_prefill_draft_scoring_reclamation_target_bytes(
     draft_scoring_reservation_bytes: usize,
     allowed_active_memory_bytes: usize,
 ) -> usize {
+    // Saturating arithmetic makes the formula total: an already-over-limit
+    // snapshot requests at least the excess, while a fitting projection returns
+    // exactly zero instead of underflowing.
     current_active_memory_bytes
         .saturating_add(draft_scoring_reservation_bytes)
         .saturating_sub(allowed_active_memory_bytes)
@@ -25,6 +36,8 @@ pub(crate) fn speculative_prefill_draft_scoring_reservation_bytes(
     draft_boundary_checkpoint_workspace_bytes: usize,
     draft_direct_publication_workspace_bytes: usize,
 ) -> Option<usize> {
+    // Overflow means admission cannot prove the request fits and must fail
+    // closed. `Option` keeps the pure formula independent of engine error types.
     draft_decoder_state_growth_bytes
         .checked_add(draft_vision_payload_bytes)?
         .checked_add(draft_maximum_expert_page_reservation_bytes)?
@@ -33,9 +46,9 @@ pub(crate) fn speculative_prefill_draft_scoring_reservation_bytes(
 }
 
 #[cfg(feature = "direct-mlx")]
-use super::super::RequestDecoderStateStack;
+use super::super::super::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 #[cfg(feature = "direct-mlx")]
 use crate::{
     InferenceEngineError, PerformanceAttribution, Qwen3_5Model,
@@ -47,7 +60,7 @@ impl Qwen3_5EngineState {
     /// Evicts only sufficient pageable target expert weights before a drafter
     /// needs additional GPU state, retaining the target model core and the
     /// configured MLX ceiling.
-    pub(super) fn admit_speculative_prefill_draft_scoring_memory(
+    pub(crate) fn admit_speculative_prefill_draft_scoring_memory(
         &self,
         request_id: u64,
         draft_model: &Qwen3_5Model,
@@ -56,6 +69,8 @@ impl Qwen3_5EngineState {
         should_reserve_draft_vision_payload: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
+        // Target runtime accounting is the process-wide baseline against which
+        // all request-scoped drafter ownership must fit.
         let target_model = self
             .model
             .as_ref()
@@ -66,9 +81,13 @@ impl Qwen3_5EngineState {
                 draft_suffix_token_count,
             )
             .map_err(qwen3_5_runtime_error)?;
+        // Paged drafts can transiently require their largest routed expert page;
+        // resident/dense drafts report zero through this helper.
         let draft_maximum_expert_page_reservation_bytes =
             self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
         let draft_vision_payload_bytes = if should_reserve_draft_vision_payload {
+            // Reserve the drafter tower's projected output, not the target's:
+            // hidden widths are allowed to differ.
             draft_model
                 .vision_model()
                 .map_or(0_u64, |draft_vision_model| {
@@ -143,9 +162,14 @@ impl Qwen3_5EngineState {
             "projected speculative-prefill drafter scoring memory"
         );
         if required_target_expert_reclamation_bytes == 0 {
+            // Avoid touching retention policy when current active memory already
+            // has sufficient headroom for the complete overlap projection.
             return Ok(());
         }
 
+        // Capture relational expert statistics around reclamation. MLX active
+        // memory can include graph work, while this payload delta precisely
+        // identifies retained target experts released for the drafter.
         let expert_weight_memory_cache_statistics_before_reclamation =
             target_model.expert_weight_memory_cache_statistics();
         let Some(memory_snapshot_after_target_expert_reclamation) =
@@ -154,6 +178,8 @@ impl Qwen3_5EngineState {
                 required_target_expert_reclamation_bytes,
             )?
         else {
+            // No reclaimable pageable owner exists. Do not evict model core or
+            // target request state to force a configured optimization to run.
             return Err(InferenceEngineError::InvalidRequest {
                 reason:
                     "speculative-prefill drafter scoring cannot reclaim pageable target experts"
@@ -180,6 +206,8 @@ impl Qwen3_5EngineState {
             reclaimed_target_expert_payload_bytes,
         );
         if remaining_target_expert_reclamation_bytes > 0 {
+            // Reclamation changed retention policy but still could not prove the
+            // projection fits. Resume normal target retention before failing.
             target_model.resume_expert_retention_after_request_memory_pressure();
             return Err(InferenceEngineError::InvalidRequest {
                 reason: "speculative-prefill drafter scoring remains above the MLX memory ceiling after target expert reclamation".to_owned(),

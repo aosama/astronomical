@@ -5,7 +5,7 @@ use crate::{InferenceEngineError, Qwen3_5ExecutionError};
 
 use super::engine_request::Qwen3_5PrefillRequestCheckpoint;
 use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
-use super::speculative_prefill_failure::configured_speculative_prefill_failure;
+use super::speculative_prefill::configured_speculative_prefill_failure;
 
 pub(super) enum PromptPrefillChunckAttemptError {
     AdaptiveMemoryLimitExceeded {
@@ -104,6 +104,9 @@ pub(super) fn configured_speculative_prefill_execution_error(
     qwen3_5_execution_error: Qwen3_5ExecutionError,
     prefill_request_checkpoint: Qwen3_5PrefillRequestCheckpoint,
 ) -> PromptPrefillChunckAttemptError {
+    // Preserve recoverable capacity errors so the outer prefill loop can restore
+    // its checkpoint, reclaim experts, and reduce chunk size. All non-capacity
+    // execution failures become fail-closed configured SpecPrefill errors.
     match prefill_execution_error(qwen3_5_execution_error, prefill_request_checkpoint) {
         PromptPrefillChunckAttemptError::Engine(inference_engine_error) => {
             PromptPrefillChunckAttemptError::Engine(configured_speculative_prefill_failure(

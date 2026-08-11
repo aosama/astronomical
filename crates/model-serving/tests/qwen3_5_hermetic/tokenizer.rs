@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill_selection.rs"]
+#[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_selection.rs"]
 mod speculative_prefill_selection;
 
 use astronomical_ipc_protocol::{
