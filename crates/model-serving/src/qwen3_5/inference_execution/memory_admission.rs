@@ -176,6 +176,21 @@ impl Qwen3_5EngineState {
             target_persistent_state_growth_bytes,
             additional_persistent_state_growth_bytes,
         )?;
+        let routed_expert_page_reservation_bytes =
+            if adaptive_ram_growth_context.sparse_experts_are_paged() {
+                model
+                    .expert_pager
+                    .as_ref()
+                    .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes())
+                    .try_into()
+                    .map_err(|_| {
+                        invalid_request_error(
+                            "routed expert page reservation exceeds the platform range",
+                        )
+                    })?
+            } else {
+                0
+            };
         let mut memory_snapshot_before_growth = model
             .runtime()
             .memory_snapshot()
@@ -186,6 +201,7 @@ impl Qwen3_5EngineState {
                 adaptive_ram_growth_context,
                 memory_snapshot_before_growth.active_memory_bytes(),
                 exact_persistent_growth_bytes,
+                routed_expert_page_reservation_bytes,
                 exact_temporary_workspace_bytes,
             )
             .map_err(|adaptive_ram_growth_projection_error| {
@@ -268,6 +284,7 @@ impl Qwen3_5EngineState {
                     adaptive_ram_growth_context,
                     memory_snapshot_after_reclamation.active_memory_bytes(),
                     exact_persistent_growth_bytes,
+                    routed_expert_page_reservation_bytes,
                     exact_temporary_workspace_bytes,
                 )
                 .map_err(|adaptive_ram_growth_projection_error| {

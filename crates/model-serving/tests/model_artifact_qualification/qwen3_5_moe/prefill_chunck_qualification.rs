@@ -450,7 +450,7 @@ fn assert_capacity_retry_attribution(
     );
     let expert_eviction_count = attribution_counter_amount(
         &generation_attribution_report,
-        "expert_weight_memory_cache_eviction_count",
+        "native_expert_cache_eviction_count",
     );
     let prefill_attempt_count =
         attribution_counter_amount(&generation_attribution_report, "prefill_chunck_count");

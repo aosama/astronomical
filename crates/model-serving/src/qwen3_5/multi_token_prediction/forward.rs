@@ -273,6 +273,10 @@ impl Qwen3_5Model {
                         tensor_name: "sparse model expert pager".to_owned(),
                     }
                 })?;
+                // The MTP sparse layer is appended after every target decoder
+                // layer in the shared pager. It participates in the same global
+                // byte ceiling and recency policy without pretending to belong
+                // to the language trunk's artifact namespace.
                 self.forward_qwen3_5_moe_with_paging(
                     &normalized_attention,
                     mixture_of_experts_weights,

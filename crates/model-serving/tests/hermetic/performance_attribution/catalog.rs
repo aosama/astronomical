@@ -113,36 +113,16 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "persistent_prompt_cache_retention_cleanup",
         ),
         (
-            PerformanceOperation::ExpertPageManifestConstruction,
-            "expert_page_manifest_construction",
-        ),
-        (
-            PerformanceOperation::ExpertPageMemoryBudgetSnapshot,
-            "expert_page_memory_budget_snapshot",
-        ),
-        (
             PerformanceOperation::PagedRouterGraphConstruction,
             "paged_router_graph_construction",
         ),
         (
-            PerformanceOperation::SelectedExpertIdContiguousGraphConstruction,
-            "selected_expert_id_contiguous_graph_construction",
+            PerformanceOperation::NativeExpertCacheRoutePreparation,
+            "native_expert_cache_route_preparation",
         ),
         (
-            PerformanceOperation::SelectedExpertIdEvaluationSynchronizationWait,
-            "selected_expert_id_evaluation_synchronization_wait",
-        ),
-        (
-            PerformanceOperation::SelectedExpertIdHostMemoryCopy,
-            "selected_expert_id_host_memory_copy",
-        ),
-        (
-            PerformanceOperation::ExpertWeightMemoryCacheLookup,
-            "expert_weight_memory_cache_lookup",
-        ),
-        (
-            PerformanceOperation::ExpertWeightMemoryCacheEviction,
-            "expert_weight_memory_cache_eviction",
+            PerformanceOperation::NativeExpertCacheReclamation,
+            "native_expert_cache_reclamation",
         ),
         (
             PerformanceOperation::PagedMoeGraphConstruction,
@@ -195,14 +175,6 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
             "prefill_state_graphics_processor_completion_wait",
-        ),
-        (
-            PerformanceOperation::ExpertBoundedSafetensorsLazyPageConstruction,
-            "expert_bounded_safetensors_lazy_page_construction",
-        ),
-        (
-            PerformanceOperation::ExpertWeightMemoryCachePageAssemblyGraphConstruction,
-            "expert_weight_memory_cache_page_assembly_graph_construction",
         ),
         (
             PerformanceOperation::ExpertPagingDiagnosticLogging,
@@ -265,32 +237,64 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "prefill_capacity_retry_count",
         ),
         (
-            PerformanceCounter::ExpertWeightMemoryCacheHitCount,
-            "expert_weight_memory_cache_hit_count",
+            PerformanceCounter::NativeExpertCacheHitCount,
+            "native_expert_cache_hit_count",
         ),
         (
-            PerformanceCounter::ExpertWeightMemoryCacheCompleteLayerHitCount,
-            "expert_weight_memory_cache_complete_layer_hit_count",
+            PerformanceCounter::NativeExpertCacheMissCount,
+            "native_expert_cache_miss_count",
         ),
         (
-            PerformanceCounter::ExpertWeightMemoryCacheMissCount,
-            "expert_weight_memory_cache_miss_count",
+            PerformanceCounter::NativeExpertCacheEvictionCount,
+            "native_expert_cache_eviction_count",
         ),
         (
-            PerformanceCounter::ExpertWeightMemoryCacheEvictionCount,
-            "expert_weight_memory_cache_eviction_count",
+            PerformanceCounter::NativeExpertCacheDiskPageLoadCount,
+            "native_expert_cache_disk_page_load_count",
         ),
         (
-            PerformanceCounter::ExpertWeightDiskPageLoadCount,
-            "expert_weight_disk_page_load_count",
+            PerformanceCounter::NativeExpertCacheDiskBatchLoadCount,
+            "native_expert_cache_disk_batch_load_count",
         ),
         (
-            PerformanceCounter::ExpertWeightDiskBatchLoadCount,
-            "expert_weight_disk_batch_load_count",
+            PerformanceCounter::NativeExpertCacheSuccessfulSourceReadCount,
+            "native_expert_cache_successful_source_read_count",
         ),
         (
-            PerformanceCounter::ExpertPageLogicalPayloadBytes,
-            "expert_page_logical_payload_bytes",
+            PerformanceCounter::NativeExpertCacheSuccessfulSourceReadByteCount,
+            "native_expert_cache_successful_source_read_byte_count",
+        ),
+        (
+            PerformanceCounter::NativeExpertCacheSuccessfulSourceReadElapsedNanoseconds,
+            "native_expert_cache_successful_source_read_elapsed_nanoseconds",
+        ),
+        (
+            PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationCount,
+            "native_expert_cache_route_dependency_synchronization_count",
+        ),
+        (
+            PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationElapsedNanoseconds,
+            "native_expert_cache_route_dependency_synchronization_elapsed_nanoseconds",
+        ),
+        (
+            PerformanceCounter::NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds,
+            "native_expert_cache_maximum_route_dependency_synchronization_elapsed_nanoseconds",
+        ),
+        (
+            PerformanceCounter::NativeExpertCacheSnapshotPublicationCount,
+            "native_expert_cache_snapshot_publication_count",
+        ),
+        (
+            PerformanceCounter::NativeExpertCachePayloadCopyByteCount,
+            "native_expert_cache_payload_copy_byte_count",
+        ),
+        (
+            PerformanceCounter::NativePagedExpertProjectionGraphCount,
+            "native_paged_expert_projection_graph_count",
+        ),
+        (
+            PerformanceCounter::CompleteLayerRouteSynchronizationElisionCount,
+            "complete_layer_route_synchronization_elision_count",
         ),
         (
             PerformanceCounter::PositionalFileReadCallCount,

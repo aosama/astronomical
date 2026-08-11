@@ -1,4 +1,11 @@
+//! Switchable, request-owned attribution with a zero-allocation disabled path.
+//!
+//! Enabled reports aggregate fixed operation and counter arrays, avoiding maps
+//! and per-event records on inference paths. Disabled reports hold only `None`,
+//! skip clock reads, and execute measured closures directly.
+
 mod catalog;
+mod counter_catalog;
 mod log;
 mod measurement_catalog;
 mod report;
@@ -8,7 +15,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(feature = "direct-mlx")]
 use std::sync::Arc;
 
-pub use catalog::{PerformanceCounter, PerformanceOperation};
+pub use catalog::PerformanceOperation;
+pub use counter_catalog::PerformanceCounter;
 pub use log::PerformanceAttributionLog;
 pub use measurement_catalog::PerformanceOperationMeasurement;
 pub use report::{
@@ -170,6 +178,15 @@ impl PerformanceAttribution {
         };
         enabled_attribution.counter_values[counter as usize] =
             enabled_attribution.counter_values[counter as usize].saturating_add(amount);
+    }
+
+    /// Retains the largest observed amount for one report counter.
+    pub fn record_maximum_counter(&mut self, counter: PerformanceCounter, amount: u64) {
+        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
+            return;
+        };
+        enabled_attribution.counter_values[counter as usize] =
+            enabled_attribution.counter_values[counter as usize].max(amount);
     }
 
     /// Compares one decode layer's selected experts with the preceding decode token.

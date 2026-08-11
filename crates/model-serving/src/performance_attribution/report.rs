@@ -23,7 +23,6 @@ pub struct ModelLoadingPerformanceAttributionMetadata {
     pub model_revision: Option<String>,
     pub prefill_transient_observation_completed: bool,
     pub prefill_observed_transient_high_water_bytes: u64,
-    pub retained_complete_expert_layer_count: u64,
     pub total_artifact_payload_bytes: Option<u64>,
     pub resident_model_payload_bytes: Option<u64>,
     pub model_shard_count: Option<usize>,
@@ -41,7 +40,6 @@ pub struct GenerationPerformanceAttributionMetadata {
     pub model_revision: String,
     pub prefill_transient_observation_completed: bool,
     pub prefill_observed_transient_high_water_bytes: u64,
-    pub retained_complete_expert_layer_count: u64,
     pub request_id: u64,
     pub configured_maximum_output_tokens: u16,
     pub mlx_active_memory_bytes: Option<u64>,
@@ -66,7 +64,6 @@ pub struct ModelLoadingPerformanceAttributionReport {
     model_revision: Option<String>,
     prefill_transient_observation_completed: bool,
     prefill_observed_transient_high_water_bytes: u64,
-    retained_complete_expert_layer_count: u64,
     total_artifact_payload_bytes: Option<u64>,
     resident_model_payload_bytes: Option<u64>,
     model_shard_count: Option<usize>,
@@ -84,7 +81,6 @@ pub struct GenerationPerformanceAttributionReport {
     model_revision: String,
     prefill_transient_observation_completed: bool,
     prefill_observed_transient_high_water_bytes: u64,
-    retained_complete_expert_layer_count: u64,
     request_id: u64,
     configured_maximum_output_tokens: u16,
     mlx_active_memory_bytes: Option<u64>,
@@ -149,8 +145,6 @@ impl PerformanceAttribution {
                     .prefill_transient_observation_completed,
                 prefill_observed_transient_high_water_bytes: model_loading_metadata
                     .prefill_observed_transient_high_water_bytes,
-                retained_complete_expert_layer_count: model_loading_metadata
-                    .retained_complete_expert_layer_count,
                 total_artifact_payload_bytes: model_loading_metadata.total_artifact_payload_bytes,
                 resident_model_payload_bytes: model_loading_metadata.resident_model_payload_bytes,
                 model_shard_count: model_loading_metadata.model_shard_count,
@@ -178,8 +172,6 @@ impl PerformanceAttribution {
                     .prefill_transient_observation_completed,
                 prefill_observed_transient_high_water_bytes: generation_metadata
                     .prefill_observed_transient_high_water_bytes,
-                retained_complete_expert_layer_count: generation_metadata
-                    .retained_complete_expert_layer_count,
                 request_id: generation_metadata.request_id,
                 configured_maximum_output_tokens: generation_metadata
                     .configured_maximum_output_tokens,
@@ -220,6 +212,8 @@ impl EnabledPerformanceAttribution {
             duration_nanoseconds_saturating(self.report_started_at.elapsed());
         let mut operation_reports = Vec::new();
         let mut attributed_elapsed_nanoseconds = 0_u64;
+        // Zip by discriminant order: catalog arrays intentionally avoid a map
+        // allocation on every measured operation.
         for (performance_operation, operation_measurement) in PerformanceOperation::ALL
             .into_iter()
             .zip(self.operation_measurements)
@@ -291,6 +285,8 @@ impl EnabledPerformanceAttribution {
                 amount: counter_amount,
             });
         }
+        // Saturation keeps overlapping or clock-edge diagnostics from wrapping;
+        // correctly classified leaf totals should remain within report elapsed.
         let unattributed_elapsed_nanoseconds =
             report_elapsed_nanoseconds.saturating_sub(attributed_elapsed_nanoseconds);
         let attributed_percent = if report_elapsed_nanoseconds == 0 {

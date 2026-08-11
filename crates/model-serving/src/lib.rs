@@ -41,14 +41,14 @@ pub use deepseek_v4::{
 pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{
-    ExpertManifestError, ExpertWeightMemoryCache, ExpertWeightMemoryCacheRequestReport,
-    ExpertWeightMemoryCacheStatistics, ExpertWeightPage, LiveMetalBudget, MemoryBudgetError,
+    ExpertManifestError, ExpertWeightMemoryCacheStatistics, LiveMetalBudget, MemoryBudgetError,
     MemoryBudgetSnapshot, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
     QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,
     QuantizedTensorSource, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
     TensorHeaderEntry, automatic_expert_weight_memory_cache_maximum_size_bytes,
-    build_quantized_expert_page_manifest_from_plan, parse_safetensors_header, validate_expert_ids,
-    validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
+    build_quantized_expert_page_manifest_from_plan, maximum_possible_expert_route_payload_bytes,
+    parse_safetensors_header, validate_expert_ids, validate_quantization_contract,
+    validate_source_intervals, validate_virtual_intervals,
 };
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
@@ -153,13 +153,11 @@ pub use qwen3_5::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_moe::{
-    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertWeightMemoryCache,
-    Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5PagedExpertWeights,
+    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
     build_quantized_expert_layer_plan, build_source_manifests, contiguous_selected_runs,
-    qwen3_5_moe_combine_experts, qwen3_5_moe_remap_expert_page_slots,
-    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
-    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
-    qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,
+    qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
+    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
 pub use qwen3_5_moe::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION};
 

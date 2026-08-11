@@ -83,10 +83,8 @@ async fn run_30_token_paged_decode_cache_probe() {
         "30-token paged decode should have loaded some experts from disk"
     );
     assert!(
-        decode_pass_measurements.cache_hit_count_delta
-            + decode_pass_measurements.complete_layer_hit_count_delta
-            > 0,
-        "30-token paged decode should reuse at least one partial expert or complete expert layer"
+        decode_pass_measurements.cache_hit_count_delta > 0,
+        "30-token paged decode should reuse at least one routed one-expert page"
     );
 }
 
@@ -153,19 +151,8 @@ async fn run_30_token_warm_cache_decode_probe() {
         "warm measured pass must generate the same greedy token IDs as the warmup pass so cache attribution is comparable"
     );
     assert!(
-        measured_warm_decode_measurements.cache_hit_count_delta
-            + measured_warm_decode_measurements.complete_layer_hit_count_delta
-            > 0,
-        "the identical measured decode should reuse partial experts or complete expert layers"
-    );
-    assert_eq!(
-        measured_warm_decode_measurements
-            .final_cache_statistics
-            .complete_layer_count,
-        warmup_decode_measurements
-            .final_cache_statistics
-            .complete_layer_count,
-        "the identical measured decode should preserve complete expert-layer residency"
+        measured_warm_decode_measurements.cache_hit_count_delta > 0,
+        "the identical measured decode should reuse routed one-expert pages"
     );
 }
 
@@ -199,7 +186,7 @@ pub(crate) async fn load_paged_qwen3_5_model_for_decode_probe(
         false,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the Ornith model should load with automatic expert residency");
+    .expect("the Ornith model should load with demand-only one-expert caching");
     eprintln!(
         "{log_prefix} status=progress phase=model_loaded elapsed_seconds={:.2}",
         model_load_started_at.elapsed().as_secs_f64()
@@ -276,7 +263,7 @@ fn run_say_hi_30_token_paged_decode_pass(
             average_seconds_per_token * f64::from(remaining_token_count);
         if should_print_per_token_progress {
             eprintln!(
-                "{log_prefix} status=progress pass={decode_pass_label} step={completed_token_count:02}/{GENERATED_TOKEN_COUNT} token_id={current_token_id} elapsed_ms={:.2} tok_per_second={:.2} disk_load_delta={} disk_batch_delta={} cache_hit_delta={} cache_miss_delta={} cache_entries={} complete_layers={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2} cumulative_disk_loads={} cumulative_disk_batches={} cumulative_cache_hits={} ETA_seconds={:.1}",
+                "{log_prefix} status=progress pass={decode_pass_label} step={completed_token_count:02}/{GENERATED_TOKEN_COUNT} token_id={current_token_id} elapsed_ms={:.2} tok_per_second={:.2} disk_load_delta={} disk_batch_delta={} cache_hit_delta={} cache_miss_delta={} one_expert_cache_entries={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2} cumulative_disk_loads={} cumulative_disk_batches={} cumulative_cache_hits={} ETA_seconds={:.1}",
                 step_elapsed.as_secs_f64() * 1000.0,
                 1.0 / step_elapsed.as_secs_f64(),
                 disk_page_load_delta,
@@ -284,7 +271,6 @@ fn run_say_hi_30_token_paged_decode_pass(
                 cache_hit_delta,
                 cache_miss_delta,
                 after_step_cache_statistics.entry_count,
-                after_step_cache_statistics.complete_layer_count,
                 bytes_to_gib(after_step_cache_statistics.resident_payload_byte_count),
                 bytes_to_gib(after_step_cache_statistics.maximum_resident_payload_byte_count),
                 bytes_to_gib(mlx_memory_snapshot.active_memory_bytes() as u64),
@@ -310,8 +296,6 @@ fn run_say_hi_30_token_paged_decode_pass(
             - initial_cache_statistics.disk_batch_load_count,
         cache_hit_count_delta: final_cache_statistics.cache_hit_count
             - initial_cache_statistics.cache_hit_count,
-        complete_layer_hit_count_delta: final_cache_statistics.complete_layer_hit_count
-            - initial_cache_statistics.complete_layer_hit_count,
         cache_miss_count_delta: final_cache_statistics.cache_miss_count
             - initial_cache_statistics.cache_miss_count,
     };
@@ -339,7 +323,6 @@ struct PagedDecodePassMeasurements {
     disk_page_load_count_delta: u64,
     disk_batch_load_count_delta: u64,
     cache_hit_count_delta: u64,
-    complete_layer_hit_count_delta: u64,
     cache_miss_count_delta: u64,
 }
 

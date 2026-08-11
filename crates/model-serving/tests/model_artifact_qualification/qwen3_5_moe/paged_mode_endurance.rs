@@ -33,7 +33,7 @@ async fn should_serve_fifty_thousand_input_tokens_by_automatically_reclaiming_ex
         run_automatic_residency_endurance_regression(),
     )
     .await
-    .expect("the automatic-residency endurance regression must finish within 120 seconds");
+    .expect("the one-expert-cache endurance regression must finish within 120 seconds");
 }
 
 #[tokio::test]
@@ -59,7 +59,7 @@ async fn run_automatic_residency_endurance_regression() {
         create_automatic_residency_endurance_engine(&model_directory).await;
 
     eprintln!(
-        "[automatic-residency-endurance 0/3] status=progress phase=model_load input_tokens={ENDURANCE_INPUT_TOKEN_COUNT} ETA_seconds=120"
+        "[one-expert-cache-endurance 0/3] status=progress phase=model_load input_tokens={ENDURANCE_INPUT_TOKEN_COUNT} ETA_seconds=120"
     );
     load_engine_with_progress(&mut qwen3_5_engine).await;
 
@@ -96,7 +96,7 @@ async fn run_automatic_residency_endurance_regression() {
     print_attribution_memory_timeline(&performance_attribution_log_path);
     assert!(
         endurance_outcome.is_ok(),
-        "automatic expert residency must reclaim retained experts before rejecting context growth: {}",
+        "one-expert caching must reclaim retained experts before rejecting context growth: {}",
         endurance_outcome.expect_err("the failed endurance outcome should contain the rejection")
     );
     eprintln!("[paged-endurance 3/3] status=success");
@@ -157,7 +157,7 @@ async fn run_sustained_paged_mode_endurance_regression() {
     }
     print_attribution_memory_timeline(&performance_attribution_log_path);
     sustained_endurance_outcome.expect(
-        "automatic expert residency must preserve enough retained experts to sample sustained output after a 70K-token prompt",
+        "one-expert caching must preserve enough retained experts to sample sustained output after a 70K-token prompt",
     );
     eprintln!("[paged-sustained-endurance 3/3] status=success");
 }
@@ -434,20 +434,17 @@ fn print_attribution_memory_timeline(performance_attribution_log_path: &Path) {
             continue;
         };
         eprintln!(
-            "[paged-endurance] status=attribution request_id={request_id} outcome={} mlx_active_bytes={} mlx_allocator_cache_bytes={} mlx_peak_bytes={} expert_evictions={} complete_layer_hits={} expert_page_logical_payload_bytes={}",
+            "[paged-endurance] status=attribution request_id={request_id} outcome={} mlx_active_bytes={} mlx_allocator_cache_bytes={} mlx_peak_bytes={} native_cache_evictions={} native_cache_hits={} native_cache_source_read_bytes={}",
             generation_report["outcome"],
             generation_report["mlx_active_memory_bytes"],
             generation_report["mlx_allocator_cache_memory_bytes"],
             generation_report["mlx_peak_memory_bytes"],
+            counter_amount(generation_report, "native_expert_cache_eviction_count"),
+            counter_amount(generation_report, "native_expert_cache_hit_count"),
             counter_amount(
                 generation_report,
-                "expert_weight_memory_cache_eviction_count"
+                "native_expert_cache_successful_source_read_byte_count",
             ),
-            counter_amount(
-                generation_report,
-                "expert_weight_memory_cache_complete_layer_hit_count"
-            ),
-            counter_amount(generation_report, "expert_page_logical_payload_bytes",),
         );
     }
 }

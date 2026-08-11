@@ -1,16 +1,15 @@
 //! Expert pager coordination for startup plans and routed expert loading.
 
-mod cache_bypass;
-mod direct_page;
-mod memory_cache;
+mod native_cache;
 
 use thiserror::Error;
 
+use astronomical_runtime_integration::MlxNativeExpertCache;
+
 use crate::expert_paging::{
-    ExpertManifestError, ExpertWeightPage, LiveMetalBudget, MemoryBudgetError,
-    MemoryBudgetSnapshot, QuantizedExpertLayerPlan, SafetensorsHeaderError,
+    ExpertManifestError, LiveMetalBudget, MemoryBudgetError, MemoryBudgetSnapshot,
+    QuantizedExpertLayerPlan, SafetensorsHeaderError,
 };
-use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
 /// Typed failures during expert paging operations.
 #[derive(Debug, Error)]
@@ -33,41 +32,16 @@ pub enum ExpertPagingError {
 }
 
 /// Startup-validated sparse-expert page plans and live memory budget.
+///
+/// Layer plans describe immutable artifact geometry, `memory_budget` projects
+/// the worker's current MLX ceiling, and `native_expert_cache` is the sole owner
+/// of mutable residency and layer-balanced least-recently-used policy. No Rust page
+/// cache or alternate bypass path exists beside it.
 #[derive(Debug)]
 pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
     pub(super) memory_budget: LiveMetalBudget,
-}
-
-/// Quantized affine weights loaded for selected experts in one layer.
-#[derive(Debug)]
-pub struct Qwen3_5PagedExpertWeights {
-    pub(crate) gate_projection: Qwen3_5AffineWeights,
-    pub(crate) up_projection: Qwen3_5AffineWeights,
-    pub(crate) down_projection: Qwen3_5AffineWeights,
-}
-
-impl Qwen3_5PagedExpertWeights {
-    pub(crate) fn append_array_references<'weights>(
-        &'weights self,
-        expert_weight_arrays: &mut Vec<&'weights astronomical_runtime_integration::MlxArray>,
-    ) {
-        self.gate_projection
-            .append_array_references(expert_weight_arrays);
-        self.up_projection
-            .append_array_references(expert_weight_arrays);
-        self.down_projection
-            .append_array_references(expert_weight_arrays);
-    }
-}
-
-impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
-    fn resident_payload_byte_count(&self) -> u64 {
-        self.gate_projection
-            .payload_byte_count()
-            .saturating_add(self.up_projection.payload_byte_count())
-            .saturating_add(self.down_projection.payload_byte_count())
-    }
+    pub(super) native_expert_cache: MlxNativeExpertCache,
 }
 
 impl Qwen3_5ExpertPager {

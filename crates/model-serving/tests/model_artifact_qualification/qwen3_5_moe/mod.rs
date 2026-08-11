@@ -1,12 +1,12 @@
 #[cfg(feature = "direct-mlx")]
 mod aligned_expert_pack;
 mod artifact;
-#[cfg(feature = "direct-mlx")]
-mod automatic_residency_endurance;
 mod config;
 mod engine;
 #[cfg(feature = "direct-mlx")]
 mod exact_model_prompt;
+#[cfg(feature = "direct-mlx")]
+mod exact_paged_decode;
 mod expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_paging_decode;
@@ -17,12 +17,16 @@ mod expert_paging_prefill_performance;
 #[cfg(feature = "direct-mlx")]
 mod expert_paging_representative_performance;
 #[cfg(feature = "direct-mlx")]
+mod expert_paging_romeo_and_juliet_performance;
+#[cfg(feature = "direct-mlx")]
 mod expert_route_reuse_performance;
 #[cfg(feature = "direct-mlx")]
 mod expert_weight_memory_cache_eviction;
 mod model;
 #[cfg(feature = "direct-mlx")]
 mod mtp;
+#[cfg(feature = "direct-mlx")]
+mod one_expert_cache_endurance;
 #[cfg(feature = "direct-mlx")]
 mod paged_mode_endurance;
 #[cfg(feature = "direct-mlx")]
@@ -155,6 +159,7 @@ async fn construct_model_artifact_expert_pager(
         .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
         .collect();
     let expert_pager = Qwen3_5ExpertPager::new(
+        &runtime,
         model_directory,
         &weight_map,
         &config,

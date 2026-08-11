@@ -66,14 +66,6 @@ impl Qwen3_5EngineState {
                         ),
                 )
                 .unwrap_or(u64::MAX),
-                retained_complete_expert_layer_count: self.model.as_ref().map_or(0, |model| {
-                    u64::try_from(
-                        model
-                            .expert_weight_memory_cache_statistics()
-                            .complete_layer_count,
-                    )
-                    .unwrap_or(u64::MAX)
-                }),
                 total_artifact_payload_bytes,
                 resident_model_payload_bytes,
                 model_shard_count,

@@ -6,7 +6,6 @@ use astronomical_model_serving::{
 use serde_json::Value;
 
 const ATTRIBUTED_PREFILL_TRANSIENT_HIGH_WATER_BYTES: u64 = 1_234_567;
-const ATTRIBUTED_RETAINED_COMPLETE_EXPERT_LAYER_COUNT: u64 = 32;
 
 mod catalog;
 mod expert_route_reuse;

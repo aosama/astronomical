@@ -25,6 +25,7 @@ async fn should_ignore_existing_experimental_aligned_packs_during_standard_exper
     let runtime = MlxRuntime::initialize(mlx_memory_limits)
         .expect("the direct MLX runtime should initialize for standard expert paging");
     let expert_pager = Qwen3_5ExpertPager::new(
+        &runtime,
         model_directory,
         &language_tensor_name_to_shard_file_name,
         &qwen3_5_config,
@@ -34,12 +35,16 @@ async fn should_ignore_existing_experimental_aligned_packs_during_standard_exper
     .expect("the production pager should construct without inspecting experimental files");
 
     eprintln!("[standard-expert-paging] status=progress phase=bounded_safetensors_page_load");
-    let (_paged_expert_weights, page_manifest, _memory_budget_snapshot) = expert_pager
-        .load_selected_experts(&runtime, 0, &[0])
+    let selected_expert_indices = runtime
+        .array_from_i32(&[0], &[1])
+        .expect("the selected expert route should be valid");
+    let (_native_snapshot, request_report) = expert_pager
+        .prepare_native_expert_snapshot(&runtime, 0, &selected_expert_indices, true)
         .expect("standard bounded safetensors should load one expert beside experimental files");
 
-    assert_eq!(page_manifest.expert_ids, vec![0]);
-    assert!(page_manifest.payload_byte_count > 0);
+    assert_eq!(request_report.cache_miss_count(), 1);
+    assert!(request_report.successful_source_read_byte_count() > 0);
+    assert_eq!(request_report.payload_copy_byte_count(), 0);
     eprintln!("[standard-expert-paging] status=success source=standard_safetensors");
 }
 

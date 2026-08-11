@@ -1,3 +1,9 @@
+//! Stable timing boundaries for model loading and request execution.
+//!
+//! Enum order indexes a fixed enabled-only accumulator. Outer spans locate
+//! latency by request phase, while leaf operations attribute concrete work;
+//! overlapping outer spans are serialized but excluded from the attributed sum.
+
 /// One stable, domain-specific operation measured on a model-serving critical path.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(usize)]
@@ -34,14 +40,9 @@ pub enum PerformanceOperation {
     PersistentPromptCacheRetentionCleanup,
     PersistentPromptCachePublicationSynchronizationWait,
     PersistentPromptCacheAtomicCommit,
-    ExpertPageManifestConstruction,
-    ExpertPageMemoryBudgetSnapshot,
     PagedRouterGraphConstruction,
-    SelectedExpertIdContiguousGraphConstruction,
-    SelectedExpertIdEvaluationSynchronizationWait,
-    SelectedExpertIdHostMemoryCopy,
-    ExpertWeightMemoryCacheLookup,
-    ExpertWeightMemoryCacheEviction,
+    NativeExpertCacheRoutePreparation,
+    NativeExpertCacheReclamation,
     PagedMoeGraphConstruction,
     ResidentMoeGraphConstruction,
     FinalLogitsGraphConstruction,
@@ -64,8 +65,6 @@ pub enum PerformanceOperation {
     MtpRejectedDraftStateRestoration,
     PrefillStateAsyncEvaluationSubmission,
     PrefillStateGraphicsProcessorCompletionWait,
-    ExpertBoundedSafetensorsLazyPageConstruction,
-    ExpertWeightMemoryCachePageAssemblyGraphConstruction,
     ExpertPagingDiagnosticLogging,
     DecodeAsyncEvaluationSubmission,
     GeneratedTokenItemSynchronizationWait,
@@ -113,14 +112,9 @@ impl PerformanceOperation {
         Self::PersistentPromptCacheRetentionCleanup,
         Self::PersistentPromptCachePublicationSynchronizationWait,
         Self::PersistentPromptCacheAtomicCommit,
-        Self::ExpertPageManifestConstruction,
-        Self::ExpertPageMemoryBudgetSnapshot,
         Self::PagedRouterGraphConstruction,
-        Self::SelectedExpertIdContiguousGraphConstruction,
-        Self::SelectedExpertIdEvaluationSynchronizationWait,
-        Self::SelectedExpertIdHostMemoryCopy,
-        Self::ExpertWeightMemoryCacheLookup,
-        Self::ExpertWeightMemoryCacheEviction,
+        Self::NativeExpertCacheRoutePreparation,
+        Self::NativeExpertCacheReclamation,
         Self::PagedMoeGraphConstruction,
         Self::ResidentMoeGraphConstruction,
         Self::FinalLogitsGraphConstruction,
@@ -143,8 +137,6 @@ impl PerformanceOperation {
         Self::MtpRejectedDraftStateRestoration,
         Self::PrefillStateAsyncEvaluationSubmission,
         Self::PrefillStateGraphicsProcessorCompletionWait,
-        Self::ExpertBoundedSafetensorsLazyPageConstruction,
-        Self::ExpertWeightMemoryCachePageAssemblyGraphConstruction,
         Self::ExpertPagingDiagnosticLogging,
         Self::DecodeAsyncEvaluationSubmission,
         Self::GeneratedTokenItemSynchronizationWait,
@@ -217,18 +209,9 @@ impl PerformanceOperation {
                 "persistent_prompt_cache_publication_synchronization_wait"
             }
             Self::PersistentPromptCacheAtomicCommit => "persistent_prompt_cache_atomic_commit",
-            Self::ExpertPageManifestConstruction => "expert_page_manifest_construction",
-            Self::ExpertPageMemoryBudgetSnapshot => "expert_page_memory_budget_snapshot",
             Self::PagedRouterGraphConstruction => "paged_router_graph_construction",
-            Self::SelectedExpertIdContiguousGraphConstruction => {
-                "selected_expert_id_contiguous_graph_construction"
-            }
-            Self::SelectedExpertIdEvaluationSynchronizationWait => {
-                "selected_expert_id_evaluation_synchronization_wait"
-            }
-            Self::SelectedExpertIdHostMemoryCopy => "selected_expert_id_host_memory_copy",
-            Self::ExpertWeightMemoryCacheLookup => "expert_weight_memory_cache_lookup",
-            Self::ExpertWeightMemoryCacheEviction => "expert_weight_memory_cache_eviction",
+            Self::NativeExpertCacheRoutePreparation => "native_expert_cache_route_preparation",
+            Self::NativeExpertCacheReclamation => "native_expert_cache_reclamation",
             Self::PagedMoeGraphConstruction => "paged_moe_graph_construction",
             Self::ResidentMoeGraphConstruction => "resident_moe_graph_construction",
             Self::FinalLogitsGraphConstruction => "final_logits_graph_construction",
@@ -275,12 +258,6 @@ impl PerformanceOperation {
             Self::PrefillStateGraphicsProcessorCompletionWait => {
                 "prefill_state_graphics_processor_completion_wait"
             }
-            Self::ExpertBoundedSafetensorsLazyPageConstruction => {
-                "expert_bounded_safetensors_lazy_page_construction"
-            }
-            Self::ExpertWeightMemoryCachePageAssemblyGraphConstruction => {
-                "expert_weight_memory_cache_page_assembly_graph_construction"
-            }
             Self::ExpertPagingDiagnosticLogging => "expert_paging_diagnostic_logging",
             Self::DecodeAsyncEvaluationSubmission => "decode_async_evaluation_submission",
             Self::GeneratedTokenItemSynchronizationWait => {
@@ -297,6 +274,9 @@ impl PerformanceOperation {
     }
 
     pub(super) const fn contributes_to_attributed_elapsed(self) -> bool {
+        // These operations contain one or more separately recorded leaves. They
+        // remain useful timeline evidence but counting them again would inflate
+        // attributed time beyond the report's wall-clock duration.
         !matches!(
             self,
             Self::PromptPrefillAdvanceSpan
@@ -307,234 +287,5 @@ impl PerformanceOperation {
                 | Self::AttentionForwardSpan
                 | Self::MlpForwardSpan
         )
-    }
-}
-
-/// One bounded numerical counter attached to a performance-attribution report.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(usize)]
-pub enum PerformanceCounter {
-    PromptTokenCount,
-    RestoredPersistentPromptCacheTokenCount,
-    GeneratedTokenCount,
-    PrefillChunckCount,
-    PrefillCapacityRejectionCount,
-    PrefillCapacityRetryCount,
-    ExpertWeightMemoryCacheHitCount,
-    ExpertWeightMemoryCacheCompleteLayerHitCount,
-    ExpertWeightMemoryCacheMissCount,
-    ExpertWeightMemoryCacheEvictionCount,
-    ExpertWeightDiskPageLoadCount,
-    ExpertWeightDiskBatchLoadCount,
-    ExpertPageLogicalPayloadBytes,
-    PositionalFileReadCallCount,
-    PositionalFileReadByteCount,
-    PositionalFileReadElapsedNanoseconds,
-    PositionalFileReadMaximumElapsedNanoseconds,
-    PositionalFileReadMaximumConcurrentCount,
-    PositionalFileReadFailureCount,
-    ExpertRoutePredictedExpertCount,
-    ExpertRouteMatchedExpertCount,
-    ExpertRouteCompletelyMatchedLayerCount,
-    ExpertRouteExaminedLayerCount,
-    MtpMemoryAdmissionFallbackCount,
-    MtpAdmittedAttemptCount,
-    SpeculativePrefillTargetOnlyPrefixChunckCount,
-    SpeculativePrefillTargetOnlyPrefixTokenCount,
-    SpeculativePrefillTerminalCaptureChunckCount,
-    SpeculativePrefillTerminalMtpHistoryTokenCount,
-    SpeculativePrefillDraftScoringCount,
-    SpeculativePrefillDraftPrefixStoreHitCount,
-    SpeculativePrefillDraftPrefixStoreWriteCount,
-    SpeculativePrefillDraftPersistentPrefixHitCount,
-    SpeculativePrefillDraftPersistentPrefixRestoredTokenCount,
-    SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-    SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes,
-    SpeculativePrefillSelectionStoreHitCount,
-    SpeculativePrefillSelectionPersistentHitCount,
-    SpeculativePrefillMandatoryVisualTokenCount,
-    SpeculativePrefillSelectedTokenCount,
-    SpeculativePrefillSparseTargetChunckCount,
-    SpeculativePrefillDraftScoredSuffixTokenCount,
-    SpeculativePrefillTargetPersistentStateWriteCount,
-    SpeculativePrefillTargetPersistentStateRestoredTokenCount,
-    SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
-    SpeculativePrefillOrdinaryControlSpanTokenCount,
-    SpeculativePrefillFallbackCount,
-    MtpPromptHistoryInitializationFallbackCount,
-    MtpFeedbackHistoryReseedCount,
-    MtpAcceptedDraftCount,
-    MtpRejectedDraftCount,
-    MtpOperationalFallbackCount,
-}
-
-impl PerformanceCounter {
-    pub(super) const COUNT: usize = Self::MtpOperationalFallbackCount as usize + 1;
-    pub(super) const ALL: [Self; Self::COUNT] = [
-        Self::PromptTokenCount,
-        Self::RestoredPersistentPromptCacheTokenCount,
-        Self::GeneratedTokenCount,
-        Self::PrefillChunckCount,
-        Self::PrefillCapacityRejectionCount,
-        Self::PrefillCapacityRetryCount,
-        Self::ExpertWeightMemoryCacheHitCount,
-        Self::ExpertWeightMemoryCacheCompleteLayerHitCount,
-        Self::ExpertWeightMemoryCacheMissCount,
-        Self::ExpertWeightMemoryCacheEvictionCount,
-        Self::ExpertWeightDiskPageLoadCount,
-        Self::ExpertWeightDiskBatchLoadCount,
-        Self::ExpertPageLogicalPayloadBytes,
-        Self::PositionalFileReadCallCount,
-        Self::PositionalFileReadByteCount,
-        Self::PositionalFileReadElapsedNanoseconds,
-        Self::PositionalFileReadMaximumElapsedNanoseconds,
-        Self::PositionalFileReadMaximumConcurrentCount,
-        Self::PositionalFileReadFailureCount,
-        Self::ExpertRoutePredictedExpertCount,
-        Self::ExpertRouteMatchedExpertCount,
-        Self::ExpertRouteCompletelyMatchedLayerCount,
-        Self::ExpertRouteExaminedLayerCount,
-        Self::MtpMemoryAdmissionFallbackCount,
-        Self::MtpAdmittedAttemptCount,
-        Self::SpeculativePrefillTargetOnlyPrefixChunckCount,
-        Self::SpeculativePrefillTargetOnlyPrefixTokenCount,
-        Self::SpeculativePrefillTerminalCaptureChunckCount,
-        Self::SpeculativePrefillTerminalMtpHistoryTokenCount,
-        Self::SpeculativePrefillDraftScoringCount,
-        Self::SpeculativePrefillDraftPrefixStoreHitCount,
-        Self::SpeculativePrefillDraftPrefixStoreWriteCount,
-        Self::SpeculativePrefillDraftPersistentPrefixHitCount,
-        Self::SpeculativePrefillDraftPersistentPrefixRestoredTokenCount,
-        Self::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-        Self::SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes,
-        Self::SpeculativePrefillSelectionStoreHitCount,
-        Self::SpeculativePrefillSelectionPersistentHitCount,
-        Self::SpeculativePrefillMandatoryVisualTokenCount,
-        Self::SpeculativePrefillSelectedTokenCount,
-        Self::SpeculativePrefillSparseTargetChunckCount,
-        Self::SpeculativePrefillDraftScoredSuffixTokenCount,
-        Self::SpeculativePrefillTargetPersistentStateWriteCount,
-        Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount,
-        Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
-        Self::SpeculativePrefillOrdinaryControlSpanTokenCount,
-        Self::SpeculativePrefillFallbackCount,
-        Self::MtpPromptHistoryInitializationFallbackCount,
-        Self::MtpFeedbackHistoryReseedCount,
-        Self::MtpAcceptedDraftCount,
-        Self::MtpRejectedDraftCount,
-        Self::MtpOperationalFallbackCount,
-    ];
-
-    pub(super) const fn identifier(self) -> &'static str {
-        match self {
-            Self::PromptTokenCount => "prompt_token_count",
-            Self::RestoredPersistentPromptCacheTokenCount => {
-                "restored_persistent_prompt_cache_token_count"
-            }
-            Self::GeneratedTokenCount => "generated_token_count",
-            Self::PrefillChunckCount => "prefill_chunck_count",
-            Self::PrefillCapacityRejectionCount => "prefill_capacity_rejection_count",
-            Self::PrefillCapacityRetryCount => "prefill_capacity_retry_count",
-            Self::ExpertWeightMemoryCacheHitCount => "expert_weight_memory_cache_hit_count",
-            Self::ExpertWeightMemoryCacheCompleteLayerHitCount => {
-                "expert_weight_memory_cache_complete_layer_hit_count"
-            }
-            Self::ExpertWeightMemoryCacheMissCount => "expert_weight_memory_cache_miss_count",
-            Self::ExpertWeightMemoryCacheEvictionCount => {
-                "expert_weight_memory_cache_eviction_count"
-            }
-            Self::ExpertWeightDiskPageLoadCount => "expert_weight_disk_page_load_count",
-            Self::ExpertWeightDiskBatchLoadCount => "expert_weight_disk_batch_load_count",
-            Self::ExpertPageLogicalPayloadBytes => "expert_page_logical_payload_bytes",
-            Self::PositionalFileReadCallCount => "positional_file_read_call_count",
-            Self::PositionalFileReadByteCount => "positional_file_read_byte_count",
-            Self::PositionalFileReadElapsedNanoseconds => {
-                "positional_file_read_elapsed_nanoseconds"
-            }
-            Self::PositionalFileReadMaximumElapsedNanoseconds => {
-                "positional_file_read_maximum_elapsed_nanoseconds"
-            }
-            Self::PositionalFileReadMaximumConcurrentCount => {
-                "positional_file_read_maximum_concurrent_count"
-            }
-            Self::PositionalFileReadFailureCount => "positional_file_read_failure_count",
-            Self::ExpertRoutePredictedExpertCount => "expert_route_predicted_expert_count",
-            Self::ExpertRouteMatchedExpertCount => "expert_route_matched_expert_count",
-            Self::ExpertRouteCompletelyMatchedLayerCount => {
-                "expert_route_completely_matched_layer_count"
-            }
-            Self::ExpertRouteExaminedLayerCount => "expert_route_examined_layer_count",
-            Self::MtpMemoryAdmissionFallbackCount => "mtp_memory_admission_fallback_count",
-            Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
-            Self::SpeculativePrefillTargetOnlyPrefixChunckCount => {
-                "speculative_prefill_target_only_prefix_chunck_count"
-            }
-            Self::SpeculativePrefillTargetOnlyPrefixTokenCount => {
-                "speculative_prefill_target_only_prefix_token_count"
-            }
-            Self::SpeculativePrefillTerminalCaptureChunckCount => {
-                "speculative_prefill_terminal_capture_chunck_count"
-            }
-            Self::SpeculativePrefillTerminalMtpHistoryTokenCount => {
-                "speculative_prefill_terminal_mtp_history_token_count"
-            }
-            Self::SpeculativePrefillDraftScoringCount => "speculative_prefill_draft_scoring_count",
-            Self::SpeculativePrefillDraftPrefixStoreHitCount => {
-                "speculative_prefill_draft_prefix_store_hit_count"
-            }
-            Self::SpeculativePrefillDraftPrefixStoreWriteCount => {
-                "speculative_prefill_draft_prefix_store_write_count"
-            }
-            Self::SpeculativePrefillDraftPersistentPrefixHitCount => {
-                "speculative_prefill_draft_persistent_prefix_hit_count"
-            }
-            Self::SpeculativePrefillDraftPersistentPrefixRestoredTokenCount => {
-                "speculative_prefill_draft_persistent_prefix_restored_token_count"
-            }
-            Self::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes => {
-                "speculative_prefill_context_target_expert_reclaimed_payload_bytes"
-            }
-            Self::SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes => {
-                "speculative_prefill_draft_target_expert_reclaimed_payload_bytes"
-            }
-            Self::SpeculativePrefillSelectionStoreHitCount => {
-                "speculative_prefill_selection_store_hit_count"
-            }
-            Self::SpeculativePrefillSelectionPersistentHitCount => {
-                "speculative_prefill_selection_persistent_hit_count"
-            }
-            Self::SpeculativePrefillMandatoryVisualTokenCount => {
-                "speculative_prefill_mandatory_visual_token_count"
-            }
-            Self::SpeculativePrefillSelectedTokenCount => {
-                "speculative_prefill_selected_token_count"
-            }
-            Self::SpeculativePrefillSparseTargetChunckCount => {
-                "speculative_prefill_sparse_target_chunck_count"
-            }
-            Self::SpeculativePrefillDraftScoredSuffixTokenCount => {
-                "speculative_prefill_draft_scored_suffix_token_count"
-            }
-            Self::SpeculativePrefillTargetPersistentStateWriteCount => {
-                "speculative_prefill_target_persistent_state_write_count"
-            }
-            Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount => {
-                "speculative_prefill_target_persistent_state_restored_token_count"
-            }
-            Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes => {
-                "speculative_prefill_target_expert_repopulated_payload_bytes"
-            }
-            Self::SpeculativePrefillOrdinaryControlSpanTokenCount => {
-                "speculative_prefill_ordinary_control_span_token_count"
-            }
-            Self::SpeculativePrefillFallbackCount => "speculative_prefill_fallback_count",
-            Self::MtpPromptHistoryInitializationFallbackCount => {
-                "mtp_prompt_history_initialization_fallback_count"
-            }
-            Self::MtpFeedbackHistoryReseedCount => "mtp_feedback_history_reseed_count",
-            Self::MtpAcceptedDraftCount => "mtp_accepted_draft_count",
-            Self::MtpRejectedDraftCount => "mtp_rejected_draft_count",
-            Self::MtpOperationalFallbackCount => "mtp_operational_fallback_count",
-        }
     }
 }

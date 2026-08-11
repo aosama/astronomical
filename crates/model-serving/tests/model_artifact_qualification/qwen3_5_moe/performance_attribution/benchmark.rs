@@ -121,6 +121,31 @@ async fn run_qwen3_6_35b_a3b_optiq_4bit_attribution_benchmark() {
             > 0
     );
     assert!(
+        super::counter_amount(
+            cold_generation_report,
+            "native_expert_cache_snapshot_publication_count",
+        ) > 0
+    );
+    assert!(
+        super::counter_amount(
+            cold_generation_report,
+            "native_expert_cache_successful_source_read_byte_count",
+        ) > 0
+    );
+    assert_eq!(
+        super::counter_amount(
+            cold_generation_report,
+            "native_expert_cache_payload_copy_byte_count",
+        ),
+        0
+    );
+    assert!(
+        super::counter_amount(
+            cold_generation_report,
+            "native_paged_expert_projection_graph_count",
+        ) > 0
+    );
+    assert!(
         operation_total_elapsed_nanoseconds(
             cold_generation_report,
             "generated_token_item_synchronization_wait",
