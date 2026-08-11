@@ -78,6 +78,87 @@ extern "C" int astronomical_native_expert_cache_prepare_layer(
   }
 }
 
+extern "C" int astronomical_native_expert_cache_analyze_layer(
+    astronomical_native_expert_cache* cache,
+    size_t layer_index,
+    mlx_array selected_expert_indices,
+    mlx_stream stream,
+    int collect_performance_metrics,
+    astronomical_native_expert_route_analysis** output_analysis,
+    astronomical_native_expert_cache_request_report* output_report) {
+  try {
+    if (cache == nullptr || !cache->cache || output_analysis == nullptr ||
+        output_report == nullptr) {
+      throw std::invalid_argument(
+          "native expert route analysis arguments are invalid");
+    }
+    // Start with empty outputs. If any later step fails, Rust receives neither
+    // a half-owned analysis handle nor stale numbers from an earlier call.
+    *output_analysis = nullptr;
+    *output_report = astronomical_native_expert_cache_request_report{};
+    auto route_analysis = cache->cache->analyze_layer(
+        layer_index,
+        mlx_array_get_(selected_expert_indices),
+        mlx_stream_get_(stream),
+        collect_performance_metrics != 0,
+        *output_report);
+    auto route_analysis_owner = std::make_unique<
+        astronomical_native_expert_route_analysis>();
+    // The handle remembers its cache owner. Commit rejects an analysis created
+    // by a different cache because expert IDs and page geometry would not match.
+    route_analysis_owner->owner = cache;
+    route_analysis_owner->route = std::make_unique<
+        astronomical::native_expert_cache::NativeExpertRouteAnalysis>(
+        std::move(route_analysis));
+    route_analysis_owner->report = *output_report;
+    *output_analysis = route_analysis_owner.release();
+    return 0;
+  } catch (const std::exception& failure) {
+    report_failure(failure);
+    return 1;
+  }
+}
+
+extern "C" int astronomical_native_expert_cache_commit_layer(
+    astronomical_native_expert_cache* cache,
+    astronomical_native_expert_route_analysis* route_analysis,
+    uint64_t maximum_resident_payload_byte_count,
+    mlx_stream stream,
+    int collect_performance_metrics,
+    astronomical_native_expert_snapshot** output_snapshot,
+    astronomical_native_expert_cache_request_report* output_report) {
+  try {
+    if (cache == nullptr || !cache->cache || route_analysis == nullptr ||
+        route_analysis->owner != cache || !route_analysis->route ||
+        output_snapshot == nullptr || output_report == nullptr) {
+      throw std::invalid_argument(
+          "native expert route commit arguments are invalid");
+    }
+    // Carry phase-1 counters forward. Native commit adds hits, misses, reads,
+    // evictions, publications, and the final ceiling to the same report.
+    *output_snapshot = nullptr;
+    *output_report = route_analysis->report;
+    auto prepared_route = cache->cache->commit_layer(
+        std::move(*route_analysis->route),
+        maximum_resident_payload_byte_count,
+        mlx_stream_get_(stream),
+        collect_performance_metrics != 0,
+        *output_report);
+    route_analysis->route.reset();
+    *output_snapshot =
+        new astronomical_native_expert_snapshot{std::move(prepared_route)};
+    return 0;
+  } catch (const std::exception& failure) {
+    report_failure(failure);
+    return 1;
+  }
+}
+
+extern "C" void astronomical_native_expert_route_analysis_free(
+    astronomical_native_expert_route_analysis* route_analysis) {
+  delete route_analysis;
+}
+
 extern "C" int astronomical_native_expert_snapshot_gather_matmul(
     mlx_array* output,
     const astronomical_native_expert_snapshot* snapshot,

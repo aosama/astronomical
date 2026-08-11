@@ -5,6 +5,8 @@ mod prefill_execution_context;
 mod speculative_prefill_chunck_policy;
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_control_span.rs"]
 mod speculative_prefill_control_span;
+#[path = "../../src/qwen3_5/model/speculative_prefill_draft_forward.rs"]
+mod speculative_prefill_draft_forward;
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_eligibility.rs"]
 mod speculative_prefill_eligibility;
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_failure.rs"]
@@ -24,6 +26,7 @@ use speculative_prefill_control_span::{
     qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
     qwen3_5_speculative_prefill_sparse_target_is_active,
 };
+use speculative_prefill_draft_forward::qwen3_5_speculative_prefill_draft_forward_end;
 use speculative_prefill_eligibility::{
     Qwen3_5SpeculativePrefillRequestEligibility, qwen3_5_speculative_prefill_request_eligibility,
 };
@@ -168,6 +171,50 @@ fn should_apply_keep_percentage_only_after_the_ordinary_target_control_span() {
         ordinary_target_control_span_end_position..complete_prompt_token_count
     );
     assert_eq!(selectable_conversation_token_count, 10_001);
+}
+
+#[test]
+fn should_split_drafter_forwards_at_every_persistent_cache_boundary() {
+    let complete_prompt_token_count = 16_209;
+    let maximum_draft_forward_token_count = 2_048;
+    let persistent_cache_block_token_count = 3_328;
+    let mut draft_forward_start_token_count = 0;
+    let mut draft_forward_end_token_counts = Vec::new();
+
+    while draft_forward_start_token_count < complete_prompt_token_count {
+        let remaining_prompt_token_count =
+            complete_prompt_token_count - draft_forward_start_token_count;
+        let draft_forward_end_token_count = qwen3_5_speculative_prefill_draft_forward_end(
+            draft_forward_start_token_count,
+            remaining_prompt_token_count,
+            maximum_draft_forward_token_count,
+            Some(persistent_cache_block_token_count),
+        )
+        .expect("the drafter forward should advance to a bounded cache boundary");
+        draft_forward_end_token_counts.push(draft_forward_end_token_count);
+        draft_forward_start_token_count = draft_forward_end_token_count;
+    }
+
+    assert_eq!(
+        draft_forward_end_token_counts,
+        vec![
+            2_048, 3_328, 5_376, 6_656, 8_704, 9_984, 12_032, 13_312, 15_360, 16_209,
+        ]
+    );
+    assert!(
+        (1..=4).all(|block_number| draft_forward_end_token_counts
+            .contains(&(block_number * persistent_cache_block_token_count))),
+        "every complete cache block must be published in parent order"
+    );
+}
+
+#[test]
+fn should_preserve_the_configured_drafter_forward_size_without_persistent_capture() {
+    assert_eq!(
+        qwen3_5_speculative_prefill_draft_forward_end(0, 16_209, 2_048, None)
+            .expect("a cache-free drafter forward should remain valid"),
+        2_048,
+    );
 }
 
 #[test]

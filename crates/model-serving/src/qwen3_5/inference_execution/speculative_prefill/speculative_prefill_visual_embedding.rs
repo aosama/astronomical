@@ -26,7 +26,7 @@ impl Qwen3_5EngineState {
     /// On success, processed images are removed from the request after projection
     /// because the returned MLX array is now the drafter's live visual owner. On
     /// failure they remain available for diagnostics until request teardown.
-    pub(crate) fn prepare_speculative_prefill_draft_visual_embeddings(
+    pub(in crate::qwen3_5) fn prepare_speculative_prefill_draft_visual_embeddings(
         &self,
         active_request: &mut Qwen3_5EngineRequest,
         draft_model: &crate::Qwen3_5Model,

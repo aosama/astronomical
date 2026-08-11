@@ -29,6 +29,7 @@ pub(crate) enum Qwen3_5ExpertResidencyTransitionReason {
 pub(crate) enum Qwen3_5ExpertResidencyPromotionOutcome {
     AlreadyResident,
     Promoted,
+    DeferredAfterRequestPressure,
     DoesNotFit,
     RecoverableCapacityRejection,
 }
@@ -62,6 +63,21 @@ impl Qwen3_5Model {
         };
         if self.resident_expert_weights.is_some() {
             return Ok(Qwen3_5ExpertResidencyPromotionOutcome::AlreadyResident);
+        }
+        if transition_reason == Qwen3_5ExpertResidencyTransitionReason::RequestFinalization
+            && self.should_defer_next_request_finalization_resident_promotion
+        {
+            // This request just paid to unload the complete expert payload. Do
+            // not make its cleanup pay to load that same payload again. Clearing
+            // the flag makes this hysteresis one-shot: an explicit ceiling raise
+            // or a later clean idle opportunity may still promote normally.
+            self.should_defer_next_request_finalization_resident_promotion = false;
+            tracing::info!(
+                ?transition_reason,
+                outcome = "deferred_after_request_pressure",
+                "deferred complete-model expert residency admission"
+            );
+            return Ok(Qwen3_5ExpertResidencyPromotionOutcome::DeferredAfterRequestPressure);
         }
         let complete_expert_payload_bytes = expert_pager.complete_expert_payload_byte_count()?;
         tracing::info!(
@@ -164,6 +180,7 @@ impl Qwen3_5Model {
         };
         // This assignment is the only Paged -> Resident publication point.
         self.resident_expert_weights = Some(candidate_resident_expert_weights);
+        self.should_defer_next_request_finalization_resident_promotion = false;
         tracing::info!(
             ?transition_reason,
             complete_expert_payload_bytes,
@@ -203,6 +220,16 @@ impl Qwen3_5Model {
                     expert_pager.resume_native_expert_retention_growth();
                 }
                 allocator_cleanup_result?;
+                if matches!(
+                    transition_reason,
+                    Qwen3_5ExpertResidencyTransitionReason::RequestAdmission
+                        | Qwen3_5ExpertResidencyTransitionReason::RequestPressure
+                ) {
+                    // Remember why the owner was released. Ceiling changes and
+                    // speculative-draft transitions have their own explicit
+                    // promotion policy and must not inherit this one-shot delay.
+                    self.should_defer_next_request_finalization_resident_promotion = true;
+                }
                 tracing::info!(
                     ?transition_reason,
                     released_resident_expert_payload_bytes,

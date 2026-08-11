@@ -42,9 +42,13 @@ mod speculative_prefill;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_attention_capture;
 #[cfg(feature = "direct-mlx")]
+mod speculative_prefill_draft_forward;
+#[cfg(feature = "direct-mlx")]
 mod speculative_prefill_selection;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_sparse_target;
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_visual_forward;
 #[cfg(feature = "direct-mlx")]
 mod target_verification_quantized_linear;
 #[cfg(feature = "direct-mlx")]

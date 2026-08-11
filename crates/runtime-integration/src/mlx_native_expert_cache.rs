@@ -231,6 +231,116 @@ impl MlxNativeExpertCache {
         ))
     }
 
+    /// Phase 1: turns repeated router assignments into an exact page list.
+    ///
+    /// This may wait for lazy router work, but it does not read expert weights,
+    /// allocate an expert page, or evict a retained page. The caller can safely
+    /// inspect the returned byte counts and perform memory admission first.
+    pub fn analyze_layer(
+        &self,
+        runtime: &MlxRuntime,
+        layer_index: usize,
+        selected_expert_indices: &MlxArray,
+        collect_performance_metrics: bool,
+    ) -> Result<
+        (
+            MlxNativeExpertCacheRouteAnalysis,
+            MlxNativeExpertCacheRequestReport,
+        ),
+        MlxRuntimeError,
+    > {
+        let mut native_route_analysis = std::ptr::null_mut();
+        let mut raw_report = zero_raw_request_report();
+        clear_captured_mlx_error();
+        // SAFETY: The engine serializes cache operations, input handles remain
+        // live, and both output pointers are uniquely writable for this call.
+        let analysis_status = unsafe {
+            raw::astronomical_native_expert_cache_analyze_layer(
+                self.native_cache.as_ptr(),
+                layer_index,
+                selected_expert_indices.raw(),
+                runtime.gpu_stream().raw(),
+                i32::from(collect_performance_metrics),
+                &mut native_route_analysis,
+                &mut raw_report,
+            )
+        };
+        check_status(analysis_status, NATIVE_CACHE_OPERATION)?;
+        let native_route_analysis = NonNull::new(native_route_analysis)
+            .ok_or_else(|| captured_native_error(NATIVE_CACHE_OPERATION))?;
+        Ok((
+            MlxNativeExpertCacheRouteAnalysis {
+                native_route_analysis,
+            },
+            request_report_from_raw(raw_report),
+        ))
+    }
+
+    /// Phase 2 using the current ceiling: loads exact misses and publishes a snapshot.
+    pub fn commit_layer(
+        &self,
+        runtime: &MlxRuntime,
+        route_analysis: MlxNativeExpertCacheRouteAnalysis,
+        collect_performance_metrics: bool,
+    ) -> Result<
+        (
+            MlxNativeExpertCacheSnapshot,
+            MlxNativeExpertCacheRequestReport,
+        ),
+        MlxRuntimeError,
+    > {
+        self.commit_layer_with_maximum_resident_payload_byte_count(
+            runtime,
+            route_analysis,
+            self.statistics().maximum_resident_payload_byte_count(),
+            collect_performance_metrics,
+        )
+    }
+
+    /// Phase 2 using a new ceiling chosen from the post-analysis memory sample.
+    ///
+    /// "Atomically" means native code changes the ceiling and commits the route
+    /// as one uninterrupted cache operation. No other policy step can remove a
+    /// selected cache hit between those actions.
+    pub fn commit_layer_with_maximum_resident_payload_byte_count(
+        &self,
+        runtime: &MlxRuntime,
+        route_analysis: MlxNativeExpertCacheRouteAnalysis,
+        maximum_resident_payload_byte_count: u64,
+        collect_performance_metrics: bool,
+    ) -> Result<
+        (
+            MlxNativeExpertCacheSnapshot,
+            MlxNativeExpertCacheRequestReport,
+        ),
+        MlxRuntimeError,
+    > {
+        let mut native_snapshot = std::ptr::null_mut();
+        let mut raw_report = zero_raw_request_report();
+        clear_captured_mlx_error();
+        // SAFETY: The engine serializes cache operations, the route analysis and
+        // stream remain live through the synchronous commit, and output pointers
+        // are uniquely writable.
+        let commit_status = unsafe {
+            raw::astronomical_native_expert_cache_commit_layer(
+                self.native_cache.as_ptr(),
+                route_analysis.native_route_analysis.as_ptr(),
+                maximum_resident_payload_byte_count,
+                runtime.gpu_stream().raw(),
+                i32::from(collect_performance_metrics),
+                &mut native_snapshot,
+                &mut raw_report,
+            )
+        };
+        check_status(commit_status, NATIVE_CACHE_OPERATION)?;
+        let native_snapshot = NonNull::new(native_snapshot)
+            .ok_or_else(|| captured_native_error(NATIVE_CACHE_OPERATION))?;
+        Ok((
+            MlxNativeExpertCacheSnapshot { native_snapshot },
+            request_report_from_raw(raw_report),
+        ))
+    }
+
     pub fn update_maximum_resident_payload_byte_count(
         &self,
         maximum_resident_payload_byte_count: u64,
@@ -303,6 +413,22 @@ impl Drop for MlxNativeExpertCache {
     fn drop(&mut self) {
         // SAFETY: This owner releases its native cache exactly once.
         unsafe { raw::astronomical_native_expert_cache_free(self.native_cache.as_ptr()) };
+    }
+}
+
+#[derive(Debug)]
+/// Exact native route evidence held between memory admission and cache commit.
+/// It owns no newly loaded expert payload and releases its native handle on drop.
+pub struct MlxNativeExpertCacheRouteAnalysis {
+    native_route_analysis: NonNull<raw::astronomical_native_expert_route_analysis>,
+}
+
+impl Drop for MlxNativeExpertCacheRouteAnalysis {
+    fn drop(&mut self) {
+        // SAFETY: This owner releases its native route analysis exactly once.
+        unsafe {
+            raw::astronomical_native_expert_route_analysis_free(self.native_route_analysis.as_ptr())
+        };
     }
 }
 
