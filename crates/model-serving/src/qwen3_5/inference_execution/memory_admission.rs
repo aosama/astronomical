@@ -5,9 +5,7 @@ use crate::qwen3_5::decoder::RequestDecoderStateStack;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::qwen3_5::model::adaptive_ram_growth_logging::log_adaptive_ram_growth_pressure;
 use crate::qwen3_5::model::memory_admission::{
-    combined_target_and_additional_persistent_growth_bytes,
-    context_memory_admission_fits_without_expert_reclamation, invalid_request_error,
-    validate_context_memory_admission,
+    combined_target_and_additional_persistent_growth_bytes, invalid_request_error,
 };
 use crate::qwen3_5_moe::{
     Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
@@ -92,12 +90,6 @@ impl Qwen3_5EngineState {
         can_use_persistent_prompt_cache: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<u64, InferenceEngineError> {
-        let target_expert_payload_bytes_before_context_admission = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-            .expert_weight_memory_cache_statistics()
-            .resident_payload_byte_count;
         let direct_publication_workspace_bytes = if can_use_persistent_prompt_cache {
             self.persistent_prompt_cache_model_contract
                 .as_ref()
@@ -109,64 +101,19 @@ impl Qwen3_5EngineState {
         };
         let additional_maximum_expert_page_reservation_bytes =
             self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
-        // First ask whether exact context, publication workspace, and any draft
-        // page fit beside the complete owner. Demote only when that same request
-        // would otherwise fail; small requests keep the faster resident path.
-        let resident_model_requires_demote = {
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            model.resident_expert_weights.is_some()
-                && !context_memory_admission_fits_without_expert_reclamation(
-                    model,
-                    self.memory_limits,
-                    self.context_memory_reservation_bytes_per_token,
-                    total_context_tokens,
-                    direct_publication_workspace_bytes,
-                    additional_maximum_expert_page_reservation_bytes,
-                )?
-        };
-        if resident_model_requires_demote {
-            self.model
-                .as_mut()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-                .demote_resident_experts_to_paging(
-                    Qwen3_5ExpertResidencyTransitionReason::RequestAdmission,
-                    performance_attribution,
-                )
-                .map_err(InferenceEngineError::from)?;
-        }
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let context_admission_outcome = performance_attribution.measure_operation(
-            PerformanceOperation::MemoryAdmissionSnapshot,
-            |_performance_attribution| {
-                validate_context_memory_admission(
-                    model,
-                    self.memory_limits,
-                    self.context_memory_reservation_bytes_per_token,
-                    total_context_tokens,
-                    direct_publication_workspace_bytes,
-                    additional_maximum_expert_page_reservation_bytes,
-                )
-            },
-        );
-        let target_expert_payload_bytes_after_context_admission = model
-            .expert_weight_memory_cache_statistics()
-            .resident_payload_byte_count;
-        let target_expert_payload_bytes_reclaimed_during_context_admission =
-            target_expert_payload_bytes_before_context_admission
-                .saturating_sub(target_expert_payload_bytes_after_context_admission);
+        let target_expert_payload_bytes_reclaimed_during_context_admission = self
+            .validate_context_memory_admission_with_resident_expert_demotion(
+                total_context_tokens,
+                direct_publication_workspace_bytes,
+                additional_maximum_expert_page_reservation_bytes,
+                performance_attribution,
+            )?;
         if self.speculative_prefill.enabled {
             performance_attribution.record_counter(
                 PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
                 target_expert_payload_bytes_reclaimed_during_context_admission,
             );
         }
-        context_admission_outcome?;
         Ok(if can_use_persistent_prompt_cache {
             target_expert_payload_bytes_reclaimed_during_context_admission
         } else {

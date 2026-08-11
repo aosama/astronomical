@@ -7,9 +7,9 @@ use super::model_artifact_rest_qualification::{
     stop_model_artifact_rest_server,
 };
 use super::persistent_prompt_cache_rest_support::{
-    MAXIMUM_OUTPUT_TOKEN_COUNT, PINNED_MODEL_ID, assistant_message, get_json_endpoint,
-    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
-    send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
+    MAXIMUM_OUTPUT_TOKEN_COUNT, PINNED_MODEL_ID, THINKING_BUDGET_TOKEN_COUNT, assistant_message,
+    get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt, read_performance_records,
+    required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
 };
 
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 11_000_000_000;
@@ -63,6 +63,8 @@ async fn run_append_only_rest_journey() {
         &prepared_prompt,
         qualification_log_prefix,
         "cold",
+        MAXIMUM_OUTPUT_TOKEN_COUNT,
+        THINKING_BUDGET_TOKEN_COUNT,
     )
     .await;
     assert!(
@@ -107,6 +109,8 @@ async fn run_append_only_rest_journey() {
         &prepared_prompt,
         qualification_log_prefix,
         "appended_warm",
+        MAXIMUM_OUTPUT_TOKEN_COUNT,
+        THINKING_BUDGET_TOKEN_COUNT,
     )
     .await;
     assert!(

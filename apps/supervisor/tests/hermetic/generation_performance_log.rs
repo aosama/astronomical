@@ -136,6 +136,7 @@ fn should_open_and_append_to_performance_log() {
             published_block_count: 1,
             allocator_bytes_cleared_for_publication: 4096,
             expert_bytes_reclaimed_for_publication: 8192,
+            expert_bytes_reclaimed_for_restore: 16_384,
         }),
     };
 
@@ -169,6 +170,10 @@ fn should_open_and_append_to_performance_log() {
     assert_eq!(
         parsed["persistent_prompt_cache_diagnostics"]["published_block_count"],
         1
+    );
+    assert_eq!(
+        parsed["persistent_prompt_cache_diagnostics"]["expert_bytes_reclaimed_for_restore"],
+        16_384
     );
     assert_eq!(
         parsed["persistent_prompt_cache_diagnostics"]["startup_cleanup_evidence"]["obsolete_format"]
@@ -275,6 +280,7 @@ fn should_serialize_null_for_optional_fields() {
             published_block_count: 1,
             allocator_bytes_cleared_for_publication: 0,
             expert_bytes_reclaimed_for_publication: 0,
+            expert_bytes_reclaimed_for_restore: 0,
         }),
     };
 
