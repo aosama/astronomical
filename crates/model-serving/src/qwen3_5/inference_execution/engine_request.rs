@@ -1,3 +1,9 @@
+//! Mutable state for one serial Qwen3.5 generation journey.
+//!
+//! This owner is the transaction boundary for prompt retries, sampling state,
+//! and performance attribution. State that can be rewound is deliberately kept
+//! here rather than hidden in the model owner.
+
 use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
@@ -56,6 +62,7 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) maximum_output_tokens: u16,
     pub(super) ordered_image_sha256_digests: Vec<[u8; 32]>,
     pub(super) next_position_tokens: u32,
+    /// One-token-ahead successor submitted during the previous advancement.
     pub(super) pending_generated_token: Option<MlxArray>,
     pub(super) prefill_cursor: usize,
     /// Largest chunk proven to fit after a capacity-driven retry in this request.
@@ -202,6 +209,10 @@ impl Qwen3_5EngineRequest {
             return operation(self);
         }
 
+        // Temporarily move attribution out of `self` so the measured closure
+        // can borrow the complete mutable request. The disabled placeholder
+        // prevents nested request code from recording the same outer span as a
+        // leaf operation; the original accumulator is always restored.
         let mut request_performance_attribution = std::mem::replace(
             &mut self.performance_attribution,
             PerformanceAttribution::disabled(),

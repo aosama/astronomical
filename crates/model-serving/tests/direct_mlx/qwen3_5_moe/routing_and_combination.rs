@@ -1,8 +1,7 @@
 use astronomical_model_serving::{
-    QuantizedExpertPageManifest, qwen3_5_moe_combine_experts, qwen3_5_moe_remap_expert_page_slots,
-    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
-    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
-    qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,
+    qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
+    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
@@ -186,81 +185,6 @@ async fn should_weight_sorted_expert_outputs_without_restoring_the_expanded_assi
             .to_vec_f32()
             .expect("the weighted expert outputs should evaluate as float32"),
         &[133.0, 134.0, 120.0, 121.0],
-    );
-}
-
-#[tokio::test]
-async fn should_remap_repeated_non_contiguous_global_expert_ids_on_the_gpu() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(
-            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-        )
-        .expect("the page-slot remapping test memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize");
-    let selected_global_expert_indices = runtime
-        .array_from_u32(&[5, 1, 3, 5], &[1, 2, 2])
-        .expect("the global expert assignments should be valid");
-    let page_manifest = QuantizedExpertPageManifest {
-        expert_ids: vec![1, 3, 5],
-        page_slot_by_global_expert_id: vec![u32::MAX, 0, u32::MAX, 1, u32::MAX, 2],
-        source_manifests: Vec::new(),
-        payload_byte_count: 0,
-    };
-
-    let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
-        &runtime,
-        &selected_global_expert_indices,
-        &[1, 3, 5],
-        &page_manifest,
-    )
-    .expect("the GPU should build compact page-slot assignments");
-
-    assert_eq!(page_slot_indices.shape(), vec![1, 2, 2]);
-    assert_eq!(
-        runtime
-            .copy_u32_values(&page_slot_indices)
-            .expect("the compact page-slot assignments should evaluate"),
-        vec![2, 0, 1, 2]
-    );
-}
-
-#[tokio::test]
-async fn should_reject_page_slot_remapping_when_the_manifest_does_not_match_the_routed_experts() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(
-            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-        )
-        .expect("the page-slot mismatch test memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize");
-    let selected_global_expert_indices = runtime
-        .array_from_u32(&[5, 1], &[1, 1, 2])
-        .expect("the global expert assignments should be valid");
-    let page_manifest = QuantizedExpertPageManifest {
-        expert_ids: vec![1, 3, 5],
-        page_slot_by_global_expert_id: vec![u32::MAX, 0, u32::MAX, 1, u32::MAX, 2],
-        source_manifests: Vec::new(),
-        payload_byte_count: 0,
-    };
-
-    let remapping_error = qwen3_5_moe_remap_expert_page_slots(
-        &runtime,
-        &selected_global_expert_indices,
-        &[1, 5],
-        &page_manifest,
-    )
-    .expect_err("a mismatched compact page must be rejected before GPU execution");
-
-    assert!(
-        remapping_error
-            .to_string()
-            .contains("routed expert IDs do not match the compact page manifest"),
-        "unexpected remapping error: {remapping_error}"
     );
 }
 

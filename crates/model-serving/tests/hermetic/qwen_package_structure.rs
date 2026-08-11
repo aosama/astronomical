@@ -45,10 +45,7 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
     }
     for required_qwen_expert_paging_source_file_name in [
         "mod.rs",
-        "complete_layer_retention.rs",
-        "expert_cache_page_assembly.rs",
         "expert_pager_construction.rs",
-        "paged_expert_weights.rs",
         "quantized_expert_layer_plan.rs",
     ] {
         assert!(
@@ -58,6 +55,22 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
             "Qwen expert-paging source must remain family-owned: {required_qwen_expert_paging_source_file_name}"
         );
     }
+    let qwen_expert_pager_source_directory =
+        qwen_expert_paging_source_directory.join("expert_pager");
+    for required_qwen_expert_pager_source_file_name in ["mod.rs", "native_cache.rs"] {
+        assert!(
+            qwen_expert_pager_source_directory
+                .join(required_qwen_expert_pager_source_file_name)
+                .is_file(),
+            "Qwen expert-pager source must exist: {required_qwen_expert_pager_source_file_name}"
+        );
+    }
+    assert!(
+        !qwen_expert_paging_source_directory
+            .join("expert_cache_page_assembly.rs")
+            .exists(),
+        "direct page-table execution must not retain selected-page assembly"
+    );
 
     for shared_only_qwen_package_name in [
         "configuration",
@@ -81,11 +94,6 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
     );
 
     for shared_expert_paging_source_name in [
-        "bounded_expert_reader.rs",
-        "expert_cache.rs",
-        "expert_cache_capacity.rs",
-        "expert_cache_eviction.rs",
-        "expert_cache_pressure.rs",
         "expert_cache_statistics.rs",
         "memory_budget.rs",
         "quantized_expert_manifest.rs",

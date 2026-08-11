@@ -2,11 +2,19 @@
 mod aligned_expert_pack;
 mod artifact;
 #[cfg(feature = "direct-mlx")]
-mod automatic_residency_endurance;
+mod automatic_residency;
+#[cfg(feature = "direct-mlx")]
+mod automatic_residency_failure;
+#[cfg(feature = "direct-mlx")]
+mod automatic_residency_mtp;
+#[cfg(feature = "direct-mlx")]
+mod automatic_residency_support;
 mod config;
 mod engine;
 #[cfg(feature = "direct-mlx")]
 mod exact_model_prompt;
+#[cfg(feature = "direct-mlx")]
+mod exact_paged_decode;
 mod expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_paging_decode;
@@ -17,12 +25,16 @@ mod expert_paging_prefill_performance;
 #[cfg(feature = "direct-mlx")]
 mod expert_paging_representative_performance;
 #[cfg(feature = "direct-mlx")]
+mod expert_paging_romeo_and_juliet_performance;
+#[cfg(feature = "direct-mlx")]
 mod expert_route_reuse_performance;
 #[cfg(feature = "direct-mlx")]
 mod expert_weight_memory_cache_eviction;
 mod model;
 #[cfg(feature = "direct-mlx")]
 mod mtp;
+#[cfg(feature = "direct-mlx")]
+mod one_expert_cache_endurance;
 #[cfg(feature = "direct-mlx")]
 mod paged_mode_endurance;
 #[cfg(feature = "direct-mlx")]
@@ -155,6 +167,7 @@ async fn construct_model_artifact_expert_pager(
         .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
         .collect();
     let expert_pager = Qwen3_5ExpertPager::new(
+        &runtime,
         model_directory,
         &weight_map,
         &config,
@@ -175,12 +188,40 @@ fn xyz_aquila_mini_optiq_four_bit_model_directory() -> std::path::PathBuf {
 }
 
 fn configured_depth_one_mtp_model_artifact_directory() -> std::path::PathBuf {
+    // Preserve deterministic model-identity selection for existing qualifications.
+    configured_depth_one_mtp_model_artifacts()
+        .into_iter()
+        .min_by(|left_candidate, right_candidate| left_candidate.1.cmp(&right_candidate.1))
+        .map(|(_payload_bytes, _model_id, model_directory)| model_directory)
+        .expect(
+            "model_directories should contain a complete supported depth-one mixture-of-experts MTP artifact",
+        )
+}
+
+fn configured_smallest_depth_one_mtp_model_artifact_directory() -> std::path::PathBuf {
+    // Residency qualifications materialize every expert, so choose the smallest
+    // compatible payload to keep the real-artifact journey within its timeout.
+    configured_depth_one_mtp_model_artifacts()
+        .into_iter()
+        .min_by(|left_candidate, right_candidate| {
+            left_candidate
+                .0
+                .cmp(&right_candidate.0)
+                .then_with(|| left_candidate.1.cmp(&right_candidate.1))
+        })
+        .map(|(_payload_bytes, _model_id, model_directory)| model_directory)
+        .expect(
+            "model_directories should contain a complete supported depth-one mixture-of-experts MTP artifact",
+        )
+}
+
+fn configured_depth_one_mtp_model_artifacts() -> Vec<(u64, String, std::path::PathBuf)> {
     use astronomical_config::{AstronomicalConfig, discover_models};
     use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
 
     let astronomical_config = AstronomicalConfig::load_from_default_location()
         .expect("the standard Astronomical configuration should load for MTP qualification");
-    let mut discovered_models = discover_models(
+    let discovered_models = discover_models(
         astronomical_config.model_directories(),
         astronomical_config.max_output_tokens(),
     )
@@ -189,11 +230,8 @@ fn configured_depth_one_mtp_model_artifact_directory() -> std::path::PathBuf {
     .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
     .collect::<Vec<_>>();
     discovered_models
-        .sort_by(|left_model, right_model| left_model.model_id.cmp(&right_model.model_id));
-
-    discovered_models
         .into_iter()
-        .find_map(|discovered_model| {
+        .filter_map(|discovered_model| {
             let validated_artifact = Qwen3_5ArtifactValidator::new()
                 .validate(&discovered_model.model_directory, 20_480)
                 .ok()?;
@@ -203,11 +241,13 @@ fn configured_depth_one_mtp_model_artifact_directory() -> std::path::PathBuf {
                 && validated_artifact
                     .mtp_artifact_capability()
                     .is_mtp_capable())
-            .then_some(discovered_model.model_directory)
+            .then_some((
+                validated_artifact.total_payload_bytes(),
+                discovered_model.model_id,
+                discovered_model.model_directory,
+            ))
         })
-        .expect(
-            "model_directories should contain a complete supported depth-one mixture-of-experts MTP artifact",
-        )
+        .collect()
 }
 
 #[cfg(feature = "direct-mlx")]

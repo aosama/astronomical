@@ -2,7 +2,10 @@
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill_selection.rs"]
 mod speculative_prefill_selection;
 
-use astronomical_ipc_protocol::{ChatMessage, ChatToolDefinition};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition,
+    RequestId,
+};
 use astronomical_model_serving::{
     Qwen3_5PromptRenderer, Qwen3_5Tokenizer, Qwen3_5TokenizerError, validate_context_token_count,
 };
@@ -12,6 +15,7 @@ use crate::common::qwen3_5_moe::certified_ornith_image_processor;
 
 const ORNITH_VOCABULARY_SIZE: u32 = 248_320;
 const ORNITH_MAXIMUM_POSITION_COUNT: u32 = 262_144;
+const SYNTHETIC_MODEL_ID: &str = "synthetic-qwen3.5";
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
@@ -20,6 +24,7 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
 fn should_discover_special_token_ids_from_tokenizer_json() {
     let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
         &ornith_tokenizer_json_bytes(248_056),
+        SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
         certified_ornith_image_processor(),
@@ -61,6 +66,7 @@ fn should_digest_token_identifier_mappings_independently_of_json_serialization()
 fn should_reject_a_tokenizer_missing_a_required_special_token() {
     let tokenizer_error = Qwen3_5Tokenizer::from_json_bytes(
         &ornith_tokenizer_json_bytes_missing_image_pad(),
+        SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
         certified_ornith_image_processor(),
@@ -87,6 +93,7 @@ fn should_reject_a_context_above_the_certified_ornith_position_limit() {
 fn should_convert_the_rendered_system_and_tool_boundary_to_an_exact_token_count() {
     let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
         &ornith_tokenizer_json_bytes(248_056),
+        SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
         certified_ornith_image_processor(),
@@ -124,6 +131,7 @@ fn should_convert_the_rendered_system_and_tool_boundary_to_an_exact_token_count(
 fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_selection() {
     let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
         &ornith_tokenizer_json_bytes(248_056),
+        SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
         certified_ornith_image_processor(),
@@ -241,6 +249,55 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
                 >= ordinary_target_prefill_control_span_token_count
                 && *selected_position < final_generation_kickoff_position)
     );
+}
+
+#[test]
+fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
+    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
+        &ornith_tokenizer_json_bytes(248_056),
+        SYNTHETIC_MODEL_ID,
+        ORNITH_VOCABULARY_SIZE,
+        ORNITH_MAXIMUM_POSITION_COUNT,
+        certified_ornith_image_processor(),
+    )
+    .expect("the synthetic tokenizer should load");
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(701),
+        model: SYNTHETIC_MODEL_ID.to_owned(),
+        messages: vec![ChatMessage::User {
+            content: ROMEO_AND_JULIET_SOURCE.to_owned(),
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 8,
+            temperature_thousandths: Some(0),
+            top_p_thousandths: Some(950),
+            seed: None,
+            thinking_budget: Some(0),
+        },
+    };
+
+    let inference_request = tokenizer
+        .prepare_chat(&chat_generation_command, false)
+        .expect("a thinking-disabled Romeo and Juliet request should prepare");
+
+    assert!(!inference_request.generation_starts_inside_thinking_block());
+    assert_eq!(inference_request.thinking_budget(), None);
+}
+
+#[test]
+fn should_preserve_a_positive_budget_for_generation_that_starts_inside_thinking() {
+    let inference_request = astronomical_model_serving::Qwen3_5InferenceRequest::new(
+        RequestId::new(702),
+        vec![1, 2, 3],
+        8,
+    )
+    .with_thinking_configuration(true, Some(64));
+
+    assert!(inference_request.generation_starts_inside_thinking_block());
+    assert_eq!(inference_request.thinking_budget(), Some(64));
 }
 
 fn ornith_tokenizer_json_bytes(image_pad_token_id: u32) -> Vec<u8> {

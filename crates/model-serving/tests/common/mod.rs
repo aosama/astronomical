@@ -136,6 +136,52 @@ pub(crate) async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
 pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> MlxMemoryLimits {
     let astronomical_config = AstronomicalConfig::load_from_default_location()
         .expect("the standard Astronomical configuration should load for model qualification");
+    let machine_mlx_memory_ceiling_bytes = sample_machine_mlx_memory_ceiling_bytes().await;
+    let configured_mlx_memory_ceiling_bytes = astronomical_config
+        .maximum_mlx_memory_bytes()
+        .expect("the configured model-artifact MLX memory ceiling should be valid");
+    let effective_mlx_memory_ceiling_bytes =
+        resolve_model_artifact_qualification_mlx_memory_ceiling_bytes(
+            configured_mlx_memory_ceiling_bytes,
+            machine_mlx_memory_ceiling_bytes,
+        );
+    eprintln!(
+        "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
+        machine_mlx_memory_ceiling_bytes,
+        configured_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
+    );
+    MlxMemoryLimits::new(
+        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
+    )
+    .expect("the machine-derived model-artifact MLX memory limits should be valid")
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+/// Uses only the machine ceiling so residency qualifications are not changed by
+/// a developer's ordinary lower application cap.
+pub(crate) async fn sample_machine_model_artifact_qualification_mlx_memory_limits()
+-> MlxMemoryLimits {
+    let machine_mlx_memory_ceiling_bytes = sample_machine_mlx_memory_ceiling_bytes().await;
+    eprintln!(
+        "[model-artifact-machine-memory] machine_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
+        machine_mlx_memory_ceiling_bytes,
+        machine_mlx_memory_ceiling_bytes,
+        machine_mlx_memory_ceiling_bytes,
+    );
+    MlxMemoryLimits::new(
+        machine_mlx_memory_ceiling_bytes,
+        machine_mlx_memory_ceiling_bytes,
+    )
+    .expect("the machine model-artifact MLX memory limits should be valid")
+}
+
+#[cfg(feature = "direct-mlx")]
+async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
     let mut sysctl_command = Command::new(SYSCTL_EXECUTABLE_PATH);
     sysctl_command
         .arg("-n")
@@ -166,35 +212,14 @@ pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> M
         .unwrap_or_else(|parse_error| {
             panic!("{IOGPU_WIRED_LIMIT_SYSCTL_KEY} should be an unsigned integer: {parse_error}")
         });
-    let machine_mlx_memory_ceiling_bytes = if wired_limit_mebibytes == 0 {
+    if wired_limit_mebibytes == 0 {
         maximum_recommended_gpu_working_set_size_bytes()
             .expect("MLX should expose the default GPU wired-memory working set")
     } else {
         wired_limit_mebibytes
             .checked_mul(BYTES_PER_MEBIBYTE)
             .expect("the GPU wired-memory limit should fit in usize bytes")
-    };
-    let configured_mlx_memory_ceiling_bytes = astronomical_config
-        .maximum_mlx_memory_bytes()
-        .expect("the configured model-artifact MLX memory ceiling should be valid");
-    let effective_mlx_memory_ceiling_bytes =
-        resolve_model_artifact_qualification_mlx_memory_ceiling_bytes(
-            configured_mlx_memory_ceiling_bytes,
-            machine_mlx_memory_ceiling_bytes,
-        );
-    eprintln!(
-        "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
-        machine_mlx_memory_ceiling_bytes,
-        configured_mlx_memory_ceiling_bytes,
-        effective_mlx_memory_ceiling_bytes,
-        effective_mlx_memory_ceiling_bytes,
-        effective_mlx_memory_ceiling_bytes,
-    );
-    MlxMemoryLimits::new(
-        effective_mlx_memory_ceiling_bytes,
-        effective_mlx_memory_ceiling_bytes,
-    )
-    .expect("the machine-derived model-artifact MLX memory limits should be valid")
+    }
 }
 
 #[cfg(feature = "direct-mlx")]

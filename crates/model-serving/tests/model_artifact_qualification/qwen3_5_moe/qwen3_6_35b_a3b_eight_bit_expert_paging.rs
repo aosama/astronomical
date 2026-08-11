@@ -161,6 +161,6 @@ async fn load_paged_model() -> (Qwen3_5Model, Qwen3_5Config) {
         false,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the Qwen3.6-35B-A3B eight-bit model should load with automatic expert residency");
+    .expect("the Qwen3.6-35B-A3B eight-bit model should load with demand-only one-expert caching");
     (qwen3_5_model, config)
 }

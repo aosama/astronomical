@@ -136,20 +136,27 @@ async fn run_expert_route_reuse_probe(
         counter_amount(generation_report, "expert_route_examined_layer_count");
     let attributed_generated_token_count =
         counter_amount(generation_report, "generated_token_count");
-    let expert_page_logical_payload_bytes =
-        counter_amount(generation_report, "expert_page_logical_payload_bytes");
-    let partial_expert_hit_count =
-        counter_amount(generation_report, "expert_weight_memory_cache_hit_count");
-    let complete_layer_hit_count = counter_amount(
+    let native_expert_cache_source_read_bytes = counter_amount(
         generation_report,
-        "expert_weight_memory_cache_complete_layer_hit_count",
+        "native_expert_cache_successful_source_read_byte_count",
     );
-    let expert_miss_count =
-        counter_amount(generation_report, "expert_weight_memory_cache_miss_count");
-    let expert_eviction_count = counter_amount(
+    let native_expert_cache_snapshot_publication_count = counter_amount(
         generation_report,
-        "expert_weight_memory_cache_eviction_count",
+        "native_expert_cache_snapshot_publication_count",
     );
+    let native_expert_cache_payload_copy_bytes = counter_amount(
+        generation_report,
+        "native_expert_cache_payload_copy_byte_count",
+    );
+    let native_paged_expert_projection_graph_count = counter_amount(
+        generation_report,
+        "native_paged_expert_projection_graph_count",
+    );
+    let one_expert_page_hit_count =
+        counter_amount(generation_report, "native_expert_cache_hit_count");
+    let expert_miss_count = counter_amount(generation_report, "native_expert_cache_miss_count");
+    let expert_eviction_count =
+        counter_amount(generation_report, "native_expert_cache_eviction_count");
     assert_eq!(
         attributed_generated_token_count,
         generated_token_ids.len() as u64,
@@ -173,7 +180,10 @@ async fn run_expert_route_reuse_probe(
     assert!(predicted_expert_count > 0);
     assert!(matched_expert_count <= predicted_expert_count);
     assert!(examined_layer_count > 0);
-    assert!(expert_page_logical_payload_bytes > 0);
+    assert!(native_expert_cache_source_read_bytes > 0);
+    assert!(native_expert_cache_snapshot_publication_count > 0);
+    assert_eq!(native_expert_cache_payload_copy_bytes, 0);
+    assert!(native_paged_expert_projection_graph_count > 0);
     let route_reuse_ratio = matched_expert_count as f64 / predicted_expert_count as f64;
     let per_layer_route_reuse = generation_report["previous_token_expert_route_reuse_by_layer"]
         .as_array()
@@ -181,7 +191,7 @@ async fn run_expert_route_reuse_probe(
     assert!(!per_layer_route_reuse.is_empty());
     assert!(!generation_report.to_string().contains("\"expert_ids\""));
     eprintln!(
-        "[{progress_log_label}] status=success generated_tokens={} predicted_experts={predicted_expert_count} matched_experts={matched_expert_count} route_reuse_ratio={route_reuse_ratio:.4} examined_layers={examined_layer_count} completely_matched_layers={completely_matched_layer_count} reported_layer_count={} partial_expert_hits={partial_expert_hit_count} complete_layer_hits={complete_layer_hit_count} expert_misses={expert_miss_count} expert_evictions={expert_eviction_count} expert_page_logical_payload_bytes={expert_page_logical_payload_bytes}",
+        "[{progress_log_label}] status=success generated_tokens={} predicted_experts={predicted_expert_count} matched_experts={matched_expert_count} route_reuse_ratio={route_reuse_ratio:.4} examined_layers={examined_layer_count} completely_matched_layers={completely_matched_layer_count} reported_layer_count={} native_cache_hits={one_expert_page_hit_count} native_cache_misses={expert_miss_count} native_cache_evictions={expert_eviction_count} native_cache_source_read_bytes={native_expert_cache_source_read_bytes} native_cache_snapshot_publications={native_expert_cache_snapshot_publication_count} native_cache_payload_copy_bytes={native_expert_cache_payload_copy_bytes} native_paged_expert_projection_graphs={native_paged_expert_projection_graph_count}",
         generated_token_ids.len(),
         per_layer_route_reuse.len(),
     );

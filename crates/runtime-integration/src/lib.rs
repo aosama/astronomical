@@ -31,7 +31,13 @@ mod mlx_descriptor_file_reader;
 #[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
 #[cfg(feature = "mlx")]
+mod mlx_native_expert_cache;
+#[cfg(feature = "mlx")]
+mod mlx_native_expert_cache_report;
+#[cfg(feature = "mlx")]
 mod mlx_operations;
+#[cfg(feature = "mlx")]
+mod mlx_paged_buffer_store;
 #[cfg(feature = "mlx")]
 mod mlx_quantized_operations;
 #[cfg(feature = "mlx")]
@@ -42,7 +48,6 @@ mod mlx_rope_operations;
 mod mlx_runtime;
 #[cfg(feature = "mlx")]
 mod mlx_runtime_device_info;
-#[cfg(feature = "mlx")]
 mod mlx_runtime_types;
 #[cfg(feature = "mlx")]
 mod mlx_safetensors;
@@ -74,10 +79,20 @@ pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
 #[cfg(feature = "mlx")]
 pub use mlx_metal_kernel::{MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
 #[cfg(feature = "mlx")]
+pub use mlx_native_expert_cache::{
+    MlxNativeExpertCache, MlxNativeExpertCacheSnapshot, MlxNativeExpertLayerDescriptor,
+    MlxNativeExpertParameter, MlxNativeExpertProjection, MlxNativeExpertTensorSourceDescriptor,
+};
+#[cfg(feature = "mlx")]
+pub use mlx_native_expert_cache_report::{
+    MlxNativeExpertCacheRequestReport, MlxNativeExpertCacheStatistics,
+};
+#[cfg(feature = "mlx")]
+pub use mlx_paged_buffer_store::{MlxPagedBufferSlot, MlxPagedFileReader};
+#[cfg(feature = "mlx")]
 pub use mlx_runtime::{MlxRuntime, compiled_metallib_path, validate_metallib_path};
 #[cfg(feature = "mlx")]
 pub use mlx_runtime_device_info::maximum_recommended_gpu_working_set_size_bytes;
-#[cfg(feature = "mlx")]
 pub use mlx_runtime_types::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError};
 #[cfg(feature = "mlx")]
 pub use mlx_safetensors::{BoundedReadInterval, MlxSafetensors, SafetensorsLoadResult};

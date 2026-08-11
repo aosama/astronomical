@@ -22,7 +22,14 @@ impl Qwen3_5EngineState {
                 astronomical_ipc_protocol::MtpRuntimeState::Unavailable
             }
         };
+        // Build readiness only after startup promotion has selected the owner.
+        // The worker forwards this value instead of inferring mode from memory.
         let mut engine_load_result = EngineLoadResult::new()
+            .with_expert_memory_mode(
+                self.model
+                    .as_ref()
+                    .map(|loaded_model| loaded_model.expert_memory_mode()),
+            )
             .with_mtp_runtime_state(mtp_runtime_state)
             .with_speculative_prefill_runtime(
                 self.speculative_prefill_runtime_state,
@@ -66,14 +73,6 @@ impl Qwen3_5EngineState {
                         ),
                 )
                 .unwrap_or(u64::MAX),
-                retained_complete_expert_layer_count: self.model.as_ref().map_or(0, |model| {
-                    u64::try_from(
-                        model
-                            .expert_weight_memory_cache_statistics()
-                            .complete_layer_count,
-                    )
-                    .unwrap_or(u64::MAX)
-                }),
                 total_artifact_payload_bytes,
                 resident_model_payload_bytes,
                 model_shard_count,

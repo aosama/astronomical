@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use crate::{
-    InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
-    Qwen3_5FeedForwardArchitecture,
-};
+use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 
 use super::Qwen3_5EngineState;
 
@@ -43,15 +40,9 @@ impl Qwen3_5EngineState {
             .runtime()
             .memory_snapshot()
             .map_err(super::qwen3_5_runtime_error)?;
-        let retained_complete_layer_count_before = model
-            .expert_weight_memory_cache_statistics()
-            .complete_layer_count;
         let adjustment_started_at = Instant::now();
-        let (
-            minimum_mlx_memory_ceiling_bytes,
-            did_change_mlx_memory_ceiling,
-            updated_mlx_memory_limits,
-        ) = model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
+        let (minimum_mlx_memory_ceiling_bytes, updated_mlx_memory_limits) =
+            model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
         self.adaptive_ram_growth_guard
             .update_active_memory_limit_bytes(updated_mlx_memory_limits.active_memory_limit_bytes())
             .map_err(|adaptive_ram_growth_guard_error| {
@@ -59,35 +50,10 @@ impl Qwen3_5EngineState {
             })?;
         self.memory_limits = updated_mlx_memory_limits;
 
-        if did_change_mlx_memory_ceiling
-            && requested_mlx_memory_ceiling_bytes > old_mlx_memory_ceiling_bytes
-        {
-            match model.config().feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => {}
-                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
-                    let mut disabled_performance_attribution =
-                        crate::PerformanceAttribution::disabled();
-                    if let Err(expert_layer_recovery_error) = model
-                        .prewarm_complete_expert_layers_with_performance_attribution(
-                            &mut disabled_performance_attribution,
-                        )
-                    {
-                        tracing::warn!(
-                            error = %expert_layer_recovery_error,
-                            "could not recover complete expert layers after raising the MLX memory ceiling"
-                        );
-                    }
-                }
-            }
-        }
-
         let mlx_memory_snapshot_after_adjustment = model
             .runtime()
             .memory_snapshot()
             .map_err(super::qwen3_5_runtime_error)?;
-        let retained_complete_layer_count_after = model
-            .expert_weight_memory_cache_statistics()
-            .complete_layer_count;
         let active_memory_bytes = u64::try_from(
             mlx_memory_snapshot_after_adjustment.active_memory_bytes(),
         )
@@ -116,8 +82,6 @@ impl Qwen3_5EngineState {
             active_mlx_memory_bytes_after = mlx_memory_snapshot_after_adjustment.active_memory_bytes(),
             allocator_cache_memory_bytes_before = mlx_memory_snapshot_before_adjustment.allocator_cache_memory_bytes(),
             allocator_cache_memory_bytes_after = mlx_memory_snapshot_after_adjustment.allocator_cache_memory_bytes(),
-            retained_complete_layer_count_before,
-            retained_complete_layer_count_after,
             expert_memory_mode = ?expert_memory_mode,
             "applied live MLX memory ceiling adjustment"
         );

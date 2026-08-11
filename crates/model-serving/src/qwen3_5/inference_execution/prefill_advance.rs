@@ -59,15 +59,16 @@ impl Qwen3_5EngineState {
                 }));
             }
         }
-        let model = self
+        let prefill_start = active_request.prefill_cursor;
+        let sparse_experts_are_paged = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let prefill_start = active_request.prefill_cursor;
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .sparse_experts_are_paged();
         let prefill_execution_context = Qwen3_5PrefillExecutionContext::new(
             active_request.visual_embeddings.is_some(),
             active_request.has_optional_prediction_session(),
-            model.sparse_experts_are_paged(),
+            sparse_experts_are_paged,
             self.persistent_prompt_cache.is_some()
                 && active_request.can_use_persistent_prompt_cache
                 && !active_request.has_optional_prediction_session(),
@@ -175,6 +176,9 @@ impl Qwen3_5EngineState {
                     active_request
                         .restore_prefill_request_checkpoint(prefill_request_checkpoint)
                         .map_err(qwen3_5_runtime_error)?;
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
                     active_request
                         .performance_attribution
                         .measure_operation(
@@ -274,6 +278,9 @@ impl Qwen3_5EngineState {
                     active_request
                         .restore_prefill_request_checkpoint(prefill_request_checkpoint)
                         .map_err(qwen3_5_runtime_error)?;
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
                     active_request
                         .performance_attribution
                         .measure_operation(
@@ -315,6 +322,10 @@ impl Qwen3_5EngineState {
         let boundary_checkpoints = prompt_prefill_chunck_outcome.boundary_checkpoints;
         let speculative_prefill_chunck_mode =
             prompt_prefill_chunck_outcome.speculative_prefill_chunck_mode;
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let prefill_token_count = prefill_end - prefill_start;
         let should_retain_adaptive_ram_growth_observation = requested_prefill_chunck_token_count
             == self.prefill_chunck_sizer.active_prefill_chunck_tokens();

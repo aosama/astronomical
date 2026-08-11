@@ -24,6 +24,8 @@ pub(crate) fn log_adaptive_ram_growth_pressure(
         current_active_memory_bytes = adaptive_ram_growth_projection.current_active_memory_bytes(),
         exact_persistent_growth_bytes =
             adaptive_ram_growth_projection.exact_persistent_growth_bytes(),
+        routed_expert_page_reservation_bytes =
+            adaptive_ram_growth_projection.routed_expert_page_reservation_bytes(),
         observed_transient_high_water_bytes =
             adaptive_ram_growth_projection.observed_transient_high_water_bytes(),
         stable_projected_bytes = adaptive_ram_growth_projection.stable_projected_bytes(),
@@ -38,22 +40,10 @@ pub(crate) fn log_adaptive_ram_growth_pressure(
         required_reclamation_bytes,
         retained_expert_payload_bytes_before,
         retained_expert_payload_bytes_after,
-        retained_partial_expert_count_before =
-            expert_weight_memory_cache_statistics_before_reclamation
-                .entry_count
-                .saturating_sub(
-                    expert_weight_memory_cache_statistics_before_reclamation.complete_layer_count,
-                ),
-        retained_partial_expert_count_after =
-            expert_weight_memory_cache_statistics_after_reclamation
-                .entry_count
-                .saturating_sub(
-                    expert_weight_memory_cache_statistics_after_reclamation.complete_layer_count,
-                ),
-        retained_complete_layer_count_before =
-            expert_weight_memory_cache_statistics_before_reclamation.complete_layer_count,
-        retained_complete_layer_count_after =
-            expert_weight_memory_cache_statistics_after_reclamation.complete_layer_count,
+        retained_one_expert_page_count_before =
+            expert_weight_memory_cache_statistics_before_reclamation.entry_count,
+        retained_one_expert_page_count_after =
+            expert_weight_memory_cache_statistics_after_reclamation.entry_count,
         actual_reclaimed_expert_payload_bytes,
         reclamation_overshoot_bytes,
         allocator_cache_memory_bytes_observed,

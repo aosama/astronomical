@@ -47,21 +47,6 @@ impl Qwen3_5AffineWeights {
         }
     }
 
-    pub(crate) fn payload_byte_count(&self) -> u64 {
-        match self {
-            Self::NativeBfloat16 { weight } => weight.byte_count() as u64,
-            Self::Quantized {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                ..
-            } => packed_weight
-                .byte_count()
-                .saturating_add(quantization_scales.byte_count())
-                .saturating_add(quantization_biases.byte_count()) as u64,
-        }
-    }
-
     pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,

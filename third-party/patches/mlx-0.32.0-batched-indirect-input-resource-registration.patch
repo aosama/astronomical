@@ -1,0 +1,46 @@
+diff --git a/mlx/backend/metal/device.h b/mlx/backend/metal/device.h
+index 32e0052..165443c 100644
+--- a/mlx/backend/metal/device.h
++++ b/mlx/backend/metal/device.h
+@@ -49,6 +49,8 @@ class MLX_API CommandEncoder {
+   void set_buffer(const MTL::Buffer* buf, int idx, int64_t offset = 0);
+   void set_input_array(const array& a, int idx, int64_t offset = 0);
+   void register_indirect_input_array(const array& a);
++  void register_indirect_input_arrays(
++      const std::vector<const array*>& arrays);
+   void set_output_array(array& a, int idx, int64_t offset = 0);
+   void register_output_array(const array& a);
+ 
+diff --git a/mlx/backend/metal/device.cpp b/mlx/backend/metal/device.cpp
+index 0c0ac97..efdb298 100644
+--- a/mlx/backend/metal/device.cpp
++++ b/mlx/backend/metal/device.cpp
+@@ -369,6 +369,28 @@ void CommandEncoder::register_indirect_input_array(const array& a) {
+   get_command_encoder()->useResource(resource, MTL::ResourceUsageRead);
+ }
+ 
++void CommandEncoder::register_indirect_input_arrays(
++    const std::vector<const array*>& arrays) {
++  std::vector<const MTL::Resource*> resources;
++  resources.reserve(arrays.size());
++  for (const auto* array : arrays) {
++    if (all_inputs_.insert(array->buffer().ptr()).second) {
++      buffer_sizes_ += array->data_size();
++    }
++    auto resource = static_cast<MTL::Resource*>(
++        const_cast<void*>(array->buffer().ptr()));
++    if (next_inputs_.insert(resource).second) {
++      resources.push_back(resource);
++    }
++    needs_barrier_ =
++        needs_barrier_ | (prev_outputs_.find(resource) != prev_outputs_.end());
++  }
++  if (!resources.empty()) {
++    get_command_encoder()->useResources(
++        resources.data(), resources.size(), MTL::ResourceUsageRead);
++  }
++}
++
+ void CommandEncoder::set_output_array(
+     array& a,
+     int idx,

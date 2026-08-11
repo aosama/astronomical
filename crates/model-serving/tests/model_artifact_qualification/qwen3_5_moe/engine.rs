@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
+use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Engine,
     Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
@@ -219,89 +219,6 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
     })
     .await
     .expect("the live-context telemetry regression must finish within 115 seconds");
-}
-
-#[tokio::test]
-#[ignore = "loads a configured depth-one MTP checkpoint and verifies automatic full residency"]
-async fn should_keep_the_complete_model_resident_when_idle_memory_is_sufficient() {
-    timeout(Duration::from_secs(120), async {
-        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let model_directory = super::configured_depth_one_mtp_model_artifact_directory();
-        assert!(
-            model_directory.is_dir(),
-            "the configured depth-one MTP checkpoint must be available"
-        );
-        eprintln!("[automatic-residency 0/4] status=progress phase=artifact_validation");
-        let validated_artifact = Qwen3_5ArtifactValidator::new()
-            .validate(&model_directory, 20_480)
-            .expect("the configured depth-one MTP artifact should validate");
-        let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-            .expect("the tokenizer should expose validated control tokens");
-        let think_end_token_id = tokenizer.think_end_token_id();
-        let image_pad_token_id = tokenizer.image_pad_token_id();
-        let mlx_memory_limits = crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-        let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
-            validated_artifact,
-            mlx_memory_limits.active_memory_limit_bytes(),
-            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
-            None,
-            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
-                .expect("the test prefill_chunck_tokens should be valid"),
-            think_end_token_id,
-            model_directory,
-            crate::common::standard_worker_chunking_configuration(),
-            false,
-            false,
-            crate::common::disabled_worker_speculative_prefill_configuration(),
-            astronomical_model_serving::PerformanceAttribution::disabled(),
-            astronomical_model_serving::PerformanceAttributionLog::disabled(),
-        )
-        .expect("the automatic-residency engine settings should be valid");
-
-        eprintln!("[automatic-residency 1/4] status=progress phase=model_load ETA_seconds=90");
-        qwen3_5_engine
-            .load()
-            .await
-            .expect("the automatic-residency model should load");
-        let request_id = RequestId::new(1_003);
-        eprintln!("[automatic-residency 2/4] status=progress phase=short_generation");
-        qwen3_5_engine
-            .start_generation(
-                Qwen3_5InferenceRequest::new(
-                    request_id,
-                    super::super::qwen3_5::SAY_HI_PROMPT_TOKEN_IDS.to_vec(),
-                    2,
-                )
-                .with_image_pad_token_id(image_pad_token_id),
-            )
-            .await
-            .expect("the resident model should accept a short request");
-        loop {
-            match qwen3_5_engine
-                .decode_next_token(request_id)
-                .await
-                .expect("the resident model should generate without SSD expert streaming")
-            {
-                GeneratedToken::PrefillProgress { .. } => {}
-                GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
-                GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
-            }
-        }
-        let generation_finalization = qwen3_5_engine
-            .cancel_generation(request_id)
-            .await
-            .expect("the automatic-residency request should finalize cleanly");
-
-        eprintln!("[automatic-residency 3/4] status=progress phase=residency_assertion");
-        assert_eq!(
-            generation_finalization.expert_memory_mode(),
-            Some(ExpertMemoryMode::Resident),
-            "automatic residency must not wait for adaptive-growth observations before using ample idle memory"
-        );
-        eprintln!("[automatic-residency 4/4] status=success");
-    })
-    .await
-    .expect("the automatic-residency regression must finish within 120 seconds");
 }
 
 #[tokio::test]

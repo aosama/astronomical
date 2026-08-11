@@ -5,6 +5,8 @@ mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
 mod attention_execution;
 #[cfg(feature = "direct-mlx")]
+mod decoder_cache_dtype_flow;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_weights;
 #[cfg(feature = "direct-mlx")]
 mod error;

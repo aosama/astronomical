@@ -53,11 +53,6 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
         "expert_paging",
         &[
             "mod.rs",
-            "bounded_expert_reader.rs",
-            "expert_cache.rs",
-            "expert_cache_capacity.rs",
-            "expert_cache_eviction.rs",
-            "expert_cache_pressure.rs",
             "expert_cache_statistics.rs",
             "memory_budget.rs",
             "quantized_expert_manifest.rs",
@@ -119,11 +114,6 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
         model_serving_source_directory.join("expert_paging");
     for shared_expert_paging_source_file_name in [
         "mod.rs",
-        "bounded_expert_reader.rs",
-        "expert_cache.rs",
-        "expert_cache_capacity.rs",
-        "expert_cache_eviction.rs",
-        "expert_cache_pressure.rs",
         "expert_cache_statistics.rs",
         "memory_budget.rs",
         "quantized_expert_manifest.rs",
