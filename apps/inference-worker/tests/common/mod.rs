@@ -6,8 +6,6 @@
 
 use std::{collections::HashMap, path::Path, path::PathBuf, sync::Arc};
 
-#[cfg(feature = "memory-management-acceptance")]
-pub(crate) mod complete_layer_residency_replay;
 pub(crate) mod exact_model_prompt;
 #[cfg(feature = "memory-management-acceptance")]
 pub(crate) mod real_model_rest_server;

@@ -185,7 +185,6 @@ impl Qwen3_5Model {
                             &self.runtime,
                             layer_index,
                             &complete_layer_expert_ids,
-                            crate::ExpertSourceRequestPhase::RetentionTransition,
                             performance_attribution,
                         )
                     },
