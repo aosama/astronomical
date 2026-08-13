@@ -41,15 +41,13 @@ pub use deepseek_v4::{
 pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{
-    ExpertManifestError, ExpertWeightMemoryCacheStatistics, ExpertWeightPage, LiveMetalBudget,
-    MemoryBudgetError, MemoryBudgetSnapshot, QuantizationMode, QuantizedExpertLayerPlan,
-    QuantizedExpertPageManifest, QuantizedExpertShardManifest, QuantizedExpertSourceInterval,
-    QuantizedExpertTensorRange, QuantizedTensorSource, RetainedExpertLayerCache, SafetensorsDtype,
-    SafetensorsHeader, SafetensorsHeaderError, TensorHeaderEntry,
-    automatic_expert_weight_memory_cache_maximum_size_bytes,
-    build_quantized_expert_page_manifest_from_plan, maximum_possible_expert_route_payload_bytes,
-    parse_safetensors_header, validate_expert_ids, validate_quantization_contract,
-    validate_source_intervals, validate_virtual_intervals,
+    ExpertManifestError, ExpertWeightMemoryCacheStatistics, ExpertWeightPage, QuantizationMode,
+    QuantizedExpertLayerPlan, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
+    QuantizedExpertSourceInterval, QuantizedExpertTensorRange, QuantizedTensorSource,
+    RetainedExpertLayerCache, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
+    TensorHeaderEntry, build_quantized_expert_page_manifest_from_plan, parse_safetensors_header,
+    validate_expert_ids, validate_quantization_contract, validate_source_intervals,
+    validate_virtual_intervals,
 };
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
@@ -59,16 +57,21 @@ pub use inference_engine::{
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
-    ExpertMemoryAdmissionError, ExpertRetentionReclamationPlan, MlxActiveMemoryBreakdown,
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetError,
-    MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetPhase, MlxRamBudgetSnapshot,
-    complete_residency_exceeds_ceiling_with_activation_headroom,
+    AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection, AllocationAdmissionDecision,
+    AllocationAdmissionObservation, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
+    CompleteResidencyDecision, CompleteResidencyRequirements, ContextAdmissionRequirements,
+    ExpertMemoryAdmissionError, ExpertRetentionReclamationPlan, ForwardRecoveryDecision,
+    ForwardRecoveryPolicy, ForwardRecoveryRequirements, MemoryAdmissionDecision, MemoryBoundary,
+    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, MlxActiveMemoryBreakdown,
+    MlxAllocationBudget, MlxAllocationBudgetError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+    MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry,
+    MlxRamBudgetPhase, MlxRamBudgetSnapshot, SpeculativePrefillAdmission,
+    combined_persistent_growth_bytes, complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure,
+    fixed_forward_workspace_after_allocation_failure, persistent_context_restore_workspace_bytes,
     projected_active_memory_after_complete_expert_replacement,
-    required_complete_residency_activation_headroom_bytes,
-    should_retry_fixed_forward_after_expert_reclamation,
+    required_complete_residency_activation_headroom_bytes, retained_expert_payload_capacity_bytes,
+    safe_minimum_active_memory_ceiling_bytes, should_retry_fixed_forward_after_expert_reclamation,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model_family_runtime::ModelFamilyInferenceEngine;
@@ -146,10 +149,7 @@ pub use qwen3_5::{
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5SpeculativePrefillSelectionError,
     Qwen3_5TargetForwardOutput, Qwen3_5VisionModel, Qwen3_5VisionWeights, Qwen3_5Weights,
     RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
-    RequestDecoderStateStackCheckpoint, combined_target_and_additional_persistent_growth_bytes,
-    context_memory_admission_projected_active_memory_bytes,
-    persistent_prompt_cache_publication_advances_parent_chain,
-    persistent_prompt_cache_restore_temporary_workspace_bytes,
+    RequestDecoderStateStackCheckpoint, persistent_prompt_cache_publication_advances_parent_chain,
     qwen3_5_aggregate_speculative_prefill_attention_weights, qwen3_5_apply_top_p_mask,
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_full_attention_step,
     qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,

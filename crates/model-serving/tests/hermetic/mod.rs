@@ -3,6 +3,7 @@ mod artifact_validator;
 mod decoder_cache;
 mod engine_backed_worker;
 mod expert_memory_admission;
+mod memory_policy;
 mod mlx_ram_budget;
 mod model_family_runtime;
 mod model_serving_package_structure;

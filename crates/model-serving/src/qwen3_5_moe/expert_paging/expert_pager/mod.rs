@@ -9,10 +9,11 @@ use astronomical_runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
 use crate::expert_paging::{
-    ExpertManifestError, ExpertWeightPage, LiveMetalBudget, MemoryBudgetError,
-    QuantizedExpertLayerPlan, QuantizedExpertPageManifest, SafetensorsHeaderError,
+    ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
+    SafetensorsHeaderError,
 };
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::{MlxAllocationBudget, MlxAllocationBudgetError};
 
 /// Typed failures during expert streaming and resident-source handling.
 #[derive(Debug, Error)]
@@ -22,7 +23,7 @@ pub enum ExpertPagingError {
     #[error("safetensors header parsing failed: {0}")]
     SafetensorsHeader(#[from] SafetensorsHeaderError),
     #[error("memory budget exceeded: {0}")]
-    MemoryBudget(#[from] MemoryBudgetError),
+    MemoryBudget(#[from] MlxAllocationBudgetError),
     #[error("native MLX runtime error during expert loading: {0}")]
     NativeRuntime(#[from] MlxRuntimeError),
     #[error("invalid expert streaming plan: {description}")]
@@ -54,7 +55,7 @@ pub enum ExpertPagingError {
 #[derive(Debug)]
 pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
-    pub(super) memory_budget: LiveMetalBudget,
+    pub(super) memory_budget: MlxAllocationBudget,
     pub(super) resident_expert_source_files: Vec<(PathBuf, File)>,
 }
 
@@ -173,7 +174,7 @@ impl Qwen3_5ExpertPager {
         configured_mlx_memory_ceiling_bytes: u64,
     ) {
         self.memory_budget
-            .update_configured_cap_bytes(configured_mlx_memory_ceiling_bytes);
+            .update_active_memory_ceiling_bytes(configured_mlx_memory_ceiling_bytes);
     }
 
     /// Rust-streamed pages are operation-local, so adaptive admission has no
@@ -198,7 +199,7 @@ impl Qwen3_5ExpertPager {
     }
 
     pub(crate) fn configured_mlx_memory_ceiling_bytes(&self) -> u64 {
-        self.memory_budget.configured_cap_bytes()
+        self.memory_budget.active_memory_ceiling_bytes()
     }
 
     pub(crate) fn maximum_expert_page_bytes(&self) -> u64 {

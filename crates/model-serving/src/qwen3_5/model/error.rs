@@ -129,7 +129,7 @@ impl From<Qwen3_5ExecutionError> for InferenceEngineError {
             Qwen3_5ExecutionError::ExpertPaging(
                 crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
                     memory_budget_error
-                    @ crate::expert_paging::memory_budget::MemoryBudgetError::BudgetExceeded {
+                    @ crate::MlxAllocationBudgetError::Rejected {
                         ..
                     },
                 ),

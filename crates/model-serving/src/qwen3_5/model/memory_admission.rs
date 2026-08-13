@@ -1,6 +1,6 @@
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxMemorySnapshot};
 
-use crate::InferenceEngineError;
+use crate::{ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionDecision};
 
 use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5Model;
@@ -31,15 +31,49 @@ pub(crate) fn validate_context_memory_admission(
     let context_reservation_bytes = initial_projection.context_reservation_bytes;
     let maximum_expert_page_reservation_bytes =
         initial_projection.maximum_expert_page_reservation_bytes;
-    let initial_projected_active_memory_bytes = initial_projection.projected_active_memory_bytes;
     let configured_mlx_memory_limit_bytes = initial_projection.configured_mlx_memory_limit_bytes;
-    if initial_projected_active_memory_bytes <= configured_mlx_memory_limit_bytes {
-        return Ok(());
+    let initial_projected_active_memory_bytes = ContextAdmissionRequirements {
+        current_active_memory_bytes: initial_memory_snapshot.active_memory_bytes(),
+        context_growth_bytes: context_reservation_bytes,
+        expert_page_reservation_bytes: maximum_expert_page_reservation_bytes,
+        temporary_workspace_bytes: temporary_workspace_reservation_bytes,
+        retained_expert_payload_bytes: 0,
+        active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
+        complete_experts_are_resident: model.resident_expert_weights.is_some(),
     }
-    let context_reclamation_target_bytes =
-        initial_projected_active_memory_bytes.saturating_sub(configured_mlx_memory_limit_bytes);
+    .projected_active_memory_bytes()
+    .unwrap_or(usize::MAX);
     let expert_weight_memory_cache_statistics_before_reclamation =
         model.expert_weight_memory_cache_statistics();
+    let context_admission_decision = ContextAdmissionRequirements {
+        current_active_memory_bytes: initial_memory_snapshot.active_memory_bytes(),
+        context_growth_bytes: context_reservation_bytes,
+        expert_page_reservation_bytes: maximum_expert_page_reservation_bytes,
+        temporary_workspace_bytes: temporary_workspace_reservation_bytes,
+        retained_expert_payload_bytes: usize::try_from(
+            expert_weight_memory_cache_statistics_before_reclamation.resident_payload_byte_count,
+        )
+        .unwrap_or(usize::MAX),
+        active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
+        complete_experts_are_resident: model.resident_expert_weights.is_some(),
+    }
+    .decide();
+    let context_reclamation_target_bytes = match context_admission_decision {
+        MemoryAdmissionDecision::Admit => return Ok(()),
+        MemoryAdmissionDecision::Reclaim { required_bytes } => {
+            usize::try_from(required_bytes).unwrap_or(usize::MAX)
+        }
+        MemoryAdmissionDecision::DemoteCompleteResidency { .. } => {
+            return Err(invalid_request_error(
+                "generation context requires complete expert demotion before paged admission",
+            ));
+        }
+        MemoryAdmissionDecision::Reject { .. } => {
+            return Err(invalid_request_error(
+                "generation context exceeds available GPU wired memory",
+            ));
+        }
+    };
     if let Some(memory_snapshot_after_reclamation) =
         reclaim_retained_experts_for_request_memory_pressure(
             model,
@@ -57,17 +91,23 @@ pub(crate) fn validate_context_memory_admission(
                 );
         let reclamation_overshoot_bytes = actual_reclaimed_expert_payload_bytes
             .saturating_sub(u64::try_from(context_reclamation_target_bytes).unwrap_or(u64::MAX));
-        let projected_active_memory_bytes_after_reclamation =
-            context_memory_admission_projected_active_memory_bytes(
-                memory_snapshot_after_reclamation.active_memory_bytes(),
-                context_reservation_bytes,
-                maximum_expert_page_reservation_bytes,
+        let post_reclamation_requirements = ContextAdmissionRequirements {
+            current_active_memory_bytes: memory_snapshot_after_reclamation.active_memory_bytes(),
+            context_growth_bytes: context_reservation_bytes,
+            expert_page_reservation_bytes: maximum_expert_page_reservation_bytes,
+            temporary_workspace_bytes: temporary_workspace_reservation_bytes,
+            retained_expert_payload_bytes: usize::try_from(
+                expert_weight_memory_cache_statistics_after_reclamation.resident_payload_byte_count,
             )
-            .and_then(|projected_active_memory_bytes| {
-                projected_active_memory_bytes.checked_add(temporary_workspace_reservation_bytes)
-            })
-            .ok_or_else(|| invalid_request_error("generation memory projection overflowed"))?;
-        if projected_active_memory_bytes_after_reclamation <= configured_mlx_memory_limit_bytes {
+            .unwrap_or(usize::MAX),
+            active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
+            complete_experts_are_resident: false,
+        };
+        let projected_active_memory_bytes_after_reclamation = post_reclamation_requirements
+            .projected_active_memory_bytes()
+            .unwrap_or(usize::MAX);
+        let post_reclamation_decision = post_reclamation_requirements.decide();
+        if post_reclamation_decision == MemoryAdmissionDecision::Admit {
             tracing::info!(
                 context_token_count_requiring_reservation,
                 initial_active_memory_bytes = initial_memory_snapshot.active_memory_bytes(),
@@ -160,14 +200,30 @@ pub(crate) fn context_memory_admission_fits_without_expert_reclamation(
         temporary_workspace_reservation_bytes,
         additional_maximum_expert_page_reservation_bytes,
     )?;
-    Ok(projection.projected_active_memory_bytes <= projection.configured_mlx_memory_limit_bytes)
+    Ok(matches!(
+        ContextAdmissionRequirements {
+            current_active_memory_bytes: projection.memory_snapshot.active_memory_bytes(),
+            context_growth_bytes: projection.context_reservation_bytes,
+            expert_page_reservation_bytes: projection.maximum_expert_page_reservation_bytes,
+            temporary_workspace_bytes: temporary_workspace_reservation_bytes,
+            retained_expert_payload_bytes: usize::try_from(
+                model
+                    .expert_weight_memory_cache_statistics()
+                    .resident_payload_byte_count,
+            )
+            .unwrap_or(usize::MAX),
+            active_memory_ceiling_bytes: projection.configured_mlx_memory_limit_bytes,
+            complete_experts_are_resident: model.resident_expert_weights.is_some(),
+        }
+        .decide(),
+        MemoryAdmissionDecision::Admit
+    ))
 }
 
 struct ContextMemoryAdmissionProjection {
     memory_snapshot: MlxMemorySnapshot,
     context_reservation_bytes: usize,
     maximum_expert_page_reservation_bytes: usize,
-    projected_active_memory_bytes: usize,
     configured_mlx_memory_limit_bytes: usize,
 }
 
@@ -176,7 +232,7 @@ fn build_context_memory_admission_projection(
     memory_limits: MlxMemoryLimits,
     context_memory_reservation_bytes_per_token: usize,
     context_token_count_requiring_reservation: usize,
-    temporary_workspace_reservation_bytes: usize,
+    _temporary_workspace_reservation_bytes: usize,
     additional_maximum_expert_page_reservation_bytes: usize,
 ) -> Result<ContextMemoryAdmissionProjection, InferenceEngineError> {
     let memory_snapshot = model
@@ -203,56 +259,12 @@ fn build_context_memory_admission_projection(
             })?
             .checked_add(additional_maximum_expert_page_reservation_bytes)
             .ok_or_else(|| invalid_request_error("combined expert page reservation overflowed"))?;
-    let projected_active_memory_bytes = context_memory_admission_projected_active_memory_bytes(
-        memory_snapshot.active_memory_bytes(),
-        context_reservation_bytes,
-        maximum_expert_page_reservation_bytes,
-    )
-    .and_then(|projected_active_memory_bytes| {
-        projected_active_memory_bytes.checked_add(temporary_workspace_reservation_bytes)
-    })
-    .ok_or_else(|| invalid_request_error("generation memory projection overflowed"))?;
     Ok(ContextMemoryAdmissionProjection {
         memory_snapshot,
         context_reservation_bytes,
         maximum_expert_page_reservation_bytes,
-        projected_active_memory_bytes,
         configured_mlx_memory_limit_bytes: memory_limits.active_memory_limit_bytes(),
     })
-}
-
-/// Returns the duplicated full-attention key/value payload retained while
-/// persistent prompt-cache blocks are concatenated into live decoder state.
-#[must_use]
-pub fn persistent_prompt_cache_restore_temporary_workspace_bytes(
-    context_memory_reservation_bytes_per_token: usize,
-    restored_persistent_prompt_cache_token_count: usize,
-) -> Option<usize> {
-    context_memory_reservation_bytes_per_token
-        .checked_mul(restored_persistent_prompt_cache_token_count)
-}
-
-/// Projects request-active memory from exact persistent growth and expert-page ownership.
-#[must_use]
-pub fn context_memory_admission_projected_active_memory_bytes(
-    current_active_memory_bytes: usize,
-    context_reservation_bytes: usize,
-    maximum_expert_page_reservation_bytes: usize,
-) -> Option<usize> {
-    current_active_memory_bytes
-        .checked_add(context_reservation_bytes)?
-        .checked_add(maximum_expert_page_reservation_bytes)
-}
-
-/// Combines exact target and additional persistent growth without adding headroom.
-#[must_use]
-pub fn combined_target_and_additional_persistent_growth_bytes(
-    target_persistent_state_growth_bytes: usize,
-    additional_persistent_state_growth_bytes: usize,
-) -> Result<usize, InferenceEngineError> {
-    target_persistent_state_growth_bytes
-        .checked_add(additional_persistent_state_growth_bytes)
-        .ok_or_else(|| invalid_request_error("target and additional persistent growth overflowed"))
 }
 
 pub(crate) fn invalid_request_error(reason: impl Into<String>) -> InferenceEngineError {

@@ -20,15 +20,14 @@ use crate::qwen3_5::decoder::RequestDecoderStateStack;
 use crate::qwen3_5::model::adaptive_ram_growth_logging::{
     log_adaptive_ram_growth_admission_decision, log_adaptive_ram_growth_pressure,
 };
-use crate::qwen3_5::model::memory_admission::{
-    combined_target_and_additional_persistent_growth_bytes, invalid_request_error,
-};
+use crate::qwen3_5::model::memory_admission::invalid_request_error;
 use crate::qwen3_5_moe::{
     Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
 };
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthPhase, InferenceEngineError, PerformanceAttribution,
     PerformanceAttributionOutcome, PerformanceCounter, PerformanceOperation,
+    combined_persistent_growth_bytes,
 };
 use astronomical_ipc_protocol::RequestId;
 
@@ -225,10 +224,13 @@ impl Qwen3_5EngineState {
                 retained_expert_payload_bytes_before_growth,
             )
         };
-        let exact_context_growth_bytes = combined_target_and_additional_persistent_growth_bytes(
+        let exact_context_growth_bytes = combined_persistent_growth_bytes(
             target_persistent_state_growth_bytes,
             additional_persistent_state_growth_bytes,
-        )?;
+        )
+        .ok_or_else(|| {
+            invalid_request_error("target and additional persistent growth overflowed")
+        })?;
         // The first projection describes ownership exactly as sampled. It may be
         // replaced below after complete-resident demotion or paged-byte eviction.
         let mut first_forward_projection = self

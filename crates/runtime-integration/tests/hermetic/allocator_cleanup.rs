@@ -3,8 +3,9 @@ const MLX_RUNTIME_MEMORY_POLICY_SOURCE: &str =
 const QWEN_REQUEST_MEMORY_RELEASE_SOURCE: &str = include_str!(
     "../../../model-serving/src/qwen3_5/inference_execution/request_memory_release.rs"
 );
-const EXPERT_PAGING_MEMORY_BUDGET_SOURCE: &str =
-    include_str!("../../../model-serving/src/expert_paging/memory_budget.rs");
+const EXPERT_PAGING_LAYER_STREAMING_SOURCE: &str = include_str!(
+    "../../../model-serving/src/qwen3_5_moe/expert_paging/expert_pager/rust_layer_streaming.rs"
+);
 const QWEN_PREFILL_ADVANCE_SOURCE: &str =
     include_str!("../../../model-serving/src/qwen3_5/inference_execution/prefill_advance.rs");
 const QWEN_MTP_DECODE_SOURCE: &str =
@@ -60,19 +61,15 @@ fn should_use_synchronized_cleanup_when_releasing_request_memory() {
 
 #[test]
 fn should_synchronize_in_flight_expert_pages_before_reclaiming_allocator_memory() {
-    let live_budget_check_start = EXPERT_PAGING_MEMORY_BUDGET_SOURCE
-        .find("pub fn check(")
-        .expect("the live expert paging budget must retain its checked admission method");
-    let live_budget_snapshot_start = EXPERT_PAGING_MEMORY_BUDGET_SOURCE[live_budget_check_start..]
-        .find("pub fn snapshot(")
-        .map(|relative_snapshot_start| live_budget_check_start + relative_snapshot_start)
-        .expect("the live expert paging budget must retain its snapshot method");
-    let live_budget_check_source =
-        &EXPERT_PAGING_MEMORY_BUDGET_SOURCE[live_budget_check_start..live_budget_snapshot_start];
-
     assert!(
-        live_budget_check_source.contains("synchronize_gpu_stream_and_clear_allocator_cache"),
+        EXPERT_PAGING_LAYER_STREAMING_SOURCE
+            .contains("synchronize_gpu_stream_and_clear_allocator_cache"),
         "expert-page rejection recovery must synchronize in-flight GPU pages before clearing allocator memory"
+    );
+    assert!(
+        EXPERT_PAGING_LAYER_STREAMING_SOURCE
+            .contains("AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit"),
+        "expert paging must execute allocator cleanup only when memory policy requests it"
     );
 }
 
