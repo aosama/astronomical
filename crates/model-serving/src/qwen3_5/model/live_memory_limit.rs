@@ -8,7 +8,10 @@
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
-use crate::{InferenceEngineError, PerformanceAttribution, safe_minimum_mlx_memory_ceiling_bytes};
+use crate::{
+    InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
+    PerformanceAttribution, safe_minimum_mlx_memory_ceiling_bytes,
+};
 
 use super::Qwen3_5Model;
 
@@ -55,7 +58,28 @@ impl Qwen3_5Model {
                 )
             })?;
         let minimum_mlx_memory_ceiling_bytes = self.minimum_mlx_memory_ceiling_bytes()?;
-        if requested_mlx_memory_ceiling_bytes < minimum_mlx_memory_ceiling_bytes {
+        let current_active_memory_bytes = u64::try_from(
+            self.runtime
+                .memory_snapshot()
+                .map_err(super::super::inference_execution::qwen3_5_runtime_error)?
+                .active_memory_bytes(),
+        )
+        .map_err(|_| {
+            super::super::inference_execution::fatal_engine_error(
+                "current MLX active memory exceeds the u64 range",
+            )
+        })?;
+        let expert_statistics = self.expert_weight_memory_cache_statistics();
+        let ceiling_change_decision = MemoryCeilingChangeRequirements {
+            current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
+            requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
+            minimum_safe_ceiling_bytes: minimum_mlx_memory_ceiling_bytes,
+            current_active_memory_bytes,
+            retained_paged_expert_payload_bytes: expert_statistics.resident_payload_byte_count,
+            complete_experts_are_resident: self.resident_expert_weights.is_some(),
+        }
+        .decide();
+        if let MemoryCeilingChangeDecision::Reject { .. } = ceiling_change_decision {
             return Err(InferenceEngineError::MlxMemoryLimitRejected {
                 requested_mlx_memory_ceiling_bytes,
                 minimum_mlx_memory_ceiling_bytes,
@@ -79,8 +103,10 @@ impl Qwen3_5Model {
             requested_mlx_memory_ceiling_bytes_as_usize,
         )
         .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
-        let is_lowering_mlx_memory_ceiling =
-            requested_mlx_memory_ceiling_bytes < current_mlx_memory_ceiling_bytes;
+        let is_lowering_mlx_memory_ceiling = matches!(
+            ceiling_change_decision,
+            MemoryCeilingChangeDecision::Lower { .. }
+        );
         let previous_expert_paging_memory_ceiling_bytes = self
             .expert_pager
             .as_ref()
@@ -92,16 +118,22 @@ impl Qwen3_5Model {
             // reclamation operation reject its own temporary work.
             self.prepare_expert_residency_for_lower_mlx_memory_limit(
                 requested_mlx_memory_ceiling_bytes,
+                ceiling_change_decision,
             )?;
             let post_reclamation_mlx_memory_snapshot = self
                 .runtime
                 .synchronize_gpu_stream_and_clear_allocator_cache()
                 .and_then(|()| self.runtime.memory_snapshot())
                 .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
-            if u64::try_from(post_reclamation_mlx_memory_snapshot.active_memory_bytes())
-                .unwrap_or(u64::MAX)
-                > requested_mlx_memory_ceiling_bytes
-            {
+            let post_reclamation_active_memory_bytes = u64::try_from(
+                post_reclamation_mlx_memory_snapshot.active_memory_bytes(),
+            )
+            .map_err(|_| {
+                super::super::inference_execution::fatal_engine_error(
+                    "post-reclamation MLX active memory exceeds the u64 range",
+                )
+            })?;
+            if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
                 self.restore_expert_paging_memory_ceiling(
                     previous_expert_paging_memory_ceiling_bytes,
                 )?;
@@ -143,16 +175,20 @@ impl Qwen3_5Model {
     fn prepare_expert_residency_for_lower_mlx_memory_limit(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
+        ceiling_change_decision: MemoryCeilingChangeDecision,
     ) -> Result<(), InferenceEngineError> {
-        let current_active_memory_bytes = self
-            .runtime
-            .memory_snapshot()
-            .map_err(super::super::inference_execution::qwen3_5_runtime_error)?
-            .active_memory_bytes();
-        let resident_owner_exceeds_requested_ceiling = self.resident_expert_weights.is_some()
-            && u64::try_from(current_active_memory_bytes).unwrap_or(u64::MAX)
-                > requested_mlx_memory_ceiling_bytes;
-        if resident_owner_exceeds_requested_ceiling {
+        let (must_demote_complete_residency, retained_paged_expert_reclamation_bytes) =
+            match ceiling_change_decision {
+                MemoryCeilingChangeDecision::Lower {
+                    must_demote_complete_residency,
+                    retained_paged_expert_reclamation_bytes,
+                } => (
+                    must_demote_complete_residency,
+                    retained_paged_expert_reclamation_bytes,
+                ),
+                _ => (false, 0),
+            };
+        if must_demote_complete_residency {
             let mut disabled_performance_attribution = PerformanceAttribution::disabled();
             self.demote_resident_experts_to_paging(
                 Qwen3_5ExpertResidencyTransitionReason::CeilingLower,
@@ -163,12 +199,9 @@ impl Qwen3_5Model {
         if self.resident_expert_weights.is_none()
             && let Some(retained_expert_layers) = self.retained_expert_layers.as_ref()
         {
-            let reclamation_target_bytes = u64::try_from(current_active_memory_bytes)
-                .unwrap_or(u64::MAX)
-                .saturating_sub(requested_mlx_memory_ceiling_bytes);
             retained_expert_layers
                 .borrow_mut()
-                .limit_for_request_pressure(reclamation_target_bytes);
+                .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);
         }
         self.mlx_ram_budget
             .borrow_mut()

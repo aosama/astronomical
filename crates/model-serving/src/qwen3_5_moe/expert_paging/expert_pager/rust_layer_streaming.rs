@@ -10,7 +10,9 @@
 //! layer, while one-token decode passes only router-selected top-K IDs. Neither
 //! shape changes quantization, expert order, or source precision.
 
-use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use crate::{
+    AllocationAdmissionDecision, PerformanceAttribution, PerformanceCounter, PerformanceOperation,
+};
 
 use super::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
 use crate::expert_paging::{
@@ -33,20 +35,42 @@ impl Qwen3_5ExpertPager {
         // manifest from it is pure planning and performs no model-payload I/O.
         let layer_plan = self.layer_plan(layer_index)?;
         let page_manifest = build_quantized_expert_page_manifest_from_plan(layer_plan, expert_ids)?;
-        // Admission must happen before opening/loading source ranges. It reserves
-        // the exact payload against current active memory and the forward reserve
-        // published by adaptive admission. Loading first would discover pressure
-        // only after spending I/O and constructing arrays that cannot be used.
-        performance_attribution.measure_operation(
+        // Admission must happen before opening/loading source ranges. It checks
+        // the exact payload against current active memory and the shared ceiling;
+        // forward admission has already reclaimed experts for persistent and
+        // transient growth. Loading first would spend I/O on an unusable page.
+        let allocation_admission_decision = performance_attribution.measure_operation(
             PerformanceOperation::MemoryAdmissionSnapshot,
             |_performance_attribution| {
-                self.memory_budget.check(
+                self.memory_budget.require_admission(
                     runtime,
                     &format!("rust_streamed_expert_layer_{layer_index}"),
                     page_manifest.payload_byte_count,
                 )
             },
         )?;
+        if allocation_admission_decision
+            == AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit
+        {
+            // Policy recommends cleanup; this paging owner executes the mechanism
+            // and asks policy to re-evaluate the fresh counters before loading.
+            performance_attribution.measure_operation(
+                PerformanceOperation::MlxAllocatorCacheCleanup,
+                |_performance_attribution| {
+                    runtime.synchronize_gpu_stream_and_clear_allocator_cache()
+                },
+            )?;
+            performance_attribution.measure_operation(
+                PerformanceOperation::MemoryAdmissionSnapshot,
+                |_performance_attribution| {
+                    self.memory_budget.require_admission(
+                        runtime,
+                        &format!("rust_streamed_expert_layer_{layer_index}_after_cleanup"),
+                        page_manifest.payload_byte_count,
+                    )
+                },
+            )?;
+        }
         let mut loaded_tensors = performance_attribution
             .measure_operation(
                 PerformanceOperation::RustExpertStreamingLayerPreparation,

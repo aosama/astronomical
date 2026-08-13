@@ -8,7 +8,8 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
-use crate::expert_paging::{LiveMetalBudget, QuantizationMode, QuantizedExpertLayerPlan};
+use crate::MlxAllocationBudget;
+use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};
 use crate::qwen3_5::{ModelWeightStorage, Qwen3_5Config};
 
 impl Qwen3_5ExpertPager {
@@ -80,7 +81,7 @@ impl Qwen3_5ExpertPager {
                 Ok(maximum_expert_page_bytes.max(layer_plan.complete_expert_payload_byte_count()?))
             },
         )?;
-        let memory_budget = LiveMetalBudget::new(
+        let memory_budget = MlxAllocationBudget::new(
             maximum_expert_page_bytes,
             configured_mlx_memory_cap_bytes as u64,
         );

@@ -56,7 +56,6 @@ mod speculative_prefill_failure_diagnostics;
 // MLX input assembly and exact memory admission for the drafter phase.
 mod speculative_prefill_gpu_input;
 mod speculative_prefill_memory_admission;
-mod speculative_prefill_memory_admission_policy;
 // Startup/request-scoped drafter validation, loading, and policy activation.
 mod speculative_prefill_model_loading;
 mod speculative_prefill_policy_activation;

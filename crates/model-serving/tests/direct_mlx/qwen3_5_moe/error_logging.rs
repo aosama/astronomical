@@ -1,17 +1,19 @@
 use astronomical_model_serving::{
-    ExpertPagingError, InferenceEngineError, MemoryBudgetError, Qwen3_5ExecutionError,
+    ExpertPagingError, InferenceEngineError, MemoryBoundary, MlxAllocationBudgetError,
+    Qwen3_5ExecutionError,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
 
 #[test]
 fn should_translate_expert_page_memory_budget_rejection_to_an_invalid_request() {
     let qwen3_5_execution_error = Qwen3_5ExecutionError::from(ExpertPagingError::MemoryBudget(
-        MemoryBudgetError::BudgetExceeded {
+        MlxAllocationBudgetError::Rejected {
             stage: "expert_page_layer_20".to_owned(),
-            projected_bytes: 40_749_683_042,
-            active_bytes: 19_944_999_178,
-            allocator_cache_bytes: 15_874_672_728,
-            configured_cap_bytes: 40_200_896_512,
+            boundary: MemoryBoundary::AllocationProjection,
+            shortfall_bytes: 548_786_530,
+            active_memory_bytes: 19_944_999_178,
+            pending_allocation_bytes: 20_804_683_864,
+            active_memory_ceiling_bytes: 40_200_896_512,
         },
     ));
 
@@ -27,7 +29,7 @@ fn should_translate_expert_page_memory_budget_rejection_to_an_invalid_request() 
 #[test]
 fn should_keep_expert_page_memory_counter_failure_fatal() {
     let qwen3_5_execution_error = Qwen3_5ExecutionError::from(ExpertPagingError::MemoryBudget(
-        MemoryBudgetError::MlxRuntime(MlxRuntimeError::RuntimeOperation {
+        MlxAllocationBudgetError::MlxRuntime(MlxRuntimeError::RuntimeOperation {
             operation: "read MLX memory counters",
             description: "simulated counter failure".to_owned(),
         }),

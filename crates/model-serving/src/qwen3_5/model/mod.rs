@@ -79,12 +79,6 @@ pub use gated_delta_boundary_checkpoints::{
 #[cfg(feature = "direct-mlx")]
 pub use gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 #[cfg(feature = "direct-mlx")]
-pub use memory_admission::{
-    combined_target_and_additional_persistent_growth_bytes,
-    context_memory_admission_projected_active_memory_bytes,
-    persistent_prompt_cache_restore_temporary_workspace_bytes,
-};
-#[cfg(feature = "direct-mlx")]
 pub use model::Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub use model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;

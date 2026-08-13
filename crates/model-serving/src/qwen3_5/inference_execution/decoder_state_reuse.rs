@@ -15,11 +15,10 @@ use astronomical_ipc_protocol::{
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
-    PersistentPromptCachePrefixLookup,
+    PersistentPromptCachePrefixLookup, persistent_context_restore_workspace_bytes,
 };
 
 use super::super::RequestDecoderStateStack;
-use super::super::model::memory_admission::persistent_prompt_cache_restore_temporary_workspace_bytes;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 /// The cache-specific portion of a newly admitted request's starting state.
 ///
@@ -117,7 +116,7 @@ impl Qwen3_5EngineState {
         // live decoder state at the same time. Admission reserves that overlap
         // before the first MLX-backed file is loaded.
         let persistent_prompt_cache_restore_temporary_workspace_bytes =
-            persistent_prompt_cache_restore_temporary_workspace_bytes(
+            persistent_context_restore_workspace_bytes(
                 self.context_memory_reservation_bytes_per_token,
                 restored_token_count,
             )
