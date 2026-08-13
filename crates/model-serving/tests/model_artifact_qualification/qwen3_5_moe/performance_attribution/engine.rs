@@ -14,6 +14,22 @@ pub(crate) fn create_attributed_engine(
     mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
     fixed_prefill_chunck_tokens: u32,
 ) -> (Qwen3_5Engine, Vec<u32>) {
+    create_attributed_engine_with_ssd_streaming_prefill(
+        model_directory,
+        performance_attribution_log_path,
+        mlx_memory_limits,
+        fixed_prefill_chunck_tokens,
+        None,
+    )
+}
+
+pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
+    model_directory: &Path,
+    performance_attribution_log_path: &Path,
+    mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
+    fixed_prefill_chunck_tokens: u32,
+    fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
+) -> (Qwen3_5Engine, Vec<u32>) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the Qwen3.6 OptiQ artifact should validate before benchmark loading");
@@ -29,8 +45,11 @@ pub(crate) fn create_attributed_engine(
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(fixed_prefill_chunck_tokens)
-            .expect("the benchmark prefill chunck size should be valid"),
+        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens_with_ssd_streaming(
+            fixed_prefill_chunck_tokens,
+            fixed_ssd_streaming_prefill_chunck_tokens,
+        )
+        .expect("the benchmark prefill chunck size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),

@@ -1,7 +1,7 @@
 //! Direct qualification of the optional MTP layer inside the complete owner.
 //!
 //! Ordinary target generation cannot prove that the appended MTP layer uses
-//! resident arrays. This focused forward compares native pager counters before
+//! resident arrays. This focused forward compares Rust pager counters before
 //! and after one real draft so an accidental MTP paging fallback is observable.
 
 use std::time::Duration;
@@ -57,7 +57,7 @@ async fn should_execute_depth_one_mtp_with_complete_resident_experts() {
         let native_pager_statistics_before_mtp_forward = qwen3_5_engine
             .expert_weight_memory_cache_statistics_for_tests()
             .await
-            .expect("resident MTP should expose native pager statistics");
+            .expect("resident MTP should expose Rust pager statistics");
 
         let romeo_and_juliet_token_id = prompt_token_ids[prompt_token_ids.len() / 2];
         eprintln!("[resident-mtp 2/5] status=progress phase=mtp_head_forward");
@@ -71,7 +71,7 @@ async fn should_execute_depth_one_mtp_with_complete_resident_experts() {
         let native_pager_statistics_after_mtp_forward = qwen3_5_engine
             .expert_weight_memory_cache_statistics_for_tests()
             .await
-            .expect("resident MTP should retain native pager statistics");
+            .expect("resident MTP should retain Rust pager statistics");
 
         assert_eq!(
             qwen3_5_engine
@@ -83,7 +83,7 @@ async fn should_execute_depth_one_mtp_with_complete_resident_experts() {
         assert_eq!(
             native_pager_statistics_after_mtp_forward,
             native_pager_statistics_before_mtp_forward,
-            "resident target and MTP execution must not prepare or load native expert pages"
+            "resident target and MTP execution must not prepare or load streamed expert pages"
         );
         eprintln!("[resident-mtp 5/5] status=success");
     })

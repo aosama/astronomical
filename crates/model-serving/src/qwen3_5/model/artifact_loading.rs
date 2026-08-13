@@ -1,5 +1,6 @@
 //! Artifact binding and startup-only MLX resource construction for Qwen3.5.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -7,8 +8,13 @@ use astronomical_runtime_integration::{
     MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime,
 };
 
-use crate::qwen3_5_moe::{Qwen3_5ExpertPager, qwen3_5_moe_sorted_expert_weighted_sum_kernel};
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::expert_paging::RetainedExpertLayerCache;
+use crate::qwen3_5_moe::{
+    Qwen3_5ExpertPager, Qwen3_5RetainedExpertLayer, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+};
+use crate::{
+    MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
+};
 
 use super::model::Qwen3_5Model;
 use super::{
@@ -149,9 +155,9 @@ impl Qwen3_5Model {
                 Ok((weights, vision_model, mtp_weights))
             },
         )?;
-        let (expert_pager, sorted_expert_weighted_sum_kernel) =
+        let (expert_pager, retained_expert_layers, sorted_expert_weighted_sum_kernel) =
             match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (None, None),
+                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
                 Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
                     let tensor_name_to_shard_file_name: HashMap<String, String> = shard_index
                         .language_tensor_name_to_shard_file_name()
@@ -179,7 +185,15 @@ impl Qwen3_5Model {
                     )?;
                     let sorted_expert_weighted_sum_kernel =
                         qwen3_5_moe_sorted_expert_weighted_sum_kernel()?;
-                    (Some(expert_pager), Some(sorted_expert_weighted_sum_kernel))
+                    let retained_expert_layers =
+                        RefCell::new(RetainedExpertLayerCache::<Qwen3_5RetainedExpertLayer>::new(
+                            expert_pager.layer_count(),
+                        ));
+                    (
+                        Some(expert_pager),
+                        Some(retained_expert_layers),
+                        Some(sorted_expert_weighted_sum_kernel),
+                    )
                 }
             };
         // Cache geometry cannot be finalized before weights and sparse plans are
@@ -227,6 +241,44 @@ impl Qwen3_5Model {
         let inverse_square_root_linear_head_dimension_scale = runtime
             .array_from_f32(&[linear_head_dimension.sqrt().recip()], &[])
             .and_then(|float32_scale| runtime.astype(&float32_scale, MlxDtype::BFloat16))?;
+        let model_core_payload_bytes = weights
+            .total_payload_bytes()
+            .saturating_add(
+                mtp_weights
+                    .as_ref()
+                    .map_or(0, |mtp_weights| mtp_weights.payload_byte_count()),
+            )
+            .saturating_add(
+                vision_model
+                    .as_ref()
+                    .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
+            );
+        let complete_expert_payload_bytes = match expert_pager.as_ref() {
+            Some(expert_pager) => expert_pager.complete_expert_payload_byte_count().map_err(
+                |_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "complete expert payload byte count overflowed during model load",
+                },
+            )?,
+            None => 0,
+        };
+        let largest_complete_expert_layer_bytes = expert_pager
+            .as_ref()
+            .map_or(0, Qwen3_5ExpertPager::maximum_expert_page_bytes);
+        let mlx_ram_budget = MlxRamBudget::new(
+            u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "MLX active memory ceiling exceeds the u64 range",
+                }
+            })?,
+            MlxRamBudgetModelGeometry {
+                model_core_payload_bytes,
+                complete_expert_payload_bytes,
+                largest_complete_expert_layer_bytes,
+            },
+        )
+        .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            description: "MLX RAM budget requires a positive active-memory ceiling",
+        })?;
         Ok(Self {
             runtime,
             config,
@@ -238,6 +290,8 @@ impl Qwen3_5Model {
             // Publication occurs only after core materialization and a fresh idle
             // memory sample in the engine loading path.
             resident_expert_weights: None,
+            retained_expert_layers,
+            mlx_ram_budget: RefCell::new(mlx_ram_budget),
             should_defer_next_request_finalization_resident_promotion: false,
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
@@ -248,6 +302,8 @@ impl Qwen3_5Model {
             chunking,
             inverse_linear_head_dimension_scale,
             inverse_square_root_linear_head_dimension_scale,
+            paged_forward_missing_route_collector:
+                crate::qwen3_5_moe::PagedForwardMissingRouteCollector::default(),
         })
     }
 }

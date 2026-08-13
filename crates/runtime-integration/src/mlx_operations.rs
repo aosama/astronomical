@@ -264,6 +264,17 @@ impl MlxRuntime {
         )
     }
 
+    /// Compares two broadcast-compatible arrays elementwise for strict less-than.
+    pub fn less(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+        self.output_array(
+            "compare MLX arrays for strict less-than",
+            |output, stream| {
+                // SAFETY: Inputs and stream are live and output is uniquely writable.
+                unsafe { raw::mlx_less(output, left.raw(), right.raw(), stream) }
+            },
+        )
+    }
+
     /// Computes the cumulative sum along one axis.
     pub fn cumsum(
         &self,

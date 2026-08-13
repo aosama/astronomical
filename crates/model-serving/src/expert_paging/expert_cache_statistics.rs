@@ -7,8 +7,6 @@ pub struct ExpertWeightMemoryCacheStatistics {
     pub resident_payload_byte_count: u64,
     pub maximum_resident_payload_byte_count: u64,
     pub eviction_count: u64,
-    pub cache_hit_count: u64,
-    pub cache_miss_count: u64,
     pub disk_page_load_count: u64,
     pub disk_batch_load_count: u64,
 }

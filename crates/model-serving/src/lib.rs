@@ -41,11 +41,12 @@ pub use deepseek_v4::{
 pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{
-    ExpertManifestError, ExpertWeightMemoryCacheStatistics, LiveMetalBudget, MemoryBudgetError,
-    MemoryBudgetSnapshot, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
-    QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,
-    QuantizedTensorSource, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
-    TensorHeaderEntry, automatic_expert_weight_memory_cache_maximum_size_bytes,
+    ExpertManifestError, ExpertWeightMemoryCacheStatistics, ExpertWeightPage, LiveMetalBudget,
+    MemoryBudgetError, MemoryBudgetSnapshot, QuantizationMode, QuantizedExpertLayerPlan,
+    QuantizedExpertPageManifest, QuantizedExpertShardManifest, QuantizedExpertSourceInterval,
+    QuantizedExpertTensorRange, QuantizedTensorSource, RetainedExpertLayerCache, SafetensorsDtype,
+    SafetensorsHeader, SafetensorsHeaderError, TensorHeaderEntry,
+    automatic_expert_weight_memory_cache_maximum_size_bytes,
     build_quantized_expert_page_manifest_from_plan, maximum_possible_expert_route_payload_bytes,
     parse_safetensors_header, validate_expert_ids, validate_quantization_contract,
     validate_source_intervals, validate_virtual_intervals,
@@ -58,8 +59,16 @@ pub use inference_engine::{
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection, MlxActiveMemoryBreakdown,
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+    AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
+    ExpertMemoryAdmissionError, ExpertRetentionReclamationPlan, MlxActiveMemoryBreakdown,
+    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetError,
+    MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetPhase, MlxRamBudgetSnapshot,
+    complete_residency_exceeds_ceiling_with_activation_headroom,
+    expert_reclamation_bytes_to_fit_fixed_forward,
+    fixed_forward_workspace_after_allocation_failure,
+    projected_active_memory_after_complete_expert_replacement,
+    required_complete_residency_activation_headroom_bytes,
+    should_retry_fixed_forward_after_expert_reclamation,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model_family_runtime::ModelFamilyInferenceEngine;

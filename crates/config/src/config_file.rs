@@ -58,6 +58,12 @@ pub(crate) struct ChunkingConfigFile {
     pub(crate) prefill_size_optimizer_enabled: Option<bool>,
     /// Required prompt-processing chunk length when optimization is disabled.
     pub(crate) fixed_prefill_tokens: Option<u32>,
+    /// Fixed prompt-processing chunk length while sparse experts stream from storage.
+    ///
+    /// Omitted values keep the complete-resident fixed size for every residency
+    /// mode. A smaller positive value shortens each forward only when experts
+    /// are not fully retained in active memory.
+    pub(crate) fixed_ssd_streaming_prefill_tokens: Option<u32>,
     /// Strictly increasing token lengths available to the adaptive optimizer.
     pub(crate) optimizer_prefill_token_candidates: Option<Vec<u32>>,
     /// Append-only attention capacity added by each storage growth operation.

@@ -336,10 +336,12 @@ fn configured_prefill_chunck_sizer(
     {
         PrefillChunckSizingPolicy::Fixed {
             fixed_prefill_chunck_tokens,
-        } => {
-            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(fixed_prefill_chunck_tokens)
-                .expect("the configured fixed prefill chunk size should be valid")
-        }
+            fixed_ssd_streaming_prefill_chunck_tokens,
+        } => Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens_with_ssd_streaming(
+            fixed_prefill_chunck_tokens,
+            fixed_ssd_streaming_prefill_chunck_tokens,
+        )
+        .expect("the configured fixed prefill chunk size should be valid"),
         PrefillChunckSizingPolicy::Optimized {
             optimizer_prefill_chunck_token_candidates,
         } => {

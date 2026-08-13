@@ -2,7 +2,7 @@
 
 use astronomical_runtime_integration::{MlxArray, MlxDtype};
 
-use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
+use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::forward_contract::{validate_forward_input, validate_generated_token_forward};
@@ -32,21 +32,31 @@ impl Qwen3_5Model {
         image_pad_token_id: u32,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<usize, Qwen3_5ExecutionError> {
-        let consumed_visual_embedding_count = self.build_visual_prefill_graph(
-            chunk_token_ids,
-            starting_position_tokens,
-            visual_embeddings,
-            starting_visual_embedding_index,
-            request_decoder_state,
-            image_pad_token_id,
-            None,
-            performance_attribution,
-        )?;
-        self.evaluate_decoder_state_with_performance_attribution(
-            request_decoder_state,
-            performance_attribution,
-        )?;
-        Ok(consumed_visual_embedding_count)
+        let maximum_paged_route_replay_attempts = 1;
+        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+            let consumed_visual_embedding_count = self.build_visual_prefill_graph(
+                chunk_token_ids,
+                starting_position_tokens,
+                visual_embeddings,
+                starting_visual_embedding_index,
+                request_decoder_state,
+                image_pad_token_id,
+                None,
+                performance_attribution,
+            )?;
+            match self.evaluate_decoder_state_for_paged_route_resolution(
+                request_decoder_state,
+                None,
+                performance_attribution,
+            )? {
+                PagedRouteValidationOutcome::CompleteHit => {
+                    return Ok(consumed_visual_embedding_count);
+                }
+            }
+        }
+        Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "paged route replay exceeded the sparse-layer safety bound",
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -118,30 +128,39 @@ impl Qwen3_5Model {
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
-        let mut boundary_checkpoint_collector =
-            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
-                completed_prefill_chunck_tokens,
-                self.decoder_cache_layout.boundary_tensor_count(),
-                checkpoint_interval_token_count,
+        let maximum_paged_route_replay_attempts = 1;
+        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+            let mut boundary_checkpoint_collector =
+                Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+                    completed_prefill_chunck_tokens.clone(),
+                    self.decoder_cache_layout.boundary_tensor_count(),
+                    checkpoint_interval_token_count,
+                )?;
+            let consumed_visual_embedding_count = self.build_visual_prefill_graph(
+                chunk_token_ids,
+                starting_position_tokens,
+                visual_embeddings,
+                starting_visual_embedding_index,
+                request_decoder_state,
+                image_pad_token_id,
+                Some(&mut boundary_checkpoint_collector),
+                performance_attribution,
             )?;
-        let consumed_visual_embedding_count = self.build_visual_prefill_graph(
-            chunk_token_ids,
-            starting_position_tokens,
-            visual_embeddings,
-            starting_visual_embedding_index,
-            request_decoder_state,
-            image_pad_token_id,
-            Some(&mut boundary_checkpoint_collector),
-            performance_attribution,
-        )?;
-        self.evaluate_decoder_state_and_boundary_checkpoints_with_performance_attribution(
-            request_decoder_state,
-            &boundary_checkpoint_collector,
-            performance_attribution,
-        )?;
-        Ok(Qwen3_5BoundaryCheckpointPrefillOutcome {
-            consumed_visual_embedding_count,
-            boundary_checkpoints: boundary_checkpoint_collector.complete()?,
+            match self.evaluate_decoder_state_for_paged_route_resolution(
+                request_decoder_state,
+                Some(&boundary_checkpoint_collector),
+                performance_attribution,
+            )? {
+                PagedRouteValidationOutcome::CompleteHit => {
+                    return Ok(Qwen3_5BoundaryCheckpointPrefillOutcome {
+                        consumed_visual_embedding_count,
+                        boundary_checkpoints: boundary_checkpoint_collector.complete()?,
+                    });
+                }
+            }
+        }
+        Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "paged route replay exceeded the sparse-layer safety bound",
         })
     }
 
@@ -152,16 +171,38 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        drop(self.build_forward_chunk_with_performance_attribution(
-            token_ids,
-            starting_position_tokens,
-            request_decoder_state,
-            performance_attribution,
-        )?);
-        self.evaluate_decoder_state_with_performance_attribution(
-            request_decoder_state,
-            performance_attribution,
-        )
+        let signed_token_ids = token_ids
+            .iter()
+            .map(|token_id| {
+                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "token ID exceeds the MLX int32 range",
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let token_indices = self
+            .runtime
+            .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?;
+        let maximum_paged_route_replay_attempts = 1;
+        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+            drop(self.build_forward_graph(
+                &token_indices,
+                token_ids.len() as i32,
+                starting_position_tokens,
+                request_decoder_state,
+                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                performance_attribution,
+            )?);
+            match self.evaluate_decoder_state_for_paged_route_resolution(
+                request_decoder_state,
+                None,
+                performance_attribution,
+            )? {
+                PagedRouteValidationOutcome::CompleteHit => return Ok(()),
+            }
+        }
+        Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "paged route replay exceeded the sparse-layer safety bound",
+        })
     }
 
     pub(crate) fn prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
@@ -173,28 +214,37 @@ impl Qwen3_5Model {
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
-        let mut boundary_checkpoint_collector =
-            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
-                completed_prefill_chunck_tokens,
-                self.decoder_cache_layout.boundary_tensor_count(),
-                checkpoint_interval_token_count,
-            )?;
-        drop(self.build_target_forward_graph(
-            token_ids,
-            starting_position_tokens,
-            request_decoder_state,
-            Some(&mut boundary_checkpoint_collector),
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
-            performance_attribution,
-        )?);
-        self.evaluate_decoder_state_and_boundary_checkpoints_with_performance_attribution(
-            request_decoder_state,
-            &boundary_checkpoint_collector,
-            performance_attribution,
-        )?;
-        Ok(Qwen3_5BoundaryCheckpointPrefillOutcome {
-            consumed_visual_embedding_count: 0,
-            boundary_checkpoints: boundary_checkpoint_collector.complete()?,
+        let maximum_paged_route_replay_attempts = 1;
+        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+            let mut boundary_checkpoint_collector =
+                Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+                    completed_prefill_chunck_tokens.clone(),
+                    self.decoder_cache_layout.boundary_tensor_count(),
+                    checkpoint_interval_token_count,
+                )?;
+            drop(self.build_target_forward_graph(
+                token_ids,
+                starting_position_tokens,
+                request_decoder_state,
+                Some(&mut boundary_checkpoint_collector),
+                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                performance_attribution,
+            )?);
+            match self.evaluate_decoder_state_for_paged_route_resolution(
+                request_decoder_state,
+                Some(&boundary_checkpoint_collector),
+                performance_attribution,
+            )? {
+                PagedRouteValidationOutcome::CompleteHit => {
+                    return Ok(Qwen3_5BoundaryCheckpointPrefillOutcome {
+                        consumed_visual_embedding_count: 0,
+                        boundary_checkpoints: boundary_checkpoint_collector.complete()?,
+                    });
+                }
+            }
+        }
+        Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "paged route replay exceeded the sparse-layer safety bound",
         })
     }
 
@@ -205,14 +255,38 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let final_logits = self.build_forward_chunk_with_performance_attribution(
-            token_ids,
-            starting_position_tokens,
-            request_decoder_state,
-            performance_attribution,
-        )?;
-        self.evaluate_forward_state(&final_logits, request_decoder_state)?;
-        Ok(final_logits)
+        let signed_token_ids = token_ids
+            .iter()
+            .map(|token_id| {
+                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "token ID exceeds the MLX int32 range",
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let token_indices = self
+            .runtime
+            .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?;
+        let maximum_paged_route_replay_attempts = 1;
+        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+            let final_logits = self.build_forward_graph(
+                &token_indices,
+                token_ids.len() as i32,
+                starting_position_tokens,
+                request_decoder_state,
+                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                performance_attribution,
+            )?;
+            match self.evaluate_forward_state_with_performance_attribution(
+                &final_logits,
+                request_decoder_state,
+                performance_attribution,
+            )? {
+                PagedRouteValidationOutcome::CompleteHit => return Ok(final_logits),
+            }
+        }
+        Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "paged route replay exceeded the sparse-layer safety bound",
+        })
     }
 
     pub(crate) fn forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
@@ -239,34 +313,46 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
         synchronization_operation: Option<PerformanceOperation>,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        let target_forward_output = self.build_target_forward_graph(
-            token_ids,
-            starting_position_tokens,
-            request_decoder_state,
-            None,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
-            performance_attribution,
-        )?;
-        let synchronize_target_forward_output =
-            |_performance_attribution: &mut PerformanceAttribution| -> Result<
-                (),
-                Qwen3_5ExecutionError,
-            > {
-                self.evaluate_forward_state(
-                    target_forward_output.final_logits(),
-                    request_decoder_state,
-                )?;
-                self.runtime.evaluate_arrays(&[
-                    target_forward_output.pre_final_normalization_hidden_states(),
-                ])?;
-                Ok(())
+        let maximum_paged_route_replay_attempts = 1;
+        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+            let target_forward_output = self.build_target_forward_graph(
+                token_ids,
+                starting_position_tokens,
+                request_decoder_state,
+                None,
+                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                performance_attribution,
+            )?;
+            let synchronize_target_forward_output =
+                |performance_attribution: &mut PerformanceAttribution| -> Result<
+                    PagedRouteValidationOutcome,
+                    Qwen3_5ExecutionError,
+                > {
+                    let mut evaluation_arrays = super::forward_contract::forward_state_arrays(
+                        target_forward_output.final_logits(),
+                        request_decoder_state,
+                    )?;
+                    evaluation_arrays
+                        .push(target_forward_output.pre_final_normalization_hidden_states());
+                    self.evaluate_arrays_resolving_paged_routes(
+                        &evaluation_arrays,
+                        performance_attribution,
+                    )
+                };
+            let paged_route_validation_outcome = match synchronization_operation {
+                Some(synchronization_operation) => performance_attribution.measure_operation(
+                    synchronization_operation,
+                    synchronize_target_forward_output,
+                )?,
+                None => synchronize_target_forward_output(performance_attribution)?,
             };
-        match synchronization_operation {
-            Some(synchronization_operation) => performance_attribution
-                .measure_operation(synchronization_operation, synchronize_target_forward_output)?,
-            None => synchronize_target_forward_output(performance_attribution)?,
+            match paged_route_validation_outcome {
+                PagedRouteValidationOutcome::CompleteHit => return Ok(target_forward_output),
+            }
         }
-        Ok(target_forward_output)
+        Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "paged route replay exceeded the sparse-layer safety bound",
+        })
     }
 
     pub(crate) fn build_forward_chunk_with_performance_attribution(
@@ -276,8 +362,20 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        self.build_forward_chunk_with_paged_prefill_execution_mode_and_performance_attribution(
-            token_ids,
+        let signed_token_ids = token_ids
+            .iter()
+            .map(|token_id| {
+                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "token ID exceeds the MLX int32 range",
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let token_indices = self
+            .runtime
+            .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?;
+        self.build_forward_graph(
+            &token_indices,
+            token_ids.len() as i32,
             starting_position_tokens,
             request_decoder_state,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
@@ -300,6 +398,32 @@ impl Qwen3_5Model {
             self.config.maximum_position_count(),
         )?;
         let token_indices = self.runtime.astype(generated_token, MlxDtype::Int32)?;
+        // Paged decode must resolve deferred missing-route bitmaps before the
+        // generated token becomes request-visible. Use a synchronous completion
+        // root with exact replay instead of decode-ahead async evaluation alone.
+        if self.sparse_experts_are_paged() {
+            let maximum_paged_route_replay_attempts = 1;
+            for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+                let next_logits = self.build_forward_graph(
+                    &token_indices,
+                    1,
+                    starting_position_tokens,
+                    request_decoder_state,
+                    Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                    performance_attribution,
+                )?;
+                match self.evaluate_forward_state_with_performance_attribution(
+                    &next_logits,
+                    request_decoder_state,
+                    performance_attribution,
+                )? {
+                    PagedRouteValidationOutcome::CompleteHit => return Ok(next_logits),
+                }
+            }
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "paged route replay exceeded the sparse-layer safety bound",
+            });
+        }
         self.build_forward_graph(
             &token_indices,
             1,

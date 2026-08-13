@@ -5,12 +5,28 @@
 //! until a complete candidate exists. Demotion follows synchronize -> unpublish
 //! -> drop -> clear allocator -> resume paging. These orders prevent lazy MLX
 //! work from retaining released arrays and make every failure state usable.
+//!
+//! The promotion admission formula is deliberately replacement-aware:
+//!
+//! `projected active = current active - retained paged experts + complete experts`
+//!
+//! Current active memory already owns the hot paged experts. Adding the complete
+//! payload without subtracting those pages would count the same expert category
+//! twice and reject a valid promotion. Reclaiming the pages before evaluating the
+//! formula has the opposite failure: an impossible promotion destroys the hot set
+//! and makes the next request read the same experts from disk again. Therefore the
+//! fit decision must happen first, while the retained pages still have an owner.
 
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5ResidentExpertWeights;
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::{
+    ExpertMemoryAdmissionError, MlxRamBudgetPhase, PerformanceAttribution, PerformanceOperation,
+    complete_residency_exceeds_ceiling_with_activation_headroom,
+    projected_active_memory_after_complete_expert_replacement,
+    required_complete_residency_activation_headroom_bytes,
+};
 
 /// A safe owner-thread boundary that requested an expert residency transition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,34 +102,29 @@ impl Qwen3_5Model {
             "started complete-model expert residency admission"
         );
 
-        // No paged snapshot may still be executing when its cache is emptied.
+        // Finish submitted products before sampling idle memory or replacing the
+        // complete resident expert owner.
         self.runtime.synchronize_gpu_stream()?;
-        expert_pager.freeze_native_expert_retention_growth();
-        // Everything inside this closure is speculative. `self` is not changed
-        // until the complete candidate reaches the publication point below.
-        let candidate_resident_expert_weights_result = (|| {
-            let retained_native_expert_payload_bytes = expert_pager
-                .native_expert_cache_statistics()
-                .resident_payload_byte_count();
-            if retained_native_expert_payload_bytes > 0 {
-                expert_pager
-                    .reclaim_native_expert_payload_bytes(retained_native_expert_payload_bytes)?;
-            }
-            self.runtime
-                .synchronize_gpu_stream_and_clear_allocator_cache()?;
-            if expert_pager
-                .native_expert_cache_statistics()
-                .resident_payload_byte_count()
-                != 0
-            {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "native expert pages remained retained before resident promotion",
-                });
-            }
 
-            // Admission uses fresh active bytes after native pages and reusable
-            // allocator buffers are gone. The complete payload is exact artifact
-            // geometry, so no laptop-specific headroom constant is required.
+        // Everything inside this closure is speculative. `self` is not changed
+        // until the complete candidate reaches the publication point below. In
+        // particular, `resident_expert_weights` remains None, so any early return
+        // leaves the model truthfully and safely in paged mode.
+        let candidate_resident_expert_weights_result = (|| {
+            // Idle promotion replaces any complete layers retained by paged mode.
+            let retained_streamed_expert_payload_bytes = self
+                .retained_expert_layers
+                .as_ref()
+                .map_or(0, |retained_expert_layers| {
+                    retained_expert_layers
+                        .borrow()
+                        .statistics()
+                        .resident_payload_byte_count
+                });
+
+            // Sample after stream synchronization. Sampling
+            // earlier could include unfinished request work or race a later page
+            // insertion, making the replacement projection internally inconsistent.
             let idle_memory_snapshot = self.runtime.memory_snapshot()?;
             let idle_active_memory_bytes =
                 u64::try_from(idle_memory_snapshot.active_memory_bytes()).map_err(|_| {
@@ -127,39 +138,113 @@ impl Qwen3_5Model {
             .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
                 description: "MLX active memory ceiling exceeds the u64 range",
             })?;
-            let projected_resident_active_memory_bytes = idle_active_memory_bytes
-                .checked_add(complete_expert_payload_bytes)
-                .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "projected resident MLX active memory overflowed",
+
+            // Remove the category that complete residency will replace. Use
+            // checked subtraction instead of saturation: retained payload larger
+            // than total active memory means telemetry ownership is inconsistent,
+            // and proceeding could admit more memory from a false baseline.
+            let projected_resident_active_memory_bytes =
+                projected_active_memory_after_complete_expert_replacement(
+                    idle_active_memory_bytes,
+                    retained_streamed_expert_payload_bytes,
+                    complete_expert_payload_bytes,
+                )
+                .map_err(|expert_memory_admission_error| match expert_memory_admission_error {
+                    ExpertMemoryAdmissionError::RetainedExpertPayloadExceedsActiveMemory => {
+                        Qwen3_5ExecutionError::InvalidInput {
+                            description: "retained expert payload exceeds idle MLX active memory",
+                        }
+                    }
+                    ExpertMemoryAdmissionError::CompleteResidencyProjectionOverflow => {
+                        Qwen3_5ExecutionError::InvalidInput {
+                            description: "projected resident MLX active memory overflowed",
+                        }
+                    }
                 })?;
-            if projected_resident_active_memory_bytes > stable_memory_ceiling_bytes {
+            // The checked helper proved the subtraction and addition above. This
+            // diagnostic component is therefore safe to derive without repeating
+            // a second independently maintained admission formula.
+            let idle_non_expert_active_memory_bytes =
+                projected_resident_active_memory_bytes - complete_expert_payload_bytes;
+            // Static payload fit is not enough. Prefill activations, key-value
+            // growth, and temporary workspaces still need spare ceiling after
+            // complete experts occupy memory. Without this reservation the model
+            // promotes into a ceiling it cannot serve from and thrashes near the
+            // MLX active-memory limit.
+            let observed_transient_high_water_bytes =
+                expert_pager.observed_transient_high_water_bytes();
+            let required_activation_headroom_bytes =
+                required_complete_residency_activation_headroom_bytes(
+                    complete_expert_payload_bytes,
+                    observed_transient_high_water_bytes.max(
+                        self.mlx_ram_budget
+                            .borrow()
+                            .activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
+                    ),
+                );
+            // Single-source owner is authoritative for complete-residency policy.
+            // The replacement projection remains as fail-closed accounting evidence.
+            let mlx_ram_budget_snapshot =
+                self.mlx_ram_budget
+                    .borrow()
+                    .plan(MlxRamBudgetPhase::Idle, 0, 0, false);
+
+            // This return is intentionally BEFORE reclamation. DoesNotFit is an
+            // ordinary policy result, not a cleanup request. The caller resumes
+            // cache growth and the next request can reuse every current hot page.
+            if !mlx_ram_budget_snapshot.complete_residency_fits
+                || complete_residency_exceeds_ceiling_with_activation_headroom(
+                    projected_resident_active_memory_bytes,
+                    stable_memory_ceiling_bytes,
+                    required_activation_headroom_bytes,
+                )
+            {
                 tracing::info!(
                     ?transition_reason,
                     idle_active_memory_bytes,
+                    idle_non_expert_active_memory_bytes,
+                    retained_streamed_expert_payload_bytes,
                     complete_expert_payload_bytes,
                     projected_resident_active_memory_bytes,
+                    observed_transient_high_water_bytes,
+                    required_activation_headroom_bytes,
                     stable_memory_ceiling_bytes,
+                    mlx_ram_budget_complete_residency_fits =
+                        mlx_ram_budget_snapshot.complete_residency_fits,
                     outcome = "does_not_fit",
                     "completed complete-model expert residency admission"
                 );
                 return Ok(None);
             }
 
+            // Crossing this point commits to replacing the paged representation.
+            // Only now may policy remove the hot pages, because exact accounting
+            // proved that their complete replacement fits under the same ceiling.
+            self.runtime
+                .synchronize_gpu_stream_and_clear_allocator_cache()?;
+
+            if let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() {
+                retained_expert_layers.borrow_mut().release_all();
+            }
+
+            // Build every resident layer into a candidate owner. Publication is
+            // still delayed until the match below confirms the complete load.
             Qwen3_5ResidentExpertWeights::load(self, positional_file_read_metrics).map(Some)
         })();
         let candidate_resident_expert_weights = match candidate_resident_expert_weights_result {
             Ok(Some(candidate_resident_expert_weights)) => candidate_resident_expert_weights,
             Ok(None) => {
-                expert_pager.resume_native_expert_retention_growth();
                 return Ok(Qwen3_5ExpertResidencyPromotionOutcome::DoesNotFit);
             }
             Err(resident_loading_error) => {
+                // A failure after replacement began may leave candidate buffers
+                // in MLX allocator storage. Clear them and always restore paging
+                // growth so the fallback model remains usable.
                 let is_recoverable_capacity_rejection =
                     resident_loading_error_is_recoverable_capacity(&resident_loading_error);
                 let cleanup_result = self
                     .runtime
                     .synchronize_gpu_stream_and_clear_allocator_cache();
-                expert_pager.resume_native_expert_retention_growth();
                 if let Err(cleanup_error) = cleanup_result {
                     return Err(cleanup_error.into());
                 }
@@ -178,7 +263,8 @@ impl Qwen3_5Model {
                 return Err(resident_loading_error);
             }
         };
-        // This assignment is the only Paged -> Resident publication point.
+        // This assignment is the only Paged -> Resident publication point. No
+        // observer can report Resident while only some layers have loaded.
         self.resident_expert_weights = Some(candidate_resident_expert_weights);
         self.should_defer_next_request_finalization_resident_promotion = false;
         tracing::info!(
@@ -216,9 +302,6 @@ impl Qwen3_5Model {
                 // Dropped resident buffers become reusable allocator storage;
                 // clearing it makes the newly paged mode's capacity observable.
                 let allocator_cleanup_result = self.runtime.clear_allocator_cache();
-                if let Some(expert_pager) = self.expert_pager.as_ref() {
-                    expert_pager.resume_native_expert_retention_growth();
-                }
                 allocator_cleanup_result?;
                 if matches!(
                     transition_reason,
@@ -233,7 +316,7 @@ impl Qwen3_5Model {
                 tracing::info!(
                     ?transition_reason,
                     released_resident_expert_payload_bytes,
-                    "demoted complete resident experts to native demand paging"
+                    "demoted complete resident experts to Rust streaming"
                 );
                 Ok(true)
             },

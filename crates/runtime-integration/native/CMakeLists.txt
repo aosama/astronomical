@@ -102,22 +102,6 @@ FetchContent_Declare(
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.0-streaming-safetensors-writer.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.0-paged-buffer-store.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.0-paged-buffer-short-read.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.0-indirect-input-resource-registration.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.0-batched-indirect-input-resource-registration.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 FetchContent_Declare(
     mlx_c
@@ -125,10 +109,6 @@ FetchContent_Declare(
     URL_HASH "SHA256=${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE_SHA256}"
     PATCH_COMMAND
         "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.6.0-paged-buffer-store.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.6.0-metallib-path.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
@@ -143,38 +123,6 @@ FetchContent_MakeAvailable(metal_cpp json fmt mlx mlx_c)
 if(NOT TARGET mlx OR NOT TARGET mlxc)
     message(FATAL_ERROR "Pinned archives did not define the expected mlx and mlxc targets")
 endif()
-
-add_library(
-    astronomical_native_expert_cache
-    STATIC
-    paged_expert_execution/astronomical_paged_expert_execution.cpp
-    paged_expert_execution/paged_native_bfloat16_execution.cpp
-    paged_expert_execution/paged_expert_nax_dispatch.cpp
-    paged_expert_execution/paged_expert_resources.cpp
-    paged_expert_execution/paged_expert_snapshot.cpp
-    expert_cache/astronomical_native_expert_cache_c_api.cpp
-    expert_cache/native_expert_cache.cpp
-    expert_cache/native_expert_cache_construction.cpp
-    expert_cache/native_expert_cache_policy.cpp
-    expert_cache/native_expert_route_evidence.cpp
-)
-target_compile_features(astronomical_native_expert_cache PRIVATE cxx_std_20)
-target_link_libraries(astronomical_native_expert_cache PRIVATE mlx mlxc)
-target_include_directories(
-    astronomical_native_expert_cache
-    PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}"
-    "${CMAKE_CURRENT_LIST_DIR}/expert_cache"
-    "${CMAKE_CURRENT_LIST_DIR}/paged_expert_execution"
-    "${mlx_SOURCE_DIR}"
-    "${mlx_c_SOURCE_DIR}"
-    "${fmt_SOURCE_DIR}/include"
-)
-set_target_properties(
-    astronomical_native_expert_cache
-    PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-)
 
 if(ASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS)
     add_library(

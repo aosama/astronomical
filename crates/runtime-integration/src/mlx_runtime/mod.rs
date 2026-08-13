@@ -9,9 +9,10 @@ use std::path::PathBuf;
 
 use crate::{MlxMemoryLimits, mlx_stream::MlxStream};
 
+pub use error_handling::classify_mlx_error;
 pub(crate) use error_handling::{
-    check_status, classify_mlx_error, clear_captured_mlx_error,
-    install_non_terminating_error_handler, take_captured_mlx_error,
+    check_status, clear_captured_mlx_error, install_non_terminating_error_handler,
+    take_captured_mlx_error,
 };
 pub use metallib::{compiled_metallib_path, validate_metallib_path};
 pub(crate) use metallib::{configure_metallib_path, configured_metallib_path};

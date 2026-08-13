@@ -1,13 +1,12 @@
 //! Atomic coordination of a live MLX ceiling and binary expert ownership.
 //!
 //! Lowering first demotes a complete resident owner when necessary, then reduces
-//! native page retention before MLX enforces the smaller limit. Raising reverses
-//! the order: MLX accepts capacity, native policy expands, and complete residency
+//! complete resident ownership before MLX enforces the smaller limit. Raising reverses
+//! the order: MLX accepts capacity, Rust retention expands, and complete residency
 //! is attempted. A failed transition restores the pager's prior ceiling.
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
-use crate::expert_paging::automatic_expert_weight_memory_cache_maximum_size_bytes;
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{InferenceEngineError, PerformanceAttribution, safe_minimum_mlx_memory_ceiling_bytes};
 
@@ -122,7 +121,7 @@ impl Qwen3_5Model {
             ));
         }
         if !is_lowering_mlx_memory_ceiling {
-            // Once MLX accepts a larger ceiling, let native policy derive a
+            // Once MLX accepts a larger ceiling, let Rust policy derive a
             // larger retention target from fresh counters. This never prewarms
             // pages; later router evidence repopulates capacity naturally.
             self.update_expert_residency_for_live_mlx_memory_limit(
@@ -161,26 +160,28 @@ impl Qwen3_5Model {
             )
             .map_err(InferenceEngineError::from)?;
         }
+        if self.resident_expert_weights.is_none()
+            && let Some(retained_expert_layers) = self.retained_expert_layers.as_ref()
+        {
+            let reclamation_target_bytes = u64::try_from(current_active_memory_bytes)
+                .unwrap_or(u64::MAX)
+                .saturating_sub(requested_mlx_memory_ceiling_bytes);
+            retained_expert_layers
+                .borrow_mut()
+                .limit_for_request_pressure(reclamation_target_bytes);
+        }
+        self.mlx_ram_budget
+            .borrow_mut()
+            .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
+            .map_err(|mlx_ram_budget_error| {
+                super::super::inference_execution::fatal_engine_error(
+                    mlx_ram_budget_error.to_string(),
+                )
+            })?;
         let Some(expert_pager) = self.expert_pager.as_mut() else {
             return Ok(());
         };
-        let current_memory_budget_snapshot = expert_pager
-            .memory_budget_snapshot_for_mlx_memory_limit_adjustment(&self.runtime)
-            .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
-        let candidate_memory_budget_snapshot = current_memory_budget_snapshot
-            .with_configured_cap_bytes(requested_mlx_memory_ceiling_bytes);
         expert_pager.update_configured_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
-        let native_expert_cache_statistics = expert_pager.native_expert_cache_statistics();
-        let maximum_resident_payload_byte_count =
-            automatic_expert_weight_memory_cache_maximum_size_bytes(
-                &candidate_memory_budget_snapshot,
-                native_expert_cache_statistics.resident_payload_byte_count(),
-                0,
-            );
-        expert_pager
-            .update_native_expert_retention_ceiling(maximum_resident_payload_byte_count)
-            .map_err(super::Qwen3_5ExecutionError::from)
-            .map_err(InferenceEngineError::from)?;
         Ok(())
     }
 
@@ -188,24 +189,18 @@ impl Qwen3_5Model {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
+        self.mlx_ram_budget
+            .borrow_mut()
+            .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
+            .map_err(|mlx_ram_budget_error| {
+                super::super::inference_execution::fatal_engine_error(
+                    mlx_ram_budget_error.to_string(),
+                )
+            })?;
         let Some(expert_pager) = self.expert_pager.as_mut() else {
             return Ok(());
         };
         expert_pager.update_configured_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
-        let current_memory_budget_snapshot = expert_pager
-            .memory_budget_snapshot_for_mlx_memory_limit_adjustment(&self.runtime)
-            .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
-        let native_expert_cache_statistics = expert_pager.native_expert_cache_statistics();
-        let maximum_resident_payload_byte_count =
-            automatic_expert_weight_memory_cache_maximum_size_bytes(
-                &current_memory_budget_snapshot,
-                native_expert_cache_statistics.resident_payload_byte_count(),
-                0,
-            );
-        expert_pager
-            .update_native_expert_retention_ceiling(maximum_resident_payload_byte_count)
-            .map_err(super::Qwen3_5ExecutionError::from)
-            .map_err(InferenceEngineError::from)?;
         Ok(())
     }
 

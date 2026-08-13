@@ -4,17 +4,16 @@ use astronomical_runtime_integration::{
     MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
 };
 
-use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
-use crate::qwen3_5_moe::{
-    Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5ResidentExpertWeights,
-};
-use crate::{DecoderCacheLayout, DecoderCacheState, PerformanceAttribution, PerformanceOperation};
+use std::cell::RefCell;
 
-use super::decoder_layer_weights::{
-    Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
-    Qwen3_5DecoderLayerWeights,
+use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, RetainedExpertLayerCache};
+use crate::qwen3_5_moe::{
+    PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
+    Qwen3_5ResidentExpertWeights, Qwen3_5RetainedExpertLayer,
 };
-use super::error::invalid_request_decoder_state;
+use crate::{DecoderCacheLayout, DecoderCacheState, MlxRamBudget, PerformanceAttribution};
+
+use super::decoder_layer_weights::{Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeights};
 use super::forward_contract::validate_forward_input;
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use super::{
@@ -37,6 +36,11 @@ pub struct Qwen3_5Model {
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
+    /// Complete Rust-loaded layers retained within the paged-mode RAM ceiling.
+    pub(crate) retained_expert_layers:
+        Option<RefCell<RetainedExpertLayerCache<Qwen3_5RetainedExpertLayer>>>,
+    /// Single-source MLX RAM split for context, activations, streaming, and experts.
+    pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
     /// True after request pressure forced the complete expert owner out.
     /// Finalization consumes this one-shot flag and stays paged instead of
     /// immediately reading the same complete payload back into memory.
@@ -54,6 +58,8 @@ pub struct Qwen3_5Model {
     /// Model-owned BF16 scalar for the key normalization scale in every
     /// linear-attention forward pass.
     pub(crate) inverse_square_root_linear_head_dimension_scale: MlxArray,
+    /// Deferred GPU missing-route roots collected during one paged forward.
+    pub(crate) paged_forward_missing_route_collector: PagedForwardMissingRouteCollector,
 }
 
 impl Qwen3_5Model {
@@ -61,6 +67,17 @@ impl Qwen3_5Model {
     #[must_use]
     pub fn runtime(&self) -> &MlxRuntime {
         &self.runtime
+    }
+
+    /// Returns the single-source MLX RAM budget owner.
+    #[must_use]
+    pub fn mlx_ram_budget(&self) -> std::cell::Ref<'_, MlxRamBudget> {
+        self.mlx_ram_budget.borrow()
+    }
+
+    /// Returns the mutable single-source MLX RAM budget owner.
+    pub fn mlx_ram_budget_mut(&self) -> std::cell::RefMut<'_, MlxRamBudget> {
+        self.mlx_ram_budget.borrow_mut()
     }
 
     /// Returns one mode-neutral expert-memory snapshot.
@@ -71,37 +88,47 @@ impl Qwen3_5Model {
     /// resetting process-lifetime paging evidence.
     #[must_use]
     pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
-        let Some(expert_pager) = self.expert_pager.as_ref() else {
+        if self.expert_pager.is_none() {
             return ExpertWeightMemoryCacheStatistics::default();
-        };
-        let native_statistics = expert_pager.native_expert_cache_statistics();
-        let (entry_count, resident_payload_byte_count, maximum_resident_payload_byte_count) =
-            self.resident_expert_weights.as_ref().map_or_else(
-                || {
-                    (
-                        usize::try_from(native_statistics.resident_expert_count())
-                            .unwrap_or(usize::MAX),
-                        native_statistics.resident_payload_byte_count(),
-                        native_statistics.maximum_resident_payload_byte_count(),
-                    )
-                },
-                |resident_expert_weights| {
-                    (
-                        resident_expert_weights.expert_entry_count(),
-                        resident_expert_weights.payload_byte_count(),
-                        resident_expert_weights.payload_byte_count(),
-                    )
-                },
-            );
-        ExpertWeightMemoryCacheStatistics {
-            entry_count,
-            resident_payload_byte_count,
-            maximum_resident_payload_byte_count,
-            eviction_count: native_statistics.eviction_count(),
-            cache_hit_count: native_statistics.cache_hit_count(),
-            cache_miss_count: native_statistics.cache_miss_count(),
-            disk_page_load_count: native_statistics.disk_page_load_count(),
-            disk_batch_load_count: native_statistics.disk_batch_load_count(),
+        }
+        if let Some(resident_expert_weights) = self.resident_expert_weights.as_ref() {
+            return ExpertWeightMemoryCacheStatistics {
+                entry_count: resident_expert_weights.expert_entry_count(),
+                resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
+                maximum_resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
+                eviction_count: 0,
+                disk_page_load_count: 0,
+                disk_batch_load_count: 0,
+            };
+        }
+        self.retained_expert_layers.as_ref().map_or_else(
+            ExpertWeightMemoryCacheStatistics::default,
+            |retained_expert_layers| retained_expert_layers.borrow().statistics(),
+        )
+    }
+
+    /// Updates the expert pager's memory budget with the observed transient
+    /// high-water mark from completed forward-pass evidence. The retention
+    /// ceiling uses this reservation to ensure enough headroom for computation
+    /// buffers (attention KV growth, intermediate tensors) between expert-page
+    /// loads.
+    pub(crate) fn update_expert_pager_transient_high_water_bytes(
+        &self,
+        observed_transient_high_water_bytes: u64,
+    ) {
+        if let Some(expert_pager) = self.expert_pager.as_ref() {
+            expert_pager
+                .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
+        }
+    }
+
+    /// Retains the admission handoff while Rust-streamed pages remain operation-local.
+    pub(crate) fn set_expert_pager_admitted_forward_reserve_bytes(
+        &self,
+        admitted_forward_reserve_bytes: u64,
+    ) {
+        if let Some(expert_pager) = self.expert_pager.as_ref() {
+            expert_pager.set_pending_admitted_forward_reserve_bytes(admitted_forward_reserve_bytes);
         }
     }
 
@@ -318,103 +345,27 @@ impl Qwen3_5Model {
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let normalized_input = self.runtime.rms_norm(
+        let attention_output = self.forward_decoder_layer_attention(
             hidden_states,
-            &decoder_layer_weights.input_normalization_weight,
-            f32::from_bits(self.config.rms_norm_epsilon_bits()),
+            token_count,
+            rope_offset_tokens,
+            layer_index,
+            decoder_layer_weights,
+            layer_model_state,
+            token_position_offsets,
+            attention_capture,
+            boundary_checkpoint_collector,
+            paged_prefill_execution_mode,
+            performance_attribution,
         )?;
-        let attention_forward_span_started_at = performance_attribution.begin_operation_span();
-        let attention_output = match (&decoder_layer_weights.attention_weights, layer_model_state) {
-            (
-                Qwen3_5AttentionWeights::Linear(linear_attention_weights),
-                DecoderCacheState::Composite {
-                    convolution,
-                    recurrent,
-                },
-            ) => performance_attribution.measure_operation(
-                PerformanceOperation::LinearAttentionGraphConstruction,
-                |_performance_attribution| {
-                    self.forward_linear_attention(
-                        &normalized_input,
-                        token_count,
-                        layer_index,
-                        linear_attention_weights,
-                        convolution,
-                        recurrent,
-                        boundary_checkpoint_collector,
-                        paged_prefill_execution_mode,
-                    )
-                },
-            ),
-            (
-                Qwen3_5AttentionWeights::Full(full_attention_weights),
-                DecoderCacheState::AppendOnlyAttention { attention },
-            ) => performance_attribution.measure_operation(
-                PerformanceOperation::FullAttentionGraphConstruction,
-                |_performance_attribution| {
-                    self.forward_full_attention(
-                        &normalized_input,
-                        token_count,
-                        rope_offset_tokens,
-                        full_attention_weights,
-                        attention,
-                        layer_index,
-                        token_position_offsets,
-                        attention_capture,
-                        paged_prefill_execution_mode,
-                    )
-                },
-            ),
-            _ => Err(invalid_request_decoder_state(
-                layer_index,
-                "decoder state attention family does not match the bound layer weights",
-            )),
-        };
-        performance_attribution.complete_operation_span(
-            PerformanceOperation::AttentionForwardSpan,
-            attention_forward_span_started_at,
-        );
-        let attention_output = attention_output?;
-        let attention_residual = self.runtime.add(hidden_states, &attention_output)?;
-        let normalized_attention = self.runtime.rms_norm(
-            &attention_residual,
-            &decoder_layer_weights.post_attention_normalization_weight,
-            f32::from_bits(self.config.rms_norm_epsilon_bits()),
-        )?;
-        let should_use_compiled_elementwise_graphs = token_count != 1
-            && paged_prefill_execution_mode
-                != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
-        let mlp_forward_span_started_at = performance_attribution.begin_operation_span();
-        let mlp_output = match &decoder_layer_weights.mlp_weights {
-            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => self
-                .forward_qwen3_5_dense_mlp(
-                    &normalized_attention,
-                    dense_mlp_weights,
-                    paged_prefill_execution_mode,
-                ),
-            Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
-                let expert_pager = self.expert_pager.as_ref().ok_or_else(|| {
-                    Qwen3_5ExecutionError::MissingTensor {
-                        tensor_name: "sparse model expert pager".to_owned(),
-                    }
-                })?;
-                self.forward_qwen3_5_moe(
-                    &normalized_attention,
-                    mixture_of_experts_weights,
-                    expert_pager,
-                    layer_index,
-                    should_use_compiled_elementwise_graphs,
-                    paged_prefill_execution_mode,
-                    performance_attribution,
-                )
-            }
-        };
-        performance_attribution.complete_operation_span(
-            PerformanceOperation::MlpForwardSpan,
-            mlp_forward_span_started_at,
-        );
-        let mlp_output = mlp_output?;
-        Ok(self.runtime.add(&attention_residual, &mlp_output)?)
+        self.forward_decoder_layer_feed_forward(
+            &attention_output,
+            token_count,
+            layer_index,
+            decoder_layer_weights,
+            paged_prefill_execution_mode,
+            performance_attribution,
+        )
     }
 
     pub(crate) fn quantized_linear(

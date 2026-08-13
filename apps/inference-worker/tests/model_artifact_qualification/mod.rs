@@ -7,6 +7,8 @@ mod model_artifact_rest_qualification;
 #[cfg(feature = "model-artifact-qualification")]
 mod model_artifact_rest_transport;
 #[cfg(feature = "model-artifact-qualification")]
+mod opencode_worker_availability_rest_journey;
+#[cfg(feature = "model-artifact-qualification")]
 mod persistent_prompt_cache_append_only_rest_journey;
 #[cfg(feature = "model-artifact-qualification")]
 mod persistent_prompt_cache_memory_rest_journey;

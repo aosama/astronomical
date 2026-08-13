@@ -105,8 +105,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg("--build")
         .arg(&native_build_directory)
         .arg("--target")
-        .arg("mlxc")
-        .arg("astronomical_native_expert_cache");
+        .arg("mlxc");
     if should_build_experimental_aligned_expert_packs {
         native_build_command.arg("astronomical_metal_expert_loader");
     }
@@ -163,11 +162,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         &native_library_directory.join("libmlxc.a"),
         "MLX C static library",
     )?;
-    require_file(
-        &native_library_directory.join("libastronomical_native_expert_cache.a"),
-        "Astronomical paged expert execution static library",
-    )?;
-    println!("cargo:rustc-link-lib=static=astronomical_native_expert_cache");
     if should_build_experimental_aligned_expert_packs {
         require_file(
             &experimental_native_library_path,
@@ -222,45 +216,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         "cargo:rerun-if-changed={}",
         native_source_directory.join("CMakeLists.txt").display()
     );
-    // Cargo does not infer native dependencies from CMake target membership.
-    // Keep every source and header explicit here; the hermetic build contract
-    // compares all CMake-listed .cpp files against this script so an edited
-    // native path cannot leave a stale release archive marked Fresh.
-    for native_paged_expert_execution_source_path in [
-        "paged_expert_execution/astronomical_paged_expert_execution.cpp",
-        "paged_expert_execution/paged_expert_execution_internal.h",
-        "paged_expert_execution/paged_expert_kernel_source.h",
-        "paged_expert_execution/paged_expert_mixed_dtype_kernel_support.h",
-        "paged_expert_execution/paged_expert_nax_dispatch.cpp",
-        "paged_expert_execution/paged_expert_nax_kernel_source.h",
-        "paged_expert_execution/paged_expert_resources.cpp",
-        "paged_expert_execution/paged_expert_snapshot.cpp",
-        "paged_expert_execution/paged_native_bfloat16_execution.cpp",
-        "paged_expert_execution/paged_native_bfloat16_kernel_source.h",
-    ] {
-        println!(
-            "cargo:rerun-if-changed={}",
-            native_source_directory
-                .join(native_paged_expert_execution_source_path)
-                .display()
-        );
-    }
-    for native_expert_cache_source_path in [
-        "expert_cache/astronomical_native_expert_cache.h",
-        "expert_cache/astronomical_native_expert_cache_c_api.cpp",
-        "expert_cache/native_expert_cache.cpp",
-        "expert_cache/native_expert_cache_construction.cpp",
-        "expert_cache/native_expert_cache_policy.cpp",
-        "expert_cache/native_expert_route_evidence.cpp",
-        "expert_cache/native_expert_cache_internal.h",
-    ] {
-        println!(
-            "cargo:rerun-if-changed={}",
-            native_source_directory
-                .join(native_expert_cache_source_path)
-                .display()
-        );
-    }
     if should_build_experimental_aligned_expert_packs {
         println!(
             "cargo:rerun-if-changed={}",
@@ -332,37 +287,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-paged-buffer-store.patch")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-paged-buffer-short-read.patch")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-indirect-input-resource-registration.patch")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-batched-indirect-input-resource-registration.patch")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest_directory
             .join("../../third-party/patches/mlx-c-0.6.0-metallib-path.patch")
-            .display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest_directory
-            .join("../../third-party/patches/mlx-c-0.6.0-paged-buffer-store.patch")
             .display()
     );
     println!(

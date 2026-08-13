@@ -104,11 +104,11 @@ async fn should_preserve_exact_cold_and_warm_generation_without_whole_token_repl
         );
         let cold_disk_page_load_count = counter_amount(
             cold_generation_report,
-            "native_expert_cache_disk_page_load_count",
+            "positional_file_read_call_count",
         );
         let warm_disk_page_load_count = counter_amount(
             warm_generation_report,
-            "native_expert_cache_disk_page_load_count",
+            "positional_file_read_call_count",
         );
         let cold_memory_evidence = assert_memory_within_policy(
             cold_generation_report,
@@ -119,15 +119,7 @@ async fn should_preserve_exact_cold_and_warm_generation_without_whole_token_repl
             configured_mlx_memory_ceiling_bytes,
         );
         eprintln!(
-            "[exact-paged-decode 3/4] status=progress cold_disk_page_load_count={cold_disk_page_load_count} warm_disk_page_load_count={warm_disk_page_load_count} cold_cache_hit_count={} warm_cache_hit_count={} cold_active_plus_allocator_bytes={} warm_active_plus_allocator_bytes={} observed_peak_bytes={} allowed_peak_bytes={}",
-            counter_amount(
-                cold_generation_report,
-                "native_expert_cache_hit_count",
-            ),
-            counter_amount(
-                warm_generation_report,
-                "native_expert_cache_hit_count",
-            ),
+            "[exact-paged-decode 3/4] status=progress cold_disk_page_load_count={cold_disk_page_load_count} warm_disk_page_load_count={warm_disk_page_load_count} cold_active_plus_allocator_bytes={} warm_active_plus_allocator_bytes={} observed_peak_bytes={} allowed_peak_bytes={}",
             cold_memory_evidence.active_plus_allocator_bytes,
             warm_memory_evidence.active_plus_allocator_bytes,
             cold_memory_evidence
@@ -193,7 +185,7 @@ fn assert_exact_layer_preparation_count(
         u64::try_from(generated_token_count).expect("the generated token count should fit u64");
     let prefill_chunck_count = counter_amount(generation_report, "prefill_chunck_count");
     assert_eq!(
-        operation_occurrence_count(generation_report, "native_expert_cache_route_preparation",),
+        operation_occurrence_count(generation_report, "rust_expert_streaming_layer_preparation",),
         sparse_layer_count * (prefill_chunck_count + generated_token_count),
         "every prompt prefill chunck and generated target token must follow one exact route preparation per sparse layer"
     );

@@ -1,4 +1,5 @@
 mod advance_generation;
+mod completed_forward_memory;
 mod decoder_state_reuse;
 pub(crate) mod engine_request;
 pub(in crate::qwen3_5) mod generated_token_emission;
@@ -12,6 +13,7 @@ mod model_loading_finalization;
 mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
 mod prefill_advance;
+mod prefill_capacity_recovery;
 mod prefill_chunck_sizer;
 mod prefill_chunck_sizer_configuration;
 mod prefill_execution_context;

@@ -292,6 +292,11 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
         should_retain_all_position_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+        // Rust-led streaming owns exactly one layer-local page at each decoder
+        // step. It needs no forward-wide native residency plan or C++ slot lease.
+        // Each forward owns one deferred missing-route collection. Clear any
+        // leftover roots from a cancelled or failed previous attempt.
+        self.clear_paged_forward_missing_route_roots();
         let rope_offset_tokens = i32::try_from(starting_position_tokens).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "starting position exceeds the MLX int32 range",
@@ -342,10 +347,18 @@ impl Qwen3_5Model {
                 && (layer_index + 1).is_multiple_of(graph_submission_layer_interval)
                 && layer_index + 1 < decoder_layer_count
             {
+                // Intermediate mlx_async_eval commits the completed layer group
+                // so MLX can detach that subgraph, start Metal work, and free
+                // intermediates before the host builds later layers. Interval 0
+                // keeps one complete prefill tape and can thrash near the MLX
+                // ceiling with low GPU utilization for tens of seconds.
                 // Do not submit after the final decoder layer: final
                 // normalization and logits extend that same graph and the
                 // caller owns the terminal evaluation boundary.
-                self.runtime.async_eval_arrays(&[&hidden_states])?;
+                performance_attribution.measure_operation(
+                    PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
+                    |_performance_attribution| self.runtime.async_eval_arrays(&[&hidden_states]),
+                )?;
             }
         }
 
