@@ -1,3 +1,16 @@
+//! Qwen3.5 prompt-processing chunk selection and transition learning.
+//!
+//! Fixed mode returns configured sizes without learning. Optimized mode asks one
+//! context-aware optimizer, remembers the exact decision, and tells the optimizer
+//! only after the corresponding chunk completes. Context identifiers isolate
+//! observations whose costs differ because of prompt position, restored prefixes,
+//! visual input, prediction state, sparse paging, cache capture, or prior pressure.
+//!
+//! Persisted optimizer construction lives in the child module so loading/recovery
+//! policy does not obscure the request-time ask/tell state machine below.
+
+mod persisted_state;
+
 use super::{
     prefill_chunck_sizer_configuration::{
         Qwen3_5PrefillChunckSizerError, configured_candidate_prefill_chunck_tokens,
@@ -20,6 +33,11 @@ const FIRST_CHUNCK_AFTER_RESTORE_CONTEXT_FLAG: u64 = 1 << 33;
 pub struct Qwen3_5PrefillChunckSizer {
     maximum_prefill_chunck_tokens: usize,
     active_prefill_chunck_tokens: usize,
+    /// Fixed size used only while sparse experts stream from storage.
+    ///
+    /// Optimized mode and fixed mode without an SSD override leave this unset;
+    /// both fall back to the complete-resident fixed size at selection time.
+    ssd_streaming_prefill_chunck_tokens: Option<usize>,
     prefill_chunck_sizing_mode: PrefillChunckSizingMode,
     active_request_restored_token_count: usize,
     has_completed_prefill_chunck_in_active_request: bool,
@@ -66,118 +84,39 @@ impl Qwen3_5PrefillChunckSizer {
         )
     }
 
-    /// Creates the production optimizer with persisted state for warm starts.
-    ///
-    /// On construction, attempts to load persisted state from the given directory.
-    /// If no state exists or the state is stale/corrupt, starts fresh (no error).
-    /// After each full-chunk observation, persists the updated optimizer state.
-    /// Creates a persisted optimizer with explicit evidence and position boundaries.
-    #[allow(clippy::too_many_arguments)]
-    pub fn for_optimized_production_with_persisted_state_and_behavior(
-        maximum_prefill_chunck_tokens: u32,
-        optimizer_prefill_chunck_token_candidates: Vec<u32>,
-        optimizer_state_directory: PathBuf,
-        model_id: String,
-        model_revision: String,
-        sliding_window_observation_count: u32,
-        prompt_position_context_bucket_tokens: u32,
-    ) -> Result<Self, Qwen3_5PrefillChunckSizerError> {
-        if sliding_window_observation_count == 0 || prompt_position_context_bucket_tokens == 0 {
-            return Err(Qwen3_5PrefillChunckSizerError::MustBePositive);
-        }
-        let sliding_window_observation_count = usize::try_from(sliding_window_observation_count)
-            .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?;
-        let prompt_position_context_bucket_tokens =
-            usize::try_from(prompt_position_context_bucket_tokens)
-                .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?;
-        let prefill_chunck_tokens =
-            maximum_prefill_chunck_tokens_from_u32(maximum_prefill_chunck_tokens)?;
-        let candidate_prefill_chunck_tokens = configured_candidate_prefill_chunck_tokens(
-            optimizer_prefill_chunck_token_candidates,
-            prefill_chunck_tokens,
-        )?;
-        let state_file_path = optimizer_state_directory.join("prefill-chunck-size.json");
-
-        let prefill_chunck_size_optimizer = match PrefillChunckSizeOptimizer::load_from_path(
-            state_file_path,
-            model_id.clone(),
-            model_revision.clone(),
-            candidate_prefill_chunck_tokens.clone(),
-            sliding_window_observation_count,
-        ) {
-            Ok(Some(loaded_optimizer)) => {
-                tracing::info!(
-                    optimizer_state_directory = %optimizer_state_directory.display(),
-                    model_id = %model_id,
-                    model_revision = %model_revision,
-                    "Loaded persisted prefill chunk size optimizer state"
-                );
-                loaded_optimizer
-            }
-            Ok(None) => {
-                tracing::info!(
-                    optimizer_state_directory = %optimizer_state_directory.display(),
-                    model_id = %model_id,
-                    model_revision = %model_revision,
-                    "No persisted optimizer state found; starting fresh"
-                );
-                PrefillChunckSizeOptimizer::new(
-                    candidate_prefill_chunck_tokens.clone(),
-                    sliding_window_observation_count,
-                )
-                .map_err(|_| Qwen3_5PrefillChunckSizerError::OptimizerRejectedCandidateSet)?
-            }
-            Err(persistence_error) => {
-                tracing::warn!(
-                    error = %persistence_error,
-                    optimizer_state_directory = %optimizer_state_directory.display(),
-                    "Failed to load persisted optimizer state; starting fresh"
-                );
-                PrefillChunckSizeOptimizer::new(
-                    candidate_prefill_chunck_tokens.clone(),
-                    sliding_window_observation_count,
-                )
-                .map_err(|_| Qwen3_5PrefillChunckSizerError::OptimizerRejectedCandidateSet)?
-            }
-        };
-
-        let active_prefill_chunck_tokens = prefill_chunck_size_optimizer
-            .candidate_prefill_chunck_tokens()
-            .first()
-            .copied()
-            .ok_or(Qwen3_5PrefillChunckSizerError::OptimizerRejectedCandidateSet)?;
-        Ok(Self {
-            maximum_prefill_chunck_tokens: prefill_chunck_tokens,
-            active_prefill_chunck_tokens,
-            prefill_chunck_sizing_mode: PrefillChunckSizingMode::Optimized {
-                prefill_chunck_size_optimizer,
-                pending_prefill_chunck_decision: None,
-                optimizer_state_persistence: Some(OptimizerStatePersistence {
-                    optimizer_state_directory,
-                    model_id,
-                    model_revision,
-                }),
-            },
-            active_request_restored_token_count: 0,
-            has_completed_prefill_chunck_in_active_request: false,
-            active_request_has_observed_capacity_reduction: false,
-            latest_prefill_optimizer_insight: None,
-            prompt_position_context_bucket_tokens: Some(prompt_position_context_bucket_tokens),
-        })
-    }
-
     /// Creates fixed `prefill_chunck_tokens` that bypass optimizer selection and persistence.
     pub fn for_fixed_prefill_chunck_tokens(
         fixed_prefill_chunck_tokens: u32,
+    ) -> Result<Self, Qwen3_5PrefillChunckSizerError> {
+        Self::for_fixed_prefill_chunck_tokens_with_ssd_streaming(fixed_prefill_chunck_tokens, None)
+    }
+
+    /// Creates fixed complete-resident and optional SSD-streaming chunk sizes.
+    ///
+    /// When sparse experts are paged, the SSD-streaming size shortens each
+    /// forward so activation pressure stays lower while expert pages stream.
+    /// Complete-resident execution keeps the larger fixed size unchanged.
+    pub fn for_fixed_prefill_chunck_tokens_with_ssd_streaming(
+        fixed_prefill_chunck_tokens: u32,
+        fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
     ) -> Result<Self, Qwen3_5PrefillChunckSizerError> {
         let fixed_prefill_chunck_tokens = usize::try_from(fixed_prefill_chunck_tokens)
             .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?;
         if fixed_prefill_chunck_tokens == 0 {
             return Err(Qwen3_5PrefillChunckSizerError::MustBePositive);
         }
+        let ssd_streaming_prefill_chunck_tokens = match fixed_ssd_streaming_prefill_chunck_tokens {
+            Some(0) => return Err(Qwen3_5PrefillChunckSizerError::MustBePositive),
+            Some(fixed_ssd_streaming_prefill_chunck_tokens) => Some(
+                usize::try_from(fixed_ssd_streaming_prefill_chunck_tokens)
+                    .map_err(|_| Qwen3_5PrefillChunckSizerError::ExceedsPlatformRange)?,
+            ),
+            None => None,
+        };
         Ok(Self {
             maximum_prefill_chunck_tokens: fixed_prefill_chunck_tokens,
             active_prefill_chunck_tokens: fixed_prefill_chunck_tokens,
+            ssd_streaming_prefill_chunck_tokens,
             prefill_chunck_sizing_mode: PrefillChunckSizingMode::Fixed,
             active_request_restored_token_count: 0,
             has_completed_prefill_chunck_in_active_request: false,
@@ -212,6 +151,7 @@ impl Qwen3_5PrefillChunckSizer {
         Ok(Self {
             maximum_prefill_chunck_tokens: prefill_chunck_tokens,
             active_prefill_chunck_tokens,
+            ssd_streaming_prefill_chunck_tokens: None,
             prefill_chunck_sizing_mode: PrefillChunckSizingMode::Optimized {
                 prefill_chunck_size_optimizer,
                 pending_prefill_chunck_decision: None,
@@ -467,8 +407,19 @@ impl Qwen3_5PrefillChunckSizer {
                 ..
             } = &mut self.prefill_chunck_sizing_mode
             else {
+                // Fixed mode may use a shorter SSD-streaming size while experts
+                // page from storage. Complete-resident execution keeps the larger
+                // configured fixed size so resident throughput is unchanged.
+                let fixed_prefill_chunck_tokens =
+                    if prefill_execution_context.are_sparse_experts_paged() {
+                        self.ssd_streaming_prefill_chunck_tokens
+                            .unwrap_or(self.maximum_prefill_chunck_tokens)
+                    } else {
+                        self.maximum_prefill_chunck_tokens
+                    };
+                self.active_prefill_chunck_tokens = fixed_prefill_chunck_tokens;
                 return prefill_chunck_start
-                    .saturating_add(self.active_prefill_chunck_tokens)
+                    .saturating_add(fixed_prefill_chunck_tokens)
                     .min(final_prompt_index);
             };
             let remaining_prompt_tokens = final_prompt_index.saturating_sub(prefill_chunck_start);

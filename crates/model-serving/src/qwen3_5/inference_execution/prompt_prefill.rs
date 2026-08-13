@@ -1,12 +1,3 @@
-use std::time::Instant;
-
-use crate::{
-    AdaptiveRamGrowthContext, PerformanceCounter, PerformanceOperation,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
-};
-use astronomical_ipc_protocol::RequestId;
-
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests};
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::{
@@ -26,16 +17,22 @@ use crate::qwen3_5::multi_token_prediction::{
     execute_terminal_optional_history_capture_with_performance_attribution,
     record_prompt_history_initialization_fallback,
 };
-
+use crate::{
+    AdaptiveRamGrowthContext, PerformanceCounter, PerformanceOperation,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
+};
+use astronomical_ipc_protocol::RequestId;
+use std::time::Instant;
 pub(super) struct PromptPrefillChunckOutcome {
     pub(super) active_memory_bytes_before_growth: usize,
+    pub(super) retained_expert_payload_bytes_before_growth: u64,
     pub(super) forward_chunk_elapsed_millis: u64,
     pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     pub(super) exact_temporary_workspace_bytes: usize,
     pub(super) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
     pub(super) speculative_prefill_chunck_mode: Qwen3_5SpeculativePrefillChunckMode,
 }
-
 impl Qwen3_5EngineState {
     pub(super) fn execute_prompt_prefill_chunck(
         &mut self,
@@ -223,13 +220,14 @@ impl Qwen3_5EngineState {
         // Admission has mutable access because this exact chunk can trigger a
         // Resident -> Paged transition. Reborrow the model afterward so graph
         // construction cannot accidentally retain the pre-transition owner.
-        let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
-            &active_request.request_decoder_state,
-            additional_persistent_state_growth_bytes,
-            exact_temporary_workspace_bytes,
-        )?;
+        let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) = self
+            .measure_adaptive_ram_growth_memory_admission(
+                adaptive_ram_growth_context,
+                &mut active_request.performance_attribution,
+                &active_request.request_decoder_state,
+                additional_persistent_state_growth_bytes,
+                exact_temporary_workspace_bytes,
+            )?;
         let model = self
             .model
             .as_ref()
@@ -510,6 +508,7 @@ impl Qwen3_5EngineState {
         )?;
         Ok(PromptPrefillChunckOutcome {
             active_memory_bytes_before_growth,
+            retained_expert_payload_bytes_before_growth,
             forward_chunk_elapsed_millis: forward_chunck_started_at.elapsed().as_millis() as u64,
             adaptive_ram_growth_context: adaptive_ram_growth_context
                 .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),

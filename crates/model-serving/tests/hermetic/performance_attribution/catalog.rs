@@ -117,12 +117,12 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "paged_router_graph_construction",
         ),
         (
-            PerformanceOperation::NativeExpertCacheRoutePreparation,
-            "native_expert_cache_route_preparation",
+            PerformanceOperation::RustExpertStreamingLayerPreparation,
+            "rust_expert_streaming_layer_preparation",
         ),
         (
-            PerformanceOperation::NativeExpertCacheReclamation,
-            "native_expert_cache_reclamation",
+            PerformanceOperation::ExpertRetentionReclamation,
+            "expert_retention_reclamation",
         ),
         (
             PerformanceOperation::PagedMoeGraphConstruction,
@@ -237,64 +237,12 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "prefill_capacity_retry_count",
         ),
         (
-            PerformanceCounter::NativeExpertCacheHitCount,
-            "native_expert_cache_hit_count",
+            PerformanceCounter::RustExpertStreamingPayloadByteCount,
+            "rust_expert_streaming_payload_byte_count",
         ),
         (
-            PerformanceCounter::NativeExpertCacheMissCount,
-            "native_expert_cache_miss_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheEvictionCount,
-            "native_expert_cache_eviction_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheDiskPageLoadCount,
-            "native_expert_cache_disk_page_load_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheDiskBatchLoadCount,
-            "native_expert_cache_disk_batch_load_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheSuccessfulSourceReadCount,
-            "native_expert_cache_successful_source_read_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheSuccessfulSourceReadByteCount,
-            "native_expert_cache_successful_source_read_byte_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheSuccessfulSourceReadElapsedNanoseconds,
-            "native_expert_cache_successful_source_read_elapsed_nanoseconds",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationCount,
-            "native_expert_cache_route_dependency_synchronization_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheRouteDependencySynchronizationElapsedNanoseconds,
-            "native_expert_cache_route_dependency_synchronization_elapsed_nanoseconds",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds,
-            "native_expert_cache_maximum_route_dependency_synchronization_elapsed_nanoseconds",
-        ),
-        (
-            PerformanceCounter::NativeExpertCacheSnapshotPublicationCount,
-            "native_expert_cache_snapshot_publication_count",
-        ),
-        (
-            PerformanceCounter::NativeExpertCachePayloadCopyByteCount,
-            "native_expert_cache_payload_copy_byte_count",
-        ),
-        (
-            PerformanceCounter::NativePagedExpertProjectionGraphCount,
-            "native_paged_expert_projection_graph_count",
-        ),
-        (
-            PerformanceCounter::CompleteLayerRouteSynchronizationElisionCount,
-            "complete_layer_route_synchronization_elision_count",
+            PerformanceCounter::RustStreamedExpertProjectionGraphCount,
+            "rust_streamed_expert_projection_graph_count",
         ),
         (
             PerformanceCounter::PositionalFileReadCallCount,

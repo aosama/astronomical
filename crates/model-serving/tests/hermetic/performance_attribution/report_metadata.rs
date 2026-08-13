@@ -51,6 +51,32 @@ fn should_serialize_prefill_evidence_in_generation_report() {
 }
 
 #[test]
+fn should_serialize_process_io_as_an_all_or_unavailable_pair() {
+    let performance_attribution_json = serialize_generation_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Success,
+    );
+
+    let physical_disk_read_bytes =
+        performance_attribution_json["process_physical_disk_read_bytes"].as_u64();
+    let physical_disk_written_bytes =
+        performance_attribution_json["process_physical_disk_written_bytes"].as_u64();
+    let unavailability_reason =
+        performance_attribution_json["process_io_unavailability_reason"].as_str();
+
+    assert_eq!(
+        physical_disk_read_bytes.is_some(),
+        physical_disk_written_bytes.is_some(),
+        "read and write deltas must come from the same process-I/O interval"
+    );
+    assert_eq!(
+        physical_disk_read_bytes.is_some(),
+        unavailability_reason.is_none(),
+        "available byte deltas and an unavailability reason are mutually exclusive"
+    );
+}
+
+#[test]
 fn should_exclude_outer_diagnostic_spans_from_attributed_elapsed_time() {
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_completed_operation(

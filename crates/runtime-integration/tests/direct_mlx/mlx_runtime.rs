@@ -99,6 +99,23 @@ fn should_reject_an_allocator_cache_limit_above_the_active_memory_limit() {
 }
 
 #[test]
+fn should_classify_prefixed_native_operation_capacity_errors() {
+    let prefixed_native_capacity_error = astronomical_runtime_integration::classify_mlx_error(
+        "prepare native expert route",
+        "native MLX operation failed: ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED active_bytes=35346771214 allocation_bytes=3538944 allowed_bytes=35350000000 at native-operation.cpp:25".to_owned(),
+    );
+
+    assert!(matches!(
+        prefixed_native_capacity_error,
+        MlxRuntimeError::ActiveMemoryLimitExceeded {
+            active_memory_bytes: 35_346_771_214,
+            attempted_allocation_bytes: 3_538_944,
+            allowed_active_memory_bytes: 35_350_000_000,
+        }
+    ));
+}
+
+#[test]
 fn should_reject_a_relocated_metallib_whose_certified_bytes_were_changed() {
     let relocation_directory =
         tempfile::tempdir().expect("the test should create a relocation directory");

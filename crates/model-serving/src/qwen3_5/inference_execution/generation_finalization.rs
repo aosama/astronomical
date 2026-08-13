@@ -8,7 +8,7 @@
 
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
-    MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome, PerformanceCounter,
+    MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
     PerformanceOperation,
 };
 
@@ -79,8 +79,12 @@ impl Qwen3_5EngineState {
     ) -> GenerationFinalization {
         let request_id = active_request.request_id;
         let configured_maximum_output_tokens = active_request.maximum_output_tokens;
-        let expert_weight_memory_cache_statistics_at_request_start =
-            active_request.expert_weight_memory_cache_statistics_at_request_start;
+        let processed_target_prompt_token_count = u64::try_from(active_request.prefill_cursor)
+            .unwrap_or(u64::MAX)
+            .saturating_sub(active_request.prompt_work_reuse.target_restored_token_count);
+        let should_refill_retained_experts_after_request = processed_target_prompt_token_count > 0;
+        let completed_context_token_count =
+            u64::try_from(active_request.prefill_cursor).unwrap_or(u64::MAX);
         // Attribution must outlive the request because cleanup and the final
         // memory snapshot are part of the user-visible request cost.
         let mut performance_attribution = std::mem::replace(
@@ -118,9 +122,35 @@ impl Qwen3_5EngineState {
                 self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
+        // Decode pressure may reclaim progressively retained layers, and a client
+        // may disconnect before the ordinary prefill-to-decode fill. Streamed
+        // pages remain operation-local. After request arrays are dropped and
+        // allocator cleanup completes, restore the composed idle retained prefix.
+        if should_refill_retained_experts_after_request && let Some(model) = self.model.as_ref() {
+            match model.fill_retained_complete_expert_layers(
+                completed_context_token_count,
+                u64::MAX,
+                &mut performance_attribution,
+            ) {
+                Ok(newly_retained_layer_count) => tracing::info!(
+                    request_id = request_id.value(),
+                    processed_target_prompt_token_count,
+                    newly_retained_layer_count,
+                    "filled retained expert layers after request cleanup"
+                ),
+                Err(retained_expert_fill_error) => tracing::info!(
+                    request_id = request_id.value(),
+                    processed_target_prompt_token_count,
+                    error = %retained_expert_fill_error,
+                    "skipped retained expert fill after request cleanup"
+                ),
+            }
+        }
         // Promotion is an idle optimization, not a condition for completing the
-        // user's request. A failure remains visible in logs while the transition
-        // helper restores a usable paged fallback.
+        // user's request. A policy rejection or recoverable native capacity
+        // result must remain a normal paged outcome. The transition helper
+        // restores paging growth after either result; only structural failures
+        // are retained as diagnostics because cleanup itself remains complete.
         if let Some(model) = self.model.as_mut()
             && let Err(resident_promotion_error) = model.try_promote_experts_to_resident(
                 Qwen3_5ExpertResidencyTransitionReason::RequestFinalization,
@@ -131,17 +161,6 @@ impl Qwen3_5EngineState {
                 request_id = request_id.value(),
                 error = %resident_promotion_error,
                 "could not restore complete expert residency after request cleanup"
-            );
-        }
-        if performance_attribution.is_enabled()
-            && let Some(model) = self.model.as_ref()
-        {
-            let expert_weight_memory_cache_statistics_at_request_end =
-                model.expert_weight_memory_cache_statistics();
-            record_final_expert_weight_memory_cache_counters(
-                &mut performance_attribution,
-                expert_weight_memory_cache_statistics_at_request_start,
-                expert_weight_memory_cache_statistics_at_request_end,
             );
         }
         let generation_finalization =
@@ -265,53 +284,4 @@ impl Qwen3_5EngineState {
             );
         }
     }
-}
-
-fn record_final_expert_weight_memory_cache_counters(
-    performance_attribution: &mut PerformanceAttribution,
-    expert_weight_memory_cache_statistics_at_request_start:
-        crate::expert_paging::ExpertWeightMemoryCacheStatistics,
-    expert_weight_memory_cache_statistics_at_request_end:
-        crate::expert_paging::ExpertWeightMemoryCacheStatistics,
-) {
-    // Native statistics are process-lifetime totals. Subtract the request-start
-    // snapshot so each generation report owns only activity caused while that
-    // request was active; saturating subtraction keeps diagnostics fail-safe if
-    // a future cache replacement resets cumulative counters.
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheHitCount,
-        expert_weight_memory_cache_statistics_at_request_end
-            .cache_hit_count
-            .saturating_sub(expert_weight_memory_cache_statistics_at_request_start.cache_hit_count),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheMissCount,
-        expert_weight_memory_cache_statistics_at_request_end
-            .cache_miss_count
-            .saturating_sub(
-                expert_weight_memory_cache_statistics_at_request_start.cache_miss_count,
-            ),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheEvictionCount,
-        expert_weight_memory_cache_statistics_at_request_end
-            .eviction_count
-            .saturating_sub(expert_weight_memory_cache_statistics_at_request_start.eviction_count),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheDiskPageLoadCount,
-        expert_weight_memory_cache_statistics_at_request_end
-            .disk_page_load_count
-            .saturating_sub(
-                expert_weight_memory_cache_statistics_at_request_start.disk_page_load_count,
-            ),
-    );
-    performance_attribution.record_counter(
-        PerformanceCounter::NativeExpertCacheDiskBatchLoadCount,
-        expert_weight_memory_cache_statistics_at_request_end
-            .disk_batch_load_count
-            .saturating_sub(
-                expert_weight_memory_cache_statistics_at_request_start.disk_batch_load_count,
-            ),
-    );
 }

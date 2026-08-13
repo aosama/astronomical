@@ -121,28 +121,16 @@ async fn run_qwen3_6_35b_a3b_optiq_4bit_attribution_benchmark() {
             > 0
     );
     assert!(
-        super::counter_amount(
+        operation_occurrence_count(
             cold_generation_report,
-            "native_expert_cache_snapshot_publication_count",
+            "rust_expert_streaming_layer_preparation",
         ) > 0
     );
+    assert!(super::counter_amount(cold_generation_report, "positional_file_read_byte_count",) > 0);
     assert!(
         super::counter_amount(
             cold_generation_report,
-            "native_expert_cache_successful_source_read_byte_count",
-        ) > 0
-    );
-    assert_eq!(
-        super::counter_amount(
-            cold_generation_report,
-            "native_expert_cache_payload_copy_byte_count",
-        ),
-        0
-    );
-    assert!(
-        super::counter_amount(
-            cold_generation_report,
-            "native_paged_expert_projection_graph_count",
+            "rust_streamed_expert_projection_graph_count",
         ) > 0
     );
     assert!(
@@ -152,4 +140,17 @@ async fn run_qwen3_6_35b_a3b_optiq_4bit_attribution_benchmark() {
         ) > 0
     );
     eprintln!("[performance-attribution 3/3] status=success");
+}
+
+fn operation_occurrence_count(report: &serde_json::Value, operation_identifier: &str) -> u64 {
+    report["operations"]
+        .as_array()
+        .and_then(|operations| {
+            operations.iter().find_map(|operation| {
+                (operation["operation"] == operation_identifier)
+                    .then(|| operation["occurrence_count"].as_u64())
+                    .flatten()
+            })
+        })
+        .unwrap_or(0)
 }

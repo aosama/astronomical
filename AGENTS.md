@@ -26,7 +26,7 @@
 
 - GitHub issues must describe Astronomical goals, evidence, scope, constraints, and acceptance criteria. Do not publish raw agent opinions, dictation fragments, private working notes, or broad external-project audits.
 
-- Cite public documentation, model cards, standards, and upstream APIs only when they establish compatibility, provenance, or licensing. Do not describe Astronomical as copied, ported, or derived from another implementation unless the user has explicitly approved actual source reuse and the required attribution is recorded.
+- Cite public documentation, model cards, standards, and upstream APIs only when they establish compatibility, provenance, or licensing.
 
 - Never publish or commit personal names, user names, email addresses, phone numbers, private repository links, local endpoints, local model inventories, credentials, tokens, or machine-specific logs unless the user explicitly approves the exact disclosure.
 
@@ -52,14 +52,6 @@
 
 - Code files should remain around the 500 lines marker not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
-
-## Keep Dependencies Updated to Latest Version
-
-- Always make sure we are using the latest dependencies for this project.
-
-## Naming Convensions in Variables
-
-- Long variable names and class names are accepted and the user prefers long communicative names to brief ambigous names.
 
 ## No Backward Compatibility for REST API surface
 

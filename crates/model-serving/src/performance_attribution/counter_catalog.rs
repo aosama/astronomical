@@ -14,29 +14,8 @@ pub enum PerformanceCounter {
     PrefillChunckCount,
     PrefillCapacityRejectionCount,
     PrefillCapacityRetryCount,
-    NativeExpertCacheHitCount,
-    NativeExpertCacheMissCount,
-    NativeExpertCacheSelectedExpertAssignmentCount,
-    NativeExpertCacheDistinctRouteExpertCount,
-    NativeExpertCacheMissingRouteExpertCount,
-    NativeExpertCacheSelectedRoutePayloadByteCount,
-    NativeExpertCacheMissingRoutePayloadByteCount,
-    NativeExpertCacheEvictionCount,
-    NativeExpertCacheEvictedPayloadByteCount,
-    NativeExpertCacheMaximumRetentionCeilingBeforeByteCount,
-    NativeExpertCacheMaximumRetentionCeilingAfterByteCount,
-    NativeExpertCacheDiskPageLoadCount,
-    NativeExpertCacheDiskBatchLoadCount,
-    NativeExpertCacheSuccessfulSourceReadCount,
-    NativeExpertCacheSuccessfulSourceReadByteCount,
-    NativeExpertCacheSuccessfulSourceReadElapsedNanoseconds,
-    NativeExpertCacheRouteDependencySynchronizationCount,
-    NativeExpertCacheRouteDependencySynchronizationElapsedNanoseconds,
-    NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds,
-    NativeExpertCacheSnapshotPublicationCount,
-    NativeExpertCachePayloadCopyByteCount,
-    NativePagedExpertProjectionGraphCount,
-    CompleteLayerRouteSynchronizationElisionCount,
+    RustExpertStreamingPayloadByteCount,
+    RustStreamedExpertProjectionGraphCount,
     PositionalFileReadCallCount,
     PositionalFileReadByteCount,
     PositionalFileReadElapsedNanoseconds,
@@ -89,29 +68,8 @@ impl PerformanceCounter {
         Self::PrefillChunckCount,
         Self::PrefillCapacityRejectionCount,
         Self::PrefillCapacityRetryCount,
-        Self::NativeExpertCacheHitCount,
-        Self::NativeExpertCacheMissCount,
-        Self::NativeExpertCacheSelectedExpertAssignmentCount,
-        Self::NativeExpertCacheDistinctRouteExpertCount,
-        Self::NativeExpertCacheMissingRouteExpertCount,
-        Self::NativeExpertCacheSelectedRoutePayloadByteCount,
-        Self::NativeExpertCacheMissingRoutePayloadByteCount,
-        Self::NativeExpertCacheEvictionCount,
-        Self::NativeExpertCacheEvictedPayloadByteCount,
-        Self::NativeExpertCacheMaximumRetentionCeilingBeforeByteCount,
-        Self::NativeExpertCacheMaximumRetentionCeilingAfterByteCount,
-        Self::NativeExpertCacheDiskPageLoadCount,
-        Self::NativeExpertCacheDiskBatchLoadCount,
-        Self::NativeExpertCacheSuccessfulSourceReadCount,
-        Self::NativeExpertCacheSuccessfulSourceReadByteCount,
-        Self::NativeExpertCacheSuccessfulSourceReadElapsedNanoseconds,
-        Self::NativeExpertCacheRouteDependencySynchronizationCount,
-        Self::NativeExpertCacheRouteDependencySynchronizationElapsedNanoseconds,
-        Self::NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds,
-        Self::NativeExpertCacheSnapshotPublicationCount,
-        Self::NativeExpertCachePayloadCopyByteCount,
-        Self::NativePagedExpertProjectionGraphCount,
-        Self::CompleteLayerRouteSynchronizationElisionCount,
+        Self::RustExpertStreamingPayloadByteCount,
+        Self::RustStreamedExpertProjectionGraphCount,
         Self::PositionalFileReadCallCount,
         Self::PositionalFileReadByteCount,
         Self::PositionalFileReadElapsedNanoseconds,
@@ -163,66 +121,9 @@ impl PerformanceCounter {
             Self::PrefillChunckCount => "prefill_chunck_count",
             Self::PrefillCapacityRejectionCount => "prefill_capacity_rejection_count",
             Self::PrefillCapacityRetryCount => "prefill_capacity_retry_count",
-            Self::NativeExpertCacheHitCount => "native_expert_cache_hit_count",
-            Self::NativeExpertCacheMissCount => "native_expert_cache_miss_count",
-            Self::NativeExpertCacheSelectedExpertAssignmentCount => {
-                "native_expert_cache_selected_expert_assignment_count"
-            }
-            Self::NativeExpertCacheDistinctRouteExpertCount => {
-                "native_expert_cache_distinct_route_expert_count"
-            }
-            Self::NativeExpertCacheMissingRouteExpertCount => {
-                "native_expert_cache_missing_route_expert_count"
-            }
-            Self::NativeExpertCacheSelectedRoutePayloadByteCount => {
-                "native_expert_cache_selected_route_payload_byte_count"
-            }
-            Self::NativeExpertCacheMissingRoutePayloadByteCount => {
-                "native_expert_cache_missing_route_payload_byte_count"
-            }
-            Self::NativeExpertCacheEvictionCount => "native_expert_cache_eviction_count",
-            Self::NativeExpertCacheEvictedPayloadByteCount => {
-                "native_expert_cache_evicted_payload_byte_count"
-            }
-            Self::NativeExpertCacheMaximumRetentionCeilingBeforeByteCount => {
-                "native_expert_cache_maximum_retention_ceiling_before_byte_count"
-            }
-            Self::NativeExpertCacheMaximumRetentionCeilingAfterByteCount => {
-                "native_expert_cache_maximum_retention_ceiling_after_byte_count"
-            }
-            Self::NativeExpertCacheDiskPageLoadCount => "native_expert_cache_disk_page_load_count",
-            Self::NativeExpertCacheDiskBatchLoadCount => {
-                "native_expert_cache_disk_batch_load_count"
-            }
-            Self::NativeExpertCacheSuccessfulSourceReadCount => {
-                "native_expert_cache_successful_source_read_count"
-            }
-            Self::NativeExpertCacheSuccessfulSourceReadByteCount => {
-                "native_expert_cache_successful_source_read_byte_count"
-            }
-            Self::NativeExpertCacheSuccessfulSourceReadElapsedNanoseconds => {
-                "native_expert_cache_successful_source_read_elapsed_nanoseconds"
-            }
-            Self::NativeExpertCacheRouteDependencySynchronizationCount => {
-                "native_expert_cache_route_dependency_synchronization_count"
-            }
-            Self::NativeExpertCacheRouteDependencySynchronizationElapsedNanoseconds => {
-                "native_expert_cache_route_dependency_synchronization_elapsed_nanoseconds"
-            }
-            Self::NativeExpertCacheMaximumRouteDependencySynchronizationElapsedNanoseconds => {
-                "native_expert_cache_maximum_route_dependency_synchronization_elapsed_nanoseconds"
-            }
-            Self::NativeExpertCacheSnapshotPublicationCount => {
-                "native_expert_cache_snapshot_publication_count"
-            }
-            Self::NativeExpertCachePayloadCopyByteCount => {
-                "native_expert_cache_payload_copy_byte_count"
-            }
-            Self::NativePagedExpertProjectionGraphCount => {
-                "native_paged_expert_projection_graph_count"
-            }
-            Self::CompleteLayerRouteSynchronizationElisionCount => {
-                "complete_layer_route_synchronization_elision_count"
+            Self::RustExpertStreamingPayloadByteCount => "rust_expert_streaming_payload_byte_count",
+            Self::RustStreamedExpertProjectionGraphCount => {
+                "rust_streamed_expert_projection_graph_count"
             }
             Self::PositionalFileReadCallCount => "positional_file_read_call_count",
             Self::PositionalFileReadByteCount => "positional_file_read_byte_count",

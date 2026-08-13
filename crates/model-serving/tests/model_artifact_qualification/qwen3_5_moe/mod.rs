@@ -1,8 +1,8 @@
-#[cfg(feature = "direct-mlx")]
-mod aligned_expert_pack;
 mod artifact;
 #[cfg(feature = "direct-mlx")]
 mod automatic_residency;
+#[cfg(feature = "direct-mlx")]
+mod automatic_residency_activation_headroom;
 #[cfg(feature = "direct-mlx")]
 mod automatic_residency_failure;
 #[cfg(feature = "direct-mlx")]
@@ -15,7 +15,6 @@ mod engine;
 mod exact_model_prompt;
 #[cfg(feature = "direct-mlx")]
 mod exact_paged_decode;
-mod expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_paging_decode;
 #[cfg(feature = "direct-mlx")]
@@ -26,17 +25,13 @@ mod expert_paging_prefill_performance;
 mod expert_paging_representative_performance;
 #[cfg(feature = "direct-mlx")]
 mod expert_paging_romeo_and_juliet_performance;
-#[cfg(feature = "direct-mlx")]
-mod expert_route_reuse_performance;
-#[cfg(feature = "direct-mlx")]
-mod expert_weight_memory_cache_eviction;
 mod model;
 #[cfg(feature = "direct-mlx")]
 mod mtp;
 #[cfg(feature = "direct-mlx")]
-mod one_expert_cache_endurance;
-#[cfg(feature = "direct-mlx")]
 mod paged_mode_endurance;
+#[cfg(feature = "direct-mlx")]
+mod paged_prefill_no_replay;
 #[cfg(feature = "direct-mlx")]
 mod performance_attribution;
 #[cfg(feature = "direct-mlx")]
@@ -130,55 +125,6 @@ fn select_smallest_compatible_speculative_prefill_draft_model(
                 .cmp(&right_candidate.0)
                 .then_with(|| left_candidate.1.cmp(&right_candidate.1))
         })
-}
-
-async fn construct_model_artifact_expert_pager(
-    progress_log_prefix: &str,
-) -> (
-    astronomical_runtime_integration::MlxRuntime,
-    astronomical_model_serving::Qwen3_5Config,
-    astronomical_model_serving::Qwen3_5ExpertPager,
-) {
-    use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5ExpertPager};
-    use astronomical_runtime_integration::MlxRuntime;
-
-    eprintln!("{progress_log_prefix} status=progress phase=artifact_validation");
-    let model_directory = crate::common::configured_ornith_model_artifact_directory();
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the pinned Ornith artifact should validate before expert pager construction");
-    eprintln!(
-        "{progress_log_prefix} status=progress phase=artifact_validated shards={} payload_bytes={}",
-        validated_artifact.shard_count(),
-        validated_artifact.total_payload_bytes()
-    );
-
-    eprintln!("{progress_log_prefix} status=progress phase=runtime_init");
-    let mlx_memory_limits =
-        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let configured_mlx_memory_cap_bytes = mlx_memory_limits.active_memory_limit_bytes();
-    let runtime = MlxRuntime::initialize(mlx_memory_limits)
-        .expect("the direct MLX runtime should initialize for expert pager construction");
-
-    eprintln!("{progress_log_prefix} status=progress phase=pager_construction");
-    let config = validated_artifact.config().clone();
-    let weight_map: std::collections::HashMap<String, String> = validated_artifact
-        .shard_index()
-        .language_tensor_name_to_shard_file_name()
-        .iter()
-        .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
-        .collect();
-    let expert_pager = Qwen3_5ExpertPager::new(
-        &runtime,
-        model_directory,
-        &weight_map,
-        &config,
-        configured_mlx_memory_cap_bytes,
-        false,
-    )
-    .expect("Qwen3_5ExpertPager should construct from the Ornith model-artifact directory");
-
-    (runtime, config, expert_pager)
 }
 
 fn qwen3_6_35b_a3b_eight_bit_model_directory() -> std::path::PathBuf {

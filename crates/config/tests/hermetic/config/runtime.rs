@@ -34,6 +34,7 @@ fn should_load_supported_runtime_settings_from_user_config_file() {
             .expect("fixed policy should resolve"),
         PrefillChunckSizingPolicy::Fixed {
             fixed_prefill_chunck_tokens: 2_048,
+            fixed_ssd_streaming_prefill_chunck_tokens: None,
         }
     );
     assert!(astronomical_config.mtp_enabled());

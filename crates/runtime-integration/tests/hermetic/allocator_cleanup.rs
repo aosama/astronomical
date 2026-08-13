@@ -127,8 +127,10 @@ fn should_not_sample_disabled_adaptive_memory_for_unpublished_forwards() {
         .find("match prediction_attempt_outcome")
         .map(|relative_match_start| mtp_prediction_attempt_start + relative_match_start)
         .expect("generation advance must branch on prediction attempt outcomes");
+    // Search for the semantic call boundary rather than its rustfmt-sensitive
+    // assignment layout so formatting cannot invalidate this structural contract.
     let target_only_decode_measurement_start = QWEN_ADVANCE_GENERATION_SOURCE[mtp_match_start..]
-        .find("let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(")
+        .find("measure_adaptive_ram_growth_memory_admission(")
         .map(|relative_decode_start| mtp_match_start + relative_decode_start)
         .expect("generation advance must retain target-only decode fallback");
     let mtp_match_source =

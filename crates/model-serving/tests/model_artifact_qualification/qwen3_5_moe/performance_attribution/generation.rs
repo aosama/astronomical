@@ -25,17 +25,35 @@ pub(crate) async fn run_attributed_generation(
         .expect("the benchmark request should be accepted");
     let mut generated_token_ids = Vec::with_capacity(usize::from(output_token_count));
     let mut generation_started_at = None;
+    let mut latest_prefill_processed_token_count = 0_u32;
+    let mut latest_prefill_elapsed_millis = 0_u64;
+    let prompt_token_count = u32::try_from(prompt_token_ids.len()).unwrap_or(u32::MAX);
     let mut progress_interval = interval(PROGRESS_INTERVAL);
     progress_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     progress_interval.tick().await;
     while generated_token_ids.len() < usize::from(output_token_count) {
         let generated_token_outcome = crate::common::generation_progress::await_generation_advance_with_live_progress(qwen3_5_engine.decode_next_token(request_id), &mut progress_interval, || {
+            if generated_token_ids.is_empty() {
+                let prefill_elapsed_seconds =
+                    latest_prefill_elapsed_millis as f64 / 1000.0;
+                let prefill_tokens_per_second = if latest_prefill_elapsed_millis == 0 {
+                    0.0
+                } else {
+                    f64::from(latest_prefill_processed_token_count)
+                        / prefill_elapsed_seconds.max(f64::EPSILON)
+                };
+                eprintln!(
+                    "[performance-attribution] status=progress phase={phase_name} stage=prefill processed_prompt_tokens={latest_prefill_processed_token_count}/{prompt_token_count} prefill_tokens_per_second={prefill_tokens_per_second:.2} request_elapsed_seconds={:.1}",
+                    request_started_at.elapsed().as_secs_f64()
+                );
+                return;
+            }
             let steady_state_output_token_count = generated_token_ids.len().saturating_sub(1);
             let generation_elapsed_seconds = generation_started_at.map(|started_at: Instant| started_at.elapsed().as_secs_f64()).unwrap_or(0.0);
             let output_tokens_per_second = steady_state_output_token_count as f64 / generation_elapsed_seconds.max(f64::EPSILON);
             let remaining_output_token_count = usize::from(output_token_count).saturating_sub(generated_token_ids.len());
             let estimated_remaining_seconds = if steady_state_output_token_count == 0 { f64::INFINITY } else { remaining_output_token_count as f64 / output_tokens_per_second.max(f64::EPSILON) };
-            eprintln!("[performance-attribution] status=progress phase={phase_name} completed_output_tokens={}/{output_token_count} steady_state_output_tokens={steady_state_output_token_count} output_tokens_per_second={output_tokens_per_second:.2} ETA_seconds={estimated_remaining_seconds:.1}", generated_token_ids.len());
+            eprintln!("[performance-attribution] status=progress phase={phase_name} stage=generation completed_output_tokens={}/{output_token_count} steady_state_output_tokens={steady_state_output_token_count} output_tokens_per_second={output_tokens_per_second:.2} ETA_seconds={estimated_remaining_seconds:.1}", generated_token_ids.len());
         }).await;
         match generated_token_outcome.unwrap_or_else(|generation_advance_error| {
             panic!(
@@ -53,8 +71,31 @@ pub(crate) async fn run_attributed_generation(
                     break;
                 }
             }
-            GeneratedToken::PrefillProgress { .. } => {}
-            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::PrefillProgress {
+                processed_token_count,
+                elapsed_millis,
+                ..
+            } => {
+                latest_prefill_processed_token_count = processed_token_count;
+                latest_prefill_elapsed_millis = elapsed_millis;
+                let prefill_tokens_per_second = if elapsed_millis == 0 {
+                    0.0
+                } else {
+                    f64::from(processed_token_count)
+                        / (elapsed_millis as f64 / 1000.0).max(f64::EPSILON)
+                };
+                eprintln!(
+                    "[performance-attribution] status=progress phase={phase_name} stage=prefill processed_prompt_tokens={processed_token_count}/{prompt_token_count} prefill_tokens_per_second={prefill_tokens_per_second:.2}"
+                );
+            }
+            GeneratedToken::PromptProcessingPhaseStarted {
+                prompt_processing_phase,
+                total_token_count,
+            } => {
+                eprintln!(
+                    "[performance-attribution] status=progress phase={phase_name} stage=prefill_start prompt_processing_phase={prompt_processing_phase:?} total_prompt_tokens={total_token_count}"
+                );
+            }
             GeneratedToken::EndOfSequence => break,
         }
     }

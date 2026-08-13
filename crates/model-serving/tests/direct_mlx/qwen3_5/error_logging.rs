@@ -1,4 +1,6 @@
-use astronomical_model_serving::{InferenceEngineError, Qwen3_5ExecutionError, WorkerRuntimeError};
+use astronomical_model_serving::{
+    ExpertPagingError, InferenceEngineError, Qwen3_5ExecutionError, WorkerRuntimeError,
+};
 use astronomical_runtime_integration::MlxRuntimeError;
 
 #[test]
@@ -37,6 +39,25 @@ fn should_translate_native_mlx_capacity_rejection_to_an_invalid_request() {
             attempted_allocation_bytes: 300_000_000,
             allowed_active_memory_bytes: 10_100_000_000,
         });
+
+    let inference_engine_error = InferenceEngineError::from(qwen3_5_execution_error);
+
+    assert!(matches!(
+        inference_engine_error,
+        InferenceEngineError::InvalidRequest { reason }
+            if reason == "generation cannot fit under the configured MLX memory ceiling"
+    ));
+}
+
+#[test]
+fn should_translate_prefixed_native_capacity_rejection_to_an_invalid_request() {
+    let qwen3_5_execution_error = Qwen3_5ExecutionError::from(ExpertPagingError::NativeRuntime(
+        MlxRuntimeError::ActiveMemoryLimitExceeded {
+            active_memory_bytes: 35_346_771_214,
+            attempted_allocation_bytes: 3_538_944,
+            allowed_active_memory_bytes: 35_350_000_000,
+        },
+    ));
 
     let inference_engine_error = InferenceEngineError::from(qwen3_5_execution_error);
 

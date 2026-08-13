@@ -41,6 +41,7 @@ pub(crate) fn prefill_optimizer_status_document(
             ),
             Some(PrefillChunckSizingPolicy::Fixed {
                 fixed_prefill_chunck_tokens,
+                fixed_ssd_streaming_prefill_chunck_tokens: _,
             }) => (Some(false), Vec::new(), Some(*fixed_prefill_chunck_tokens)),
             None => (
                 latest_prefill_optimizer_insight.map(|_| true),

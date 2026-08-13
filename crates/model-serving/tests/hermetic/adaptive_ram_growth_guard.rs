@@ -38,7 +38,7 @@ fn should_allow_unobserved_growth_when_exact_persistent_bytes_fit_the_limit() {
 }
 
 #[test]
-fn should_apply_transient_learning_only_to_the_exact_execution_context() {
+fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let observed_prefill_context = AdaptiveRamGrowthContext::prefill(128, 0, false, false, true);
@@ -66,7 +66,7 @@ fn should_apply_transient_learning_only_to_the_exact_execution_context() {
     );
     assert_eq!(
         different_context_projection.observed_transient_high_water_bytes(),
-        0
+        200
     );
     assert_eq!(observed_context_projection.stable_projected_bytes(), 800);
     assert_eq!(observed_context_projection.peak_projected_bytes(), 1_000);
@@ -92,7 +92,10 @@ fn should_accept_stable_memory_at_c_and_reject_one_byte_above_c() {
     assert_eq!(fitting_projection.stable_projected_bytes(), 1_000);
     assert!(fitting_projection.fits_stable_and_peak_limits());
     assert_eq!(exceeding_projection.stable_projected_bytes(), 1_001);
-    assert_eq!(exceeding_projection.required_reclamation_bytes(), 1);
+    assert_eq!(
+        exceeding_projection.operation_reclamation_required_bytes(),
+        1
+    );
     assert!(!exceeding_projection.fits_stable_and_peak_limits());
 }
 
@@ -123,18 +126,21 @@ fn should_accept_peak_memory_at_p_and_reject_one_byte_above_p() {
         .project_growth_for_context(fitting_peak_context, 900, 100, 0, 0)
         .expect("peak ending exactly at P should project");
     let exceeding_projection = adaptive_ram_growth_guard
-        .project_growth_for_context(exceeding_peak_context, 900, 100, 0, 0)
+        .project_growth_for_context(exceeding_peak_context, 900, 101, 0, 0)
         .expect("peak one byte above P should project");
 
-    assert_eq!(fitting_projection.peak_projected_bytes(), 1_010);
-    assert!(fitting_projection.fits_stable_and_peak_limits());
-    assert_eq!(exceeding_projection.peak_projected_bytes(), 1_011);
-    assert_eq!(exceeding_projection.required_reclamation_bytes(), 1);
+    assert_eq!(fitting_projection.peak_projected_bytes(), 1_011);
+    assert!(!fitting_projection.fits_stable_and_peak_limits());
+    assert_eq!(exceeding_projection.peak_projected_bytes(), 1_012);
+    assert_eq!(
+        exceeding_projection.operation_reclamation_required_bytes(),
+        2
+    );
     assert!(!exceeding_projection.fits_stable_and_peak_limits());
 }
 
 #[test]
-fn should_keep_prompt_position_visual_mtp_and_expert_mode_contexts_independent() {
+fn should_reserve_transient_headroom_for_unseen_prefill_contexts() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let observed_prefill_context = AdaptiveRamGrowthContext::prefill(128, 7, true, true, true);
@@ -158,7 +164,7 @@ fn should_keep_prompt_position_visual_mtp_and_expert_mode_contexts_independent()
                 .project_growth_for_context(independent_prefill_context, 500, 100, 0, 0)
                 .expect("an independent context should project")
                 .observed_transient_high_water_bytes(),
-            0
+            200
         );
     }
 }
@@ -205,7 +211,7 @@ fn should_reject_growth_when_the_peak_projection_exceeds_the_limit() {
         .expect("the peak projection should not overflow");
 
     assert_eq!(projection.peak_projected_bytes(), 1_050);
-    assert_eq!(projection.required_reclamation_bytes(), 40);
+    assert_eq!(projection.operation_reclamation_required_bytes(), 40);
     assert!(!projection.fits_stable_and_peak_limits());
 }
 
@@ -252,7 +258,7 @@ fn should_preserve_the_highest_transient_observation_after_a_lower_spike() {
 
     assert_eq!(projection.observed_transient_high_water_bytes(), 200);
     assert_eq!(projection.peak_projected_bytes(), 1_001);
-    assert_eq!(projection.required_reclamation_bytes(), 0);
+    assert_eq!(projection.operation_reclamation_required_bytes(), 0);
     assert!(projection.fits_stable_and_peak_limits());
 }
 
@@ -278,7 +284,7 @@ fn should_not_underflow_when_active_memory_falls_without_a_new_allocator_peak() 
 }
 
 #[test]
-fn should_allow_growth_when_the_measured_peak_fits_but_the_soft_recovery_reserve_does_not() {
+fn should_admit_growth_without_expert_reclamation_when_only_the_recovery_reserve_is_short() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     // Learn a 150-byte transient window.
@@ -299,10 +305,17 @@ fn should_allow_growth_when_the_measured_peak_fits_but_the_soft_recovery_reserve
     assert_eq!(projection.exact_persistent_growth_bytes(), 150);
     assert_eq!(projection.observed_transient_high_water_bytes(), 150);
     assert_eq!(projection.peak_projected_bytes(), 900);
-    assert_eq!(projection.soft_recovery_projected_bytes(), 1_050);
+    assert_eq!(projection.recovery_projected_bytes(), 1_050);
     assert_eq!(projection.active_memory_limit_bytes(), 1_000);
-    assert_eq!(projection.required_reclamation_bytes(), 0);
-    assert_eq!(projection.soft_reserve_shortfall_bytes(), 40);
+    assert_eq!(projection.operation_reclamation_required_bytes(), 0);
+    assert_eq!(projection.recovery_reserve_shortfall_bytes(), 40);
+    assert_eq!(
+        projection
+            .expert_retention_reclamation_plan(1_000)
+            .reclamation_target_bytes(),
+        0,
+        "recovery-only headroom must not force expert reclamation before a typed allocation failure"
+    );
     assert!(projection.fits_stable_and_peak_limits());
     assert!(!projection.has_full_recovery_reserve());
 }
@@ -326,15 +339,22 @@ fn should_report_only_the_measured_peak_shortfall_as_required_reclamation() {
         .expect("a valid projection should not overflow");
 
     // peak: 700 + 150 + 200 = 1_050, deficit against P=1,010 is 40.
-    // soft: 1_050 + 200 = 1_250, shortfall against P=1,010 is 240.
-    assert_eq!(projection.required_reclamation_bytes(), 40);
-    assert_eq!(projection.soft_reserve_shortfall_bytes(), 240);
+    // recovery: 1_050 + 200 = 1_250, shortfall against P=1,010 is 240.
+    assert_eq!(projection.operation_reclamation_required_bytes(), 40);
+    assert_eq!(projection.recovery_reserve_shortfall_bytes(), 240);
+    assert_eq!(
+        projection
+            .expert_retention_reclamation_plan(1_000)
+            .reclamation_target_bytes(),
+        40,
+        "preemptive reclamation should cover the measured peak shortfall, not the larger diagnostic recovery shortfall"
+    );
     assert!(!projection.fits_stable_and_peak_limits());
     assert!(!projection.has_full_recovery_reserve());
 }
 
 #[test]
-fn should_reject_a_soft_projection_overflow() {
+fn should_reject_a_recovery_projection_overflow() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(usize::MAX)
         .expect("the platform maximum should be a valid positive limit");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -348,7 +368,7 @@ fn should_reject_a_soft_projection_overflow() {
 
     let projection_error = adaptive_ram_growth_guard
         .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 0, 0, 0, 0)
-        .expect_err("an overflowing soft recovery projection must fail closed");
+        .expect_err("an overflowing recovery projection must fail closed");
 
     assert_eq!(
         projection_error,
@@ -486,7 +506,37 @@ fn should_project_exact_temporary_workspace_without_double_counting_learned_resi
     assert_eq!(projection.observed_transient_high_water_bytes(), 100);
     assert_eq!(projection.stable_projected_bytes(), 600);
     assert_eq!(projection.peak_projected_bytes(), 900);
-    assert_eq!(projection.soft_recovery_projected_bytes(), 1_200);
+    assert_eq!(projection.recovery_projected_bytes(), 1_200);
+    assert_eq!(
+        projection.forward_reserve_bytes(),
+        400,
+        "the residency planner must reserve every byte between the admitted active baseline and expected peak boundary"
+    );
+}
+
+#[test]
+fn should_not_subtract_stable_expert_growth_twice_from_prefill_headroom() {
+    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(40_000)
+        .expect("a positive active-memory limit should create a guard");
+
+    // Active memory grows by 10,000 stable expert bytes. Peak is another 3,000
+    // bytes above the final active sample, so the reusable transient window is
+    // exactly 3,000 bytes. The stable post-forward sample already excludes the
+    // expert growth from this difference.
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        DEFAULT_PREFILL_CONTEXT,
+        true,
+        20_000,
+        30_000,
+        33_000,
+        0,
+    );
+
+    assert_eq!(
+        adaptive_ram_growth_guard
+            .observed_transient_high_water_bytes(AdaptiveRamGrowthPhase::Prefill),
+        3_000
+    );
 }
 
 #[test]
@@ -510,5 +560,8 @@ fn should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_
         70_778_880
     );
     assert_eq!(projection.stable_projected_bytes(), 28_069_417_478);
-    assert_eq!(projection.required_reclamation_bytes(), 69_417_478);
+    assert_eq!(
+        projection.operation_reclamation_required_bytes(),
+        69_417_478
+    );
 }

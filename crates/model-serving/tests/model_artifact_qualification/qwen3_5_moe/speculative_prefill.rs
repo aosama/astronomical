@@ -147,7 +147,7 @@ async fn should_measure_representative_speculative_prefill_against_a_target_only
             mlx_memory_limits,
         );
         eprintln!(
-            "[speculative-prefill-release] status=sample prompt_tokens={} output_tokens={} target_only_total_request_seconds={:.3} speculative_prefill_total_request_seconds={:.3} target_only_prefill_seconds={:.3} speculative_prefill_prefill_seconds={:.3} target_only_decode_seconds={:.3} speculative_prefill_decode_seconds={:.3} speculative_prefill_draft_scoring_seconds={:.3} speculative_prefill_sparse_input_assembly_seconds={:.3} speculative_prefill_sparse_target_seconds={:.3} speculative_prefill_fallback_count={} target_only_mtp_accepted={} target_only_mtp_rejected={} speculative_prefill_mtp_accepted={} speculative_prefill_mtp_rejected={} target_only_expert_disk_page_loads={} speculative_prefill_expert_disk_page_loads={} target_only_expert_cache_misses={} speculative_prefill_expert_cache_misses={} target_only_expert_cache_evictions={} speculative_prefill_expert_cache_evictions={} target_only_generation_tokens_per_second={:.2} speculative_prefill_generation_tokens_per_second={:.2} throughput_ratio={:.3} total_request_speedup_ratio={:.3} target_only_active_mlx_bytes={} speculative_prefill_active_mlx_bytes={} target_only_peak_mlx_bytes={} speculative_prefill_peak_mlx_bytes={}",
+            "[speculative-prefill-release] status=sample prompt_tokens={} output_tokens={} target_only_total_request_seconds={:.3} speculative_prefill_total_request_seconds={:.3} target_only_prefill_seconds={:.3} speculative_prefill_prefill_seconds={:.3} target_only_decode_seconds={:.3} speculative_prefill_decode_seconds={:.3} speculative_prefill_draft_scoring_seconds={:.3} speculative_prefill_sparse_input_assembly_seconds={:.3} speculative_prefill_sparse_target_seconds={:.3} speculative_prefill_fallback_count={} target_only_mtp_accepted={} target_only_mtp_rejected={} speculative_prefill_mtp_accepted={} speculative_prefill_mtp_rejected={} target_only_expert_disk_page_loads={} speculative_prefill_expert_disk_page_loads={} target_only_generation_tokens_per_second={:.2} speculative_prefill_generation_tokens_per_second={:.2} throughput_ratio={:.3} total_request_speedup_ratio={:.3} target_only_active_mlx_bytes={} speculative_prefill_active_mlx_bytes={} target_only_peak_mlx_bytes={} speculative_prefill_peak_mlx_bytes={}",
             benchmark_prompt.prompt_token_ids.len(),
             REPRESENTATIVE_OUTPUT_TOKEN_COUNT,
             target_only_before_measurement.total_request_elapsed_seconds,
@@ -166,10 +166,6 @@ async fn should_measure_representative_speculative_prefill_against_a_target_only
             speculative_prefill_measurement.mtp_rejected_draft_count,
             target_only_baseline_measurement.expert_weight_disk_page_load_count,
             speculative_prefill_measurement.expert_weight_disk_page_load_count,
-            target_only_baseline_measurement.expert_weight_memory_cache_miss_count,
-            speculative_prefill_measurement.expert_weight_memory_cache_miss_count,
-            target_only_baseline_measurement.expert_weight_memory_cache_eviction_count,
-            speculative_prefill_measurement.expert_weight_memory_cache_eviction_count,
             target_only_baseline_measurement.generation_tokens_per_second(),
             speculative_prefill_measurement.generation_tokens_per_second(),
             throughput_ratio,
@@ -271,8 +267,6 @@ pub(super) struct RepresentativeGenerationMeasurement {
     mtp_accepted_draft_count: u64,
     mtp_rejected_draft_count: u64,
     pub(super) expert_weight_disk_page_load_count: u64,
-    pub(super) expert_weight_memory_cache_miss_count: u64,
-    pub(super) expert_weight_memory_cache_eviction_count: u64,
     pub(super) maximum_active_memory_bytes: u64,
     pub(super) maximum_peak_memory_bytes: u64,
     pub(super) speculative_prefill_fallback_count: u64,
@@ -513,13 +507,7 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
         mtp_accepted_draft_count: performance_counter_amount("mtp_accepted_draft_count"),
         mtp_rejected_draft_count: performance_counter_amount("mtp_rejected_draft_count"),
         expert_weight_disk_page_load_count: performance_counter_amount(
-            "native_expert_cache_disk_page_load_count",
-        ),
-        expert_weight_memory_cache_miss_count: performance_counter_amount(
-            "native_expert_cache_miss_count",
-        ),
-        expert_weight_memory_cache_eviction_count: performance_counter_amount(
-            "native_expert_cache_eviction_count",
+            "positional_file_read_call_count",
         ),
         maximum_active_memory_bytes,
         maximum_peak_memory_bytes,

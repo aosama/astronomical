@@ -12,6 +12,7 @@ use super::{
 };
 
 use super::sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
+use super::token_decoder::Qwen3_5TokenDecoder;
 use super::token_ids::{Qwen3_5TokenIds, discover_token_ids};
 use super::tokenizer_error::Qwen3_5TokenizerError;
 
@@ -216,14 +217,11 @@ impl Qwen3_5Tokenizer {
     /// Creates one bounded request-local monotonic UTF-8 decoder.
     #[must_use]
     pub fn incremental_decoder(&self) -> Qwen3_5TokenDecoder {
-        Qwen3_5TokenDecoder {
-            tokenizer: Arc::clone(&self.tokenizer),
-            model_vocabulary_size: self.model_vocabulary_size,
-            token_ids: self.token_ids,
-            generated_token_ids: Vec::new(),
-            emitted_text: String::new(),
-            pending_token_ids: Vec::new(),
-        }
+        Qwen3_5TokenDecoder::new(
+            Arc::clone(&self.tokenizer),
+            self.model_vocabulary_size,
+            self.token_ids,
+        )
     }
 
     /// Validates, renders, and tokenizes one structured chat request for native prefill.
@@ -386,105 +384,6 @@ pub fn validate_context_token_count(
         });
     }
     Ok(())
-}
-
-/// Request-local streaming decoder that emits only newly stable text suffixes.
-///
-/// Uses incremental single-token or small-batch decode calls instead of
-/// re-decoding the full token prefix on every push, reducing decode complexity
-/// from O(n^2) to O(n) for normal BPE byte-level tokenizers.
-#[derive(Clone, Debug)]
-pub struct Qwen3_5TokenDecoder {
-    tokenizer: Arc<Tokenizer>,
-    model_vocabulary_size: u32,
-    token_ids: Qwen3_5TokenIds,
-    generated_token_ids: Vec<u32>,
-    emitted_text: String,
-    pending_token_ids: Vec<u32>,
-}
-
-const MAX_PENDING_TOKENS: usize = 4;
-const REPLACEMENT_CHARACTER: char = '\u{FFFD}';
-
-impl Qwen3_5TokenDecoder {
-    /// Decodes one generated token while suppressing both certified stop tokens.
-    pub fn push_token(
-        &mut self,
-        generated_token_id: u32,
-    ) -> Result<Option<String>, Qwen3_5TokenizerError> {
-        if generated_token_id == self.token_ids.end_of_text_token_id
-            || generated_token_id == self.token_ids.im_end_token_id
-        {
-            return Ok(None);
-        }
-        if generated_token_id >= self.model_vocabulary_size
-            || self.tokenizer.id_to_token(generated_token_id).is_none()
-        {
-            return Err(Qwen3_5TokenizerError::GeneratedTokenOutOfVocabulary {
-                generated_token_id,
-                model_vocabulary_size: self.model_vocabulary_size,
-            });
-        }
-        self.generated_token_ids.push(generated_token_id);
-        self.pending_token_ids.push(generated_token_id);
-
-        let candidate_text = self
-            .tokenizer
-            .decode(&self.pending_token_ids, true)
-            .map_err(|source| Qwen3_5TokenizerError::DecodeGeneratedTokens { source })?;
-
-        if !candidate_text.ends_with(REPLACEMENT_CHARACTER) {
-            self.emitted_text.push_str(&candidate_text);
-            self.pending_token_ids.clear();
-            if candidate_text.is_empty() {
-                return Ok(None);
-            }
-            return Ok(Some(candidate_text));
-        }
-
-        if self.pending_token_ids.len() >= MAX_PENDING_TOKENS {
-            return self.flush_via_full_decode();
-        }
-
-        Ok(None)
-    }
-
-    /// Flushes a final incomplete byte-fallback sequence at request completion.
-    pub fn finish(&mut self) -> Result<Option<String>, Qwen3_5TokenizerError> {
-        if self.pending_token_ids.is_empty() {
-            return Ok(None);
-        }
-        self.flush_via_full_decode()
-    }
-
-    fn flush_via_full_decode(&mut self) -> Result<Option<String>, Qwen3_5TokenizerError> {
-        let full_decoded_text = self
-            .tokenizer
-            .decode(&self.generated_token_ids, true)
-            .map_err(|source| Qwen3_5TokenizerError::DecodeGeneratedTokens { source })?;
-        if !full_decoded_text.starts_with(&self.emitted_text) {
-            return Err(Qwen3_5TokenizerError::DecodedTextRewrotePrefix);
-        }
-        let new_text_suffix = full_decoded_text[self.emitted_text.len()..].to_owned();
-        self.emitted_text = full_decoded_text;
-        self.pending_token_ids.clear();
-        if new_text_suffix.is_empty() {
-            return Ok(None);
-        }
-        Ok(Some(new_text_suffix))
-    }
-
-    pub(crate) fn generated_token_ids_for_diagnostics(&self) -> &[u32] {
-        &self.generated_token_ids
-    }
-
-    pub(crate) fn pending_token_ids_for_diagnostics(&self) -> &[u32] {
-        &self.pending_token_ids
-    }
-
-    pub(crate) fn emitted_text_for_diagnostics(&self) -> &str {
-        &self.emitted_text
-    }
 }
 
 /// Extracts one token-count vector per user message from the conversation history.

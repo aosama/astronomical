@@ -53,7 +53,7 @@ async fn run_compact_prefill_performance_probe() {
         &compact_prefill_snapshot.final_position_logits,
     );
     eprintln!(
-        "[paged-prefill-performance] status=success token_count={} token_local_prefill_elapsed_seconds={:.3} token_local_prefill_tokens_per_second={:.2} compact_prefill_elapsed_seconds={:.3} compact_prefill_tokens_per_second={:.2} token_local_expert_weight_memory_cache_disk_page_loads={} compact_expert_weight_memory_cache_disk_page_loads={} token_local_expert_weight_memory_cache_disk_batch_loads={} compact_expert_weight_memory_cache_disk_batch_loads={} token_local_expert_weight_memory_cache_hits={} compact_expert_weight_memory_cache_hits={} token_local_expert_weight_memory_cache_misses={} compact_expert_weight_memory_cache_misses={} token_local_expert_weight_memory_cache_resident_payload_bytes={} compact_expert_weight_memory_cache_resident_payload_bytes={} max_abs_logit_delta={:.6}",
+        "[paged-prefill-performance] status=success token_count={} token_local_prefill_elapsed_seconds={:.3} token_local_prefill_tokens_per_second={:.2} compact_prefill_elapsed_seconds={:.3} compact_prefill_tokens_per_second={:.2} token_local_page_store_disk_page_loads={} compact_page_store_disk_page_loads={} token_local_page_store_disk_batch_loads={} compact_page_store_disk_batch_loads={} token_local_resident_payload_bytes={} compact_resident_payload_bytes={} max_abs_logit_delta={:.6}",
         prompt_token_ids.len(),
         token_local_prefill_snapshot.prefill_elapsed.as_secs_f64(),
         prefill_tokens_per_second(
@@ -69,10 +69,6 @@ async fn run_compact_prefill_performance_probe() {
         compact_prefill_snapshot.expert_weight_memory_cache_disk_page_load_count,
         token_local_prefill_snapshot.expert_weight_memory_cache_disk_batch_load_count,
         compact_prefill_snapshot.expert_weight_memory_cache_disk_batch_load_count,
-        token_local_prefill_snapshot.expert_weight_memory_cache_hit_count,
-        compact_prefill_snapshot.expert_weight_memory_cache_hit_count,
-        token_local_prefill_snapshot.expert_weight_memory_cache_miss_count,
-        compact_prefill_snapshot.expert_weight_memory_cache_miss_count,
         token_local_prefill_snapshot.expert_weight_memory_cache_resident_payload_byte_count,
         compact_prefill_snapshot.expert_weight_memory_cache_resident_payload_byte_count,
         maximum_token_local_to_compact_absolute_logit_delta,
@@ -114,14 +110,12 @@ async fn run_automatic_prefill_2048_prompt_tps_probe() {
         automatic_prefill_snapshot.prefill_elapsed,
     );
     eprintln!(
-        "[paged-prefill-performance] status=success token_count={} prompt_processing_prefill_elapsed_seconds={:.3} prompt_processing_prefill_tokens_per_second={:.2} expert_weight_memory_cache_disk_page_loads={} expert_weight_memory_cache_disk_batch_loads={} expert_weight_memory_cache_hits={} expert_weight_memory_cache_misses={} expert_weight_memory_cache_resident_payload_bytes={}",
+        "[paged-prefill-performance] status=success token_count={} prompt_processing_prefill_elapsed_seconds={:.3} prompt_processing_prefill_tokens_per_second={:.2} page_store_disk_page_loads={} page_store_disk_batch_loads={} resident_payload_bytes={}",
         prompt_token_ids.len(),
         automatic_prefill_snapshot.prefill_elapsed.as_secs_f64(),
         prompt_processing_prefill_tokens_per_second,
         automatic_prefill_snapshot.expert_weight_memory_cache_disk_page_load_count,
         automatic_prefill_snapshot.expert_weight_memory_cache_disk_batch_load_count,
-        automatic_prefill_snapshot.expert_weight_memory_cache_hit_count,
-        automatic_prefill_snapshot.expert_weight_memory_cache_miss_count,
         automatic_prefill_snapshot.expert_weight_memory_cache_resident_payload_byte_count,
     );
     assert!(

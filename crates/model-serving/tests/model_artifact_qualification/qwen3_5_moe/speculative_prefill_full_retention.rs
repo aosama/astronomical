@@ -62,16 +62,6 @@ async fn should_complete_persistent_speculative_prefill_when_keep_percentage_is_
             "a resident target that fits beside the drafter must not demand-load expert pages",
         );
         assert_eq!(
-            full_keep_measurement.expert_weight_memory_cache_miss_count,
-            0,
-            "resident target execution must not consult the native expert cache",
-        );
-        assert_eq!(
-            full_keep_measurement.expert_weight_memory_cache_eviction_count,
-            0,
-            "SpecPrefill must not destroy fitting target residency",
-        );
-        assert_eq!(
             full_keep_measurement.speculative_prefill_draft_scored_suffix_token_count,
             representative_prompt.prompt_token_ids.len() as u64,
         );

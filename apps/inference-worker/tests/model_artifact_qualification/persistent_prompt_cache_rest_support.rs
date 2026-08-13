@@ -36,6 +36,29 @@ pub(super) fn prepare_cacheable_romeo_and_juliet_prompt(
     model_directory: &Path,
     maximum_prompt_token_count: usize,
 ) -> PreparedRomeoAndJulietPrompt {
+    prepare_romeo_and_juliet_prompt_with_instruction(
+        model_directory,
+        maximum_prompt_token_count,
+        "Return only a factual Romeo and Juliet summary in no more than four short sentences and ninety words. Use one paragraph with no line breaks. Include the central conflict, major decisions, and tragic outcome.",
+    )
+}
+
+pub(super) fn prepare_romeo_and_juliet_summary_prompt(
+    model_directory: &Path,
+    maximum_prompt_token_count: usize,
+) -> PreparedRomeoAndJulietPrompt {
+    prepare_romeo_and_juliet_prompt_with_instruction(
+        model_directory,
+        maximum_prompt_token_count,
+        "Summarize Romeo and Juliet in one paragraph of no more than four lines. Include the central conflict, major decisions, and tragic outcome.",
+    )
+}
+
+fn prepare_romeo_and_juliet_prompt_with_instruction(
+    model_directory: &Path,
+    maximum_prompt_token_count: usize,
+    summary_instruction: &str,
+) -> PreparedRomeoAndJulietPrompt {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, u32::from(MAXIMUM_OUTPUT_TOKEN_COUNT))
         .expect("the pinned cache-pressure artifact should validate");
@@ -63,7 +86,7 @@ pub(super) fn prepare_cacheable_romeo_and_juliet_prompt(
         let candidate_source_end_byte_position =
             source_character_boundaries[candidate_character_position];
         let candidate_user_message = format!(
-            "Return only a factual Romeo and Juliet summary in no more than four short sentences and ninety words. Use one paragraph with no line breaks. Include the central conflict, major decisions, and tragic outcome.\n\nSource material:\n{}",
+            "{summary_instruction}\n\nSource material:\n{}",
             &repeated_source_material[..candidate_source_end_byte_position],
         );
         let candidate_prompt_token_count = prepared_chat_token_count(
