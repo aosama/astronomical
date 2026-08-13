@@ -17,7 +17,6 @@ use std::{fs, path::Path};
 use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use crate::common::real_model_rest_server::{
@@ -31,7 +30,6 @@ const MAXIMUM_MLX_MEMORY_BYTES: u64 = 23_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 7_000;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 1_280;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 256;
-const SAMPLING_SEED: u64 = 81;
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
@@ -80,7 +78,6 @@ async fn run_progressive_expert_memory_rest_journey() {
         "stream_options": {"include_usage": true},
         "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
-        "seed": SAMPLING_SEED,
     });
     let streamed_completion: StreamResponse<Value> = openai_client
         .chat()
@@ -140,27 +137,12 @@ async fn run_progressive_expert_memory_rest_journey() {
             "[progressive-expert-memory] status=retained_fill_decision {retained_expert_fill_decision}"
         );
     }
-    let generation_attribution_report = generation_attribution_report(isolated_worker_home.path());
-    let expert_source_read_bytes =
-        generation_expert_source_read_bytes(&generation_attribution_report);
-    print_expert_source_by_layer(&generation_attribution_report);
-    print_complete_layer_policy_replay(&generation_attribution_report, final_expert_payload_bytes);
-    let model_text_sha256 = sha256_hex(completed_stream.model_text.as_bytes());
+    let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home.path());
     eprintln!(
-        "[progressive-expert-memory] status=success prompt_tokens={PROMPT_TOKEN_COUNT} maximum_mlx_memory_bytes={MAXIMUM_MLX_MEMORY_BYTES} progressive_expert_payload_bytes={:?} final_expert_payload_bytes={final_expert_payload_bytes} final_active_memory_bytes={final_active_memory_bytes} peak_memory_bytes={peak_memory_bytes} expert_source_read_bytes={expert_source_read_bytes} average_prefill_tokens_per_second={average_prefill_tokens_per_second:.2} average_generation_tokens_per_second={average_generation_tokens_per_second:.2} output_characters={} model_text_sha256={model_text_sha256}",
+        "[progressive-expert-memory] status=success prompt_tokens={PROMPT_TOKEN_COUNT} maximum_mlx_memory_bytes={MAXIMUM_MLX_MEMORY_BYTES} progressive_expert_payload_bytes={:?} final_expert_payload_bytes={final_expert_payload_bytes} final_active_memory_bytes={final_active_memory_bytes} peak_memory_bytes={peak_memory_bytes} expert_source_read_bytes={expert_source_read_bytes} average_prefill_tokens_per_second={average_prefill_tokens_per_second:.2} average_generation_tokens_per_second={average_generation_tokens_per_second:.2} output_characters={}",
         memory_evidence.progressive_expert_payload_bytes,
         completed_stream.model_text.len(),
     );
-}
-
-fn sha256_hex(content_bytes: &[u8]) -> String {
-    // A stable digest lets repeated seeded journeys prove exact streamed-text
-    // parity without printing user-visible model output into qualification logs.
-    let digest_bytes = Sha256::digest(content_bytes);
-    digest_bytes
-        .iter()
-        .map(|digest_byte| format!("{digest_byte:02x}"))
-        .collect()
 }
 
 fn memory_admission_decision_log_lines(isolated_worker_home: &Path) -> Vec<String> {
@@ -181,7 +163,7 @@ fn retained_expert_fill_decision_log_lines(isolated_worker_home: &Path) -> Vec<S
         .collect()
 }
 
-fn generation_attribution_report(isolated_worker_home: &Path) -> Value {
+fn generation_expert_source_read_bytes(isolated_worker_home: &Path) -> u64 {
     let attribution_log_path = isolated_worker_home
         .join(".astronomical")
         .join("logs")
@@ -197,97 +179,16 @@ fn generation_attribution_report(isolated_worker_home: &Path) -> Value {
         .filter(|attribution_report| attribution_report["report_kind"] == "generation")
         .collect::<Vec<_>>();
     assert_eq!(generation_reports.len(), 1);
-    generation_reports
-        .into_iter()
-        .next()
-        .expect("one generation attribution report should exist")
-}
-
-fn generation_expert_source_read_bytes(generation_attribution_report: &Value) -> u64 {
     // This is logical positional source traffic, not guaranteed physical SSD
     // traffic. macOS process I/O deltas are reported separately because the file
     // cache can satisfy some repeated ranges without another device read.
-    generation_attribution_report["counters"]
+    generation_reports[0]["counters"]
         .as_array()
         .into_iter()
         .flatten()
         .filter(|counter_report| counter_report["counter"] == "positional_file_read_byte_count")
         .filter_map(|counter_report| counter_report["amount"].as_u64())
         .sum()
-}
-
-fn print_expert_source_by_layer(generation_attribution_report: &Value) {
-    let expert_source_reports = generation_attribution_report["expert_source_by_layer"]
-        .as_array()
-        .expect("generation attribution should report bounded expert source evidence");
-    assert!(!expert_source_reports.is_empty());
-    for expert_source_report in expert_source_reports {
-        eprintln!(
-            "[progressive-expert-memory] status=expert_source layer={} phase={} logical_bytes={} intervals={} loads={} resident_hits={} read_calls={} read_bytes={} read_ns={} readiness_count={} readiness_ns={} readiness_max_ns={} readiness_failures={}",
-            expert_source_report["layer_index"].as_u64().unwrap_or(0),
-            expert_source_report["request_phase"]
-                .as_str()
-                .unwrap_or("unknown"),
-            expert_source_report["logical_source_payload_bytes"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["source_interval_count"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["source_load_count"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["resident_hit_count"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["executed_positional_read_call_count"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["executed_positional_read_bytes"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["executed_positional_read_elapsed_nanoseconds"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["page_readiness_wait_count"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["page_readiness_wait_nanoseconds"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["maximum_page_readiness_wait_nanoseconds"]
-                .as_u64()
-                .unwrap_or(0),
-            expert_source_report["page_readiness_failure_count"]
-                .as_u64()
-                .unwrap_or(0),
-        );
-    }
-}
-
-fn print_complete_layer_policy_replay(
-    generation_attribution_report: &Value,
-    retained_payload_capacity_bytes: u64,
-) {
-    let layer_evidence =
-        crate::common::complete_layer_residency_replay::evidence_from_generation_report(
-            generation_attribution_report,
-        );
-    let replay_outcomes =
-        crate::common::complete_layer_residency_replay::replay_complete_layer_policies(
-            &layer_evidence,
-            retained_payload_capacity_bytes,
-        );
-    for replay_outcome in replay_outcomes {
-        eprintln!(
-            "[progressive-expert-memory] status=residency_replay policy={} selected_layers={:?} retained_bytes={} avoided_source_bytes={} avoided_readiness_ns={}",
-            replay_outcome.policy_name,
-            replay_outcome.selected_layer_indices,
-            replay_outcome.retained_payload_bytes,
-            replay_outcome.avoided_source_demand_bytes,
-            replay_outcome.avoided_page_readiness_wait_nanoseconds,
-        );
-    }
 }
 
 fn isolated_worker_log_lines(isolated_worker_home: &Path) -> Vec<String> {
