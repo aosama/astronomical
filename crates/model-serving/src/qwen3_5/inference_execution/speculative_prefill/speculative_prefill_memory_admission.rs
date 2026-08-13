@@ -11,10 +11,7 @@ use super::super::super::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
 use super::super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 #[cfg(feature = "direct-mlx")]
-use super::speculative_prefill_memory_admission_policy::{
-    speculative_prefill_draft_scoring_reservation_bytes,
-    speculative_prefill_required_target_expert_reclamation_bytes,
-};
+use crate::SpeculativePrefillAdmission;
 #[cfg(feature = "direct-mlx")]
 use crate::{
     InferenceEngineError, PerformanceAttribution, Qwen3_5Model,
@@ -86,16 +83,17 @@ impl Qwen3_5EngineState {
             } else {
                 (0, 0)
             };
-        let draft_scoring_reservation_bytes = speculative_prefill_draft_scoring_reservation_bytes(
-            draft_decoder_state_growth_bytes,
-            draft_vision_payload_bytes,
-            draft_maximum_expert_page_reservation_bytes,
-            draft_boundary_checkpoint_workspace_bytes,
-            draft_direct_publication_workspace_bytes,
-        )
-        .ok_or_else(|| {
-            fatal_engine_error("speculative-prefill draft scoring reservation overflowed")
-        })?;
+        let draft_scoring_reservation_bytes =
+            SpeculativePrefillAdmission::draft_scoring_reservation_bytes(
+                draft_decoder_state_growth_bytes,
+                draft_vision_payload_bytes,
+                draft_maximum_expert_page_reservation_bytes,
+                draft_boundary_checkpoint_workspace_bytes,
+                draft_direct_publication_workspace_bytes,
+            )
+            .ok_or_else(|| {
+                fatal_engine_error("speculative-prefill draft scoring reservation overflowed")
+            })?;
         let mut memory_snapshot_before_draft_scoring = self
             .model
             .as_ref()
@@ -106,7 +104,7 @@ impl Qwen3_5EngineState {
         // Only pageable target experts are reclaimable here. Target core weights,
         // active request state, and the configured ceiling remain unchanged.
         let mut required_target_expert_reclamation_bytes =
-            speculative_prefill_required_target_expert_reclamation_bytes(
+            SpeculativePrefillAdmission::required_target_expert_reclamation_bytes(
                 memory_snapshot_before_draft_scoring.active_memory_bytes(),
                 draft_scoring_reservation_bytes,
                 self.memory_limits.allowed_active_memory_bytes(),
@@ -160,7 +158,7 @@ impl Qwen3_5EngineState {
                 .memory_snapshot()
                 .map_err(qwen3_5_runtime_error)?;
             required_target_expert_reclamation_bytes =
-                speculative_prefill_required_target_expert_reclamation_bytes(
+                SpeculativePrefillAdmission::required_target_expert_reclamation_bytes(
                     memory_snapshot_before_draft_scoring.active_memory_bytes(),
                     draft_scoring_reservation_bytes,
                     self.memory_limits.allowed_active_memory_bytes(),
@@ -212,7 +210,7 @@ impl Qwen3_5EngineState {
             });
         };
         let remaining_target_expert_reclamation_bytes =
-            speculative_prefill_required_target_expert_reclamation_bytes(
+            SpeculativePrefillAdmission::required_target_expert_reclamation_bytes(
                 memory_snapshot_after_target_expert_reclamation.active_memory_bytes(),
                 draft_scoring_reservation_bytes,
                 self.memory_limits.allowed_active_memory_bytes(),

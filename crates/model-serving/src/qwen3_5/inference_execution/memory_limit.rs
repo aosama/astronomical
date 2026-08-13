@@ -1,6 +1,9 @@
 use std::time::Instant;
 
-use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+use crate::{
+    InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+    safe_minimum_active_memory_ceiling_bytes,
+};
 
 use super::Qwen3_5EngineState;
 
@@ -14,9 +17,11 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
     evictable_retained_expert_payload_bytes: u64,
     maximum_expert_page_reserve_bytes: u64,
 ) -> u64 {
-    current_idle_active_mlx_memory_bytes
-        .saturating_sub(evictable_retained_expert_payload_bytes)
-        .saturating_add(maximum_expert_page_reserve_bytes)
+    safe_minimum_active_memory_ceiling_bytes(
+        current_idle_active_mlx_memory_bytes,
+        evictable_retained_expert_payload_bytes,
+        maximum_expert_page_reserve_bytes,
+    )
 }
 
 impl Qwen3_5EngineState {

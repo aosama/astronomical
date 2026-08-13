@@ -23,10 +23,7 @@ use super::super::engine_request::Qwen3_5EngineRequest;
 use super::speculative_prefill_draft_artifact_loading::{
     load_validated_speculative_prefill_draft_model, validate_speculative_prefill_draft_artifact,
 };
-use super::speculative_prefill_memory_admission_policy::{
-    speculative_prefill_draft_load_fits_with_target_active_memory,
-    speculative_prefill_required_target_expert_reclamation_bytes,
-};
+use crate::SpeculativePrefillAdmission;
 
 impl Qwen3_5EngineState {
     /// Captures a best-effort process-wide MLX snapshot with the live drafter
@@ -139,7 +136,7 @@ impl Qwen3_5EngineState {
             })?;
         let stable_active_memory_ceiling_bytes = self.memory_limits.active_memory_limit_bytes();
         let draft_load_fits_with_current_target =
-            speculative_prefill_draft_load_fits_with_target_active_memory(
+            SpeculativePrefillAdmission::draft_load_fits_with_target_active_memory(
                 target_memory_snapshot_before_draft_load.active_memory_bytes(),
                 draft_artifact_payload_bytes,
                 stable_active_memory_ceiling_bytes,
@@ -175,7 +172,7 @@ impl Qwen3_5EngineState {
                     reason: "Qwen3.5 engine lost its loaded target model".to_owned(),
                 })?;
             let required_target_expert_reclamation_bytes =
-                speculative_prefill_required_target_expert_reclamation_bytes(
+                SpeculativePrefillAdmission::required_target_expert_reclamation_bytes(
                     target_memory_snapshot_before_draft_load.active_memory_bytes(),
                     draft_artifact_payload_bytes,
                     stable_active_memory_ceiling_bytes,
@@ -211,7 +208,7 @@ impl Qwen3_5EngineState {
         // Logical expert eviction is not enough evidence: immutable in-flight
         // snapshots may have delayed physical release. Only this fresh active
         // memory sample can authorize loading the complete draft payload.
-        if !speculative_prefill_draft_load_fits_with_target_active_memory(
+        if !SpeculativePrefillAdmission::draft_load_fits_with_target_active_memory(
             target_memory_snapshot_after_draft_load_preparation.active_memory_bytes(),
             draft_artifact_payload_bytes,
             stable_active_memory_ceiling_bytes,

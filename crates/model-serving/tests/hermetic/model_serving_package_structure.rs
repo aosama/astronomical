@@ -27,10 +27,18 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
         "memory",
         &[
             "mod.rs",
+            "allocation_admission.rs",
             "adaptive_ram_growth_guard.rs",
+            "ceiling_change.rs",
+            "context_admission.rs",
+            "decision.rs",
             "expert_memory_admission.rs",
+            "forward_recovery.rs",
+            "live_allocation_budget.rs",
             "mlx_memory_telemetry.rs",
             "mlx_ram_budget.rs",
+            "residency_admission.rs",
+            "speculative_prefill_admission.rs",
         ],
     );
     assert_source_directory_contains_files(
@@ -56,7 +64,6 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
         &[
             "mod.rs",
             "expert_cache_statistics.rs",
-            "memory_budget.rs",
             "quantized_expert_manifest.rs",
             "quantized_expert_validation.rs",
             "safetensors_header.rs",
@@ -117,7 +124,6 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
     for shared_expert_paging_source_file_name in [
         "mod.rs",
         "expert_cache_statistics.rs",
-        "memory_budget.rs",
         "quantized_expert_manifest.rs",
         "quantized_expert_validation.rs",
         "safetensors_header.rs",
