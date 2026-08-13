@@ -83,10 +83,10 @@ pub use model_generation_processor::{
     ModelGenerationProcessor, PreparedModelGeneration,
 };
 pub use performance_attribution::{
-    ExpertSourceRequestPhase, GenerationPerformanceAttributionMetadata,
-    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
-    PerformanceAttributionOutcome, PerformanceAttributionReport, PerformanceCounter,
-    PerformanceOperation, PerformanceOperationMeasurement,
+    GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
+    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
+    PerformanceAttributionReport, PerformanceCounter, PerformanceOperation,
+    PerformanceOperationMeasurement,
 };
 pub use persistent_cache::{
     PERSISTENT_SPECULATIVE_PREFILL_SELECTION_FORMAT_VERSION,

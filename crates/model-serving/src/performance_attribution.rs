@@ -6,7 +6,6 @@
 
 mod catalog;
 mod counter_catalog;
-mod expert_source;
 mod log;
 mod measurement_catalog;
 mod report;
@@ -18,7 +17,6 @@ use std::sync::Arc;
 
 pub use catalog::PerformanceOperation;
 pub use counter_catalog::PerformanceCounter;
-pub use expert_source::ExpertSourceRequestPhase;
 pub use log::PerformanceAttributionLog;
 pub use measurement_catalog::PerformanceOperationMeasurement;
 pub use report::{
@@ -42,7 +40,6 @@ pub(super) struct EnabledPerformanceAttribution {
     pub(super) previous_token_selected_expert_ids_by_layer: Vec<Option<Vec<usize>>>,
     pub(super) previous_token_expert_route_reuse_by_layer:
         Vec<PreviousTokenExpertRouteReuseMeasurement>,
-    pub(super) expert_source_by_layer: Vec<expert_source::ExpertSourceLayerMeasurement>,
     #[cfg(feature = "direct-mlx")]
     pub(super) positional_file_read_metrics:
         Arc<astronomical_runtime_integration::PositionalFileReadMetrics>,
@@ -85,7 +82,6 @@ impl PerformanceAttribution {
                 counter_values: [0; PerformanceCounter::COUNT],
                 previous_token_selected_expert_ids_by_layer: Vec::new(),
                 previous_token_expert_route_reuse_by_layer: Vec::new(),
-                expert_source_by_layer: Vec::new(),
                 #[cfg(feature = "direct-mlx")]
                 positional_file_read_metrics: Arc::new(
                     astronomical_runtime_integration::PositionalFileReadMetrics::default(),
@@ -203,93 +199,6 @@ impl PerformanceAttribution {
             enabled_attribution.counter_values[counter as usize].max(amount);
     }
 
-    /// Aggregates one expert source request without retaining per-event records.
-    pub fn record_expert_source_load(
-        &mut self,
-        layer_index: usize,
-        request_phase: ExpertSourceRequestPhase,
-        logical_source_payload_bytes: u64,
-        source_interval_count: u64,
-    ) {
-        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
-            return;
-        };
-        ensure_expert_source_layer(enabled_attribution, layer_index);
-        enabled_attribution.expert_source_by_layer[layer_index][request_phase.index()]
-            .record_load(logical_source_payload_bytes, source_interval_count);
-    }
-
-    /// Records that a retained complete layer avoided a source request.
-    pub fn record_expert_source_resident_hit(
-        &mut self,
-        layer_index: usize,
-        request_phase: ExpertSourceRequestPhase,
-        avoided_source_payload_bytes: u64,
-        avoided_source_interval_count: u64,
-    ) {
-        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
-            return;
-        };
-        ensure_expert_source_layer(enabled_attribution, layer_index);
-        enabled_attribution.expert_source_by_layer[layer_index][request_phase.index()]
-            .record_resident_hit(avoided_source_payload_bytes, avoided_source_interval_count);
-    }
-
-    /// Records one explicit page-materialization wait using caller-supplied timing.
-    pub fn record_expert_page_readiness_wait(
-        &mut self,
-        layer_index: usize,
-        request_phase: ExpertSourceRequestPhase,
-        elapsed: Duration,
-        did_succeed: bool,
-    ) {
-        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
-            return;
-        };
-        ensure_expert_source_layer(enabled_attribution, layer_index);
-        enabled_attribution.expert_source_by_layer[layer_index][request_phase.index()]
-            .record_page_readiness_wait(
-                u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX),
-                did_succeed,
-            );
-    }
-
-    /// Materializes one expert page and attributes the blocking readiness boundary.
-    pub fn measure_expert_page_readiness<ReadinessOutput, ReadinessError>(
-        &mut self,
-        layer_index: usize,
-        request_phase: ExpertSourceRequestPhase,
-        materialize_page: impl FnOnce() -> Result<ReadinessOutput, ReadinessError>,
-    ) -> Result<ReadinessOutput, ReadinessError> {
-        if self.enabled_attribution.is_none() {
-            return materialize_page();
-        }
-        let readiness_started_at = Instant::now();
-        let readiness_outcome = materialize_page();
-        self.record_expert_page_readiness_wait(
-            layer_index,
-            request_phase,
-            readiness_started_at.elapsed(),
-            readiness_outcome.is_ok(),
-        );
-        readiness_outcome
-    }
-
-    /// Returns the phase/layer read accumulator used by bounded lazy MLX reads.
-    #[cfg(feature = "direct-mlx")]
-    pub(crate) fn expert_source_positional_file_read_metrics(
-        &mut self,
-        layer_index: usize,
-        request_phase: ExpertSourceRequestPhase,
-    ) -> Option<Arc<astronomical_runtime_integration::PositionalFileReadMetrics>> {
-        let enabled_attribution = self.enabled_attribution.as_mut()?;
-        ensure_expert_source_layer(enabled_attribution, layer_index);
-        Some(
-            enabled_attribution.expert_source_by_layer[layer_index][request_phase.index()]
-                .positional_file_read_metrics(),
-        )
-    }
-
     /// Compares one decode layer's selected experts with the preceding decode token.
     pub fn record_previous_token_expert_route_reuse(
         &mut self,
@@ -391,18 +300,6 @@ impl PerformanceAttribution {
             .map_or(0, |enabled_attribution| {
                 enabled_attribution.counter_values[counter as usize]
             })
-    }
-}
-
-fn ensure_expert_source_layer(
-    enabled_attribution: &mut EnabledPerformanceAttribution,
-    layer_index: usize,
-) {
-    if enabled_attribution.expert_source_by_layer.len() <= layer_index {
-        enabled_attribution.expert_source_by_layer.resize_with(
-            layer_index.saturating_add(1),
-            expert_source::empty_expert_source_layer_measurement,
-        );
     }
 }
 
