@@ -1,20 +1,20 @@
-//! Expert pager coordination for startup plans and routed expert loading.
+//! Rust-owned Qwen expert streaming and resident-promotion source metadata.
 
-mod native_cache;
+mod rust_layer_streaming;
 
 use std::fs::File;
 use std::path::PathBuf;
 
+use astronomical_runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
-use astronomical_runtime_integration::MlxNativeExpertCache;
-
 use crate::expert_paging::{
-    ExpertManifestError, LiveMetalBudget, MemoryBudgetError, MemoryBudgetSnapshot,
-    QuantizedExpertLayerPlan, SafetensorsHeaderError,
+    ExpertManifestError, ExpertWeightPage, LiveMetalBudget, MemoryBudgetError,
+    QuantizedExpertLayerPlan, QuantizedExpertPageManifest, SafetensorsHeaderError,
 };
+use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 
-/// Typed failures during expert paging operations.
+/// Typed failures during expert streaming and resident-source handling.
 #[derive(Debug, Error)]
 pub enum ExpertPagingError {
     #[error("expert manifest construction failed: {0}")]
@@ -23,7 +23,11 @@ pub enum ExpertPagingError {
     SafetensorsHeader(#[from] SafetensorsHeaderError),
     #[error("memory budget exceeded: {0}")]
     MemoryBudget(#[from] MemoryBudgetError),
-    #[error("MLX runtime error during expert page loading: {description}")]
+    #[error("native MLX runtime error during expert loading: {0}")]
+    NativeRuntime(#[from] MlxRuntimeError),
+    #[error("invalid expert streaming plan: {description}")]
+    InvalidPagingPlan { description: String },
+    #[error("Rust expert streaming failed: {description}")]
     Runtime { description: String },
     #[error("layer index {layer_index} is out of range (decoder layer count: {layer_count})")]
     LayerIndexOutOfRange {
@@ -32,13 +36,13 @@ pub enum ExpertPagingError {
     },
     #[error("expert paging is not enabled for this model")]
     PagingNotEnabled,
-    #[error("failed to open validated expert source file {source_file:?}: {source}")]
+    #[error("failed to open resident expert source {source_file:?}: {source}")]
     ResidentSourceOpen {
         source_file: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to duplicate validated expert source file {source_file:?}: {source}")]
+    #[error("failed to clone resident expert source {source_file:?}: {source}")]
     ResidentSourceClone {
         source_file: PathBuf,
         #[source]
@@ -46,38 +50,77 @@ pub enum ExpertPagingError {
     },
 }
 
-/// Startup-validated sparse-expert page plans and live memory budget.
-///
-/// Layer plans describe immutable artifact geometry, `memory_budget` projects
-/// the worker's current MLX ceiling, and `native_expert_cache` solely owns paged
-/// residency and layer-balanced least-recently-used policy. Retained source files
-/// let the model construct a separate complete resident owner without reopening
-/// user paths; the pager itself never stores a second Rust page cache.
+/// Immutable layer geometry plus bounded-read and resident-promotion sources.
 #[derive(Debug)]
 pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
     pub(super) memory_budget: LiveMetalBudget,
-    pub(super) native_expert_cache: MlxNativeExpertCache,
-    /// One descriptor per unique validated shard, retained for future promotion.
     pub(super) resident_expert_source_files: Vec<(PathBuf, File)>,
 }
 
+/// Exact compact or complete expert arrays loaded by Rust for one layer use.
+#[derive(Debug)]
+pub struct Qwen3_5PagedExpertWeights {
+    pub(crate) gate_projection: Qwen3_5AffineWeights,
+    pub(crate) up_projection: Qwen3_5AffineWeights,
+    pub(crate) down_projection: Qwen3_5AffineWeights,
+}
+
+impl Qwen3_5PagedExpertWeights {
+    pub(crate) fn append_array_references<'weights>(
+        &'weights self,
+        expert_weight_arrays: &mut Vec<&'weights astronomical_runtime_integration::MlxArray>,
+    ) {
+        self.gate_projection
+            .append_array_references(expert_weight_arrays);
+        self.up_projection
+            .append_array_references(expert_weight_arrays);
+        self.down_projection
+            .append_array_references(expert_weight_arrays);
+    }
+}
+
+impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
+    fn resident_payload_byte_count(&self) -> u64 {
+        affine_payload_byte_count(&self.gate_projection)
+            .saturating_add(affine_payload_byte_count(&self.up_projection))
+            .saturating_add(affine_payload_byte_count(&self.down_projection))
+    }
+}
+
+fn affine_payload_byte_count(affine_weights: &Qwen3_5AffineWeights) -> u64 {
+    let mut arrays = Vec::new();
+    affine_weights.append_array_references(&mut arrays);
+    arrays.into_iter().fold(0u64, |payload_bytes, array| {
+        payload_bytes.saturating_add(u64::try_from(array.byte_count()).unwrap_or(u64::MAX))
+    })
+}
+
+/// One complete Rust-loaded layer retained between requests.
+#[derive(Debug)]
+pub(crate) struct Qwen3_5RetainedExpertLayer {
+    pub(crate) weights: Qwen3_5PagedExpertWeights,
+    pub(crate) manifest: QuantizedExpertPageManifest,
+}
+
+impl ExpertWeightPage for Qwen3_5RetainedExpertLayer {
+    fn resident_payload_byte_count(&self) -> u64 {
+        self.weights.resident_payload_byte_count()
+    }
+}
+
 impl Qwen3_5ExpertPager {
-    /// Returns immutable target-then-MTP plans shared by both ownership modes.
     pub(crate) fn layer_plans(&self) -> &[QuantizedExpertLayerPlan] {
         &self.layer_plans
     }
 
-    /// Sums the exact complete payload across every target and optional MTP layer.
     pub(crate) fn complete_expert_payload_byte_count(&self) -> Result<u64, ExpertPagingError> {
         self.layer_plans
             .iter()
-            .try_fold(0_u64, |complete_model_payload_bytes, layer_plan| {
-                let complete_layer_payload_bytes =
-                    layer_plan.complete_expert_payload_byte_count()?;
-                complete_model_payload_bytes
-                    .checked_add(complete_layer_payload_bytes)
-                    .ok_or_else(|| ExpertPagingError::Runtime {
+            .try_fold(0_u64, |model_payload_bytes, layer_plan| {
+                model_payload_bytes
+                    .checked_add(layer_plan.complete_expert_payload_byte_count()?)
+                    .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
                         description: "complete model expert payload byte count overflowed"
                             .to_owned(),
                     })
@@ -92,7 +135,6 @@ impl Qwen3_5ExpertPager {
             })
     }
 
-    /// Clones descriptors for one promotion attempt without consuming fallback ownership.
     pub(crate) fn clone_resident_expert_source_files(
         &self,
     ) -> Result<Vec<(PathBuf, File)>, ExpertPagingError> {
@@ -110,16 +152,8 @@ impl Qwen3_5ExpertPager {
             .collect()
     }
 
-    /// Removes only Rust promotion descriptors for failed-transition qualification.
     pub(crate) fn remove_resident_expert_source_files_for_tests(&mut self) {
         self.resident_expert_source_files.clear();
-    }
-
-    pub(crate) fn native_expert_retention_growth_is_enabled_for_tests(&self) -> bool {
-        if !self.freeze_native_expert_retention_growth() {
-            return false;
-        }
-        self.resume_native_expert_retention_growth()
     }
 
     pub(crate) fn layer_plan(
@@ -142,19 +176,32 @@ impl Qwen3_5ExpertPager {
             .update_configured_cap_bytes(configured_mlx_memory_ceiling_bytes);
     }
 
+    /// Rust-streamed pages are operation-local, so adaptive admission has no
+    /// retained streaming owner to re-plan before the next forward.
+    pub(crate) fn set_pending_admitted_forward_reserve_bytes(
+        &self,
+        _admitted_forward_reserve_bytes: u64,
+    ) {
+    }
+
+    pub(crate) fn update_observed_transient_high_water_bytes(
+        &self,
+        observed_transient_high_water_bytes: u64,
+    ) {
+        self.memory_budget
+            .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
+    }
+
+    #[must_use]
+    pub(crate) fn observed_transient_high_water_bytes(&self) -> u64 {
+        self.memory_budget.observed_transient_high_water_bytes()
+    }
+
     pub(crate) fn configured_mlx_memory_ceiling_bytes(&self) -> u64 {
         self.memory_budget.configured_cap_bytes()
     }
 
     pub(crate) fn maximum_expert_page_bytes(&self) -> u64 {
         self.memory_budget.maximum_expert_page_bytes()
-    }
-
-    pub(crate) fn memory_budget_snapshot_for_mlx_memory_limit_adjustment(
-        &self,
-        runtime: &astronomical_runtime_integration::MlxRuntime,
-    ) -> Result<MemoryBudgetSnapshot, MemoryBudgetError> {
-        self.memory_budget
-            .snapshot(runtime, "mlx_memory_limit_adjustment", 0)
     }
 }

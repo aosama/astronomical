@@ -54,7 +54,7 @@ pub(crate) fn check_status(status: i32, operation: &'static str) -> Result<(), M
     Err(classify_mlx_error(operation, description))
 }
 
-pub(crate) fn classify_mlx_error(operation: &'static str, description: String) -> MlxRuntimeError {
+pub fn classify_mlx_error(operation: &'static str, description: String) -> MlxRuntimeError {
     parse_active_memory_limit_error(&description).unwrap_or(MlxRuntimeError::RuntimeOperation {
         operation,
         description,
@@ -80,7 +80,12 @@ pub(crate) fn clear_captured_mlx_error() {
 
 fn parse_active_memory_limit_error(description: &str) -> Option<MlxRuntimeError> {
     const ERROR_MARKER: &str = "ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED";
-    let marker_payload = description.strip_prefix(ERROR_MARKER)?;
+    // Native C and C++ boundaries add operation context before the shared
+    // marker, for example "native MLX operation failed: <marker> ...". The
+    // marker is the stable contract; requiring it at byte zero loses the typed
+    // capacity classification and turns a recoverable request rejection into a
+    // fatal worker failure.
+    let marker_payload = description.split_once(ERROR_MARKER)?.1;
     let marker_fields =
         if let Some((marker_fields, native_location)) = marker_payload.split_once(" at ") {
             if native_location.is_empty() {

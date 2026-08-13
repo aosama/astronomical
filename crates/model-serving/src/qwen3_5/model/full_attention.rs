@@ -1,13 +1,11 @@
 //! A beginner's guide to the full-attention path used by Qwen3.5.
 //!
 //! The foundational attention calculation is:
-//!
 //!     attention(Q, K, V) = softmax((Q @ K-transpose) / sqrt(d)) @ V
 //!
 //! Here d is the number of features in one attention head. A head is one small,
 //! separate attention calculation; the model runs many heads in parallel and
 //! joins their outputs afterward.
-//!
 //! Each new query token compares itself with each available key token. The
 //! score of a query/key pair says how relevant that older token is to the
 //! current token. Softmax converts all scores for one query into weights that
@@ -16,8 +14,7 @@
 //! If a prompt chunk has n query tokens and n available key/value tokens, this
 //! conceptual comparison table has n x n entries. That is the O(n^2) work that
 //! makes long prompt processing expensive. MLX executes the formula as one
-//! fused operation. Its Metal implementation can process score tiles and
-//! consume them immediately, rather than requiring the whole n x n table to
+//! fused operation. Its Metal implementation can process score tiles and consume them immediately, rather than requiring the whole n x n table to
 //! exist in memory at once.
 //!
 //! During token generation, this file processes one new query token at a time.
@@ -164,26 +161,21 @@ pub fn qwen3_5_full_attention_step(
         runtime.multiply(&attention_output, &gate_weights)
     }
 }
-
 #[derive(Clone, Copy)]
 struct FullAttentionShape {
     // Independent examples processed together. Text serving currently uses one
     // example, but preserving this axis makes the MLX attention contract clear.
     batch_size: i32,
-
     // Number of new query tokens in this forward: a prompt chunk length during
     // prefill, or one during normal autoregressive token generation.
     query_token_count: i32,
-
     // Number of key/value positions visible to the complete forward, including
     // the newly appended query positions.
     active_key_value_token_count: i32,
-
     // The width after all query-head vectors are placed side by side. It is
     // query_head_count x features_per_head and matches the output gate.
     output_dimension: i32,
 }
-
 fn validate_full_attention_arguments(
     rotated_queries: &MlxArray,
     active_keys: &MlxArray,
@@ -196,14 +188,12 @@ fn validate_full_attention_arguments(
     let query_shape = rotated_queries.shape();
     let key_shape = active_keys.shape();
     let value_shape = active_values.shape();
-
     // The attention primitive needs all three tensors to have those four axes.
     if query_shape.len() != 4 || key_shape.len() != 4 || value_shape.len() != 4 {
         return Err(full_attention_error(
             "rotated queries, active keys, and active values must have rank four",
         ));
     }
-
     // K describes which positions can be selected. V carries the content that
     // will be blended when a K position gets a high softmax weight. Therefore
     // they must have exactly the same positions, heads, and feature width.
@@ -218,7 +208,6 @@ fn validate_full_attention_arguments(
     let head_dimension = query_shape[3];
     let key_value_head_count = key_shape[1];
     let active_key_value_token_count = key_shape[2];
-
     // Q @ K-transpose needs matching batches and per-head feature widths.
     // Grouped-query attention permits fewer K/V heads, but their count must
     // divide the Q-head count evenly so every Q head has a matching K/V group.
@@ -238,14 +227,12 @@ fn validate_full_attention_arguments(
              and the active KV view must cover the new query tokens",
         ));
     }
-
     // Once attention has produced one vector per query head, the decoder joins
     // those vectors into a single feature vector for each token. checked_mul
     // protects the shape arithmetic from malformed model metadata.
     let output_dimension = query_head_count
         .checked_mul(head_dimension)
         .ok_or_else(|| full_attention_error("full-attention output dimension overflowed"))?;
-
     // The gate is stored as one flattened vector per token, so it must line up
     // exactly with that joined attention output.
     if output_gate.shape() != [batch_size, query_token_count, output_dimension] {
@@ -253,7 +240,6 @@ fn validate_full_attention_arguments(
             "full-attention output gate shape is incompatible with query heads",
         ));
     }
-
     // Dividing QK scores by sqrt(features_per_head) keeps score magnitudes in a
     // range where softmax remains numerically useful. Invalid scale values
     // would make the resulting attention probabilities meaningless.
@@ -267,7 +253,6 @@ fn validate_full_attention_arguments(
         output_dimension,
     })
 }
-
 fn full_attention_error(description: &'static str) -> MlxRuntimeError {
     // Give all failures from this small owner a stable operation label while
     // retaining the specific explanation for the request-level error path.
@@ -276,7 +261,6 @@ fn full_attention_error(description: &'static str) -> MlxRuntimeError {
         description: description.to_owned(),
     }
 }
-
 impl Qwen3_5Model {
     /// Runs one full-attention layer, threading the in-memory KV state through
     /// the single `FullAttentionKeyValueState` owner. The owner grows capacity

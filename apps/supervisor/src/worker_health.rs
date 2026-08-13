@@ -1,14 +1,11 @@
-use std::sync::{Arc, RwLock};
-
+use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, SpeculativePrefillRuntimeState,
     WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerInsight,
     WorkerPromptProcessingPhase, WorkerPromptWorkReuse, WorkerRuntimeFeatureConfiguration,
 };
+use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
-
-use super::serving_session_snapshot::ServingSessionSnapshot;
-
 /// Coarse worker availability state exposed by the supervisor readiness endpoint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerHealthStatus {
@@ -363,7 +360,6 @@ impl WorkerHealthSnapshot {
         self
     }
 }
-
 pub(crate) fn publish_health(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     worker_health_snapshot: WorkerHealthSnapshot,

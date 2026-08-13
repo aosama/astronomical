@@ -9,6 +9,8 @@
 //! and preserves fail-closed admission when a pending page would exceed the
 //! configured worker ceiling.
 
+use std::cell::Cell;
+
 use thiserror::Error;
 
 use astronomical_runtime_integration::MlxRuntime;
@@ -31,6 +33,12 @@ pub enum MemoryBudgetError {
 }
 
 /// Observed counters and conservative projected usage for one runtime stage.
+///
+/// The `observed_transient_high_water_bytes` field reserves space for
+/// computation buffers that the forward pass allocates between expert-page
+/// loads. Without this reservation, the retention ceiling would allow too many
+/// expert pages to stay resident, leaving insufficient room for transient
+/// computation and causing the next forward to exceed the MLX ceiling.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MemoryBudgetSnapshot {
     pub stage: String,
@@ -40,6 +48,12 @@ pub struct MemoryBudgetSnapshot {
     pub projected_bytes: u64,
     pub configured_cap_bytes: u64,
     pub maximum_expert_page_bytes: u64,
+    /// Peak transient MLX memory observed across completed forward passes with
+    /// a similar execution shape. This is the maximum amount of active memory
+    /// that temporary computation buffers (attention KV growth, intermediate
+    /// tensors, etc.) are expected to need on top of the stable baseline.
+    /// Setting this to zero disables the reservation.
+    pub observed_transient_high_water_bytes: u64,
 }
 
 impl MemoryBudgetSnapshot {
@@ -53,52 +67,55 @@ impl MemoryBudgetSnapshot {
     }
 
     /// Returns whether the projected request fits the configured worker cap.
+    ///
+    /// MLX's patched Metal allocator enforces `active_memory + allocation <= limit`.
+    /// The `active_memory_` counter increases by the allocation size regardless of
+    /// whether the buffer was reused from cache or freshly allocated. The allocator
+    /// cache (`cache_memory_`) is a separate counter that does not participate in
+    /// the enforcement check. Therefore the correct projection is simply
+    /// `active + pending`, not `active + cache + pending`.
     #[must_use]
     pub fn within_cap(&self) -> bool {
-        self.projected_mlx_memory_bytes()
-            .is_some_and(|projected_mlx_memory_bytes| {
-                projected_mlx_memory_bytes <= self.configured_cap_bytes
-            })
+        projected_active_memory_after_allocation(self.active_bytes, self.pending_allocation_bytes)
+            .is_some_and(|projected_bytes| projected_bytes <= self.configured_cap_bytes)
     }
 
-    /// Returns whether releasing unused MLX allocator buffers would make this
-    /// otherwise rejected allocation fit without reducing active model memory.
+    /// Returns whether releasing unused MLX allocator buffers before the
+    /// allocation would prevent total GPU memory from exceeding the ceiling.
+    ///
+    /// The enforcement check (`active + pending <= cap`) can pass while total
+    /// GPU memory (`active + cache + pending`) still exceeds the cap. In that
+    /// case, proactively clearing the cache avoids triggering MLX's internal
+    /// `gc_limit_` release at allocation time, which adds latency.
     #[must_use]
-    pub fn should_reclaim_allocator_cache_before_rejecting(&self) -> bool {
-        if self.allocator_cache_bytes == 0 || self.within_cap() {
+    pub fn should_clear_allocator_cache_to_reduce_total_gpu_memory(&self) -> bool {
+        if self.allocator_cache_bytes == 0 || !self.within_cap() {
             return false;
         }
-        self.active_bytes
-            .checked_add(self.pending_allocation_bytes)
-            .is_some_and(|projected_mlx_memory_bytes_without_allocator_cache| {
-                projected_mlx_memory_bytes_without_allocator_cache <= self.configured_cap_bytes
+        let Some(total_gpu_memory_after_allocation) = self
+            .active_bytes
+            .checked_add(self.allocator_cache_bytes)
+            .and_then(|active_plus_cache| {
+                active_plus_cache.checked_add(self.pending_allocation_bytes)
             })
-    }
-
-    fn projected_mlx_memory_bytes(&self) -> Option<u64> {
-        projected_mlx_memory_bytes_after_allocator_reuse(
-            self.active_bytes,
-            self.allocator_cache_bytes,
-            self.pending_allocation_bytes,
-        )
+        else {
+            return true;
+        };
+        total_gpu_memory_after_allocation > self.configured_cap_bytes
     }
 }
 
-fn projected_mlx_memory_bytes_after_allocator_reuse(
+/// Projects the MLX `active_memory_` counter after a single allocation.
+///
+/// MLX's patched Metal allocator increments `active_memory_` by the buffer size
+/// on every allocation, whether the buffer was reused from cache or freshly
+/// created. The enforcement check is `active + allocation > allowed`. The
+/// allocator cache is a separate counter that does not affect this projection.
+fn projected_active_memory_after_allocation(
     active_bytes: u64,
-    allocator_cache_bytes: u64,
     pending_allocation_bytes: u64,
 ) -> Option<u64> {
-    // MLX's pinned Metal allocator first reuses a suitable cached buffer. If no
-    // buffer matches, it releases cached buffers before allocating under memory
-    // pressure. Only bytes beyond the reclaimable allocator pool can increase
-    // system allocation; counting the whole pending page here caused a full
-    // cache clear before nearly every expert layer.
-    let additional_system_gpu_memory_bytes =
-        pending_allocation_bytes.saturating_sub(allocator_cache_bytes);
-    active_bytes
-        .checked_add(allocator_cache_bytes)?
-        .checked_add(additional_system_gpu_memory_bytes)
+    active_bytes.checked_add(pending_allocation_bytes)
 }
 
 /// Bounds one routed page before lazy router output becomes host-visible.
@@ -121,11 +138,18 @@ pub fn maximum_possible_expert_route_payload_bytes(
 /// Computes the expert-weight retention ceiling from current MLX residency.
 ///
 /// In plain terms: keep non-expert memory, make room for the exact expert pages
-/// this route is missing, and still leave room for one ordinary future route.
-/// Existing retained pages are the only elastic category. If everything fits,
-/// retention can grow. If it does not, shrink old retention by only the deficit.
-/// Incoming pages are counted once as future retained payload, never once as an
-/// allocation and again as retained memory.
+/// this route is missing, reserve room for one ordinary future route, AND
+/// reserve room for the transient computation buffers that the forward pass
+/// allocates between expert-page loads. Existing retained pages are the only
+/// elastic category. If everything fits, retention can grow. If it does not,
+/// shrink old retention by only the deficit. Incoming pages are counted once as
+/// future retained payload, never once as an allocation and again as retained
+/// memory.
+///
+/// The `observed_transient_high_water_bytes` reservation ensures that after
+/// retaining expert pages, enough headroom remains for attention KV growth,
+/// intermediate tensors, and other transient allocations that peak during
+/// the forward pass and are released afterward.
 #[must_use]
 pub fn automatic_expert_weight_memory_cache_maximum_size_bytes(
     memory_budget_snapshot: &MemoryBudgetSnapshot,
@@ -153,24 +177,30 @@ pub fn automatic_expert_weight_memory_cache_maximum_size_bytes(
     else {
         return 0;
     };
-    let live_reserved_bytes = projected_mlx_memory_bytes_after_allocator_reuse(
+    let live_reserved_bytes = projected_active_memory_after_allocation(
         memory_budget_snapshot.active_bytes,
-        memory_budget_snapshot.allocator_cache_bytes,
         pending_or_future_expert_page_reserve_bytes,
     )
     .unwrap_or(u64::MAX);
+    // Reserve space for the transient computation buffers (attention KV growth,
+    // intermediate tensors) that peak during the forward pass. Without this
+    // reservation, the retention ceiling would allow too many expert pages to
+    // stay resident, leaving insufficient headroom for forward-pass computation
+    // and causing the next request to exceed the MLX active-memory ceiling.
+    let effective_cap_bytes = memory_budget_snapshot
+        .configured_cap_bytes
+        .saturating_sub(memory_budget_snapshot.observed_transient_high_water_bytes);
     // `active_bytes` already includes retained expert arrays. Add the current
     // retained payload back after subtracting total live residency. If the
     // pending page will become retained after this load, include it once in the
     // post-load target while retaining a distinct future routed-page reserve.
-    let automatic_maximum_size_bytes =
-        if live_reserved_bytes <= memory_budget_snapshot.configured_cap_bytes {
-            post_load_retained_expert_payload_bytes
-                .saturating_add(memory_budget_snapshot.configured_cap_bytes - live_reserved_bytes)
-        } else {
-            post_load_retained_expert_payload_bytes
-                .saturating_sub(live_reserved_bytes - memory_budget_snapshot.configured_cap_bytes)
-        };
+    let automatic_maximum_size_bytes = if live_reserved_bytes <= effective_cap_bytes {
+        post_load_retained_expert_payload_bytes
+            .saturating_add(effective_cap_bytes - live_reserved_bytes)
+    } else {
+        post_load_retained_expert_payload_bytes
+            .saturating_sub(live_reserved_bytes - effective_cap_bytes)
+    };
 
     automatic_maximum_size_bytes
 }
@@ -180,6 +210,10 @@ pub fn automatic_expert_weight_memory_cache_maximum_size_bytes(
 pub struct LiveMetalBudget {
     maximum_expert_page_bytes: u64,
     configured_cap_bytes: u64,
+    /// Peak transient MLX memory observed across completed forward passes.
+    /// Interior mutability allows updating from shared references during forward
+    /// pass telemetry collection without requiring exclusive access to the model.
+    observed_transient_high_water_bytes: Cell<u64>,
 }
 
 impl LiveMetalBudget {
@@ -188,6 +222,7 @@ impl LiveMetalBudget {
         Self {
             maximum_expert_page_bytes,
             configured_cap_bytes,
+            observed_transient_high_water_bytes: Cell::new(0),
         }
     }
 
@@ -208,6 +243,23 @@ impl LiveMetalBudget {
         self.maximum_expert_page_bytes
     }
 
+    /// Returns the observed transient high-water mark for forward-pass
+    /// computation buffers. Zero before any forward completes.
+    #[must_use]
+    pub fn observed_transient_high_water_bytes(&self) -> u64 {
+        self.observed_transient_high_water_bytes.get()
+    }
+
+    /// Updates the observed transient high-water mark from the adaptive RAM
+    /// growth guard after a completed forward pass.
+    pub fn update_observed_transient_high_water_bytes(
+        &self,
+        observed_transient_high_water_bytes: u64,
+    ) {
+        self.observed_transient_high_water_bytes
+            .set(observed_transient_high_water_bytes);
+    }
+
     /// Check live counters before/after a bounded operation and return evidence.
     ///
     /// Fails closed when projected local MLX memory exceeds the configured cap.
@@ -218,7 +270,7 @@ impl LiveMetalBudget {
         pending_allocation_bytes: u64,
     ) -> Result<MemoryBudgetSnapshot, MemoryBudgetError> {
         let mut snapshot = self.snapshot(runtime, stage, pending_allocation_bytes)?;
-        if snapshot.should_reclaim_allocator_cache_before_rejecting() {
+        if snapshot.should_clear_allocator_cache_to_reduce_total_gpu_memory() {
             tracing::debug!(
                 stage,
                 allocator_cache_bytes = snapshot.allocator_cache_bytes,
@@ -253,18 +305,15 @@ impl LiveMetalBudget {
         let active_bytes = snapshot.active_memory_bytes() as u64;
         let allocator_cache_bytes = snapshot.allocator_cache_memory_bytes() as u64;
 
-        let projected_bytes = projected_mlx_memory_bytes_after_allocator_reuse(
-            active_bytes,
-            allocator_cache_bytes,
-            pending_allocation_bytes,
-        )
-        .ok_or_else(|| MemoryBudgetError::BudgetExceeded {
-            stage: stage.to_owned(),
-            projected_bytes: u64::MAX,
-            active_bytes,
-            allocator_cache_bytes,
-            configured_cap_bytes: self.configured_cap_bytes,
-        })?;
+        let projected_bytes =
+            projected_active_memory_after_allocation(active_bytes, pending_allocation_bytes)
+                .ok_or_else(|| MemoryBudgetError::BudgetExceeded {
+                    stage: stage.to_owned(),
+                    projected_bytes: u64::MAX,
+                    active_bytes,
+                    allocator_cache_bytes,
+                    configured_cap_bytes: self.configured_cap_bytes,
+                })?;
 
         Ok(MemoryBudgetSnapshot {
             stage: stage.to_owned(),
@@ -274,6 +323,7 @@ impl LiveMetalBudget {
             projected_bytes,
             configured_cap_bytes: self.configured_cap_bytes,
             maximum_expert_page_bytes: self.maximum_expert_page_bytes,
+            observed_transient_high_water_bytes: self.observed_transient_high_water_bytes.get(),
         })
     }
 }

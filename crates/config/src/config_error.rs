@@ -32,6 +32,8 @@ pub enum AstronomicalConfigError {
     FixedPrefillChunckTokensRequiredWhenOptimizerDisabled,
     #[error("chunking.fixed_prefill_tokens must be positive")]
     InvalidFixedPrefillChunckTokens,
+    #[error("chunking.fixed_ssd_streaming_prefill_tokens must be positive")]
+    InvalidFixedSsdStreamingPrefillChunckTokens,
     #[error("chunking.optimizer_prefill_token_candidates must not be empty")]
     OptimizerPrefillChunckTokenCandidatesMustNotBeEmpty,
     #[error("chunking.optimizer_prefill_token_candidates must contain only positive values")]

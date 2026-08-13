@@ -331,3 +331,42 @@ fn should_keep_fixed_prefill_chunck_tokens_after_recorded_elapsed_time() {
         "fixed mode must retain its configured size for the next full chunk"
     );
 }
+
+#[test]
+fn should_use_fixed_ssd_streaming_prefill_chunck_tokens_only_while_experts_are_paged() {
+    let mut prefill_chunck_sizer =
+        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens_with_ssd_streaming(
+            2_048,
+            Some(256),
+        )
+        .expect("fixed complete-resident and SSD streaming sizes should be valid");
+    let paged_execution_context = Qwen3_5PrefillExecutionContext::new(false, false, true, false);
+    let complete_resident_execution_context =
+        Qwen3_5PrefillExecutionContext::new(false, false, false, false);
+
+    prefill_chunck_sizer.start_prompt_processing_request(0);
+
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end_for_execution_context(
+            0,
+            10_000,
+            paged_execution_context,
+        ),
+        256,
+        "paged expert residency must use the configured SSD streaming chunk size"
+    );
+    assert_eq!(
+        prefill_chunck_sizer.active_prefill_chunck_tokens(),
+        256,
+        "active fixed size should reflect the SSD streaming selection"
+    );
+    assert_eq!(
+        prefill_chunck_sizer.next_prefill_chunck_end_for_execution_context(
+            0,
+            10_000,
+            complete_resident_execution_context,
+        ),
+        2_048,
+        "complete-resident execution must keep the larger fixed chunk size"
+    );
+}

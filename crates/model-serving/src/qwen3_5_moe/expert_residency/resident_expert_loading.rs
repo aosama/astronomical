@@ -18,7 +18,7 @@ use super::{Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights};
 impl Qwen3_5ResidentExpertWeights {
     /// Builds a private complete-model candidate from startup-validated plans.
     ///
-    /// The caller freezes and empties native retention before entering here and
+    /// The caller retires and clears native streaming ownership before entering here and
     /// publishes the returned owner only after every layer has materialized.
     /// Therefore any error drops this local candidate without changing the
     /// model's externally visible `Paged` state.

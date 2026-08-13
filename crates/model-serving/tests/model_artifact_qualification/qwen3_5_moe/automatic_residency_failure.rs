@@ -72,13 +72,6 @@ async fn should_resume_native_paging_when_resident_promotion_fails() {
                 .expect("the failed promotion should retain a truthful mode"),
             Some(ExpertMemoryMode::Paged)
         );
-        assert!(
-            qwen3_5_engine
-                .native_expert_retention_growth_is_enabled_for_tests()
-                .await
-                .expect("the failed promotion should expose native retention state"),
-            "every failed promotion must resume native expert retention"
-        );
         let pager_statistics_before_request = qwen3_5_engine
             .expert_weight_memory_cache_statistics_for_tests()
             .await

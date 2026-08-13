@@ -37,6 +37,7 @@ impl ChunkingConfig {
         let prefill_sizing_policy = resolve_prefill_chunck_sizing_policy(
             configured.prefill_size_optimizer_enabled,
             configured.fixed_prefill_tokens,
+            configured.fixed_ssd_streaming_prefill_tokens,
             configured.optimizer_prefill_token_candidates.as_deref(),
         )?;
         let resolved = Self {

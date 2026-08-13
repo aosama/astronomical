@@ -10,11 +10,11 @@ use crate::{
     PerformanceOperation,
 };
 
-use super::generated_token_emission::synchronize_generated_token_id;
-use super::memory_admission::{
-    AdaptiveRamGrowthMemoryAdmissionError, collect_completed_forward_memory_snapshot,
-    record_completed_adaptive_ram_growth,
+use super::completed_forward_memory::{
+    collect_completed_forward_memory_snapshot, record_completed_adaptive_ram_growth,
 };
+use super::generated_token_emission::synchronize_generated_token_id;
+use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::multi_token_prediction::{
     Qwen3_5PredictionAcceptanceOutcome, attempt_prediction_proposal_and_verification,
@@ -91,6 +91,39 @@ impl Qwen3_5EngineState {
         {
             return Ok(ActiveRequestAdvance::Continue(prefill_progress));
         }
+        // Prefill is complete. Activations shrink for decode, so leftover
+        // retained-expert budget may pin a deterministic complete-layer prefix.
+        // Failures are non-fatal: decode can still stream top-K routes.
+        if !active_request.decode_warm_expert_layers_attempted {
+            active_request.decode_warm_expert_layers_attempted = true;
+            if let Some(model) = self.model.as_ref() {
+                let context_token_count =
+                    u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+                match model.fill_retained_complete_expert_layers(
+                    context_token_count,
+                    u64::MAX,
+                    &mut active_request.performance_attribution,
+                ) {
+                    Ok(newly_retained_layer_count) => {
+                        if newly_retained_layer_count > 0 {
+                            tracing::info!(
+                                request_id = request_id.value(),
+                                newly_retained_layer_count,
+                                context_token_count,
+                                "decode-warm complete expert layers ready for generation"
+                            );
+                        }
+                    }
+                    Err(decode_warm_fill_error) => {
+                        tracing::info!(
+                            request_id = request_id.value(),
+                            error = %decode_warm_fill_error,
+                            "skipped decode-warm complete expert fill; decode will stream routes"
+                        );
+                    }
+                }
+            }
+        }
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 
         if let Some(queued_prediction_token_id) = take_queued_prediction_token(active_request) {
@@ -139,14 +172,16 @@ impl Qwen3_5EngineState {
                     active_request.has_optional_prediction_session(),
                     sparse_experts_are_paged,
                 );
-                let active_memory_bytes_before_growth = self
-                    .measure_adaptive_ram_growth_memory_admission(
-                        adaptive_ram_growth_context,
-                        &mut active_request.performance_attribution,
-                        &active_request.request_decoder_state,
-                        0,
-                        0,
-                    )?;
+                let (
+                    active_memory_bytes_before_growth,
+                    retained_expert_payload_bytes_before_growth,
+                ) = self.measure_adaptive_ram_growth_memory_admission(
+                    adaptive_ram_growth_context,
+                    &mut active_request.performance_attribution,
+                    &active_request.request_decoder_state,
+                    0,
+                    0,
+                )?;
                 self.save_speculative_prefill_target_prefix(active_request)?;
                 let model = self
                     .model
@@ -160,29 +195,45 @@ impl Qwen3_5EngineState {
                     )? {
                     prediction_token
                 } else {
-                    let final_prompt_logits = model
-                        .build_forward_chunk_with_performance_attribution(
-                            &[final_prompt_token_id],
-                            active_request.next_position_tokens,
-                            &mut active_request.request_decoder_state,
-                            &mut active_request.performance_attribution,
-                        )
-                        .map_err(InferenceEngineError::from)?;
+                    let final_prompt_logits = if model.sparse_experts_are_paged() {
+                        // Paged decode resolves deferred GPU missing-route bitmaps
+                        // on a synchronous completion root before the token is
+                        // observable.
+                        model
+                            .forward_chunk_with_performance_attribution(
+                                &[final_prompt_token_id],
+                                active_request.next_position_tokens,
+                                &mut active_request.request_decoder_state,
+                                &mut active_request.performance_attribution,
+                            )
+                            .map_err(InferenceEngineError::from)?
+                    } else {
+                        model
+                            .build_forward_chunk_with_performance_attribution(
+                                &[final_prompt_token_id],
+                                active_request.next_position_tokens,
+                                &mut active_request.request_decoder_state,
+                                &mut active_request.performance_attribution,
+                            )
+                            .map_err(InferenceEngineError::from)?
+                    };
                     active_request.advance_position(1)?;
                     active_request.build_generated_token(model, &final_prompt_logits)?
                 };
-                active_request
-                    .performance_attribution
-                    .measure_operation(
-                        PerformanceOperation::DecodeAsyncEvaluationSubmission,
-                        |_performance_attribution| {
-                            model.async_evaluate_generation(
-                                &first_generated_token,
-                                &active_request.request_decoder_state,
-                            )
-                        },
-                    )
-                    .map_err(InferenceEngineError::from)?;
+                if !model.sparse_experts_are_paged() {
+                    active_request
+                        .performance_attribution
+                        .measure_operation(
+                            PerformanceOperation::DecodeAsyncEvaluationSubmission,
+                            |_performance_attribution| {
+                                model.async_evaluate_generation(
+                                    &first_generated_token,
+                                    &active_request.request_decoder_state,
+                                )
+                            },
+                        )
+                        .map_err(InferenceEngineError::from)?;
+                }
                 record_completed_adaptive_ram_growth(
                     &mut self.adaptive_ram_growth_guard,
                     adaptive_ram_growth_context
@@ -190,6 +241,7 @@ impl Qwen3_5EngineState {
                     true,
                     model,
                     active_memory_bytes_before_growth,
+                    retained_expert_payload_bytes_before_growth,
                     0,
                     &mut active_request.performance_attribution,
                 )?;
@@ -260,7 +312,10 @@ impl Qwen3_5EngineState {
                 Err(AdaptiveRamGrowthMemoryAdmissionError::Engine(memory_admission_error)) => {
                     return Err(memory_admission_error);
                 }
-                Ok(active_memory_bytes_before_growth) => {
+                Ok((
+                    active_memory_bytes_before_growth,
+                    retained_expert_payload_bytes_before_growth,
+                )) => {
                     let model = self.model.as_ref().ok_or_else(|| {
                         fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
@@ -284,6 +339,7 @@ impl Qwen3_5EngineState {
                                 true,
                                 model,
                                 active_memory_bytes_before_growth,
+                                retained_expert_payload_bytes_before_growth,
                                 target_verification_boundary_workspace_bytes,
                                 &mut active_request.performance_attribution,
                             )?;
@@ -312,6 +368,7 @@ impl Qwen3_5EngineState {
                                 true,
                                 model,
                                 active_memory_bytes_before_growth,
+                                retained_expert_payload_bytes_before_growth,
                                 if target_verification_was_attempted {
                                     target_verification_boundary_workspace_bytes
                                 } else {
@@ -329,6 +386,7 @@ impl Qwen3_5EngineState {
                                 true,
                                 model,
                                 active_memory_bytes_before_growth,
+                                retained_expert_payload_bytes_before_growth,
                                 target_verification_boundary_workspace_bytes,
                                 &mut active_request.performance_attribution,
                             )?;
@@ -349,13 +407,14 @@ impl Qwen3_5EngineState {
             active_request.has_optional_prediction_session(),
             sparse_experts_are_paged,
         );
-        let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
-            &active_request.request_decoder_state,
-            0,
-            0,
-        )?;
+        let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) = self
+            .measure_adaptive_ram_growth_memory_admission(
+                adaptive_ram_growth_context,
+                &mut active_request.performance_attribution,
+                &active_request.request_decoder_state,
+                0,
+                0,
+            )?;
         let model = self
             .model
             .as_ref()
@@ -380,18 +439,20 @@ impl Qwen3_5EngineState {
             let next_generated_token = active_request.build_generated_token(model, &next_logits)?;
             next_generated_token
         };
-        active_request
-            .performance_attribution
-            .measure_operation(
-                PerformanceOperation::DecodeAsyncEvaluationSubmission,
-                |_performance_attribution| {
-                    model.async_evaluate_generation(
-                        &next_generated_token,
-                        &active_request.request_decoder_state,
-                    )
-                },
-            )
-            .map_err(InferenceEngineError::from)?;
+        if !model.sparse_experts_are_paged() {
+            active_request
+                .performance_attribution
+                .measure_operation(
+                    PerformanceOperation::DecodeAsyncEvaluationSubmission,
+                    |_performance_attribution| {
+                        model.async_evaluate_generation(
+                            &next_generated_token,
+                            &active_request.request_decoder_state,
+                        )
+                    },
+                )
+                .map_err(InferenceEngineError::from)?;
+        }
         let mlx_memory_snapshot = collect_completed_forward_memory_snapshot(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context
@@ -399,6 +460,7 @@ impl Qwen3_5EngineState {
             true,
             model,
             active_memory_bytes_before_growth,
+            retained_expert_payload_bytes_before_growth,
             0,
             &mut active_request.performance_attribution,
         )?;

@@ -14,7 +14,12 @@ pub(crate) use super::speculative_prefill_selection_metadata::{
 };
 
 #[cfg(feature = "direct-mlx")]
-use crate::safetensors::SafetensorsTensorView;
+use self::speculative_prefill_selection_validation::{
+    selected_token_position_count, validate_selection_tensor_layout,
+};
+
+#[cfg(feature = "direct-mlx")]
+mod speculative_prefill_selection_validation;
 
 #[cfg(feature = "direct-mlx")]
 use super::model_contract::PersistentPromptCacheModelContract;
@@ -433,90 +438,6 @@ fn validate_metadata_text(
                 metadata_name,
                 actual_metadata_value: actual_metadata_value.clone(),
                 expected_metadata_value: expected_metadata_value.to_owned(),
-            },
-        );
-    }
-    Ok(())
-}
-
-#[cfg(feature = "direct-mlx")]
-fn validate_selection_tensor_layout(
-    parsed_header: &PersistentSafetensorsHeader,
-    selection_file_path: &Path,
-) -> Result<(), PersistentSpeculativePrefillSelectionFileError> {
-    if parsed_header.tensor_views.len() != 1 {
-        return Err(
-            PersistentSpeculativePrefillSelectionFileError::InvalidTensorLayout {
-                selection_file_path: selection_file_path.to_path_buf(),
-            },
-        );
-    }
-    let Some(selected_token_positions_tensor) = parsed_header
-        .tensor_views
-        .get(PERSISTENT_SPECULATIVE_PREFILL_SELECTION_TENSOR_NAME)
-    else {
-        return Err(
-            PersistentSpeculativePrefillSelectionFileError::InvalidTensorLayout {
-                selection_file_path: selection_file_path.to_path_buf(),
-            },
-        );
-    };
-    if selected_token_positions_tensor.dtype != "U32"
-        || selected_token_positions_tensor.shape.len() != 1
-        || selected_token_positions_tensor.shape[0] == 0
-    {
-        return Err(
-            PersistentSpeculativePrefillSelectionFileError::InvalidTensorLayout {
-                selection_file_path: selection_file_path.to_path_buf(),
-            },
-        );
-    }
-    validate_tensor_offsets(
-        selected_token_positions_tensor,
-        parsed_header,
-        selection_file_path,
-    )
-}
-
-#[cfg(feature = "direct-mlx")]
-fn selected_token_position_count(
-    parsed_header: &PersistentSafetensorsHeader,
-    selection_file_path: &Path,
-) -> Result<usize, PersistentSpeculativePrefillSelectionFileError> {
-    parsed_header
-        .tensor_views
-        .get(PERSISTENT_SPECULATIVE_PREFILL_SELECTION_TENSOR_NAME)
-        .map(|selected_token_positions_tensor| selected_token_positions_tensor.shape[0])
-        .ok_or_else(
-            || PersistentSpeculativePrefillSelectionFileError::InvalidTensorLayout {
-                selection_file_path: selection_file_path.to_path_buf(),
-            },
-        )
-}
-
-#[cfg(feature = "direct-mlx")]
-fn validate_tensor_offsets(
-    selected_token_positions_tensor: &SafetensorsTensorView,
-    parsed_header: &PersistentSafetensorsHeader,
-    selection_file_path: &Path,
-) -> Result<(), PersistentSpeculativePrefillSelectionFileError> {
-    let [data_start_offset, data_end_offset] = selected_token_positions_tensor.data_offsets;
-    let Some(absolute_data_end_offset) = parsed_header
-        .data_section_start_bytes
-        .checked_add(data_end_offset)
-    else {
-        return Err(
-            PersistentSpeculativePrefillSelectionFileError::TensorDataOutsideFile {
-                selection_file_path: selection_file_path.to_path_buf(),
-            },
-        );
-    };
-    if data_start_offset > data_end_offset
-        || absolute_data_end_offset > parsed_header.file_size_bytes
-    {
-        return Err(
-            PersistentSpeculativePrefillSelectionFileError::TensorDataOutsideFile {
-                selection_file_path: selection_file_path.to_path_buf(),
             },
         );
     }

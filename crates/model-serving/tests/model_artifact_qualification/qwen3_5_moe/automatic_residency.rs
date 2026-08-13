@@ -1,7 +1,7 @@
 //! End-to-end resident, paged, live-ceiling, and request-pressure journeys.
 //!
 //! Each ignored test owns a real validated sparse artifact and MLX runtime. The
-//! assertions distinguish ownership by observable mode and native page counters,
+//! assertions distinguish ownership by observable mode and streamed-page counters,
 //! rather than accepting successful token generation as sufficient evidence.
 
 use std::time::Duration;
@@ -84,7 +84,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
         );
         assert_eq!(
             native_cache_statistics_after_request, native_cache_statistics_before_request,
-            "resident inference must not consult, populate, or read through the native expert cache"
+            "resident inference must not consult or populate Rust-streamed expert pages"
         );
         eprintln!("[automatic-residency 5/5] status=success");
     })
@@ -160,10 +160,9 @@ async fn should_page_the_complete_sparse_model_when_idle_memory_is_insufficient(
                 > native_cache_statistics_before_request.disk_page_load_count,
             "paged inference must demand-load routed expert weights"
         );
-        assert!(
-            native_cache_statistics_after_request.resident_payload_byte_count
-                <= native_cache_statistics_after_request.maximum_resident_payload_byte_count,
-            "paged inference must remain within its native expert-cache payload limit"
+        assert_eq!(
+            native_cache_statistics_after_request.resident_payload_byte_count, 0,
+            "multi-token paged prefill must finish operation-local without pinning complete layers"
         );
         eprintln!("[automatic-paging 5/5] status=success");
     })
@@ -259,12 +258,12 @@ async fn should_transition_the_complete_sparse_model_across_live_memory_limits()
         assert_eq!(
             resident_statistics_after_ceiling_raise.disk_page_load_count,
             native_cache_statistics_after_paged_request.disk_page_load_count,
-            "repromotion must load contiguous resident arrays without consulting the native pager"
+            "repromotion must load contiguous resident arrays without consulting the Rust pager"
         );
         assert_eq!(
             resident_statistics_after_ceiling_raise.disk_batch_load_count,
             native_cache_statistics_after_paged_request.disk_batch_load_count,
-            "repromotion must not add native expert-page batches"
+            "repromotion must not add streamed expert-page batches"
         );
         eprintln!("[live-residency-transition 7/7] status=success");
     })

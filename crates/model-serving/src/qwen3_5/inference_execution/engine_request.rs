@@ -114,6 +114,8 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) forced_speculative_prefill_failure_stage_for_tests:
         Option<Qwen3_5SpeculativePrefillFailureStageForTests>,
     pub(super) force_next_prefill_capacity_rejection_for_tests: bool,
+    /// One-shot post-prefill attempt to pin decode-warm complete expert layers.
+    pub(super) decode_warm_expert_layers_attempted: bool,
 }
 
 impl Qwen3_5EngineRequest {

@@ -17,6 +17,54 @@ fn should_require_fixed_prefill_chunck_tokens_when_optimizer_is_disabled() {
 }
 
 #[test]
+fn should_accept_fixed_ssd_streaming_prefill_chunck_tokens_when_optimizer_is_disabled() {
+    let temp_home = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temp_home.path(),
+        r#"{
+          "chunking": {
+            "prefill_size_optimizer_enabled": false,
+            "fixed_prefill_tokens": 2048,
+            "fixed_ssd_streaming_prefill_tokens": 256
+          }
+        }"#,
+    );
+
+    let user_config = AstronomicalConfig::load_from_home_directory(temp_home.path())
+        .expect("config should load with fixed SSD streaming prefill tokens");
+
+    assert_eq!(
+        user_config
+            .prefill_chunck_sizing_policy()
+            .expect("the fixed policy should resolve"),
+        PrefillChunckSizingPolicy::Fixed {
+            fixed_prefill_chunck_tokens: 2_048,
+            fixed_ssd_streaming_prefill_chunck_tokens: Some(256),
+        }
+    );
+}
+
+#[test]
+fn should_reject_zero_fixed_ssd_streaming_prefill_chunck_tokens() {
+    let temp_home = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temp_home.path(),
+        r#"{
+          "chunking": {
+            "prefill_size_optimizer_enabled": false,
+            "fixed_prefill_tokens": 2048,
+            "fixed_ssd_streaming_prefill_tokens": 0
+          }
+        }"#,
+    );
+
+    assert!(matches!(
+        AstronomicalConfig::load_from_home_directory(temp_home.path()),
+        Err(AstronomicalConfigError::InvalidFixedSsdStreamingPrefillChunckTokens)
+    ));
+}
+
+#[test]
 fn should_reject_zero_fixed_prefill_chunck_tokens_when_optimizer_is_disabled() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(

@@ -470,6 +470,7 @@ impl Qwen3_5EngineState {
                 force_next_speculative_prefill_draft_prefix_restore_failure_for_tests: false,
                 forced_speculative_prefill_failure_stage_for_tests: None,
                 force_next_prefill_capacity_rejection_for_tests: false,
+                decode_warm_expert_layers_attempted: false,
             });
             let restored_prompt_prefix_token_count = u32::try_from(prefill_cursor)
                 .map_err(|_| fatal_engine_error("restored prompt prefix exceeds the u32 range"))?;

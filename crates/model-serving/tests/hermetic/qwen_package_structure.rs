@@ -57,7 +57,7 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
     }
     let qwen_expert_pager_source_directory =
         qwen_expert_paging_source_directory.join("expert_pager");
-    for required_qwen_expert_pager_source_file_name in ["mod.rs", "native_cache.rs"] {
+    for required_qwen_expert_pager_source_file_name in ["mod.rs", "rust_layer_streaming.rs"] {
         assert!(
             qwen_expert_pager_source_directory
                 .join(required_qwen_expert_pager_source_file_name)
@@ -125,6 +125,26 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
             .join("memory_admission.rs")
             .is_file(),
         "Qwen inference execution must own adaptive memory-admission orchestration"
+    );
+    for separated_memory_execution_owner in [
+        "completed_forward_memory.rs",
+        "prefill_capacity_recovery.rs",
+    ] {
+        assert!(
+            shared_qwen_source_directory
+                .join("inference_execution")
+                .join(separated_memory_execution_owner)
+                .is_file(),
+            "Qwen inference execution must keep memory responsibilities separated: {separated_memory_execution_owner}"
+        );
+    }
+    assert!(
+        shared_qwen_source_directory
+            .join("inference_execution")
+            .join("prefill_chunck_sizer")
+            .join("persisted_state.rs")
+            .is_file(),
+        "Qwen prefill chunk sizing must isolate persisted-state construction"
     );
 
     let sparse_model_module_source =

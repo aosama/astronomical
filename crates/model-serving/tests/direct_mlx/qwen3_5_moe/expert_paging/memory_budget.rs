@@ -124,11 +124,39 @@ fn should_fail_closed_when_local_active_and_allocator_cache_bytes_overflow() {
 }
 
 #[test]
-fn should_reclaim_allocator_cache_before_rejecting_an_expert_page_that_would_then_fit() {
+fn should_reclaim_allocator_cache_when_enforcement_passes_but_total_gpu_memory_exceeds_cap() {
     let memory_budget_snapshot = memory_budget_snapshot(9_500, 9_000, 1_000, 500);
 
-    assert!(!memory_budget_snapshot.within_cap());
-    assert!(memory_budget_snapshot.should_reclaim_allocator_cache_before_rejecting());
+    // The enforcement check passes: active + pending = 9500 <= cap = 9500.
+    assert!(memory_budget_snapshot.within_cap());
+    // But total GPU memory (active + cache + pending = 10500) exceeds the cap,
+    // so the allocator cache should be cleared before proceeding.
+    assert!(memory_budget_snapshot.should_clear_allocator_cache_to_reduce_total_gpu_memory());
+}
+
+#[test]
+fn should_reduce_retention_ceiling_when_observed_transient_buffers_need_headroom() {
+    // At 10 GB cap, 4 GB active, 0 cache, 1.5 KB pending: without transient
+    // reservation the retention ceiling is generous. With 2 GB of transient
+    // headroom, the ceiling shrinks by exactly 2 GB.
+    let mut memory_budget_snapshot = memory_budget_snapshot(10_000, 4_000, 0, 1_500);
+    let retention_without_transient =
+        automatic_expert_weight_memory_cache_maximum_size_bytes(&memory_budget_snapshot, 2_000, 0);
+    // Without transient reservation: cap - (active + pending) = 10000 - 5500 = 4500
+    // plus post_load_retained = 2000, so max = 2000 + 4500 = 6500
+    assert_eq!(retention_without_transient, 6_500);
+
+    memory_budget_snapshot.observed_transient_high_water_bytes = 2_000;
+    let retention_with_transient =
+        automatic_expert_weight_memory_cache_maximum_size_bytes(&memory_budget_snapshot, 2_000, 0);
+    // With 2 GB transient: effective_cap = 10000 - 2000 = 8000
+    // cap - (active + pending) = 8000 - 5500 = 2500
+    // plus post_load_retained = 2000, so max = 2000 + 2500 = 4500
+    assert_eq!(retention_with_transient, 4_500);
+    assert!(
+        retention_with_transient < retention_without_transient,
+        "transient reservation must shrink the retention ceiling"
+    );
 }
 
 #[test]
@@ -178,9 +206,7 @@ fn memory_budget_snapshot_with_pending_allocation(
     maximum_expert_page_bytes: u64,
     pending_allocation_bytes: u64,
 ) -> MemoryBudgetSnapshot {
-    let projected_bytes = active_bytes
-        .saturating_add(allocator_cache_bytes)
-        .saturating_add(pending_allocation_bytes.saturating_sub(allocator_cache_bytes));
+    let projected_bytes = active_bytes.saturating_add(pending_allocation_bytes);
     MemoryBudgetSnapshot {
         stage: "expert_weight_memory_cache_budget_test".to_owned(),
         active_bytes,
@@ -189,5 +215,6 @@ fn memory_budget_snapshot_with_pending_allocation(
         projected_bytes,
         configured_cap_bytes,
         maximum_expert_page_bytes,
+        observed_transient_high_water_bytes: 0,
     }
 }

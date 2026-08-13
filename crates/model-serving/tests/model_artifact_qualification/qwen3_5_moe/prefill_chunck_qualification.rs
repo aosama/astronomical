@@ -448,10 +448,6 @@ fn assert_capacity_retry_attribution(
         &generation_attribution_report,
         "prefill_capacity_retry_count",
     );
-    let expert_eviction_count = attribution_counter_amount(
-        &generation_attribution_report,
-        "native_expert_cache_eviction_count",
-    );
     let prefill_attempt_count =
         attribution_counter_amount(&generation_attribution_report, "prefill_chunck_count");
     assert!(
@@ -461,10 +457,6 @@ fn assert_capacity_retry_attribution(
     assert!(
         prefill_capacity_retry_count > 0,
         "the constrained request must retry after a native capacity rejection"
-    );
-    assert!(
-        expert_eviction_count > 0,
-        "automatic expert reclamation must run before prefill chunk reduction"
     );
     assert!(
         prefill_attempt_count > u64::try_from(completed_prefill_chunck_count).unwrap_or(u64::MAX),

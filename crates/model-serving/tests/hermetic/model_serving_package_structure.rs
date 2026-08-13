@@ -28,7 +28,9 @@ fn should_group_architecture_neutral_model_serving_modules_by_domain_ownership()
         &[
             "mod.rs",
             "adaptive_ram_growth_guard.rs",
+            "expert_memory_admission.rs",
             "mlx_memory_telemetry.rs",
+            "mlx_ram_budget.rs",
         ],
     );
     assert_source_directory_contains_files(
