@@ -11,8 +11,7 @@
 //! shape changes quantization, expert order, or source precision.
 
 use crate::{
-    AllocationAdmissionDecision, ExpertSourceRequestPhase, PerformanceAttribution,
-    PerformanceCounter, PerformanceOperation,
+    AllocationAdmissionDecision, PerformanceAttribution, PerformanceCounter, PerformanceOperation,
 };
 
 use super::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
@@ -30,22 +29,12 @@ impl Qwen3_5ExpertPager {
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,
         expert_ids: &[usize],
-        request_phase: ExpertSourceRequestPhase,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), ExpertPagingError> {
         // `layer_plan` is startup-validated immutable geometry. Building a page
         // manifest from it is pure planning and performs no model-payload I/O.
         let layer_plan = self.layer_plan(layer_index)?;
         let page_manifest = build_quantized_expert_page_manifest_from_plan(layer_plan, expert_ids)?;
-        let source_interval_count =
-            page_manifest
-                .source_manifests
-                .iter()
-                .fold(0_u64, |interval_count, source_manifest| {
-                    interval_count.saturating_add(
-                        u64::try_from(source_manifest.source_intervals.len()).unwrap_or(u64::MAX),
-                    )
-                });
         // Admission must happen before opening/loading source ranges. It checks
         // the exact payload against current active memory and the shared ceiling;
         // forward admission has already reclaimed experts for persistent and
@@ -89,8 +78,7 @@ impl Qwen3_5ExpertPager {
                     load_quantized_expert_page(
                         runtime,
                         &page_manifest,
-                        performance_attribution
-                            .expert_source_positional_file_read_metrics(layer_index, request_phase),
+                        performance_attribution.positional_file_read_metrics(),
                     )
                 },
             )
@@ -100,29 +88,6 @@ impl Qwen3_5ExpertPager {
         // This conversion consumes named tensors from the map. Any absent weight,
         // scale, or bias fails before model execution can observe a partial page.
         let streamed_weights = build_paged_expert_weights(&mut loaded_tensors, layer_plan)?;
-        performance_attribution.record_expert_source_load(
-            layer_index,
-            request_phase,
-            page_manifest.payload_byte_count,
-            source_interval_count,
-        );
-        if performance_attribution.is_enabled() {
-            // Bounded SafeTensors arrays are lazy. Diagnostic attribution needs a
-            // real per-layer readiness boundary, so enabled runs materialize this
-            // page before its layer graph is constructed. This wait includes MLX
-            // allocation and materialization in addition to positional reads; it
-            // is not presented as pure storage or graphics-processor time. Normal
-            // serving keeps the original lazy schedule when attribution is off.
-            let mut streamed_weight_arrays = Vec::new();
-            streamed_weights.append_array_references(&mut streamed_weight_arrays);
-            performance_attribution
-                .measure_expert_page_readiness(layer_index, request_phase, || {
-                    runtime.evaluate_arrays(&streamed_weight_arrays)
-                })
-                .map_err(|error| ExpertPagingError::Runtime {
-                    description: error.to_string(),
-                })?;
-        }
         // This counter is logical selected payload. Positional-read counters and
         // process-attributed physical I/O answer different questions and remain
         // separate in performance reports.
