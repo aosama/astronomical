@@ -333,9 +333,6 @@ pub(crate) async fn run_prefill_snapshot(
             .disk_page_load_count,
         expert_weight_memory_cache_disk_batch_load_count: expert_weight_memory_cache_statistics
             .disk_batch_load_count,
-        expert_weight_memory_cache_hit_count: expert_weight_memory_cache_statistics.cache_hit_count,
-        expert_weight_memory_cache_miss_count: expert_weight_memory_cache_statistics
-            .cache_miss_count,
         expert_weight_memory_cache_resident_payload_byte_count,
     }
 }
@@ -347,8 +344,6 @@ pub(crate) struct PrefillSnapshot {
     pub(crate) prefill_elapsed: Duration,
     pub(crate) expert_weight_memory_cache_disk_page_load_count: u64,
     pub(crate) expert_weight_memory_cache_disk_batch_load_count: u64,
-    pub(crate) expert_weight_memory_cache_hit_count: u64,
-    pub(crate) expert_weight_memory_cache_miss_count: u64,
     pub(crate) expert_weight_memory_cache_resident_payload_byte_count: u64,
 }
 

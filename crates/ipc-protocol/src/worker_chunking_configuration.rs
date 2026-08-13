@@ -13,6 +13,11 @@ pub enum WorkerPrefillChunckSizingPolicy {
     },
     Fixed {
         fixed_prefill_chunck_tokens: u32,
+        /// Smaller fixed size while sparse experts stream from storage.
+        ///
+        /// `None` keeps the complete-resident fixed size for every residency mode.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
     },
 }
 

@@ -43,6 +43,14 @@ pub(super) struct EnabledPerformanceAttribution {
     #[cfg(feature = "direct-mlx")]
     pub(super) positional_file_read_metrics:
         Arc<astronomical_runtime_integration::PositionalFileReadMetrics>,
+    #[cfg(feature = "direct-mlx")]
+    // Capture cumulative process I/O at the same boundary as the monotonic report
+    // clock. Keeping the Result preserves sampling failure as explicit evidence;
+    // replacing failure with zero would falsely claim that macOS served no disk I/O.
+    pub(super) process_io_start: Result<
+        astronomical_runtime_integration::MacosProcessIoSnapshot,
+        astronomical_runtime_integration::MacosProcessIoError,
+    >,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -78,6 +86,8 @@ impl PerformanceAttribution {
                 positional_file_read_metrics: Arc::new(
                     astronomical_runtime_integration::PositionalFileReadMetrics::default(),
                 ),
+                #[cfg(feature = "direct-mlx")]
+                process_io_start: astronomical_runtime_integration::sample_current_process_io(),
             })),
         }
     }

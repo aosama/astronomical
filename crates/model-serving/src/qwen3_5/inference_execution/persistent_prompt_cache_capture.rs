@@ -235,7 +235,7 @@ impl Qwen3_5EngineState {
                         .expert_weight_memory_cache_statistics()
                         .resident_payload_byte_count;
                     active_request.performance_attribution.measure_operation(
-                        PerformanceOperation::NativeExpertCacheReclamation,
+                        PerformanceOperation::ExpertRetentionReclamation,
                         |_performance_attribution| {
                             reclaim_retained_experts_for_request_memory_pressure(
                                 model,

@@ -25,6 +25,7 @@ workspace = true
 [features]
 performance-measurement = []
 model-artifact-qualification = []
+memory-management-acceptance = []
 
 [dependencies]
 astronomical-config = { path = "../../crates/config" }

@@ -11,6 +11,8 @@ pub use crate::expert_paging::build_source_manifests;
 #[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
+pub(crate) use expert_paging::Qwen3_5RetainedExpertLayer;
+#[cfg(feature = "direct-mlx")]
 pub use expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
@@ -20,6 +22,7 @@ pub(crate) use expert_residency::Qwen3_5ResidentExpertWeights;
 pub(crate) use model::feed_forward_weights::bind_qwen3_5_moe_feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::{
+    PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
     Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
 };
 #[cfg(feature = "direct-mlx")]

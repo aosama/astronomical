@@ -128,7 +128,7 @@ pub(crate) fn run_representative_performance_probe_for_loaded_model(
                 .memory_snapshot()
                 .expect("the representative probe should sample MLX memory at progress boundaries");
             eprintln!(
-                "{progress_log_prefix} status=progress output_tokens={completed_output_token_count:03}/{REPRESENTATIVE_OUTPUT_TOKEN_COUNT} average_output_tokens_per_second={average_output_tokens_per_second:.2} ETA_seconds={estimated_remaining_seconds:.1} one_expert_cache_entries={} cache_evictions={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2}",
+                "{progress_log_prefix} status=progress output_tokens={completed_output_token_count:03}/{REPRESENTATIVE_OUTPUT_TOKEN_COUNT} average_output_tokens_per_second={average_output_tokens_per_second:.2} ETA_seconds={estimated_remaining_seconds:.1} expert_entries={} whole_layer_releases={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2}",
                 cache_statistics.entry_count,
                 cache_statistics.eviction_count,
                 bytes_to_gib(cache_statistics.resident_payload_byte_count),
@@ -152,7 +152,7 @@ pub(crate) fn run_representative_performance_probe_for_loaded_model(
     let end_to_end_output_tokens_per_second =
         f64::from(REPRESENTATIVE_OUTPUT_TOKEN_COUNT) / request_execution_elapsed.as_secs_f64();
     eprintln!(
-        "{progress_log_prefix} status=success total_elapsed_seconds={:.3} input_tokens={} output_tokens={} output_token_id_checksum={} prefill_elapsed_seconds={:.3} generation_elapsed_seconds={:.3} average_output_tokens_per_second={average_output_tokens_per_second:.2} end_to_end_output_tokens_per_second={end_to_end_output_tokens_per_second:.2} one_expert_cache_entries={} cache_evictions={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} disk_page_loads={} disk_batch_loads={} cache_hits={} cache_misses={} mlx_active_bytes={} mlx_allocator_bytes={} mlx_peak_bytes={} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2}",
+        "{progress_log_prefix} status=success total_elapsed_seconds={:.3} input_tokens={} output_tokens={} output_token_id_checksum={} prefill_elapsed_seconds={:.3} generation_elapsed_seconds={:.3} average_output_tokens_per_second={average_output_tokens_per_second:.2} end_to_end_output_tokens_per_second={end_to_end_output_tokens_per_second:.2} expert_entries={} whole_layer_releases={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} disk_page_loads={} disk_batch_loads={} mlx_active_bytes={} mlx_allocator_bytes={} mlx_peak_bytes={} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2}",
         test_started_at.elapsed().as_secs_f64(),
         REPRESENTATIVE_INPUT_TOKEN_COUNT,
         REPRESENTATIVE_OUTPUT_TOKEN_COUNT,
@@ -169,12 +169,6 @@ pub(crate) fn run_representative_performance_probe_for_loaded_model(
         final_cache_statistics
             .disk_batch_load_count
             .saturating_sub(initial_cache_statistics.disk_batch_load_count),
-        final_cache_statistics
-            .cache_hit_count
-            .saturating_sub(initial_cache_statistics.cache_hit_count),
-        final_cache_statistics
-            .cache_miss_count
-            .saturating_sub(initial_cache_statistics.cache_miss_count),
         final_mlx_memory_snapshot.active_memory_bytes(),
         final_mlx_memory_snapshot.allocator_cache_memory_bytes(),
         final_mlx_memory_snapshot.peak_memory_bytes(),

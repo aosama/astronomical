@@ -110,6 +110,9 @@ struct CommonPerformanceAttributionReport {
     outcome: PerformanceAttributionOutcome,
     operations: Vec<PerformanceOperationReport>,
     counters: Vec<PerformanceCounterReport>,
+    process_physical_disk_read_bytes: Option<u64>,
+    process_physical_disk_written_bytes: Option<u64>,
+    process_io_unavailability_reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -294,6 +297,17 @@ impl EnabledPerformanceAttribution {
         } else {
             attributed_elapsed_nanoseconds as f64 / report_elapsed_nanoseconds as f64 * 100.0
         };
+        #[cfg(feature = "direct-mlx")]
+        // This end sample intentionally occurs after all report counters and
+        // timings are finalized. The resulting interval therefore covers the
+        // complete user-visible operation represented by this JSON row.
+        let process_io_evidence = finish_process_io_evidence(&self.process_io_start);
+        #[cfg(not(feature = "direct-mlx"))]
+        let process_io_evidence = (
+            None,
+            None,
+            Some("process I/O attribution requires direct-mlx".to_owned()),
+        );
         CommonPerformanceAttributionReport {
             started_at_unix_millis: self.report_started_at_unix_millis,
             ended_at_unix_millis: unix_epoch_millis(),
@@ -304,7 +318,39 @@ impl EnabledPerformanceAttribution {
             outcome,
             operations: operation_reports,
             counters: counter_reports,
+            process_physical_disk_read_bytes: process_io_evidence.0,
+            process_physical_disk_written_bytes: process_io_evidence.1,
+            process_io_unavailability_reason: process_io_evidence.2,
         }
+    }
+}
+
+#[cfg(feature = "direct-mlx")]
+fn finish_process_io_evidence(
+    process_io_start: &Result<
+        astronomical_runtime_integration::MacosProcessIoSnapshot,
+        astronomical_runtime_integration::MacosProcessIoError,
+    >,
+) -> (Option<u64>, Option<u64>, Option<String>) {
+    // Preserve one invariant in the serialized contract: either both byte
+    // deltas are present, or both are null with a reason. Consumers must never
+    // mistake an unavailable operating-system sample for measured zero traffic.
+    let process_io_delta = process_io_start
+        .as_ref()
+        .map_err(ToString::to_string)
+        .and_then(|process_io_start| {
+            astronomical_runtime_integration::sample_current_process_io()
+                .map_err(|sampling_error| sampling_error.to_string())?
+                .delta_since(*process_io_start)
+                .map_err(|delta_error| delta_error.to_string())
+        });
+    match process_io_delta {
+        Ok(process_io_delta) => (
+            Some(process_io_delta.physical_disk_read_bytes()),
+            Some(process_io_delta.physical_disk_written_bytes()),
+            None,
+        ),
+        Err(unavailability_reason) => (None, None, Some(unavailability_reason)),
     }
 }
 

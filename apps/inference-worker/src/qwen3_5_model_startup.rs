@@ -133,8 +133,10 @@ pub(crate) fn initialize_qwen3_5_model(
         None => match &chunking.prefill_sizing_policy {
             WorkerPrefillChunckSizingPolicy::Fixed {
                 fixed_prefill_chunck_tokens,
-            } => Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(
+                fixed_ssd_streaming_prefill_chunck_tokens,
+            } => Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens_with_ssd_streaming(
                 *fixed_prefill_chunck_tokens,
+                *fixed_ssd_streaming_prefill_chunck_tokens,
             ),
             WorkerPrefillChunckSizingPolicy::Optimized {
                 optimizer_prefill_chunck_token_candidates,

@@ -73,15 +73,13 @@ async fn run_romeo_and_juliet_production_prefill_journey() {
     let baseline_speedup_ratio =
         measured_tokens_per_second / RECORDED_BRANCH_BASELINE_TOKENS_PER_SECOND;
     eprintln!(
-        "[paged-romeo-31913] status=success total_elapsed_seconds={:.3} prompt_tokens={} prefill_elapsed_seconds={:.3} prefill_tokens_per_second={measured_tokens_per_second:.2} recorded_branch_baseline_tokens_per_second={RECORDED_BRANCH_BASELINE_TOKENS_PER_SECOND:.2} baseline_speedup_ratio={baseline_speedup_ratio:.3} greedy_token_id={} disk_page_loads={} disk_batch_loads={} cache_hits={} cache_misses={} cache_entries={} resident_payload_bytes={}",
+        "[paged-romeo-31913] status=success total_elapsed_seconds={:.3} prompt_tokens={} prefill_elapsed_seconds={:.3} prefill_tokens_per_second={measured_tokens_per_second:.2} recorded_branch_baseline_tokens_per_second={RECORDED_BRANCH_BASELINE_TOKENS_PER_SECOND:.2} baseline_speedup_ratio={baseline_speedup_ratio:.3} greedy_token_id={} disk_page_loads={} disk_batch_loads={} expert_entries={} resident_payload_bytes={}",
         test_started_at.elapsed().as_secs_f64(),
         measured_prefill.processed_token_count,
         measured_prefill.elapsed.as_secs_f64(),
         measured_prefill.greedy_token_id,
         measured_prefill.disk_page_load_count_delta,
         measured_prefill.disk_batch_load_count_delta,
-        measured_prefill.cache_hit_count_delta,
-        measured_prefill.cache_miss_count_delta,
         measured_prefill.final_cache_statistics.entry_count,
         measured_prefill
             .final_cache_statistics
@@ -97,7 +95,6 @@ async fn run_romeo_and_juliet_production_prefill_journey() {
         baseline_speedup_ratio >= 2.0,
         "the warmed production page-table path must process the 31,913-token prompt at least twice as fast as the recorded 548 tokens/second branch baseline; measured {measured_tokens_per_second:.2} tokens/second ({baseline_speedup_ratio:.3}x)"
     );
-    assert!(measured_prefill.cache_hit_count_delta > 0);
     assert!(
         measured_prefill
             .final_cache_statistics
@@ -176,12 +173,6 @@ fn run_prefill_pass(
         disk_batch_load_count_delta: final_cache_statistics
             .disk_batch_load_count
             .saturating_sub(initial_cache_statistics.disk_batch_load_count),
-        cache_hit_count_delta: final_cache_statistics
-            .cache_hit_count
-            .saturating_sub(initial_cache_statistics.cache_hit_count),
-        cache_miss_count_delta: final_cache_statistics
-            .cache_miss_count
-            .saturating_sub(initial_cache_statistics.cache_miss_count),
         final_cache_statistics,
     }
 }
@@ -192,8 +183,6 @@ struct PrefillPassMeasurement {
     greedy_token_id: u32,
     disk_page_load_count_delta: u64,
     disk_batch_load_count_delta: u64,
-    cache_hit_count_delta: u64,
-    cache_miss_count_delta: u64,
     final_cache_statistics: ExpertWeightMemoryCacheStatistics,
 }
 

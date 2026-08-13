@@ -46,6 +46,9 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for PromptPrefillChunckAttemptE
 pub(super) fn terminal_optional_prefill_error_is_fallback(
     qwen3_5_execution_error: &Qwen3_5ExecutionError,
 ) -> bool {
+    if qwen3_5_execution_error.is_recoverable_graphics_processor_out_of_memory() {
+        return false;
+    }
     match qwen3_5_execution_error {
         Qwen3_5ExecutionError::Runtime(mlx_runtime_error) => {
             matches!(mlx_runtime_error, MlxRuntimeError::RuntimeOperation { .. })
@@ -73,29 +76,38 @@ pub(super) fn prefill_execution_error(
     qwen3_5_execution_error: Qwen3_5ExecutionError,
     prefill_request_checkpoint: Qwen3_5PrefillRequestCheckpoint,
 ) -> PromptPrefillChunckAttemptError {
-    match qwen3_5_execution_error {
-        Qwen3_5ExecutionError::Runtime(MlxRuntimeError::ActiveMemoryLimitExceeded {
-            active_memory_bytes,
-            attempted_allocation_bytes,
-            allowed_active_memory_bytes,
-        }) => PromptPrefillChunckAttemptError::ActiveMemoryLimitExceeded {
+    if let Some((active_memory_bytes, attempted_allocation_bytes, allowed_active_memory_bytes)) =
+        qwen3_5_execution_error.active_memory_limit_exceeded_evidence()
+    {
+        return PromptPrefillChunckAttemptError::ActiveMemoryLimitExceeded {
             active_memory_bytes,
             attempted_allocation_bytes,
             allowed_active_memory_bytes,
             prefill_request_checkpoint,
-        },
-        Qwen3_5ExecutionError::Runtime(mlx_runtime_error)
-            if mlx_runtime_error.is_recoverable_graphics_processor_out_of_memory() =>
-        {
-            PromptPrefillChunckAttemptError::GraphicsProcessorMemoryExhausted {
-                reason: mlx_runtime_error.to_string(),
-                prefill_request_checkpoint,
-            }
-        }
-        other_qwen3_5_execution_error => {
-            PromptPrefillChunckAttemptError::Engine(other_qwen3_5_execution_error.into())
-        }
+        };
     }
+    if qwen3_5_execution_error.is_recoverable_graphics_processor_out_of_memory() {
+        return PromptPrefillChunckAttemptError::GraphicsProcessorMemoryExhausted {
+            reason: qwen3_5_execution_error.to_string(),
+            prefill_request_checkpoint,
+        };
+    }
+    // Eager Rust expert streaming should resolve every layer before constructing
+    // expert computation. Preserve this defensive translation so a violated
+    // route-stability invariant still reaches the bounded checkpoint/reclamation
+    // path instead of changing established request-level error classification.
+    if matches!(
+        &qwen3_5_execution_error,
+        Qwen3_5ExecutionError::InvalidInput { description }
+            if *description == "paged route replay exceeded the sparse-layer safety bound"
+    ) {
+        return PromptPrefillChunckAttemptError::GraphicsProcessorMemoryExhausted {
+            reason: "paged expert routes could not stabilize under the active memory ceiling"
+                .to_owned(),
+            prefill_request_checkpoint,
+        };
+    }
+    PromptPrefillChunckAttemptError::Engine(qwen3_5_execution_error.into())
 }
 
 pub(super) fn configured_speculative_prefill_execution_error(
@@ -105,7 +117,7 @@ pub(super) fn configured_speculative_prefill_execution_error(
     prefill_request_checkpoint: Qwen3_5PrefillRequestCheckpoint,
 ) -> PromptPrefillChunckAttemptError {
     // Preserve recoverable capacity errors so the outer prefill loop can restore
-    // its checkpoint, reclaim experts, and reduce chunk size. All non-capacity
+    // its checkpoint, reclaim experts, and retry the unchanged chunk once. Non-capacity
     // execution failures become fail-closed configured SpecPrefill errors.
     match prefill_execution_error(qwen3_5_execution_error, prefill_request_checkpoint) {
         PromptPrefillChunckAttemptError::Engine(inference_engine_error) => {

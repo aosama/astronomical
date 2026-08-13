@@ -1,17 +1,12 @@
-//! Paged mixture-of-experts graph execution after routing and page loading.
-//!
-//! A native snapshot is more than page-table metadata: it is the lifetime owner
-//! for every MLX array whose graphics-processor address appears in that table.
-//! Keeping the snapshot borrowed through graph construction allows native
-//! eviction to proceed without invalidating lazy or already-submitted products.
+//! MLX gathered execution against one Rust-streamed expert layer.
 
-use astronomical_runtime_integration::{
-    MlxArray, MlxNativeExpertCacheSnapshot, MlxNativeExpertProjection,
-};
+use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
 
+use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
+use super::super::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination::combine_sparse_and_shared_experts;
 use super::routing::{
@@ -19,44 +14,138 @@ use super::routing::{
     qwen3_5_moe_sorted_expert_weighted_sum,
 };
 
+const REMAP_EXPERT_PAGE_SLOTS_OPERATION: &str = "remap Qwen3.5-MoE expert page slots";
+
 impl Qwen3_5Model {
-    /// Executes sparse expert computation directly against independently owned pages.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn forward_moe_paged(
+    pub(super) fn forward_moe_paged_target_verification_with_performance_attribution(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        native_expert_cache_snapshot: &MlxNativeExpertCacheSnapshot,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        page_manifest: &QuantizedExpertPageManifest,
         selected_indices: &MlxArray,
+        sorted_unique_expert_ids: &[usize],
         selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        self.forward_moe_with_precomputed_paged_expert_indices(
-            hidden_states,
-            mixture_of_experts_weights,
-            native_expert_cache_snapshot,
-            selected_indices,
-            selected_scores,
-            should_use_compiled_elementwise_graphs,
+        performance_attribution.measure_operation(
+            PerformanceOperation::PagedMoeGraphConstruction,
+            |_performance_attribution| {
+                let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
+                    &self.runtime,
+                    selected_indices,
+                    sorted_unique_expert_ids,
+                    page_manifest,
+                )?;
+                let hidden_shape = hidden_states.shape();
+                let batch_size = hidden_shape[0];
+                let token_count = hidden_shape[1];
+                let hidden_dimension = hidden_shape[2];
+                let experts_per_token = page_slot_indices.shape()[2];
+                let flattened_states = self
+                    .runtime
+                    .reshape(hidden_states, &[batch_size * token_count, hidden_dimension])?;
+                let flattened_indices = self.runtime.reshape(
+                    &page_slot_indices,
+                    &[batch_size * token_count, experts_per_token],
+                )?;
+                let expanded_states = self.runtime.expand_dims(&flattened_states, -2)?;
+                let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
+                let selected_up = self.streamed_expert_linear(
+                    &expanded_states,
+                    &paged_expert_weights.up_projection,
+                    &flattened_indices,
+                    false,
+                )?;
+                let selected_gate = self.streamed_expert_linear(
+                    &expanded_states,
+                    &paged_expert_weights.gate_projection,
+                    &flattened_indices,
+                    false,
+                )?;
+                let activated = self.runtime.apply_compiled_swiglu(
+                    &self.compiled_swiglu,
+                    &selected_gate,
+                    &selected_up,
+                )?;
+                let selected_outputs = self.streamed_expert_linear(
+                    &activated,
+                    &paged_expert_weights.down_projection,
+                    &flattened_indices,
+                    false,
+                )?;
+                let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
+                let selected_outputs = self.runtime.reshape(
+                    &selected_outputs,
+                    &[batch_size, token_count, experts_per_token, hidden_dimension],
+                )?;
+                let expanded_scores = self.runtime.expand_dims(selected_scores, -1)?;
+                let weighted_outputs =
+                    self.runtime.multiply(&selected_outputs, &expanded_scores)?;
+                let sparse_output = self.runtime.sum_axis(&weighted_outputs, -2, false)?;
+                self.combine_paged_sparse_and_shared_outputs(
+                    hidden_states,
+                    mixture_of_experts_weights,
+                    &sparse_output,
+                    false,
+                )
+            },
         )
     }
 
-    fn forward_moe_with_precomputed_paged_expert_indices(
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn forward_moe_paged_with_performance_attribution(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        native_expert_cache_snapshot: &MlxNativeExpertCacheSnapshot,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        page_manifest: &QuantizedExpertPageManifest,
+        selected_indices: &MlxArray,
+        sorted_unique_expert_ids: &[usize],
+        selected_scores: &MlxArray,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let paged_output = performance_attribution.measure_operation(
+            PerformanceOperation::PagedMoeGraphConstruction,
+            |_performance_attribution| {
+                let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
+                    &self.runtime,
+                    selected_indices,
+                    sorted_unique_expert_ids,
+                    page_manifest,
+                )?;
+                self.forward_moe_with_streamed_weights(
+                    hidden_states,
+                    mixture_of_experts_weights,
+                    paged_expert_weights,
+                    &page_slot_indices,
+                    selected_scores,
+                    should_use_compiled_elementwise_graphs,
+                )
+            },
+        )?;
+        performance_attribution.record_counter(
+            PerformanceCounter::RustStreamedExpertProjectionGraphCount,
+            3,
+        );
+        Ok(paged_output)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn forward_moe_with_streamed_weights(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        // Sorting is worthwhile only for enough assignments to expose matrix
-        // tiles. The sorted IDs let each Metal tile reuse one expert page; the
-        // inverse order is consumed directly by the weighted-sum kernel so no
-        // expanded token/top-K tensor needs to be restored first.
-        let sorted_expert_assignments =
+        let sorted_assignments =
             if selected_expert_indices.element_count() >= MINIMUM_SORTED_EXPERT_ASSIGNMENTS {
                 Some(qwen3_5_moe_sort_expert_assignments(
                     &self.runtime,
@@ -66,44 +155,35 @@ impl Qwen3_5Model {
             } else {
                 None
             };
-        let (expert_input_states, expert_indices, are_expert_indices_sorted) =
-            match sorted_expert_assignments.as_ref() {
-                Some((sorted_states, sorted_indices, _)) => (sorted_states, sorted_indices, true),
-                None => (&expanded_states, selected_expert_indices, false),
-            };
-        // Gate, up, and down all dereference the immutable native page table.
-        // The snapshot owns packed weights, affine parameters, or native BF16
-        // matrices for the complete lifetime of these lazy projections.
-        let selected_up = native_expert_cache_snapshot.gather_matmul(
-            &self.runtime,
-            MlxNativeExpertProjection::Up,
-            expert_input_states,
+        let (expert_inputs, expert_indices, indices_are_sorted) = match sorted_assignments.as_ref()
+        {
+            Some((sorted_states, sorted_indices, _)) => (sorted_states, sorted_indices, true),
+            None => (&expanded_states, selected_expert_indices, false),
+        };
+        let selected_up = self.streamed_expert_linear(
+            expert_inputs,
+            &paged_expert_weights.up_projection,
             expert_indices,
-            true,
-            are_expert_indices_sorted,
+            indices_are_sorted,
         )?;
-        let selected_gate = native_expert_cache_snapshot.gather_matmul(
-            &self.runtime,
-            MlxNativeExpertProjection::Gate,
-            expert_input_states,
+        let selected_gate = self.streamed_expert_linear(
+            expert_inputs,
+            &paged_expert_weights.gate_projection,
             expert_indices,
-            true,
-            are_expert_indices_sorted,
+            indices_are_sorted,
         )?;
         let selected_activated = self.runtime.apply_compiled_swiglu(
             &self.compiled_swiglu,
             &selected_gate,
             &selected_up,
         )?;
-        let selected_outputs = native_expert_cache_snapshot.gather_matmul(
-            &self.runtime,
-            MlxNativeExpertProjection::Down,
+        let selected_outputs = self.streamed_expert_linear(
             &selected_activated,
+            &paged_expert_weights.down_projection,
             expert_indices,
-            true,
-            are_expert_indices_sorted,
+            indices_are_sorted,
         )?;
-        let sparse_expert_output = match sorted_expert_assignments.as_ref() {
+        let sparse_output = match sorted_assignments.as_ref() {
             Some((_, _, inverse_order)) => qwen3_5_moe_sorted_expert_weighted_sum(
                 &self.runtime,
                 self.sorted_expert_weighted_sum_kernel()?,
@@ -119,7 +199,61 @@ impl Qwen3_5Model {
                 self.runtime.sum_axis(&weighted_outputs, -2, false)?
             }
         };
+        self.combine_paged_sparse_and_shared_outputs(
+            hidden_states,
+            mixture_of_experts_weights,
+            &sparse_output,
+            should_use_compiled_elementwise_graphs,
+        )
+    }
 
+    fn streamed_expert_linear(
+        &self,
+        activations: &MlxArray,
+        affine_weights: &crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights,
+        selected_expert_indices: &MlxArray,
+        are_expert_indices_sorted: bool,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+        match affine_weights {
+            Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
+                let transposed_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
+                Ok(self.runtime.gather_dense_matmul(
+                    activations,
+                    &transposed_weights,
+                    None,
+                    Some(selected_expert_indices),
+                    are_expert_indices_sorted,
+                )?)
+            }
+            Qwen3_5AffineWeights::Quantized {
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                quantization_group_size,
+                quantization_bits,
+            } => Ok(self.runtime.gather_quantized_matmul_affine(
+                activations,
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                None,
+                Some(selected_expert_indices),
+                true,
+                *quantization_group_size,
+                *quantization_bits,
+                are_expert_indices_sorted,
+            )?),
+        }
+    }
+
+    pub(super) fn combine_paged_sparse_and_shared_outputs(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        sparse_expert_output: &MlxArray,
+        should_use_compiled_elementwise_graphs: bool,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let shared_gate = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_gate_projection,
@@ -140,180 +274,49 @@ impl Qwen3_5Model {
             &mixture_of_experts_weights.shared_expert_output_gate_projection,
         )?;
         if should_use_compiled_elementwise_graphs {
-            Ok(self
+            return Ok(self
                 .runtime
                 .apply_compiled_sparse_shared_expert_combination(
                     &self.compiled_elementwise_graphs,
                     &sparse_expert_output,
                     &shared_output,
                     &shared_gate_logits,
-                )?)
-        } else {
-            Ok(combine_sparse_and_shared_experts(
-                &self.runtime,
-                &sparse_expert_output,
-                &shared_output,
-                &shared_gate_logits,
-            )?)
+                )?);
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn forward_moe_paged_with_performance_attribution(
-        &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        native_expert_cache_snapshot: &MlxNativeExpertCacheSnapshot,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let paged_moe_output = performance_attribution.measure_operation(
-            PerformanceOperation::PagedMoeGraphConstruction,
-            |_performance_attribution| {
-                self.forward_moe_paged(
-                    hidden_states,
-                    mixture_of_experts_weights,
-                    native_expert_cache_snapshot,
-                    selected_indices,
-                    selected_scores,
-                    should_use_compiled_elementwise_graphs,
-                )
-            },
-        )?;
-        performance_attribution
-            .record_counter(PerformanceCounter::NativePagedExpertProjectionGraphCount, 3);
-        Ok(paged_moe_output)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn forward_moe_paged_target_verification_with_performance_attribution(
-        &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        native_expert_cache_snapshot: &MlxNativeExpertCacheSnapshot,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let paged_moe_output = performance_attribution.measure_operation(
-            PerformanceOperation::PagedMoeGraphConstruction,
-            |_performance_attribution| {
-                self.forward_moe_target_verification_with_precomputed_paged_expert_indices(
-                    hidden_states,
-                    mixture_of_experts_weights,
-                    native_expert_cache_snapshot,
-                    selected_indices,
-                    selected_scores,
-                )
-            },
-        )?;
-        performance_attribution
-            .record_counter(PerformanceCounter::NativePagedExpertProjectionGraphCount, 3);
-        Ok(paged_moe_output)
-    }
-
-    fn forward_moe_target_verification_with_precomputed_paged_expert_indices(
-        &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        native_expert_cache_snapshot: &MlxNativeExpertCacheSnapshot,
-        selected_expert_indices: &MlxArray,
-        selected_scores: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        // The two-token MTP verification window must preserve token order and
-        // its first-row recurrent checkpoint. Flatten only for gathered expert
-        // products, then restore [batch, token, top-K, hidden] before weighting.
-        // This intentionally favors exact rollback semantics over sorted large-
-        // prefill dispatch.
-        let hidden_state_shape = hidden_states.shape();
-        let batch_size = hidden_state_shape[0];
-        let token_count = hidden_state_shape[1];
-        let hidden_dimension = hidden_state_shape[2];
-        let expert_count_per_token = selected_expert_indices.shape()[2];
-        let flattened_hidden_states = self
-            .runtime
-            .reshape(hidden_states, &[batch_size * token_count, hidden_dimension])?;
-        let flattened_expert_indices = self.runtime.reshape(
-            selected_expert_indices,
-            &[batch_size * token_count, expert_count_per_token],
-        )?;
-        let expanded_states = self.runtime.expand_dims(&flattened_hidden_states, -2)?;
-        let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        let selected_up = native_expert_cache_snapshot.gather_matmul(
-            &self.runtime,
-            MlxNativeExpertProjection::Up,
-            &expanded_states,
-            &flattened_expert_indices,
-            true,
-            false,
-        )?;
-        let selected_gate = native_expert_cache_snapshot.gather_matmul(
-            &self.runtime,
-            MlxNativeExpertProjection::Gate,
-            &expanded_states,
-            &flattened_expert_indices,
-            true,
-            false,
-        )?;
-        let selected_activated = self.runtime.apply_compiled_swiglu(
-            &self.compiled_swiglu,
-            &selected_gate,
-            &selected_up,
-        )?;
-        let selected_outputs = native_expert_cache_snapshot.gather_matmul(
-            &self.runtime,
-            MlxNativeExpertProjection::Down,
-            &selected_activated,
-            &flattened_expert_indices,
-            true,
-            false,
-        )?;
-        let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
-        let selected_outputs = self.runtime.reshape(
-            &selected_outputs,
-            &[
-                batch_size,
-                token_count,
-                expert_count_per_token,
-                hidden_dimension,
-            ],
-        )?;
-        let expanded_scores = self.runtime.expand_dims(selected_scores, -1)?;
-        let weighted_outputs = self.runtime.multiply(&selected_outputs, &expanded_scores)?;
-        let sparse_expert_output = self.runtime.sum_axis(&weighted_outputs, -2, false)?;
-
-        let execution_mode =
-            crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
-        let shared_gate = self.quantized_linear_for_paged_prefill_execution_mode(
-            hidden_states,
-            &mixture_of_experts_weights.shared_expert_gate_projection,
-            execution_mode,
-        )?;
-        let shared_up = self.quantized_linear_for_paged_prefill_execution_mode(
-            hidden_states,
-            &mixture_of_experts_weights.shared_expert_up_projection,
-            execution_mode,
-        )?;
-        let shared_activated =
-            self.runtime
-                .apply_compiled_swiglu(&self.compiled_swiglu, &shared_gate, &shared_up)?;
-        let shared_output = self.quantized_linear_for_paged_prefill_execution_mode(
-            &shared_activated,
-            &mixture_of_experts_weights.shared_expert_down_projection,
-            execution_mode,
-        )?;
-        let shared_gate_logits = self.quantized_linear_for_paged_prefill_execution_mode(
-            hidden_states,
-            &mixture_of_experts_weights.shared_expert_output_gate_projection,
-            execution_mode,
-        )?;
         Ok(combine_sparse_and_shared_experts(
             &self.runtime,
-            &sparse_expert_output,
+            sparse_expert_output,
             &shared_output,
             &shared_gate_logits,
         )?)
     }
+}
+
+pub fn qwen3_5_moe_remap_expert_page_slots(
+    runtime: &MlxRuntime,
+    selected_indices: &MlxArray,
+    sorted_unique_expert_ids: &[usize],
+    page_manifest: &QuantizedExpertPageManifest,
+) -> Result<MlxArray, MlxRuntimeError> {
+    if sorted_unique_expert_ids.iter().any(|expert_id| {
+        page_manifest
+            .page_slot_by_global_expert_id
+            .get(*expert_id)
+            .is_none_or(|page_slot| *page_slot == u32::MAX)
+    }) {
+        return Err(MlxRuntimeError::RuntimeOperation {
+            operation: REMAP_EXPERT_PAGE_SLOTS_OPERATION,
+            description: "a routed expert is absent from the streamed page manifest".to_owned(),
+        });
+    }
+    let expert_capacity = i32::try_from(page_manifest.page_slot_by_global_expert_id.len())
+        .map_err(|_| MlxRuntimeError::RuntimeOperation {
+            operation: REMAP_EXPERT_PAGE_SLOTS_OPERATION,
+            description: "expert capacity exceeds the MLX shape range".to_owned(),
+        })?;
+    let page_slots = runtime.array_from_u32(
+        &page_manifest.page_slot_by_global_expert_id,
+        &[expert_capacity],
+    )?;
+    runtime.take_axis(&page_slots, selected_indices, 0)
 }

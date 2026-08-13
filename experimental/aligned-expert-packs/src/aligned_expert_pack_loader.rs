@@ -102,7 +102,7 @@ fn mlx_dtype(dtype: SafetensorsDtype) -> Result<MlxDtype, ExpertPagingError> {
 }
 
 fn runtime_description(description: impl Into<String>) -> ExpertPagingError {
-    ExpertPagingError::Runtime {
+    ExpertPagingError::InvalidPagingPlan {
         description: description.into(),
     }
 }

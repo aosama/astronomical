@@ -434,16 +434,15 @@ fn print_attribution_memory_timeline(performance_attribution_log_path: &Path) {
             continue;
         };
         eprintln!(
-            "[paged-endurance] status=attribution request_id={request_id} outcome={} mlx_active_bytes={} mlx_allocator_cache_bytes={} mlx_peak_bytes={} native_cache_evictions={} native_cache_hits={} native_cache_source_read_bytes={}",
+            "[paged-endurance] status=attribution request_id={request_id} outcome={} mlx_active_bytes={} mlx_allocator_cache_bytes={} mlx_peak_bytes={} page_store_source_read_bytes={} page_store_snapshot_publications={}",
             generation_report["outcome"],
             generation_report["mlx_active_memory_bytes"],
             generation_report["mlx_allocator_cache_memory_bytes"],
             generation_report["mlx_peak_memory_bytes"],
-            counter_amount(generation_report, "native_expert_cache_eviction_count"),
-            counter_amount(generation_report, "native_expert_cache_hit_count"),
-            counter_amount(
+            counter_amount(generation_report, "positional_file_read_byte_count",),
+            operation_occurrence_count(
                 generation_report,
-                "native_expert_cache_successful_source_read_byte_count",
+                "rust_expert_streaming_layer_preparation"
             ),
         );
     }
@@ -456,6 +455,19 @@ fn counter_amount(generation_report: &Value, counter_identifier: &str) -> u64 {
             counter_reports.iter().find_map(|counter_report| {
                 (counter_report["counter"] == counter_identifier)
                     .then(|| counter_report["amount"].as_u64())
+                    .flatten()
+            })
+        })
+        .unwrap_or(0)
+}
+
+fn operation_occurrence_count(report: &Value, operation_identifier: &str) -> u64 {
+    report["operations"]
+        .as_array()
+        .and_then(|operations| {
+            operations.iter().find_map(|operation| {
+                (operation["operation"] == operation_identifier)
+                    .then(|| operation["occurrence_count"].as_u64())
                     .flatten()
             })
         })

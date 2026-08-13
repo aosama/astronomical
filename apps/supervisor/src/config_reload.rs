@@ -182,8 +182,11 @@ impl ResolvedRuntimeConfig {
                     },
                     PrefillChunckSizingPolicy::Fixed {
                         fixed_prefill_chunck_tokens,
+                        fixed_ssd_streaming_prefill_chunck_tokens,
                     } => WorkerPrefillChunckSizingPolicy::Fixed {
                         fixed_prefill_chunck_tokens: *fixed_prefill_chunck_tokens,
+                        fixed_ssd_streaming_prefill_chunck_tokens:
+                            *fixed_ssd_streaming_prefill_chunck_tokens,
                     },
                 },
                 full_attention_key_value_growth_tokens: self

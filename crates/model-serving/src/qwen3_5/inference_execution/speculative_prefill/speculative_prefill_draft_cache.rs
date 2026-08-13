@@ -345,7 +345,7 @@ impl Qwen3_5EngineState {
                 let active_memory_deficit_bytes =
                     publication_error.active_memory_deficit_bytes().unwrap_or(0);
                 performance_attribution.measure_operation(
-                    crate::PerformanceOperation::NativeExpertCacheReclamation,
+                    crate::PerformanceOperation::ExpertRetentionReclamation,
                     |_performance_attribution| {
                         if let Some(target_model) = self.model.as_ref() {
                             // Target and drafter share the process-wide MLX

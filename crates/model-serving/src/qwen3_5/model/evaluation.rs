@@ -1,6 +1,7 @@
 use astronomical_runtime_integration::MlxArray;
 
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::PerformanceAttribution;
+use crate::qwen3_5_moe::PagedRouteValidationOutcome;
 
 use super::{Qwen3_5ExecutionError, Qwen3_5Model, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
@@ -37,70 +38,42 @@ impl Qwen3_5Model {
         final_logits: &MlxArray,
         request_decoder_state: &RequestDecoderStateStack,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        let evaluation_arrays =
-            super::forward_contract::forward_state_arrays(final_logits, request_decoder_state)?;
-        self.runtime.evaluate_arrays(&evaluation_arrays)?;
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        self.evaluate_forward_state_with_performance_attribution(
+            final_logits,
+            request_decoder_state,
+            &mut disabled_performance_attribution,
+        )?;
         Ok(())
     }
 
-    /// Synchronizes reusable decoder state after an intermediate prefill chunk.
-    pub(crate) fn evaluate_decoder_state_with_performance_attribution(
+    /// Evaluates forward roots and resolves deferred GPU missing-route bitmaps.
+    pub(crate) fn evaluate_forward_state_with_performance_attribution(
         &self,
+        final_logits: &MlxArray,
         request_decoder_state: &RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        self.evaluate_decoder_state_and_optional_boundary_checkpoints_with_performance_attribution(
-            request_decoder_state,
-            None,
-            performance_attribution,
-        )
+    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
+        let evaluation_arrays =
+            super::forward_contract::forward_state_arrays(final_logits, request_decoder_state)?;
+        self.evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)
     }
 
-    pub(crate) fn evaluate_decoder_state_and_boundary_checkpoints_with_performance_attribution(
-        &self,
-        request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        self.evaluate_decoder_state_and_optional_boundary_checkpoints_with_performance_attribution(
-            request_decoder_state,
-            Some(boundary_checkpoint_collector),
-            performance_attribution,
-        )
-    }
-
-    fn evaluate_decoder_state_and_optional_boundary_checkpoints_with_performance_attribution(
+    /// Evaluates decoder-state roots and returns paged-route replay outcome.
+    pub(crate) fn evaluate_decoder_state_for_paged_route_resolution(
         &self,
         request_decoder_state: &RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
             &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
         let mut evaluation_arrays =
             super::forward_contract::decoder_state_arrays(request_decoder_state)?;
         if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
             evaluation_arrays.extend(boundary_checkpoint_collector.evaluation_arrays());
         }
-        // mlx_async_eval is asynchronous only with respect to the submitted
-        // graphics-processor work. Before returning, MLX still traverses the
-        // lazy graph, resolves dependencies, compiles first-use Metal libraries
-        // and pipelines, and encodes commands. Keep that host-side submission
-        // boundary separate from the remaining stream completion wait so cold
-        // compilation cannot be misreported as graphics-processor execution.
-        performance_attribution.measure_operation(
-            PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
-            |_performance_attribution| self.runtime.async_eval_arrays(&evaluation_arrays),
-        )?;
-        // Prefill state and optional cache boundary checkpoints must be fully
-        // materialized before allocator cleanup or publication can observe
-        // their buffers. This explicit barrier measures only work still in
-        // flight after async evaluation submission returned.
-        performance_attribution.measure_operation(
-            PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
-            |_performance_attribution| self.runtime.synchronize_gpu_stream(),
-        )?;
-        Ok(())
+        self.evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)
     }
 
     /// Submits decode evaluation without synchronizing the graphics processor.

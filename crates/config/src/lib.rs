@@ -254,14 +254,17 @@ pub enum PrefillChunckSizingPolicy {
     },
     /// Process each normal full chunk with one configured token count.
     Fixed {
-        /// Required positive token count for each fixed prefill chunk.
+        /// Required positive token count for each fixed complete-resident prefill chunk.
         fixed_prefill_chunck_tokens: u32,
+        /// Optional smaller fixed size used only while sparse experts stream from storage.
+        fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
     },
 }
 
 fn resolve_prefill_chunck_sizing_policy(
     configured_prefill_chunck_size_optimizer_enabled: Option<bool>,
     configured_fixed_prefill_chunck_tokens: Option<u32>,
+    configured_fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
     configured_optimizer_prefill_chunck_token_candidates: Option<&[u32]>,
 ) -> Result<PrefillChunckSizingPolicy, AstronomicalConfigError> {
     let fixed_prefill_chunck_tokens = match configured_prefill_chunck_size_optimizer_enabled {
@@ -282,8 +285,19 @@ fn resolve_prefill_chunck_sizing_policy(
     if fixed_prefill_chunck_tokens == 0 {
         return Err(AstronomicalConfigError::InvalidFixedPrefillChunckTokens);
     }
+    let fixed_ssd_streaming_prefill_chunck_tokens =
+        match configured_fixed_ssd_streaming_prefill_chunck_tokens {
+            Some(0) => {
+                return Err(AstronomicalConfigError::InvalidFixedSsdStreamingPrefillChunckTokens);
+            }
+            Some(fixed_ssd_streaming_prefill_chunck_tokens) => {
+                Some(fixed_ssd_streaming_prefill_chunck_tokens)
+            }
+            None => None,
+        };
     Ok(PrefillChunckSizingPolicy::Fixed {
         fixed_prefill_chunck_tokens,
+        fixed_ssd_streaming_prefill_chunck_tokens,
     })
 }
 

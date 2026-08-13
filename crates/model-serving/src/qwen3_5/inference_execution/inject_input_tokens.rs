@@ -3,7 +3,7 @@ use astronomical_ipc_protocol::RequestId;
 use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
 
 use super::super::model::memory_admission::invalid_request_error;
-use super::memory_admission::record_completed_adaptive_ram_growth;
+use super::completed_forward_memory::record_completed_adaptive_ram_growth;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 use crate::qwen3_5::multi_token_prediction::{
     disable_prediction_after_optional_injection_failure, forward_final_injected_prediction_token,
@@ -139,8 +139,8 @@ impl Qwen3_5EngineState {
                 active_request.has_optional_prediction_session(),
                 model.sparse_experts_are_paged(),
             );
-            let active_memory_bytes_before_growth = self
-                .measure_adaptive_ram_growth_memory_admission(
+            let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) =
+                self.measure_adaptive_ram_growth_memory_admission(
                     adaptive_ram_growth_context,
                     &mut active_request.performance_attribution,
                     &active_request.request_decoder_state,
@@ -185,6 +185,7 @@ impl Qwen3_5EngineState {
                 false,
                 model,
                 active_memory_bytes_before_growth,
+                retained_expert_payload_bytes_before_growth,
                 0,
                 &mut active_request.performance_attribution,
             )?;
@@ -200,13 +201,14 @@ impl Qwen3_5EngineState {
             should_reseed_prediction_after_injection,
             sparse_experts_are_paged,
         );
-        let active_memory_bytes_before_growth = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
-            &active_request.request_decoder_state,
-            0,
-            0,
-        )?;
+        let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) = self
+            .measure_adaptive_ram_growth_memory_admission(
+                adaptive_ram_growth_context,
+                &mut active_request.performance_attribution,
+                &active_request.request_decoder_state,
+                0,
+                0,
+            )?;
         let model = self
             .model
             .as_ref()
@@ -247,6 +249,7 @@ impl Qwen3_5EngineState {
             true,
             model,
             active_memory_bytes_before_growth,
+            retained_expert_payload_bytes_before_growth,
             0,
             &mut active_request.performance_attribution,
         )?;

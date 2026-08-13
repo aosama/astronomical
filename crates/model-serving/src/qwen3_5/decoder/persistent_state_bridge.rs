@@ -1,10 +1,7 @@
-use std::collections::HashMap;
-
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
-
 use super::RequestDecoderStateStack;
 use crate::DecoderCacheState;
-
+use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use std::collections::HashMap;
 /// Bridges persistent prompt-cache block tensors and the live in-memory
 /// request decoder state. The in-memory owners decide how restored tensors
 /// become live state; this module owns only SSD block extraction and assembly.
@@ -376,7 +373,6 @@ pub(super) fn slice_full_attention_block(
             },
         )
 }
-
 pub(super) fn retain_layer_tensor(
     layer_index: usize,
     tensor_role: &'static str,
@@ -390,7 +386,6 @@ pub(super) fn retain_layer_tensor(
         },
     )
 }
-
 pub(super) fn retain_block_tensor(
     layer_index: usize,
     tensor_name: &str,
@@ -404,7 +399,6 @@ pub(super) fn retain_block_tensor(
         },
     )
 }
-
 /// Persistent prompt-cache block extraction or restoration could not bridge
 /// to the live in-memory request decoder state.
 #[derive(Debug, thiserror::Error)]

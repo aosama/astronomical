@@ -53,7 +53,10 @@ fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_gr
         .expect("the combined projection should not overflow");
 
     assert!(target_only_projection.fits_stable_and_peak_limits());
-    assert_eq!(combined_projection.required_reclamation_bytes(), 1);
+    assert_eq!(
+        combined_projection.operation_reclamation_required_bytes(),
+        1
+    );
     assert!(!combined_projection.fits_stable_and_peak_limits());
 }
 

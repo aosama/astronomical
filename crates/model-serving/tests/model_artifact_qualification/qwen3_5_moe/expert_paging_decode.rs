@@ -55,7 +55,7 @@ async fn run_30_token_paged_decode_cache_probe() {
     );
 
     eprintln!(
-        "[paged-30] status=success elapsed_seconds={:.2} generated_tokens={} average_tok_per_second={:.2} cache_entries={} resident_payload_gib={:.2} disk_page_loads={} disk_batch_loads={} cache_hits={} cache_misses={}",
+        "[paged-30] status=success elapsed_seconds={:.2} generated_tokens={} average_tok_per_second={:.2} expert_entries={} resident_payload_gib={:.2} disk_page_loads={} disk_batch_loads={}",
         test_started_at.elapsed().as_secs_f64(),
         GENERATED_TOKEN_COUNT,
         decode_pass_measurements.average_token_per_second(),
@@ -70,21 +70,11 @@ async fn run_30_token_paged_decode_cache_probe() {
             .disk_page_load_count,
         decode_pass_measurements
             .final_cache_statistics
-            .disk_batch_load_count,
-        decode_pass_measurements
-            .final_cache_statistics
-            .cache_hit_count,
-        decode_pass_measurements
-            .final_cache_statistics
-            .cache_miss_count
+            .disk_batch_load_count
     );
     assert!(
         decode_pass_measurements.disk_page_load_count_delta > 0,
         "30-token paged decode should have loaded some experts from disk"
-    );
-    assert!(
-        decode_pass_measurements.cache_hit_count_delta > 0,
-        "30-token paged decode should reuse at least one routed one-expert page"
     );
 }
 
@@ -103,12 +93,10 @@ async fn run_30_token_warm_cache_decode_probe() {
         true,
     );
     eprintln!(
-        "[paged-30-warm] status=progress phase=warmup_done average_tok_per_second={:.2} disk_page_loads={} disk_batch_loads={} cache_hits={} cache_misses={} cache_entries={} resident_payload_gib={:.2}",
+        "[paged-30-warm] status=progress phase=warmup_done average_tok_per_second={:.2} disk_page_loads={} disk_batch_loads={} expert_entries={} resident_payload_gib={:.2}",
         warmup_decode_measurements.average_token_per_second(),
         warmup_decode_measurements.disk_page_load_count_delta,
         warmup_decode_measurements.disk_batch_load_count_delta,
-        warmup_decode_measurements.cache_hit_count_delta,
-        warmup_decode_measurements.cache_miss_count_delta,
         warmup_decode_measurements
             .final_cache_statistics
             .entry_count,
@@ -128,14 +116,12 @@ async fn run_30_token_warm_cache_decode_probe() {
         true,
     );
     eprintln!(
-        "[paged-30-warm] status=success elapsed_seconds={:.2} warmup_tok_per_second={:.2} measured_warm_tok_per_second={:.2} measured_disk_page_loads={} measured_disk_batch_loads={} measured_cache_hits={} measured_cache_misses={} cache_entries={} resident_payload_gib={:.2}",
+        "[paged-30-warm] status=success elapsed_seconds={:.2} warmup_tok_per_second={:.2} measured_warm_tok_per_second={:.2} measured_disk_page_loads={} measured_disk_batch_loads={} expert_entries={} resident_payload_gib={:.2}",
         test_started_at.elapsed().as_secs_f64(),
         warmup_decode_measurements.average_token_per_second(),
         measured_warm_decode_measurements.average_token_per_second(),
         measured_warm_decode_measurements.disk_page_load_count_delta,
         measured_warm_decode_measurements.disk_batch_load_count_delta,
-        measured_warm_decode_measurements.cache_hit_count_delta,
-        measured_warm_decode_measurements.cache_miss_count_delta,
         measured_warm_decode_measurements
             .final_cache_statistics
             .entry_count,
@@ -148,11 +134,7 @@ async fn run_30_token_warm_cache_decode_probe() {
     assert_eq!(
         measured_warm_decode_measurements.generated_token_ids,
         warmup_decode_measurements.generated_token_ids,
-        "warm measured pass must generate the same greedy token IDs as the warmup pass so cache attribution is comparable"
-    );
-    assert!(
-        measured_warm_decode_measurements.cache_hit_count_delta > 0,
-        "the identical measured decode should reuse routed one-expert pages"
+        "warm measured pass must generate the same greedy token IDs as the warmup pass"
     );
 }
 
@@ -186,7 +168,7 @@ pub(crate) async fn load_paged_qwen3_5_model_for_decode_probe(
         false,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the Ornith model should load with demand-only one-expert caching");
+    .expect("the Ornith model should load with explicit Rust expert streaming");
     eprintln!(
         "{log_prefix} status=progress phase=model_loaded elapsed_seconds={:.2}",
         model_load_started_at.elapsed().as_secs_f64()
@@ -251,10 +233,6 @@ fn run_say_hi_30_token_paged_decode_pass(
             - before_step_cache_statistics.disk_page_load_count;
         let disk_batch_load_delta = after_step_cache_statistics.disk_batch_load_count
             - before_step_cache_statistics.disk_batch_load_count;
-        let cache_hit_delta = after_step_cache_statistics.cache_hit_count
-            - before_step_cache_statistics.cache_hit_count;
-        let cache_miss_delta = after_step_cache_statistics.cache_miss_count
-            - before_step_cache_statistics.cache_miss_count;
         let completed_token_count = decode_step_index + 1;
         let average_seconds_per_token =
             generation_started_at.elapsed().as_secs_f64() / f64::from(completed_token_count);
@@ -263,13 +241,11 @@ fn run_say_hi_30_token_paged_decode_pass(
             average_seconds_per_token * f64::from(remaining_token_count);
         if should_print_per_token_progress {
             eprintln!(
-                "{log_prefix} status=progress pass={decode_pass_label} step={completed_token_count:02}/{GENERATED_TOKEN_COUNT} token_id={current_token_id} elapsed_ms={:.2} tok_per_second={:.2} disk_load_delta={} disk_batch_delta={} cache_hit_delta={} cache_miss_delta={} one_expert_cache_entries={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2} cumulative_disk_loads={} cumulative_disk_batches={} cumulative_cache_hits={} ETA_seconds={:.1}",
+                "{log_prefix} status=progress pass={decode_pass_label} step={completed_token_count:02}/{GENERATED_TOKEN_COUNT} token_id={current_token_id} elapsed_ms={:.2} tok_per_second={:.2} disk_load_delta={} disk_batch_delta={} expert_entries={} resident_payload_gib={:.2} maximum_resident_payload_gib={:.2} mlx_active_gib={:.2} mlx_allocator_gib={:.2} mlx_peak_gib={:.2} cumulative_disk_loads={} cumulative_disk_batches={} ETA_seconds={:.1}",
                 step_elapsed.as_secs_f64() * 1000.0,
                 1.0 / step_elapsed.as_secs_f64(),
                 disk_page_load_delta,
                 disk_batch_load_delta,
-                cache_hit_delta,
-                cache_miss_delta,
                 after_step_cache_statistics.entry_count,
                 bytes_to_gib(after_step_cache_statistics.resident_payload_byte_count),
                 bytes_to_gib(after_step_cache_statistics.maximum_resident_payload_byte_count),
@@ -278,7 +254,6 @@ fn run_say_hi_30_token_paged_decode_pass(
                 bytes_to_gib(mlx_memory_snapshot.peak_memory_bytes() as u64),
                 after_step_cache_statistics.disk_page_load_count,
                 after_step_cache_statistics.disk_batch_load_count,
-                after_step_cache_statistics.cache_hit_count,
                 estimated_remaining_seconds
             );
         }
@@ -294,19 +269,13 @@ fn run_say_hi_30_token_paged_decode_pass(
             - initial_cache_statistics.disk_page_load_count,
         disk_batch_load_count_delta: final_cache_statistics.disk_batch_load_count
             - initial_cache_statistics.disk_batch_load_count,
-        cache_hit_count_delta: final_cache_statistics.cache_hit_count
-            - initial_cache_statistics.cache_hit_count,
-        cache_miss_count_delta: final_cache_statistics.cache_miss_count
-            - initial_cache_statistics.cache_miss_count,
     };
     eprintln!(
-        "{log_prefix} status=progress pass={decode_pass_label} phase=decode_done elapsed_ms={:.2} average_tok_per_second={:.2} disk_page_loads={} disk_batch_loads={} cache_hits={} cache_misses={} resident_payload_gib={:.2}",
+        "{log_prefix} status=progress pass={decode_pass_label} phase=decode_done elapsed_ms={:.2} average_tok_per_second={:.2} disk_page_loads={} disk_batch_loads={} resident_payload_gib={:.2}",
         measurements.generation_elapsed.as_secs_f64() * 1000.0,
         measurements.average_token_per_second(),
         measurements.disk_page_load_count_delta,
         measurements.disk_batch_load_count_delta,
-        measurements.cache_hit_count_delta,
-        measurements.cache_miss_count_delta,
         bytes_to_gib(
             measurements
                 .final_cache_statistics
@@ -322,8 +291,6 @@ struct PagedDecodePassMeasurements {
     final_cache_statistics: ExpertWeightMemoryCacheStatistics,
     disk_page_load_count_delta: u64,
     disk_batch_load_count_delta: u64,
-    cache_hit_count_delta: u64,
-    cache_miss_count_delta: u64,
 }
 
 impl PagedDecodePassMeasurements {

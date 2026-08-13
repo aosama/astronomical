@@ -1,11 +1,14 @@
 #![cfg(any(
     feature = "model-artifact-qualification",
+    feature = "memory-management-acceptance",
     feature = "performance-measurement"
 ))]
 
 use std::{collections::HashMap, path::Path, path::PathBuf, sync::Arc};
 
 pub(crate) mod exact_model_prompt;
+#[cfg(feature = "memory-management-acceptance")]
+pub(crate) mod real_model_rest_server;
 
 #[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
 pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str =
@@ -60,6 +63,7 @@ pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::Discove
 
 #[cfg(any(
     feature = "model-artifact-qualification",
+    feature = "memory-management-acceptance",
     feature = "performance-measurement"
 ))]
 #[allow(dead_code)]

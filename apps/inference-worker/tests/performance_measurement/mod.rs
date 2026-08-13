@@ -15,8 +15,6 @@ mod model_prefill_optimizer_candidate_observation;
 #[cfg(feature = "performance-measurement")]
 mod model_prefill_optimizer_comparison;
 #[cfg(feature = "performance-measurement")]
-mod model_prefill_qualification_cancellation;
-#[cfg(feature = "performance-measurement")]
 mod model_prefill_qualification_worker;
 #[cfg(feature = "performance-measurement")]
 mod model_process_metrics;

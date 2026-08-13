@@ -29,6 +29,23 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| fatal_engine_error("cannot inspect expert statistics before loading"))
     }
 
+    fn complete_expert_payload_byte_count_for_tests(&self) -> Result<u64, InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot inspect expert payload before loading"))?;
+        let expert_pager = loaded_model.expert_pager.as_ref().ok_or_else(|| {
+            fatal_engine_error("cannot inspect complete expert payload for a dense model")
+        })?;
+        expert_pager
+            .complete_expert_payload_byte_count()
+            .map_err(|expert_paging_error| {
+                fatal_engine_error(format!(
+                    "cannot measure complete expert payload: {expert_paging_error}"
+                ))
+            })
+    }
+
     fn remove_resident_expert_source_files_for_tests(
         &mut self,
     ) -> Result<(), InferenceEngineError> {
@@ -41,19 +58,6 @@ impl Qwen3_5EngineState {
         })?;
         expert_pager.remove_resident_expert_source_files_for_tests();
         Ok(())
-    }
-
-    fn native_expert_retention_growth_is_enabled_for_tests(
-        &self,
-    ) -> Result<bool, InferenceEngineError> {
-        let loaded_model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("cannot inspect expert retention before loading"))?;
-        let expert_pager = loaded_model.expert_pager.as_ref().ok_or_else(|| {
-            fatal_engine_error("cannot inspect native expert retention for a dense model")
-        })?;
-        Ok(expert_pager.native_expert_retention_growth_is_enabled_for_tests())
     }
 
     fn execute_resident_mtp_draft_for_tests(
@@ -242,6 +246,28 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
+    /// Returns the exact complete expert payload used by residency admission.
+    #[doc(hidden)]
+    pub async fn complete_expert_payload_byte_count_for_tests(
+        &self,
+    ) -> Result<u64, InferenceEngineError> {
+        let (complete_expert_payload_sender, complete_expert_payload_receiver) =
+            std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let complete_expert_payload_bytes =
+                qwen_inference_execution.complete_expert_payload_byte_count_for_tests()?;
+            complete_expert_payload_sender
+                .send(complete_expert_payload_bytes)
+                .map_err(|_| {
+                    fatal_engine_error("complete expert payload receiver stopped unexpectedly")
+                })
+        })
+        .await?;
+        complete_expert_payload_receiver.recv().map_err(|_| {
+            fatal_engine_error("complete expert payload owner operation returned no response")
+        })
+    }
+
     /// Removes resident-promotion source descriptors to qualify typed failure recovery.
     #[doc(hidden)]
     pub async fn remove_resident_expert_source_files_for_tests(
@@ -251,27 +277,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             qwen_inference_execution.remove_resident_expert_source_files_for_tests()
         })
         .await
-    }
-
-    /// Probes whether native expert retention can grow, restoring its original enabled state.
-    #[doc(hidden)]
-    pub async fn native_expert_retention_growth_is_enabled_for_tests(
-        &self,
-    ) -> Result<bool, InferenceEngineError> {
-        let (retention_state_sender, retention_state_receiver) = std::sync::mpsc::sync_channel(1);
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            let retention_growth_is_enabled =
-                qwen_inference_execution.native_expert_retention_growth_is_enabled_for_tests()?;
-            retention_state_sender
-                .send(retention_growth_is_enabled)
-                .map_err(|_| {
-                    fatal_engine_error("expert retention state receiver stopped unexpectedly")
-                })
-        })
-        .await?;
-        retention_state_receiver.recv().map_err(|_| {
-            fatal_engine_error("expert retention state owner operation returned no response")
-        })
     }
 
     /// Executes one real MTP head forward from a supplied fixture token on the owner thread.
