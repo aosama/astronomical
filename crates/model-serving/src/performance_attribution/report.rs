@@ -1,8 +1,8 @@
 use serde::Serialize;
 
 use super::{
-    EnabledPerformanceAttribution, PerformanceAttribution, PerformanceCounter,
-    PerformanceOperation, unix_epoch_millis,
+    EnabledPerformanceAttribution, ExpertSourceRequestPhase, PerformanceAttribution,
+    PerformanceCounter, PerformanceOperation, unix_epoch_millis,
 };
 
 /// Outcome recorded when one bounded attribution report ends.
@@ -88,6 +88,7 @@ pub struct GenerationPerformanceAttributionReport {
     mlx_peak_memory_bytes: Option<u64>,
     failure_description: Option<String>,
     previous_token_expert_route_reuse_by_layer: Vec<PreviousTokenExpertRouteReuseByLayerReport>,
+    expert_source_by_layer: Vec<ExpertSourceByLayerReport>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -97,6 +98,29 @@ struct PreviousTokenExpertRouteReuseByLayerReport {
     matched_expert_count: u64,
     completely_matched_layer_count: u64,
     examined_layer_count: u64,
+}
+
+/// Bounded source evidence for one validated model layer and request phase.
+#[derive(Clone, Debug, Serialize)]
+struct ExpertSourceByLayerReport {
+    layer_index: usize,
+    request_phase: ExpertSourceRequestPhase,
+    logical_source_payload_bytes: u64,
+    maximum_source_page_payload_bytes: u64,
+    source_interval_count: u64,
+    source_load_count: u64,
+    resident_hit_count: u64,
+    avoided_source_payload_bytes: u64,
+    avoided_source_interval_count: u64,
+    page_readiness_wait_count: u64,
+    page_readiness_wait_nanoseconds: u64,
+    maximum_page_readiness_wait_nanoseconds: u64,
+    page_readiness_failure_count: u64,
+    executed_positional_read_call_count: u64,
+    executed_positional_read_bytes: u64,
+    executed_positional_read_elapsed_nanoseconds: u64,
+    maximum_positional_read_elapsed_nanoseconds: u64,
+    positional_read_failure_count: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -201,12 +225,82 @@ impl PerformanceAttribution {
                         }
                     })
                     .collect(),
+                expert_source_by_layer: enabled_attribution.expert_source_reports(),
             },
         ))
     }
 }
 
 impl EnabledPerformanceAttribution {
+    fn expert_source_reports(&self) -> Vec<ExpertSourceByLayerReport> {
+        self.expert_source_by_layer
+            .iter()
+            .enumerate()
+            .flat_map(|(layer_index, phase_measurements)| {
+                ExpertSourceRequestPhase::ALL
+                    .into_iter()
+                    .filter_map(move |request_phase| {
+                        let phase_measurement = &phase_measurements[request_phase.index()];
+                        if !phase_measurement.has_evidence() {
+                            return None;
+                        }
+                        #[cfg(feature = "direct-mlx")]
+                        let positional_read_snapshot = phase_measurement
+                            .positional_file_read_metrics
+                            .as_ref()
+                            .map(|read_metrics| read_metrics.snapshot());
+                        Some(ExpertSourceByLayerReport {
+                            layer_index,
+                            request_phase,
+                            logical_source_payload_bytes: phase_measurement
+                                .logical_source_payload_bytes,
+                            maximum_source_page_payload_bytes: phase_measurement
+                                .maximum_source_page_payload_bytes,
+                            source_interval_count: phase_measurement.source_interval_count,
+                            source_load_count: phase_measurement.source_load_count,
+                            resident_hit_count: phase_measurement.resident_hit_count,
+                            avoided_source_payload_bytes: phase_measurement
+                                .avoided_source_payload_bytes,
+                            avoided_source_interval_count: phase_measurement
+                                .avoided_source_interval_count,
+                            page_readiness_wait_count: phase_measurement.page_readiness_wait_count,
+                            page_readiness_wait_nanoseconds: phase_measurement
+                                .page_readiness_wait_nanoseconds,
+                            maximum_page_readiness_wait_nanoseconds: phase_measurement
+                                .maximum_page_readiness_wait_nanoseconds,
+                            page_readiness_failure_count: phase_measurement
+                                .page_readiness_failure_count,
+                            #[cfg(feature = "direct-mlx")]
+                            executed_positional_read_call_count: positional_read_snapshot
+                                .map_or(0, |snapshot| snapshot.read_call_count),
+                            #[cfg(not(feature = "direct-mlx"))]
+                            executed_positional_read_call_count: 0,
+                            #[cfg(feature = "direct-mlx")]
+                            executed_positional_read_bytes: positional_read_snapshot
+                                .map_or(0, |snapshot| snapshot.read_byte_count),
+                            #[cfg(not(feature = "direct-mlx"))]
+                            executed_positional_read_bytes: 0,
+                            #[cfg(feature = "direct-mlx")]
+                            executed_positional_read_elapsed_nanoseconds: positional_read_snapshot
+                                .map_or(0, |snapshot| snapshot.total_read_elapsed_nanoseconds),
+                            #[cfg(not(feature = "direct-mlx"))]
+                            executed_positional_read_elapsed_nanoseconds: 0,
+                            #[cfg(feature = "direct-mlx")]
+                            maximum_positional_read_elapsed_nanoseconds: positional_read_snapshot
+                                .map_or(0, |snapshot| snapshot.maximum_read_elapsed_nanoseconds),
+                            #[cfg(not(feature = "direct-mlx"))]
+                            maximum_positional_read_elapsed_nanoseconds: 0,
+                            #[cfg(feature = "direct-mlx")]
+                            positional_read_failure_count: positional_read_snapshot
+                                .map_or(0, |snapshot| snapshot.read_failure_count),
+                            #[cfg(not(feature = "direct-mlx"))]
+                            positional_read_failure_count: 0,
+                        })
+                    })
+            })
+            .collect()
+    }
+
     fn finish_common_report(
         &self,
         outcome: PerformanceAttributionOutcome,
@@ -243,6 +337,16 @@ impl EnabledPerformanceAttribution {
         let counter_values = {
             let mut counter_values = self.counter_values;
             let positional_file_read_snapshot = self.positional_file_read_metrics.snapshot();
+            let expert_source_positional_file_read_snapshots = self
+                .expert_source_by_layer
+                .iter()
+                .flat_map(|phase_measurements| phase_measurements.iter())
+                .filter_map(|phase_measurement| {
+                    phase_measurement
+                        .positional_file_read_metrics
+                        .as_ref()
+                        .map(|read_metrics| read_metrics.snapshot())
+                });
             add_counter_amount(
                 &mut counter_values,
                 PerformanceCounter::PositionalFileReadCallCount,
@@ -272,6 +376,38 @@ impl EnabledPerformanceAttribution {
                 PerformanceCounter::PositionalFileReadFailureCount,
                 positional_file_read_snapshot.read_failure_count,
             );
+            for layer_read_snapshot in expert_source_positional_file_read_snapshots {
+                add_counter_amount(
+                    &mut counter_values,
+                    PerformanceCounter::PositionalFileReadCallCount,
+                    layer_read_snapshot.read_call_count,
+                );
+                add_counter_amount(
+                    &mut counter_values,
+                    PerformanceCounter::PositionalFileReadByteCount,
+                    layer_read_snapshot.read_byte_count,
+                );
+                add_counter_amount(
+                    &mut counter_values,
+                    PerformanceCounter::PositionalFileReadElapsedNanoseconds,
+                    layer_read_snapshot.total_read_elapsed_nanoseconds,
+                );
+                counter_values
+                    [PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds as usize] =
+                    counter_values
+                        [PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds as usize]
+                        .max(layer_read_snapshot.maximum_read_elapsed_nanoseconds);
+                counter_values
+                    [PerformanceCounter::PositionalFileReadMaximumConcurrentCount as usize] =
+                    counter_values
+                        [PerformanceCounter::PositionalFileReadMaximumConcurrentCount as usize]
+                        .max(layer_read_snapshot.maximum_concurrent_read_count);
+                add_counter_amount(
+                    &mut counter_values,
+                    PerformanceCounter::PositionalFileReadFailureCount,
+                    layer_read_snapshot.read_failure_count,
+                );
+            }
             counter_values
         };
         #[cfg(not(feature = "direct-mlx"))]

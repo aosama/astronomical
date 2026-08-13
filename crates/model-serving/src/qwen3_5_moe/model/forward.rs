@@ -9,7 +9,7 @@
 use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::{ExpertSourceRequestPhase, PerformanceAttribution, PerformanceOperation};
 
 use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
@@ -118,6 +118,20 @@ impl Qwen3_5Model {
                 .as_ref()
                 .and_then(|resident_expert_weights| resident_expert_weights.layer(layer_index))
         {
+            let avoided_source_evidence = if token_count > 1 {
+                expert_pager.complete_layer_source_evidence(layer_index)?
+            } else {
+                let sorted_unique_expert_ids =
+                    self.copy_sorted_unique_expert_ids(&selected_indices, performance_attribution)?;
+                expert_pager
+                    .source_evidence_for_expert_ids(layer_index, &sorted_unique_expert_ids)?
+            };
+            performance_attribution.record_expert_source_resident_hit(
+                layer_index,
+                expert_source_request_phase(token_count),
+                avoided_source_evidence.payload_bytes,
+                avoided_source_evidence.source_interval_count,
+            );
             return self.forward_moe_resident_with_performance_attribution(
                 hidden_states,
                 mixture_of_experts_weights,
@@ -140,6 +154,18 @@ impl Qwen3_5Model {
         {
             let sorted_unique_expert_ids =
                 self.copy_sorted_unique_expert_ids(&selected_indices, performance_attribution)?;
+            let avoided_source_evidence = if token_count > 1 {
+                expert_pager.complete_layer_source_evidence(layer_index)?
+            } else {
+                expert_pager
+                    .source_evidence_for_expert_ids(layer_index, &sorted_unique_expert_ids)?
+            };
+            performance_attribution.record_expert_source_resident_hit(
+                layer_index,
+                expert_source_request_phase(token_count),
+                avoided_source_evidence.payload_bytes,
+                avoided_source_evidence.source_interval_count,
+            );
             if paged_prefill_execution_mode
                 == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
             {
@@ -271,6 +297,7 @@ impl Qwen3_5Model {
                 &self.runtime,
                 layer_index,
                 &streamed_expert_ids,
+                expert_source_request_phase(route_token_count),
                 performance_attribution,
             )?;
         if let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() {
@@ -340,6 +367,7 @@ impl Qwen3_5Model {
                 &self.runtime,
                 layer_index,
                 &sorted_unique_expert_ids,
+                ExpertSourceRequestPhase::Prefill,
                 performance_attribution,
             )?;
         self.forward_moe_paged_with_performance_attribution(
@@ -441,5 +469,13 @@ impl Qwen3_5Model {
         sorted_unique_ids.sort_unstable();
         sorted_unique_ids.dedup();
         Ok(sorted_unique_ids)
+    }
+}
+
+fn expert_source_request_phase(token_count: i32) -> ExpertSourceRequestPhase {
+    if token_count > 1 {
+        ExpertSourceRequestPhase::Prefill
+    } else {
+        ExpertSourceRequestPhase::Decode
     }
 }
