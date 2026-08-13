@@ -22,9 +22,8 @@ use astronomical_runtime_integration::MlxRuntimeError;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5ResidentExpertWeights;
 use crate::{
-    ExpertMemoryAdmissionError, MlxRamBudgetPhase, PerformanceAttribution, PerformanceOperation,
-    complete_residency_exceeds_ceiling_with_activation_headroom,
-    projected_active_memory_after_complete_expert_replacement,
+    CompleteResidencyDecision, CompleteResidencyRequirements, MlxRamBudgetPhase,
+    PerformanceAttribution, PerformanceOperation,
     required_complete_residency_activation_headroom_bytes,
 };
 
@@ -139,33 +138,6 @@ impl Qwen3_5Model {
                 description: "MLX active memory ceiling exceeds the u64 range",
             })?;
 
-            // Remove the category that complete residency will replace. Use
-            // checked subtraction instead of saturation: retained payload larger
-            // than total active memory means telemetry ownership is inconsistent,
-            // and proceeding could admit more memory from a false baseline.
-            let projected_resident_active_memory_bytes =
-                projected_active_memory_after_complete_expert_replacement(
-                    idle_active_memory_bytes,
-                    retained_streamed_expert_payload_bytes,
-                    complete_expert_payload_bytes,
-                )
-                .map_err(|expert_memory_admission_error| match expert_memory_admission_error {
-                    ExpertMemoryAdmissionError::RetainedExpertPayloadExceedsActiveMemory => {
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "retained expert payload exceeds idle MLX active memory",
-                        }
-                    }
-                    ExpertMemoryAdmissionError::CompleteResidencyProjectionOverflow => {
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "projected resident MLX active memory overflowed",
-                        }
-                    }
-                })?;
-            // The checked helper proved the subtraction and addition above. This
-            // diagnostic component is therefore safe to derive without repeating
-            // a second independently maintained admission formula.
-            let idle_non_expert_active_memory_bytes =
-                projected_resident_active_memory_bytes - complete_expert_payload_bytes;
             // Static payload fit is not enough. Prefill activations, key-value
             // growth, and temporary workspaces still need spare ceiling after
             // complete experts occupy memory. Without this reservation the model
@@ -182,40 +154,63 @@ impl Qwen3_5Model {
                             .activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
                     ),
                 );
-            // Single-source owner is authoritative for complete-residency policy.
-            // The replacement projection remains as fail-closed accounting evidence.
-            let mlx_ram_budget_snapshot =
-                self.mlx_ram_budget
-                    .borrow()
-                    .plan(MlxRamBudgetPhase::Idle, 0, 0, false);
-
-            // This return is intentionally BEFORE reclamation. DoesNotFit is an
-            // ordinary policy result, not a cleanup request. The caller resumes
-            // cache growth and the next request can reuse every current hot page.
-            if !mlx_ram_budget_snapshot.complete_residency_fits
-                || complete_residency_exceeds_ceiling_with_activation_headroom(
-                    projected_resident_active_memory_bytes,
-                    stable_memory_ceiling_bytes,
-                    required_activation_headroom_bytes,
-                )
-            {
-                tracing::info!(
-                    ?transition_reason,
-                    idle_active_memory_bytes,
-                    idle_non_expert_active_memory_bytes,
-                    retained_streamed_expert_payload_bytes,
-                    complete_expert_payload_bytes,
-                    projected_resident_active_memory_bytes,
-                    observed_transient_high_water_bytes,
-                    required_activation_headroom_bytes,
-                    stable_memory_ceiling_bytes,
-                    mlx_ram_budget_complete_residency_fits =
-                        mlx_ram_budget_snapshot.complete_residency_fits,
-                    outcome = "does_not_fit",
-                    "completed complete-model expert residency admission"
-                );
-                return Ok(None);
+            let complete_residency_decision = CompleteResidencyRequirements {
+                current_active_memory_bytes: idle_active_memory_bytes,
+                retained_paged_expert_payload_bytes: retained_streamed_expert_payload_bytes,
+                complete_expert_payload_bytes,
+                required_headroom_bytes: required_activation_headroom_bytes,
+                active_memory_ceiling_bytes: stable_memory_ceiling_bytes,
             }
+            .decide();
+            match complete_residency_decision {
+                CompleteResidencyDecision::Admit {
+                    projected_active_memory_bytes,
+                    ..
+                } => {
+                    tracing::debug!(
+                        ?transition_reason,
+                        projected_active_memory_bytes,
+                        required_activation_headroom_bytes,
+                        stable_memory_ceiling_bytes,
+                        "admitted complete-model expert residency replacement"
+                    );
+                }
+                CompleteResidencyDecision::DoesNotFit {
+                    projected_active_memory_bytes,
+                    shortfall_bytes,
+                    boundary,
+                    ..
+                } => {
+                    tracing::info!(
+                        ?transition_reason,
+                        idle_active_memory_bytes,
+                        retained_streamed_expert_payload_bytes,
+                        complete_expert_payload_bytes,
+                        projected_resident_active_memory_bytes = projected_active_memory_bytes,
+                        observed_transient_high_water_bytes,
+                        required_activation_headroom_bytes,
+                        stable_memory_ceiling_bytes,
+                        ?boundary,
+                        shortfall_bytes,
+                        outcome = "does_not_fit",
+                        "completed complete-model expert residency admission"
+                    );
+                    return Ok(None);
+                }
+                CompleteResidencyDecision::RejectInvalidObservation { error } => {
+                    tracing::warn!(
+                        ?transition_reason,
+                        %error,
+                        outcome = "invalid_memory_observation",
+                        "rejected complete-model expert residency admission"
+                    );
+                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                        description: "complete-residency memory observation was inconsistent",
+                    });
+                }
+            }
+            // This point is reached only after the memory package admitted the
+            // replacement. Execution below performs ownership mutation and I/O.
 
             // Crossing this point commits to replacing the paged representation.
             // Only now may policy remove the hot pages, because exact accounting

@@ -2,7 +2,8 @@
 
 ## Ownership
 
-- Rust owns expert selection, bounded SafeTensors manifests, source reads, temporary layer owners, memory checks, and attribution.
+- The model-serving `memory` package owns cross-component fit, reclamation, residency, retry, and ceiling decisions from typed requirements and Machine Learning framework for Apple silicon observations.
+- Rust paging owns expert selection, bounded SafeTensors manifests, source reads, temporary layer owners, and execution of typed memory decisions.
 - Runtime integration exposes ordinary Machine Learning framework for Apple silicon arrays and operations through Machine Learning framework for Apple silicon C.
 - Production expert streaming has no custom C++ page store, page table, paged-buffer slot, snapshot, or retirement protocol.
 
@@ -37,9 +38,10 @@ Each layer executes once. There is no missing-route replay, cross-layer expert c
 
 - `maximum_mlx_memory_gb` remains the only user memory limit.
 - `MlxRamBudget` is the single source of truth for the split among `model_core_payload_bytes`, `context_window_reserve_bytes`, `activation_headroom_bytes`, `complete_layer_stream_slot_bytes`, and `retained_expert_budget_bytes`.
+- Allocation, context, speculative-prefill, complete-residency, recovery, and live-ceiling policies live beside `MlxRamBudget` under `model-serving/src/memory`; Qwen and paging modules do not recompute those decisions.
 - `context_window_reserve_bytes` starts at 1 GB SI and rises from live measurements; multi-token prefill keeps `complete_layer_stream_slot_bytes` and does not grow retained complete layers while activations are large.
 - Initial admission reserves the model-derived largest complete expert layer because prefill streams one complete layer.
-- Bounded loading checks the live Machine Learning framework for Apple silicon budget before constructing each page.
+- Bounded loading reports the exact pending page to the memory package before construction, then executes admit, allocator-cleanup, or reject advice.
 - Per-prefill-chunk synchronization and allocator cleanup release temporary layer storage before the next configured chunk.
 - Request pressure can demote the complete resident owner. Rust-streamed pages need no explicit retention reclamation because they are operation-local.
 

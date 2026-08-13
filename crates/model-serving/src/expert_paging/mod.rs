@@ -1,8 +1,7 @@
-//! Architecture-neutral expert storage, bounded loading, and retention policy.
+//! Architecture-neutral expert storage, bounded loading, and retention mechanism.
 
 mod bounded_expert_reader;
 mod expert_cache_statistics;
-pub mod memory_budget;
 pub mod quantized_expert_manifest;
 pub mod quantized_expert_validation;
 mod retained_expert_layer_cache;
@@ -17,11 +16,6 @@ pub trait ExpertWeightPage: std::fmt::Debug {
     fn resident_payload_byte_count(&self) -> u64;
 }
 pub(crate) use bounded_expert_reader::load_quantized_expert_page;
-pub use memory_budget::{
-    LiveMetalBudget, MemoryBudgetError, MemoryBudgetSnapshot,
-    automatic_expert_weight_memory_cache_maximum_size_bytes,
-    maximum_possible_expert_route_payload_bytes,
-};
 pub use quantized_expert_manifest::{
     ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
     QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,

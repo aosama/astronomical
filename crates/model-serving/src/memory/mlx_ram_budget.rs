@@ -43,7 +43,7 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 use super::{
-    complete_residency_exceeds_ceiling_with_activation_headroom,
+    CompleteResidencyDecision, CompleteResidencyRequirements,
     expert_reclamation_bytes_to_fit_fixed_forward,
     required_complete_residency_activation_headroom_bytes,
 };
@@ -343,15 +343,17 @@ impl MlxRamBudget {
         // Full residency does not need a stream slot because no sparse layer is
         // cold. It still needs activation/context headroom. The helper applies a
         // startup floor when no useful live transient evidence exists yet.
-        let projected_complete_resident_bytes = self
-            .model_geometry
-            .model_core_payload_bytes
-            .saturating_add(self.model_geometry.complete_expert_payload_bytes)
-            .saturating_add(other_fixed_bytes);
-        let complete_residency_fits = !complete_residency_exceeds_ceiling_with_activation_headroom(
-            projected_complete_resident_bytes,
-            self.mlx_active_memory_ceiling_bytes,
-            complete_residency_headroom_bytes,
+        let complete_residency_fits = matches!(
+            CompleteResidencyRequirements {
+                current_active_memory_bytes: self.model_geometry.model_core_payload_bytes,
+                retained_paged_expert_payload_bytes: 0,
+                complete_expert_payload_bytes: self.model_geometry.complete_expert_payload_bytes,
+                required_headroom_bytes: complete_residency_headroom_bytes
+                    .saturating_add(other_fixed_bytes),
+                active_memory_ceiling_bytes: self.mlx_active_memory_ceiling_bytes,
+            }
+            .decide(),
+            CompleteResidencyDecision::Admit { .. }
         );
 
         MlxRamBudgetSnapshot {

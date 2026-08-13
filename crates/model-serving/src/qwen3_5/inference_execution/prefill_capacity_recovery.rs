@@ -19,10 +19,7 @@ use astronomical_ipc_protocol::RequestId;
 
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
-    InferenceEngineError, PerformanceCounter, PerformanceOperation,
-    expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure,
-    should_retry_fixed_forward_after_expert_reclamation,
+    ForwardRecoveryPolicy, InferenceEngineError, PerformanceCounter, PerformanceOperation,
 };
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5PrefillRequestCheckpoint};
@@ -73,14 +70,14 @@ impl Qwen3_5EngineState {
         let retained_expert_payload_bytes = retained_expert_payload_bytes(model);
         // The retry needs transient arrays already active at failure plus the
         // allocation that failed. They are additive, not alternative estimates.
-        let fixed_forward_workspace_bytes = fixed_forward_workspace_after_allocation_failure(
+        let fixed_forward_workspace_bytes = ForwardRecoveryPolicy::fixed_workspace_bytes(
             memory_snapshot_before_reclamation.active_memory_bytes(),
             active_memory_bytes_at_failure,
             attempted_allocation_bytes,
             self.adaptive_ram_growth_guard
                 .admission_transient_high_water_bytes(),
         );
-        let expert_reclamation_target_bytes = expert_reclamation_bytes_to_fit_fixed_forward(
+        let expert_reclamation_target_bytes = ForwardRecoveryPolicy::required_reclamation_bytes(
             memory_snapshot_before_reclamation.active_memory_bytes(),
             retained_expert_payload_bytes,
             allowed_active_memory_bytes,
@@ -104,7 +101,7 @@ impl Qwen3_5EngineState {
                     .saturating_sub(retained_payload_after_reclamation),
             );
         }
-        let should_retry_same_prefill_chunck = should_retry_fixed_forward_after_expert_reclamation(
+        let should_retry_same_prefill_chunck = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,
@@ -169,7 +166,7 @@ impl Qwen3_5EngineState {
             .adaptive_ram_growth_guard
             .admission_transient_high_water_bytes()
             .max(1);
-        let expert_reclamation_target_bytes = expert_reclamation_bytes_to_fit_fixed_forward(
+        let expert_reclamation_target_bytes = ForwardRecoveryPolicy::required_reclamation_bytes(
             memory_snapshot_before_reclamation.active_memory_bytes(),
             retained_expert_payload_bytes,
             model.runtime().memory_limits().active_memory_limit_bytes(),
@@ -183,7 +180,7 @@ impl Qwen3_5EngineState {
         let retained_payload_after_reclamation = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
-        let should_retry_same_prefill_chunck = should_retry_fixed_forward_after_expert_reclamation(
+        let should_retry_same_prefill_chunck = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,

@@ -45,11 +45,8 @@ pub use inference_execution::{
 pub use model::{
     Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
     Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput,
-    Qwen3_5Weights, combined_target_and_additional_persistent_growth_bytes,
-    context_memory_admission_projected_active_memory_bytes,
-    persistent_prompt_cache_restore_temporary_workspace_bytes,
-    qwen3_5_aggregate_speculative_prefill_attention_weights, qwen3_5_full_attention_step,
-    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
+    Qwen3_5Weights, qwen3_5_aggregate_speculative_prefill_attention_weights,
+    qwen3_5_full_attention_step, qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_step, qwen3_5_select_speculative_prefill_token_positions_on_gpu,
 };
