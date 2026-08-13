@@ -9,6 +9,7 @@ const ATTRIBUTED_PREFILL_TRANSIENT_HIGH_WATER_BYTES: u64 = 1_234_567;
 
 mod catalog;
 mod expert_route_reuse;
+mod expert_source_by_layer;
 mod log;
 mod measurement;
 mod report_metadata;

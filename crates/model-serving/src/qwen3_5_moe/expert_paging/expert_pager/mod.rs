@@ -67,6 +67,12 @@ pub struct Qwen3_5PagedExpertWeights {
     pub(crate) down_projection: Qwen3_5AffineWeights,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ExpertSourceEvidence {
+    pub(crate) payload_bytes: u64,
+    pub(crate) source_interval_count: u64,
+}
+
 impl Qwen3_5PagedExpertWeights {
     pub(crate) fn append_array_references<'weights>(
         &'weights self,
@@ -111,6 +117,37 @@ impl ExpertWeightPage for Qwen3_5RetainedExpertLayer {
 }
 
 impl Qwen3_5ExpertPager {
+    pub(crate) fn complete_layer_source_evidence(
+        &self,
+        layer_index: usize,
+    ) -> Result<ExpertSourceEvidence, ExpertPagingError> {
+        let layer_plan = self.layer_plan(layer_index)?;
+        let complete_expert_ids = (0..layer_plan.expert_capacity).collect::<Vec<_>>();
+        self.source_evidence_for_expert_ids(layer_index, &complete_expert_ids)
+    }
+
+    pub(crate) fn source_evidence_for_expert_ids(
+        &self,
+        layer_index: usize,
+        expert_ids: &[usize],
+    ) -> Result<ExpertSourceEvidence, ExpertPagingError> {
+        let page_manifest = crate::build_quantized_expert_page_manifest_from_plan(
+            self.layer_plan(layer_index)?,
+            expert_ids,
+        )?;
+        Ok(ExpertSourceEvidence {
+            payload_bytes: page_manifest.payload_byte_count,
+            source_interval_count: page_manifest.source_manifests.iter().fold(
+                0_u64,
+                |interval_count, source_manifest| {
+                    interval_count.saturating_add(
+                        u64::try_from(source_manifest.source_intervals.len()).unwrap_or(u64::MAX),
+                    )
+                },
+            ),
+        })
+    }
+
     pub(crate) fn layer_plans(&self) -> &[QuantizedExpertLayerPlan] {
         &self.layer_plans
     }
