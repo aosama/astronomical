@@ -142,9 +142,10 @@ impl Qwen3_5EngineState {
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
         let routed_expert_page_reservation_bytes = model_after_demotion
-            .expert_pager
-            .as_ref()
-            .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes())
+            .expert_page_reservation_bytes_for_forward(
+                adaptive_ram_growth_context.forward_token_count(),
+            )
+            .map_err(InferenceEngineError::from)?
             .try_into()
             .map_err(|_| {
                 invalid_request_error("routed expert page reservation exceeds the platform range")

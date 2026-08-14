@@ -43,9 +43,10 @@ impl Qwen3_5Model {
         completion_roots.extend_from_slice(evaluation_arrays);
 
         // Attribute the blocking MLX evaluation boundary separately from graph
-        // construction. With prefill_graph_submission_layer_interval = 0 this
-        // single wait owns the entire multi-layer multi-token tape, including
-        // first-use Metal compile and any memory-pressure thrash.
+        // construction. With experimental solid-state-drive paging interval 0,
+        // or any fully resident model, this single wait owns the entire
+        // multi-layer multi-token tape, including first-use Metal compile and
+        // any memory-pressure thrash.
         performance_attribution.measure_operation(
             PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
             |_performance_attribution| self.runtime.evaluate_arrays(&completion_roots),

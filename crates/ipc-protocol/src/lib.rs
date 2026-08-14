@@ -38,4 +38,5 @@ pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
 pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, WorkerPrefillChunckSizingPolicy,
+    experimental_ssd_paging_graph_submission_layer_interval,
 };

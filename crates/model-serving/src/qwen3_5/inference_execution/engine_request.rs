@@ -114,7 +114,14 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) forced_speculative_prefill_failure_stage_for_tests:
         Option<Qwen3_5SpeculativePrefillFailureStageForTests>,
     pub(super) force_next_prefill_capacity_rejection_for_tests: bool,
-    /// One-shot post-prefill attempt to pin decode-warm complete expert layers.
+    /// One-shot guard for the prefill-to-decode expert-memory restore.
+    ///
+    /// After the last prompt chunk, the engine lifts the temporary pressure
+    /// cap and either restores complete residency or fills demand-selected
+    /// pages. That restore is expensive disk I/O and must not run again on
+    /// every later generated token. `true` means "already tried", not
+    /// "succeeded". A failed restore still leaves this flag set so decode
+    /// continues by streaming.
     pub(super) decode_warm_expert_layers_attempted: bool,
 }
 

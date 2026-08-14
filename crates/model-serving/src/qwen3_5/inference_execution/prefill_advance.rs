@@ -9,8 +9,7 @@
 //! 5. Reclaim exact elastic expert bytes and retry the same chunk at most once.
 //! 6. Publish required prompt-cache state before advancing the in-memory cursor.
 //! 7. Synchronize and clear operation-local allocator storage.
-//! 8. Learn memory evidence, then progressively refill warm complete layers at
-//!    the safe completed-chunk barrier.
+//! 8. Learn memory evidence; decode fills demand-selected pages after prefill.
 //! 9. Emit progress only after all required state transitions succeeded.
 //!
 //! Chunk reduction is deliberately absent from recovery. Silently changing a
@@ -23,7 +22,7 @@ use astronomical_ipc_protocol::RequestId;
 
 use crate::{
     GeneratedToken, InferenceEngineError, PerformanceCounter, PerformanceOperation,
-    persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
+    last_prefill_chunk_demand_weight, persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
 };
 
 use super::super::model::memory_admission::invalid_request_error;
@@ -161,6 +160,22 @@ impl Qwen3_5EngineState {
             active_request.clamped_prefill_chunck_token_count(requested_prefill_chunck_token_count);
         let mut has_retried_current_prefill_chunck_after_reclamation = false;
         let mut has_observed_prefill_capacity_constraint = false;
+        // Decode continues from the prompt tail, so the last prefill chunk
+        // records each routed assignment with a density-matching multiplier.
+        let last_chunk_ends_prompt = prefill_start
+            .saturating_add(attempted_prefill_chunck_token_count)
+            >= final_prompt_index;
+        let demand_assignment_weight = if last_chunk_ends_prompt {
+            last_prefill_chunk_demand_weight(
+                u64::try_from(prefill_start).unwrap_or(u64::MAX),
+                u64::try_from(attempted_prefill_chunck_token_count).unwrap_or(u64::MAX),
+            )
+        } else {
+            1
+        };
+        if let Some(model) = self.model.as_ref() {
+            model.set_expert_demand_assignment_weight(demand_assignment_weight);
+        }
         let (prefill_end, prompt_prefill_chunck_outcome) = loop {
             let prefill_end = prefill_start
                 .checked_add(attempted_prefill_chunck_token_count)
@@ -349,44 +364,9 @@ impl Qwen3_5EngineState {
             exact_temporary_workspace_bytes,
             &mut active_request.performance_attribution,
         )?;
-        // Progressive fill deliberately targets decode/idle composition rather
-        // than the just-finished prefill plan. The prefill arrays are gone after
-        // cleanup, so this barrier can safely prepare complete layers for decode.
-        let total_prefill_token_count = active_request.input_token_ids.len().saturating_sub(1);
-        let retained_expert_budget_bytes = model
-            .mlx_ram_budget()
-            .plan(
-                crate::MlxRamBudgetPhase::Decode,
-                u64::try_from(prefill_end).unwrap_or(u64::MAX),
-                0,
-                false,
-            )
-            .retained_expert_budget_bytes;
-        let progressive_retained_expert_payload_target_bytes =
-            crate::MlxRamBudget::progressive_retained_expert_payload_target_bytes(
-                retained_expert_budget_bytes,
-                u64::try_from(prefill_end).unwrap_or(u64::MAX),
-                u64::try_from(total_prefill_token_count).unwrap_or(u64::MAX),
-            );
-        // Scale warm ownership with completed prompt progress. Long prompts become
-        // progressively warmer without loading the complete target at startup or
-        // retaining operation-local pages while activations are live.
-        if progressive_retained_expert_payload_target_bytes > 0
-            && let Err(progressive_expert_fill_error) = model.fill_retained_complete_expert_layers(
-                u64::try_from(prefill_end).unwrap_or(u64::MAX),
-                progressive_retained_expert_payload_target_bytes,
-                &mut active_request.performance_attribution,
-            )
-        {
-            tracing::info!(
-                request_id = request_id.value(),
-                prefill_end,
-                total_prefill_token_count,
-                progressive_retained_expert_payload_target_bytes,
-                error = %progressive_expert_fill_error,
-                "stopped progressive complete-layer fill after a completed prompt chunk"
-            );
-        }
+        // Demand-selected pages are materialized once after all prompt chunks.
+        // Rebuilding them at every barrier would repeatedly read the same model
+        // payload while the demand histogram is still changing.
         let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
         let prefill_chunck_elapsed_millis = forward_chunk_started_at.elapsed().as_millis() as u64;
         let next_prefill_execution_context = Qwen3_5PrefillExecutionContext::new(

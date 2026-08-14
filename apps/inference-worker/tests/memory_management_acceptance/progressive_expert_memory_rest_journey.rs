@@ -1,16 +1,13 @@
-//! User journey proving useful expert paging under a constrained 23 GB ceiling.
+//! User journey proving useful demand retention under a constrained 23 GB ceiling.
 //!
 //! The model cannot keep every expert resident in this qualification cell. The
-//! desired behavior is therefore not merely "request succeeds": each completed
-//! prompt chunk should leave progressively more reusable complete layers, decode
-//! may reclaim a suffix under pressure, and finalization should refill the safe
-//! idle/decode budget instead of leaving expert RAM empty.
+//! desired behavior is therefore not merely "request succeeds": routed experts
+//! must remain reusable across decoder layers instead of consuming nearly the
+//! whole ceiling on early layers while repeatedly reading omitted routes.
 //!
 //! The journey observes public status while consuming a real streaming response,
-//! then prints detailed admission/refill evidence from isolated logs. Source-read
-//! bytes are diagnostic rather than a fixed assertion because exact generated
-//! routes can vary; residency growth and successful final refill are the durable
-//! user behavior protected here.
+//! then prints detailed admission evidence from isolated logs. The durable user
+//! behavior is bounded memory plus decode demand retention across every layer.
 
 use std::{fs, path::Path};
 
@@ -89,7 +86,7 @@ async fn run_progressive_expert_memory_rest_journey() {
         observe_progressive_expert_memory(server_address),
     );
     // Status polling runs concurrently with Server-Sent Events consumption so the
-    // test can see monotonic prefill growth that final idle status alone cannot prove.
+    // test observes the active request and its final bounded idle state.
     assert!(!completed_stream.model_text.is_empty());
     assert!(matches!(
         completed_stream.finish_reason.as_deref(),
@@ -115,14 +112,9 @@ async fn run_progressive_expert_memory_rest_journey() {
         memory_evidence.final_status["mlx_memory_snapshot"]["peak_memory_bytes"]
             .as_u64()
             .expect("the completed status should report peak MLX memory");
-    let largest_prefill_expert_payload_bytes = memory_evidence
-        .progressive_expert_payload_bytes
-        .iter()
-        .copied()
-        .max()
-        .expect("progressive prefill evidence should contain expert payload");
     assert!(final_expert_payload_bytes > 0);
-    assert!(final_expert_payload_bytes >= largest_prefill_expert_payload_bytes);
+    assert!(final_active_memory_bytes <= MAXIMUM_MLX_MEMORY_BYTES);
+    assert!(peak_memory_bytes <= MAXIMUM_MLX_MEMORY_BYTES.saturating_add(230_000_000));
     // Stop before reading logs to flush asynchronous tracing and attribution.
     stop_real_model_rest_server(real_model_rest_server).await;
     let memory_admission_decisions =
@@ -138,11 +130,59 @@ async fn run_progressive_expert_memory_rest_journey() {
         );
     }
     let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home.path());
+    let decode_streamed_layer_indices = decode_streamed_layer_indices(isolated_worker_home.path());
+    // Prefill streams one complete expert model per chunk, then decode fill
+    // rereads the retained subset. A healthy 7,000-plus-1,280-token cell with
+    // zero decode-streamed layers measured 120.01 GB. Demand-per-byte ranking
+    // measured 123.48 GB and must still fail.
+    const MAXIMUM_WEIGHTED_RANKING_SOURCE_READ_BYTES: u64 = 122_000_000_000;
+    assert!(
+        expert_source_read_bytes < MAXIMUM_WEIGHTED_RANKING_SOURCE_READ_BYTES,
+        "decode should reuse retained experts instead of continuously reading expert sources; observed {expert_source_read_bytes} logical source bytes across {} streamed decode layers",
+        decode_streamed_layer_indices.len()
+    );
+    assert!(
+        decode_streamed_layer_indices.len() < 40,
+        "demand retention should prevent every decoder layer from streaming throughout decode; streamed {decode_streamed_layer_indices:?}"
+    );
+    assert_eq!(
+        generation_attribution_report_count(isolated_worker_home.path()),
+        1
+    );
     eprintln!(
         "[progressive-expert-memory] status=success prompt_tokens={PROMPT_TOKEN_COUNT} maximum_mlx_memory_bytes={MAXIMUM_MLX_MEMORY_BYTES} progressive_expert_payload_bytes={:?} final_expert_payload_bytes={final_expert_payload_bytes} final_active_memory_bytes={final_active_memory_bytes} peak_memory_bytes={peak_memory_bytes} expert_source_read_bytes={expert_source_read_bytes} average_prefill_tokens_per_second={average_prefill_tokens_per_second:.2} average_generation_tokens_per_second={average_generation_tokens_per_second:.2} output_characters={}",
         memory_evidence.progressive_expert_payload_bytes,
         completed_stream.model_text.len(),
     );
+}
+
+fn generation_attribution_report_count(isolated_worker_home: &Path) -> usize {
+    let attribution_log_path = isolated_worker_home
+        .join(".astronomical")
+        .join("logs")
+        .join("performance-attribution.jsonl");
+    fs::read_to_string(attribution_log_path)
+        .expect("the completed request should flush performance attribution")
+        .lines()
+        .filter_map(|json_line| serde_json::from_str::<Value>(json_line).ok())
+        .filter(|attribution_report| attribution_report["report_kind"] == "generation")
+        .count()
+}
+
+fn decode_streamed_layer_indices(isolated_worker_home: &Path) -> std::collections::BTreeSet<usize> {
+    isolated_worker_log_lines(isolated_worker_home)
+        .into_iter()
+        .filter(|log_line| {
+            log_line.contains("Rust expert layer streaming completed")
+                && !log_line.contains("streamed_expert_count=256")
+        })
+        .filter_map(|log_line| {
+            log_line
+                .split_whitespace()
+                .find_map(|field| field.strip_prefix("layer_index="))
+                .and_then(|layer_index| layer_index.parse::<usize>().ok())
+        })
+        .collect()
 }
 
 fn memory_admission_decision_log_lines(isolated_worker_home: &Path) -> Vec<String> {
@@ -240,14 +280,6 @@ async fn observe_progressive_expert_memory(
             && status_document["activity"] == "idle"
             && matches!(snapshot_source, Some("finalized" | "idle_poll"))
         {
-            // At least two strictly increasing observations prove growth happened
-            // across barriers, rather than one final bulk refill after generation.
-            assert!(progressive_expert_payload_bytes.len() >= 2);
-            assert!(
-                progressive_expert_payload_bytes
-                    .windows(2)
-                    .all(|payload_pair| payload_pair[1] > payload_pair[0])
-            );
             return ProgressiveExpertMemoryEvidence {
                 progressive_expert_payload_bytes,
                 final_status: status_document,
@@ -348,9 +380,14 @@ fn write_qualification_config(isolated_worker_home: &Path, model_directory: &Pat
             "level": "debug",
             "retained_files": 2,
         },
+        // This cell streams experts. Submit each completed decoder layer so
+        // operation-local pages can detach instead of remaining live in a
+        // multi-layer lazy tape until the terminal eval.
         "chunking": {
             "prefill_size_optimizer_enabled": false,
             "fixed_prefill_tokens": 2_048,
+            "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
+            "experimental_ssd_paging_generation_graph_submission_layer_interval": 1,
         },
     });
     fs::write(

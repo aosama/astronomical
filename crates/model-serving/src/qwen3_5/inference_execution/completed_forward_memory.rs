@@ -71,20 +71,23 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
     // Expert paging needs the phase high-water even when this exact context will
     // not be retained. This prevents warm layers from consuming activation space
     // already proven necessary by another context in the same phase.
-    let observed_transient_high_water_bytes = adaptive_ram_growth_guard
+    let phase_observed_transient_high_water_bytes = adaptive_ram_growth_guard
         .observed_transient_high_water_bytes(
             adaptive_ram_growth_context.adaptive_ram_growth_phase(),
         );
     model.update_expert_pager_transient_high_water_bytes(
-        u64::try_from(observed_transient_high_water_bytes).unwrap_or(u64::MAX),
+        u64::try_from(phase_observed_transient_high_water_bytes).unwrap_or(u64::MAX),
     );
 
     if should_retain_adaptive_ram_growth_observation {
+        let context_observed_transient_high_water_bytes = adaptive_ram_growth_guard
+            .observed_transient_high_water_bytes_for_context(adaptive_ram_growth_context);
         record_composed_ram_budget_measurement(
             adaptive_ram_growth_context,
             model,
             active_memory_bytes_before_growth,
-            observed_transient_high_water_bytes,
+            context_observed_transient_high_water_bytes,
+            exact_temporary_workspace_bytes,
             &memory_snapshot_after_growth,
         );
     }
@@ -123,6 +126,7 @@ fn record_composed_ram_budget_measurement(
     model: &Qwen3_5Model,
     active_memory_bytes_before_growth: usize,
     observed_transient_high_water_bytes: usize,
+    exact_temporary_workspace_bytes: usize,
     memory_snapshot_after_growth: &MlxMemorySnapshot,
 ) {
     let mlx_ram_budget_phase = match adaptive_ram_growth_context.adaptive_ram_growth_phase() {
@@ -146,6 +150,8 @@ fn record_composed_ram_budget_measurement(
                 .unwrap_or(u64::MAX),
             measured_context_and_activation_bytes,
             observed_activation_headroom_bytes: u64::try_from(observed_transient_high_water_bytes)
+                .unwrap_or(u64::MAX),
+            exact_temporary_workspace_bytes: u64::try_from(exact_temporary_workspace_bytes)
                 .unwrap_or(u64::MAX),
         });
 

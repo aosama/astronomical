@@ -41,6 +41,7 @@ pub enum PerformanceOperation {
     PersistentPromptCachePublicationSynchronizationWait,
     PersistentPromptCacheAtomicCommit,
     PagedRouterGraphConstruction,
+    RetainedExpertPagePlanning,
     RustExpertStreamingLayerPreparation,
     ExpertRetentionReclamation,
     PagedMoeGraphConstruction,
@@ -113,6 +114,7 @@ impl PerformanceOperation {
         Self::PersistentPromptCachePublicationSynchronizationWait,
         Self::PersistentPromptCacheAtomicCommit,
         Self::PagedRouterGraphConstruction,
+        Self::RetainedExpertPagePlanning,
         Self::RustExpertStreamingLayerPreparation,
         Self::ExpertRetentionReclamation,
         Self::PagedMoeGraphConstruction,
@@ -210,6 +212,7 @@ impl PerformanceOperation {
             }
             Self::PersistentPromptCacheAtomicCommit => "persistent_prompt_cache_atomic_commit",
             Self::PagedRouterGraphConstruction => "paged_router_graph_construction",
+            Self::RetainedExpertPagePlanning => "retained_expert_page_planning",
             Self::RustExpertStreamingLayerPreparation => "rust_expert_streaming_layer_preparation",
             Self::ExpertRetentionReclamation => "expert_retention_reclamation",
             Self::PagedMoeGraphConstruction => "paged_moe_graph_construction",

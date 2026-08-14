@@ -79,12 +79,6 @@ impl Qwen3_5EngineState {
     ) -> GenerationFinalization {
         let request_id = active_request.request_id;
         let configured_maximum_output_tokens = active_request.maximum_output_tokens;
-        let processed_target_prompt_token_count = u64::try_from(active_request.prefill_cursor)
-            .unwrap_or(u64::MAX)
-            .saturating_sub(active_request.prompt_work_reuse.target_restored_token_count);
-        let should_refill_retained_experts_after_request = processed_target_prompt_token_count > 0;
-        let completed_context_token_count =
-            u64::try_from(active_request.prefill_cursor).unwrap_or(u64::MAX);
         // Attribution must outlive the request because cleanup and the final
         // memory snapshot are part of the user-visible request cost.
         let mut performance_attribution = std::mem::replace(
@@ -122,35 +116,16 @@ impl Qwen3_5EngineState {
                 self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
-        // Decode pressure may reclaim progressively retained layers, and a client
-        // may disconnect before the ordinary prefill-to-decode fill. Streamed
-        // pages remain operation-local. After request arrays are dropped and
-        // allocator cleanup completes, restore the composed idle retained prefix.
-        if should_refill_retained_experts_after_request && let Some(model) = self.model.as_ref() {
-            match model.fill_retained_complete_expert_layers(
-                completed_context_token_count,
-                u64::MAX,
-                &mut performance_attribution,
-            ) {
-                Ok(newly_retained_layer_count) => tracing::info!(
-                    request_id = request_id.value(),
-                    processed_target_prompt_token_count,
-                    newly_retained_layer_count,
-                    "filled retained expert layers after request cleanup"
-                ),
-                Err(retained_expert_fill_error) => tracing::info!(
-                    request_id = request_id.value(),
-                    processed_target_prompt_token_count,
-                    error = %retained_expert_fill_error,
-                    "skipped retained expert fill after request cleanup"
-                ),
-            }
-        }
-        // Promotion is an idle optimization, not a condition for completing the
-        // user's request. A policy rejection or recoverable native capacity
-        // result must remain a normal paged outcome. The transition helper
-        // restores paging growth after either result; only structural failures
-        // are retained as diagnostics because cleanup itself remains complete.
+        // Demand-selected pages were already materialized at the prefill/decode
+        // barrier. Do not rebuild them here: that repeats model reads, fills
+        // allocator cache with replaced pages, and delays attribution flush.
+        //
+        // What this step may do is restore the complete owner now that request
+        // arrays are gone. That is an idle optimization for the next request,
+        // not a condition for finishing this one. `DoesNotFit` and recoverable
+        // capacity rejection stay normal paged outcomes. Only a structural
+        // load error is logged as a warning. There is no sticky "stay paged"
+        // flag from the earlier demotion.
         if let Some(model) = self.model.as_mut()
             && let Err(resident_promotion_error) = model.try_promote_experts_to_resident(
                 Qwen3_5ExpertResidencyTransitionReason::RequestFinalization,

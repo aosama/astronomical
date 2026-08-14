@@ -1,3 +1,4 @@
+use astronomical_ipc_protocol::experimental_ssd_paging_graph_submission_layer_interval;
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
@@ -303,15 +304,19 @@ impl Qwen3_5Model {
             }
         })?;
         let decoder_layer_count = self.config.layer_count() as usize;
-        // Prompt and generation shapes have different scheduling economics.
-        // A zero prefill interval intentionally leaves each configured prompt
-        // chunk as one lazy MLX graph, while generation can submit bounded
-        // layer groups to overlap later host graph construction with execution.
-        let graph_submission_layer_interval = if token_count == 1 {
-            self.chunking.generation_graph_submission_layer_interval
-        } else {
-            self.chunking.prefill_graph_submission_layer_interval
-        };
+        // Experimental solid-state-drive paging may submit completed layer
+        // groups so streamed pages can detach. Fully resident experts always
+        // receive interval 0 and keep one lazy decoder tape.
+        let graph_submission_layer_interval =
+            usize::try_from(experimental_ssd_paging_graph_submission_layer_interval(
+                token_count,
+                self.sparse_experts_are_paged(),
+                self.chunking
+                    .experimental_ssd_paging_prefill_graph_submission_layer_interval,
+                self.chunking
+                    .experimental_ssd_paging_generation_graph_submission_layer_interval,
+            ))
+            .unwrap_or(0);
         for layer_index in 0..decoder_layer_count {
             let decoder_layer_weights = self
                 .weights
@@ -347,14 +352,12 @@ impl Qwen3_5Model {
                 && (layer_index + 1).is_multiple_of(graph_submission_layer_interval)
                 && layer_index + 1 < decoder_layer_count
             {
-                // Intermediate mlx_async_eval commits the completed layer group
-                // so MLX can detach that subgraph, start Metal work, and free
-                // intermediates before the host builds later layers. Interval 0
-                // keeps one complete prefill tape and can thrash near the MLX
-                // ceiling with low GPU utilization for tens of seconds.
-                // Do not submit after the final decoder layer: final
-                // normalization and logits extend that same graph and the
-                // caller owns the terminal evaluation boundary.
+                // Intermediate mlx_async_eval commits a completed paging layer
+                // group so streamed pages can detach before later layers are
+                // built. This branch cannot run for fully resident experts
+                // because the interval is forced to 0. Do not submit after the
+                // final decoder layer: final normalization and logits extend
+                // that same graph and the caller owns the terminal evaluation.
                 performance_attribution.measure_operation(
                     PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
                     |_performance_attribution| self.runtime.async_eval_arrays(&[&hidden_states]),
