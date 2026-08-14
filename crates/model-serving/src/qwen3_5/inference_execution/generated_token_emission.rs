@@ -79,6 +79,9 @@ impl Qwen3_5EngineState {
             is_reasoning_token,
             expert_memory_mode: Some(model.expert_memory_mode()),
             mlx_memory_telemetry,
+            first_decode_forward_elapsed_millis: active_request
+                .first_decode_forward_elapsed_millis
+                .take(),
             generation_finalization: None,
         };
         Ok(GeneratedTokenEmission {

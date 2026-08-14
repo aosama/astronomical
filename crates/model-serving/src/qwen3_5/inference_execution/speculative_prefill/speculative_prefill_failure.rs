@@ -7,13 +7,9 @@
 
 use astronomical_ipc_protocol::RequestId;
 
-// Production resolves the error from this crate. Hermetic integration tests
-// include this file below their own module root, so they resolve the same public
-// type from the compiled model-serving library instead.
-#[cfg(not(test))]
-use crate::InferenceEngineError;
-#[cfg(test)]
-use astronomical_model_serving::InferenceEngineError;
+// The production parent and the hermetic include parent both import this public
+// error type, keeping this fail-closed translator testable without crate aliases.
+use super::InferenceEngineError;
 
 /// Converts a configured SpecPrefill execution problem into a bounded
 /// user-visible request failure without changing execution mode.

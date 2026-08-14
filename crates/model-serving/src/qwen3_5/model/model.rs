@@ -11,7 +11,10 @@ use crate::qwen3_5_moe::{
     PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
     Qwen3_5ResidentExpertWeights, Qwen3_5RetainedExpertLayer,
 };
-use crate::{DecoderCacheLayout, DecoderCacheState, MlxRamBudget, PerformanceAttribution};
+use crate::{
+    DecoderCacheLayout, DecoderCacheState, MlxRamBudget, PerformanceAttribution,
+    PhaseAwareExpertResidencyPlan,
+};
 
 use super::decoder_layer_weights::{Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeights};
 use super::forward_contract::validate_forward_input;
@@ -41,6 +44,8 @@ pub struct Qwen3_5Model {
         Option<RefCell<RetainedExpertLayerCache<Qwen3_5RetainedExpertLayer>>>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
+    /// Pure target consulted only when execution performs a mandatory expert read.
+    pub(crate) active_expert_residency_plan: RefCell<Option<PhaseAwareExpertResidencyPlan>>,
 
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
@@ -96,6 +101,13 @@ impl Qwen3_5Model {
                 eviction_count: 0,
                 disk_page_load_count: 0,
                 disk_batch_load_count: 0,
+                complete_layer_count: resident_expert_weights.layer_count(),
+                complete_layer_payload_byte_count: resident_expert_weights.payload_byte_count(),
+                partial_layer_count: 0,
+                partial_layer_payload_byte_count: 0,
+                mandatory_read_promotion_count: 0,
+                complete_layer_eviction_count: 0,
+                partial_layer_eviction_count: 0,
             };
         }
         self.retained_expert_layers.as_ref().map_or_else(
@@ -133,16 +145,6 @@ impl Qwen3_5Model {
         Ok(expert_pager.maximum_routed_expert_page_bytes(
             usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX),
         )?)
-    }
-
-    /// Retains the admission handoff while Rust-streamed pages remain operation-local.
-    pub(crate) fn set_expert_pager_admitted_forward_reserve_bytes(
-        &self,
-        admitted_forward_reserve_bytes: u64,
-    ) {
-        if let Some(expert_pager) = self.expert_pager.as_ref() {
-            expert_pager.set_pending_admitted_forward_reserve_bytes(admitted_forward_reserve_bytes);
-        }
     }
 
     pub(crate) fn sorted_expert_weighted_sum_kernel(

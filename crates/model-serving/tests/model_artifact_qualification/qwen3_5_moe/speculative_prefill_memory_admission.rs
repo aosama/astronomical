@@ -243,6 +243,7 @@ async fn run_configured_cold_cache_summary_journey(
                     "[configured-cold-specprefill] status=progress phase={prompt_processing_phase:?} total_tokens={total_token_count}"
                 );
             }
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::PrefillProgress {
                 processed_token_count,
                 mlx_memory_telemetry,

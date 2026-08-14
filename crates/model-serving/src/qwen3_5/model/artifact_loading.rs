@@ -299,6 +299,7 @@ impl Qwen3_5Model {
             resident_expert_weights: None,
             retained_expert_layers,
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
+            active_expert_residency_plan: RefCell::new(None),
 
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,

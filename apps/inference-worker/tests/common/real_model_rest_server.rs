@@ -10,6 +10,7 @@
 //! the just-built worker executable path; no developer-machine path is embedded.
 
 use std::{
+    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
@@ -62,12 +63,16 @@ pub(crate) async fn launch_real_model_rest_server(
         .worker_startup_configuration();
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         Some(maximum_mlx_memory_bytes);
-    let performance_log_directory =
-        tempfile::tempdir().expect("the real-model performance log directory should be created");
+    // Keep the supervisor record beside the isolated worker logs so acceptance
+    // journeys can reconcile public request timing with worker attribution after
+    // an orderly stop. The entire directory remains owned by the test tempdir.
+    let performance_log_directory = runtime_config_resolver.instance_paths().logging_directory();
+    fs::create_dir_all(&performance_log_directory)
+        .expect("the isolated real-model performance log directory should be created");
     let worker_handle = WorkerHandle::launch_with_startup_configuration(
         &production_worker_executable_path,
         Duration::from_secs(60),
-        GenerationPerformanceLog::open(performance_log_directory.path())
+        GenerationPerformanceLog::open(&performance_log_directory)
             .expect("the real-model performance log should open"),
         crate::common::single_model_directories(model_id, &model_directory),
         20_480,

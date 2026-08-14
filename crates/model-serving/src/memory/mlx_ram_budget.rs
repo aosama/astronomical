@@ -43,7 +43,6 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 use super::{
-    CompleteResidencyDecision, CompleteResidencyRequirements,
     expert_reclamation_bytes_to_fit_fixed_forward,
     required_complete_residency_activation_headroom_bytes,
 };
@@ -95,12 +94,6 @@ pub struct MlxRamBudgetSnapshot {
     pub other_fixed_bytes: u64,
     /// Leftover budget that may pin retained expert layers in MLX.
     pub retained_expert_budget_bytes: u64,
-    /// True when the operation must stream experts operation-locally.
-    pub must_stream_operation_local: bool,
-    /// True when retained expert pages may grow under this plan.
-    pub may_grow_retained_expert_layers: bool,
-    /// True when full complete-expert residency fits the ceiling with headroom.
-    pub complete_residency_fits: bool,
 }
 
 /// Live measurement that refines context-window reserve and activation headroom.
@@ -139,6 +132,8 @@ pub struct MlxRamBudget {
     /// Phase-specific activation evidence; these values can grow but never shrink.
     prefill_activation_headroom_bytes: u64,
     decode_activation_headroom_bytes: u64,
+    /// Distinguishes an unobserved prefill phase from a valid zero-byte sample.
+    has_prefill_activation_measurement: bool,
     /// Distinguishes an unobserved decode phase from a valid zero-byte sample.
     has_decode_activation_measurement: bool,
     /// Distinguishes "no evidence" from a valid measured value of zero.
@@ -173,6 +168,7 @@ impl MlxRamBudget {
             measured_context_window_high_water_by_token_bucket: BTreeMap::new(),
             prefill_activation_headroom_bytes: 0,
             decode_activation_headroom_bytes: 0,
+            has_prefill_activation_measurement: false,
             has_decode_activation_measurement: false,
             has_context_window_measurement: false,
         })
@@ -251,16 +247,32 @@ impl MlxRamBudget {
     #[must_use]
     pub fn activation_headroom_bytes(&self, phase: MlxRamBudgetPhase) -> u64 {
         match phase {
-            MlxRamBudgetPhase::Prefill => self.prefill_activation_headroom_bytes,
+            MlxRamBudgetPhase::Prefill => {
+                // Keep the geometry-derived startup floor after learning. A
+                // cheaper completed chunk must not let retained pages expand
+                // into the operating interval needed by a later large chunk.
+                required_complete_residency_activation_headroom_bytes(
+                    self.model_geometry.complete_expert_payload_bytes,
+                    self.prefill_activation_headroom_bytes,
+                )
+            }
             MlxRamBudgetPhase::Decode => {
                 if self.has_decode_activation_measurement {
                     self.decode_activation_headroom_bytes
+                } else if self.has_prefill_activation_measurement {
+                    required_complete_residency_activation_headroom_bytes(
+                        self.model_geometry.complete_expert_payload_bytes,
+                        self.prefill_activation_headroom_bytes,
+                    )
                 } else {
                     // Decode follows prefill in the user journey. Until one
                     // decode completes, prefill high-water is the only live
                     // evidence preventing warm fill from occupying transient
                     // space that the first token immediately needs back.
-                    self.prefill_activation_headroom_bytes
+                    required_complete_residency_activation_headroom_bytes(
+                        self.model_geometry.complete_expert_payload_bytes,
+                        0,
+                    )
                 }
             }
             MlxRamBudgetPhase::Idle => 0,
@@ -294,6 +306,7 @@ impl MlxRamBudget {
 
         match measurement.phase {
             MlxRamBudgetPhase::Prefill => {
+                self.has_prefill_activation_measurement = true;
                 self.prefill_activation_headroom_bytes = self
                     .prefill_activation_headroom_bytes
                     .max(measurement.observed_activation_headroom_bytes);
@@ -317,7 +330,6 @@ impl MlxRamBudget {
         phase: MlxRamBudgetPhase,
         context_token_count: u64,
         other_fixed_bytes: u64,
-        multi_token_prefill: bool,
     ) -> MlxRamBudgetSnapshot {
         // Idle refill happens after request arrays are released, so it needs no
         // live context reserve. Prefill/decode plans protect the next operation's
@@ -344,36 +356,6 @@ impl MlxRamBudget {
         let retained_expert_budget_bytes = self
             .mlx_active_memory_ceiling_bytes
             .saturating_sub(fixed_non_expert_bytes);
-        // A page is operation-local when prefill explicitly requires full-layer
-        // streaming or when the leftover retention budget cannot hold even the
-        // largest layer safely. This flag describes execution need, not I/O state.
-        let must_stream_operation_local = multi_token_prefill
-            || retained_expert_budget_bytes
-                < self.model_geometry.largest_complete_expert_layer_bytes;
-        // Multi-token prefill never grows retained complete layers *inside the
-        // forward*. Activations and newly pinned experts would fight for the same
-        // ceiling. Barrier-safe page fill occurs after prefill cleanup.
-        let may_grow_retained_expert_layers = !multi_token_prefill && !must_stream_operation_local;
-        let complete_residency_headroom_bytes =
-            required_complete_residency_activation_headroom_bytes(
-                self.model_geometry.complete_expert_payload_bytes,
-                activation_headroom_bytes.max(context_window_reserve_bytes),
-            );
-        // Full residency does not need a stream slot because no sparse layer is
-        // cold. It still needs activation/context headroom. The helper applies a
-        // startup floor when no useful live transient evidence exists yet.
-        let complete_residency_fits = matches!(
-            CompleteResidencyRequirements {
-                current_active_memory_bytes: self.model_geometry.model_core_payload_bytes,
-                retained_paged_expert_payload_bytes: 0,
-                complete_expert_payload_bytes: self.model_geometry.complete_expert_payload_bytes,
-                required_headroom_bytes: complete_residency_headroom_bytes
-                    .saturating_add(other_fixed_bytes),
-                active_memory_ceiling_bytes: self.mlx_active_memory_ceiling_bytes,
-            }
-            .decide(),
-            CompleteResidencyDecision::Admit { .. }
-        );
 
         MlxRamBudgetSnapshot {
             mlx_active_memory_ceiling_bytes: self.mlx_active_memory_ceiling_bytes,
@@ -383,29 +365,32 @@ impl MlxRamBudget {
             complete_layer_stream_slot_bytes,
             other_fixed_bytes,
             retained_expert_budget_bytes,
-            must_stream_operation_local,
-            may_grow_retained_expert_layers,
-            complete_residency_fits,
         }
     }
 
-    /// Expert bytes that must yield so retained payload fits the planned budget.
+    /// Refines retained ownership against one concrete admitted forward.
+    ///
+    /// `current_active_memory_bytes` already includes current retained experts,
+    /// while `admitted_forward_reserve_bytes` includes exact persistent growth,
+    /// one phase-correct expert page, and expected transient work. Adding the
+    /// remaining strict-ceiling capacity to current retention therefore yields
+    /// the largest expert payload that may coexist with that forward.
     #[must_use]
-    pub fn expert_reclamation_target_bytes(
+    pub const fn retained_expert_budget_for_admitted_forward(
         &self,
-        phase: MlxRamBudgetPhase,
-        context_token_count: u64,
-        other_fixed_bytes: u64,
-        multi_token_prefill: bool,
-        retained_expert_payload_bytes: u64,
+        current_active_memory_bytes: u64,
+        current_retained_expert_payload_bytes: u64,
+        admitted_forward_reserve_bytes: u64,
     ) -> u64 {
-        let planned_budget = self.plan(
-            phase,
-            context_token_count,
-            other_fixed_bytes,
-            multi_token_prefill,
-        );
-        retained_expert_payload_bytes.saturating_sub(planned_budget.retained_expert_budget_bytes)
+        let projected_active_memory_bytes =
+            current_active_memory_bytes.saturating_add(admitted_forward_reserve_bytes);
+        if projected_active_memory_bytes <= self.mlx_active_memory_ceiling_bytes {
+            return current_retained_expert_payload_bytes.saturating_add(
+                self.mlx_active_memory_ceiling_bytes - projected_active_memory_bytes,
+            );
+        }
+        current_retained_expert_payload_bytes
+            .saturating_sub(projected_active_memory_bytes - self.mlx_active_memory_ceiling_bytes)
     }
 
     /// Reclamation needed so a fixed forward workspace fits the ceiling.
@@ -428,4 +413,23 @@ impl MlxRamBudget {
 
 fn context_token_bucket(context_token_count: u64) -> u64 {
     context_token_count / CONTEXT_TOKEN_BUCKET_WIDTH
+}
+
+/// Separates request workspace from expert ownership acquired during a forward.
+///
+/// The MLX peak includes both categories. Charging newly retained experts to
+/// context learning would reserve those bytes again and evict the topology that
+/// produced the measurement.
+#[must_use]
+pub const fn measured_non_expert_forward_growth_bytes(
+    active_memory_bytes_before_growth: u64,
+    peak_memory_bytes_during_growth: u64,
+    retained_expert_payload_bytes_before_growth: u64,
+    retained_expert_payload_bytes_after_growth: u64,
+) -> u64 {
+    let newly_retained_expert_payload_bytes = retained_expert_payload_bytes_after_growth
+        .saturating_sub(retained_expert_payload_bytes_before_growth);
+    peak_memory_bytes_during_growth
+        .saturating_sub(active_memory_bytes_before_growth)
+        .saturating_sub(newly_retained_expert_payload_bytes)
 }

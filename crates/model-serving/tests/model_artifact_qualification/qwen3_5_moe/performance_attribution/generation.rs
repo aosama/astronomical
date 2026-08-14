@@ -96,6 +96,7 @@ pub(crate) async fn run_attributed_generation(
                     "[performance-attribution] status=progress phase={phase_name} stage=prefill_start prompt_processing_phase={prompt_processing_phase:?} total_prompt_tokens={total_token_count}"
                 );
             }
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }

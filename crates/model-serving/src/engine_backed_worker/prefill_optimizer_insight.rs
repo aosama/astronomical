@@ -30,6 +30,9 @@ pub(super) fn to_worker_prefill_optimizer_insight(
             PrefillChunckSizeOptimizerDecisionReason::Fallback => {
                 WorkerPrefillOptimizerDecisionReason::Fallback
             }
+            PrefillChunckSizeOptimizerDecisionReason::TerminalRemainder => {
+                WorkerPrefillOptimizerDecisionReason::TerminalRemainder
+            }
         },
         has_observed_prefill_capacity_constraint: prefill_optimizer_insight
             .has_observed_prefill_capacity_constraint,

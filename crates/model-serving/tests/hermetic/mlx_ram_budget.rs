@@ -1,6 +1,6 @@
 use astronomical_model_serving::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, MlxRamBudgetMeasurement,
-    MlxRamBudgetModelGeometry, MlxRamBudgetPhase,
+    MlxRamBudgetModelGeometry, MlxRamBudgetPhase, measured_non_expert_forward_growth_bytes,
 };
 
 fn fable_class_geometry() -> MlxRamBudgetModelGeometry {
@@ -27,6 +27,10 @@ fn should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements()
         1_000_000_000
     );
     assert!(!mlx_ram_budget.has_context_window_measurement());
+    assert_eq!(
+        mlx_ram_budget.activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
+        3_623_878_656,
+    );
 }
 
 #[test]
@@ -34,7 +38,7 @@ fn should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners() {
     let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
 
-    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 4_096, 0, true);
+    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 4_096, 0);
 
     // retained_expert_budget =
     //   mlx_active_memory_ceiling
@@ -43,32 +47,11 @@ fn should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners() {
     //   - activation_headroom
     //   - complete_layer_stream_slot
     assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
+    assert_eq!(planned_budget.activation_headroom_bytes, 3_623_878_656);
     assert_eq!(planned_budget.complete_layer_stream_slot_bytes, 905_969_664);
     assert_eq!(
         planned_budget.retained_expert_budget_bytes,
-        39_000_000_000 - 2_360_000_000 - 1_000_000_000 - 905_969_664
-    );
-    assert!(planned_budget.must_stream_operation_local);
-    assert!(!planned_budget.may_grow_retained_expert_layers);
-    assert!(!planned_budget.complete_residency_fits);
-}
-
-#[test]
-fn should_require_operation_local_streaming_for_multi_token_prefill() {
-    let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
-        .expect("positive ceiling should construct");
-
-    let multi_token_prefill = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 2_048, 0, true);
-    let decode = mlx_ram_budget.plan(MlxRamBudgetPhase::Decode, 2_048, 0, false);
-
-    assert!(multi_token_prefill.must_stream_operation_local);
-    assert!(!multi_token_prefill.may_grow_retained_expert_layers);
-    // Decode may retain only when leftover retained-expert budget covers a complete layer.
-    assert_eq!(
-        decode.may_grow_retained_expert_layers,
-        decode.retained_expert_budget_bytes
-            >= fable_class_geometry().largest_complete_expert_layer_bytes
-            && !decode.must_stream_operation_local
+        39_000_000_000 - 2_360_000_000 - 1_000_000_000 - 3_623_878_656 - 905_969_664
     );
 }
 
@@ -99,8 +82,8 @@ fn should_raise_context_window_reserve_from_measurements_and_never_under_shoot()
     assert!(context_window_reserve_for_4096 >= context_window_reserve_for_2048);
     assert!(context_window_reserve_for_4096 >= 1_500_000_000);
 
-    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 4_096, 0, true);
-    assert_eq!(planned_budget.activation_headroom_bytes, 700_000_000);
+    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 4_096, 0);
+    assert_eq!(planned_budget.activation_headroom_bytes, 3_623_878_656);
     // Experts must not be budgeted into the learned context-window / activation reserve.
     let fixed_non_expert_bytes = planned_budget.model_core_payload_bytes
         + planned_budget.context_window_reserve_bytes
@@ -126,10 +109,10 @@ fn should_not_charge_transient_workspace_as_both_context_and_activation() {
         exact_temporary_workspace_bytes: 100_000_000,
     });
 
-    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 7_000, 0, true);
+    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 7_000, 0);
 
     assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
-    assert_eq!(planned_budget.activation_headroom_bytes, 2_000_000_000);
+    assert_eq!(planned_budget.activation_headroom_bytes, 3_623_878_656);
 }
 
 #[test]
@@ -162,11 +145,11 @@ fn should_protect_the_first_decode_with_prefill_activation_evidence() {
         exact_temporary_workspace_bytes: 0,
     });
 
-    let first_decode_plan = mlx_ram_budget.plan(MlxRamBudgetPhase::Decode, 7_000, 0, false);
+    let first_decode_plan = mlx_ram_budget.plan(MlxRamBudgetPhase::Decode, 7_000, 0);
 
     // Before decode has its own evidence, retaining experts into prefill-proven
     // transient space would force immediate reclamation on the first token.
-    assert_eq!(first_decode_plan.activation_headroom_bytes, 1_900_000_000);
+    assert_eq!(first_decode_plan.activation_headroom_bytes, 3_623_878_656);
 }
 
 #[test]
@@ -188,49 +171,46 @@ fn should_use_decode_activation_evidence_after_decode_is_observed() {
         exact_temporary_workspace_bytes: 0,
     });
 
-    let learned_decode_plan = mlx_ram_budget.plan(MlxRamBudgetPhase::Decode, 7_000, 0, false);
+    let learned_decode_plan = mlx_ram_budget.plan(MlxRamBudgetPhase::Decode, 7_000, 0);
 
     assert_eq!(learned_decode_plan.activation_headroom_bytes, 400_000_000);
 }
 
 #[test]
-fn should_compute_reclamation_when_retained_experts_exceed_budget() {
-    let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
+fn should_limit_retained_experts_to_leave_the_exact_admitted_prefill_reserve() {
+    let mlx_ram_budget = MlxRamBudget::new(38_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
-    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 4_096, 0, true);
-    let retained_expert_payload_bytes = planned_budget.retained_expert_budget_bytes + 3_000_000_000;
+    let current_active_memory_bytes = 35_879_800_070;
+    let current_retained_expert_payload_bytes = 33_520_877_568;
+    // Production evidence showed 1.554 GB of context/activation growth followed
+    // by one exact 905,969,664-byte complete-layer allocation.
+    let admitted_forward_reserve_bytes = 2_460_246_024;
 
+    let retained_expert_budget_bytes = mlx_ram_budget.retained_expert_budget_for_admitted_forward(
+        current_active_memory_bytes,
+        current_retained_expert_payload_bytes,
+        admitted_forward_reserve_bytes,
+    );
+
+    assert_eq!(retained_expert_budget_bytes, 33_180_831_474);
+    assert!(retained_expert_budget_bytes < current_retained_expert_payload_bytes);
     assert_eq!(
-        mlx_ram_budget.expert_reclamation_target_bytes(
-            MlxRamBudgetPhase::Prefill,
-            4_096,
-            0,
-            true,
-            retained_expert_payload_bytes,
-        ),
-        3_000_000_000
+        current_active_memory_bytes
+            .saturating_sub(current_retained_expert_payload_bytes)
+            .saturating_add(retained_expert_budget_bytes)
+            .saturating_add(admitted_forward_reserve_bytes),
+        38_000_000_000,
     );
 }
 
 #[test]
-fn should_allow_complete_residency_only_when_core_experts_and_headroom_fit() {
-    let small_geometry = MlxRamBudgetModelGeometry {
-        model_core_payload_bytes: 500_000_000,
-        complete_expert_payload_bytes: 2_000_000_000,
-        largest_complete_expert_layer_bytes: 200_000_000,
-        largest_routed_expert_page_bytes: 20_000_000,
-    };
-    let mlx_ram_budget = MlxRamBudget::new(8_000_000_000, small_geometry)
-        .expect("positive ceiling should construct");
-
-    let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Idle, 0, 0, false);
-    assert!(planned_budget.complete_residency_fits);
-
-    let tight_budget = MlxRamBudget::new(2_400_000_000, small_geometry)
-        .expect("positive ceiling should construct");
-    assert!(
-        !tight_budget
-            .plan(MlxRamBudgetPhase::Idle, 0, 0, false)
-            .complete_residency_fits
+fn should_exclude_newly_retained_experts_from_context_and_activation_learning() {
+    assert_eq!(
+        measured_non_expert_forward_growth_bytes(2_358_922_508, 36_867_500_000, 0, 33_520_877_568,),
+        987_699_924,
+    );
+    assert_eq!(
+        measured_non_expert_forward_growth_bytes(3_000, 4_500, 2_000, 2_000),
+        1_500,
     );
 }

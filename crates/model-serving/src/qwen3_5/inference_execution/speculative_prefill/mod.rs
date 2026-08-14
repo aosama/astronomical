@@ -33,6 +33,7 @@
 //! activation during loading). The engine deliberately does not retry the same
 //! request through target-only execution: a retry after partial decoder-state or
 //! cache mutation could duplicate work or silently change the promised policy.
+
 //!
 //! # Ownership map
 //!
@@ -40,6 +41,8 @@
 //! tests can exercise them. MLX execution items are feature-gated where required.
 //! All children remain private; the re-exports below are the intentionally small
 //! boundary used by sibling inference stages.
+
+use crate::InferenceEngineError;
 
 // Pure formulas used by prompt-prefill orchestration and hermetic tests.
 mod chunk_mode;

@@ -9,6 +9,7 @@ mod protocol_message;
 mod protocol_reader;
 mod protocol_writer;
 mod worker_chunking_configuration;
+mod worker_startup_configuration;
 
 pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
@@ -27,16 +28,18 @@ pub use persistent_prompt_cache_diagnostics::{
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpRuntimeState, RequestId,
-    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerLogLevel,
+    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
     WorkerMlxMemorySnapshot, WorkerPrefillOptimizerCandidateEvidence,
     WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
     WorkerPrefillOptimizerInsight, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
-    WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,
-    WorkerStartupConfiguration,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
 pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, WorkerPrefillChunckSizingPolicy,
     experimental_ssd_paging_graph_submission_layer_interval,
+};
+pub use worker_startup_configuration::{
+    WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,
+    WorkerStartupConfiguration,
 };

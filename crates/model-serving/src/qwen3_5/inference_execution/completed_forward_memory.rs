@@ -19,9 +19,11 @@
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
 use crate::qwen3_5::model::Qwen3_5Model;
+use crate::qwen3_5_moe::model::record_expert_reclamation_attribution;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthPhase, InferenceEngineError,
     MlxRamBudgetMeasurement, MlxRamBudgetPhase, PerformanceAttribution, PerformanceOperation,
+    RetainedExpertReclamation, measured_non_expert_forward_growth_bytes,
 };
 
 use super::qwen3_5_runtime_error;
@@ -54,11 +56,6 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
         return Ok(Some(memory_snapshot_after_growth));
     }
 
-    // Retained payload is part of the admitted operation snapshot even though
-    // transient learning uses post-forward active memory as its stable baseline.
-    // Keep it at this boundary so future diagnostics can compare topology before
-    // and after a forward without changing every caller again.
-    let _retained_expert_payload_bytes_before_growth = retained_expert_payload_bytes_before_growth;
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         adaptive_ram_growth_context,
         should_retain_adaptive_ram_growth_observation,
@@ -82,14 +79,16 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
     if should_retain_adaptive_ram_growth_observation {
         let context_observed_transient_high_water_bytes = adaptive_ram_growth_guard
             .observed_transient_high_water_bytes_for_context(adaptive_ram_growth_context);
-        record_composed_ram_budget_measurement(
+        let budget_reclamation = record_composed_ram_budget_measurement(
             adaptive_ram_growth_context,
             model,
             active_memory_bytes_before_growth,
+            retained_expert_payload_bytes_before_growth,
             context_observed_transient_high_water_bytes,
             exact_temporary_workspace_bytes,
             &memory_snapshot_after_growth,
         );
+        record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
     }
     Ok(Some(memory_snapshot_after_growth))
 }
@@ -125,23 +124,27 @@ fn record_composed_ram_budget_measurement(
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     model: &Qwen3_5Model,
     active_memory_bytes_before_growth: usize,
+    retained_expert_payload_bytes_before_growth: u64,
     observed_transient_high_water_bytes: usize,
     exact_temporary_workspace_bytes: usize,
     memory_snapshot_after_growth: &MlxMemorySnapshot,
-) {
+) -> RetainedExpertReclamation {
     let mlx_ram_budget_phase = match adaptive_ram_growth_context.adaptive_ram_growth_phase() {
         AdaptiveRamGrowthPhase::Prefill => MlxRamBudgetPhase::Prefill,
         AdaptiveRamGrowthPhase::Decode => MlxRamBudgetPhase::Decode,
     };
-    // Peak minus the admitted stable baseline is the request workspace seen by
-    // the composed RAM budget. Saturation treats a lower/reset peak as no positive
-    // observation rather than unsigned wraparound.
-    let measured_context_and_activation_bytes = u64::try_from(
-        memory_snapshot_after_growth
-            .peak_memory_bytes()
-            .saturating_sub(active_memory_bytes_before_growth),
-    )
-    .unwrap_or(u64::MAX);
+    // Peak includes complete/routed pages promoted by mandatory reads. Subtract
+    // only newly retained payload so the composed budget learns request workspace
+    // without reserving the same expert ownership a second time.
+    let retained_expert_payload_bytes_after_growth = model
+        .expert_weight_memory_cache_statistics()
+        .resident_payload_byte_count;
+    let measured_context_and_activation_bytes = measured_non_expert_forward_growth_bytes(
+        u64::try_from(active_memory_bytes_before_growth).unwrap_or(u64::MAX),
+        u64::try_from(memory_snapshot_after_growth.peak_memory_bytes()).unwrap_or(u64::MAX),
+        retained_expert_payload_bytes_before_growth,
+        retained_expert_payload_bytes_after_growth,
+    );
     model
         .mlx_ram_budget_mut()
         .record_measurement(MlxRamBudgetMeasurement {
@@ -156,23 +159,21 @@ fn record_composed_ram_budget_measurement(
         });
 
     // Publish the composed expert budget so retained-layer ownership stays inside
-    // the single-source split. `may_grow` gates new warm fills; existing warm
-    // layers may remain up to `retained_expert_budget_bytes`. Setting this ceiling
-    // to zero merely because the completed operation was multi-token prefill would
-    // evict reusable layers without evidence of live pressure.
-    let multi_token_prefill = adaptive_ram_growth_context.forward_token_count() > 1
-        && matches!(mlx_ram_budget_phase, MlxRamBudgetPhase::Prefill);
+    // the single-source split. Execution policy—not this numeric owner—decides
+    // whether a mandatory page remains operation-local or transfers to retention.
     let retained_expert_budget = model.mlx_ram_budget().plan(
         mlx_ram_budget_phase,
         u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
         0,
-        multi_token_prefill,
     );
-    if let Some(retained_expert_layers) = model.retained_expert_layers.as_ref() {
-        retained_expert_layers
-            .borrow_mut()
-            .update_maximum_resident_payload_bytes(
-                retained_expert_budget.retained_expert_budget_bytes,
-            );
-    }
+    model.retained_expert_layers.as_ref().map_or_else(
+        RetainedExpertReclamation::default,
+        |retained_expert_layers| {
+            retained_expert_layers
+                .borrow_mut()
+                .update_maximum_resident_payload_bytes(
+                    retained_expert_budget.retained_expert_budget_bytes,
+                )
+        },
+    )
 }

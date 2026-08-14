@@ -1,10 +1,9 @@
 //! One terminal cleanup path for success, rejection, cancellation, and failure.
 //!
 //! Request-owned lazy arrays are dropped before expert-retention policy resumes
-//! and before allocator cleanup. The cleaned idle baseline can then attempt
-//! complete residency. Final telemetry is sampled only after that attempt, so it
-//! reports the owner that will serve the next request rather than the final
-//! token's in-flight graph or a transient paged state.
+//! and before allocator cleanup. Final telemetry then reports the read-through
+//! topology preserved for the next request rather than the final token's
+//! in-flight graph.
 
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
@@ -14,7 +13,6 @@ use crate::{
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 
 impl Qwen3_5EngineState {
     pub(super) fn collect_current_mlx_memory_telemetry(
@@ -116,28 +114,8 @@ impl Qwen3_5EngineState {
                 self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
-        // Demand-selected pages were already materialized at the prefill/decode
-        // barrier. Do not rebuild them here: that repeats model reads, fills
-        // allocator cache with replaced pages, and delays attribution flush.
-        //
-        // What this step may do is restore the complete owner now that request
-        // arrays are gone. That is an idle optimization for the next request,
-        // not a condition for finishing this one. `DoesNotFit` and recoverable
-        // capacity rejection stay normal paged outcomes. Only a structural
-        // load error is logged as a warning. There is no sticky "stay paged"
-        // flag from the earlier demotion.
-        if let Some(model) = self.model.as_mut()
-            && let Err(resident_promotion_error) = model.try_promote_experts_to_resident(
-                Qwen3_5ExpertResidencyTransitionReason::RequestFinalization,
-                &mut performance_attribution,
-            )
-        {
-            tracing::warn!(
-                request_id = request_id.value(),
-                error = %resident_promotion_error,
-                "could not restore complete expert residency after request cleanup"
-            );
-        }
+        // Preserve the read-through topology. Finalization performs no source
+        // reads; future mandatory forwards populate any newly available budget.
         let generation_finalization =
             self.collect_generation_finalization(&mut performance_attribution);
         self.record_generation_performance_attribution(
@@ -159,6 +137,7 @@ impl Qwen3_5EngineState {
             return GenerationFinalization::default();
         };
         let expert_memory_mode = Some(model.expert_memory_mode());
+        let expert_residency_telemetry = Some(model.expert_residency_telemetry());
         let mlx_memory_telemetry = match performance_attribution.measure_operation(
             PerformanceOperation::FinalizedMlxMemorySnapshot,
             |_performance_attribution| model.runtime().memory_snapshot(),
@@ -194,7 +173,11 @@ impl Qwen3_5EngineState {
                 None
             }
         };
-        GenerationFinalization::new(expert_memory_mode, mlx_memory_telemetry)
+        GenerationFinalization::new(
+            expert_memory_mode,
+            mlx_memory_telemetry,
+            expert_residency_telemetry,
+        )
     }
 
     pub(super) fn record_generation_performance_attribution(

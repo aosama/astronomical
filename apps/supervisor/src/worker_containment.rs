@@ -67,10 +67,18 @@ async fn cancel_worker_request(
                     request_id: prefill_request_id,
                     ..
                 } if prefill_request_id == request_id => {}
+                WorkerEvent::GenerationPreparationStarted {
+                    request_id: preparation_request_id,
+                    ..
+                } if preparation_request_id == request_id => {}
                 WorkerEvent::GenerationProgress {
                     request_id: progress_request_id,
                     ..
                 } if progress_request_id == request_id => {}
+                WorkerEvent::FirstDecodeCompleted {
+                    request_id: decode_request_id,
+                    ..
+                } if decode_request_id == request_id => {}
                 WorkerEvent::PromptWorkReuse {
                     request_id: reuse_request_id,
                     ..
@@ -81,6 +89,7 @@ async fn cancel_worker_request(
                 WorkerEvent::GenerationFinalized {
                     expert_memory_mode,
                     mlx_memory_snapshot,
+                    expert_residency,
                     ..
                 } => {
                     if let Some(expert_memory_mode) = expert_memory_mode {
@@ -90,6 +99,12 @@ async fn cancel_worker_request(
                         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
                     } else {
                         clear_latest_mlx_memory_snapshot(health_snapshot);
+                    }
+                    if let Some(expert_residency) = expert_residency {
+                        crate::worker_health::publish_worker_expert_residency(
+                            health_snapshot,
+                            expert_residency,
+                        );
                     }
                 }
                 WorkerEvent::Completed {

@@ -296,6 +296,7 @@ async fn run_bounded_generation(qwen3_5_engine: &mut Qwen3_5Engine, request_id: 
                     request_id.value(),
                 );
             }
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
                 assert!(
                     generated_token_count > 0,

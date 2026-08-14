@@ -47,6 +47,7 @@ pub use mlx_memory_telemetry::{
 pub use mlx_ram_budget::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, MlxRamBudgetError,
     MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetPhase, MlxRamBudgetSnapshot,
+    measured_non_expert_forward_growth_bytes,
 };
 pub use residency_admission::{CompleteResidencyDecision, CompleteResidencyRequirements};
 pub use speculative_prefill_admission::SpeculativePrefillAdmission;

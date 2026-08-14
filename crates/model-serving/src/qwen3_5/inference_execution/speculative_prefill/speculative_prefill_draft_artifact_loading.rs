@@ -5,7 +5,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation, Qwen3_5ArtifactValidator,
-    Qwen3_5Model, Qwen3_5Tokenizer, qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason,
+    Qwen3_5Model, Qwen3_5Tokenizer,
 };
 
 use super::super::ValidatedQwen3_5Artifact;
@@ -45,7 +45,6 @@ pub(crate) fn load_speculative_prefill_draft_model(
     target_token_identifier_mapping_digest: [u8; 32],
     target_max_output_tokens: u32,
     memory_limits: MlxMemoryLimits,
-    should_attempt_complete_expert_residency: bool,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(Option<(Qwen3_5Model, String)>, Option<String>), InferenceEngineError> {
     // Disabled mode performs no draft-directory access, artifact validation, or
@@ -64,7 +63,6 @@ pub(crate) fn load_speculative_prefill_draft_model(
         speculative_prefill,
         draft_validated_artifact,
         memory_limits,
-        should_attempt_complete_expert_residency,
         performance_attribution,
     )
 }
@@ -157,7 +155,6 @@ pub(crate) fn load_validated_speculative_prefill_draft_model(
     speculative_prefill: &WorkerSpeculativePrefillConfiguration,
     draft_validated_artifact: ValidatedQwen3_5Artifact,
     memory_limits: MlxMemoryLimits,
-    should_attempt_complete_expert_residency: bool,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(Option<(Qwen3_5Model, String)>, Option<String>), InferenceEngineError> {
     let draft_model_directory = speculative_prefill
@@ -182,7 +179,7 @@ pub(crate) fn load_validated_speculative_prefill_draft_model(
             ));
         }
     };
-    let mut draft_model = match Qwen3_5Model::load_with_performance_attribution(
+    let draft_model = match Qwen3_5Model::load_with_performance_attribution(
         draft_runtime,
         draft_validated_artifact,
         draft_model_directory,
@@ -235,35 +232,6 @@ pub(crate) fn load_validated_speculative_prefill_draft_model(
             return Err(configured_draft_loading_failure("draft weight loading"));
         }
     };
-    // Startup loads the draft only to validate compatibility and drops it before
-    // target admission, so resident materialization there would be wasted work.
-    // The request-scoped load executes scoring and can benefit from residency.
-    if should_attempt_complete_expert_residency {
-        // Only request-scoped loads execute scoring. Startup validation skips
-        // promotion because the draft is immediately dropped afterward.
-        draft_model
-            .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
-            .map_err(|draft_cleanup_error| {
-                tracing::warn!(
-                    error = %draft_cleanup_error,
-                    "request-scoped speculative prefill draft cleanup failed before residency admission"
-                );
-                configured_draft_loading_failure("draft expert residency cleanup")
-            })?;
-        draft_model
-            .try_promote_experts_to_resident(
-                Qwen3_5ExpertResidencyTransitionReason::SpeculativePrefillDraftLoading,
-                performance_attribution,
-            )
-            .map_err(|draft_residency_error| {
-                tracing::warn!(
-                    error = %draft_residency_error,
-                    "request-scoped speculative prefill draft expert residency failed"
-                );
-                configured_draft_loading_failure("draft expert residency")
-            })?;
-    }
     Ok((Some((draft_model, draft_model_revision)), None))
 }
 

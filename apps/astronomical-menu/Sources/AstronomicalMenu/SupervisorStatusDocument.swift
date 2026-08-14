@@ -291,7 +291,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mlxMemoryCeilingBytes: 0, servingSession: .empty
   )
 
-  var isActive: Bool { activity == "prompt_processing" || activity == "generating" }
+  var isActive: Bool {
+    activity == "prompt_processing" || activity == "generation_preparation"
+      || activity == "generating"
+  }
   var currentRate: Double? {
     guard let progress, progress.processedTokens > 0, progress.elapsedMilliseconds > 0 else {
       return nil
@@ -303,6 +306,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     if activity == "generating", let currentRate {
       return String(format: "GEN %.1f tok/s", currentRate)
     }
+    if activity == "generation_preparation" { return "Preparing…" }
     guard activity == "prompt_processing", let progress else { return "" }
     let completionPercentageTitle = progress.completionPercentageTitle
     if progress.phase == "drafter" { return "Drafting…" }
@@ -314,6 +318,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     if activity == "generating" {
       return currentRate.map { String(format: "Generating · %.1f tok/s", $0) } ?? "Generating"
     }
+    if activity == "generation_preparation" { return "Preparing generation…" }
     guard let progress else { return phaseTitle }
     if progress.phase == "drafter" { return "Drafting…" }
     guard let currentRate else { return "Target · \(progress.completionPercentageTitle)" }
@@ -322,6 +327,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
   var phaseTitle: String {
     switch activity {
     case "generating": "Generating"
+    case "generation_preparation": "Preparing generation"
     case "prompt_processing": progress?.phase == "drafter" ? "Drafting…" : "Target"
     default:
       switch status {
@@ -332,7 +338,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     }
   }
   var modelFootprintTitle: String {
-    expertMemoryMode == "paged"
+    expertMemoryMode == "paged" || expertMemoryMode == "hybrid"
       ? "RAM + SSD streaming" : expertMemoryMode == "resident" ? "Fully in memory" : "Not loaded"
   }
   var modelDiskSizeTitle: String {
@@ -349,6 +355,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
   }
   var progressTitle: String {
     guard let progress else { return "Standing by" }
+    if progress.phase == "generation_preparation" { return "Preparing the first output" }
     if progress.phase == "drafter" { return "Drafting…" }
     let tokenCountTitle = "\(progress.processedTokens) / \(progress.totalTokens) tokens"
     return progress.phase == "generation"
@@ -356,13 +363,14 @@ struct SupervisorStatusDocument: Codable, Equatable {
       : "\(progress.completionPercentageTitle) · \(tokenCountTitle)"
   }
   var elapsedTimeMetricTitle: String {
-    progress?.phase == "generation" ? "Elapsed" : "Elapsed / ETA"
+    progress?.phase == "generation" || progress?.phase == "generation_preparation"
+      ? "Elapsed" : "Elapsed / ETA"
   }
 
   var elapsedTimeTitle: String {
     guard let progress else { return "Not active" }
     let elapsedSeconds = Double(progress.elapsedMilliseconds) / 1_000
-    guard progress.phase != "generation" else {
+    guard progress.phase != "generation" && progress.phase != "generation_preparation" else {
       return String(format: "%.1f s", elapsedSeconds)
     }
     guard progress.processedTokens > 0 else {

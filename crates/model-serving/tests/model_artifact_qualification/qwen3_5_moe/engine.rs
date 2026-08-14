@@ -70,6 +70,7 @@ async fn should_generate_the_certified_greedy_continuation_through_the_engine_tr
             GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
             GeneratedToken::PrefillProgress { .. } => {}
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }
@@ -134,6 +135,7 @@ async fn should_generate_the_certified_sampled_continuation_through_the_engine_t
             GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
             GeneratedToken::PrefillProgress { .. } => {}
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }

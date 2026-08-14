@@ -159,9 +159,22 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         worker_health_snapshot.expert_memory_mode.map(
             |expert_memory_mode| match expert_memory_mode {
                 astronomical_ipc_protocol::ExpertMemoryMode::Resident => "resident",
+                astronomical_ipc_protocol::ExpertMemoryMode::Hybrid => "hybrid",
                 astronomical_ipc_protocol::ExpertMemoryMode::Paged => "paged",
             }
         )
+    );
+    status_json["expert_residency"] =
+        serde_json::json!(
+        worker_health_snapshot.expert_residency.map(|expert_residency| {
+            serde_json::json!({
+                "total_layer_count": expert_residency.total_layer_count,
+                "complete_layer_count": expert_residency.complete_layer_count,
+                "complete_layer_payload_bytes": expert_residency.complete_layer_payload_bytes,
+                "partial_layer_count": expert_residency.partial_layer_count,
+                "partial_layer_payload_bytes": expert_residency.partial_layer_payload_bytes,
+            })
+        })
     );
     status_json["mlx_memory_snapshot"] =
         serde_json::json!(worker_health_snapshot.latest_mlx_memory_snapshot);
@@ -248,6 +261,24 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                     "processed_tokens": generated_token_count,
                     "total_tokens": maximum_output_tokens,
                     "elapsed_ms": elapsed_millis,
+                });
+            }
+            ActiveRequestProgress::GenerationPreparation {
+                request_started_at,
+                preparation_started_at,
+                total_layer_count,
+                complete_layer_count,
+                partial_layer_count,
+            } => {
+                status_json["progress"] = serde_json::json!({
+                    "phase": "generation_preparation",
+                    "processed_tokens": 0,
+                    "total_tokens": 1,
+                    "elapsed_ms": u64::try_from(preparation_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    "request_elapsed_ms": u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    "total_layer_count": total_layer_count,
+                    "complete_layer_count": complete_layer_count,
+                    "partial_layer_count": partial_layer_count,
                 });
             }
         }
