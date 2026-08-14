@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState, WorkerPromptWorkReuse};
-use astronomical_supervisor::{ChatGenerationExecutor, ServingSessionSnapshot, WorkerHealthStatus};
+use astronomical_supervisor::{
+    ChatGenerationExecutor, PendingPromptCacheClear, ServingSessionSnapshot, WorkerHealthSnapshot,
+    WorkerHealthStatus,
+};
 use tokio::time::{Instant, sleep, timeout};
 
 use crate::common::supervisor::launch_test_executor;
@@ -50,6 +53,45 @@ async fn should_publish_the_ready_model_identity_from_the_worker_readiness_event
         .shutdown()
         .await
         .expect("the worker-backed executor should shut down after the health test");
+}
+
+#[tokio::test]
+async fn should_preserve_a_pending_cache_clear_across_model_replacement() {
+    timeout(Duration::from_secs(1), async {
+        let model_capabilities = ChatModelCapabilities {
+            supports_reasoning: true,
+            supports_tool_calls: true,
+            has_vision: false,
+            max_input_tokens: 1_024,
+            max_output_tokens: 128,
+            context_window: 2_048,
+        };
+        let mut previous_health_snapshot = WorkerHealthSnapshot::ready_with_model(
+            "example/old-model".to_owned(),
+            model_capabilities.clone(),
+            MtpRuntimeState::Disabled,
+            None,
+        );
+        previous_health_snapshot.pending_prompt_cache_clear = Some(PendingPromptCacheClear {
+            model_id: Some("example/cached-model".to_owned()),
+        });
+
+        let replacement_health_snapshot = WorkerHealthSnapshot::ready_with_replacement_model(
+            "example/new-model".to_owned(),
+            model_capabilities,
+            1,
+            MtpRuntimeState::Disabled,
+            None,
+            &previous_health_snapshot,
+        );
+
+        assert_eq!(
+            replacement_health_snapshot.pending_prompt_cache_clear,
+            previous_health_snapshot.pending_prompt_cache_clear
+        );
+    })
+    .await
+    .expect("health replacement test should finish within one second");
 }
 
 #[test]

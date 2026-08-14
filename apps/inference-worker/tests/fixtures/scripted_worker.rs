@@ -42,7 +42,9 @@ async fn main() {
             }
             WorkerCommand::SwapModel { .. } => continue,
             WorkerCommand::SampleMlxMemory => continue,
-            WorkerCommand::UpdateMlxMemoryLimit { .. } => continue,
+            WorkerCommand::UpdateMlxMemoryLimit { .. } | WorkerCommand::ClearPromptCache { .. } => {
+                continue;
+            }
         };
         if event_writer
             .send_event(&WorkerEvent::Completed {

@@ -14,7 +14,7 @@ use axum::{
     extract::{DefaultBodyLimit, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use std::{
     path::PathBuf,
@@ -245,6 +245,14 @@ async fn cache_stats(State(application_state): State<ApplicationState>) -> Respo
             .as_ref(),
     );
     let serving_session = &worker_health_snapshot.serving_session;
+    let pending_cache_clear = worker_health_snapshot
+        .pending_prompt_cache_clear
+        .as_ref()
+        .map(|pending_clear| {
+            serde_json::json!({
+                "model_id": pending_clear.model_id,
+            })
+        });
     Json(serde_json::json!({
         "persistent_prompt_cache_hits": persistent_prompt_cache_summary.hits,
         "persistent_prompt_cache_misses": persistent_prompt_cache_summary.misses,
@@ -260,6 +268,7 @@ async fn cache_stats(State(application_state): State<ApplicationState>) -> Respo
         "persistent_prompt_cache_visual_embedding_hits": persistent_prompt_cache_summary.visual_embedding_hits,
         "persistent_prompt_cache_visual_embedding_misses": persistent_prompt_cache_summary.visual_embedding_misses,
         "persistent_prompt_cache_visual_embedding_rows_loaded": persistent_prompt_cache_summary.visual_embedding_rows_loaded,
+        "pending_cache_clear": pending_cache_clear,
         "speculative_prefill_cache_efficacy": {
             "target": {
                 "eligible_token_count": serving_session.target_prompt_work_token_count,
@@ -359,6 +368,7 @@ fn application_router(application_state: ApplicationState) -> Router {
     let supports_config_reload = application_state.reloadable_config.is_some()
         && application_state.runtime_config_resolver.is_some();
     let supports_shutdown = application_state.shutdown_controller.is_some();
+    let supports_cache_clear = application_state.worker_control.is_some();
     let supports_live_mlx_memory_control =
         supports_config_reload && application_state.worker_control.is_some();
     let router = Router::new()
@@ -384,6 +394,14 @@ fn application_router(application_state: ApplicationState) -> Router {
         router.route(
             "/v1/config/reload",
             post(crate::config_reload_endpoint::reload_config),
+        )
+    } else {
+        router
+    };
+    let router = if supports_cache_clear {
+        router.route(
+            "/v1/cache",
+            delete(crate::cache_clear_endpoint::clear_cache),
         )
     } else {
         router

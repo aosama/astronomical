@@ -142,6 +142,18 @@ where
         receive_owner_result(completion_receiver).await
     }
 
+    async fn clear_persistent_prompt_cache(
+        &mut self,
+        model_id: Option<String>,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        let (completion_sender, completion_receiver) = oneshot::channel();
+        self.send_command(MlxInferenceCommand::ClearPersistentPromptCache {
+            model_id,
+            completion_sender,
+        })?;
+        receive_owner_result(completion_receiver).await
+    }
+
     async fn collect_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
@@ -203,6 +215,10 @@ where
         completion_sender: OwnerResultSender<GenerationFinalization>,
     },
     CollectPersistentPromptCacheStats(OwnerResultSender<Option<WorkerEvent>>),
+    ClearPersistentPromptCache {
+        model_id: Option<String>,
+        completion_sender: OwnerResultSender<Option<WorkerEvent>>,
+    },
     CollectMlxMemoryTelemetry(OwnerResultSender<Option<MlxMemoryTelemetry>>),
     UpdateMlxMemoryLimit {
         requested_mlx_memory_ceiling_bytes: u64,
@@ -266,6 +282,14 @@ fn run_mlx_owner<Execution>(
             MlxInferenceCommand::CollectPersistentPromptCacheStats(completion_sender) => {
                 let _receiver_was_dropped = completion_sender
                     .send(execution.collect_persistent_prompt_cache_stats())
+                    .is_err();
+            }
+            MlxInferenceCommand::ClearPersistentPromptCache {
+                model_id,
+                completion_sender,
+            } => {
+                let _receiver_was_dropped = completion_sender
+                    .send(execution.clear_persistent_prompt_cache(model_id))
                     .is_err();
             }
             MlxInferenceCommand::CollectMlxMemoryTelemetry(completion_sender) => {

@@ -386,6 +386,15 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     })
                     .await?;
             }
+            WorkerCommand::ClearPromptCache { model_id } => {
+                event_writer
+                    .send_event(&WorkerEvent::PromptCacheCleared {
+                        model_id,
+                        blocks_removed: 0,
+                        bytes_freed: 0,
+                    })
+                    .await?;
+            }
         }
     }
     Ok(())

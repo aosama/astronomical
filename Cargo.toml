@@ -30,7 +30,7 @@ version = "0.2.0"
 
 [workspace.dependencies]
 async-openai = { version = "0.41.3", default-features = false, features = ["byot", "chat-completion"] }
-axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
 base64 = "0.23"
 bytes = "1"
 futures-util = { version = "0.3", features = ["sink"] }
