@@ -16,7 +16,7 @@ print_usage() {
     printf '%s\n' "Usage: scripts/verify-before-commit.sh [--hermetic-only]"
     printf '%s\n' ""
     printf '%s\n' "Without arguments, verifies formatting, dependency notices, hermetic tests, and REST API tests."
-    printf '%s\n' "--hermetic-only  Compile and run hermetic Rust tests within the 10-minute macOS CI budget."
+    printf '%s\n' "--hermetic-only  Compile and run hermetic Rust tests within the bounded macOS CI budget."
 }
 
 parse_arguments() {

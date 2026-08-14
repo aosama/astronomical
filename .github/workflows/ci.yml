@@ -86,9 +86,10 @@ jobs:
   verify:
     if: ${{ needs.detect-changes.outputs.code_changed == 'true' }}
     needs: detect-changes
-    name: 10-minute macOS hermetic verification
+    name: Bounded macOS hermetic verification
     runs-on: macos-26
-    timeout-minutes: 10
+    # Step-level limits bound verification work; this job budget also covers cache restore and save.
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
