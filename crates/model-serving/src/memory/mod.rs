@@ -5,6 +5,7 @@ mod context_admission;
 mod decision;
 mod expert_memory_admission;
 mod forward_recovery;
+#[cfg(feature = "direct-mlx")]
 mod live_allocation_budget;
 mod mlx_memory_telemetry;
 mod mlx_ram_budget;
@@ -38,6 +39,7 @@ pub use expert_memory_admission::{
 pub use forward_recovery::{
     ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements,
 };
+#[cfg(feature = "direct-mlx")]
 pub use live_allocation_budget::{MlxAllocationBudget, MlxAllocationBudgetError};
 pub use mlx_memory_telemetry::{
     MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,

@@ -74,6 +74,8 @@ pub struct MlxRamBudgetModelGeometry {
     pub complete_expert_payload_bytes: u64,
     /// One complete sparse layer; reserved as the streaming workspace.
     pub largest_complete_expert_layer_bytes: u64,
+    /// Largest exact top-K page used by one-token decode.
+    pub largest_routed_expert_page_bytes: u64,
 }
 
 /// One composed RAM split for a planned operation.
@@ -95,7 +97,7 @@ pub struct MlxRamBudgetSnapshot {
     pub retained_expert_budget_bytes: u64,
     /// True when the operation must stream experts operation-locally.
     pub must_stream_operation_local: bool,
-    /// True when retained complete expert layers may grow under this plan.
+    /// True when retained expert pages may grow under this plan.
     pub may_grow_retained_expert_layers: bool,
     /// True when full complete-expert residency fits the ceiling with headroom.
     pub complete_residency_fits: bool,
@@ -112,6 +114,8 @@ pub struct MlxRamBudgetMeasurement {
     pub measured_context_and_activation_bytes: u64,
     /// Transient-only high-water independently learned by forward admission.
     pub observed_activation_headroom_bytes: u64,
+    /// Explicit operation workspace already reserved by forward admission.
+    pub exact_temporary_workspace_bytes: u64,
 }
 
 /// Invalid configuration for the RAM budget owner.
@@ -135,6 +139,8 @@ pub struct MlxRamBudget {
     /// Phase-specific activation evidence; these values can grow but never shrink.
     prefill_activation_headroom_bytes: u64,
     decode_activation_headroom_bytes: u64,
+    /// Distinguishes an unobserved decode phase from a valid zero-byte sample.
+    has_decode_activation_measurement: bool,
     /// Distinguishes "no evidence" from a valid measured value of zero.
     has_context_window_measurement: bool,
 }
@@ -167,6 +173,7 @@ impl MlxRamBudget {
             measured_context_window_high_water_by_token_bucket: BTreeMap::new(),
             prefill_activation_headroom_bytes: 0,
             decode_activation_headroom_bytes: 0,
+            has_decode_activation_measurement: false,
             has_context_window_measurement: false,
         })
     }
@@ -245,7 +252,17 @@ impl MlxRamBudget {
     pub fn activation_headroom_bytes(&self, phase: MlxRamBudgetPhase) -> u64 {
         match phase {
             MlxRamBudgetPhase::Prefill => self.prefill_activation_headroom_bytes,
-            MlxRamBudgetPhase::Decode => self.decode_activation_headroom_bytes,
+            MlxRamBudgetPhase::Decode => {
+                if self.has_decode_activation_measurement {
+                    self.decode_activation_headroom_bytes
+                } else {
+                    // Decode follows prefill in the user journey. Until one
+                    // decode completes, prefill high-water is the only live
+                    // evidence preventing warm fill from occupying transient
+                    // space that the first token immediately needs back.
+                    self.prefill_activation_headroom_bytes
+                }
+            }
             MlxRamBudgetPhase::Idle => 0,
         }
     }
@@ -257,8 +274,16 @@ impl MlxRamBudget {
         // bucket is directly usable as a future reserve.
         self.has_context_window_measurement = true;
         let token_bucket = context_token_bucket(measurement.context_token_count);
-        let measured_with_buffer = measurement
+        // The forward sample includes both persistent context and transient
+        // activation bytes. Activation has its own separately composed owner, so
+        // subtract that evidence before learning context or the same workspace is
+        // reserved twice. Saturation fails safe when independently sampled
+        // transient evidence is larger because of allocator timing differences.
+        let measured_persistent_context_bytes = measurement
             .measured_context_and_activation_bytes
+            .saturating_sub(measurement.observed_activation_headroom_bytes)
+            .saturating_sub(measurement.exact_temporary_workspace_bytes);
+        let measured_with_buffer = measured_persistent_context_bytes
             .saturating_add(CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES);
         self.measured_context_window_high_water_by_token_bucket
             .entry(token_bucket)
@@ -274,6 +299,7 @@ impl MlxRamBudget {
                     .max(measurement.observed_activation_headroom_bytes);
             }
             MlxRamBudgetPhase::Decode => {
+                self.has_decode_activation_measurement = true;
                 self.decode_activation_headroom_bytes = self
                     .decode_activation_headroom_bytes
                     .max(measurement.observed_activation_headroom_bytes);
@@ -303,17 +329,10 @@ impl MlxRamBudget {
             }
         };
         let activation_headroom_bytes = self.activation_headroom_bytes(phase);
-        let complete_layer_stream_slot_bytes = if multi_token_prefill
-            || matches!(
-                phase,
-                MlxRamBudgetPhase::Prefill | MlxRamBudgetPhase::Decode
-            ) {
-            // Both prefill and decode can encounter a cold sparse layer. Decode
-            // may load only routed experts, but reserving the largest complete
-            // layer gives one model-derived safe workspace shared by both paths.
-            self.model_geometry.largest_complete_expert_layer_bytes
-        } else {
-            0
+        let complete_layer_stream_slot_bytes = match phase {
+            MlxRamBudgetPhase::Prefill => self.model_geometry.largest_complete_expert_layer_bytes,
+            MlxRamBudgetPhase::Decode => self.model_geometry.largest_routed_expert_page_bytes,
+            MlxRamBudgetPhase::Idle => 0,
         };
         let fixed_non_expert_bytes = self
             .model_geometry
@@ -333,7 +352,7 @@ impl MlxRamBudget {
                 < self.model_geometry.largest_complete_expert_layer_bytes;
         // Multi-token prefill never grows retained complete layers *inside the
         // forward*. Activations and newly pinned experts would fight for the same
-        // ceiling. Barrier-safe progressive fill occurs after chunk cleanup.
+        // ceiling. Barrier-safe page fill occurs after prefill cleanup.
         let may_grow_retained_expert_layers = !multi_token_prefill && !must_stream_operation_local;
         let complete_residency_headroom_bytes =
             required_complete_residency_activation_headroom_bytes(
@@ -387,39 +406,6 @@ impl MlxRamBudget {
             multi_token_prefill,
         );
         retained_expert_payload_bytes.saturating_sub(planned_budget.retained_expert_budget_bytes)
-    }
-
-    /// How many complete layers fit inside a retained-expert budget.
-    ///
-    /// Uses the largest complete-layer size as a uniform charge so heterogeneous
-    /// layers never over-admit.
-    #[must_use]
-    pub fn maximum_retained_complete_layer_count(
-        retained_expert_budget_bytes: u64,
-        largest_complete_expert_layer_bytes: u64,
-    ) -> usize {
-        if largest_complete_expert_layer_bytes == 0 {
-            return 0;
-        }
-        usize::try_from(retained_expert_budget_bytes / largest_complete_expert_layer_bytes)
-            .unwrap_or(usize::MAX)
-    }
-
-    /// Scales a retained-expert budget by completed prompt progress.
-    #[must_use]
-    pub fn progressive_retained_expert_payload_target_bytes(
-        retained_expert_budget_bytes: u64,
-        processed_prompt_token_count: u64,
-        total_prompt_token_count: u64,
-    ) -> u64 {
-        if total_prompt_token_count == 0 {
-            return 0;
-        }
-        // Integer division rounds down. Progressive fill may therefore trail the
-        // ideal fraction by less than one byte, which is safer than over-admission.
-        retained_expert_budget_bytes
-            .saturating_mul(processed_prompt_token_count.min(total_prompt_token_count))
-            / total_prompt_token_count
     }
 
     /// Reclamation needed so a fixed forward workspace fits the ceiling.

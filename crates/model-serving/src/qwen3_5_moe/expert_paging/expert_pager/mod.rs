@@ -104,6 +104,16 @@ pub(crate) struct Qwen3_5RetainedExpertLayer {
     pub(crate) manifest: QuantizedExpertPageManifest,
 }
 
+impl Qwen3_5RetainedExpertLayer {
+    pub(crate) fn has_exact_expert_ids(&self, expert_ids: &[usize]) -> bool {
+        self.manifest.expert_ids == expert_ids
+    }
+
+    pub(crate) fn contains_every_expert(&self, selected_expert_ids: &[usize]) -> bool {
+        self.manifest.contains_every_expert(selected_expert_ids)
+    }
+}
+
 impl ExpertWeightPage for Qwen3_5RetainedExpertLayer {
     fn resident_payload_byte_count(&self) -> u64 {
         self.weights.resident_payload_byte_count()
@@ -204,5 +214,23 @@ impl Qwen3_5ExpertPager {
 
     pub(crate) fn maximum_expert_page_bytes(&self) -> u64 {
         self.memory_budget.maximum_expert_page_bytes()
+    }
+
+    /// Returns the largest exact page payload for one routed top-K set.
+    pub(crate) fn maximum_routed_expert_page_bytes(
+        &self,
+        experts_per_token: usize,
+    ) -> Result<u64, ExpertPagingError> {
+        self.layer_plans
+            .iter()
+            .try_fold(0_u64, |largest_page_bytes, layer_plan| {
+                let complete_layer_payload_bytes =
+                    layer_plan.complete_expert_payload_byte_count()?;
+                let routed_expert_count = experts_per_token.min(layer_plan.expert_capacity);
+                let routed_page_bytes = u128::from(complete_layer_payload_bytes)
+                    .saturating_mul(routed_expert_count as u128)
+                    / (layer_plan.expert_capacity.max(1) as u128);
+                Ok(largest_page_bytes.max(u64::try_from(routed_page_bytes).unwrap_or(u64::MAX)))
+            })
     }
 }

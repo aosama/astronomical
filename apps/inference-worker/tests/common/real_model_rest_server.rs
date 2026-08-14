@@ -16,8 +16,8 @@ use std::{
 };
 
 use astronomical_supervisor::{
-    GenerationPerformanceLog, ResolvedRuntimeConfigResolver, WorkerHandle,
-    build_application_with_reload,
+    GenerationPerformanceLog, ResolvedRuntimeConfigResolver, ShutdownController, WorkerHandle,
+    build_application_with_full_control,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -84,16 +84,22 @@ pub(crate) async fn launch_real_model_rest_server(
         .local_addr()
         .expect("the real-model REST listener should expose its address");
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-    let resolved_runtime_config = ResolvedRuntimeConfigResolver::new(
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::new(
         isolated_worker_home_directory.to_path_buf(),
         production_worker_executable_path,
-    )
-    .load()
-    .expect("the isolated real-model configuration should resolve");
-    let application = build_application_with_reload(
+    );
+    let resolved_runtime_config = runtime_config_resolver
+        .load()
+        .expect("the isolated real-model configuration should resolve");
+    // Use the production daemon's full-control router so real-model journeys can
+    // exercise public live-memory changes through HTTP instead of test-only
+    // worker seams. The shutdown controller is owned only to satisfy that same
+    // production boundary; this harness still performs explicit process cleanup.
+    let application = build_application_with_full_control(
         worker_handle.clone(),
         Arc::new(RwLock::new(resolved_runtime_config)),
-        isolated_worker_home_directory.to_path_buf(),
+        runtime_config_resolver,
+        ShutdownController::new(),
     );
     // The in-process HTTP server still talks to the out-of-process worker through
     // production IPC. Only socket/process ownership is kept in this test harness.
