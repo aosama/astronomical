@@ -20,6 +20,8 @@ pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_residency::Qwen3_5ResidentExpertWeights;
 #[cfg(feature = "direct-mlx")]
+pub use expert_residency::maximum_resident_gate_up_fusion_transient_payload_bytes;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use model::feed_forward_weights::bind_qwen3_5_moe_feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::{

@@ -13,7 +13,7 @@ Dependency direction:
 
 ## Resident fast path
 
-When every sparse expert fits with activation headroom, the model owns complete contiguous expert arrays. Gate, up, and down projections use global expert identifiers directly with `gather_qmm` or `gather_mm`.
+When every sparse expert fits with activation headroom, the model owns complete contiguous expert arrays. Compatible routed gate and up rows are concatenated once per layer during resident loading. Execution uses one gathered gate/up projection, splits its output before the Swish-gated linear unit, then runs the gathered down projection. Valid incompatible gate/up storage remains separate.
 
 ## Multi-token prefill
 

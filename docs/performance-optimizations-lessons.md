@@ -12,8 +12,11 @@
 ## Mixture-of-experts routing
 
 - Unsorted expert assignments cause scattered expert-weight reads during gathered quantized matrix multiplication.
-- For at least 64 assignments, flatten assignments, sort by expert, gather token rows in that order, and pass sorted_indices=true to all three expert projections.
-- Reuse one sort for the gate, up, and down projections.
+- For at least 64 assignments, flatten assignments, sort by expert, gather token rows in that order, and pass sorted_indices=true to every routed expert projection.
+- Reuse one sort for fused gate/up and down projections. Unfused paths reuse it for gate, up, and down.
+- When affine gate and up expert projections share quantization metadata, concatenate their output rows at model load. One gathered quantized matrix multiplication can produce both halves; split once before the Swish-gated linear unit. This removes one graphics-processor launch per sparse layer and remains bit-identical because affine rows are packed independently.
+- Bound gate-and-up fusion materialization to one layer at a time, then synchronize and clear reclaimable allocator memory before fusing the next layer. Retaining every original and fused buffer until the end creates a model-scale transient.
+- Do not retain a shared-expert fusion solely because an isolated projection benchmark removes launches. Repeating a one-row output gate and retaining another complete projection can improve that microbenchmark while failing to improve representative resident REST generation. Require an end-to-end gain before accepting the extra persistent payload and ownership path.
 - Compute the inverse sort once, then use a Metal kernel to apply router scores directly to sorted outputs. Restoring [batch, tokens, top-k, hidden] first creates an expensive transient tensor.
 - Keep small decode batches unsorted; sorting eight assignments costs more than it saves.
 - Native BF16 paged experts should retain their one-weight source layout through bounded reads, page retention, and GPU selection. Converting them to affine parameters or copying selected weights to the host defeats paging and changes precision.
@@ -74,6 +77,8 @@
 - First-use compilation can make a correct fast path appear slow. MLX stores compiled Metal pipelines in the system cache and reuses them across processes and reboots.
 - Kernel name, source, template values, compile options, and target architecture affect cache identity.
 - Report cold and warm kernel-cache results separately.
+- Put prompt-only custom matrix kernels behind the token-count check first. Decode visits the wrapper in every layer for every token; environment, capability, and module inspection before the shape rejection can erase decode gains.
+- For long affine-quantized prompt matrices, compare a model-shaped Metal 4 tile with the stock quantized matrix multiplication. Keep one-token decode on its measured matrix-vector or gathered path; a prompt tile is not automatically a decode kernel.
 - A synchronous `mlx_eval` call includes serial dependency traversal, graphics-processor command encoding, first-use Metal library and pipeline compilation, and the final completion wait. Do not label its complete duration as graphics-processor synchronization or infer the active resource from wall time alone.
 - Shapeless `mlx_compile` avoids shape-specific graph retracing, but its first evaluated compiled primitive still builds a Metal source library and compute pipeline. The first request can therefore saturate one host core even when later identical requests spend nearly all host time asleep while the graphics processor runs.
 - MLX protects its per-device library and kernel maps with exclusive locks and encodes one evaluation tape serially. A Rayon loop around one MLX stream cannot parallelize that first-use work; split asynchronous evaluation submission from explicit stream synchronization before deciding whether host parallelism is useful.

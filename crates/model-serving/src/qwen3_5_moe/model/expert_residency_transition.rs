@@ -38,6 +38,7 @@ use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5ResidentExpertWeights;
+use crate::qwen3_5_moe::expert_residency::maximum_resident_gate_up_fusion_transient_payload_bytes;
 use crate::{
     CompleteResidencyDecision, CompleteResidencyRequirements, MlxRamBudgetPhase,
     PerformanceAttribution, PerformanceOperation,
@@ -173,11 +174,19 @@ impl Qwen3_5Model {
                             .activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
                     ),
                 );
+            // Resident fusion and request activations occur in disjoint phases,
+            // so admission reserves whichever phase has the larger peak.
+            let gate_up_fusion_transient_payload_bytes =
+                maximum_resident_gate_up_fusion_transient_payload_bytes(
+                    expert_pager.layer_plans(),
+                )?;
+            let required_residency_headroom_bytes =
+                required_activation_headroom_bytes.max(gate_up_fusion_transient_payload_bytes);
             let complete_residency_decision = CompleteResidencyRequirements {
                 current_active_memory_bytes: idle_active_memory_bytes,
                 retained_paged_expert_payload_bytes: retained_streamed_expert_payload_bytes,
                 complete_expert_payload_bytes,
-                required_headroom_bytes: required_activation_headroom_bytes,
+                required_headroom_bytes: required_residency_headroom_bytes,
                 active_memory_ceiling_bytes: stable_memory_ceiling_bytes,
             }
             .decide();
@@ -190,6 +199,8 @@ impl Qwen3_5Model {
                         ?transition_reason,
                         projected_active_memory_bytes,
                         required_activation_headroom_bytes,
+                        gate_up_fusion_transient_payload_bytes,
+                        required_residency_headroom_bytes,
                         stable_memory_ceiling_bytes,
                         "admitted complete-model expert residency replacement"
                     );
@@ -208,6 +219,8 @@ impl Qwen3_5Model {
                         projected_resident_active_memory_bytes = projected_active_memory_bytes,
                         observed_transient_high_water_bytes,
                         required_activation_headroom_bytes,
+                        gate_up_fusion_transient_payload_bytes,
+                        required_residency_headroom_bytes,
                         stable_memory_ceiling_bytes,
                         ?boundary,
                         shortfall_bytes,

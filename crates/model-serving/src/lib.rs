@@ -170,6 +170,9 @@ pub use qwen3_5::{
     safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use qwen3_5_moe::maximum_resident_gate_up_fusion_transient_payload_bytes;
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_moe::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
     Qwen3_5MoESplitPageRoute, build_quantized_expert_layer_plan, build_source_manifests,
