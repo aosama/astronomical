@@ -1,8 +1,9 @@
 //! Full-stack residency admission with activation headroom.
 //!
 //! User journey: load a large sparse checkpoint under a ceiling that still fits
-//! the static complete-expert payload, serve Romeo and Juliet, and remain in
-//! demand paging because activation headroom rejects complete residency.
+//! the static complete-expert payload, serve Romeo and Juliet, and remain
+//! non-resident under paged or hybrid retention because activation headroom
+//! rejects complete residency.
 
 use std::time::Duration;
 
@@ -19,15 +20,15 @@ use super::automatic_residency_support::{
     initialize_automatic_residency_tracing, serve_romeo_and_juliet_request,
 };
 
-/// Production regression ceiling: static Fable experts fit, activation headroom does not.
-const STATIC_FIT_WITHOUT_HEADROOM_CEILING_BYTES: usize = 39_000_000_000;
+/// Qualification ceiling: static Fable experts fit, activation headroom does not.
+const STATIC_FIT_WITHOUT_HEADROOM_CEILING_BYTES: usize = 40_000_000_000;
 
-/// Large sparse checkpoint whose complete experts nearly fill a 39 GB ceiling.
+/// Large sparse checkpoint whose complete experts nearly fill a 40 GB ceiling.
 const LARGE_SPARSE_HEADROOM_REGRESSION_MODEL_ID: &str =
     "Qwen3.6-35B-A3B-Fable-Holo3.1-Qwopus-KAT-Coder-C-qx86-hi-mlx";
 
 #[tokio::test]
-#[ignore = "loads Fable under a static-fit 39 GB ceiling and proves activation headroom keeps paging"]
+#[ignore = "loads Fable under a static-fit 40 GB ceiling and proves activation headroom prevents complete residency"]
 async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activation_headroom_does_not()
  {
     timeout(Duration::from_secs(120), async {
@@ -127,18 +128,24 @@ async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activa
         eprintln!(
             "[activation-headroom-paging 5/6] status=progress phase=post_request_assertion"
         );
-        assert_eq!(
-            generation_finalization.expert_memory_mode(),
-            Some(ExpertMemoryMode::Paged),
+        // Hybrid mode retains a bounded subset of expert layers while continuing to
+        // demand-page the remainder, so both paged modes prove complete residency was rejected.
+        assert!(
+            matches!(
+                generation_finalization.expert_memory_mode(),
+                Some(ExpertMemoryMode::Paged | ExpertMemoryMode::Hybrid)
+            ),
             "request finalization must not promote complete residency without activation headroom"
         );
-        assert_eq!(
-            qwen3_5_engine
-                .expert_memory_mode_for_tests()
-                .await
-                .expect("the model should still expose its expert mode after the request"),
-            Some(ExpertMemoryMode::Paged),
-            "the engine must remain paged after the first Romeo and Juliet request"
+        assert!(
+            matches!(
+                qwen3_5_engine
+                    .expert_memory_mode_for_tests()
+                    .await
+                    .expect("the model should still expose its expert mode after the request"),
+                Some(ExpertMemoryMode::Paged | ExpertMemoryMode::Hybrid)
+            ),
+            "the engine must remain paged or hybrid after the first Romeo and Juliet request"
         );
         assert!(
             native_cache_statistics_after_request.disk_page_load_count
