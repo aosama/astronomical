@@ -9,8 +9,8 @@ use std::{
 
 use crate::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus,
-    WorkerProcess, WorkerTerminationOutcome,
+    GenerationStartError, PromptCacheClearOutcome, WorkerControlError, WorkerHealthSnapshot,
+    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
@@ -164,6 +164,8 @@ impl WorkerHandle {
         let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
             WorkerHealthStatus::Loading,
         )));
+        let active_generation_permits = Arc::new(Semaphore::new(1));
+        let generation_queue_permits = Arc::new(Semaphore::new(GENERATION_QUEUE_DEPTH));
 
         tokio::spawn(run_worker(
             worker_process,
@@ -174,11 +176,13 @@ impl WorkerHandle {
             performance_log,
             model_directories,
             max_output_tokens,
+            Arc::clone(&active_generation_permits),
+            Arc::clone(&generation_queue_permits),
         ));
 
         Ok(Self {
-            active_generation_permits: Arc::new(Semaphore::new(1)),
-            generation_queue_permits: Arc::new(Semaphore::new(GENERATION_QUEUE_DEPTH)),
+            active_generation_permits,
+            generation_queue_permits,
             command_sender: Some(command_sender),
             health_snapshot,
         })
@@ -319,6 +323,28 @@ impl WorkerHandle {
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?;
         update_receiver
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)?
+    }
+
+    /// Applies a cache clear immediately or queues the newest scope until idle.
+    pub async fn clear_prompt_cache(
+        &self,
+        model_id: Option<String>,
+    ) -> Result<PromptCacheClearOutcome, WorkerControlError> {
+        let command_sender = self
+            .command_sender
+            .as_ref()
+            .ok_or(WorkerControlError::MissingActiveWorker)?;
+        let (clear_sender, clear_receiver) = oneshot::channel();
+        command_sender
+            .send(WorkerLoopCommand::ClearPromptCache {
+                model_id,
+                clear_sender,
+            })
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)?;
+        clear_receiver
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
     }

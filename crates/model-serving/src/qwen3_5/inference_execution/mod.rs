@@ -322,6 +322,23 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         ))
     }
 
+    fn clear_persistent_prompt_cache(
+        &mut self,
+        model_id: Option<String>,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() else {
+            return Ok(None);
+        };
+        let clear_outcome = persistent_prompt_cache
+            .clear_prompt_cache(model_id.as_deref())
+            .map_err(|clear_error| fatal_engine_error(clear_error.to_string()))?;
+        Ok(Some(WorkerEvent::PromptCacheCleared {
+            model_id: clear_outcome.model_id,
+            blocks_removed: clear_outcome.blocks_removed,
+            bytes_freed: clear_outcome.bytes_freed,
+        }))
+    }
+
     fn collect_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {

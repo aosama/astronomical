@@ -265,6 +265,16 @@ pub enum WorkerCommand {
         /// Validated effective MLX ceiling in exact bytes.
         effective_mlx_memory_ceiling_bytes: u64,
     },
+    /// Requests the worker delete the persistent prompt-cache footprint on SSD.
+    ///
+    /// When `model_id` is `None`, the entire global cache root is wiped. When
+    /// `model_id` is `Some`, only the `<global_root>/<model_id>/` tree is
+    /// removed. The supervisor sends this from `DELETE /v1/cache` and waits
+    /// for `PromptCacheCleared` before responding to the HTTP caller.
+    ClearPromptCache {
+        /// Optional scoped model identity. `None` clears everything.
+        model_id: Option<String>,
+    },
 }
 
 /// An event emitted by the inference worker.
@@ -444,6 +454,19 @@ pub enum WorkerEvent {
         persistent_prompt_cache_visual_embedding_misses: u64,
         persistent_prompt_cache_visual_embedding_rows_loaded: u64,
     },
+    /// Confirms a persistent prompt-cache deletion completed.
+    ///
+    /// Emitted by the worker after processing `ClearPromptCache`. The supervisor
+    /// waits for this event before responding to the HTTP caller with the
+    /// deletion outcome.
+    PromptCacheCleared {
+        /// The model identity scoped by the request. `None` means global clear.
+        model_id: Option<String>,
+        /// Number of prompt-cache block directories removed.
+        blocks_removed: u64,
+        /// Total bytes removed across all cache file types.
+        bytes_freed: u64,
+    },
 }
 
 impl WorkerEvent {
@@ -484,6 +507,9 @@ impl WorkerEvent {
             Self::ModelSwapped { .. } => "model_swapped".to_owned(),
             Self::ModelSwapFailed { .. } => "model_swap_failed".to_owned(),
             Self::PersistentPromptCacheStats { .. } => "persistent_prompt_cache_stats".to_owned(),
+            Self::PromptCacheCleared { model_id, .. } => {
+                format!("prompt_cache_cleared model_id={:?}", model_id)
+            }
         }
     }
 }
