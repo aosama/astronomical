@@ -81,7 +81,7 @@ Astronomical keeps the trusted daily driver separate from repository development
 | Channel | State | REST API | Application |
 | --- | --- | --- | --- |
 | Stable | `~/.astronomical` | `127.0.0.1:6732` | `~/Applications/Astronomical.app` |
-| Development | `~/.astronomical-dev` | `127.0.0.1:6733` | `target/astronomical-macos-development/Astronomical Development.app` |
+| Development | `~/.astronomical-dev` | `127.0.0.1:6733` | `target/astronomical-macos-development.noindex/Astronomical Development.app` |
 
 Config, logs, prompt caches, optimizer evidence, daemon ownership, process locks, and loopback endpoints are isolated. A standard instance rejects a configured endpoint belonging to the other channel. Both configs may reference the same read-only model directories. Real-model development still shares the Mac's GPU, wired memory, and storage bandwidth with Stable.
 
@@ -119,7 +119,7 @@ Build and validate the Development app without replacing or stopping Stable:
 
     scripts/make-astronomical-app.sh
 
-The signed local bundle is written to `target/astronomical-macos-development/Astronomical Development.app`. Default validation does not load a second model. Use the explicit `--real-model` validation option only when shared GPU pressure is acceptable.
+The signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Each build generates a macOS icon whose badge shows the semantic version and UTC build date in `YYYYMMDD` form. Default validation does not load a second model. Use the explicit `--real-model` validation option only when shared GPU pressure is acceptable.
 
 Build a clean Stable candidate and explicitly promote it outside the repository build tree with one command:
 
