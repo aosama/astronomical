@@ -4,10 +4,11 @@
     feature = "performance-measurement"
 ))]
 
-use std::{collections::HashMap, path::Path, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, path::PathBuf, sync::Arc};
 
 pub(crate) mod exact_model_prompt;
 #[cfg(feature = "memory-management-acceptance")]
+#[allow(dead_code)] // Shared module is compiled into independently gated test binaries.
 pub(crate) mod real_model_rest_server;
 #[cfg(feature = "memory-management-acceptance")]
 pub(crate) mod solid_png;
@@ -15,6 +16,26 @@ pub(crate) mod solid_png;
 #[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
 pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str =
     astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID;
+
+/// Copies Development configuration into a temporary Development-shaped home
+/// so qualification reads user policy without sharing mutable runtime state.
+#[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
+pub(crate) fn isolated_development_home_from_user_config() -> tempfile::TempDir {
+    let development_config =
+        astronomical_config::AstronomicalConfig::load_from_development_location()
+            .expect("Development configuration should load for isolated qualification");
+    let isolated_development_home =
+        tempfile::tempdir().expect("isolated Development home should be created");
+    let isolated_state_directory = isolated_development_home.path().join(".astronomical-dev");
+    fs::create_dir_all(&isolated_state_directory)
+        .expect("isolated Development state should be created");
+    fs::copy(
+        development_config.instance_paths().config_file_path(),
+        isolated_state_directory.join("config.json"),
+    )
+    .expect("Development config should copy into isolated qualification state");
+    isolated_development_home
+}
 
 #[allow(dead_code)] // Used only by feature-specific test binaries.
 pub(crate) fn single_model_directories(
@@ -51,8 +72,10 @@ pub(crate) fn discovered_model_artifact(
 #[cfg(feature = "model-artifact-qualification")]
 #[allow(dead_code)] // Used only by model-artifact qualification test binaries.
 pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::DiscoveredModel> {
-    let astronomical_config = astronomical_config::AstronomicalConfig::load_from_default_location()
-        .expect("the standard Astronomical configuration should load for model qualification");
+    let astronomical_config =
+        astronomical_config::AstronomicalConfig::load_from_development_location().expect(
+            "the Development Astronomical configuration should load for model qualification",
+        );
     astronomical_config::discover_models(
         astronomical_config.model_directories(),
         astronomical_config.max_output_tokens(),
@@ -70,8 +93,10 @@ pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::Discove
 ))]
 #[allow(dead_code)]
 pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathBuf {
-    let astronomical_config = astronomical_config::AstronomicalConfig::load_from_default_location()
-        .expect("the standard Astronomical configuration should load for model qualification");
+    let astronomical_config =
+        astronomical_config::AstronomicalConfig::load_from_development_location().expect(
+            "the Development Astronomical configuration should load for model qualification",
+        );
     astronomical_config
         .find_configured_model_directory_by_id(model_id)
         .unwrap_or_else(|discovery_error| {
@@ -81,7 +106,7 @@ pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathB
         })
         .unwrap_or_else(|| {
             panic!(
-                "the standard Astronomical configuration model_directories should discover model ID {model_id}"
+                "the Development Astronomical configuration model_directories should discover model ID {model_id}"
             )
         })
 }

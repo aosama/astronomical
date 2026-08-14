@@ -14,6 +14,73 @@ const DELAYED_MALFORMED_OUTPUT_MODEL_ID: &str = "astronomical/delayed-malformed-
 const RESPONSES_FIXTURE_MODEL_ID: &str = "astronomical/accepted-chat-fixture";
 
 #[tokio::test]
+async fn should_reject_a_second_daemon_for_the_same_instance_state() {
+    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
+        .expect("Cargo should provide the astronomicald executable path");
+    let development_state_directory = tempfile::tempdir().expect("state should be created");
+    write_instance_config(development_state_directory.path(), "127.0.0.1:0");
+    let (mut first_daemon, first_address) = spawn_actual_instance_daemon(
+        &daemon_executable_path,
+        "development",
+        development_state_directory.path(),
+    )
+    .await;
+
+    let second_output = timeout(
+        Duration::from_secs(3),
+        Command::new(&daemon_executable_path)
+            .args(["--instance", "development", "--state-directory"])
+            .arg(development_state_directory.path())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output(),
+    )
+    .await
+    .expect("second daemon should fail promptly")
+    .expect("second daemon process should run");
+
+    assert!(!second_output.status.success());
+    assert!(String::from_utf8_lossy(&second_output.stderr).contains("already running"));
+    assert!(
+        get_endpoint(first_address, "/health")
+            .await
+            .starts_with("HTTP/1.1 200 OK")
+    );
+    terminate_daemon(&first_daemon);
+    let _first_status = first_daemon
+        .wait()
+        .await
+        .expect("first daemon should be reaped");
+}
+
+#[tokio::test]
+async fn should_reject_ambiguous_or_relative_instance_arguments_before_startup() {
+    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
+        .expect("Cargo should provide the astronomicald executable path");
+    for invalid_arguments in [
+        vec!["--state-directory", "relative-state"],
+        vec!["--instance", "stable", "--instance", "development"],
+    ] {
+        let daemon_output = timeout(
+            Duration::from_secs(3),
+            Command::new(&daemon_executable_path)
+                .args(invalid_arguments)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .output(),
+        )
+        .await
+        .expect("invalid daemon arguments should fail promptly")
+        .expect("daemon argument validation should run");
+
+        assert_eq!(daemon_output.status.code(), Some(2));
+        assert!(String::from_utf8_lossy(&daemon_output.stderr).contains("Usage: astronomicald"));
+    }
+}
+
+#[tokio::test]
 async fn should_keep_health_available_when_worker_startup_fails() {
     let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
         .expect("Cargo should provide the astronomicald executable path");
@@ -169,6 +236,8 @@ async fn should_fail_startup_when_user_config_is_malformed() {
     let daemon_output = timeout(
         Duration::from_secs(3),
         Command::new(daemon_executable_path)
+            .args(["--instance", "development", "--state-directory"])
+            .arg(temp_home.path().join(".astronomical-dev"))
             .env_remove("ASTRONOMICAL_SUPERVISOR_BIND_ADDRESS")
             .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
             .env("HOME", temp_home.path())
@@ -187,6 +256,46 @@ async fn should_fail_startup_when_user_config_is_malformed() {
     assert!(
         daemon_stderr.contains("failed to parse Astronomical config file"),
         "stderr should explain the malformed config, got: {daemon_stderr}"
+    );
+}
+
+#[tokio::test]
+async fn should_reject_a_standard_development_instance_configured_for_the_stable_endpoint() {
+    let temp_home = tempfile::tempdir().expect("temp home should be created");
+    let development_state_directory = temp_home.path().join(".astronomical-dev");
+    std::fs::create_dir_all(&development_state_directory)
+        .expect("development state directory should be created");
+    std::fs::write(
+        development_state_directory.join("config.json"),
+        r#"{"supervisor":{"bind_address":"127.0.0.1:6732"}}"#,
+    )
+    .expect("development config should be written");
+    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
+        .expect("Cargo should provide the astronomicald executable path");
+
+    let daemon_output = timeout(
+        Duration::from_secs(3),
+        Command::new(daemon_executable_path)
+            .args(["--instance", "development"])
+            .env_remove("ASTRONOMICAL_SUPERVISOR_BIND_ADDRESS")
+            .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
+            .env("HOME", temp_home.path())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .expect("the daemon should reject the cross-channel endpoint before the timeout")
+    .expect("the daemon should run");
+
+    assert!(!daemon_output.status.success());
+    let daemon_stderr = String::from_utf8_lossy(&daemon_output.stderr);
+    assert!(
+        daemon_stderr
+            .contains("standard runtime instance must bind to 127.0.0.1:6733, not 127.0.0.1:6732"),
+        "stderr should explain the channel endpoint mismatch, got: {daemon_stderr}"
     );
 }
 
@@ -251,6 +360,8 @@ async fn spawn_daemon_with_worker_ready_model(
     );
     let mut daemon_command = Command::new(daemon_executable_path);
     daemon_command
+        .args(["--instance", "development", "--state-directory"])
+        .arg(temp_home.path().join(".astronomical-dev"))
         .env("ASTRONOMICAL_SUPERVISOR_BIND_ADDRESS", "127.0.0.1:0")
         .env("HOME", temp_home.path())
         .stdin(Stdio::null())
@@ -343,7 +454,7 @@ async fn post_response(daemon_address: SocketAddr, stream: bool) -> String {
     responses_response
 }
 
-async fn get_endpoint(daemon_address: SocketAddr, endpoint_path: &str) -> String {
+pub(super) async fn get_endpoint(daemon_address: SocketAddr, endpoint_path: &str) -> String {
     let mut daemon_connection = TcpStream::connect(daemon_address)
         .await
         .expect("the daemon should accept a local connection");
@@ -362,6 +473,60 @@ async fn get_endpoint(daemon_address: SocketAddr, endpoint_path: &str) -> String
         .await
         .expect("the endpoint response should be readable");
     endpoint_response
+}
+
+pub(super) async fn post_empty_endpoint(daemon_address: SocketAddr, endpoint_path: &str) -> String {
+    let mut daemon_connection = TcpStream::connect(daemon_address)
+        .await
+        .expect("the daemon should accept a local connection");
+    daemon_connection
+        .write_all(
+            format!(
+                "POST {endpoint_path} HTTP/1.1\r\nHost: {daemon_address}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .await
+        .expect("the endpoint request should be written");
+    let mut endpoint_response = String::new();
+    daemon_connection
+        .read_to_string(&mut endpoint_response)
+        .await
+        .expect("the endpoint response should be readable");
+    endpoint_response
+}
+
+pub(super) async fn spawn_actual_instance_daemon(
+    daemon_executable_path: &str,
+    runtime_instance: &str,
+    state_directory: &Path,
+) -> (Child, SocketAddr) {
+    let mut daemon_process = Command::new(daemon_executable_path)
+        .args(["--instance", runtime_instance, "--state-directory"])
+        .arg(state_directory)
+        .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("instance daemon should start");
+    let stdout = daemon_process
+        .stdout
+        .take()
+        .expect("daemon stdout should be captured");
+    let mut stdout_lines = BufReader::new(stdout).lines();
+    let startup_line = timeout(Duration::from_secs(3), stdout_lines.next_line())
+        .await
+        .expect("daemon should report its endpoint")
+        .expect("daemon startup output should be readable")
+        .expect("daemon startup output should not end");
+    let daemon_address = startup_line
+        .strip_prefix(DAEMON_STARTUP_PREFIX)
+        .expect("daemon should report the expected startup prefix")
+        .parse()
+        .expect("daemon address should parse");
+    (daemon_process, daemon_address)
 }
 
 async fn wait_until_endpoint_contains(
@@ -384,7 +549,7 @@ async fn wait_until_endpoint_contains(
     );
 }
 
-fn terminate_daemon(daemon_process: &Child) {
+pub(super) fn terminate_daemon(daemon_process: &Child) {
     let process_id = daemon_process.id().expect("the daemon should still run");
     let terminate_status = std::process::Command::new("kill")
         .args(["-TERM", &process_id.to_string()])
@@ -394,8 +559,18 @@ fn terminate_daemon(daemon_process: &Child) {
 }
 
 fn write_config(home_directory: &Path, config_json: &str) {
-    let config_directory = home_directory.join(".astronomical");
+    let config_directory = home_directory.join(".astronomical-dev");
     std::fs::create_dir_all(&config_directory).expect("config directory should be created");
     std::fs::write(config_directory.join("config.json"), config_json)
         .expect("config file should be written");
+}
+
+pub(super) fn write_instance_config(state_directory: &Path, bind_address: &str) {
+    std::fs::write(
+        state_directory.join("config.json"),
+        format!(
+            r#"{{"chunking":{{"prefill_size_optimizer_enabled":true}},"supervisor":{{"bind_address":"{bind_address}"}}}}"#
+        ),
+    )
+    .expect("instance config should be written");
 }

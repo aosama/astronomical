@@ -41,13 +41,13 @@ async fn run_model_swap_allocator_contract() {
     let first_model_directory = crate::common::configured_model_directory_by_id(FIRST_MODEL_ID)
         .unwrap_or_else(|| {
             panic!(
-                "the memory contract requires the local {FIRST_MODEL_ID} artifact; configure it in ~/.astronomical/config.json"
+                "the memory contract requires the local {FIRST_MODEL_ID} artifact; configure it in ~/.astronomical-dev/config.json"
             )
         });
     let replacement_model_directory =
         crate::common::configured_model_directory_by_id(REPLACEMENT_MODEL_ID).unwrap_or_else(|| {
             panic!(
-                "the memory contract requires the local {REPLACEMENT_MODEL_ID} artifact; configure it in ~/.astronomical/config.json"
+                "the memory contract requires the local {REPLACEMENT_MODEL_ID} artifact; configure it in ~/.astronomical-dev/config.json"
             )
         });
     let mlx_memory_limits =

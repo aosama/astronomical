@@ -9,9 +9,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_config::{
-    AstronomicalConfig, AstronomicalConfigError, ChunkingConfig, DiscoveredModel,
-    DiscoveredModelError, LogLevel, LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig,
-    SpeculativePrefillConfig, discover_models,
+    AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
+    AstronomicalRuntimeInstance, ChunkingConfig, DiscoveredModel, DiscoveredModelError, LogLevel,
+    LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, SpeculativePrefillConfig,
+    discover_models,
 };
 use astronomical_ipc_protocol::{
     WorkerChunkingConfiguration, WorkerLogLevel, WorkerPrefillChunckSizingPolicy,
@@ -63,31 +64,51 @@ pub struct ResolvedRuntimeConfig {
 /// Resolves startup and reload config from one user configuration directory.
 #[derive(Clone, Debug)]
 pub struct ResolvedRuntimeConfigResolver {
-    config_home_directory: PathBuf,
+    instance_paths: AstronomicalInstancePaths,
     fallback_worker_executable_path: PathBuf,
 }
 
 impl ResolvedRuntimeConfigResolver {
     #[must_use]
-    pub const fn new(
-        config_home_directory: PathBuf,
+    /// Resolves temporary or user-selected Development-shaped test state.
+    pub fn for_development_home_directory(
+        development_home_directory: PathBuf,
         fallback_worker_executable_path: PathBuf,
     ) -> Self {
         Self {
-            config_home_directory,
+            instance_paths: AstronomicalInstancePaths::for_state_directory(
+                development_home_directory.join(".astronomical-dev"),
+                AstronomicalRuntimeInstance::Development,
+            ),
             fallback_worker_executable_path,
         }
     }
 
     #[must_use]
-    pub fn config_home_directory(&self) -> &std::path::Path {
-        &self.config_home_directory
+    pub const fn for_instance(
+        instance_paths: AstronomicalInstancePaths,
+        fallback_worker_executable_path: PathBuf,
+    ) -> Self {
+        Self {
+            instance_paths,
+            fallback_worker_executable_path,
+        }
+    }
+
+    #[must_use]
+    pub fn state_directory(&self) -> &std::path::Path {
+        self.instance_paths.state_directory()
+    }
+
+    #[must_use]
+    pub const fn instance_paths(&self) -> &AstronomicalInstancePaths {
+        &self.instance_paths
     }
 
     /// Loads and resolves the current config file.
     pub fn load(&self) -> Result<ResolvedRuntimeConfig, ResolvedRuntimeConfigError> {
         let user_config =
-            AstronomicalConfig::load_from_home_directory(&self.config_home_directory)?;
+            AstronomicalConfig::load_from_instance_paths(self.instance_paths.clone())?;
         self.resolve(&user_config)
     }
 
@@ -96,7 +117,9 @@ impl ResolvedRuntimeConfigResolver {
         &self,
         user_config: &AstronomicalConfig,
     ) -> Result<ResolvedRuntimeConfig, ResolvedRuntimeConfigError> {
-        let supervisor_bind_address = user_config.supervisor_bind_address()?;
+        let supervisor_bind_address = self
+            .instance_paths
+            .validate_configured_bind_address(user_config.supervisor_bind_address()?)?;
         let configured_model_directories = user_config.model_directories().to_vec();
         let max_output_tokens = user_config.max_output_tokens();
         let discovered_models = discover_models(&configured_model_directories, max_output_tokens)?

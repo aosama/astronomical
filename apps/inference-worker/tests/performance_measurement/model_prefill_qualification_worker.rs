@@ -37,7 +37,7 @@ impl PreparedPrefillQualificationWorker {
 
     pub(super) fn optimizer_state_file_path(&self) -> PathBuf {
         self.isolated_worker_home_directory()
-            .join(".astronomical")
+            .join(".astronomical-dev")
             .join("optimizer")
             .join("prefill-chunck-size.json")
     }
@@ -99,7 +99,9 @@ pub(super) fn prepare_prefill_qualification_worker(
             .expect("Cargo should provide the production worker executable path");
     let isolated_worker_home =
         IsolatedPrefillQualificationWorkerHome::from_environment_or_temporary();
-    let configuration_directory = isolated_worker_home.directory_path().join(".astronomical");
+    let configuration_directory = isolated_worker_home
+        .directory_path()
+        .join(".astronomical-dev");
     let optimizer_state_file_path = configuration_directory
         .join("optimizer")
         .join("prefill-chunck-size.json");
@@ -148,7 +150,7 @@ pub(super) async fn launch_prepared_prefill_qualification_worker(
         .join("logs");
     fs::create_dir_all(&performance_log_directory)
         .expect("the prefill benchmark performance log directory should be created");
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::new(
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
         prepared_prefill_qualification_worker
             .isolated_worker_home_directory()
             .to_path_buf(),

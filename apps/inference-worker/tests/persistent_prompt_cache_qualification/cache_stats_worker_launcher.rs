@@ -20,7 +20,7 @@ pub(super) fn create_cache_stats_worker_configuration() -> (
     );
     let isolated_worker_home =
         tempfile::tempdir().expect("the cache-stats worker home should be created");
-    let isolated_configuration_directory = isolated_worker_home.path().join(".astronomical");
+    let isolated_configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
     fs::create_dir(&isolated_configuration_directory)
         .expect("the cache-stats worker configuration directory should be created");
     let persistent_prompt_cache_directory_path = isolated_configuration_directory.join("cache");
@@ -40,7 +40,7 @@ pub(super) fn create_cache_stats_worker_configuration() -> (
     )
     .expect("the cache-stats worker configuration should be written");
 
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::new(
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_worker_home.path().to_path_buf(),
         production_worker_executable_path.clone(),
     )
@@ -60,11 +60,11 @@ fn configured_prompt_cache_maximum_size_gb() -> u64 {
     let home_directory = std::env::var_os("HOME")
         .map(PathBuf::from)
         .expect("HOME should be set for the cache-stats E2E test");
-    let config_file_path = home_directory.join(".astronomical/config.json");
+    let config_file_path = home_directory.join(".astronomical-dev/config.json");
     let config_file_bytes = fs::read(&config_file_path)
-        .expect("~/.astronomical/config.json should be readable for the cache-stats E2E test");
+        .expect("Development config should be readable for the cache-stats E2E test");
     let config_document: serde_json::Value = serde_json::from_slice(&config_file_bytes)
-        .expect("~/.astronomical/config.json should be valid JSON");
+        .expect("Development config should be valid JSON");
     config_document
         .get("prompt_cache_max_size_gb")
         .and_then(serde_json::Value::as_u64)

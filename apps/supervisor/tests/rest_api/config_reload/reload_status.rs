@@ -32,8 +32,10 @@ async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
     .await
     .expect("the idle worker should launch");
     wait_for_ready_idle_worker(&worker_handle).await;
-    let runtime_config_resolver =
-        ResolvedRuntimeConfigResolver::new(config_home_directory.clone(), worker_executable_path);
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        config_home_directory.clone(),
+        worker_executable_path,
+    );
     let mut initial_resolved_config = runtime_config_resolver
         .load()
         .expect("the initial configuration should resolve");
@@ -139,7 +141,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
     write_config_file(
         &config_home_directory,
         r#"{
-            "supervisor": { "bind_address": "127.0.0.1:6733" },
+            "supervisor": { "bind_address": "127.0.0.1:6734" },
             "prompt_cache_max_size_gb": 50
         }"#,
     );
@@ -153,7 +155,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         config_warning: None,
         chunking: astronomical_config::ChunkingConfig::default(),
         optimizer_state_directory: config_home_directory
-            .join(".astronomical")
+            .join(".astronomical-dev")
             .join("optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
@@ -161,17 +163,19 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
-            config_home_directory.join(".astronomical").join("cache"),
+            config_home_directory
+                .join(".astronomical-dev")
+                .join("cache"),
             50_000_000_000,
         ),
-        bind_address: "127.0.0.1:6732".to_owned(),
+        bind_address: "127.0.0.1:6733".to_owned(),
         logging_config: astronomical_config::LoggingConfig::new(
-            config_home_directory.join(".astronomical").join("logs"),
+            config_home_directory.join(".astronomical-dev").join("logs"),
             astronomical_config::LogLevel::Warn,
             7,
         ),
     }));
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),
         reloadable_config,
         config_home_directory,
@@ -200,18 +204,18 @@ async fn should_apply_only_in_place_reload_fields_when_a_rest_api_restart_is_req
         &config_home_directory,
         r#"{
             "chunking": { "prefill_size_optimizer_enabled": true },
-            "supervisor": { "bind_address": "127.0.0.1:6733" }
+            "supervisor": { "bind_address": "127.0.0.1:6734" }
         }"#,
     );
     let mut initial_resolved_config = sample_resolved_config();
     initial_resolved_config.config_warning = Some("old startup warning".to_owned());
     initial_resolved_config.logging_config = astronomical_config::LoggingConfig::new(
-        config_home_directory.join(".astronomical").join("logs"),
+        config_home_directory.join(".astronomical-dev").join("logs"),
         astronomical_config::LogLevel::Warn,
         7,
     );
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),
         Arc::clone(&reloadable_config),
         config_home_directory,
@@ -238,7 +242,7 @@ async fn should_apply_only_in_place_reload_fields_when_a_rest_api_restart_is_req
         .read()
         .expect("the reloadable config should remain readable");
     assert_eq!(live_config.config_warning, None);
-    assert_eq!(live_config.bind_address, "127.0.0.1:6732");
+    assert_eq!(live_config.bind_address, "127.0.0.1:6733");
 }
 
 #[tokio::test]
@@ -262,7 +266,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
         config_warning: Some("ignored fixed prefill setting".to_owned()),
         chunking: astronomical_config::ChunkingConfig::default(),
         optimizer_state_directory: config_home_directory
-            .join(".astronomical")
+            .join(".astronomical-dev")
             .join("optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
@@ -270,17 +274,19 @@ async fn should_update_status_config_warning_after_successful_reload() {
         speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
-            config_home_directory.join(".astronomical").join("cache"),
+            config_home_directory
+                .join(".astronomical-dev")
+                .join("cache"),
             50_000_000_000,
         ),
-        bind_address: "127.0.0.1:6732".to_owned(),
+        bind_address: "127.0.0.1:6733".to_owned(),
         logging_config: astronomical_config::LoggingConfig::new(
-            config_home_directory.join(".astronomical").join("logs"),
+            config_home_directory.join(".astronomical-dev").join("logs"),
             astronomical_config::LogLevel::Warn,
             7,
         ),
     }));
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),
         reloadable_config,
         config_home_directory,
@@ -333,8 +339,11 @@ async fn should_keep_all_discovered_models_listed_and_routable_with_speculative_
     let reloadable_config = Arc::new(RwLock::new(resolved_config));
     let scripted_executor = ScriptedExecutor::ready(Vec::new());
     let received_generation_commands = scripted_executor.received_generation_commands();
-    let application =
-        build_application_with_reload(scripted_executor, reloadable_config, config_home_directory);
+    let application = build_development_application_with_reload(
+        scripted_executor,
+        reloadable_config,
+        config_home_directory,
+    );
 
     let model_list_response = application
         .clone()
@@ -425,11 +434,11 @@ async fn should_reject_mtp_reload_when_worker_replacement_is_unavailable() {
     );
     let mut initial_resolved_config = sample_resolved_config();
     initial_resolved_config.logging_config = astronomical_config::LoggingConfig::new(
-        config_home_directory.join(".astronomical").join("logs"),
+        config_home_directory.join(".astronomical-dev").join("logs"),
         astronomical_config::LogLevel::Warn,
         7,
     );
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),
         Arc::new(RwLock::new(initial_resolved_config)),
         config_home_directory,

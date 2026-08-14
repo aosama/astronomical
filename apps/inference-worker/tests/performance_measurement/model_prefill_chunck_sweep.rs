@@ -99,11 +99,9 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
     let mut protocol_writer = ProtocolWriter::new(test_to_worker);
     let mut protocol_reader = ProtocolReader::new(test_from_worker);
 
-    let worker_configuration_home_directory = std::env::var_os("HOME")
-        .map(std::path::PathBuf::from)
-        .expect("HOME should be set for the prefill sweep");
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::new(
-        worker_configuration_home_directory,
+    let isolated_development_home = crate::common::isolated_development_home_from_user_config();
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        isolated_development_home.path().to_path_buf(),
         std::path::PathBuf::new(),
     )
     .load()

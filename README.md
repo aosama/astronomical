@@ -74,9 +74,20 @@ Astronomical is experimental and deliberately focused:
 
 Astronomical does not bundle, download, or redistribute model weights. Model licenses remain separate and must permit the intended use.
 
-## Configure models
+## Stable and Development instances
 
-On first launch Astronomical creates ~/.astronomical/config.json. Add one or more absolute directories to scan recursively:
+Astronomical keeps the trusted daily driver separate from repository development:
+
+| Channel | State | REST API | Application |
+| --- | --- | --- | --- |
+| Stable | `~/.astronomical` | `127.0.0.1:6732` | `~/Applications/Astronomical.app` |
+| Development | `~/.astronomical-dev` | `127.0.0.1:6733` | `target/astronomical-macos-development/Astronomical Development.app` |
+
+Config, logs, prompt caches, optimizer evidence, daemon ownership, process locks, and loopback endpoints are isolated. A standard instance rejects a configured endpoint belonging to the other channel. Both configs may reference the same read-only model directories. Real-model development still shares the Mac's GPU, wired memory, and storage bandwidth with Stable.
+
+Serving and qualification tests read user-selected model locations and policy from Development only. Their mutable config, cache, optimizer, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
+
+On first launch each instance creates its own `config.json`. Add one or more absolute directories to scan recursively:
 
     {
       "model_directories": ["/path/to/models"],
@@ -104,11 +115,21 @@ Provision the pinned, checksum-verified native dependencies:
 
     scripts/bootstrap-native-dependencies.sh
 
-Build and validate the optimized menu-bar application after configuring at least one compatible local model:
+Build and validate the Development app without replacing or stopping Stable:
 
     scripts/make-astronomical-app.sh
 
-The signed local bundle is written to target/astronomical-macos-release/Astronomical.app.
+The signed local bundle is written to `target/astronomical-macos-development/Astronomical Development.app`. Default validation does not load a second model. Use the explicit `--real-model` validation option only when shared GPU pressure is acceptable.
+
+Build a clean Stable candidate and explicitly promote it outside the repository build tree with one command:
+
+    scripts/make-install-astronomical-stable-app.sh
+
+Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. The separate `make-astronomical-app.sh --channel stable` and `install-astronomical-stable-app.sh` commands remain available when the two stages need to run independently.
+
+Stable candidate builds perform signature, resource, metadata, and bundled-daemon validation without launching over a running Stable instance. Promotion does not restart the running app. Stable builds require a clean Git worktree.
+
+Astronomical follows pre-1.0 Semantic Versioning beginning at `0.2.0`. User interfaces and `/v1/status` show the semantic version, Stable or Development channel, short Git commit, and dirty-development marker.
 
 To build only the optimized daemon and worker:
 
@@ -118,7 +139,7 @@ To build only the optimized daemon and worker:
 
 ## Connect locally
 
-The daemon exposes its OpenAI-compatible API and embedded Observatory at the same loopback address. The default is [http://127.0.0.1:6732/](http://127.0.0.1:6732/). Astronomical refuses non-loopback bind addresses.
+The daemon exposes its OpenAI-compatible API and embedded Observatory at the same loopback address. Stable uses [http://127.0.0.1:6732/](http://127.0.0.1:6732/) and Development uses [http://127.0.0.1:6733/](http://127.0.0.1:6733/). Astronomical refuses non-loopback bind addresses.
 
 Point an OpenAI-compatible local client at that address, select a discovered model, and Astronomical loads or swaps the worker on demand.
 

@@ -9,7 +9,7 @@ use serde::Serialize;
 /// One row in the generation performance log.
 ///
 /// Each completed generation request appends one JSON line to
-/// `~/.astronomical/logs/performance.jsonl`. Fields are chosen to
+/// the selected instance's `logs/performance.jsonl`. Fields are chosen to
 /// answer "how well is the model performing?" at a glance:
 ///
 /// - Throughput: `prefill_tok_per_second` and `generation_tok_per_second`

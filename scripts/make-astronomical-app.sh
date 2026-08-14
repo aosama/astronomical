@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
 
-# Builds optimized release binaries and assembles an Astronomical.app bundle
-# in target/astronomical-macos-release/, then runs post-build validation.
+# Builds one channel-specific optimized app bundle, then validates only that instance.
 #
 # Exit codes:
 #   0 — build and validation succeeded
@@ -14,6 +13,7 @@ set -eu
 # ── Constants ──────────────────────────────────────────────────────────
 
 readonly TOTAL_PHASES=5
+APPLICATION_CHANNEL="development"
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -21,11 +21,11 @@ script_start_seconds=0
 current_phase=0
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/make-astronomical-app.sh"
+    printf '%s\n' "Usage: scripts/make-astronomical-app.sh [--channel development|stable]"
     printf '%s\n' ""
     printf '%s\n' "Builds release binaries, assembles Astronomical.app, and runs"
     printf '%s\n' "post-build validation. Output:"
-    printf '%s\n' "  target/astronomical-macos-release/Astronomical.app"
+    printf '%s\n' "Development is the safe default. Stable builds require a clean worktree."
 }
 
 print_error() {
@@ -64,10 +64,8 @@ finish_phase() {
 
 remove_previous_app_bundle() {
     bundle_path="$1"
-    expected_suffix="/target/astronomical-macos-release/Astronomical.app"
-
     case "$bundle_path" in
-        *"$expected_suffix")
+        *"/target/astronomical-macos-development/Astronomical Development.app"|*"/target/astronomical-macos-stable/Astronomical.app")
             rm -rf "$bundle_path"
             ;;
         *)
@@ -80,6 +78,15 @@ remove_previous_app_bundle() {
 main() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
+            --channel)
+                if [ "$#" -lt 2 ]; then
+                    print_error "--channel requires development or stable"
+                    exit 2
+                fi
+                APPLICATION_CHANNEL="$2"
+                shift 2
+                continue
+                ;;
             --help|-h)
                 print_usage
                 exit 0
@@ -96,7 +103,7 @@ main() {
 
     printf '%s\n' ""
     printf '%s\n' "══════════════════════════════════════════════════════════════"
-    printf '%s\n' "  Astronomical.app Build Pipeline (${TOTAL_PHASES} phases)"
+    printf '%s\n' "  Astronomical ${APPLICATION_CHANNEL} Build Pipeline (${TOTAL_PHASES} phases)"
     printf '%s\n' "══════════════════════════════════════════════════════════════"
     printf '%s\n' ""
 
@@ -110,11 +117,48 @@ main() {
     require_command sysctl
     require_command codesign
     require_command plutil
+    require_command git
+    require_command jq
     finish_phase "success"
 
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-    release_directory="${repository_root}/target/astronomical-macos-release"
-    app_bundle_path="${release_directory}/Astronomical.app"
+    case "$APPLICATION_CHANNEL" in
+        development)
+            release_directory="${repository_root}/target/astronomical-macos-development"
+            app_bundle_path="${release_directory}/Astronomical Development.app"
+            bundle_name="Astronomical Development"
+            bundle_identifier="dev.astronomical.app.development"
+            supervisor_port="6733"
+            state_directory_name=".astronomical-dev"
+            ;;
+        stable)
+            release_directory="${repository_root}/target/astronomical-macos-stable"
+            app_bundle_path="${release_directory}/Astronomical.app"
+            bundle_name="Astronomical"
+            bundle_identifier="dev.astronomical.app"
+            supervisor_port="6732"
+            state_directory_name=".astronomical"
+            ;;
+        *)
+            print_error "channel must be development or stable"
+            exit 2
+            ;;
+    esac
+    application_version="$(cargo metadata --no-deps --format-version 1 | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .version')"
+    build_commit="$(git rev-parse --short=12 HEAD)"
+    build_number="$(git rev-list --count HEAD)"
+    if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+        build_dirty="true"
+    else
+        build_dirty="false"
+    fi
+    if [ "$APPLICATION_CHANNEL" = "stable" ] && [ "$build_dirty" = "true" ]; then
+        print_error "Stable builds require a clean worktree; build Development or commit the intended changes"
+        exit 1
+    fi
+    export ASTRONOMICAL_BUILD_COMMIT="$build_commit"
+    export ASTRONOMICAL_BUILD_NUMBER="$build_number"
+    export ASTRONOMICAL_BUILD_DIRTY="$build_dirty"
 
     # ── Phase 2: Verify native dependencies ───────────────────────────────
 
@@ -152,12 +196,21 @@ main() {
         printf '%s\n' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
         printf '%s\n' '<plist version="1.0">'
         printf '%s\n' '<dict>'
-        printf '%s\n' '  <key>CFBundleName</key><string>Astronomical</string>'
-        printf '%s\n' '  <key>CFBundleDisplayName</key><string>Astronomical</string>'
+        printf '  <key>CFBundleName</key><string>%s</string>\n' "$bundle_name"
+        printf '  <key>CFBundleDisplayName</key><string>%s</string>\n' "$bundle_name"
         printf '%s\n' '  <key>CFBundleExecutable</key><string>astronomical-menu</string>'
-        printf '%s\n' '  <key>CFBundleIdentifier</key><string>dev.astronomical.app</string>'
-        printf '%s\n' '  <key>CFBundleVersion</key><string>0.1.0</string>'
-        printf '%s\n' '  <key>CFBundleShortVersionString</key><string>0.1.0</string>'
+        printf '  <key>CFBundleIdentifier</key><string>%s</string>\n' "$bundle_identifier"
+        printf '  <key>CFBundleVersion</key><string>%s</string>\n' "$build_number"
+        printf '  <key>CFBundleShortVersionString</key><string>%s</string>\n' "$application_version"
+        printf '  <key>AstronomicalChannel</key><string>%s</string>\n' "$APPLICATION_CHANNEL"
+        printf '  <key>AstronomicalSupervisorPort</key><integer>%s</integer>\n' "$supervisor_port"
+        printf '  <key>AstronomicalStateDirectoryName</key><string>%s</string>\n' "$state_directory_name"
+        printf '  <key>AstronomicalBuildCommit</key><string>%s</string>\n' "$build_commit"
+        if [ "$build_dirty" = "true" ]; then
+            printf '%s\n' '  <key>AstronomicalBuildDirty</key><true/>'
+        else
+            printf '%s\n' '  <key>AstronomicalBuildDirty</key><false/>'
+        fi
         printf '%s\n' '  <key>CFBundlePackageType</key><string>APPL</string>'
         printf '%s\n' '  <key>LSUIElement</key><true/>'
         printf '%s\n' '</dict>'
@@ -196,15 +249,20 @@ main() {
 
     # ── Phase 5: Post-build validation ───────────────────────────────────
 
-    start_phase 5 "post-build validation (health, models, chat completion)"
+    start_phase 5 "post-build validation for isolated ${APPLICATION_CHANNEL} instance"
     validate_script="${repository_root}/scripts/validate-astronomical-app.sh"
     if [ -x "$validate_script" ]; then
-        if "$validate_script" --app-bundle "$app_bundle_path"; then
+        validation_exit_code=0
+        if [ "$APPLICATION_CHANNEL" = "stable" ]; then
+            "$validate_script" --app-bundle "$app_bundle_path" --bundle-only || validation_exit_code=$?
+        else
+            "$validate_script" --app-bundle "$app_bundle_path" || validation_exit_code=$?
+        fi
+        if [ "$validation_exit_code" -eq 0 ]; then
             finish_phase "success"
         else
-            validate_exit_code=$?
             finish_phase "failed"
-            print_error "post-build validation failed (exit code ${validate_exit_code})"
+            print_error "post-build validation failed (exit code ${validation_exit_code})"
             exit 1
         fi
     else
@@ -220,7 +278,7 @@ main() {
 
     printf '%s\n' ""
     printf '%s\n' "══════════════════════════════════════════════════════════════"
-    printf '%s\n' "  Astronomical.app ready in ${total_elapsed_seconds}s"
+    printf '%s\n' "  Astronomical ${APPLICATION_CHANNEL} app ready in ${total_elapsed_seconds}s"
     printf '%s\n' "  ${app_bundle_path}"
     printf '%s\n' ""
     printf '%s\n' "  Launch: open \"${app_bundle_path}\""

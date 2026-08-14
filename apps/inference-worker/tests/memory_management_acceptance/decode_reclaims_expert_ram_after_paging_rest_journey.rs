@@ -307,7 +307,7 @@ fn dump_reclaim_logs(isolated_worker_home: &Path) {
 }
 
 fn isolated_worker_log_lines(isolated_worker_home: &Path) -> Vec<String> {
-    let logging_directory = isolated_worker_home.join(".astronomical").join("logs");
+    let logging_directory = isolated_worker_home.join(".astronomical-dev").join("logs");
     fs::read_dir(logging_directory)
         .expect("the decode RAM-reclaim log directory should exist")
         .filter_map(Result::ok)
@@ -323,7 +323,7 @@ fn isolated_worker_log_lines(isolated_worker_home: &Path) -> Vec<String> {
 }
 
 fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
-    let configuration_directory = isolated_worker_home.join(".astronomical");
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the decode RAM-reclaim configuration directory should be created");
     let configuration_document = json!({

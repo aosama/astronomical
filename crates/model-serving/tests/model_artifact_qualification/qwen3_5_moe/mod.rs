@@ -167,7 +167,7 @@ fn configured_depth_one_mtp_model_artifacts() -> Vec<(u64, String, std::path::Pa
     use astronomical_config::{AstronomicalConfig, discover_models};
     use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
 
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for MTP qualification");
     let discovered_models = discover_models(
         astronomical_config.model_directories(),
@@ -205,7 +205,7 @@ fn configured_speculative_prefill_draft_model_artifact(
     use astronomical_config::{AstronomicalConfig, discover_models};
     use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 
-    let astronomical_config = AstronomicalConfig::load_from_default_location().expect(
+    let astronomical_config = AstronomicalConfig::load_from_development_location().expect(
         "the standard Astronomical configuration should load for SpecPrefill qualification",
     );
     let target_artifact = Qwen3_5ArtifactValidator::new()

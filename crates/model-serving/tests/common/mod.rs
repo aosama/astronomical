@@ -134,7 +134,7 @@ pub(crate) async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> MlxMemoryLimits {
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for model qualification");
     let machine_mlx_memory_ceiling_bytes = sample_machine_mlx_memory_ceiling_bytes().await;
     let configured_mlx_memory_ceiling_bytes = astronomical_config
@@ -233,7 +233,7 @@ pub(crate) fn configured_ornith_model_artifact_directory() -> PathBuf {
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathBuf {
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for model qualification");
     astronomical_config
         .find_configured_model_directory_by_id(model_id)
@@ -252,7 +252,7 @@ pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathB
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf> {
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for model qualification");
     astronomical_config
         .find_configured_model_directory_by_id(model_id)
@@ -266,9 +266,9 @@ pub(crate) fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn configured_model_artifact_prompt_cache_maximum_size_bytes() -> u64 {
-    AstronomicalConfig::load_from_default_location()
-        .expect("~/.astronomical/config.json should load for model-artifact qualification")
+    AstronomicalConfig::load_from_development_location()
+        .expect("~/.astronomical-dev/config.json should load for model-artifact qualification")
         .prompt_cache()
-        .expect("~/.astronomical/config.json should define prompt_cache.max_size_gb")
+        .expect("~/.astronomical-dev/config.json should define prompt_cache.max_size_gb")
         .global_prompt_cache_maximum_size_bytes()
 }

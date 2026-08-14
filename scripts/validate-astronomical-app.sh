@@ -1,315 +1,165 @@
 #!/usr/bin/env sh
 
-# Post-build validation for Astronomical.app
-#
-# Terminates any stale Astronomical menu and daemon processes, launches the
-# freshly built daemon, validates the backend, then launches and verifies the
-# user-visible menu process:
-#   (a) the daemon is running and status is healthy
-#   (b) models are listed and correct
-#   (c) one of the models replies with text
-#   (d) the menu bar app process is running after validation
-#
-# Exit codes:
-#   0 — all validations passed
-#   1 — validation failure
-#   2 — usage error
-#
-# Designed to be called after scripts/make-astronomical-app.sh succeeds.
+# Validates exactly one channel-specific app without stopping another instance.
 
 set -eu
 
-# ── Constants ──────────────────────────────────────────────────────────
-
-SUPERVISOR_BASE_URL=""
-readonly DAEMON_STARTUP_TIMEOUT_SECONDS=120
-readonly RUNNING_DAEMON_IDLE_TIMEOUT_SECONDS=120
-readonly CHAT_COMPLETION_TIMEOUT_SECONDS=120
-readonly CHAT_MAX_TOKENS=512
-readonly GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS=10
-readonly STUCK_DETECTION_SECONDS=30
-readonly POLL_INTERVAL_SECONDS=3
-
-# ── State (set during main, cleaned up by trap) ─────────────────────────
-
+readonly WAIT_TIMEOUT_SECONDS=120
+readonly CLEANUP_TIMEOUT_SECONDS=10
+APP_BUNDLE_PATH=""
+RUN_REAL_MODEL_JOURNEY="false"
+BUNDLE_ONLY="false"
 LAUNCHED_DAEMON_PID=""
-VALIDATION_TEMP_DIR=""
-VALIDATION_MODEL_ID=""
-
-# ── Cleanup ────────────────────────────────────────────────────────────
-
-cleanup() {
-    # Only remove a worker when cleaning up the daemon this validation launched.
-    # A successful validation deliberately clears this PID to leave the app usable.
-    if [ -n "${LAUNCHED_DAEMON_PID:-}" ]; then
-        kill -TERM "${LAUNCHED_DAEMON_PID}" 2>/dev/null || true
-        worker_pids="$(pgrep -x -f "astronomical-inference-worker" 2>/dev/null || true)"
-        for worker_pid in ${worker_pids:-}; do
-            kill -TERM "${worker_pid}" 2>/dev/null || true
-        done
-    fi
-
-    # Remove the temporary directory.
-    if [ -n "${VALIDATION_TEMP_DIR:-}" ]; then
-        case "${VALIDATION_TEMP_DIR}" in
-            /|.|..)
-                # Refuse to remove unsafe paths.
-                ;;
-            *)
-                rm -rf "${VALIDATION_TEMP_DIR}" 2>/dev/null || true
-                ;;
-        esac
-    fi
-}
-trap cleanup 0
-
-# ── Helpers ────────────────────────────────────────────────────────────
-
-step_started_at_seconds=0
-
-start_step() {
-    step_name="$1"
-    step_started_at_seconds="$(date +%s)"
-    printf '%s step=%s status=start\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$step_name"
-}
-
-finish_step() {
-    step_name="$1"
-    step_status="$2"
-    step_finished_at_seconds="$(date +%s)"
-    step_elapsed_seconds=$((step_finished_at_seconds - step_started_at_seconds))
-    printf '%s step=%s status=%s elapsed_seconds=%s\n' \
-        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$step_name" "$step_status" "$step_elapsed_seconds"
-}
-
-print_usage() {
-    printf '%s\n' "Usage: scripts/validate-astronomical-app.sh [--app-bundle PATH]"
-    printf '%s\n' ""
-    printf '%s\n' "Validates a freshly built Astronomical.app by launching its daemon and"
-    printf '%s\n' "running health, model-listing, and chat-completion checks."
-    printf '%s\n' ""
-    printf '%s\n' "  --app-bundle PATH  Path to the Astronomical.app bundle."
-    printf '%s\n' "                     Defaults to target/astronomical-macos-release/Astronomical.app"
-    printf '%s\n' ""
-    printf '%s\n' "Requires: curl, jq, pgrep, kill"
-    printf '%s\n' ""
-    printf '%s\n' "The daemon must be able to load a model from ~/.astronomical/config.json"
-    printf '%s\n' "or from the model_directories configured there."
-}
+LAUNCHED_MENU_PID=""
+VALIDATION_TEMP_DIRECTORY=""
 
 print_error() {
     printf '%s\n' "Error: $1" >&2
 }
 
+print_usage() {
+    printf '%s\n' "Usage: scripts/validate-astronomical-app.sh [--app-bundle PATH] [--bundle-only] [--real-model]"
+    printf '%s\n' ""
+    printf '%s\n' "Default validation is isolated and does not load a model."
+    printf '%s\n' "--real-model additionally runs a bounded Romeo and Juliet chat journey."
+}
+
+cleanup() {
+    if [ -n "${LAUNCHED_MENU_PID:-}" ]; then
+        terminate_process_bounded "$LAUNCHED_MENU_PID" "validation-menu"
+    fi
+    if [ -n "${LAUNCHED_DAEMON_PID:-}" ]; then
+        terminate_process_bounded "$LAUNCHED_DAEMON_PID" "validation-daemon"
+    fi
+    if [ -n "${VALIDATION_TEMP_DIRECTORY:-}" ] && [ -d "$VALIDATION_TEMP_DIRECTORY" ]; then
+        case "$VALIDATION_TEMP_DIRECTORY" in
+            /|.|..) print_error "refusing to remove unsafe validation directory" ;;
+            *) rm -rf "$VALIDATION_TEMP_DIRECTORY" ;;
+        esac
+    fi
+}
+trap cleanup 0
+
+wait_for_process_exit() {
+    process_identifier="$1"
+    timeout_seconds="$2"
+    waited_seconds=0
+    while kill -0 "$process_identifier" 2>/dev/null; do
+        if [ "$waited_seconds" -ge "$timeout_seconds" ]; then return 1; fi
+        sleep 1
+        waited_seconds=$((waited_seconds + 1))
+        if [ $((waited_seconds % 5)) -eq 0 ]; then
+            printf '%s process=%s status=stopping elapsed_seconds=%s\n' \
+                "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$process_identifier" "$waited_seconds"
+        fi
+    done
+}
+
+terminate_process_bounded() {
+    process_identifier="$1"
+    process_description="$2"
+    child_process_identifiers="$(pgrep -P "$process_identifier" 2>/dev/null || true)"
+    kill -TERM "$process_identifier" 2>/dev/null || true
+    if ! wait_for_process_exit "$process_identifier" "$CLEANUP_TIMEOUT_SECONDS"; then
+        printf '%s process=%s status=force-stop description=%s\n' \
+            "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$process_identifier" "$process_description"
+        kill -KILL "$process_identifier" 2>/dev/null || true
+    fi
+    wait "$process_identifier" 2>/dev/null || true
+    for child_process_identifier in $child_process_identifiers; do
+        if kill -0 "$child_process_identifier" 2>/dev/null; then
+            kill -TERM "$child_process_identifier" 2>/dev/null || true
+            if ! wait_for_process_exit "$child_process_identifier" "$CLEANUP_TIMEOUT_SECONDS"; then
+                kill -KILL "$child_process_identifier" 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
 require_command() {
-    required_command="$1"
-    if ! command -v "$required_command" >/dev/null 2>&1; then
-        print_error "required command is unavailable: $required_command"
+    if ! command -v "$1" >/dev/null 2>&1; then
+        print_error "required command is unavailable: $1"
         exit 2
     fi
 }
 
-# ── Terminate any running Astronomical daemon ──────────────────────────
+start_step() {
+    current_step_name="$1"
+    current_step_started_at="$(date +%s)"
+    printf '%s step=%s status=start\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$current_step_name"
+}
 
-terminate_running_menu() {
-    start_step "terminate-running-menu"
+finish_step() {
+    printf '%s step=%s status=success elapsed_seconds=%s\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$current_step_name" \
+        "$(( $(date +%s) - current_step_started_at ))"
+}
 
-    menu_pids="$(pgrep -x "astronomical-menu" 2>/dev/null || true)"
-    if [ -z "${menu_pids:-}" ]; then
-        finish_step "terminate-running-menu" "skipped"
-        return 0
-    fi
-
-    for pid in ${menu_pids:-}; do
-        printf '  terminating stale menu PID=%s\n' "$pid"
-        kill -TERM "$pid" 2>/dev/null || true
-    done
-
+wait_for_url() {
+    expected_url="$1"
+    expected_description="$2"
     waited_seconds=0
-    while [ "$waited_seconds" -lt "$GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS" ]; do
-        remaining_menu="$(pgrep -x "astronomical-menu" 2>/dev/null || true)"
-        if [ -z "${remaining_menu:-}" ]; then
-            finish_step "terminate-running-menu" "success"
+    while [ "$waited_seconds" -lt "$WAIT_TIMEOUT_SECONDS" ]; do
+        if curl --silent --fail --max-time 2 "$expected_url" >/dev/null 2>&1; then
             return 0
+        fi
+        if [ -n "${LAUNCHED_DAEMON_PID:-}" ] && ! kill -0 "$LAUNCHED_DAEMON_PID" 2>/dev/null; then
+            print_error "daemon exited while waiting for ${expected_description}"
+            if [ -f "${VALIDATION_TEMP_DIRECTORY}/daemon.log" ]; then
+                perl -ne 'print if $. <= 200' "${VALIDATION_TEMP_DIRECTORY}/daemon.log" >&2
+            fi
+            return 1
         fi
         sleep 1
         waited_seconds=$((waited_seconds + 1))
+        printf '%s step=%s status=waiting elapsed_seconds=%s\n' \
+            "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$current_step_name" "$waited_seconds"
     done
-
-    remaining_menu="$(pgrep -x "astronomical-menu" 2>/dev/null || true)"
-    for pid in ${remaining_menu:-}; do
-        printf '  force-killing stale menu PID=%s\n' "$pid"
-        kill -KILL "$pid" 2>/dev/null || true
-    done
-    sleep 1
-
-    final_menu="$(pgrep -x "astronomical-menu" 2>/dev/null || true)"
-    if [ -n "${final_menu:-}" ]; then
-        print_error "could not terminate stale Astronomical menu process(es): ${final_menu}"
-        finish_step "terminate-running-menu" "failed"
-        return 1
-    fi
-
-    finish_step "terminate-running-menu" "success"
-    return 0
-}
-
-terminate_running_daemon() {
-    start_step "terminate-running-daemon"
-
-    # Use -x for exact command name match to avoid matching this script itself
-    # or other processes whose arguments happen to contain these strings.
-    daemon_pids="$(pgrep -x "astronomicald" 2>/dev/null || true)"
-    worker_pids="$(pgrep -x "astronomical-inference-worker" 2>/dev/null || true)"
-
-    if [ -z "${daemon_pids:-}" ] && [ -z "${worker_pids:-}" ]; then
-        finish_step "terminate-running-daemon" "skipped"
-        return 0
-    fi
-
-    # Send SIGTERM to all matching processes.
-    for pid in ${daemon_pids:-} ${worker_pids:-}; do
-        kill -TERM "$pid" 2>/dev/null || true
-    done
-
-    # Wait up to GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS for graceful shutdown.
-    waited_seconds=0
-    while [ "$waited_seconds" -lt "$GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS" ]; do
-        remaining_daemon="$(pgrep -x "astronomicald" 2>/dev/null || true)"
-        remaining_worker="$(pgrep -x "astronomical-inference-worker" 2>/dev/null || true)"
-        if [ -z "${remaining_daemon:-}" ] && [ -z "${remaining_worker:-}" ]; then
-            finish_step "terminate-running-daemon" "success"
-            return 0
-        fi
-        sleep 1
-        waited_seconds=$((waited_seconds + 1))
-    done
-
-    # Force kill any stragglers.
-    remaining_daemon="$(pgrep -x "astronomicald" 2>/dev/null || true)"
-    remaining_worker="$(pgrep -x "astronomical-inference-worker" 2>/dev/null || true)"
-    for pid in ${remaining_daemon:-} ${remaining_worker:-}; do
-        kill -KILL "$pid" 2>/dev/null || true
-    done
-    sleep 1
-
-    # Final check.
-    final_daemon="$(pgrep -x "astronomicald" 2>/dev/null || true)"
-    final_worker="$(pgrep -x "astronomical-inference-worker" 2>/dev/null || true)"
-    if [ -n "${final_daemon:-}" ] || [ -n "${final_worker:-}" ]; then
-        print_error "could not terminate running Astronomical processes"
-        finish_step "terminate-running-daemon" "failed"
-        return 1
-    fi
-
-    finish_step "terminate-running-daemon" "success"
-    return 0
-}
-
-# ── Validation: health endpoint ─────────────────────────────────────────
-
-validate_health() {
-    start_step "validate-health"
-    health_response="$(curl --silent --max-time 5 "${SUPERVISOR_BASE_URL}/health")"
-    if [ "$health_response" = "ok" ]; then
-        finish_step "validate-health" "success"
-        return 0
-    fi
-    print_error "health endpoint returned: ${health_response:-<empty>}"
-    finish_step "validate-health" "failed"
+    print_error "timed out waiting for ${expected_description}"
     return 1
 }
 
-# ── Validation: status endpoint reports ready ────────────────────────────
-
-validate_status_ready() {
-    start_step "validate-status-ready"
-    status_response="$(curl --silent --max-time 5 "${SUPERVISOR_BASE_URL}/v1/status")"
-    status_value="$(printf '%s' "$status_response" | jq -r '.status // empty')"
-    activity_value="$(printf '%s' "$status_response" | jq -r '.activity // empty')"
-
-    printf '  status=%s activity=%s\n' "$status_value" "$activity_value"
-
-    if [ "$status_value" = "ready" ] && [ "$activity_value" = "idle" ]; then
-        finish_step "validate-status-ready" "success"
-        return 0
-    fi
-    print_error "expected status=ready activity=idle, got status=${status_value} activity=${activity_value}"
-    finish_step "validate-status-ready" "failed"
-    return 1
+read_plist_value() {
+    plutil -extract "$1" raw -o - "${APP_BUNDLE_PATH}/Contents/Info.plist"
 }
 
-# ── Validation: models are listed and correct ──────────────────────────
-
-validate_models_listed() {
-    start_step "validate-models-listed"
-    models_response="$(curl --silent --max-time 5 "${SUPERVISOR_BASE_URL}/v1/models")"
-    model_count="$(printf '%s' "$models_response" | jq '.data | length')"
-    model_ids="$(printf '%s' "$models_response" | jq -r '.data[].id' 2>/dev/null || true)"
-
-    printf '  discovered %s models:\n' "$model_count"
-    if [ -n "$model_ids" ]; then
-        printf '%s\n' "$model_ids" | while read -r model_id; do
-            printf '    - %s\n' "$model_id"
-        done
+validate_real_model() {
+    start_step "real-model-romeo-and-juliet"
+    printf '%s\n' "  Shared GPU and wired memory are not isolated; this explicit journey may affect Stable latency."
+    model_identifier="$(curl --silent --fail --max-time 10 "${supervisor_base_url}/v1/models" | jq --raw-output '.data[0].id // empty')"
+    if [ -z "$model_identifier" ]; then
+        print_error "Development config has no discovered model for real-model validation"
+        exit 1
     fi
-
-    if [ "$model_count" -eq 0 ] 2>/dev/null; then
-        print_error "no models discovered — check model_directories in ~/.astronomical/config.json"
-        finish_step "validate-models-listed" "failed"
-        return 1
-    fi
-
-    VALIDATION_MODEL_ID="$(printf '%s' "$models_response" | jq -r '.data | map(.id) | sort | first // empty')"
-    if [ -z "$VALIDATION_MODEL_ID" ]; then
-        print_error "no usable model identifier was returned"
-        finish_step "validate-models-listed" "failed"
-        return 1
-    fi
-
-    printf '  validation model: %s\n' "$VALIDATION_MODEL_ID"
-
-    finish_step "validate-models-listed" "success"
-    return 0
+    romeo_fixture="${repository_root}/apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    request_file="${VALIDATION_TEMP_DIRECTORY}/chat-request.json"
+    jq --null-input --arg model "$model_identifier" --rawfile prompt "$romeo_fixture" \
+        '{model:$model,messages:[{role:"user",content:$prompt}],max_tokens:16,stream:false}' > "$request_file"
+    curl --silent --show-error --fail --max-time 120 \
+        --header 'Content-Type: application/json' --data-binary "@${request_file}" \
+        "${supervisor_base_url}/v1/chat/completions" > "${VALIDATION_TEMP_DIRECTORY}/chat-response.json"
+    jq --exit-status '.choices[0].message.content | type == "string" and length > 0' \
+        "${VALIDATION_TEMP_DIRECTORY}/chat-response.json" >/dev/null
+    finish_step
 }
-
-# ── Validation: menu bar process is launched ────────────────────────────
-
-validate_menu_launched() {
-    start_step "validate-menu-launched"
-
-    waited_seconds=0
-    while [ "$waited_seconds" -lt 10 ]; do
-        menu_pids="$(pgrep -x "astronomical-menu" 2>/dev/null || true)"
-        if [ -n "${menu_pids:-}" ]; then
-            printf '  menu PID(s): %s\n' "$menu_pids"
-            finish_step "validate-menu-launched" "success"
-            return 0
-        fi
-        sleep 1
-        waited_seconds=$((waited_seconds + 1))
-    done
-
-    print_error "menu bar app did not launch an astronomical-menu process"
-    finish_step "validate-menu-launched" "failed"
-    return 1
-}
-
-# ── Main ────────────────────────────────────────────────────────────────
 
 main() {
-    app_bundle_path=""
-
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    APP_BUNDLE_PATH="${repository_root}/target/astronomical-macos-development/Astronomical Development.app"
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --app-bundle)
-                if [ "$#" -lt 2 ]; then
-                    print_error "--app-bundle requires a path argument"
-                    print_usage >&2
-                    exit 2
-                fi
-                app_bundle_path="$2"
+                [ "$#" -ge 2 ] || { print_error "--app-bundle requires a path"; exit 2; }
+                APP_BUNDLE_PATH="$2"
                 shift 2
+                ;;
+            --real-model)
+                RUN_REAL_MODEL_JOURNEY="true"
+                shift
+                ;;
+            --bundle-only)
+                BUNDLE_ONLY="true"
+                shift
                 ;;
             --help|-h)
                 print_usage
@@ -323,192 +173,131 @@ main() {
         esac
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    for required_command in curl jq plutil codesign perl pgrep; do require_command "$required_command"; done
+    if [ "$BUNDLE_ONLY" = "true" ] && [ "$RUN_REAL_MODEL_JOURNEY" = "true" ]; then
+        print_error "--bundle-only and --real-model cannot be combined"
+        exit 2
+    fi
+    [ -d "$APP_BUNDLE_PATH" ] || { print_error "app bundle not found: ${APP_BUNDLE_PATH}"; exit 1; }
+    daemon_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomicald"
+    menu_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomical-menu"
+    worker_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomical-inference-worker"
+    for bundled_executable in "$daemon_executable" "$menu_executable" "$worker_executable"; do
+        [ -x "$bundled_executable" ] || { print_error "bundled executable is unavailable: ${bundled_executable}"; exit 1; }
+    done
+    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES; do
+        [ -s "${APP_BUNDLE_PATH}/Contents/Resources/${packaged_resource}" ] || {
+            print_error "required bundled resource is unavailable: ${packaged_resource}"
+            exit 1
+        }
+    done
 
-    if [ -z "$app_bundle_path" ]; then
-        app_bundle_path="${repository_root}/target/astronomical-macos-release/Astronomical.app"
+    start_step "bundle-identity-and-signature"
+    application_channel="$(read_plist_value AstronomicalChannel)"
+    application_version="$(read_plist_value CFBundleShortVersionString)"
+    application_build_number="$(read_plist_value CFBundleVersion)"
+    application_commit="$(read_plist_value AstronomicalBuildCommit)"
+    application_is_dirty="$(read_plist_value AstronomicalBuildDirty)"
+    bundle_identifier="$(read_plist_value CFBundleIdentifier)"
+    supervisor_port="$(read_plist_value AstronomicalSupervisorPort)"
+    state_directory_name="$(read_plist_value AstronomicalStateDirectoryName)"
+    case "$application_channel" in
+        stable)
+            expected_supervisor_port="6732"
+            expected_state_directory_name=".astronomical"
+            expected_bundle_identifier="dev.astronomical.app"
+            [ "$application_is_dirty" = "false" ] || { print_error "Stable bundle must not be dirty"; exit 1; }
+            ;;
+        development)
+            expected_supervisor_port="6733"
+            expected_state_directory_name=".astronomical-dev"
+            expected_bundle_identifier="dev.astronomical.app.development"
+            ;;
+        *) print_error "invalid bundle channel"; exit 1 ;;
+    esac
+    case "$supervisor_port" in ''|*[!0-9]*) print_error "invalid bundle supervisor port"; exit 1 ;; esac
+    case "$application_build_number" in ''|*[!0-9]*) print_error "invalid bundle build number"; exit 1 ;; esac
+    [ -n "$application_version" ] || { print_error "bundle version is unavailable"; exit 1; }
+    [ -n "$application_commit" ] || { print_error "bundle commit is unavailable"; exit 1; }
+    case "$application_is_dirty" in true|false) ;; *) print_error "invalid bundle dirty marker"; exit 1 ;; esac
+    [ "$supervisor_port" = "$expected_supervisor_port" ] || { print_error "bundle channel and supervisor port disagree"; exit 1; }
+    [ "$state_directory_name" = "$expected_state_directory_name" ] || { print_error "bundle channel and state directory disagree"; exit 1; }
+    [ "$bundle_identifier" = "$expected_bundle_identifier" ] || { print_error "bundle channel and identifier disagree"; exit 1; }
+    codesign --verify --deep --strict "$APP_BUNDLE_PATH"
+    daemon_version_output="$("$daemon_executable" --version)"
+    case "$daemon_version_output" in
+        *"${application_version}"*"${application_commit}"*) ;;
+        *) print_error "app and bundled daemon identities do not match"; exit 1 ;;
+    esac
+    supervisor_base_url="http://127.0.0.1:${supervisor_port}"
+    finish_step
+
+    if [ "$BUNDLE_ONLY" = "true" ]; then
+        printf '%s\n' "Validated ${application_version} ${application_channel} (${application_commit}) bundle without launching it."
+        return
     fi
 
-    # ── Prerequisite checks ─────────────────────────────────────────────
-
-    require_command curl
-    require_command jq
-    require_command pgrep
-    require_command kill
-    require_command open
-
-    if [ ! -d "$app_bundle_path" ]; then
-        print_error "app bundle not found: ${app_bundle_path}"
-        print_error "run scripts/make-astronomical-app.sh first"
+    if curl --silent --fail --max-time 2 "${supervisor_base_url}/health" >/dev/null 2>&1; then
+        print_error "${application_channel} endpoint is already occupied; validation will not stop an unowned instance"
         exit 1
     fi
-
-    menu_executable="${app_bundle_path}/Contents/MacOS/astronomical-menu"
-    if [ ! -x "$menu_executable" ]; then
-        print_error "menu executable not found or not executable: ${menu_executable}"
-        exit 1
+    stable_was_available="false"
+    if [ "$application_channel" = "development" ] \
+        && curl --silent --fail --max-time 2 "http://127.0.0.1:6732/health" >/dev/null 2>&1; then
+        stable_was_available="true"
     fi
 
-    daemon_executable="${app_bundle_path}/Contents/MacOS/astronomicald"
-    if [ ! -x "$daemon_executable" ]; then
-        print_error "daemon executable not found or not executable: ${daemon_executable}"
-        exit 1
-    fi
+    VALIDATION_TEMP_DIRECTORY="$(mktemp -d)"
+    start_step "launch-${application_channel}-daemon"
+    "$daemon_executable" --instance "$application_channel" \
+        > "${VALIDATION_TEMP_DIRECTORY}/daemon.log" 2>&1 &
+    LAUNCHED_DAEMON_PID="$!"
+    wait_for_url "${supervisor_base_url}/health" "${application_channel} health"
+    status_file="${VALIDATION_TEMP_DIRECTORY}/status.json"
+    curl --silent --show-error --fail --max-time 10 "${supervisor_base_url}/v1/status" > "$status_file"
+    jq --exit-status \
+        --arg channel "$application_channel" --arg version "$application_version" --arg commit "$application_commit" \
+        '.application.channel == $channel and .application.version == $version and .application.commit == $commit' \
+        "$status_file" >/dev/null
+    models_file="${VALIDATION_TEMP_DIRECTORY}/models.json"
+    curl --silent --show-error --fail --max-time 10 "${supervisor_base_url}/v1/models" > "$models_file"
+    jq --exit-status '.data | type == "array"' "$models_file" >/dev/null
+    finish_step
 
-    worker_executable="${app_bundle_path}/Contents/MacOS/astronomical-inference-worker"
-    if [ ! -x "$worker_executable" ]; then
-        print_error "worker executable not found or not executable: ${worker_executable}"
-        exit 1
-    fi
-
-    app_license_path="${app_bundle_path}/Contents/Resources/LICENSE"
-    if [ ! -f "$app_license_path" ]; then
-        print_error "app license not found: ${app_license_path}"
-        exit 1
-    fi
-    third_party_notices_path="${app_bundle_path}/Contents/Resources/THIRD_PARTY_NOTICES"
-    if [ ! -f "$third_party_notices_path" ]; then
-        print_error "third-party notices not found: ${third_party_notices_path}"
-        exit 1
-    fi
-    rust_dependency_notices_path="${app_bundle_path}/Contents/Resources/RUST_DEPENDENCY_NOTICES"
-    if [ ! -s "$rust_dependency_notices_path" ]; then
-        print_error "Rust dependency notices not found or empty: ${rust_dependency_notices_path}"
-        exit 1
-    fi
-
-    config_path="${HOME}/.astronomical/config.json"
-    if [ ! -f "$config_path" ]; then
-        print_error "Astronomical config not found: ${config_path}"
-        print_error "start the daemon once to create the template, then add model_directories"
-        exit 1
-    fi
-    supervisor_bind_address="$(jq --raw-output '.supervisor.bind_address // "127.0.0.1:6732"' "$config_path")"
-    if [ -z "$supervisor_bind_address" ] || [ "$supervisor_bind_address" = "null" ]; then
-        print_error "supervisor.bind_address must be a non-empty string"
-        exit 1
-    fi
-    SUPERVISOR_BASE_URL="http://${supervisor_bind_address}"
-
-    # Create a temporary directory for request bodies.
-    VALIDATION_TEMP_DIR="$(mktemp -d)" || {
-        print_error "failed to create temporary directory"
-        exit 1
-    }
-
-    printf '%s\n' ""
-    printf '%s\n' "══════════════════════════════════════════════════════════════"
-    printf '%s\n' "  Astronomical Post-Build Validation"
-    printf '%s\n' "  App bundle:   ${app_bundle_path}"
-    printf '%s\n' "  Config:       ${config_path}"
-    printf '%s\n' "  API endpoint: ${SUPERVISOR_BASE_URL}"
-    printf '%s\n' "══════════════════════════════════════════════════════════════"
-    printf '%s\n' ""
-
-    # Do not interrupt a request already being served by the installed app.
-    if ! wait_for_running_daemon_idle_before_replacement; then
-        exit 1
-    fi
-
-    # ── Terminate any stale Astronomical menu ────────────────────────────
-
-    if ! terminate_running_menu; then
-        print_error "failed to terminate stale menu"
-        exit 1
-    fi
-
-    # ── Terminate any running Astronomical daemon ────────────────────────
-
-    if ! terminate_running_daemon; then
-        print_error "failed to terminate running daemon"
-        exit 1
-    fi
-
-    # ── Launch the freshly built validation daemon ───────────────────────
-
-    if ! launch_bundled_daemon; then
-        exit 1
-    fi
-
-    # ── Step 4/9: Wait for the daemon to become ready ────────────────────
-
-    if ! wait_for_daemon_ready; then
-        print_error "daemon did not become ready within ${DAEMON_STARTUP_TIMEOUT_SECONDS}s"
-        # Collect diagnostic info before exiting (trap will clean up).
-        diag_status="$(curl --silent --max-time 5 "${SUPERVISOR_BASE_URL}/v1/status" 2>/dev/null || printf 'unreachable')"
-        printf '  diagnostic status: %s\n' "$diag_status"
-        exit 1
-    fi
-
-    # ── Step 5/9: Validate health endpoint ────────────────────────────────
-
-    if ! validate_health; then
-        exit 1
-    fi
-
-    # ── Step 6/9: Validate status is ready ────────────────────────────────
-
-    if ! validate_status_ready; then
-        exit 1
-    fi
-
-    # ── Step 7/9: Validate models are listed ──────────────────────────────
-
-    if ! validate_models_listed; then
-        exit 1
-    fi
-
-    # ── Step 8/9: Validate chat completion returns text ───────────────────
-
-    if ! validate_chat_completion; then
-        exit 1
-    fi
-
-    # Validation requests must not pollute the interactive session counters.
-    if ! terminate_running_daemon; then
-        print_error "failed to terminate validation daemon"
-        exit 1
-    fi
-    LAUNCHED_DAEMON_PID=""
-
-    if ! launch_bundled_daemon; then
-        exit 1
-    fi
-    if ! wait_for_daemon_ready; then
-        print_error "clean interactive daemon did not become ready"
-        exit 1
-    fi
-    LAUNCHED_DAEMON_PID=""
-
-    # ── Launch and validate the user-visible menu bar app ────────────────
-
-    start_step "launch-menu"
-    printf '  launching menu bar app...\n'
-    if open "$app_bundle_path" 2>/dev/null; then
-        finish_step "launch-menu" "success"
+    start_step "launch-channel-specific-menu"
+    "$menu_executable" > "${VALIDATION_TEMP_DIRECTORY}/menu.log" 2>&1 &
+    LAUNCHED_MENU_PID="$!"
+    sleep 2
+    kill -0 "$LAUNCHED_MENU_PID" 2>/dev/null || { print_error "menu process exited during validation"; exit 1; }
+    kill -TERM "$LAUNCHED_MENU_PID"
+    if ! wait_for_process_exit "$LAUNCHED_MENU_PID" "$CLEANUP_TIMEOUT_SECONDS"; then
+        terminate_process_bounded "$LAUNCHED_MENU_PID" "validation-menu"
     else
-        print_error "failed to launch menu bar app"
-        finish_step "launch-menu" "failed"
+        wait "$LAUNCHED_MENU_PID" 2>/dev/null || true
+    fi
+    LAUNCHED_MENU_PID=""
+    finish_step
+
+    if [ "$RUN_REAL_MODEL_JOURNEY" = "true" ]; then validate_real_model; fi
+
+    start_step "shutdown-${application_channel}-daemon"
+    curl --silent --show-error --fail --max-time 10 --request POST \
+        "${supervisor_base_url}/v1/control/shutdown" >/dev/null
+    if ! wait_for_process_exit "$LAUNCHED_DAEMON_PID" "$WAIT_TIMEOUT_SECONDS"; then
+        terminate_process_bounded "$LAUNCHED_DAEMON_PID" "validation-daemon"
+        print_error "daemon did not complete graceful shutdown"
         exit 1
     fi
+    wait "$LAUNCHED_DAEMON_PID"
+    LAUNCHED_DAEMON_PID=""
+    finish_step
 
-    if ! validate_menu_launched; then
-        exit 1
+    if [ "$stable_was_available" = "true" ]; then
+        start_step "confirm-stable-remained-available"
+        curl --silent --show-error --fail --max-time 10 "http://127.0.0.1:6732/health" >/dev/null
+        finish_step
     fi
-
-    # ── Summary ──────────────────────────────────────────────────────────
-
-    printf '%s\n' ""
-    printf '%s\n' "══════════════════════════════════════════════════════════════"
-    printf '%s\n' "  All validations passed"
-    printf '%s\n' "══════════════════════════════════════════════════════════════"
-    printf '%s\n' ""
-
-    return 0
+    printf '%s\n' "Validated ${application_version} ${application_channel} (${application_commit}) without replacing another instance."
 }
-
-validation_script_directory="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
-# shellcheck source=scripts/validate-astronomical-app-runtime.sh
-. "${validation_script_directory}/validate-astronomical-app-runtime.sh"
 
 main "$@"

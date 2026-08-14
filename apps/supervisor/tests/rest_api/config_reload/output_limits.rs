@@ -10,7 +10,7 @@ async fn should_cap_chat_generation_to_the_reloaded_output_token_ceiling() {
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
     let executor = ScriptedExecutor::ready(Vec::new());
     let received_generation_commands = executor.received_generation_commands();
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         executor,
         Arc::clone(&reloadable_config),
         config_home_directory,
@@ -55,7 +55,7 @@ async fn should_cap_responses_generation_to_the_reloaded_output_token_ceiling() 
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
     let executor = ScriptedExecutor::ready(Vec::new());
     let received_generation_commands = executor.received_generation_commands();
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         executor,
         Arc::clone(&reloadable_config),
         config_home_directory,

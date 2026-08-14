@@ -76,8 +76,11 @@ fn should_atomically_update_maximum_mlx_memory_without_losing_other_config_field
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),
     );
 
-    let prior_config_bytes = write_maximum_mlx_memory_gb(temporary_home_directory.path(), Some(32))
-        .expect("memory ceiling should be persisted");
+    let prior_config_bytes = write_maximum_mlx_memory_gb(
+        temporary_home_directory.path().join(".astronomical"),
+        Some(32),
+    )
+    .expect("memory ceiling should be persisted");
 
     assert_eq!(prior_config_bytes, Some(original_config_bytes.to_vec()));
     let persisted_config_bytes = std::fs::read(
@@ -121,8 +124,9 @@ fn should_remove_maximum_mlx_memory_override_when_reset_to_automatic() {
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),
     );
 
-    let prior_config_bytes = write_maximum_mlx_memory_gb(temporary_home_directory.path(), None)
-        .expect("memory ceiling override should be removed");
+    let prior_config_bytes =
+        write_maximum_mlx_memory_gb(temporary_home_directory.path().join(".astronomical"), None)
+            .expect("memory ceiling override should be removed");
 
     assert_eq!(prior_config_bytes, Some(original_config_bytes.to_vec()));
     let persisted_config_bytes = std::fs::read(
@@ -154,7 +158,10 @@ fn should_leave_original_config_unchanged_when_candidate_validation_fails() {
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),
     );
 
-    let persist_result = write_maximum_mlx_memory_gb(temporary_home_directory.path(), Some(32));
+    let persist_result = write_maximum_mlx_memory_gb(
+        temporary_home_directory.path().join(".astronomical"),
+        Some(32),
+    );
 
     assert!(matches!(
         persist_result,
@@ -181,11 +188,17 @@ fn should_restore_the_previous_config_bytes_after_a_persisted_change() {
         temporary_home_directory.path(),
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),
     );
-    write_maximum_mlx_memory_gb(temporary_home_directory.path(), Some(32))
-        .expect("memory ceiling should be persisted");
+    write_maximum_mlx_memory_gb(
+        temporary_home_directory.path().join(".astronomical"),
+        Some(32),
+    )
+    .expect("memory ceiling should be persisted");
 
-    restore_config_file(temporary_home_directory.path(), Some(original_config_bytes))
-        .expect("previous config should be restored");
+    restore_config_file(
+        temporary_home_directory.path().join(".astronomical"),
+        Some(original_config_bytes),
+    )
+    .expect("previous config should be restored");
 
     assert_eq!(
         std::fs::read(
