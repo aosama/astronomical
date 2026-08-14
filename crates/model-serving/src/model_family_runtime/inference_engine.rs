@@ -83,6 +83,16 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         }
     }
 
+    async fn clear_persistent_prompt_cache(
+        &mut self,
+        model_id: Option<String>,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        match self {
+            Self::Qwen3_5(engine) => engine.clear_persistent_prompt_cache(model_id).await,
+            Self::DeepSeekV4(_) => Ok(None),
+        }
+    }
+
     async fn collect_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {

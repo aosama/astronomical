@@ -2,6 +2,7 @@ mod persistent_prompt_cache_block_topology;
 mod persistent_prompt_cache_block_transaction;
 mod persistent_prompt_cache_direct_writer;
 mod persistent_prompt_cache_disk_store;
+mod persistent_prompt_cache_disk_store_clear;
 mod persistent_prompt_cache_disk_store_directory_safety;
 mod persistent_prompt_cache_disk_store_global_quota;
 mod persistent_prompt_cache_disk_store_rollback;

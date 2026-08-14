@@ -318,6 +318,7 @@ pub(super) struct ScriptedChatEngine {
     speculative_prefill_draft_model_id: Option<String>,
     speculative_prefill_draft_model_revision: Option<String>,
     active_generation_prompt_cache_stats: Option<WorkerEvent>,
+    prompt_cache_clear_event: Option<WorkerEvent>,
 }
 
 impl ScriptedChatEngine {
@@ -368,6 +369,7 @@ impl ScriptedChatEngine {
             speculative_prefill_draft_model_id: None,
             speculative_prefill_draft_model_revision: None,
             active_generation_prompt_cache_stats: None,
+            prompt_cache_clear_event: None,
         }
     }
 
@@ -446,6 +448,14 @@ impl ScriptedChatEngine {
         active_generation_prompt_cache_stats: WorkerEvent,
     ) -> Self {
         self.active_generation_prompt_cache_stats = Some(active_generation_prompt_cache_stats);
+        self
+    }
+
+    pub(super) fn with_prompt_cache_clear_event(
+        mut self,
+        prompt_cache_clear_event: WorkerEvent,
+    ) -> Self {
+        self.prompt_cache_clear_event = Some(prompt_cache_clear_event);
         self
     }
 }
@@ -556,5 +566,12 @@ impl InferenceEngine for ScriptedChatEngine {
             .is_active
             .then(|| self.active_generation_prompt_cache_stats.clone())
             .flatten())
+    }
+
+    async fn clear_persistent_prompt_cache(
+        &mut self,
+        _model_id: Option<String>,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        Ok(self.prompt_cache_clear_event.clone())
     }
 }

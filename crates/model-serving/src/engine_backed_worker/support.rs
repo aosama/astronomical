@@ -1,5 +1,6 @@
 //! Shared factory, generation state, and typed failures for the engine-backed worker.
 
+use std::path::Path;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::{
@@ -24,6 +25,20 @@ pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
 
     /// Updates the ceiling used by a future lazy model load.
     fn update_mlx_memory_ceiling_bytes(&mut self, _effective_mlx_memory_ceiling_bytes: u64) {}
+
+    /// Returns the global prompt-cache root directory, if the factory manages one.
+    ///
+    /// `None` means the factory does not own a cache (e.g. the `()` unit factory).
+    /// The supervisor uses this to compute the target path for cache-clear
+    /// operations when no model is currently loaded.
+    fn global_prompt_cache_root_directory(&self) -> Option<&Path> {
+        None
+    }
+
+    /// Whether worker control operations should emit timing attribution.
+    fn performance_attribution_enabled(&self) -> bool {
+        false
+    }
 }
 
 impl<Processor, Engine> ModelFactory<Processor, Engine> for () {
@@ -47,6 +62,8 @@ pub enum WorkerRuntimeError {
     Ipc(#[from] ProtocolError),
     #[error("model swap failed: {model_load_failure_reason}")]
     ModelSwapFailed { model_load_failure_reason: String },
+    #[error("persistent prompt-cache clear failed: {reason}")]
+    PersistentPromptCacheClearFailed { reason: String },
 }
 
 pub(crate) struct ActiveEngineGeneration<RequestOutput> {

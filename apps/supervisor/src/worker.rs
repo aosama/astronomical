@@ -4,9 +4,12 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use astronomical_ipc_protocol::ProtocolError;
-use tokio::sync::mpsc;
+use tokio::sync::{Semaphore, mpsc};
 use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
 
+use crate::worker_cache_clear::{
+    apply_pending_prompt_cache_clear_if_idle, handle_prompt_cache_clear_command,
+};
 use crate::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, apply_mlx_memory_limit, contain_mlx_memory_limit_failure,
 };
@@ -39,6 +42,8 @@ pub(crate) async fn run_worker(
     mut performance_log: GenerationPerformanceLog,
     mut model_directories: Arc<HashMap<String, PathBuf>>,
     mut max_output_tokens: u32,
+    active_generation_permits: Arc<Semaphore>,
+    generation_queue_permits: Arc<Semaphore>,
 ) {
     publish_health(
         &health_snapshot,
@@ -47,9 +52,10 @@ pub(crate) async fn run_worker(
     let mut active_generation: Option<ActiveGeneration> = None;
     let mut is_ready = false;
     let mut model_load_deadline = Some(Instant::now() + model_load_timeout);
-    let mut idle_memory_sampling_interval = interval(Duration::from_secs(1));
-    idle_memory_sampling_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut idle_control_interval = interval(Duration::from_secs(1));
+    idle_control_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut pending_mlx_memory_ceiling_bytes = None;
+    let mut pending_prompt_cache_clear: Option<crate::PendingPromptCacheClear> = None;
 
     loop {
         if active_generation.is_none()
@@ -78,6 +84,18 @@ pub(crate) async fn run_worker(
                 .await;
             }
         }
+        apply_pending_prompt_cache_clear_if_idle(
+            &mut pending_prompt_cache_clear,
+            &mut worker_process,
+            &health_snapshot,
+            &mut active_generation,
+            &mut is_ready,
+            &mut model_load_deadline,
+            &mut performance_log,
+            &active_generation_permits,
+            &generation_queue_permits,
+        )
+        .await;
         let stream_event_sender = active_generation
             .as_ref()
             .map(|generation| generation.stream_event_sender.clone());
@@ -104,9 +122,10 @@ pub(crate) async fn run_worker(
                             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
                             continue;
                         }
-                        // The FIFO queue in WorkerHandle serializes requests, so
-                        // active_generation should always be None when a Generate
-                        // command arrives. This check is a defensive assertion.
+                        // WorkerHandle reserves the active permit before it sends
+                        // this command, so permit availability cannot determine
+                        // whether this loop already owns a request. The explicit
+                        // active-generation state is authoritative at admission.
                         if active_generation.is_some() {
                             let _send_outcome = start_sender.send(Err(GenerationStartError::CapacityUnavailable));
                             tracing::error!("received a Generate command while a generation is active; this indicates a queue bug");
@@ -383,6 +402,25 @@ pub(crate) async fn run_worker(
                         .await;
                         let _send_outcome = update_sender.send(update_outcome);
                     }
+                    WorkerLoopCommand::ClearPromptCache {
+                        model_id,
+                        clear_sender,
+                    } => {
+                        handle_prompt_cache_clear_command(
+                            model_id,
+                            clear_sender,
+                            &mut pending_prompt_cache_clear,
+                            &mut worker_process,
+                            &health_snapshot,
+                            &mut active_generation,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut performance_log,
+                            &active_generation_permits,
+                            &generation_queue_permits,
+                        )
+                        .await;
+                    }
                 }
             }
             worker_event_outcome = worker_process.next_event(), if is_worker_running => {
@@ -415,32 +453,6 @@ pub(crate) async fn run_worker(
                                     event_handling_error,
                                 ).await;
                                 is_ready = false;
-                            }
-                        }
-                        if active_generation.is_none()
-                            && let Some(pending_mlx_memory_ceiling_bytes) =
-                                pending_mlx_memory_ceiling_bytes.take()
-                        {
-                            publish_pending_mlx_memory_ceiling(&health_snapshot, None);
-                            if let Err(memory_limit_error) = apply_mlx_memory_limit(
-                                &mut worker_process,
-                                pending_mlx_memory_ceiling_bytes,
-                                model_load_timeout,
-                                &health_snapshot,
-                                &mut is_ready,
-                                &mut model_load_deadline,
-                                &mut active_generation,
-                                &mut performance_log,
-                            )
-                            .await
-                            {
-                                contain_mlx_memory_limit_failure(
-                                    &mut worker_process,
-                                    &health_snapshot,
-                                    &mut active_generation,
-                                    &mut is_ready,
-                                    memory_limit_error,
-                                ).await;
                             }
                         }
                     }
@@ -483,8 +495,13 @@ pub(crate) async fn run_worker(
                     cancellation_acknowledgement_timeout,
                 ).await;
             }
-            _ = idle_memory_sampling_interval.tick(), if is_worker_running && is_ready && active_generation.is_none() && has_loaded_model => {
-                if let Err(memory_sample_error) = worker_process.sample_mlx_memory().await {
+            _ = idle_control_interval.tick(), if is_worker_running
+                && is_ready
+                && active_generation.is_none()
+                && (has_loaded_model || pending_prompt_cache_clear.is_some()) => {
+                if has_loaded_model
+                    && let Err(memory_sample_error) = worker_process.sample_mlx_memory().await
+                {
                     tracing::warn!(error = %memory_sample_error, "could not request idle MLX memory telemetry");
                 }
             }
