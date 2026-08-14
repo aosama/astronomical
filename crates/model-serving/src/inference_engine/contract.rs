@@ -55,6 +55,17 @@ pub trait InferenceEngine {
         async move { Ok(None) }
     }
 
+    /// Clears persistent prompt-cache storage on the engine's owning context.
+    ///
+    /// `Ok(None)` means this engine has no open cache store, allowing the worker
+    /// to fall back to its startup-configured global cache root.
+    fn clear_persistent_prompt_cache(
+        &mut self,
+        _model_id: Option<String>,
+    ) -> impl Future<Output = Result<Option<WorkerEvent>, InferenceEngineError>> + Send {
+        async move { Ok(None) }
+    }
+
     /// Collects the current idle MLX memory observation when the engine supports it.
     fn collect_mlx_memory_telemetry(
         &self,
@@ -117,6 +128,14 @@ pub trait MlxInferenceExecution: 'static {
     /// Reports optional persistent prompt-cache state.
     fn collect_persistent_prompt_cache_stats(
         &self,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        Ok(None)
+    }
+
+    /// Clears persistent prompt-cache storage owned by this execution context.
+    fn clear_persistent_prompt_cache(
+        &mut self,
+        _model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         Ok(None)
     }

@@ -8,7 +8,7 @@ use tokio::time::Instant;
 
 use crate::{
     ChatGenerationStreamEvent, GenerationStartError, MlxMemoryLimitUpdateOutcome,
-    WorkerControlError, WorkerTerminationOutcome,
+    PromptCacheClearOutcome, WorkerControlError, WorkerTerminationOutcome,
 };
 
 pub(crate) enum WorkerLoopCommand {
@@ -31,6 +31,10 @@ pub(crate) enum WorkerLoopCommand {
     UpdateMlxMemoryLimit {
         effective_mlx_memory_ceiling_bytes: u64,
         update_sender: oneshot::Sender<Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>>,
+    },
+    ClearPromptCache {
+        model_id: Option<String>,
+        clear_sender: oneshot::Sender<Result<PromptCacheClearOutcome, WorkerControlError>>,
     },
 }
 

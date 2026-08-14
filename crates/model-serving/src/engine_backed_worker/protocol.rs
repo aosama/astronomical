@@ -191,6 +191,10 @@ where
                                 .await?;
                             active_generation = Some(current_generation);
                         }
+                        WorkerCommand::ClearPromptCache { .. } => {
+                            tracing::warn!(request_id = current_generation.request_id.value(), "received ClearPromptCache command while generation is active; ignoring");
+                            active_generation = Some(current_generation);
+                        }
                     }
                 }
                 () = tokio::task::yield_now() => {
