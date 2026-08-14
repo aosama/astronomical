@@ -14,6 +14,7 @@ mod paged_decode_layer_disposition;
 mod paged_route_materialization;
 mod performance_attribution;
 mod persistent_cache_structure;
+mod phase_aware_expert_residency;
 mod prefill_chunck_size_optimizer;
 mod prefill_chunck_size_optimizer_persistence;
 mod quantized_expert_page_manifest;

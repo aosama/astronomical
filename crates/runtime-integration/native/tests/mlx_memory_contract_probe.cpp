@@ -466,8 +466,11 @@ void run_probe() {
   require_zero_cache_limit(gpu_stream);
   require_allocation_triggered_cache_reclamation(gpu_stream);
   require_async_evaluation_cleanup_boundary(gpu_stream);
-  require_evaluation_rejection_preserves_prior_tape_work(gpu_stream);
+  // Reach the exact allocator boundary before the rejected-tape contract. MLX
+  // may retain a tiny live bookkeeping allocation after that rejection even
+  // though every array owner and allocator-cache entry has been released.
   require_strict_active_memory_limit(gpu_stream);
+  require_evaluation_rejection_preserves_prior_tape_work(gpu_stream);
   synchronize(gpu_stream);
   clear_cache();
   require_policy_round_trips();

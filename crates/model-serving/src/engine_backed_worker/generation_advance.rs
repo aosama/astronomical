@@ -61,8 +61,17 @@ where
                 is_reasoning_token,
                 expert_memory_mode,
                 mlx_memory_telemetry,
+                first_decode_forward_elapsed_millis,
                 generation_finalization,
             } => {
+                if let Some(elapsed_millis) = first_decode_forward_elapsed_millis {
+                    event_writer
+                        .send_event(&WorkerEvent::FirstDecodeCompleted {
+                            request_id,
+                            elapsed_millis,
+                        })
+                        .await?;
+                }
                 if let Some(generation_finalization) = generation_finalization {
                     active_generation.engine_has_finalized_generation = true;
                     self.emit_generation_finalization(
@@ -221,6 +230,7 @@ where
                 completed_prefill_chunck_tokens,
                 prefill_optimizer_insight,
                 mlx_memory_telemetry,
+                expert_residency_telemetry,
                 speculative_prefill_draft_memory_telemetry,
                 expert_memory_mode,
                 prompt_work_reuse,
@@ -288,6 +298,8 @@ where
                                 mlx_memory_telemetry,
                             )
                         }),
+                        expert_residency: expert_residency_telemetry
+                            .map(super::output::worker_expert_residency_snapshot),
                         speculative_prefill_draft_memory_snapshot:
                             speculative_prefill_draft_memory_telemetry.map(
                                 |speculative_prefill_draft_memory_telemetry| {
@@ -316,7 +328,27 @@ where
                         completed_prefill_chunck_tokens: None,
                         prefill_optimizer_insight: None,
                         mlx_memory_snapshot: None,
+                        expert_residency: None,
                         speculative_prefill_draft_memory_snapshot: None,
+                    })
+                    .await?;
+                Ok(Some(active_generation))
+            }
+            GeneratedToken::GenerationPreparationStarted {
+                total_layer_count,
+                complete_layer_count,
+                complete_layer_payload_bytes,
+                partial_layer_count,
+                partial_layer_payload_bytes,
+            } => {
+                event_writer
+                    .send_event(&WorkerEvent::GenerationPreparationStarted {
+                        request_id: active_generation.request_id,
+                        total_layer_count,
+                        complete_layer_count,
+                        complete_layer_payload_bytes,
+                        partial_layer_count,
+                        partial_layer_payload_bytes,
                     })
                     .await?;
                 Ok(Some(active_generation))

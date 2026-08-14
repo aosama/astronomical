@@ -7,6 +7,7 @@ fn should_replace_the_terminal_token_mode_with_the_post_finalization_mode() {
         is_reasoning_token: false,
         expert_memory_mode: Some(ExpertMemoryMode::Paged),
         mlx_memory_telemetry: None,
+        first_decode_forward_elapsed_millis: None,
         generation_finalization: None,
     }
     .with_expert_memory_mode(Some(ExpertMemoryMode::Resident));
@@ -18,6 +19,7 @@ fn should_replace_the_terminal_token_mode_with_the_post_finalization_mode() {
             is_reasoning_token: false,
             expert_memory_mode: Some(ExpertMemoryMode::Resident),
             mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
             generation_finalization: None,
         }
     );
@@ -32,6 +34,7 @@ async fn should_emit_only_changed_expert_memory_modes_without_losing_token_outpu
             is_reasoning_token: false,
             expert_memory_mode: Some(ExpertMemoryMode::Paged),
             mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
             generation_finalization: None,
         }],
     );
@@ -97,6 +100,7 @@ async fn should_emit_the_recovered_resident_mode_before_completing_the_same_requ
                 is_reasoning_token: false,
                 expert_memory_mode: Some(ExpertMemoryMode::Paged),
                 mlx_memory_telemetry: None,
+                first_decode_forward_elapsed_millis: None,
                 generation_finalization: None,
             },
             GeneratedToken::TokenId {
@@ -104,6 +108,7 @@ async fn should_emit_the_recovered_resident_mode_before_completing_the_same_requ
                 is_reasoning_token: false,
                 expert_memory_mode: Some(ExpertMemoryMode::Resident),
                 mlx_memory_telemetry: None,
+                first_decode_forward_elapsed_millis: None,
                 generation_finalization: None,
             },
         ],
@@ -231,6 +236,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
                 context_state_payload_bytes: 0,
                 speculative_prefill_draft_memory_bytes: 0,
             }),
+            expert_residency: None,
         }
     );
     assert_eq!(
@@ -269,9 +275,11 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
             is_reasoning_token: false,
             expert_memory_mode: Some(ExpertMemoryMode::Paged),
             mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
             generation_finalization: Some(GenerationFinalization::new(
                 Some(ExpertMemoryMode::Resident),
                 Some(final_mlx_memory_telemetry),
+                None,
             )),
         }],
     );
@@ -318,6 +326,7 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
                 context_state_payload_bytes: 0,
                 speculative_prefill_draft_memory_bytes: 0,
             }),
+            expert_residency: None,
         }
     );
     assert!(matches!(

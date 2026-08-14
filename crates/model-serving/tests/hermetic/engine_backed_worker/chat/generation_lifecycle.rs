@@ -103,6 +103,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
                     is_reasoning_token: true,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: Some(123),
                     generation_finalization: None,
                 },
                 GeneratedToken::TokenId {
@@ -110,6 +111,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
                 GeneratedToken::TokenId {
@@ -117,6 +119,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
             ],
@@ -140,6 +143,13 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
         .send_command(&WorkerCommand::Generate(parallel_tool_call_command))
         .await
         .expect("the worker should receive a chat request");
+    assert_eq!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::FirstDecodeCompleted {
+            request_id: RequestId::new(713),
+            elapsed_millis: 123,
+        }
+    );
     assert_eq!(
         next_event(&mut supervisor_reader).await,
         WorkerEvent::Output {

@@ -1,20 +1,17 @@
-//! Prefill-to-decode expert-memory restore for one user request.
+//! Prefill-to-decode expert-residency preparation for one user request.
 //!
 //! # What the user is waiting for
 //!
 //! After the model finishes reading the prompt, it starts writing tokens. Token
 //! writing is much cheaper in activation memory than prompt reading. The RAM the
-//! user already granted can therefore come back to expert weights so generation
-//! does not keep streaming those weights from the solid-state drive.
+//! user already granted can therefore preserve more expert weights so generation
+//! does not stream every routed weight from the solid-state drive.
 //!
 //! # Words used in this file
 //!
-//! - Complete residency: every mixture-of-experts weight sits in RAM as one
-//!   owner. Decode then never reads experts from disk.
-//! - Paged mode: expert weights live on disk. A layer either streams for one
-//!   operation or keeps a smaller demand-selected page in RAM.
-//! - Demand-selected page: the experts this prompt actually routed to, ranked
-//!   by how often they appeared. Not "one routed top-K page per layer".
+//! - Stable complete layer: all experts for one decoder layer remain retained.
+//! - Elastic routed page: exact experts already required by a decode route remain retained.
+//! - Operation-local page: experts are released after the mandatory forward.
 //! - Temporary request-pressure cap: a smaller retained-page ceiling installed
 //!   so the remaining prompt can finish. It is not the user's normal RAM grant.
 //!
@@ -22,37 +19,35 @@
 //!
 //! Prefill may demote the complete owner and freeze retained pages so the last
 //! prompt chunks still fit. If that freeze is left in place, decode sees a tiny
-//! leftover budget, rejects every warm page, and streams from disk even though
+//! leftover budget, rejects useful retained pages, and streams from disk even though
 //! tens of gigabytes are free. This file is the one place that:
 //!
 //! 1. Releases the temporary cap after the last prefill cleanup barrier.
-//! 2. Tries to restore the complete owner when the leftover ceiling admits it.
-//! 3. Otherwise fills demand-selected pages from the full leftover decode budget.
+//! 2. Reconciles a pure decode topology target against already-owned pages.
+//! 3. Leaves all new ownership to later execution-required prefill/decode reads.
 //!
-//! Either path is best-effort. A failed restore must not fail the user's
+//! Reconciliation is best-effort. A failed plan must not fail the user's
 //! request; decode can still stream missing routes.
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::qwen3_5_moe::{
-    Qwen3_5ExpertResidencyPromotionOutcome, Qwen3_5ExpertResidencyTransitionReason,
-};
+use crate::{ExpertResidencyPhase, InferenceEngineError, PerformanceOperation};
 
-use super::Qwen3_5EngineState;
+use super::{Qwen3_5EngineState, fatal_engine_error};
 
 impl Qwen3_5EngineState {
-    /// Restores as much expert RAM as the leftover ceiling admits after prefill.
+    /// Reconciles retained ownership with the leftover ceiling after prefill.
     ///
     /// Call this exactly once, after the last prefill chunk has synchronized and
     /// cleaned allocator storage, and before the first decode forward. The
-    /// request flag `decode_warm_expert_layers_attempted` is the one-shot guard.
-    pub(super) fn restore_decode_expert_memory_after_prefill(
+    /// request flag `generation_residency_preparation_attempted` is the one-shot guard.
+    pub(super) fn prepare_decode_expert_residency_after_prefill(
         &mut self,
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-    ) {
+    ) -> Result<(), InferenceEngineError> {
         let Some(model) = self.model.as_mut() else {
-            return;
+            return Err(fatal_engine_error("Qwen3.5 engine lost its loaded model"));
         };
         // Prefill pressure protects the remaining prompt by installing a
         // temporary retained-page ceiling. That cap must die here. Decode uses
@@ -67,59 +62,40 @@ impl Qwen3_5EngineState {
                 "released prefill request-pressure expert retention ceiling before decode"
             );
         }
-        // Prefer the complete owner. Promotion is replacement-aware: current
-        // active memory already owns any hot paged pages, so admission
-        // subtracts those pages before adding the complete payload. If this
-        // succeeds, decode never needs demand-selected pages.
-        if model.sparse_experts_are_paged() {
-            match model.try_promote_experts_to_resident(
-                Qwen3_5ExpertResidencyTransitionReason::DecodeHandoff,
-                &mut active_request.performance_attribution,
-            ) {
-                Ok(Qwen3_5ExpertResidencyPromotionOutcome::Promoted) => {
-                    tracing::info!(
-                        request_id = request_id.value(),
-                        "restored complete expert residency after prefill before decode"
-                    );
-                    return;
-                }
-                Ok(_) => {}
-                Err(decode_handoff_promotion_error) => {
-                    tracing::info!(
-                        request_id = request_id.value(),
-                        error = %decode_handoff_promotion_error,
-                        "skipped decode-handoff complete residency promotion"
-                    );
-                }
-            }
-        }
-        // Complete residency did not fit. Spend the leftover decode budget on
-        // the experts this prompt actually used. `u64::MAX` means "do not add
-        // a second smaller caller cap"; the composed plan is already the cap.
         let context_token_count =
             u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
-        match model.fill_retained_expert_pages(
-            context_token_count,
-            u64::MAX,
-            &mut active_request.performance_attribution,
-        ) {
-            Ok(newly_retained_page_count) => {
-                if newly_retained_page_count > 0 {
-                    tracing::info!(
-                        request_id = request_id.value(),
-                        newly_retained_page_count,
+        let residency_preparation_result =
+            active_request.performance_attribution.measure_operation(
+                PerformanceOperation::GenerationPreparation,
+                |performance_attribution| {
+                    model.refresh_phase_aware_expert_residency_plan(
+                        ExpertResidencyPhase::GenerationPreparation,
                         context_token_count,
-                        "decode-warm expert pages ready for generation"
-                    );
-                }
-            }
-            Err(decode_warm_fill_error) => {
-                tracing::info!(
-                    request_id = request_id.value(),
-                    error = %decode_warm_fill_error,
-                    "skipped decode-warm expert fill; decode will stream routes"
-                );
-            }
+                        performance_attribution,
+                    )
+                },
+            );
+        if let Err(residency_preparation_error) = residency_preparation_result {
+            // Residency planning is an accelerator, not a correctness gate. A
+            // missing plan makes every uncovered route operation-local, which is
+            // slower but preserves exact model execution and the user's request.
+            model.clear_phase_aware_expert_residency_plan();
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %residency_preparation_error,
+                "continued decode with operation-local expert streaming after optional residency planning failed"
+            );
         }
+        let (total_layer_count, complete_layer_count, partial_layer_count) =
+            model.retained_expert_layer_counts();
+        tracing::info!(
+            request_id = request_id.value(),
+            context_token_count,
+            total_layer_count,
+            complete_layer_count,
+            partial_layer_count,
+            "generation preparation preserved expert topology without eager source reads"
+        );
+        Ok(())
     }
 }

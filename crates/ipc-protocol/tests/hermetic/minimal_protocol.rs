@@ -1,15 +1,11 @@
-use std::path::PathBuf;
-
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    SpeculativePrefillRuntimeState, WorkerChunkingConfiguration, WorkerCommand, WorkerEvent,
-    WorkerLogLevel, WorkerMlxMemorySnapshot, WorkerPrefillChunckSizingPolicy,
-    WorkerPrefillOptimizerCandidateEvidence, WorkerPrefillOptimizerContext,
-    WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
-    WorkerPromptProcessingPhase, WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
-    decode_command,
+    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerPrefillOptimizerCandidateEvidence,
+    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
+    WorkerPrefillOptimizerInsight, WorkerPromptProcessingPhase, decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -30,63 +26,6 @@ fn should_serialize_speculative_prefill_runtime_state_as_snake_case() {
         serde_json::to_string(&SpeculativePrefillRuntimeState::Unavailable)
             .expect("speculative-prefill state should serialize"),
         "\"unavailable\""
-    );
-}
-
-#[tokio::test]
-async fn should_round_trip_worker_startup_configuration() {
-    let worker_command = WorkerCommand::InitializeWorker(WorkerStartupConfiguration {
-        global_prompt_cache_root_directory: PathBuf::from("/tmp/fictional-prompt-cache"),
-        global_prompt_cache_maximum_size_bytes: 50_000_000_000,
-        persistent_prompt_cache_enabled: false,
-        chunking: WorkerChunkingConfiguration {
-            prefill_sizing_policy: WorkerPrefillChunckSizingPolicy::Optimized {
-                optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048, 4_096, 8_192],
-            },
-            full_attention_key_value_growth_tokens: 256,
-            speculative_prefill_draft_forward_tokens: 2_048,
-            experimental_ssd_paging_prefill_graph_submission_layer_interval: 0,
-            experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-            prefill_optimizer_observation_window: 5,
-            prefill_optimizer_position_bucket_tokens: 32_768,
-            prompt_cache_block_tokens: None,
-            prompt_cache_common_prefix_stride_blocks: 4,
-        },
-        optimizer_state_directory: None,
-        configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
-        mtp_enabled: true,
-        speculative_prefill: WorkerSpeculativePrefillConfiguration {
-            enabled: true,
-            target_model_id: Some("astronomical/target-model".to_owned()),
-            draft_model_id: Some("astronomical/draft-model".to_owned()),
-            draft_model_directory: None,
-            minimum_prompt_tokens: 8_192,
-            keep_percentage: 20,
-            selection_chunck_token_count: 32,
-            mandatory_trailing_token_count: 512,
-            lookahead_token_count: 8,
-            importance_pooling_kernel_token_count: 13,
-        },
-        performance_attribution_enabled: false,
-        logging_directory: PathBuf::from("/tmp/fictional-logs"),
-        logging_level: WorkerLogLevel::Warn,
-        retained_log_file_count: 1,
-    });
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
-    let mut worker_reader = ProtocolReader::new(worker_transport);
-
-    supervisor_writer
-        .send_command(&worker_command)
-        .await
-        .expect("worker startup configuration should be written");
-
-    assert_eq!(
-        worker_reader
-            .next_command()
-            .await
-            .expect("worker startup configuration should decode"),
-        Some(worker_command)
     );
 }
 
@@ -130,7 +69,7 @@ async fn should_round_trip_an_unversioned_chat_command() {
 #[tokio::test]
 async fn should_round_trip_expert_memory_mode_change_event() {
     let worker_event = WorkerEvent::ExpertMemoryModeChanged {
-        expert_memory_mode: ExpertMemoryMode::Paged,
+        expert_memory_mode: ExpertMemoryMode::Hybrid,
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
@@ -146,6 +85,34 @@ async fn should_round_trip_expert_memory_mode_change_event() {
             .next_event()
             .await
             .expect("the expert memory mode event frame should decode"),
+        Some(worker_event)
+    );
+}
+
+#[tokio::test]
+async fn should_round_trip_generation_preparation_topology() {
+    let worker_event = WorkerEvent::GenerationPreparationStarted {
+        request_id: RequestId::new(72),
+        total_layer_count: 40,
+        complete_layer_count: 24,
+        complete_layer_payload_bytes: 21_743_271_936,
+        partial_layer_count: 8,
+        partial_layer_payload_bytes: 226_492_416,
+    };
+    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut worker_writer = ProtocolWriter::new(worker_transport);
+    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+
+    worker_writer
+        .send_event(&worker_event)
+        .await
+        .expect("generation-preparation topology should be written");
+
+    assert_eq!(
+        supervisor_reader
+            .next_event()
+            .await
+            .expect("generation-preparation topology should decode"),
         Some(worker_event)
     );
 }
@@ -468,6 +435,13 @@ async fn should_round_trip_prefill_progress_event() {
             context_state_payload_bytes: 2_000,
             speculative_prefill_draft_memory_bytes: 0,
         }),
+        expert_residency: Some(WorkerExpertResidencySnapshot {
+            total_layer_count: 40,
+            complete_layer_count: 6,
+            complete_layer_payload_bytes: 2_852_126_720,
+            partial_layer_count: 34,
+            partial_layer_payload_bytes: 523_239_424,
+        }),
         speculative_prefill_draft_memory_snapshot: Some(WorkerMlxMemorySnapshot {
             source: MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
             active_memory_bytes: 20_000,
@@ -510,6 +484,7 @@ async fn should_round_trip_prefill_progress_before_a_chunk_measurement() {
         completed_prefill_chunck_tokens: None,
         prefill_optimizer_insight: None,
         mlx_memory_snapshot: None,
+        expert_residency: None,
         speculative_prefill_draft_memory_snapshot: None,
     };
 
@@ -555,6 +530,30 @@ async fn should_round_trip_generation_progress_event() {
             .next_event()
             .await
             .expect("the generation progress event frame should decode"),
+        Some(worker_event)
+    );
+}
+
+#[tokio::test]
+async fn should_round_trip_first_decode_completion_event() {
+    let worker_event = WorkerEvent::FirstDecodeCompleted {
+        request_id: RequestId::new(83),
+        elapsed_millis: 1_234,
+    };
+    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut worker_writer = ProtocolWriter::new(worker_transport);
+    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+
+    worker_writer
+        .send_event(&worker_event)
+        .await
+        .expect("a first decode completion event should be written");
+
+    assert_eq!(
+        supervisor_reader
+            .next_event()
+            .await
+            .expect("the first decode completion frame should decode"),
         Some(worker_event)
     );
 }

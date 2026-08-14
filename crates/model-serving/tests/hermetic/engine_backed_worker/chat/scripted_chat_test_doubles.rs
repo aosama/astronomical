@@ -335,6 +335,7 @@ impl ScriptedChatEngine {
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
                 GeneratedToken::TokenId {
@@ -342,6 +343,7 @@ impl ScriptedChatEngine {
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
             ],
@@ -411,6 +413,7 @@ impl ScriptedChatEngine {
                     speculative_prefill_draft_memory_bytes: 0,
                 },
             )),
+            None,
         );
         scripted_engine
     }

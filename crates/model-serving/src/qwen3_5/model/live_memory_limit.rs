@@ -1,9 +1,9 @@
 //! Atomic coordination of a live MLX ceiling and binary expert ownership.
 //!
-//! Lowering first demotes a complete resident owner when necessary, then reduces
-//! complete resident ownership before MLX enforces the smaller limit. Raising reverses
-//! the order: MLX accepts capacity, Rust retention expands, and complete residency
-//! is attempted. A failed transition restores the pager's prior ceiling.
+//! Lowering first demotes a complete resident owner when necessary, then reclaims
+//! retained pages before MLX enforces the smaller limit. Raising lets MLX accept
+//! capacity before Rust publishes a larger read-through retention budget; it does
+//! not scan expert storage. A failed transition restores the pager's prior ceiling.
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
@@ -159,15 +159,8 @@ impl Qwen3_5Model {
             self.update_expert_residency_for_live_mlx_memory_limit(
                 requested_mlx_memory_ceiling_bytes,
             )?;
-            let mut disabled_performance_attribution = PerformanceAttribution::disabled();
-            // A user-raised ceiling is an explicit new fit proof. CeilingRaise is
-            // not blocked by request-pressure hysteresis, so more RAM can restore
-            // complete residency without bothering the user.
-            self.try_promote_experts_to_resident(
-                Qwen3_5ExpertResidencyTransitionReason::CeilingRaise,
-                &mut disabled_performance_attribution,
-            )
-            .map_err(InferenceEngineError::from)?;
+            // A larger ceiling publishes capacity only. Future mandatory reads
+            // populate it without a synchronous whole-model source scan.
         }
         Ok((
             minimum_mlx_memory_ceiling_bytes,
@@ -246,12 +239,6 @@ impl Qwen3_5Model {
     ) -> Result<(), InferenceEngineError> {
         if let Some(previous_memory_ceiling_bytes) = previous_memory_ceiling_bytes {
             self.update_expert_residency_for_live_mlx_memory_limit(previous_memory_ceiling_bytes)?;
-            let mut disabled_performance_attribution = PerformanceAttribution::disabled();
-            self.try_promote_experts_to_resident(
-                Qwen3_5ExpertResidencyTransitionReason::CeilingRaise,
-                &mut disabled_performance_attribution,
-            )
-            .map_err(InferenceEngineError::from)?;
         }
         Ok(())
     }

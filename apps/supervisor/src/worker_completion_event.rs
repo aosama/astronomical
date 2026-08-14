@@ -98,6 +98,9 @@ pub(super) fn handle_worker_completion_event(
         prefill_elapsed_millis,
         generation_elapsed_millis,
         total_elapsed_millis,
+        time_to_first_output_millis = ?completed_request.time_to_first_output_millis,
+        generation_preparation_elapsed_millis = ?completed_request
+            .generation_preparation_elapsed_millis,
         prefill_tok_per_second = ?prefill_tok_per_second,
         generation_tok_per_second = ?generation_tok_per_second,
         "worker generation completed"
@@ -119,9 +122,18 @@ pub(super) fn handle_worker_completion_event(
         prefill_elapsed_millis,
         generation_elapsed_millis,
         total_elapsed_millis,
+        time_to_first_output_millis: completed_request.time_to_first_output_millis,
+        generation_preparation_elapsed_millis: completed_request
+            .generation_preparation_elapsed_millis,
+        first_decode_forward_elapsed_millis: completed_request.first_decode_forward_elapsed_millis,
+        generation_preparation_expert_source_read_byte_count: 0,
+        final_complete_expert_layer_count: completed_request.final_complete_expert_layer_count,
+        final_complete_expert_payload_bytes: completed_request.final_complete_expert_payload_bytes,
+        final_partial_expert_layer_count: completed_request.final_partial_expert_layer_count,
+        final_partial_expert_payload_bytes: completed_request.final_partial_expert_payload_bytes,
         prefill_tok_per_second,
         generation_tok_per_second,
-        mlx_peak_memory_bytes: completed_request.last_mlx_peak_memory_bytes,
+        mlx_peak_memory_bytes: completed_request.maximum_mlx_peak_memory_bytes,
         mlx_active_memory_bytes: completed_request.last_mlx_active_memory_bytes,
         persistent_prompt_cache_diagnostics,
     });

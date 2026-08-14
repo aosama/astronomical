@@ -17,10 +17,10 @@
 //!
 //! The last prefill chunk has a synchronization and allocator-cleanup barrier.
 //! After that barrier, decode activations are small. Leaving the freeze in
-//! place makes decode-warm believe the leftover budget is about one gigabyte
-//! and reject every demand-selected page. `resume_expert_retention_after...`
-//! only lifts the cap. The caller then decides whether to promote the complete
-//! owner or fill demand-selected pages.
+//! place hides the generation-phase retained budget and rejects useful existing
+//! ownership. `resume_expert_retention_after...` only lifts the cap. The caller
+//! reconciles existing topology without reading storage; later mandatory
+//! forwards may install newly read complete or routed pages.
 //!
 //! Callers that lift the cap today:
 //! - decode handoff, after the last prefill barrier
@@ -35,6 +35,39 @@ use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
+    /// Constrains retained experts to the strict-ceiling capacity left by one
+    /// concrete forward admission. Returns whether owned arrays were released.
+    pub(crate) fn limit_expert_retention_for_admitted_forward(
+        &self,
+        current_active_memory_bytes: u64,
+        current_retained_expert_payload_bytes: u64,
+        admitted_forward_reserve_bytes: u64,
+    ) -> bool {
+        let retained_expert_budget_bytes = self
+            .mlx_ram_budget
+            .borrow()
+            .retained_expert_budget_for_admitted_forward(
+                current_active_memory_bytes,
+                current_retained_expert_payload_bytes,
+                admitted_forward_reserve_bytes,
+            );
+        let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() else {
+            return false;
+        };
+        let released_retained_experts = retained_expert_layers
+            .borrow_mut()
+            .limit_for_request_pressure_to_maximum(retained_expert_budget_bytes);
+        tracing::info!(
+            current_active_memory_bytes,
+            current_retained_expert_payload_bytes,
+            admitted_forward_reserve_bytes,
+            retained_expert_budget_bytes,
+            released_retained_experts,
+            "constrained retained experts to the exact admitted-forward budget"
+        );
+        released_retained_experts
+    }
+
     /// Installs the temporary retained-page ceiling and evicts pages that no
     /// longer fit. Returns whether any page was actually released.
     pub(crate) fn limit_expert_retention_for_request_memory_pressure(

@@ -72,6 +72,7 @@ async fn run_prompt_cache_disabled_cold_prefill_qualification() {
             GeneratedToken::TokenId { token_id, .. } => generated_token_ids.push(token_id),
             GeneratedToken::PrefillProgress { .. } => {}
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => break,
         }
     }

@@ -1,5 +1,4 @@
-mod automatic_expert_residency_round_trip_rest_journey;
 mod complete_expert_residency_rest_journey;
-mod decode_reclaims_expert_ram_after_paging_rest_journey;
 mod mlx_memory_progress_rest_journey;
+mod prefill_decode_expert_residency_interaction_rest_journey;
 mod progressive_expert_memory_rest_journey;

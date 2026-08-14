@@ -39,20 +39,25 @@ pub use deepseek_v4::{
 };
 pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
 pub use expert_paging::{
-    ExpertManifestError, ExpertPageRoutePartition, ExpertWeightMemoryCacheStatistics,
-    ExpertWeightPage, PagedDecodeLayerDisposition, QuantizationMode, QuantizedExpertLayerPlan,
-    QuantizedExpertPageManifest, QuantizedExpertShardManifest, QuantizedExpertSourceInterval,
-    QuantizedExpertTensorRange, QuantizedTensorSource, RetainedExpertLayerCache,
-    RetainedExpertPagePlanError, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
+    ExpertManifestError, ExpertPageRoutePartition, ExpertResidencyPhase,
+    ExpertWeightMemoryCacheStatistics, ExpertWeightPage, PagedDecodeLayerDisposition,
+    PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError, QuantizationMode,
+    QuantizedExpertLayerPlan, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
+    QuantizedExpertSourceInterval, QuantizedExpertTensorRange, QuantizedTensorSource,
+    RetainedExpertLayerCache, RetainedExpertLayerCommit, RetainedExpertLayerCommitDelta,
+    RetainedExpertLayerCommitError, RetainedExpertLayerCommitOutcome, RetainedExpertPageClass,
+    RetainedExpertReclamation, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
     TensorHeaderEntry, build_quantized_expert_page_manifest_from_plan,
-    last_prefill_chunk_demand_weight, parse_safetensors_header, validate_expert_ids,
-    validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
+    last_prefill_chunk_demand_weight, parse_safetensors_header, plan_phase_aware_expert_residency,
+    validate_expert_ids, validate_quantization_contract, validate_source_intervals,
+    validate_virtual_intervals,
 };
 pub use inference_engine::{
-    EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
-    InferenceEngine, InferenceEngineError, MlxInferenceEngine, MlxInferenceExecution,
-    PrefillChunckOptimizerCandidateInsight, PrefillChunckOptimizerContextInsight,
-    PrefillChunckOptimizerInsight, PreparedInferenceRequest,
+    EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
+    GenerationFinalization, InferenceEngine, InferenceEngineError, MlxInferenceEngine,
+    MlxInferenceExecution, PrefillChunckOptimizerCandidateInsight,
+    PrefillChunckOptimizerContextInsight, PrefillChunckOptimizerInsight, PreparedInferenceRequest,
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
@@ -67,7 +72,8 @@ pub use memory::{
     SpeculativePrefillAdmission, combined_persistent_growth_bytes,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure, persistent_context_restore_workspace_bytes,
+    fixed_forward_workspace_after_allocation_failure, measured_non_expert_forward_growth_bytes,
+    persistent_context_restore_workspace_bytes,
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes, retained_expert_payload_capacity_bytes,
     safe_minimum_active_memory_ceiling_bytes, should_retry_fixed_forward_after_expert_reclamation,

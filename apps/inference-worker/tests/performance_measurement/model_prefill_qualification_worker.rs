@@ -376,6 +376,7 @@ pub(super) async fn observed_final_expert_memory_mode(
 pub(super) const fn expert_memory_mode_label(expert_memory_mode: ExpertMemoryMode) -> &'static str {
     match expert_memory_mode {
         ExpertMemoryMode::Resident => "resident",
+        ExpertMemoryMode::Hybrid => "hybrid",
         ExpertMemoryMode::Paged => "paged",
     }
 }

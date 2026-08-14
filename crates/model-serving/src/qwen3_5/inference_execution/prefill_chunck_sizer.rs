@@ -386,6 +386,23 @@ impl Qwen3_5PrefillChunckSizer {
         final_prompt_index: usize,
         prefill_execution_context: Qwen3_5PrefillExecutionContext,
     ) -> usize {
+        self.next_prefill_chunck_end_for_execution_context_with_terminal_coalescing(
+            prefill_chunck_start,
+            final_prompt_index,
+            prefill_execution_context,
+            false,
+        )
+    }
+
+    /// Returns the next end and optionally coalesces a boundary-safe terminal remainder.
+    #[must_use]
+    pub fn next_prefill_chunck_end_for_execution_context_with_terminal_coalescing(
+        &mut self,
+        prefill_chunck_start: usize,
+        final_prompt_index: usize,
+        prefill_execution_context: Qwen3_5PrefillExecutionContext,
+        should_coalesce_terminal_remainder: bool,
+    ) -> usize {
         let prompt_processing_context =
             self.context_for_prefill_chunck_start(prefill_chunck_start, prefill_execution_context);
         let optimizer_context_insight = PrefillChunckOptimizerContextInsight {
@@ -423,11 +440,24 @@ impl Qwen3_5PrefillChunckSizer {
                     .min(final_prompt_index);
             };
             let remaining_prompt_tokens = final_prompt_index.saturating_sub(prefill_chunck_start);
-            let prefill_chunck_decision = prefill_chunck_size_optimizer
-                .ask_with_maximum_prefill_chunck_tokens(
+            let prefill_chunck_decision = if should_coalesce_terminal_remainder {
+                prefill_chunck_size_optimizer
+                    .ask_for_terminal_remainder(
+                        remaining_prompt_tokens,
+                        self.maximum_prefill_chunck_tokens,
+                    )
+                    .unwrap_or_else(|| {
+                        prefill_chunck_size_optimizer.ask_with_maximum_prefill_chunck_tokens(
+                            prompt_processing_context,
+                            remaining_prompt_tokens,
+                        )
+                    })
+            } else {
+                prefill_chunck_size_optimizer.ask_with_maximum_prefill_chunck_tokens(
                     prompt_processing_context,
                     remaining_prompt_tokens,
-                );
+                )
+            };
             let candidate_prefill_chunck_tokens = prefill_chunck_decision
                 .candidate_prefill_chunck_tokens
                 .min(self.maximum_prefill_chunck_tokens);

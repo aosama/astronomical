@@ -3,6 +3,8 @@
 //! The token returned to the user is normally the predecessor of the token
 //! already being evaluated.
 
+use std::time::Instant;
+
 use astronomical_ipc_protocol::RequestId;
 
 use crate::{
@@ -91,20 +93,40 @@ impl Qwen3_5EngineState {
         {
             return Ok(ActiveRequestAdvance::Continue(prefill_progress));
         }
-        // Prefill just finished. The last prompt chunk already synchronized
-        // and cleaned allocator storage, so leftover RAM may come back to
-        // experts before the first generated token. The one-shot flag keeps
-        // later decode steps from repeating disk I/O. Failures are non-fatal:
-        // decode can still stream missing routes. See
-        // decode_expert_memory_handoff.rs for the release-then-promote-or-fill
-        // order.
-        if !active_request.decode_warm_expert_layers_attempted {
-            active_request.decode_warm_expert_layers_attempted = true;
-            self.restore_decode_expert_memory_after_prefill(request_id, active_request);
+        if !active_request.generation_preparation_announced {
+            active_request.generation_preparation_announced = true;
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            let expert_residency = model.expert_residency_telemetry();
+            return Ok(ActiveRequestAdvance::Continue(
+                crate::GeneratedToken::GenerationPreparationStarted {
+                    total_layer_count: expert_residency.total_layer_count,
+                    complete_layer_count: expert_residency.complete_layer_count,
+                    complete_layer_payload_bytes: expert_residency.complete_layer_payload_bytes,
+                    partial_layer_count: expert_residency.partial_layer_count,
+                    partial_layer_payload_bytes: expert_residency.partial_layer_payload_bytes,
+                },
+            ));
+        }
+        // Prefill just finished. Reconcile the larger generation-phase budget
+        // without reading storage; mandatory decode reads populate empty route
+        // ownership later. The one-shot flag prevents repeated planning.
+        if !active_request.generation_residency_preparation_attempted {
+            active_request.generation_residency_preparation_attempted = true;
+            self.prepare_decode_expert_residency_after_prefill(request_id, active_request)?;
         }
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 
         if let Some(queued_prediction_token_id) = take_queued_prediction_token(active_request) {
+            // The prediction path already computed the first observable token,
+            // so no additional first decode forward is required at this boundary.
+            if active_request.generated_token_count == 0
+                && active_request.first_decode_forward_elapsed_millis.is_none()
+            {
+                active_request.first_decode_forward_elapsed_millis = Some(0);
+            }
             let model = self
                 .model
                 .as_ref()
@@ -136,8 +158,18 @@ impl Qwen3_5EngineState {
             };
         }
 
+        let mut first_decode_forward_started_at = None;
         let current_generated_token = match active_request.pending_generated_token.take() {
-            Some(pending_generated_token) => pending_generated_token,
+            Some(pending_generated_token) => {
+                // Final prefill already produced this token; report a truthful
+                // zero rather than attributing later output handling to decode.
+                if active_request.generated_token_count == 0
+                    && active_request.first_decode_forward_elapsed_millis.is_none()
+                {
+                    active_request.first_decode_forward_elapsed_millis = Some(0);
+                }
+                pending_generated_token
+            }
             None => {
                 let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
                 let sparse_experts_are_paged = self
@@ -172,9 +204,11 @@ impl Qwen3_5EngineState {
                     request_id = request_id.value(),
                     context_token_count = active_request.input_token_ids.len(),
                     sparse_experts_are_paged,
-                    decode_warm_attempted = active_request.decode_warm_expert_layers_attempted,
+                    generation_residency_preparation_attempted =
+                        active_request.generation_residency_preparation_attempted,
                     "starting first decode forward after prompt processing"
                 );
+                first_decode_forward_started_at = Some(Instant::now());
                 let first_generated_token = if let Some(prediction_token) =
                     forward_initial_target_token_with_prediction_state(
                         model,
@@ -239,6 +273,12 @@ impl Qwen3_5EngineState {
 
         let current_generated_token_id =
             synchronize_generated_token_id(active_request, &current_generated_token)?;
+        if let Some(first_decode_forward_started_at) = first_decode_forward_started_at {
+            active_request.first_decode_forward_elapsed_millis = Some(
+                u64::try_from(first_decode_forward_started_at.elapsed().as_millis())
+                    .unwrap_or(u64::MAX),
+            );
+        }
         if self.generated_token_will_be_terminal(active_request, current_generated_token_id) {
             let model = self
                 .model

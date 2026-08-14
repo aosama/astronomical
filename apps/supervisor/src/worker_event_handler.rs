@@ -6,10 +6,11 @@ use std::{
 use tokio::time::Instant;
 
 use crate::{
-    ActiveRequestProgress, ChatGenerationStreamEvent, GenerationPerformanceLog, WorkerActivity,
-    WorkerControlError, WorkerHealthSnapshot,
+    ActiveRequestProgress, ChatGenerationStreamEvent, ExpertResidencySnapshot,
+    GenerationPerformanceLog, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
     worker_completion_event::handle_worker_completion_event,
+    worker_generation_preparation::handle_generation_preparation_started,
     worker_health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot,
         publish_active_request_progress, publish_activity, publish_expert_memory_mode,
@@ -195,6 +196,7 @@ pub(super) fn handle_worker_event(
             request_id,
             expert_memory_mode,
             mlx_memory_snapshot,
+            expert_residency,
         } => {
             let Some(active_request) = active_generation.as_mut() else {
                 return Err(protocol_violation(
@@ -207,8 +209,12 @@ pub(super) fn handle_worker_event(
                 ));
             }
             if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
-                active_request.last_mlx_peak_memory_bytes =
-                    Some(mlx_memory_snapshot.peak_memory_bytes);
+                active_request.maximum_mlx_peak_memory_bytes = Some(
+                    active_request
+                        .maximum_mlx_peak_memory_bytes
+                        .unwrap_or(0)
+                        .max(mlx_memory_snapshot.peak_memory_bytes),
+                );
                 active_request.last_mlx_active_memory_bytes =
                     Some(mlx_memory_snapshot.active_memory_bytes);
                 publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
@@ -217,6 +223,20 @@ pub(super) fn handle_worker_event(
             }
             if let Some(expert_memory_mode) = expert_memory_mode {
                 publish_expert_memory_mode(health_snapshot, expert_memory_mode);
+            }
+            if let Some(expert_residency) = expert_residency {
+                active_request.final_complete_expert_layer_count =
+                    Some(expert_residency.complete_layer_count);
+                active_request.final_complete_expert_payload_bytes =
+                    Some(expert_residency.complete_layer_payload_bytes);
+                active_request.final_partial_expert_layer_count =
+                    Some(expert_residency.partial_layer_count);
+                active_request.final_partial_expert_payload_bytes =
+                    Some(expert_residency.partial_layer_payload_bytes);
+                crate::worker_health::publish_worker_expert_residency(
+                    health_snapshot,
+                    expert_residency,
+                );
             }
         }
         WorkerEvent::Output {
@@ -269,6 +289,23 @@ pub(super) fn handle_worker_event(
                 let stream_event = ChatGenerationStreamEvent::from_worker_output(output);
                 try_send_stream_event(&active_request.stream_event_sender, stream_event)?;
             }
+            if active_request.time_to_first_output_millis.is_none() {
+                active_request.time_to_first_output_millis = Some(
+                    u64::try_from(active_request.request_started_at.elapsed().as_millis())
+                        .unwrap_or(u64::MAX),
+                );
+            }
+            if active_request
+                .generation_preparation_elapsed_millis
+                .is_none()
+            {
+                active_request.generation_preparation_elapsed_millis = active_request
+                    .generation_preparation_started_at
+                    .map(|preparation_started_at| {
+                        u64::try_from(preparation_started_at.elapsed().as_millis())
+                            .unwrap_or(u64::MAX)
+                    });
+            }
             if active_request.generation_started_at.is_none() {
                 active_request.generation_started_at = Some(Instant::now());
                 publish_activity(health_snapshot, WorkerActivity::Generating);
@@ -297,6 +334,27 @@ pub(super) fn handle_worker_event(
         worker_prefill_progress_event @ WorkerEvent::PrefillProgress { .. } => {
             handle_worker_prefill_progress(
                 worker_prefill_progress_event,
+                health_snapshot,
+                active_generation,
+            )?;
+        }
+        WorkerEvent::GenerationPreparationStarted {
+            request_id,
+            total_layer_count,
+            complete_layer_count,
+            complete_layer_payload_bytes,
+            partial_layer_count,
+            partial_layer_payload_bytes,
+        } => {
+            handle_generation_preparation_started(
+                request_id,
+                ExpertResidencySnapshot {
+                    total_layer_count,
+                    complete_layer_count,
+                    complete_layer_payload_bytes,
+                    partial_layer_count,
+                    partial_layer_payload_bytes,
+                },
                 health_snapshot,
                 active_generation,
             )?;
@@ -334,6 +392,17 @@ pub(super) fn handle_worker_event(
                         .unwrap_or_else(Instant::now),
                 );
             }
+            if active_request
+                .generation_preparation_elapsed_millis
+                .is_none()
+            {
+                active_request.generation_preparation_elapsed_millis = active_request
+                    .generation_preparation_started_at
+                    .map(|preparation_started_at| {
+                        u64::try_from(preparation_started_at.elapsed().as_millis())
+                            .unwrap_or(u64::MAX)
+                    });
+            }
             active_request.latest_generation_progress_token_count = generated_token_count;
             publish_activity(health_snapshot, WorkerActivity::Generating);
             publish_active_request_progress(
@@ -346,6 +415,36 @@ pub(super) fn handle_worker_event(
             );
             if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
                 publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
+            }
+        }
+        WorkerEvent::FirstDecodeCompleted {
+            request_id,
+            elapsed_millis,
+        } => {
+            let Some(active_request) = active_generation.as_mut() else {
+                return Err(protocol_violation(
+                    "first decode completion without an active request",
+                ));
+            };
+            if request_id != active_request.request_id
+                || active_request.first_decode_forward_elapsed_millis.is_some()
+            {
+                return Err(protocol_violation(
+                    "first decode completion correlation or duplication mismatch",
+                ));
+            }
+            active_request.first_decode_forward_elapsed_millis = Some(elapsed_millis);
+            if active_request
+                .generation_preparation_elapsed_millis
+                .is_none()
+            {
+                active_request.generation_preparation_elapsed_millis = active_request
+                    .generation_preparation_started_at
+                    .map(|preparation_started_at| {
+                        u64::try_from(preparation_started_at.elapsed().as_millis())
+                            .unwrap_or(u64::MAX)
+                            .saturating_sub(elapsed_millis)
+                    });
             }
         }
         WorkerEvent::PromptWorkReuse {

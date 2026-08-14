@@ -1,4 +1,9 @@
-use astronomical_model_serving::QuantizedExpertPageManifest;
+use std::path::PathBuf;
+
+use astronomical_model_serving::{
+    QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest, QuantizedTensorSource,
+    SafetensorsDtype,
+};
 
 fn retained_page_manifest() -> QuantizedExpertPageManifest {
     QuantizedExpertPageManifest {
@@ -58,5 +63,47 @@ fn should_partition_route_assignments_without_duplicate_execution() {
         route_partition.retained_assignment_positions.len()
             + route_partition.missing_assignment_positions.len(),
         6
+    );
+}
+
+#[test]
+fn should_derive_exact_per_expert_and_complete_layer_payload_from_tensor_geometry() {
+    let tensor_source = |tensor_name: &str, bytes_per_expert: usize| QuantizedTensorSource {
+        tensor_name: tensor_name.to_owned(),
+        projection_name: "fictional_projection".to_owned(),
+        parameter_name: "weight".to_owned(),
+        quantization_bits: 4,
+        quantization_group_size: 64,
+        source_file: PathBuf::from("fictional-model.safetensors"),
+        source_file_size_bytes: 1_000,
+        dtype: SafetensorsDtype::Uint32,
+        full_shape: vec![4, 2, 2],
+        tensor_payload_offset: 0,
+        bytes_per_expert,
+        expert_capacity: 4,
+    };
+    let layer_plan = QuantizedExpertLayerPlan {
+        layer_prefix: "fictional.layers.0".to_owned(),
+        tensor_sources: vec![
+            tensor_source("gate.weight", 10),
+            tensor_source("up.weight", 5),
+        ],
+        expert_capacity: 4,
+        quantization_bits: 4,
+        quantization_group_size: 64,
+        quantization_mode: QuantizationMode::Affine,
+    };
+
+    assert_eq!(
+        layer_plan
+            .expert_payload_byte_count()
+            .expect("fictional exact expert geometry should be valid"),
+        15
+    );
+    assert_eq!(
+        layer_plan
+            .complete_expert_payload_byte_count()
+            .expect("fictional complete geometry should agree"),
+        60
     );
 }

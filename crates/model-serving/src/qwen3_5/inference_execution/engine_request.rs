@@ -114,15 +114,13 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) forced_speculative_prefill_failure_stage_for_tests:
         Option<Qwen3_5SpeculativePrefillFailureStageForTests>,
     pub(super) force_next_prefill_capacity_rejection_for_tests: bool,
-    /// One-shot guard for the prefill-to-decode expert-memory restore.
-    ///
-    /// After the last prompt chunk, the engine lifts the temporary pressure
-    /// cap and either restores complete residency or fills demand-selected
-    /// pages. That restore is expensive disk I/O and must not run again on
-    /// every later generated token. `true` means "already tried", not
-    /// "succeeded". A failed restore still leaves this flag set so decode
-    /// continues by streaming.
-    pub(super) decode_warm_expert_layers_attempted: bool,
+    /// One-shot guard for no-I/O prefill-to-decode residency reconciliation.
+    /// Mandatory decode reads populate any remaining elastic route ownership.
+    pub(super) generation_residency_preparation_attempted: bool,
+    /// First decode-forward latency waiting to be emitted with its generated token.
+    pub(super) first_decode_forward_elapsed_millis: Option<u64>,
+    /// Ensures the worker observes generation preparation before blocking handoff work.
+    pub(super) generation_preparation_announced: bool,
 }
 
 impl Qwen3_5EngineRequest {

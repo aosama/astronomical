@@ -5,43 +5,36 @@
 //! to this cache. Consequently, `Some(page)` means the complete selected page is usable;
 //! there is no observable partially loaded state.
 //!
-//! The production policy ranks experts globally by observed route frequency.
-//! The last prefill chunk may count each assignment more than once so decode
-//! pages follow the prompt tail. Stable identifiers break ties.
+//! The production policy uses observed route frequency to preserve or reclaim
+//! already-owned partial pages. It never turns demand into speculative I/O. The
+//! last prefill chunk may count each assignment more than once so prompt-tail
+//! coverage remains useful at the transition to decode.
 
-use super::{ExpertWeightMemoryCacheStatistics, ExpertWeightPage};
-use thiserror::Error;
+mod contract;
+mod reclamation;
 
-#[derive(Clone, Copy)]
-struct ExpertCandidate {
-    layer_index: usize,
-    expert_id: usize,
-    demand_count: u64,
+pub use contract::{
+    RetainedExpertLayerCommit, RetainedExpertLayerCommitDelta, RetainedExpertLayerCommitError,
+    RetainedExpertLayerCommitOutcome, RetainedExpertReclamation,
+};
+
+use super::{
+    CurrentExpertLayerResidency, ExpertWeightMemoryCacheStatistics, ExpertWeightPage,
+    RetainedExpertPageClass,
+};
+#[derive(Debug)]
+struct RetainedExpertLayerEntry<ExpertPage> {
+    page: ExpertPage,
+    class: RetainedExpertPageClass,
+    expert_ids: Vec<usize>,
     payload_bytes: u64,
-}
-
-/// Invalid immutable geometry supplied to the retained-page planner.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-pub enum RetainedExpertPagePlanError {
-    #[error(
-        "retained-page geometry has {payload_layer_count} payload layers and {expert_capacity_layer_count} capacity layers, expected {retained_layer_count}"
-    )]
-    LayerCountMismatch {
-        retained_layer_count: usize,
-        payload_layer_count: usize,
-        expert_capacity_layer_count: usize,
-    },
-    #[error("retained-page geometry has zero expert capacity at layer {layer_index}")]
-    ZeroExpertCapacity { layer_index: usize },
-    #[error("retained-page geometry has zero payload at layer {layer_index}")]
-    ZeroLayerPayload { layer_index: usize },
 }
 
 /// Keeps one deterministic retained expert page per layer within one byte ceiling.
 #[derive(Debug)]
 pub struct RetainedExpertLayerCache<ExpertPage> {
     /// One stable slot per decoder layer. `None` means execution must stream it.
-    retained_layers: Vec<Option<ExpertPage>>,
+    retained_layers: Vec<Option<RetainedExpertLayerEntry<ExpertPage>>>,
     /// Cumulative routed demand used to choose a useful page for every layer.
     expert_demand_counts_by_layer: Vec<Vec<u64>>,
     /// Multiplier applied to each recorded assignment. Last-chunk prefill
@@ -59,6 +52,9 @@ pub struct RetainedExpertLayerCache<ExpertPage> {
     eviction_count: u64,
     disk_page_load_count: u64,
     disk_batch_load_count: u64,
+    mandatory_read_promotion_count: u64,
+    complete_layer_eviction_count: u64,
+    partial_layer_eviction_count: u64,
 }
 
 impl<ExpertPage> RetainedExpertLayerCache<ExpertPage>
@@ -77,45 +73,189 @@ where
             eviction_count: 0,
             disk_page_load_count: 0,
             disk_batch_load_count: 0,
+            mandatory_read_promotion_count: 0,
+            complete_layer_eviction_count: 0,
+            partial_layer_eviction_count: 0,
         }
     }
 
     pub fn retained_layer(&self, layer_index: usize) -> Option<&ExpertPage> {
-        self.retained_layers.get(layer_index)?.as_ref()
+        self.retained_layers
+            .get(layer_index)?
+            .as_ref()
+            .map(|entry| &entry.page)
     }
 
-    pub fn update_maximum_resident_payload_bytes(&mut self, maximum_payload_bytes: u64) {
+    /// Repeats exact projected-byte accounting before a caller transfers ownership.
+    #[must_use]
+    pub fn can_commit_materialized_page(
+        &self,
+        layer_index: usize,
+        candidate_payload_bytes: u64,
+    ) -> bool {
+        if candidate_payload_bytes == 0 {
+            return false;
+        }
+        let Some(layer_slot) = self.retained_layers.get(layer_index) else {
+            return false;
+        };
+        let existing_payload_bytes = layer_slot.as_ref().map_or(0, |entry| entry.payload_bytes);
+        self.resident_payload_bytes
+            .checked_sub(existing_payload_bytes)
+            .and_then(|payload_without_replaced_page| {
+                payload_without_replaced_page.checked_add(candidate_payload_bytes)
+            })
+            .is_some_and(|projected_payload_bytes| {
+                projected_payload_bytes <= self.effective_maximum_resident_payload_bytes()
+            })
+    }
+
+    pub fn update_maximum_resident_payload_bytes(
+        &mut self,
+        maximum_payload_bytes: u64,
+    ) -> RetainedExpertReclamation {
         // Store the normal limit independently from temporary request pressure.
         // A live pressure cap still wins through `effective_maximum...`, but the
         // normal value survives so finalization can resume retention immediately
         // without waiting for another budget publication as an accidental repair.
         self.normal_maximum_resident_payload_bytes = maximum_payload_bytes;
-        self.evict_highest_layers_to_fit();
+        self.reclaim_to_effective_ceiling()
     }
 
-    /// Replaces one layer atomically when the replacement fits the shared ceiling.
-    pub fn replace_layer(&mut self, layer_index: usize, expert_page: ExpertPage) -> bool {
-        let replacement_payload_bytes = expert_page.resident_payload_byte_count();
-        let effective_maximum_resident_payload_bytes =
-            self.effective_maximum_resident_payload_bytes();
-        let Some(layer_slot) = self.retained_layers.get_mut(layer_index) else {
-            return false;
-        };
-        let existing_payload_bytes = layer_slot
+    /// Commits a complete layer loaded by a mandatory prefill read.
+    pub fn commit_materialized_complete_layer(
+        &mut self,
+        layer_index: usize,
+        expert_capacity: usize,
+        expert_page: ExpertPage,
+    ) -> Result<RetainedExpertLayerCommit<ExpertPage>, RetainedExpertLayerCommitError> {
+        if self.retained_layers.get(layer_index).is_none() {
+            return Err(RetainedExpertLayerCommitError::LayerOutOfRange { layer_index });
+        }
+        if expert_capacity == 0 {
+            return Err(RetainedExpertLayerCommitError::ZeroExpertCapacity { layer_index });
+        }
+        if expert_page.resident_payload_byte_count() == 0 {
+            return Err(RetainedExpertLayerCommitError::ZeroPayload { layer_index });
+        }
+        if self.retained_layers[layer_index]
             .as_ref()
-            .map_or(0, ExpertWeightPage::resident_payload_byte_count);
+            .is_some_and(|entry| entry.class == RetainedExpertPageClass::StableCompleteLayer)
+        {
+            return Ok(RetainedExpertLayerCommit {
+                outcome: RetainedExpertLayerCommitOutcome::PreservedExisting,
+                uncommitted_page: Some(expert_page),
+            });
+        }
+        let expert_ids = (0..expert_capacity).collect();
+        let commit_outcome = self.commit_entry(
+            layer_index,
+            RetainedExpertPageClass::StableCompleteLayer,
+            expert_ids,
+            expert_page,
+        )?;
+        if matches!(
+            commit_outcome.outcome,
+            RetainedExpertLayerCommitOutcome::Committed(_)
+        ) {
+            self.mandatory_read_promotion_count =
+                self.mandatory_read_promotion_count.saturating_add(1);
+        }
+        Ok(commit_outcome)
+    }
+
+    /// Commits the first exact routed page loaded by mandatory decode execution.
+    pub fn commit_materialized_routed_page(
+        &mut self,
+        layer_index: usize,
+        expert_capacity: usize,
+        expert_ids: Vec<usize>,
+        expert_page: ExpertPage,
+    ) -> Result<RetainedExpertLayerCommit<ExpertPage>, RetainedExpertLayerCommitError> {
+        self.validate_routed_page_metadata(layer_index, expert_capacity, &expert_ids)?;
+        if expert_page.resident_payload_byte_count() == 0 {
+            return Err(RetainedExpertLayerCommitError::ZeroPayload { layer_index });
+        }
+        if self.retained_layers[layer_index].is_some() {
+            // Existing complete and partial pages remain useful. Split execution
+            // streams only route misses, so replacing either page would add I/O.
+            return Ok(RetainedExpertLayerCommit {
+                outcome: RetainedExpertLayerCommitOutcome::PreservedExisting,
+                uncommitted_page: Some(expert_page),
+            });
+        }
+        self.commit_entry(
+            layer_index,
+            RetainedExpertPageClass::ElasticRoutedExperts,
+            expert_ids,
+            expert_page,
+        )
+    }
+
+    fn commit_entry(
+        &mut self,
+        layer_index: usize,
+        class: RetainedExpertPageClass,
+        expert_ids: Vec<usize>,
+        expert_page: ExpertPage,
+    ) -> Result<RetainedExpertLayerCommit<ExpertPage>, RetainedExpertLayerCommitError> {
+        let replacement_payload_bytes = expert_page.resident_payload_byte_count();
+        let existing_payload_bytes = self.retained_layers[layer_index]
+            .as_ref()
+            .map_or(0, |entry| entry.payload_bytes);
         let projected_payload_bytes = self
             .resident_payload_bytes
-            .saturating_sub(existing_payload_bytes)
-            .saturating_add(replacement_payload_bytes);
-        if projected_payload_bytes > effective_maximum_resident_payload_bytes {
-            return false;
+            .checked_sub(existing_payload_bytes)
+            .ok_or(RetainedExpertLayerCommitError::InconsistentPayloadAccounting { layer_index })?
+            .checked_add(replacement_payload_bytes)
+            .ok_or(RetainedExpertLayerCommitError::PayloadByteCountOverflow { layer_index })?;
+        if projected_payload_bytes > self.effective_maximum_resident_payload_bytes() {
+            return Ok(RetainedExpertLayerCommit {
+                outcome: RetainedExpertLayerCommitOutcome::RejectedByCurrentCeiling,
+                uncommitted_page: Some(expert_page),
+            });
         }
-        if layer_slot.replace(expert_page).is_some() {
-            self.eviction_count = self.eviction_count.saturating_add(1);
+        let replacement_entry = RetainedExpertLayerEntry {
+            page: expert_page,
+            class,
+            expert_ids,
+            payload_bytes: replacement_payload_bytes,
+        };
+        if let Some(replaced_entry) = self.retained_layers[layer_index].replace(replacement_entry) {
+            self.record_eviction(replaced_entry.class);
         }
         self.resident_payload_bytes = projected_payload_bytes;
-        true
+        Ok(RetainedExpertLayerCommit {
+            outcome: RetainedExpertLayerCommitOutcome::Committed(RetainedExpertLayerCommitDelta {
+                released_payload_bytes: existing_payload_bytes,
+                committed_payload_bytes: replacement_payload_bytes,
+            }),
+            uncommitted_page: None,
+        })
+    }
+
+    fn validate_routed_page_metadata(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+        expert_ids: &[usize],
+    ) -> Result<(), RetainedExpertLayerCommitError> {
+        if self.retained_layers.get(layer_index).is_none() {
+            return Err(RetainedExpertLayerCommitError::LayerOutOfRange { layer_index });
+        }
+        if expert_capacity == 0 {
+            return Err(RetainedExpertLayerCommitError::ZeroExpertCapacity { layer_index });
+        }
+        if expert_ids.is_empty()
+            || expert_ids.len() >= expert_capacity
+            || expert_ids.windows(2).any(|ids| ids[0] >= ids[1])
+            || expert_ids
+                .iter()
+                .any(|expert_id| *expert_id >= expert_capacity)
+        {
+            return Err(RetainedExpertLayerCommitError::InvalidExpertIds { layer_index });
+        }
+        Ok(())
     }
 
     /// Removes one stale page before a barrier-safe topology rebuild.
@@ -123,13 +263,13 @@ where
         let Some(layer_slot) = self.retained_layers.get_mut(layer_index) else {
             return false;
         };
-        let Some(removed_page) = layer_slot.take() else {
+        let Some(removed_entry) = layer_slot.take() else {
             return false;
         };
         self.resident_payload_bytes = self
             .resident_payload_bytes
-            .saturating_sub(removed_page.resident_payload_byte_count());
-        self.eviction_count = self.eviction_count.saturating_add(1);
+            .saturating_sub(removed_entry.payload_bytes);
+        self.record_eviction(removed_entry.class);
         true
     }
 
@@ -168,84 +308,39 @@ where
         self.demand_assignment_weight = 1;
     }
 
-    /// Selects experts globally by observed route frequency.
-    #[must_use]
-    pub fn preferred_expert_ids_for_global_budget(
-        &self,
-        complete_layer_payload_bytes: &[u64],
-        expert_capacities: &[usize],
-    ) -> Result<Vec<Vec<usize>>, RetainedExpertPagePlanError> {
-        let layer_count = self.expert_demand_counts_by_layer.len();
-        if complete_layer_payload_bytes.len() != layer_count
-            || expert_capacities.len() != layer_count
-        {
-            return Err(RetainedExpertPagePlanError::LayerCountMismatch {
-                retained_layer_count: layer_count,
-                payload_layer_count: complete_layer_payload_bytes.len(),
-                expert_capacity_layer_count: expert_capacities.len(),
-            });
-        }
-        let mut expert_candidates = Vec::new();
-        for layer_index in 0..layer_count {
-            let expert_capacity = expert_capacities[layer_index];
-            if expert_capacity == 0 {
-                return Err(RetainedExpertPagePlanError::ZeroExpertCapacity { layer_index });
-            }
-            if complete_layer_payload_bytes[layer_index] == 0 {
-                return Err(RetainedExpertPagePlanError::ZeroLayerPayload { layer_index });
-            }
-            // Round upward so planning never admits more payload than the cache
-            // ceiling when unusual tensor geometry is not exactly divisible.
-            let expert_capacity_bytes = u64::try_from(expert_capacity).unwrap_or(u64::MAX);
-            let payload_bytes_per_expert = complete_layer_payload_bytes[layer_index]
-                .saturating_add(expert_capacity_bytes.saturating_sub(1))
-                / expert_capacity_bytes.max(1);
-            for expert_id in 0..expert_capacity {
-                let demand_count = self.expert_demand_counts_by_layer[layer_index]
-                    .get(expert_id)
-                    .copied()
-                    .unwrap_or(0);
-                expert_candidates.push(ExpertCandidate {
-                    layer_index,
-                    expert_id,
-                    demand_count,
-                    payload_bytes: payload_bytes_per_expert,
-                });
-            }
-        }
-        expert_candidates.sort_unstable_by(|left, right| {
-            right
-                .demand_count
-                .cmp(&left.demand_count)
-                .then_with(|| left.layer_index.cmp(&right.layer_index))
-                .then_with(|| left.expert_id.cmp(&right.expert_id))
-        });
-
-        let mut preferred_expert_ids_by_layer =
-            (0..layer_count).map(|_| Vec::new()).collect::<Vec<_>>();
-        let mut remaining_payload_bytes = self.effective_maximum_resident_payload_bytes();
-        for expert_candidate in expert_candidates {
-            if expert_candidate.payload_bytes > remaining_payload_bytes {
-                continue;
-            }
-            preferred_expert_ids_by_layer[expert_candidate.layer_index]
-                .push(expert_candidate.expert_id);
-            remaining_payload_bytes =
-                remaining_payload_bytes.saturating_sub(expert_candidate.payload_bytes);
-        }
-        for preferred_expert_ids in &mut preferred_expert_ids_by_layer {
-            preferred_expert_ids.sort_unstable();
-        }
-        Ok(preferred_expert_ids_by_layer)
-    }
-
     pub fn record_disk_load(&mut self, expert_count: usize, batch_count: usize) {
         self.disk_page_load_count = self
             .disk_page_load_count
-            .saturating_add(expert_count as u64);
+            .saturating_add(u64::try_from(expert_count).unwrap_or(u64::MAX));
         self.disk_batch_load_count = self
             .disk_batch_load_count
-            .saturating_add(batch_count as u64);
+            .saturating_add(u64::try_from(batch_count).unwrap_or(u64::MAX));
+    }
+
+    /// Returns planner-ready ownership metadata without exposing page arrays.
+    #[must_use]
+    pub fn topology_snapshot(&self) -> Vec<CurrentExpertLayerResidency> {
+        self.retained_layers
+            .iter()
+            .enumerate()
+            .filter_map(|(layer_index, retained_entry)| {
+                let retained_entry = retained_entry.as_ref()?;
+                Some(CurrentExpertLayerResidency {
+                    layer_index,
+                    class: retained_entry.class,
+                    retained_expert_ids: retained_entry.expert_ids.clone(),
+                    payload_bytes: retained_entry.payload_bytes,
+                    covered_weighted_demand: retained_entry
+                        .expert_ids
+                        .iter()
+                        .filter_map(|expert_id| {
+                            self.expert_demand_counts_by_layer[layer_index].get(*expert_id)
+                        })
+                        .copied()
+                        .fold(0_u64, u64::saturating_add),
+                })
+            })
+            .collect()
     }
 
     /// Freezes retained pages at a smaller ceiling so the remaining prompt fits.
@@ -264,10 +359,21 @@ where
         let pressure_maximum = self
             .resident_payload_bytes
             .saturating_sub(reclamation_target_bytes);
-        self.request_pressure_maximum_resident_payload_bytes = Some(pressure_maximum);
-        let payload_before_eviction = self.resident_payload_bytes;
-        self.evict_highest_layers_to_fit();
-        self.resident_payload_bytes < payload_before_eviction
+        self.limit_for_request_pressure_to_maximum(pressure_maximum)
+    }
+
+    /// Installs an absolute request-scoped ceiling derived from one admitted forward.
+    ///
+    /// Unlike deficit-based reclamation, this can leave room for mandatory reads
+    /// to become retained while preventing those reads from consuming the exact
+    /// context, streaming-page, and transient reserve already admitted.
+    pub fn limit_for_request_pressure_to_maximum(
+        &mut self,
+        pressure_maximum_resident_payload_bytes: u64,
+    ) -> bool {
+        self.request_pressure_maximum_resident_payload_bytes =
+            Some(pressure_maximum_resident_payload_bytes);
+        self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
     }
 
     /// Lifts the temporary request-pressure freeze.
@@ -283,10 +389,8 @@ where
 
     pub fn release_all(&mut self) -> bool {
         let had_retained_layers = self.resident_payload_bytes > 0;
-        for retained_layer in &mut self.retained_layers {
-            if retained_layer.take().is_some() {
-                self.eviction_count = self.eviction_count.saturating_add(1);
-            }
+        for layer_index in 0..self.retained_layers.len() {
+            self.remove_layer(layer_index);
         }
         self.resident_payload_bytes = 0;
         had_retained_layers
@@ -294,6 +398,25 @@ where
 
     #[must_use]
     pub fn statistics(&self) -> ExpertWeightMemoryCacheStatistics {
+        let complete_layer_count = self
+            .retained_layers
+            .iter()
+            .flatten()
+            .filter(|entry| entry.class == RetainedExpertPageClass::StableCompleteLayer)
+            .count();
+        let complete_layer_payload_byte_count = self
+            .retained_layers
+            .iter()
+            .flatten()
+            .filter(|entry| entry.class == RetainedExpertPageClass::StableCompleteLayer)
+            .map(|entry| entry.payload_bytes)
+            .fold(0_u64, u64::saturating_add);
+        let partial_layer_count = self
+            .retained_layers
+            .iter()
+            .flatten()
+            .filter(|entry| entry.class == RetainedExpertPageClass::ElasticRoutedExperts)
+            .count();
         ExpertWeightMemoryCacheStatistics {
             entry_count: self
                 .retained_layers
@@ -305,24 +428,15 @@ where
             eviction_count: self.eviction_count,
             disk_page_load_count: self.disk_page_load_count,
             disk_batch_load_count: self.disk_batch_load_count,
-        }
-    }
-
-    fn evict_highest_layers_to_fit(&mut self) {
-        // Reverse order is policy, not an arbitrary implementation detail. It
-        // leaves the lowest contiguous prefix resident after every shrink.
-        let effective_maximum_resident_payload_bytes =
-            self.effective_maximum_resident_payload_bytes();
-        for layer_slot in self.retained_layers.iter_mut().rev() {
-            if self.resident_payload_bytes <= effective_maximum_resident_payload_bytes {
-                break;
-            }
-            if let Some(evicted_layer) = layer_slot.take() {
-                self.resident_payload_bytes = self
-                    .resident_payload_bytes
-                    .saturating_sub(evicted_layer.resident_payload_byte_count());
-                self.eviction_count = self.eviction_count.saturating_add(1);
-            }
+            complete_layer_count,
+            complete_layer_payload_byte_count,
+            partial_layer_count,
+            partial_layer_payload_byte_count: self
+                .resident_payload_bytes
+                .saturating_sub(complete_layer_payload_byte_count),
+            mandatory_read_promotion_count: self.mandatory_read_promotion_count,
+            complete_layer_eviction_count: self.complete_layer_eviction_count,
+            partial_layer_eviction_count: self.partial_layer_eviction_count,
         }
     }
 

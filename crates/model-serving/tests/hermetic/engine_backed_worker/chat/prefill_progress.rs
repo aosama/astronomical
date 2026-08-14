@@ -15,6 +15,13 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     forward_prefill_chunck_elapsed_millis: 350,
                     completed_prefill_chunck_tokens: 2_048,
                     prefill_optimizer_insight: None,
+                    expert_residency_telemetry: Some(ExpertResidencyTelemetry {
+                        total_layer_count: 40,
+                        complete_layer_count: 6,
+                        complete_layer_payload_bytes: 2_852_126_720,
+                        partial_layer_count: 34,
+                        partial_layer_payload_bytes: 523_239_424,
+                    }),
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         11_000,
                         12_000,
@@ -52,6 +59,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     forward_prefill_chunck_elapsed_millis: 525,
                     completed_prefill_chunck_tokens: 2_048,
                     prefill_optimizer_insight: None,
+                    expert_residency_telemetry: None,
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         14_000,
                         15_000,
@@ -72,6 +80,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
                 GeneratedToken::TokenId {
@@ -79,6 +88,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
             ],
@@ -132,6 +142,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             completed_prefill_chunck_tokens,
             prefill_optimizer_insight,
             mlx_memory_snapshot,
+            expert_residency,
             speculative_prefill_draft_memory_snapshot,
             ..
         } => {
@@ -142,6 +153,16 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             assert_eq!(forward_prefill_chunck_elapsed_millis, Some(350));
             assert_eq!(completed_prefill_chunck_tokens, Some(2_048));
             assert_eq!(prefill_optimizer_insight, None);
+            assert_eq!(
+                expert_residency,
+                Some(WorkerExpertResidencySnapshot {
+                    total_layer_count: 40,
+                    complete_layer_count: 6,
+                    complete_layer_payload_bytes: 2_852_126_720,
+                    partial_layer_count: 34,
+                    partial_layer_payload_bytes: 523_239_424,
+                })
+            );
             assert_eq!(
                 mlx_memory_snapshot,
                 Some(WorkerMlxMemorySnapshot {
@@ -229,6 +250,7 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
                     forward_prefill_chunck_elapsed_millis: 350,
                     completed_prefill_chunck_tokens: 512,
                     prefill_optimizer_insight: None,
+                    expert_residency_telemetry: None,
                     mlx_memory_telemetry: None,
                     speculative_prefill_draft_memory_telemetry: None,
                     expert_memory_mode: None,
@@ -239,6 +261,7 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
             ],
@@ -315,6 +338,7 @@ async fn should_report_only_the_confirmed_active_prompt_processing_phase() {
                     forward_prefill_chunck_elapsed_millis: 350,
                     completed_prefill_chunck_tokens: 8,
                     prefill_optimizer_insight: None,
+                    expert_residency_telemetry: None,
                     mlx_memory_telemetry: None,
                     speculative_prefill_draft_memory_telemetry: None,
                     expert_memory_mode: None,
@@ -325,6 +349,7 @@ async fn should_report_only_the_confirmed_active_prompt_processing_phase() {
                     is_reasoning_token: false,
                     expert_memory_mode: None,
                     mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
                     generation_finalization: None,
                 },
             ],

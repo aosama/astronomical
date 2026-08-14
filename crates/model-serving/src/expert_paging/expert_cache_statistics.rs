@@ -9,4 +9,11 @@ pub struct ExpertWeightMemoryCacheStatistics {
     pub eviction_count: u64,
     pub disk_page_load_count: u64,
     pub disk_batch_load_count: u64,
+    pub complete_layer_count: usize,
+    pub complete_layer_payload_byte_count: u64,
+    pub partial_layer_count: usize,
+    pub partial_layer_payload_byte_count: u64,
+    pub mandatory_read_promotion_count: u64,
+    pub complete_layer_eviction_count: u64,
+    pub partial_layer_eviction_count: u64,
 }

@@ -44,9 +44,9 @@ impl Qwen3_5EngineState {
             })
     }
 
-    /// Drops every request-scoped draft owner, then restores complete target
-    /// residency whenever the target and live request state fit together.
-    pub(in crate::qwen3_5) fn release_speculative_prefill_draft_and_restore_target_residency(
+    /// Drops every request-scoped draft owner and resumes target retention.
+    /// Existing target pages survive when they fit; this path performs no reads.
+    pub(in crate::qwen3_5) fn release_speculative_prefill_draft_and_resume_target_retention(
         &mut self,
         active_request: &mut Qwen3_5EngineRequest,
         draft_visual_embeddings: Option<MlxArray>,
@@ -78,21 +78,6 @@ impl Qwen3_5EngineState {
         let resumed_target_expert_retention = self.model.as_ref().is_some_and(|target_model| {
             target_model.resume_expert_retention_after_request_memory_pressure()
         });
-        let target_residency_promotion_outcome = self
-            .model
-            .as_mut()
-            .ok_or_else(|| qwen3_5_runtime_error("Qwen3.5 engine lost its loaded target model"))?
-            .try_promote_experts_to_resident(
-                crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason::SpeculativePrefillDraftLoading,
-                &mut active_request.performance_attribution,
-            )
-            .map_err(|target_residency_error| {
-                configured_speculative_prefill_failure(
-                    active_request.request_id,
-                    "target expert residency restoration after drafter release",
-                    target_residency_error,
-                )
-            })?;
         let target_expert_payload_bytes_after_draft_release = self
             .model
             .as_ref()
@@ -104,9 +89,8 @@ impl Qwen3_5EngineState {
         tracing::info!(
             request_id = active_request.request_id.value(),
             resumed_target_expert_retention,
-            ?target_residency_promotion_outcome,
             target_expert_payload_bytes_after_draft_release,
-            "released request-scoped speculative-prefill draft and restored fitting target residency"
+            "released request-scoped speculative-prefill draft without eager target expert reads"
         );
         Ok(())
     }

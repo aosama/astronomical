@@ -43,18 +43,6 @@ pub(super) fn prepare_cacheable_romeo_and_juliet_prompt(
     )
 }
 
-#[allow(dead_code)] // Shared by feature-selected persistent-cache qualification journeys.
-pub(super) fn prepare_romeo_and_juliet_summary_prompt(
-    model_directory: &Path,
-    maximum_prompt_token_count: usize,
-) -> PreparedRomeoAndJulietPrompt {
-    prepare_romeo_and_juliet_prompt_with_instruction(
-        model_directory,
-        maximum_prompt_token_count,
-        "Summarize Romeo and Juliet in one paragraph of no more than four lines. Include the central conflict, major decisions, and tragic outcome.",
-    )
-}
-
 fn prepare_romeo_and_juliet_prompt_with_instruction(
     model_directory: &Path,
     maximum_prompt_token_count: usize,

@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, ChatModelCapabilities, WorkerChunkingConfiguration,
-    WorkerPersistentPromptCacheRequestDiagnostics,
+    ChatGenerationOutput, ChatModelCapabilities, WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -45,8 +44,20 @@ pub struct WorkerPromptWorkReuse {
 pub enum ExpertMemoryMode {
     /// Every target and optional MTP layer has complete sparse experts resident.
     Resident,
-    /// No complete owner is installed; every sparse layer uses demand paging.
+    /// Some complete layers or routed pages are retained while misses still page.
+    Hybrid,
+    /// No sparse expert payload is retained; every layer pages operation-locally.
     Paged,
+}
+
+/// Final concrete sparse-expert topology copied from the model owner.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerExpertResidencySnapshot {
+    pub total_layer_count: u32,
+    pub complete_layer_count: u32,
+    pub complete_layer_payload_bytes: u64,
+    pub partial_layer_count: u32,
+    pub partial_layer_payload_bytes: u64,
 }
 
 /// Runtime execution state of native multi-token prediction (MTP).
@@ -132,6 +143,7 @@ pub enum WorkerPrefillOptimizerDecisionReason {
     StaleObservationProbe,
     CumulativeLatencyPlanning,
     Fallback,
+    TerminalRemainder,
 }
 
 /// Recent measured evidence for one configured prefill candidate.
@@ -168,75 +180,6 @@ pub struct WorkerPrefillOptimizerInsight {
     pub has_observations_for_every_candidate: bool,
     pub context: WorkerPrefillOptimizerContext,
     pub candidate_evidence: Vec<WorkerPrefillOptimizerCandidateEvidence>,
-}
-
-/// Logging verbosity supplied by the supervisor when starting a worker.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerLogLevel {
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
-}
-
-/// Resolved optional draft-assisted speculative-prefill settings supplied to the worker.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct WorkerSpeculativePrefillConfiguration {
-    pub enabled: bool,
-    pub target_model_id: Option<String>,
-    pub draft_model_id: Option<String>,
-    pub draft_model_directory: Option<PathBuf>,
-    pub minimum_prompt_tokens: u32,
-    pub keep_percentage: u32,
-    pub selection_chunck_token_count: u32,
-    pub mandatory_trailing_token_count: u32,
-    pub lookahead_token_count: u32,
-    pub importance_pooling_kernel_token_count: u32,
-}
-
-impl WorkerSpeculativePrefillConfiguration {
-    /// Returns this policy enabled only when the loaded model is its configured target.
-    pub fn for_loaded_model(&self, loaded_model_id: &str) -> Self {
-        let mut loaded_model_speculative_prefill_configuration = self.clone();
-        loaded_model_speculative_prefill_configuration.enabled =
-            self.enabled && self.target_model_id.as_deref() == Some(loaded_model_id);
-        loaded_model_speculative_prefill_configuration
-    }
-}
-
-/// Worker-acknowledged feature settings safe to expose through local status.
-///
-/// This intentionally excludes startup paths and model locations. It proves the
-/// effective policy of the worker process that will serve requests.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct WorkerRuntimeFeatureConfiguration {
-    /// Whether the worker will persist and restore ordinary prompt state.
-    pub persistent_prompt_cache_enabled: bool,
-    /// Whether the worker may activate multi-token prediction for a compatible model.
-    pub mtp_enabled: bool,
-    /// Whether the currently bound target model may execute draft-assisted prefill.
-    pub speculative_prefill_enabled: bool,
-}
-
-/// Fully resolved worker-owned startup settings.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct WorkerStartupConfiguration {
-    pub global_prompt_cache_root_directory: PathBuf,
-    pub global_prompt_cache_maximum_size_bytes: u64,
-    pub persistent_prompt_cache_enabled: bool,
-    pub chunking: WorkerChunkingConfiguration,
-    pub optimizer_state_directory: Option<PathBuf>,
-    pub configured_maximum_mlx_memory_bytes: Option<u64>,
-    pub mtp_enabled: bool,
-    pub speculative_prefill: WorkerSpeculativePrefillConfiguration,
-    pub performance_attribution_enabled: bool,
-    pub logging_directory: PathBuf,
-    pub logging_level: WorkerLogLevel,
-    pub retained_log_file_count: usize,
 }
 
 /// A command sent from the HTTP process to its one inference worker.
@@ -331,6 +274,7 @@ pub enum WorkerEvent {
         expert_memory_mode: Option<ExpertMemoryMode>,
         /// Present when post-cleanup MLX memory could be observed.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+        expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
     /// Reports that the configured model finished loading.
     Ready {
@@ -373,8 +317,19 @@ pub enum WorkerEvent {
         prefill_optimizer_insight: Option<WorkerPrefillOptimizerInsight>,
         /// Present with completed chunks; worker-owned MLX allocator observation.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+        /// Current complete/partial ownership after this prompt-processing boundary.
+        expert_residency: Option<WorkerExpertResidencySnapshot>,
         /// Snapshot captured while the request-scoped SpecPrefill drafter was scoring.
         speculative_prefill_draft_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    },
+    /// Reports the explicit barrier between final prompt processing and first decode.
+    GenerationPreparationStarted {
+        request_id: RequestId,
+        total_layer_count: u32,
+        complete_layer_count: u32,
+        complete_layer_payload_bytes: u64,
+        partial_layer_count: u32,
+        partial_layer_payload_bytes: u64,
     },
     /// Reports generated-token progress that has not necessarily produced public output yet.
     GenerationProgress {
@@ -384,6 +339,11 @@ pub enum WorkerEvent {
         elapsed_millis: u64,
         /// Present when generation advanced without public model output.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    },
+    /// Reports the measured first decode forward independently from preparation and output.
+    FirstDecodeCompleted {
+        request_id: RequestId,
+        elapsed_millis: u64,
     },
     /// Reports model-row work avoided through exact or SpecPrefill-specific reusable state.
     PromptWorkReuse {
@@ -492,8 +452,17 @@ impl WorkerEvent {
             Self::PrefillProgress { request_id, .. } => {
                 format!("prefill_progress request_id={}", request_id.value())
             }
+            Self::GenerationPreparationStarted { request_id, .. } => {
+                format!(
+                    "generation_preparation_started request_id={}",
+                    request_id.value()
+                )
+            }
             Self::GenerationProgress { request_id, .. } => {
                 format!("generation_progress request_id={}", request_id.value())
+            }
+            Self::FirstDecodeCompleted { request_id, .. } => {
+                format!("first_decode_completed request_id={}", request_id.value())
             }
             Self::PromptWorkReuse { request_id, .. } => {
                 format!("prompt_work_reuse request_id={}", request_id.value())

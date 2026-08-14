@@ -252,9 +252,20 @@ impl EngineGenerationStart {
 
 /// Final engine state available after a generation ends or is cancelled.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ExpertResidencyTelemetry {
+    pub total_layer_count: u32,
+    pub complete_layer_count: u32,
+    pub complete_layer_payload_bytes: u64,
+    pub partial_layer_count: u32,
+    pub partial_layer_payload_bytes: u64,
+}
+
+/// Final engine state available after a generation ends or is cancelled.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct GenerationFinalization {
     expert_memory_mode: Option<ExpertMemoryMode>,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+    expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
 }
 
 impl GenerationFinalization {
@@ -262,10 +273,12 @@ impl GenerationFinalization {
     pub const fn new(
         expert_memory_mode: Option<ExpertMemoryMode>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+        expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
     ) -> Self {
         Self {
             expert_memory_mode,
             mlx_memory_telemetry,
+            expert_residency_telemetry,
         }
     }
 
@@ -280,8 +293,15 @@ impl GenerationFinalization {
     }
 
     #[must_use]
+    pub const fn expert_residency_telemetry(self) -> Option<ExpertResidencyTelemetry> {
+        self.expert_residency_telemetry
+    }
+
+    #[must_use]
     pub const fn has_reportable_state(self) -> bool {
-        self.expert_memory_mode.is_some() || self.mlx_memory_telemetry.is_some()
+        self.expert_memory_mode.is_some()
+            || self.mlx_memory_telemetry.is_some()
+            || self.expert_residency_telemetry.is_some()
     }
 }
 
@@ -330,6 +350,8 @@ pub enum GeneratedToken {
         is_reasoning_token: bool,
         expert_memory_mode: Option<ExpertMemoryMode>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+        /// Wall-clock duration of the first decode forward, emitted exactly once.
+        first_decode_forward_elapsed_millis: Option<u64>,
         /// Present only after the engine has released this request. The worker
         /// reports the finalization but must not cancel the engine again.
         generation_finalization: Option<GenerationFinalization>,
@@ -344,6 +366,8 @@ pub enum GeneratedToken {
         completed_prefill_chunck_tokens: u32,
         prefill_optimizer_insight: Option<PrefillChunckOptimizerInsight>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+        /// Current complete/partial retained ownership after this chunk.
+        expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
         /// Active MLX telemetry captured during request-scoped draft scoring.
         speculative_prefill_draft_memory_telemetry: Option<MlxMemoryTelemetry>,
         expert_memory_mode: Option<ExpertMemoryMode>,
@@ -354,6 +378,14 @@ pub enum GeneratedToken {
     PromptProcessingPhaseStarted {
         prompt_processing_phase: WorkerPromptProcessingPhase,
         total_token_count: u32,
+    },
+    /// Prefill is complete and the engine is reconciling expert ownership before decode.
+    GenerationPreparationStarted {
+        total_layer_count: u32,
+        complete_layer_count: u32,
+        complete_layer_payload_bytes: u64,
+        partial_layer_count: u32,
+        partial_layer_payload_bytes: u64,
     },
     /// Engine-side end-of-sequence without an explicit token ID.
     EndOfSequence,
@@ -373,7 +405,9 @@ impl GeneratedToken {
             | Self::PrefillProgress {
                 expert_memory_mode, ..
             } => *expert_memory_mode = final_expert_memory_mode,
-            Self::PromptProcessingPhaseStarted { .. } | Self::EndOfSequence => {}
+            Self::PromptProcessingPhaseStarted { .. }
+            | Self::GenerationPreparationStarted { .. }
+            | Self::EndOfSequence => {}
         }
         self
     }
