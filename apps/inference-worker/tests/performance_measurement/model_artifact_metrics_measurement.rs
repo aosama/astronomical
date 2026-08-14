@@ -72,7 +72,7 @@ fn should_disable_prefill_chunck_optimizer_for_summary_metrics_worker() {
     );
     let configuration_document_path = isolated_worker_home
         .path()
-        .join(".astronomical/config.json");
+        .join(".astronomical-dev/config.json");
     let configuration_document: serde_json::Value = serde_json::from_slice(
         &fs::read(&configuration_document_path)
             .expect("the metrics worker config should be readable"),
@@ -129,7 +129,7 @@ async fn run_model_artifact_measurement(metrics_case: MetricsCase) {
     let performance_log_directory = isolated_worker_home.path().join("logs");
     fs::create_dir_all(&performance_log_directory)
         .expect("the metrics performance log directory should be created");
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::new(
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_worker_home.path().to_path_buf(),
         PathBuf::from(&production_worker_executable_path),
     )
@@ -246,7 +246,7 @@ fn isolated_prompt_cache_worker_launcher(
 ) -> (tempfile::TempDir, PathBuf) {
     let isolated_worker_home = tempfile::tempdir()
         .expect("the isolated prompt-cache metrics worker home should be created");
-    let configuration_directory = isolated_worker_home.path().join(".astronomical");
+    let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the isolated prompt-cache metrics configuration directory should be created");
     let configuration_document = json!({

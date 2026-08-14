@@ -35,6 +35,29 @@ function createConsoleContext() {
     return scriptContext;
 }
 
+test("formats exact Stable and dirty Development build identities from status", () => {
+    const scriptContext = createConsoleContext();
+
+    assert.equal(
+        scriptContext.applicationIdentityTitle({
+            version: "0.2.0",
+            channel_display_name: "Stable",
+            commit: "abcdef1",
+            is_dirty: false
+        }),
+        "0.2.0 · Stable · abcdef1"
+    );
+    assert.equal(
+        scriptContext.applicationIdentityTitle({
+            version: "0.2.0",
+            channel_display_name: "Development",
+            commit: "1234567",
+            is_dirty: true
+        }),
+        "0.2.0 · Development · 1234567-dirty"
+    );
+});
+
 function createNavigationButton(observatoryDestination) {
     return {
         dataset: { observatoryDestination },

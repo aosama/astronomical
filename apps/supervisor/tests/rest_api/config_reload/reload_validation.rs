@@ -8,7 +8,7 @@ async fn should_reject_invalid_config_reload_without_mutating_live_state() {
 
     let initial_resolved_config = sample_resolved_config();
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),
         reloadable_config.clone(),
         config_home_directory,
@@ -52,7 +52,7 @@ async fn should_reject_enabled_speculative_prefill_without_an_explicit_keep_perc
 
     let initial_resolved_config = sample_resolved_config();
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),
         Arc::clone(&reloadable_config),
         config_home_directory,
@@ -89,7 +89,7 @@ async fn should_return_existing_invalid_config_feedback_when_fixed_prefill_chunc
     );
     let initial_resolved_config = sample_resolved_config();
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
-    let application = build_application_with_reload(
+    let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),
         reloadable_config.clone(),
         config_home_directory,
@@ -123,8 +123,11 @@ async fn should_return_busy_when_generation_is_active_during_config_reload() {
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.is_busy_override = true;
-    let application =
-        build_application_with_reload(executor, reloadable_config.clone(), config_home_directory);
+    let application = build_development_application_with_reload(
+        executor,
+        reloadable_config.clone(),
+        config_home_directory,
+    );
 
     let response = post_config_reload(&application).await;
     assert_eq!(

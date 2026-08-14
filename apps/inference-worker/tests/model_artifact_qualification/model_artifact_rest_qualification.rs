@@ -7,7 +7,8 @@ use std::{
 
 use astronomical_supervisor::{
     GenerationPerformanceLog, ResolvedRuntimeConfigResolver, WorkerHandle,
-    build_application_with_config_warning_and_discovered_models, build_application_with_reload,
+    build_application_with_config_warning_and_discovered_models,
+    build_development_application_with_reload,
 };
 use serde_json::json;
 use tokio::{
@@ -38,6 +39,7 @@ pub(super) struct ModelArtifactRestServer {
     pub(super) server_address: SocketAddr,
     shutdown_sender: oneshot::Sender<()>,
     server_task: JoinHandle<Result<(), std::io::Error>>,
+    isolated_development_home: Option<tempfile::TempDir>,
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -235,11 +237,18 @@ pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limi
         std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
             .expect("Cargo should provide the production inference-worker executable path"),
     );
+    let owned_isolated_development_home = isolated_worker_home_directory
+        .is_none()
+        .then(crate::common::isolated_development_home_from_user_config);
     let worker_configuration_home_directory = isolated_worker_home_directory
         .map(Path::to_path_buf)
-        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
-        .expect("HOME should be set for the deployment litmus");
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::new(
+        .or_else(|| {
+            owned_isolated_development_home
+                .as_ref()
+                .map(|isolated_home| isolated_home.path().to_path_buf())
+        })
+        .expect("qualification should own or receive an isolated Development home");
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         worker_configuration_home_directory,
         production_worker_executable_path.clone(),
     );
@@ -279,14 +288,15 @@ pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limi
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let application = match isolated_worker_home_directory {
         Some(isolated_worker_home_directory) => {
-            let runtime_config_resolver = ResolvedRuntimeConfigResolver::new(
-                isolated_worker_home_directory.to_path_buf(),
-                production_worker_executable_path,
-            );
+            let runtime_config_resolver =
+                ResolvedRuntimeConfigResolver::for_development_home_directory(
+                    isolated_worker_home_directory.to_path_buf(),
+                    production_worker_executable_path,
+                );
             let resolved_runtime_config = runtime_config_resolver
                 .load()
                 .expect("the isolated model-artifact configuration should resolve");
-            build_application_with_reload(
+            build_development_application_with_reload(
                 worker_handle.clone(),
                 Arc::new(RwLock::new(resolved_runtime_config)),
                 isolated_worker_home_directory.to_path_buf(),
@@ -313,23 +323,30 @@ pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limi
         server_address,
         shutdown_sender,
         server_task,
+        isolated_development_home: owned_isolated_development_home,
     }
 }
 
 pub(super) async fn stop_model_artifact_rest_server(
     model_artifact_rest_server: ModelArtifactRestServer,
 ) {
-    let _ = model_artifact_rest_server.shutdown_sender.send(());
-    model_artifact_rest_server
-        .server_task
+    let ModelArtifactRestServer {
+        worker_handle,
+        shutdown_sender,
+        server_task,
+        isolated_development_home,
+        ..
+    } = model_artifact_rest_server;
+    let _ = shutdown_sender.send(());
+    server_task
         .await
         .expect("the model-artifact REST server task should not panic")
         .expect("the model-artifact REST server should stop cleanly");
-    model_artifact_rest_server
-        .worker_handle
+    worker_handle
         .shutdown()
         .await
         .expect("the model-artifact worker should terminate and be reaped");
+    drop(isolated_development_home);
 }
 
 async fn wait_until_ready(server_address: SocketAddr) {

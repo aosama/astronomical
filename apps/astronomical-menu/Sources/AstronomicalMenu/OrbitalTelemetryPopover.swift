@@ -65,6 +65,7 @@ enum MlxMemoryLegendItem: Equatable {
 struct OrbitalTelemetryPopover: View {
   @Environment(\.colorScheme) private var colorScheme
   @ObservedObject var telemetryStore: TelemetryStore
+  let applicationIdentity: ApplicationIdentity
   let openObservatory: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
@@ -76,8 +77,18 @@ struct OrbitalTelemetryPopover: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top) {
         VStack(alignment: .leading, spacing: 4) {
-          Text("ASTRONOMICAL").font(PopoverTypography.boldCaption).tracking(2).foregroundStyle(
-            .cyan)
+          HStack(spacing: 6) {
+            Text("ASTRONOMICAL").font(PopoverTypography.boldCaption).tracking(2).foregroundStyle(
+              applicationIdentity.channel == .development ? .orange : .cyan)
+            Text(applicationIdentity.channel.displayName.uppercased())
+              .font(PopoverTypography.semiboldCaption)
+              .padding(.horizontal, 6)
+              .padding(.vertical, 2)
+              .background(
+                applicationIdentity.channel == .development
+                  ? .orange.opacity(0.2) : .cyan.opacity(0.2),
+                in: Capsule())
+          }
           HStack(alignment: .center, spacing: 6) {
             Text(statusDocument.readyModelIdentifier ?? "No model resident")
               .font(PopoverTypography.headline)
@@ -146,6 +157,21 @@ struct OrbitalTelemetryPopover: View {
           .accessibilityLabel("Server control: \(controlActionFeedback.message)")
       }
       Divider()
+      VStack(alignment: .leading, spacing: 2) {
+        Text(telemetryStore.statusDocument.application?.buildTitle ?? applicationIdentity.buildTitle)
+          .font(.caption.monospaced())
+        if let serverIdentity = telemetryStore.statusDocument.application,
+          serverIdentity.version != applicationIdentity.version
+            || serverIdentity.commit != applicationIdentity.commit
+        {
+          Text("App bundle: \(applicationIdentity.buildTitle)")
+            .font(.caption)
+            .foregroundStyle(.orange)
+        }
+        Text("Config: ~/\(applicationIdentity.stateDirectoryName)/config.json · Port \(applicationIdentity.supervisorPort)")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
       Button(action: openObservatory) {
         Label("Open Observatory", systemImage: "safari")
           .frame(maxWidth: .infinity)

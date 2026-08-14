@@ -2,6 +2,7 @@ mod application;
 mod cache_stats;
 mod config_reload;
 mod copilot_responses_compatibility;
+mod daemon_instance_isolation;
 mod daemon_process;
 mod diagnostics;
 mod openai_chat_completion_non_streaming;

@@ -234,7 +234,7 @@ fn configured_text_only_compatible_draft(
 ) -> (std::path::PathBuf, String) {
     use astronomical_config::{AstronomicalConfig, discover_models};
 
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard configuration should load for text-only draft discovery");
     let target_artifact = Qwen3_5ArtifactValidator::new()
         .validate(target_model_directory, 1)

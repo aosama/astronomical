@@ -43,6 +43,7 @@ pub(super) fn prepare_cacheable_romeo_and_juliet_prompt(
     )
 }
 
+#[allow(dead_code)] // Shared by feature-selected persistent-cache qualification journeys.
 pub(super) fn prepare_romeo_and_juliet_summary_prompt(
     model_directory: &Path,
     maximum_prompt_token_count: usize,
@@ -237,7 +238,7 @@ pub(super) fn write_cache_pressure_worker_config(
     model_directory: &Path,
     maximum_mlx_memory_bytes: u64,
 ) {
-    let configuration_directory = isolated_worker_home.join(".astronomical");
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the cache-pressure REST configuration directory should be created");
     let configuration_document = json!({

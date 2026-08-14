@@ -61,6 +61,9 @@ button, summary, label { -webkit-tap-highlight-color: transparent; }
 .observatory-brand { display: flex; align-items: center; gap: 14px; }
 .observatory-brand h1 { margin: 0; font-size: 20px; line-height: 1.15; letter-spacing: -0.02em; }
 .brand-subtitle { margin: 2px 0 0; color: var(--text-dim); font-size: 15px; }
+.application-build-identity { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
+body[data-application-channel="development"] #application-channel,
+body[data-application-channel="development"] .application-build-identity { color: #f2a900; }
 .brand-mark {
     position: relative;
     flex: 0 0 auto;

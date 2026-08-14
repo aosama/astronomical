@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::logging_config::LogLevel;
 use super::{
-    AstronomicalConfigError, CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME,
+    AstronomicalConfigError,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
@@ -120,12 +120,6 @@ pub(crate) struct LoggingConfigFile {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SupervisorConfigFile {
     pub(crate) bind_address: Option<String>,
-}
-
-pub(crate) fn config_file_path_for_home(home_directory: &Path) -> PathBuf {
-    home_directory
-        .join(CONFIG_DIRECTORY_NAME)
-        .join(CONFIG_FILE_NAME)
 }
 
 pub(crate) fn read_user_config_file(

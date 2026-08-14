@@ -76,7 +76,7 @@ async fn should_start_the_production_worker_from_an_ipc_startup_configuration() 
     write_config(temp_home.path(), r#"{"prompt_cache_max_size_gb":50}"#);
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
         .expect("Cargo should provide the production worker path");
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::new(
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
         temp_home.path().to_path_buf(),
         PathBuf::from(&worker_executable_path),
     )
@@ -182,7 +182,7 @@ fn chat_command() -> ChatGenerationCommand {
 }
 
 fn write_config(home_directory: &Path, config_json: &str) {
-    let config_directory = home_directory.join(".astronomical");
+    let config_directory = home_directory.join(".astronomical-dev");
     std::fs::create_dir_all(&config_directory).expect("config directory should be created");
     std::fs::write(config_directory.join("config.json"), config_json)
         .expect("config file should be written");

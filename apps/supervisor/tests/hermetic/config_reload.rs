@@ -20,8 +20,8 @@ use tokio::time::{Instant, sleep};
 
 #[test]
 fn should_mark_bind_address_changes_as_rest_api_restart_required() {
-    let current = resolved_config_with_bind_address("127.0.0.1:6732");
-    let candidate = resolved_config_with_bind_address("127.0.0.1:6733");
+    let current = resolved_config_with_bind_address("127.0.0.1:6733");
+    let candidate = resolved_config_with_bind_address("127.0.0.1:6734");
 
     let decision = ConfigReloadDiff::compare(&current, &candidate);
 
@@ -102,19 +102,20 @@ fn should_restart_worker_when_optimizer_prefill_chunck_candidates_change() {
     let current = sample_resolved_config();
     let mut candidate = sample_resolved_config();
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    let configuration_directory = temporary_home_directory.path().join(".astronomical");
+    let configuration_directory = temporary_home_directory.path().join(".astronomical-dev");
     std::fs::create_dir_all(&configuration_directory).expect("config directory should be created");
     std::fs::write(
         configuration_directory.join("config.json"),
         r#"{ "chunking": { "prefill_size_optimizer_enabled": true, "optimizer_prefill_token_candidates": [2048, 4096, 8192] } }"#,
     )
     .expect("config file should be written");
-    candidate.chunking = astronomical_config::AstronomicalConfig::load_from_home_directory(
-        temporary_home_directory.path(),
-    )
-    .expect("candidate config should load")
-    .chunking()
-    .expect("candidate chunking should resolve");
+    candidate.chunking =
+        astronomical_config::AstronomicalConfig::load_from_development_home_directory(
+            temporary_home_directory.path(),
+        )
+        .expect("candidate config should load")
+        .chunking()
+        .expect("candidate chunking should resolve");
 
     let decision = ConfigReloadDiff::compare(&current, &candidate);
 
@@ -264,7 +265,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
             PathBuf::from("/tmp/prompt-cache"),
             50_000_000_000,
         ),
-        bind_address: "127.0.0.1:6732".to_owned(),
+        bind_address: "127.0.0.1:6733".to_owned(),
         logging_config: LoggingConfig::new(
             PathBuf::from("/tmp/astronomical-logs"),
             LogLevel::Warn,
@@ -347,7 +348,7 @@ fn should_resolve_reload_config_from_the_config_file() {
         .expect("a config home should be created")
         .keep();
     let config_file_path = config_home_directory
-        .join(".astronomical")
+        .join(".astronomical-dev")
         .join("config.json");
     std::fs::create_dir_all(
         config_file_path
@@ -377,7 +378,7 @@ fn should_resolve_reload_config_from_the_config_file() {
         }"#,
     )
     .expect("the config file should be written");
-    let resolver = ResolvedRuntimeConfigResolver::new(
+    let resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         config_home_directory.clone(),
         PathBuf::from("/fallback/worker"),
     );
@@ -420,7 +421,7 @@ fn should_resolve_reload_config_from_the_config_file() {
         resolved_config
             .prompt_cache_config
             .global_prompt_cache_root_directory(),
-        &config_home_directory.join(".astronomical/cache")
+        &config_home_directory.join(".astronomical-dev/cache")
     );
 }
 
@@ -429,7 +430,7 @@ fn should_not_resolve_a_draft_model_when_speculative_prefill_is_disabled() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
     let config_file_path = config_home_directory
         .path()
-        .join(".astronomical")
+        .join(".astronomical-dev")
         .join("config.json");
     std::fs::create_dir_all(
         config_file_path
@@ -447,7 +448,7 @@ fn should_not_resolve_a_draft_model_when_speculative_prefill_is_disabled() {
         }"#,
     )
     .expect("the config file should be written");
-    let resolver = ResolvedRuntimeConfigResolver::new(
+    let resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         config_home_directory.path().to_path_buf(),
         PathBuf::from("/fallback/worker"),
     );
@@ -469,7 +470,7 @@ fn should_reject_enabled_speculative_prefill_when_target_model_is_not_discovered
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
     let config_file_path = config_home_directory
         .path()
-        .join(".astronomical")
+        .join(".astronomical-dev")
         .join("config.json");
     std::fs::create_dir_all(
         config_file_path
@@ -489,7 +490,7 @@ fn should_reject_enabled_speculative_prefill_when_target_model_is_not_discovered
         }"#,
     )
     .expect("the config file should be written");
-    let resolver = ResolvedRuntimeConfigResolver::new(
+    let resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         config_home_directory.path().to_path_buf(),
         PathBuf::from("/fallback/worker"),
     );

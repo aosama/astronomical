@@ -3,10 +3,11 @@ import SwiftUI
 
 @MainActor
 final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopoverDelegate {
-  private let supervisorClient = LocalSupervisorClient()
+  private let applicationIdentity = ApplicationIdentity.current()
+  private lazy var supervisorClient = LocalSupervisorClient(applicationIdentity: applicationIdentity)
   private lazy var telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
   private lazy var daemonLifecycleController = DaemonLifecycleController(
-    supervisorClient: supervisorClient)
+    supervisorClient: supervisorClient, applicationIdentity: applicationIdentity)
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
@@ -23,8 +24,9 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
       systemSymbolName: "sparkles", accessibilityDescription: "Astronomical")
     menuBarStatusItem.button?.image?.size = NSSize(width: 18, height: 18)
     menuBarStatusItem.button?.image?.isTemplate = true
-    menuBarStatusItem.button?.setAccessibilityLabel("Astronomical telemetry")
-    menuBarStatusItem.button?.toolTip = "Astronomical telemetry"
+    menuBarStatusItem.button?.setAccessibilityLabel(
+      "Astronomical \(applicationIdentity.channel.displayName) telemetry")
+    menuBarStatusItem.button?.toolTip = applicationIdentity.buildTitle
     statusItem = menuBarStatusItem
 
     let popover = NSPopover()
@@ -33,6 +35,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
     popover.contentViewController = NSHostingController(
       rootView: OrbitalTelemetryPopover(
         telemetryStore: telemetryStore,
+        applicationIdentity: applicationIdentity,
         openObservatory: { [weak self] in self?.openObservatory() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
@@ -43,11 +46,14 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
     telemetryPopover = popover
     telemetryStore.onMenuBarTitleChanged = { [weak self] menuBarTitle in
       guard let self else { return }
-      latestMenuBarTitle = menuBarTitle
+      let channelAwareMenuBarTitle =
+        applicationIdentity.channel == .development
+        ? " DEV\(menuBarTitle.isEmpty ? "" : " · \(menuBarTitle)")" : menuBarTitle
+      latestMenuBarTitle = channelAwareMenuBarTitle
       let currentTitle = statusItem?.button?.title ?? ""
       statusItem?.button?.title = menuBarTitleToDisplay(
         currentTitle: currentTitle,
-        latestTitle: menuBarTitle,
+        latestTitle: channelAwareMenuBarTitle,
         popoverIsShown: telemetryPopover?.isShown == true
       )
     }
@@ -104,7 +110,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
 
   private func openObservatory() {
     do {
-      let observatoryURL = try localSupervisorEndpointURL(path: "/")
+      let observatoryURL = try applicationIdentity.endpointURL(path: "/")
       guard NSWorkspace.shared.open(observatoryURL) else {
         throw ObservatoryLaunchError.defaultBrowserUnavailable
       }
@@ -114,8 +120,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
   }
 
   private func revealConfiguration() {
-    let configurationURL = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".astronomical/config.json")
+    let configurationURL = applicationIdentity.configFileURL()
     NSWorkspace.shared.activateFileViewerSelecting([configurationURL])
   }
 }
