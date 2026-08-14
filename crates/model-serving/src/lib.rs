@@ -107,11 +107,12 @@ pub use persistent_cache::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use persistent_cache::{
-    PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheDiskStoreError, PersistentPromptCachePublicationOutcome,
-    PersistentPromptCacheStartupCleanupCategory, PersistentPromptCacheStartupCleanupEvidence,
-    PersistentSpeculativePrefillPolicyPurgeOutcome, RestoredSpeculativePrefillTargetState,
-    build_persistent_prompt_cache_stats_event,
+    PersistentPromptCacheClearOutcome, PersistentPromptCacheDiskStore,
+    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheDiskStoreError,
+    PersistentPromptCachePublicationOutcome, PersistentPromptCacheStartupCleanupCategory,
+    PersistentPromptCacheStartupCleanupEvidence, PersistentSpeculativePrefillPolicyPurgeOutcome,
+    RestoredSpeculativePrefillTargetState, build_persistent_prompt_cache_stats_event,
+    clear_persistent_prompt_cache_directory,
 };
 pub use prefill_chunck_size_optimizer::{
     PrefillChunckOptimizerCandidateEvidence, PrefillChunckOptimizerContextEvidence,

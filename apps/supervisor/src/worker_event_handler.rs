@@ -406,6 +406,11 @@ pub(super) fn handle_worker_event(
         WorkerEvent::PersistentPromptCacheStats { .. } => {
             publish_persistent_prompt_cache_stats(health_snapshot, worker_event);
         }
+        WorkerEvent::PromptCacheCleared { .. } => {
+            return Err(protocol_violation(
+                "prompt-cache clear acknowledgement outside cache-clear wait",
+            ));
+        }
     }
     Ok(())
 }

@@ -164,6 +164,22 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     })
                     .await?;
             }
+            WorkerCommand::ClearPromptCache { model_id } => {
+                let acknowledged_model_id =
+                    if model_id.as_deref() == Some("astronomical/mismatched-clear-model") {
+                        Some("astronomical/different-model".to_owned())
+                    } else {
+                        model_id
+                    };
+                emit_cleared_cache_stats(&mut event_writer).await?;
+                event_writer
+                    .send_event(&WorkerEvent::PromptCacheCleared {
+                        model_id: acknowledged_model_id,
+                        blocks_removed: 3,
+                        bytes_freed: 4_096,
+                    })
+                    .await?;
+            }
         }
     }
     Ok(())
@@ -200,6 +216,31 @@ where
                 context_state_payload_bytes: 0,
                 speculative_prefill_draft_memory_bytes: 0,
             }),
+        })
+        .await
+}
+
+async fn emit_cleared_cache_stats<WriteTransport>(
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+where
+    WriteTransport: tokio::io::AsyncWrite + Unpin,
+{
+    event_writer
+        .send_event(&WorkerEvent::PersistentPromptCacheStats {
+            persistent_prompt_cache_hits: 0,
+            persistent_prompt_cache_misses: 0,
+            persistent_prompt_cache_tokens_saved: 0,
+            persistent_prompt_cache_block_token_count: 2_048,
+            persistent_prompt_cache_sequence_state_block_count: 0,
+            persistent_prompt_cache_boundary_state_snapshot_count: 0,
+            persistent_prompt_cache_visual_embedding_count: 0,
+            persistent_prompt_cache_total_size_bytes: 0,
+            persistent_prompt_cache_visual_embedding_total_size_bytes: 0,
+            persistent_prompt_cache_maximum_size_bytes: 50_000_000_000,
+            persistent_prompt_cache_visual_embedding_hits: 0,
+            persistent_prompt_cache_visual_embedding_misses: 0,
+            persistent_prompt_cache_visual_embedding_rows_loaded: 0,
         })
         .await
 }

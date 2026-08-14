@@ -66,6 +66,11 @@ pub enum WorkerControlError {
         /// Maximum interval permitted for the worker-side adjustment.
         memory_limit_update_timeout_millis: u128,
     },
+    /// The worker did not acknowledge a prompt-cache clear in time.
+    #[error(
+        "worker prompt-cache clear acknowledgement did not arrive within the {cache_clear_timeout_millis}-millisecond timeout"
+    )]
+    PromptCacheClearTimeout { cache_clear_timeout_millis: u128 },
 
     /// The supervisor no longer owns a worker process to operate on.
     #[error("supervisor does not currently own an active worker process")]

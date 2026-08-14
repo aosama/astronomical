@@ -82,4 +82,16 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         self.effective_mlx_memory_ceiling_bytes =
             usize::try_from(effective_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
     }
+
+    fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
+        Some(
+            self.prompt_cache_config
+                .global_prompt_cache_root_directory()
+                .as_path(),
+        )
+    }
+
+    fn performance_attribution_enabled(&self) -> bool {
+        self.performance_attribution_enabled
+    }
 }

@@ -70,7 +70,7 @@ impl PersistentPromptCacheDiskStoreConfig {
 
 /// Persistent, descriptor-backed SSD cache for Qwen3.5-MoE prompt-cache files.
 pub struct PersistentPromptCacheDiskStore {
-    active_model_prompt_cache_directory: PathBuf,
+    pub(super) active_model_prompt_cache_directory: PathBuf,
     pub(super) blocks_directory: PathBuf,
     pub(crate) visual_embeddings_directory: PathBuf,
     pub(crate) speculative_prefill_selections_directory: PathBuf,

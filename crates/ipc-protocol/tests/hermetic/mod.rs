@@ -5,5 +5,6 @@ mod chat_generation_validation_limits;
 mod experimental_ssd_paging_graph_submission;
 mod minimal_protocol;
 mod persistent_prompt_cache_diagnostics;
+mod prompt_cache_clear_protocol;
 mod runtime_feature_configuration;
 mod speculative_prefill_configuration;

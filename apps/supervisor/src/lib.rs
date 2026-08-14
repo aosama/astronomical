@@ -2,6 +2,7 @@
 
 mod application;
 mod application_build_identity;
+mod cache_clear_endpoint;
 mod chat_diagnostics;
 mod chat_generation_executor;
 mod config_reload;
@@ -26,6 +27,7 @@ mod shutdown_control;
 mod status_endpoint;
 mod system_telemetry;
 mod worker;
+mod worker_cache_clear;
 mod worker_completion_event;
 mod worker_containment;
 mod worker_control_error;
@@ -79,11 +81,12 @@ pub use openai_responses_translation::{
 pub use serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;
 pub use system_telemetry::parse_macos_memory_pressure_level;
+pub use worker_cache_clear::PromptCacheClearOutcome;
 pub use worker_control_error::WorkerControlError;
 pub use worker_handle::{GenerationQueueDepth, WorkerHandle};
 pub use worker_health::{
-    ActiveRequestProgress, PersistentPromptCacheSummary, WorkerActivity, WorkerHealthSnapshot,
-    WorkerHealthStatus,
+    ActiveRequestProgress, PendingPromptCacheClear, PersistentPromptCacheSummary, WorkerActivity,
+    WorkerHealthSnapshot, WorkerHealthStatus,
 };
 pub use worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 pub use worker_process::{WorkerProcess, WorkerTerminationOutcome};

@@ -1,4 +1,5 @@
 mod application;
+mod cache_clear;
 mod cache_stats;
 mod config_reload;
 mod copilot_responses_compatibility;

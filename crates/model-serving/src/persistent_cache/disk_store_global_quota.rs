@@ -61,7 +61,7 @@ pub(super) fn prepare_prompt_cache_directory_tree(
     Ok(())
 }
 
-fn reject_parent_directory_components(
+pub(super) fn reject_parent_directory_components(
     persistent_prompt_cache_directory: &Path,
 ) -> Result<(), PersistentPromptCacheDiskStoreError> {
     if persistent_prompt_cache_directory

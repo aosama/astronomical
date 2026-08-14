@@ -46,3 +46,45 @@ async fn should_report_prompt_cache_lookup_counters_when_generation_starts() {
     );
     close_worker_transport(supervisor_writer, worker_task).await;
 }
+
+#[tokio::test]
+async fn should_delegate_a_loaded_model_cache_clear_to_the_engine_owner() {
+    timeout(Duration::from_secs(2), async {
+        let expected_clear_event = WorkerEvent::PromptCacheCleared {
+            model_id: Some("example/scripted-chat".to_owned()),
+            blocks_removed: 4,
+            bytes_freed: 8_192,
+        };
+        let engine_worker = EngineBackedWorker::new(
+            ScriptedChatProcessor::new(),
+            ScriptedChatEngine::new().with_prompt_cache_clear_event(expected_clear_event.clone()),
+        );
+        let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+        let (supervisor_reader_transport, supervisor_writer_transport) =
+            split(supervisor_transport);
+        let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
+        let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+        let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+        let worker_task = tokio::spawn(async move {
+            engine_worker
+                .run(worker_reader_transport, worker_writer_transport)
+                .await
+        });
+
+        assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+        supervisor_writer
+            .send_command(&WorkerCommand::ClearPromptCache {
+                model_id: Some("example/scripted-chat".to_owned()),
+            })
+            .await
+            .expect("worker should receive the cache-clear command");
+        assert_eq!(
+            next_event(&mut supervisor_reader).await,
+            expected_clear_event
+        );
+
+        close_worker_transport(supervisor_writer, worker_task).await;
+    })
+    .await
+    .expect("loaded-engine cache-clear journey should finish within two seconds");
+}

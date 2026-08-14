@@ -16,6 +16,8 @@ pub(crate) mod disk_store;
 #[cfg(feature = "direct-mlx")]
 mod disk_store_block_transaction;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod disk_store_clear;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod disk_store_error;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod disk_store_file;
@@ -67,6 +69,10 @@ pub use counters::PersistentPromptCacheCounters;
 pub use counters::build_persistent_prompt_cache_stats_event;
 #[cfg(feature = "direct-mlx")]
 pub use disk_store::{PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig};
+#[cfg(feature = "direct-mlx")]
+pub use disk_store_clear::{
+    PersistentPromptCacheClearOutcome, clear_persistent_prompt_cache_directory,
+};
 #[cfg(feature = "direct-mlx")]
 pub use disk_store_error::PersistentPromptCacheDiskStoreError;
 #[cfg(feature = "direct-mlx")]
