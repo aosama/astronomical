@@ -11,8 +11,8 @@ use tokio::time::{Duration as TokioDuration, MissedTickBehavior, interval, timeo
 
 use crate::common::generation_progress::await_generation_advance_with_live_progress;
 
-const FIRST_MODEL_ID: &str = "Qwen3.6-35B-A3B-8bit";
-const REPLACEMENT_MODEL_ID: &str = "Qwen3.6-35B-A3B-oQ4e-mtp";
+const FIRST_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-6bit";
+const REPLACEMENT_MODEL_ID: &str = "AX-Qwen3.6-35B-A3B-MLX-OptiQ-4bit-MTP";
 const VALIDATION_MAXIMUM_OUTPUT_TOKENS: u32 = 20_480;
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 const IMAGE_PAD_TOKEN_ID: u32 = 248_069;
@@ -27,12 +27,12 @@ const SAY_HI_PROMPT_TOKEN_IDS: [u32; 15] = [
 ];
 
 #[tokio::test]
-#[ignore = "loads Qwen3.6-35B-A3B-8bit, then hot-swaps to Qwen3.6-35B-A3B-oQ4e-mtp"]
+#[ignore = "loads Ornith-1.0-35B-OptiQ-6bit, then hot-swaps to AX-Qwen3.6-35B-A3B-MLX-OptiQ-4bit-MTP"]
 async fn should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_model() {
     timeout(MODEL_SWAP_TEST_TIMEOUT, run_model_swap_allocator_contract())
         .await
         .expect(
-            "the 35B eight-bit-to-four-bit MLX allocator contract must finish within 105 seconds",
+            "the 35B six-bit-to-four-bit MLX allocator contract must finish within 105 seconds",
         );
 }
 
