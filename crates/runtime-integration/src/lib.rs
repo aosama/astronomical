@@ -35,6 +35,8 @@ mod mlx_metal_kernel;
 #[cfg(feature = "mlx")]
 mod mlx_operations;
 #[cfg(feature = "mlx")]
+mod mlx_quantization_construction;
+#[cfg(feature = "mlx")]
 mod mlx_quantized_operations;
 #[cfg(feature = "mlx")]
 mod mlx_random_operations;
