@@ -9,11 +9,11 @@ use serde::Deserialize;
 use super::logging_config::LogLevel;
 use super::{
     AstronomicalConfigError, CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME,
+    DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+    DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
-    DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
-    DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL, DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
-    DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
+    DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW, DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS, DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
     DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS, maximum_mlx_memory_gb_to_bytes,
     parse_loopback_bind_address, prompt_cache_size_gb_to_bytes,
@@ -70,10 +70,10 @@ pub(crate) struct ChunkingConfigFile {
     pub(crate) full_attention_key_value_growth_tokens: Option<u32>,
     /// Maximum prompt rows evaluated by one speculative drafter forward.
     pub(crate) speculative_prefill_draft_forward_tokens: Option<u32>,
-    /// Multi-token decoder-layer submission interval; zero keeps one lazy graph.
-    pub(crate) prefill_graph_submission_layer_interval: Option<u32>,
-    /// One-token decoder-layer submission interval; zero disables intermediate submission.
-    pub(crate) generation_graph_submission_layer_interval: Option<u32>,
+    /// Experimental multi-token layer interval used only while experts stream from disk.
+    pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: Option<u32>,
+    /// Experimental one-token layer interval used only while experts stream from disk.
+    pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: Option<u32>,
     /// Number of completed measurements retained for each optimizer candidate.
     pub(crate) prefill_optimizer_observation_window: Option<u32>,
     /// Prompt-position width represented by one optimizer context bucket.
@@ -143,8 +143,8 @@ pub(crate) fn read_user_config_file(
                     "optimizer_prefill_token_candidates": DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
                     "full_attention_key_value_growth_tokens": DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
                     "speculative_prefill_draft_forward_tokens": DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
-                    "prefill_graph_submission_layer_interval": DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-                    "generation_graph_submission_layer_interval": DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                    "experimental_ssd_paging_prefill_graph_submission_layer_interval": DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                    "experimental_ssd_paging_generation_graph_submission_layer_interval": DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
                     "prefill_optimizer_observation_window": DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
                     "prefill_optimizer_position_bucket_tokens": DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
                     "prompt_cache_block_tokens": null,

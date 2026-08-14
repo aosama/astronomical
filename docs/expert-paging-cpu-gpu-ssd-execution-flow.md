@@ -29,17 +29,17 @@ Each layer executes once. There is no missing-route replay, cross-layer expert c
 
 ## One-token decode
 
-1. After multi-token prefill finishes, `MlxRamBudget` may admit the largest exact decode-warm complete-layer prefix under `retained_expert_budget_bytes`; no second fixed byte cap is applied.
-2. If the current layer is warm, decode reuses that complete layer with ordinary gathered matrix multiplication.
-3. Otherwise Rust evaluates and deduplicates the top-K routed expert identifiers, builds bounded SafeTensors intervals only for that route, and executes the same gathered matrix operations.
-4. Multi-token prefill reuses warm complete layers that still fit `retained_expert_budget_bytes`. Only live budget pressure shrinks the warm prefix; prefill start must not zero the retention ceiling.
+1. After multi-token prefill, `MlxRamBudget` admits demand-selected pages ranked globally by observed route frequency. The last prompt-processing chunk records each assignment with `max(1, earlier_tokens / last_chunk_tokens)` so decode pages follow the prompt tail.
+2. Decode reuses covered routed experts, reads only missing top-K experts, partitions assignments by page, and adds the two sparse outputs before shared-expert combination.
+3. One-token admission reserves the largest model-derived routed page; multi-token prefill reserves a complete layer.
+4. Live pressure may shrink retained pages; prefill must not zero retention without pressure.
 
 ## Memory behavior
 
 - `maximum_mlx_memory_gb` remains the only user memory limit.
 - `MlxRamBudget` is the single source of truth for the split among `model_core_payload_bytes`, `context_window_reserve_bytes`, `activation_headroom_bytes`, `complete_layer_stream_slot_bytes`, and `retained_expert_budget_bytes`.
 - Allocation, context, speculative-prefill, complete-residency, recovery, and live-ceiling policies live beside `MlxRamBudget` under `model-serving/src/memory`; Qwen and paging modules do not recompute those decisions.
-- `context_window_reserve_bytes` starts at 1 GB SI and rises from live measurements; multi-token prefill keeps `complete_layer_stream_slot_bytes` and does not grow retained complete layers while activations are large.
+- `context_window_reserve_bytes` starts at 1 GB SI and learns persistent growth after subtracting separately charged transient activation evidence.
 - Initial admission reserves the model-derived largest complete expert layer because prefill streams one complete layer.
 - Bounded loading reports the exact pending page to the memory package before construction, then executes admit, allocator-cleanup, or reject advice.
 - Per-prefill-chunk synchronization and allocator cleanup release temporary layer storage before the next configured chunk.

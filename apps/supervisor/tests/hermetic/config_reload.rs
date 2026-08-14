@@ -363,8 +363,8 @@ fn should_resolve_reload_config_from_the_config_file() {
                 "fixed_prefill_tokens": 4096,
                 "full_attention_key_value_growth_tokens": 192,
                 "speculative_prefill_draft_forward_tokens": 1536,
-                "prefill_graph_submission_layer_interval": 0,
-                "generation_graph_submission_layer_interval": 6,
+                "experimental_ssd_paging_prefill_graph_submission_layer_interval": 0,
+                "experimental_ssd_paging_generation_graph_submission_layer_interval": 6,
                 "prefill_optimizer_observation_window": 7,
                 "prefill_optimizer_position_bucket_tokens": 16384,
                 "prompt_cache_block_tokens": 768,
@@ -391,9 +391,12 @@ fn should_resolve_reload_config_from_the_config_file() {
         worker_chunking.speculative_prefill_draft_forward_tokens,
         1_536
     );
-    assert_eq!(worker_chunking.prefill_graph_submission_layer_interval, 0);
     assert_eq!(
-        worker_chunking.generation_graph_submission_layer_interval,
+        worker_chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval,
+        0
+    );
+    assert_eq!(
+        worker_chunking.experimental_ssd_paging_generation_graph_submission_layer_interval,
         6
     );
     assert_eq!(worker_chunking.prefill_optimizer_observation_window, 7);

@@ -316,6 +316,18 @@ impl AdaptiveRamGrowthGuard {
             .unwrap_or(0)
     }
 
+    /// Returns transient evidence for this exact execution context.
+    #[must_use]
+    pub fn observed_transient_high_water_bytes_for_context(
+        &self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+    ) -> usize {
+        self.observed_transient_high_water_bytes_by_context
+            .get(&adaptive_ram_growth_context)
+            .copied()
+            .unwrap_or(0)
+    }
+
     /// Returns the largest transient window observed across all completed
     /// forward phases. Admission uses this conservative value because a future
     /// request may begin in a different phase than the request that supplied

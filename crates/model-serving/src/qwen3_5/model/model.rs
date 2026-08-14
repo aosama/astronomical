@@ -41,10 +41,7 @@ pub struct Qwen3_5Model {
         Option<RefCell<RetainedExpertLayerCache<Qwen3_5RetainedExpertLayer>>>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
-    /// True after request pressure forced the complete expert owner out.
-    /// Finalization consumes this one-shot flag and stays paged instead of
-    /// immediately reading the same complete payload back into memory.
-    pub(crate) should_defer_next_request_finalization_resident_promotion: bool,
+
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
@@ -120,6 +117,22 @@ impl Qwen3_5Model {
             expert_pager
                 .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
         }
+    }
+
+    /// Returns phase-correct sparse loading workspace for forward admission.
+    pub(crate) fn expert_page_reservation_bytes_for_forward(
+        &self,
+        forward_token_count: usize,
+    ) -> Result<u64, Qwen3_5ExecutionError> {
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
+            return Ok(0);
+        };
+        if forward_token_count > 1 {
+            return Ok(expert_pager.maximum_expert_page_bytes());
+        }
+        Ok(expert_pager.maximum_routed_expert_page_bytes(
+            usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX),
+        )?)
     }
 
     /// Retains the admission handoff while Rust-streamed pages remain operation-local.

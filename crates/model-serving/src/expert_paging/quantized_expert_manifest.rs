@@ -210,6 +210,86 @@ pub struct QuantizedExpertPageManifest {
     pub payload_byte_count: u64,
 }
 
+/// Disjoint assignment positions for one retained page and its route misses.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExpertPageRoutePartition {
+    pub retained_assignment_positions: Vec<usize>,
+    pub retained_expert_ids: Vec<usize>,
+    pub missing_assignment_positions: Vec<usize>,
+    pub missing_expert_ids: Vec<usize>,
+}
+
+impl QuantizedExpertPageManifest {
+    /// Reports whether every global expert has a compact page slot.
+    #[must_use]
+    pub fn contains_all_experts(&self) -> bool {
+        self.expert_ids.len() == self.page_slot_by_global_expert_id.len()
+            && self
+                .page_slot_by_global_expert_id
+                .iter()
+                .all(|page_slot| *page_slot != u32::MAX)
+    }
+
+    /// Reports whether this compact page can execute every routed expert.
+    #[must_use]
+    pub fn contains_every_expert(&self, selected_expert_ids: &[usize]) -> bool {
+        selected_expert_ids.iter().all(|expert_id| {
+            self.page_slot_by_global_expert_id
+                .get(*expert_id)
+                .is_some_and(|page_slot| *page_slot != u32::MAX)
+        })
+    }
+
+    /// Returns routed experts absent from this page in stable route-ID order.
+    #[must_use]
+    pub fn missing_expert_ids(&self, selected_expert_ids: &[usize]) -> Vec<usize> {
+        selected_expert_ids
+            .iter()
+            .copied()
+            .filter(|expert_id| {
+                self.page_slot_by_global_expert_id
+                    .get(*expert_id)
+                    .is_none_or(|page_slot| *page_slot == u32::MAX)
+            })
+            .collect()
+    }
+
+    /// Partitions routed assignments without changing their original order.
+    #[must_use]
+    pub fn partition_route_assignments(
+        &self,
+        selected_expert_ids: &[usize],
+    ) -> ExpertPageRoutePartition {
+        let mut retained_assignment_positions = Vec::new();
+        let mut retained_expert_ids = Vec::new();
+        let mut missing_assignment_positions = Vec::new();
+        let mut missing_expert_ids = Vec::new();
+        for (assignment_position, expert_id) in selected_expert_ids.iter().copied().enumerate() {
+            let is_retained = self
+                .page_slot_by_global_expert_id
+                .get(expert_id)
+                .is_some_and(|page_slot| *page_slot != u32::MAX);
+            if is_retained {
+                retained_assignment_positions.push(assignment_position);
+                retained_expert_ids.push(expert_id);
+            } else {
+                missing_assignment_positions.push(assignment_position);
+                missing_expert_ids.push(expert_id);
+            }
+        }
+        retained_expert_ids.sort_unstable();
+        retained_expert_ids.dedup();
+        missing_expert_ids.sort_unstable();
+        missing_expert_ids.dedup();
+        ExpertPageRoutePartition {
+            retained_assignment_positions,
+            retained_expert_ids,
+            missing_assignment_positions,
+            missing_expert_ids,
+        }
+    }
+}
+
 /// Validated source metadata for one full quantized expert tensor.
 #[derive(Clone, Debug)]
 pub struct QuantizedTensorSource {

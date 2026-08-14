@@ -35,16 +35,16 @@ pub struct WorkerChunkingConfiguration {
     pub full_attention_key_value_growth_tokens: u32,
     /// Maximum token rows evaluated by one speculative-prefill drafter forward.
     pub speculative_prefill_draft_forward_tokens: u32,
-    /// Decoder-layer interval for intermediate multi-token graph submission.
+    /// Experimental decoder-layer interval for multi-token solid-state-drive paging.
     ///
-    /// Zero is meaningful: it keeps one complete prefill chunk as one lazy MLX
-    /// graph instead of inserting intermediate scheduler boundaries.
-    pub prefill_graph_submission_layer_interval: u32,
-    /// Decoder-layer interval for intermediate one-token graph submission.
+    /// Zero keeps one complete prefill chunk as one lazy MLX graph. A positive
+    /// value is ignored while experts are fully memory resident.
+    pub experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+    /// Experimental decoder-layer interval for one-token solid-state-drive paging.
     ///
-    /// Zero disables intermediate generation submission; a positive value can
-    /// overlap host graph construction with graphics-processor execution.
-    pub generation_graph_submission_layer_interval: u32,
+    /// Zero disables intermediate generation submission. A positive value is
+    /// ignored while experts are fully memory resident.
+    pub experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     /// Completed observations retained per optimizer candidate and context.
     pub prefill_optimizer_observation_window: u32,
     /// Prompt-position width represented by one optimizer context identifier.
@@ -53,4 +53,42 @@ pub struct WorkerChunkingConfiguration {
     pub prompt_cache_block_tokens: Option<u32>,
     /// Number of cache blocks between retained branch restart checkpoints.
     pub prompt_cache_common_prefix_stride_blocks: u32,
+}
+
+/// Returns the experimental solid-state-drive paging layer interval for one forward.
+///
+/// Fully resident experts always return 0 so the decoder stays one lazy tape.
+/// A positive configured interval applies only while sparse experts stream from disk.
+#[must_use]
+pub const fn experimental_ssd_paging_graph_submission_layer_interval(
+    token_count: i32,
+    sparse_experts_are_paged: bool,
+    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+    experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
+) -> u32 {
+    if !sparse_experts_are_paged {
+        return 0;
+    }
+    if token_count == 1 {
+        experimental_ssd_paging_generation_graph_submission_layer_interval
+    } else {
+        experimental_ssd_paging_prefill_graph_submission_layer_interval
+    }
+}
+
+impl WorkerChunkingConfiguration {
+    /// Returns the experimental solid-state-drive paging interval for one forward.
+    #[must_use]
+    pub const fn experimental_ssd_paging_graph_submission_layer_interval(
+        &self,
+        token_count: i32,
+        sparse_experts_are_paged: bool,
+    ) -> u32 {
+        experimental_ssd_paging_graph_submission_layer_interval(
+            token_count,
+            sparse_experts_are_paged,
+            self.experimental_ssd_paging_prefill_graph_submission_layer_interval,
+            self.experimental_ssd_paging_generation_graph_submission_layer_interval,
+        )
+    }
 }

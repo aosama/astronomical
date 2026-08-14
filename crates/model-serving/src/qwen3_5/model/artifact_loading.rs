@@ -264,6 +264,12 @@ impl Qwen3_5Model {
         let largest_complete_expert_layer_bytes = expert_pager
             .as_ref()
             .map_or(0, Qwen3_5ExpertPager::maximum_expert_page_bytes);
+        let largest_routed_expert_page_bytes =
+            expert_pager.as_ref().map_or(Ok(0), |expert_pager| {
+                expert_pager.maximum_routed_expert_page_bytes(
+                    usize::try_from(config.experts_per_token()).unwrap_or(usize::MAX),
+                )
+            })?;
         let mlx_ram_budget = MlxRamBudget::new(
             u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
                 Qwen3_5ExecutionError::InvalidInput {
@@ -274,6 +280,7 @@ impl Qwen3_5Model {
                 model_core_payload_bytes,
                 complete_expert_payload_bytes,
                 largest_complete_expert_layer_bytes,
+                largest_routed_expert_page_bytes,
             },
         )
         .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
@@ -292,7 +299,7 @@ impl Qwen3_5Model {
             resident_expert_weights: None,
             retained_expert_layers,
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
-            should_defer_next_request_finalization_resident_promotion: false,
+
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,

@@ -1,12 +1,24 @@
 //! Whole-model transitions between contiguous residency and native paging.
 //!
+//! # Two ownership modes a later reader must not mix
+//!
+//! - Complete residency: every mixture-of-experts weight sits in RAM as one
+//!   owner (`resident_expert_weights = Some`). Decode never reads experts from
+//!   disk. This owner is atomic: paging cannot evict three specialists and keep
+//!   the rest.
+//! - Paged mode: expert weights live on disk. A layer either streams for one
+//!   operation or keeps a smaller demand-selected page in
+//!   `retained_expert_layers`.
+//!
+//! # Safe orders
+//!
 //! Promotion follows prepare -> build candidate -> publish. Native retention is
 //! frozen before its pages are reclaimed, and the model remains observably paged
 //! until a complete candidate exists. Demotion follows synchronize -> unpublish
 //! -> drop -> clear allocator -> resume paging. These orders prevent lazy MLX
 //! work from retaining released arrays and make every failure state usable.
 //!
-//! The promotion admission formula is deliberately replacement-aware:
+//! # Replacement-aware admission
 //!
 //! `projected active = current active - retained paged experts + complete experts`
 //!
@@ -16,6 +28,11 @@
 //! formula has the opposite failure: an impossible promotion destroys the hot set
 //! and makes the next request read the same experts from disk again. Therefore the
 //! fit decision must happen first, while the retained pages still have an owner.
+//!
+//! There is no sticky "stay paged" flag. Decode handoff and request finalization
+//! ask this file whether the leftover ceiling admits the complete owner. If it
+//! does not fit, the model stays paged and decode-warm may pin demand-selected
+//! pages instead.
 
 use astronomical_runtime_integration::MlxRuntimeError;
 
@@ -27,25 +44,46 @@ use crate::{
     required_complete_residency_activation_headroom_bytes,
 };
 
-/// A safe owner-thread boundary that requested an expert residency transition.
+/// Why the owner thread asked for a whole-model expert residency change.
+///
+/// These labels exist for logs and attribution, not for sticky policy. The
+/// leftover ceiling still decides whether promotion fits. Do not add a variant
+/// that means "never promote again".
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Qwen3_5ExpertResidencyTransitionReason {
+    /// First load: try complete residency before the first user request.
     Startup,
+    /// A new request projected that complete experts still fit beside context.
     RequestAdmission,
+    /// Prefill activations did not fit, so demote the complete owner now.
     RequestPressure,
+    /// The request is gone. Idle RAM may restore the complete owner.
     RequestFinalization,
+    /// Prefill just finished. Decode activations are smaller, so try again
+    /// before the first generated token. This is the post-prefill restore.
+    DecodeHandoff,
+    /// The user raised the public memory ceiling.
     CeilingRaise,
+    /// The user lowered the public memory ceiling.
     CeilingLower,
+    /// Draft-model loading needs the target to yield or reclaim expert RAM.
     SpeculativePrefillDraftLoading,
 }
 
 /// Nonfatal outcomes from an optional complete-model promotion attempt.
+///
+/// A `DoesNotFit` or `RecoverableCapacityRejection` result is a normal paged
+/// outcome. The caller must keep serving the user from disk or demand-selected
+/// pages. Only a structural `Err` is a real failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Qwen3_5ExpertResidencyPromotionOutcome {
+    /// Dense models, or sparse models that already own every expert.
     AlreadyResident,
+    /// The complete owner is now published and paged pages were released.
     Promoted,
-    DeferredAfterRequestPressure,
+    /// The leftover ceiling plus required activation headroom is too small.
     DoesNotFit,
+    /// Native allocation rejected the candidate after admission. Paging remains.
     RecoverableCapacityRejection,
 }
 
@@ -79,21 +117,9 @@ impl Qwen3_5Model {
         if self.resident_expert_weights.is_some() {
             return Ok(Qwen3_5ExpertResidencyPromotionOutcome::AlreadyResident);
         }
-        if transition_reason == Qwen3_5ExpertResidencyTransitionReason::RequestFinalization
-            && self.should_defer_next_request_finalization_resident_promotion
-        {
-            // This request just paid to unload the complete expert payload. Do
-            // not make its cleanup pay to load that same payload again. Clearing
-            // the flag makes this hysteresis one-shot: an explicit ceiling raise
-            // or a later clean idle opportunity may still promote normally.
-            self.should_defer_next_request_finalization_resident_promotion = false;
-            tracing::info!(
-                ?transition_reason,
-                outcome = "deferred_after_request_pressure",
-                "deferred complete-model expert residency admission"
-            );
-            return Ok(Qwen3_5ExpertResidencyPromotionOutcome::DeferredAfterRequestPressure);
-        }
+        // Decode handoff and request finalization may restore the complete
+        // owner when the leftover ceiling admits it. Fit is decided below, not
+        // by a sticky paged flag from the earlier demotion.
         let complete_expert_payload_bytes = expert_pager.complete_expert_payload_byte_count()?;
         tracing::info!(
             ?transition_reason,
@@ -261,7 +287,6 @@ impl Qwen3_5Model {
         // This assignment is the only Paged -> Resident publication point. No
         // observer can report Resident while only some layers have loaded.
         self.resident_expert_weights = Some(candidate_resident_expert_weights);
-        self.should_defer_next_request_finalization_resident_promotion = false;
         tracing::info!(
             ?transition_reason,
             complete_expert_payload_bytes,
@@ -298,16 +323,6 @@ impl Qwen3_5Model {
                 // clearing it makes the newly paged mode's capacity observable.
                 let allocator_cleanup_result = self.runtime.clear_allocator_cache();
                 allocator_cleanup_result?;
-                if matches!(
-                    transition_reason,
-                    Qwen3_5ExpertResidencyTransitionReason::RequestAdmission
-                        | Qwen3_5ExpertResidencyTransitionReason::RequestPressure
-                ) {
-                    // Remember why the owner was released. Ceiling changes and
-                    // speculative-draft transitions have their own explicit
-                    // promotion policy and must not inherit this one-shot delay.
-                    self.should_defer_next_request_finalization_resident_promotion = true;
-                }
                 tracing::info!(
                     ?transition_reason,
                     released_resident_expert_payload_bytes,

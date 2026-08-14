@@ -117,6 +117,30 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
             .and_then(|chunking| chunking.get("optimizer_prefill_token_candidates")),
         Some(&serde_json::json!([1_024, 2_048, 4_096, 8_192]))
     );
+    assert_eq!(
+        generated_config_json.get("chunking").and_then(|chunking| {
+            chunking.get("experimental_ssd_paging_prefill_graph_submission_layer_interval")
+        }),
+        Some(&serde_json::json!(0))
+    );
+    assert_eq!(
+        generated_config_json.get("chunking").and_then(|chunking| {
+            chunking.get("experimental_ssd_paging_generation_graph_submission_layer_interval")
+        }),
+        Some(&serde_json::json!(3))
+    );
+    assert!(
+        generated_config_json
+            .get("chunking")
+            .and_then(|chunking| chunking.get("prefill_graph_submission_layer_interval"))
+            .is_none()
+    );
+    assert!(
+        generated_config_json
+            .get("chunking")
+            .and_then(|chunking| chunking.get("generation_graph_submission_layer_interval"))
+            .is_none()
+    );
     assert!(astronomical_config.mtp_enabled());
     assert_eq!(
         astronomical_config

@@ -1,8 +1,8 @@
 //! MLX gathered execution against one Rust-streamed expert layer.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::MlxArray;
 
-use crate::expert_paging::QuantizedExpertPageManifest;
+use crate::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
@@ -13,8 +13,7 @@ use super::routing::{
     MINIMUM_SORTED_EXPERT_ASSIGNMENTS, qwen3_5_moe_sort_expert_assignments,
     qwen3_5_moe_sorted_expert_weighted_sum,
 };
-
-const REMAP_EXPERT_PAGE_SLOTS_OPERATION: &str = "remap Qwen3.5-MoE expert page slots";
+use super::split_page_route::{Qwen3_5MoESplitPageRoute, qwen3_5_moe_remap_expert_page_slots};
 
 impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
@@ -116,12 +115,16 @@ impl Qwen3_5Model {
                     sorted_unique_expert_ids,
                     page_manifest,
                 )?;
-                self.forward_moe_with_streamed_weights(
+                let sparse_output = self.forward_moe_with_streamed_weights(
                     hidden_states,
-                    mixture_of_experts_weights,
                     paged_expert_weights,
                     &page_slot_indices,
                     selected_scores,
+                )?;
+                self.combine_paged_sparse_and_shared_outputs(
+                    hidden_states,
+                    mixture_of_experts_weights,
+                    &sparse_output,
                     should_use_compiled_elementwise_graphs,
                 )
             },
@@ -133,15 +136,70 @@ impl Qwen3_5Model {
         Ok(paged_output)
     }
 
+    /// Executes one route from a retained page plus an operation-local miss page.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn forward_moe_split_paged_with_performance_attribution(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        retained_expert_weights: &Qwen3_5PagedExpertWeights,
+        retained_page_manifest: &QuantizedExpertPageManifest,
+        missing_expert_weights: &Qwen3_5PagedExpertWeights,
+        missing_page_manifest: &QuantizedExpertPageManifest,
+        selected_indices: &MlxArray,
+        selected_scores: &MlxArray,
+        route_partition: &ExpertPageRoutePartition,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let paged_output = performance_attribution.measure_operation(
+            PerformanceOperation::PagedMoeGraphConstruction,
+            |_performance_attribution| {
+                let split_page_route = Qwen3_5MoESplitPageRoute::build(
+                    &self.runtime,
+                    selected_indices,
+                    selected_scores,
+                    route_partition,
+                    retained_page_manifest,
+                    missing_page_manifest,
+                )?;
+                let retained_sparse_output = self.forward_moe_with_streamed_weights(
+                    hidden_states,
+                    retained_expert_weights,
+                    &split_page_route.retained_page_slot_indices,
+                    &split_page_route.retained_scores,
+                )?;
+                let missing_sparse_output = self.forward_moe_with_streamed_weights(
+                    hidden_states,
+                    missing_expert_weights,
+                    &split_page_route.missing_page_slot_indices,
+                    &split_page_route.missing_scores,
+                )?;
+                let sparse_output = self
+                    .runtime
+                    .add(&retained_sparse_output, &missing_sparse_output)?;
+                self.combine_paged_sparse_and_shared_outputs(
+                    hidden_states,
+                    mixture_of_experts_weights,
+                    &sparse_output,
+                    should_use_compiled_elementwise_graphs,
+                )
+            },
+        )?;
+        performance_attribution.record_counter(
+            PerformanceCounter::RustStreamedExpertProjectionGraphCount,
+            6,
+        );
+        Ok(paged_output)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn forward_moe_with_streamed_weights(
         &self,
         hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         paged_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
@@ -199,12 +257,7 @@ impl Qwen3_5Model {
                 self.runtime.sum_axis(&weighted_outputs, -2, false)?
             }
         };
-        self.combine_paged_sparse_and_shared_outputs(
-            hidden_states,
-            mixture_of_experts_weights,
-            &sparse_output,
-            should_use_compiled_elementwise_graphs,
-        )
+        Ok(sparse_output)
     }
 
     fn streamed_expert_linear(
@@ -290,33 +343,4 @@ impl Qwen3_5Model {
             &shared_gate_logits,
         )?)
     }
-}
-
-pub fn qwen3_5_moe_remap_expert_page_slots(
-    runtime: &MlxRuntime,
-    selected_indices: &MlxArray,
-    sorted_unique_expert_ids: &[usize],
-    page_manifest: &QuantizedExpertPageManifest,
-) -> Result<MlxArray, MlxRuntimeError> {
-    if sorted_unique_expert_ids.iter().any(|expert_id| {
-        page_manifest
-            .page_slot_by_global_expert_id
-            .get(*expert_id)
-            .is_none_or(|page_slot| *page_slot == u32::MAX)
-    }) {
-        return Err(MlxRuntimeError::RuntimeOperation {
-            operation: REMAP_EXPERT_PAGE_SLOTS_OPERATION,
-            description: "a routed expert is absent from the streamed page manifest".to_owned(),
-        });
-    }
-    let expert_capacity = i32::try_from(page_manifest.page_slot_by_global_expert_id.len())
-        .map_err(|_| MlxRuntimeError::RuntimeOperation {
-            operation: REMAP_EXPERT_PAGE_SLOTS_OPERATION,
-            description: "expert capacity exceeds the MLX shape range".to_owned(),
-        })?;
-    let page_slots = runtime.array_from_u32(
-        &page_manifest.page_slot_by_global_expert_id,
-        &[expert_capacity],
-    )?;
-    runtime.take_axis(&page_slots, selected_indices, 0)
 }

@@ -160,6 +160,9 @@ impl Qwen3_5Model {
                 requested_mlx_memory_ceiling_bytes,
             )?;
             let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+            // A user-raised ceiling is an explicit new fit proof. CeilingRaise is
+            // not blocked by request-pressure hysteresis, so more RAM can restore
+            // complete residency without bothering the user.
             self.try_promote_experts_to_resident(
                 Qwen3_5ExpertResidencyTransitionReason::CeilingRaise,
                 &mut disabled_performance_attribution,
