@@ -2,10 +2,22 @@ use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, SpeculativePrefillRuntimeState,
     WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerInsight,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse, WorkerRuntimeFeatureConfiguration,
+    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
 };
-use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
+
+mod publisher;
+
+pub(crate) use publisher::{
+    clear_active_request_progress, clear_latest_mlx_memory_snapshot,
+    publish_active_request_progress, publish_activity, publish_expert_memory_mode,
+    publish_expert_residency, publish_health, publish_latest_mlx_memory_snapshot,
+    publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
+    publish_pending_mlx_memory_ceiling, publish_pending_prompt_cache_clear,
+    publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
+    record_prompt_work_reuse, record_serving_session,
+};
+
 /// Coarse worker availability state exposed by the supervisor readiness endpoint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerHealthStatus {
@@ -42,6 +54,8 @@ pub enum WorkerActivity {
     Idle,
     /// A request is active but no output has reached the supervisor yet.
     PromptProcessing,
+    /// Prompt processing finished and expert ownership is being prepared for decode.
+    GenerationPreparation,
     /// At least one generated output has reached the supervisor.
     Generating,
 }
@@ -53,6 +67,7 @@ impl WorkerActivity {
         match self {
             Self::Idle => "idle",
             Self::PromptProcessing => "prompt_processing",
+            Self::GenerationPreparation => "generation_preparation",
             Self::Generating => "generating",
         }
     }
@@ -72,12 +87,30 @@ pub enum ActiveRequestProgress {
         /// Present only after the engine completes and measures a prefill chunk.
         completed_prefill_chunck_tokens: Option<u32>,
     },
+    /// Prefill completed and the worker is preparing the first decode forward.
+    GenerationPreparation {
+        request_started_at: Instant,
+        preparation_started_at: Instant,
+        total_layer_count: u32,
+        complete_layer_count: u32,
+        partial_layer_count: u32,
+    },
     /// Accumulated generation progress for the active request.
     Generation {
         generated_token_count: u32,
         maximum_output_tokens: u32,
         elapsed_millis: u64,
     },
+}
+
+/// Latest worker-reported complete-versus-partial sparse-expert topology.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ExpertResidencySnapshot {
+    pub total_layer_count: u32,
+    pub complete_layer_count: u32,
+    pub complete_layer_payload_bytes: u64,
+    pub partial_layer_count: u32,
+    pub partial_layer_payload_bytes: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -166,6 +199,8 @@ pub struct WorkerHealthSnapshot {
     pub active_request_progress: Option<ActiveRequestProgress>,
     /// Latest worker-reported sparse-expert residency.
     pub expert_memory_mode: Option<ExpertMemoryMode>,
+    /// Concrete topology retained independently of transient request progress.
+    pub expert_residency: Option<ExpertResidencySnapshot>,
     /// Actual MTP runtime state: Disabled, TargetOnly, Active, or Unavailable.
     pub mtp_runtime_state: MtpRuntimeState,
     /// Concise reason when MTP runtime state is Unavailable.
@@ -216,6 +251,7 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: Some(capabilities),
             active_request_progress: None,
             expert_memory_mode: None,
+            expert_residency: None,
             mtp_runtime_state,
             mtp_unavailable_reason,
             speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
@@ -288,6 +324,7 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: None,
             active_request_progress: None,
             expert_memory_mode: None,
+            expert_residency: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
@@ -318,6 +355,7 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: None,
             active_request_progress: None,
             expert_memory_mode: None,
+            expert_residency: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
@@ -371,152 +409,5 @@ impl WorkerHealthSnapshot {
     ) -> Self {
         self.worker_runtime_feature_configuration = Some(worker_runtime_feature_configuration);
         self
-    }
-}
-pub(crate) fn publish_health(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    worker_health_snapshot: WorkerHealthSnapshot,
-) {
-    if let Ok(mut health_snapshot) = health_snapshot.write() {
-        *health_snapshot = worker_health_snapshot;
-    }
-}
-
-pub(crate) fn publish_activity(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    worker_activity: WorkerActivity,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.activity = worker_activity;
-    }
-}
-
-pub(crate) fn publish_active_request_progress(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    progress: ActiveRequestProgress,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.active_request_progress = Some(progress);
-    }
-}
-
-pub(crate) fn clear_active_request_progress(health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.active_request_progress = None;
-    }
-}
-
-pub(crate) fn publish_expert_memory_mode(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    expert_memory_mode: ExpertMemoryMode,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.expert_memory_mode = Some(expert_memory_mode);
-    }
-}
-
-pub(crate) fn publish_persistent_prompt_cache_stats(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    persistent_prompt_cache_stats: WorkerEvent,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.persistent_prompt_cache_stats = Some(persistent_prompt_cache_stats);
-    }
-}
-
-pub(crate) fn publish_latest_mlx_memory_snapshot(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    mlx_memory_snapshot: WorkerMlxMemorySnapshot,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.latest_mlx_memory_snapshot = Some(mlx_memory_snapshot);
-    }
-}
-
-pub(crate) fn clear_latest_mlx_memory_snapshot(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.latest_mlx_memory_snapshot = None;
-    }
-}
-
-pub(crate) fn publish_pending_mlx_memory_ceiling(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    pending_mlx_memory_ceiling_bytes: Option<u64>,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.pending_mlx_memory_ceiling_bytes = pending_mlx_memory_ceiling_bytes;
-    }
-}
-
-pub(crate) fn publish_pending_prompt_cache_clear(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    pending_prompt_cache_clear: Option<PendingPromptCacheClear>,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.pending_prompt_cache_clear = pending_prompt_cache_clear;
-    }
-}
-
-pub(crate) fn publish_mlx_memory_limit_changed(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    effective_mlx_memory_ceiling_bytes: u64,
-    minimum_mlx_memory_ceiling_bytes: u64,
-    expert_memory_mode: ExpertMemoryMode,
-    mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes;
-        worker_health_snapshot.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
-        worker_health_snapshot.pending_mlx_memory_ceiling_bytes = None;
-        worker_health_snapshot.mlx_memory_limit_error = None;
-        worker_health_snapshot.expert_memory_mode = worker_health_snapshot
-            .ready_model_id
-            .as_ref()
-            .map(|_| expert_memory_mode);
-        worker_health_snapshot.latest_mlx_memory_snapshot = mlx_memory_snapshot;
-    }
-}
-
-pub(crate) fn publish_mlx_memory_limit_rejection(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    minimum_mlx_memory_ceiling_bytes: u64,
-    reason: String,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
-        worker_health_snapshot.pending_mlx_memory_ceiling_bytes = None;
-        worker_health_snapshot.mlx_memory_limit_error = Some(reason);
-    }
-}
-
-pub(crate) fn record_serving_session(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    prompt_token_count: u32,
-    cached_token_count: u32,
-    prefill_tok_per_second: Option<f64>,
-    generation_tok_per_second: Option<f64>,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot
-            .serving_session
-            .record_completed_request(
-                prompt_token_count,
-                cached_token_count,
-                prefill_tok_per_second,
-                generation_tok_per_second,
-            );
-    }
-}
-
-pub(crate) fn record_prompt_work_reuse(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    prompt_work_reuse: WorkerPromptWorkReuse,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot
-            .serving_session
-            .record_prompt_work_reuse(prompt_work_reuse);
     }
 }

@@ -250,6 +250,28 @@ async fn should_terminate_worker_after_an_out_of_order_event() {
 }
 
 #[tokio::test]
+async fn should_terminate_worker_after_duplicate_generation_preparation() {
+    let worker_executor = launch_fixture().await;
+    let mut malformed_stream = worker_executor
+        .start_chat_generation(command_for_model(
+            "astronomical/duplicate-generation-preparation-fixture",
+            1_000,
+        ))
+        .await
+        .expect("the fixture should start the duplicate-preparation request");
+
+    assert_eq!(
+        receive_event(&mut malformed_stream).await,
+        ChatGenerationStreamEvent::Error(ChatGenerationStreamErrorCode::WorkerUnavailable)
+    );
+    wait_for_health(&worker_executor, WorkerHealthStatus::Unavailable).await;
+    worker_executor
+        .shutdown()
+        .await
+        .expect("shutdown should succeed");
+}
+
+#[tokio::test]
 async fn should_terminate_worker_after_an_empty_output_batch() {
     let worker_executor = launch_fixture().await;
     let mut malformed_stream = worker_executor

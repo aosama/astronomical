@@ -24,8 +24,7 @@ pub(crate) use model::feed_forward_weights::bind_qwen3_5_moe_feed_forward_weight
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
-    Qwen3_5ExpertResidencyPromotionOutcome, Qwen3_5ExpertResidencyTransitionReason,
-    reclaim_retained_experts_for_request_memory_pressure,
+    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{

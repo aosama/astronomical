@@ -29,10 +29,10 @@
 //! and makes the next request read the same experts from disk again. Therefore the
 //! fit decision must happen first, while the retained pages still have an owner.
 //!
-//! There is no sticky "stay paged" flag. Decode handoff and request finalization
-//! ask this file whether the leftover ceiling admits the complete owner. If it
-//! does not fit, the model stays paged and decode-warm may pin demand-selected
-//! pages instead.
+//! There is no sticky "stay paged" flag. Startup may install the atomic complete
+//! owner when it fits; request pressure may demote it. Once paging is active,
+//! phase-aware read-through retention preserves complete and routed layer pages
+//! without whole-model promotion during generation preparation or finalization.
 
 use astronomical_runtime_integration::MlxRuntimeError;
 
@@ -57,13 +57,6 @@ pub(crate) enum Qwen3_5ExpertResidencyTransitionReason {
     RequestAdmission,
     /// Prefill activations did not fit, so demote the complete owner now.
     RequestPressure,
-    /// The request is gone. Idle RAM may restore the complete owner.
-    RequestFinalization,
-    /// Prefill just finished. Decode activations are smaller, so try again
-    /// before the first generated token. This is the post-prefill restore.
-    DecodeHandoff,
-    /// The user raised the public memory ceiling.
-    CeilingRaise,
     /// The user lowered the public memory ceiling.
     CeilingLower,
     /// Draft-model loading needs the target to yield or reclaim expert RAM.

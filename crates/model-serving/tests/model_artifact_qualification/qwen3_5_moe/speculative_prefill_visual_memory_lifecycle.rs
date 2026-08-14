@@ -172,6 +172,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
                 );
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
         }
     }
     assert!(
@@ -308,6 +309,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         match generated_token {
             GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::PrefillProgress {
                 completed_prefill_chunck_tokens,
                 ..

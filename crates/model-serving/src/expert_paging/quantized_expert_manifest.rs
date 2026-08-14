@@ -121,6 +121,14 @@ pub enum ExpertManifestError {
         layer_prefix: String,
         tensor_name: String,
     },
+    #[error(
+        "complete expert payload geometry disagrees for layer {layer_prefix:?}: per-expert calculation={calculated_payload_bytes}, source calculation={source_payload_bytes}"
+    )]
+    InconsistentCompleteExpertPayload {
+        layer_prefix: String,
+        calculated_payload_bytes: u64,
+        source_payload_bytes: u64,
+    },
 }
 
 /// One selected expert run copied from one original quantized tensor.
@@ -319,6 +327,29 @@ pub struct QuantizedExpertLayerPlan {
 }
 
 impl QuantizedExpertLayerPlan {
+    /// Returns the exact packed payload bytes for one expert across all tensors.
+    pub fn expert_payload_byte_count(&self) -> Result<u64, ExpertManifestError> {
+        self.tensor_sources
+            .iter()
+            .try_fold(0_u64, |expert_payload_bytes, tensor_source| {
+                let bytes_per_expert =
+                    u64::try_from(tensor_source.bytes_per_expert).map_err(|_| {
+                        ExpertManifestError::CompleteExpertPayloadByteCountOverflow {
+                            layer_prefix: self.layer_prefix.clone(),
+                            tensor_name: tensor_source.tensor_name.clone(),
+                        }
+                    })?;
+                expert_payload_bytes
+                    .checked_add(bytes_per_expert)
+                    .ok_or_else(
+                        || ExpertManifestError::CompleteExpertPayloadByteCountOverflow {
+                            layer_prefix: self.layer_prefix.clone(),
+                            tensor_name: tensor_source.tensor_name.clone(),
+                        },
+                    )
+            })
+    }
+
     /// Returns the exact source payload needed to retain every expert in this layer.
     ///
     /// Each source covers one projection parameter across the complete leading
@@ -326,9 +357,9 @@ impl QuantizedExpertLayerPlan {
     /// packed weights, scales, and biases independently without estimating from
     /// a nominal quantization label.
     pub fn complete_expert_payload_byte_count(&self) -> Result<u64, ExpertManifestError> {
-        self.tensor_sources
-            .iter()
-            .try_fold(0_u64, |complete_layer_payload_bytes, tensor_source| {
+        let source_payload_bytes = self.tensor_sources.iter().try_fold(
+            0_u64,
+            |complete_layer_payload_bytes, tensor_source| {
                 let tensor_payload_overflow =
                     || ExpertManifestError::CompleteExpertPayloadByteCountOverflow {
                         layer_prefix: self.layer_prefix.clone(),
@@ -344,7 +375,30 @@ impl QuantizedExpertLayerPlan {
                 complete_layer_payload_bytes
                     .checked_add(tensor_payload_bytes)
                     .ok_or_else(tensor_payload_overflow)
-            })
+            },
+        )?;
+        let calculated_payload_bytes = self
+            .expert_payload_byte_count()?
+            .checked_mul(u64::try_from(self.expert_capacity).map_err(|_| {
+                ExpertManifestError::CompleteExpertPayloadByteCountOverflow {
+                    layer_prefix: self.layer_prefix.clone(),
+                    tensor_name: "complete-layer expert capacity".to_owned(),
+                }
+            })?)
+            .ok_or_else(
+                || ExpertManifestError::CompleteExpertPayloadByteCountOverflow {
+                    layer_prefix: self.layer_prefix.clone(),
+                    tensor_name: "complete-layer expert capacity".to_owned(),
+                },
+            )?;
+        if calculated_payload_bytes != source_payload_bytes {
+            return Err(ExpertManifestError::InconsistentCompleteExpertPayload {
+                layer_prefix: self.layer_prefix.clone(),
+                calculated_payload_bytes,
+                source_payload_bytes,
+            });
+        }
+        Ok(source_payload_bytes)
     }
 }
 

@@ -344,6 +344,7 @@ async fn run_capacity_retry_continuation(
                 }
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
                 panic!("the retry qualification ended before 512 output tokens");
             }

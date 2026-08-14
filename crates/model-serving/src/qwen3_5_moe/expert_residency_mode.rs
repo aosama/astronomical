@@ -1,4 +1,4 @@
-//! How much expert RAM decode-warm may pin, and when prefill recovery must demote.
+//! How much expert RAM phase-aware retention may own, and when prefill must demote.
 //!
 //! # Mental model for a later reader
 //!
@@ -11,15 +11,14 @@
 //! request pressure demotes that owner and may install a temporary retained-page
 //! cap so the rest of the prompt can finish. That cap is not the decode budget.
 //!
-//! After prefill, activations shrink. Decode-warm may then spend the leftover
-//! composed RAM plan on demand-selected pages. Restoring the complete owner is
-//! a separate promotion admit in `expert_residency_transition.rs`. This file
-//! only answers two policy questions:
+//! After prefill, activations shrink. Stable complete layers and elastic routed
+//! pages may then use the leftover composed RAM plan, but only mandatory reads
+//! can install new ownership. This file answers two policy questions:
 //!
-//! 1. How many bytes may decode-warm pin?
+//! 1. How many bytes may phase-aware retention own?
 //! 2. Must native prefill recovery demote the complete owner before retry?
 
-/// Bytes decode-warm may pin after composing the leftover retained-expert budget.
+/// Bytes phase-aware retention may own after composing the expert budget.
 ///
 /// `planned_retained_expert_budget_bytes` is the leftover after subtracting
 /// model core, learned context reserve, activation headroom, and one complete
@@ -27,7 +26,7 @@
 /// already granted.
 ///
 /// `requested_retained_expert_payload_bytes` is an optional smaller caller
-/// ceiling. Decode handoff passes `u64::MAX` so the composed plan wins.
+/// ceiling. Generation preparation passes `u64::MAX` so the composed plan wins.
 /// Tests and diagnostic callers may pass a smaller number.
 ///
 /// Do not shrink this to "one routed top-K page per layer" after request

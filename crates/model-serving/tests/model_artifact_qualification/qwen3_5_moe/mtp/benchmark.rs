@@ -538,6 +538,7 @@ async fn run_one_generation(
                 measurement.record_mlx_memory_telemetry(mlx_memory_telemetry);
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
                 panic!("the Qwen benchmark should finalize on an emitted token")
             }

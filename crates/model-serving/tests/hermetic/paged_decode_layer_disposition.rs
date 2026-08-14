@@ -82,7 +82,7 @@ fn should_record_a_streamed_disk_load_after_releasing_the_empty_layer_borrow() {
         let retained_expert_cache = retained_expert_layers.borrow();
         assert!(
             retained_expert_cache.retained_layer(0).is_none(),
-            "decode-warm may leave some layers empty after a capped fill"
+            "phase-aware retention may leave a layer empty until a mandatory route read"
         );
         PagedDecodeLayerDisposition::from_retained_page(
             retained_expert_cache

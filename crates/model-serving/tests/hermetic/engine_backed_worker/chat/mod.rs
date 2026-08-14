@@ -9,15 +9,15 @@ use astronomical_ipc_protocol::{
     ChatGenerationOutput, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
     ChatToolChoice, ChatToolDefinition, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 use astronomical_model_serving::{
-    EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
-    GenerationFinalization, InferenceEngine, InferenceEngineError, MlxActiveMemoryBreakdown,
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory, ModelGeneratedTokenTranslation,
-    ModelGenerationOutputError, ModelGenerationProcessor, PreparedInferenceRequest,
-    PreparedModelGeneration, WorkerRuntimeError,
+    EngineBackedWorker, EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry,
+    GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
+    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory,
+    ModelGeneratedTokenTranslation, ModelGenerationOutputError, ModelGenerationProcessor,
+    PreparedInferenceRequest, PreparedModelGeneration, WorkerRuntimeError,
 };
 use tokio::{
     io::{AsyncWrite, duplex, split},

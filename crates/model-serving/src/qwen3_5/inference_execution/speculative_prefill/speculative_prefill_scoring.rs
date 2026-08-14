@@ -489,7 +489,7 @@ impl Qwen3_5EngineState {
             restored_draft_prefix_token_count,
             draft_prompt_state_persistence_failed,
         )?;
-        self.release_speculative_prefill_draft_and_restore_target_residency(
+        self.release_speculative_prefill_draft_and_resume_target_retention(
             active_request,
             draft_visual_embeddings,
             draft_model,

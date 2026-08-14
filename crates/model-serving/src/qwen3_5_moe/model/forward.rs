@@ -3,7 +3,9 @@
 use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::{PagedDecodeLayerDisposition, PerformanceAttribution, PerformanceOperation};
+use crate::{
+    PagedDecodeLayerDisposition, PerformanceAttribution, PerformanceCounter, PerformanceOperation,
+};
 
 use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
@@ -132,6 +134,10 @@ impl Qwen3_5Model {
                 retained_expert_layers.borrow().retained_layer(layer_index)
             && retained_expert_layer.manifest.contains_all_experts()
         {
+            performance_attribution.record_counter(
+                PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
+                retained_expert_layer.manifest.payload_byte_count,
+            );
             if paged_prefill_execution_mode
                 == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
             {
@@ -181,7 +187,7 @@ impl Qwen3_5Model {
                 None
             };
 
-        // Reuse a demand-selected page directly when it covers the complete route.
+        // Reuse an execution-retained page directly when it covers the complete route.
         if should_use_loaded_model_mode
             && let Some(retained_expert_layers) = self.retained_expert_layers.as_ref()
             && let Some(sorted_unique_expert_ids) = sorted_unique_expert_ids.as_ref()
@@ -189,6 +195,10 @@ impl Qwen3_5Model {
                 retained_expert_layers.borrow().retained_layer(layer_index)
             && retained_expert_layer.contains_every_expert(sorted_unique_expert_ids)
         {
+            performance_attribution.record_counter(
+                PerformanceCounter::RetainedRouteAssignmentHitCount,
+                u64::try_from(selected_expert_ids.as_ref().map_or(0, Vec::len)).unwrap_or(u64::MAX),
+            );
             if paged_prefill_execution_mode
                 == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
             {
@@ -257,6 +267,16 @@ impl Qwen3_5Model {
                     );
                 }
                 PagedDecodeLayerDisposition::SplitRetainedAndMissing(route_partition) => {
+                    performance_attribution.record_counter(
+                        PerformanceCounter::RetainedRouteAssignmentHitCount,
+                        u64::try_from(route_partition.retained_assignment_positions.len())
+                            .unwrap_or(u64::MAX),
+                    );
+                    performance_attribution.record_counter(
+                        PerformanceCounter::RetainedRouteAssignmentMissCount,
+                        u64::try_from(route_partition.missing_assignment_positions.len())
+                            .unwrap_or(u64::MAX),
+                    );
                     let (missing_expert_weights, missing_page_manifest) = expert_pager
                         .load_rust_streamed_expert_layer(
                             &self.runtime,
@@ -366,91 +386,6 @@ impl Qwen3_5Model {
             false,
             paged_prefill_execution_mode,
             sorted_unique_expert_ids.as_deref(),
-            performance_attribution,
-        )
-    }
-
-    // Paging dependencies stay explicit instead of adding a request-context abstraction.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn forward_moe_with_layer_store_paging(
-        &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        route_token_count: i32,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
-        should_execute_token_projections_separately: bool,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
-        known_sorted_unique_expert_ids: Option<&[usize]>,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let copied_sorted_unique_expert_ids;
-        let sorted_unique_expert_ids = match known_sorted_unique_expert_ids {
-            Some(sorted_unique_expert_ids) => sorted_unique_expert_ids,
-            None => {
-                copied_sorted_unique_expert_ids =
-                    self.copy_sorted_unique_expert_ids(selected_indices)?;
-                &copied_sorted_unique_expert_ids
-            }
-        };
-        let streamed_expert_ids = if route_token_count > 1 {
-            (0..expert_pager.layer_plan(layer_index)?.expert_capacity).collect::<Vec<_>>()
-        } else {
-            sorted_unique_expert_ids.to_vec()
-        };
-        let (streamed_expert_weights, page_manifest) = expert_pager
-            .load_rust_streamed_expert_layer(
-                &self.runtime,
-                layer_index,
-                &streamed_expert_ids,
-                performance_attribution,
-            )?;
-        if let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() {
-            retained_expert_layers.borrow_mut().record_disk_load(
-                streamed_expert_ids.len(),
-                page_manifest.source_manifests.len(),
-            );
-        }
-        performance_attribution.measure_operation(
-            PerformanceOperation::ExpertPagingDiagnosticLogging,
-            |_performance_attribution| {
-                tracing::debug!(
-                    layer_index,
-                    route_expert_count = sorted_unique_expert_ids.len(),
-                    streamed_expert_count = streamed_expert_ids.len(),
-                    streamed_payload_bytes = page_manifest.payload_byte_count,
-                    ?paged_prefill_execution_mode,
-                    "Rust expert layer streaming completed"
-                );
-            },
-        );
-        if should_execute_token_projections_separately {
-            return self.forward_moe_paged_target_verification_with_performance_attribution(
-                hidden_states,
-                mixture_of_experts_weights,
-                &streamed_expert_weights,
-                &page_manifest,
-                selected_indices,
-                &streamed_expert_ids,
-                selected_scores,
-                performance_attribution,
-            );
-        }
-        // Multi-token pages stay operation-local: execute, then drop. Pinning every
-        // complete layer during prefill forces near-ceiling MLX residency and
-        // collapses the measured streaming path.
-        self.forward_moe_paged_with_performance_attribution(
-            hidden_states,
-            mixture_of_experts_weights,
-            &streamed_expert_weights,
-            &page_manifest,
-            selected_indices,
-            sorted_unique_expert_ids,
-            selected_scores,
-            should_use_compiled_elementwise_graphs,
             performance_attribution,
         )
     }

@@ -115,6 +115,23 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     "astronomical/activity-transition-fixture" => {
                         send_activity_transition(request_id, &mut event_writer).await?;
                     }
+                    "astronomical/duplicate-generation-preparation-fixture" => {
+                        let generation_preparation_event =
+                            WorkerEvent::GenerationPreparationStarted {
+                                request_id,
+                                total_layer_count: 40,
+                                complete_layer_count: 25,
+                                complete_layer_payload_bytes: 22_649_241_600,
+                                partial_layer_count: 15,
+                                partial_layer_payload_bytes: 424_673_280,
+                            };
+                        event_writer
+                            .send_event(&generation_preparation_event)
+                            .await?;
+                        event_writer
+                            .send_event(&generation_preparation_event)
+                            .await?;
+                    }
                     "astronomical/out-of-order-chat-fixture" => {
                         event_writer
                             .send_event(&WorkerEvent::Output {
@@ -283,7 +300,14 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     context_state_payload_bytes: 2_000,
                                     speculative_prefill_draft_memory_bytes: 0,
                                 }),
+                                expert_residency: None,
                                 speculative_prefill_draft_memory_snapshot: None,
+                            })
+                            .await?;
+                        event_writer
+                            .send_event(&WorkerEvent::FirstDecodeCompleted {
+                                request_id,
+                                elapsed_millis: 321,
                             })
                             .await?;
                         event_writer
@@ -301,6 +325,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             .send_event(&WorkerEvent::GenerationFinalized {
                                 request_id,
                                 expert_memory_mode: Some(ExpertMemoryMode::Resident),
+                                expert_residency: None,
                                 mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                                     source: MlxMemorySnapshotSource::Finalized,
                                     active_memory_bytes: 24_000,

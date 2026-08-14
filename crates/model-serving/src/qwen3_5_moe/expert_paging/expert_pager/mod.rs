@@ -105,10 +105,6 @@ pub(crate) struct Qwen3_5RetainedExpertLayer {
 }
 
 impl Qwen3_5RetainedExpertLayer {
-    pub(crate) fn has_exact_expert_ids(&self, expert_ids: &[usize]) -> bool {
-        self.manifest.expert_ids == expert_ids
-    }
-
     pub(crate) fn contains_every_expert(&self, selected_expert_ids: &[usize]) -> bool {
         self.manifest.contains_every_expert(selected_expert_ids)
     }
@@ -185,14 +181,6 @@ impl Qwen3_5ExpertPager {
     ) {
         self.memory_budget
             .update_active_memory_ceiling_bytes(configured_mlx_memory_ceiling_bytes);
-    }
-
-    /// Rust-streamed pages are operation-local, so adaptive admission has no
-    /// retained streaming owner to re-plan before the next forward.
-    pub(crate) fn set_pending_admitted_forward_reserve_bytes(
-        &self,
-        _admitted_forward_reserve_bytes: u64,
-    ) {
     }
 
     pub(crate) fn update_observed_transient_high_water_bytes(

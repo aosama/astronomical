@@ -453,9 +453,9 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
                 mlx_memory_telemetry,
                 ..
             } => mlx_memory_telemetry.as_ref(),
-            GeneratedToken::PromptProcessingPhaseStarted { .. } | GeneratedToken::EndOfSequence => {
-                None
-            }
+            GeneratedToken::PromptProcessingPhaseStarted { .. }
+            | GeneratedToken::GenerationPreparationStarted { .. }
+            | GeneratedToken::EndOfSequence => None,
         };
         if let Some(memory_telemetry) = memory_telemetry {
             maximum_active_memory_bytes =

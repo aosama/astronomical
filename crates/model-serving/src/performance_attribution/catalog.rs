@@ -42,7 +42,12 @@ pub enum PerformanceOperation {
     PersistentPromptCacheAtomicCommit,
     PagedRouterGraphConstruction,
     RetainedExpertPagePlanning,
+    PhaseAwareExpertResidencyPlanning,
     RustExpertStreamingLayerPreparation,
+    MandatoryPrefillCompleteLayerMaterializationWait,
+    MandatoryDecodeRoutePageMaterializationWait,
+    ExpertResidencyCommit,
+    GenerationPreparation,
     ExpertRetentionReclamation,
     PagedMoeGraphConstruction,
     ResidentMoeGraphConstruction,
@@ -115,7 +120,12 @@ impl PerformanceOperation {
         Self::PersistentPromptCacheAtomicCommit,
         Self::PagedRouterGraphConstruction,
         Self::RetainedExpertPagePlanning,
+        Self::PhaseAwareExpertResidencyPlanning,
         Self::RustExpertStreamingLayerPreparation,
+        Self::MandatoryPrefillCompleteLayerMaterializationWait,
+        Self::MandatoryDecodeRoutePageMaterializationWait,
+        Self::ExpertResidencyCommit,
+        Self::GenerationPreparation,
         Self::ExpertRetentionReclamation,
         Self::PagedMoeGraphConstruction,
         Self::ResidentMoeGraphConstruction,
@@ -213,7 +223,16 @@ impl PerformanceOperation {
             Self::PersistentPromptCacheAtomicCommit => "persistent_prompt_cache_atomic_commit",
             Self::PagedRouterGraphConstruction => "paged_router_graph_construction",
             Self::RetainedExpertPagePlanning => "retained_expert_page_planning",
+            Self::PhaseAwareExpertResidencyPlanning => "phase_aware_expert_residency_planning",
             Self::RustExpertStreamingLayerPreparation => "rust_expert_streaming_layer_preparation",
+            Self::MandatoryPrefillCompleteLayerMaterializationWait => {
+                "mandatory_prefill_complete_layer_materialization_wait"
+            }
+            Self::MandatoryDecodeRoutePageMaterializationWait => {
+                "mandatory_decode_route_page_materialization_wait"
+            }
+            Self::ExpertResidencyCommit => "expert_residency_commit",
+            Self::GenerationPreparation => "generation_preparation",
             Self::ExpertRetentionReclamation => "expert_retention_reclamation",
             Self::PagedMoeGraphConstruction => "paged_moe_graph_construction",
             Self::ResidentMoeGraphConstruction => "resident_moe_graph_construction",
@@ -289,6 +308,7 @@ impl PerformanceOperation {
                 | Self::MtpPromptHistoryInitializationSpan
                 | Self::AttentionForwardSpan
                 | Self::MlpForwardSpan
+                | Self::GenerationPreparation
         )
     }
 }

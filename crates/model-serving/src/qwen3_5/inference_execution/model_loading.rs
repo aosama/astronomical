@@ -134,7 +134,6 @@ impl Qwen3_5EngineState {
                     resolved_target_token_identifier_mapping_digest,
                     target_max_output_tokens,
                     self.memory_limits,
-                    false,
                     &mut model_loading_performance_attribution,
                 )?;
             // This startup drafter exists only to prove compatibility and derive

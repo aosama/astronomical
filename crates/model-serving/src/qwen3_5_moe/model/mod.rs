@@ -1,6 +1,3 @@
-/// Demand-selected page fill after prefill. Does not restore complete residency.
-#[cfg(feature = "direct-mlx")]
-mod decode_warm_expert_layers;
 #[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
@@ -22,7 +19,11 @@ mod paged_execution;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_resolution;
 #[cfg(feature = "direct-mlx")]
+mod phase_aware_expert_residency;
+#[cfg(feature = "direct-mlx")]
 mod prefill_execution_mode;
+#[cfg(feature = "direct-mlx")]
+mod read_through_residency;
 #[cfg(feature = "direct-mlx")]
 mod resident_execution;
 #[cfg(feature = "direct-mlx")]
@@ -33,9 +34,7 @@ mod routing;
 mod split_page_route;
 
 #[cfg(feature = "direct-mlx")]
-pub(crate) use expert_residency_transition::{
-    Qwen3_5ExpertResidencyPromotionOutcome, Qwen3_5ExpertResidencyTransitionReason,
-};
+pub(crate) use expert_residency_transition::Qwen3_5ExpertResidencyTransitionReason;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_retention_memory_pressure::reclaim_retained_experts_for_request_memory_pressure;
 #[cfg(feature = "direct-mlx")]
@@ -44,6 +43,8 @@ pub use output_combination::qwen3_5_moe_combine_experts;
 pub(crate) use paged_route_resolution::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
 };
+#[cfg(feature = "direct-mlx")]
+pub(crate) use phase_aware_expert_residency::record_expert_reclamation_attribution;
 #[cfg(feature = "direct-mlx")]
 pub use prefill_execution_mode::Qwen3_5MoEPagedPrefillExecutionMode;
 #[cfg(feature = "direct-mlx")]

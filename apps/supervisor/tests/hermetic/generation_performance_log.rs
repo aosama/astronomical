@@ -96,6 +96,14 @@ fn should_open_and_append_to_performance_log() {
         prefill_elapsed_millis: 1_000,
         generation_elapsed_millis: 2_000,
         total_elapsed_millis: 3_500,
+        time_to_first_output_millis: Some(1_750),
+        generation_preparation_elapsed_millis: Some(250),
+        first_decode_forward_elapsed_millis: Some(83),
+        generation_preparation_expert_source_read_byte_count: 0,
+        final_complete_expert_layer_count: Some(20),
+        final_complete_expert_payload_bytes: Some(10_000_000_000),
+        final_partial_expert_layer_count: Some(20),
+        final_partial_expert_payload_bytes: Some(1_000_000_000),
         prefill_tok_per_second: Some(5_000.0),
         generation_tok_per_second: Some(100.0),
         mlx_peak_memory_bytes: Some(40_000_000_000),
@@ -159,6 +167,12 @@ fn should_open_and_append_to_performance_log() {
     assert_eq!(parsed["prefill_elapsed_millis"], 1_000);
     assert_eq!(parsed["generation_elapsed_millis"], 2_000);
     assert_eq!(parsed["total_elapsed_millis"], 3_500);
+    assert_eq!(parsed["time_to_first_output_millis"], 1_750);
+    assert_eq!(parsed["generation_preparation_elapsed_millis"], 250);
+    assert_eq!(
+        parsed["generation_preparation_expert_source_read_byte_count"],
+        0
+    );
     assert_eq!(parsed["prefill_tok_per_second"], 5_000.0);
     assert_eq!(parsed["generation_tok_per_second"], 100.0);
     assert_eq!(parsed["mlx_peak_memory_bytes"], 40_000_000_000_i64);
@@ -202,6 +216,14 @@ fn should_append_multiple_records_to_performance_log() {
         prefill_elapsed_millis: 200,
         generation_elapsed_millis: 1_000,
         total_elapsed_millis: 1_500,
+        time_to_first_output_millis: Some(400),
+        generation_preparation_elapsed_millis: Some(100),
+        first_decode_forward_elapsed_millis: Some(10),
+        generation_preparation_expert_source_read_byte_count: 0,
+        final_complete_expert_layer_count: Some(1),
+        final_complete_expert_payload_bytes: Some(1_000),
+        final_partial_expert_layer_count: Some(1),
+        final_partial_expert_payload_bytes: Some(100),
         prefill_tok_per_second: Some(5_000.0),
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
@@ -220,6 +242,14 @@ fn should_append_multiple_records_to_performance_log() {
         prefill_elapsed_millis: 100,
         generation_elapsed_millis: 10_000,
         total_elapsed_millis: 11_000,
+        time_to_first_output_millis: Some(700),
+        generation_preparation_elapsed_millis: Some(200),
+        first_decode_forward_elapsed_millis: Some(15),
+        generation_preparation_expert_source_read_byte_count: 0,
+        final_complete_expert_layer_count: Some(2),
+        final_complete_expert_payload_bytes: Some(2_000),
+        final_partial_expert_layer_count: Some(2),
+        final_partial_expert_payload_bytes: Some(200),
         prefill_tok_per_second: Some(10_000.0),
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: Some(35_000_000_000),
@@ -260,6 +290,14 @@ fn should_serialize_null_for_optional_fields() {
         prefill_elapsed_millis: 0,
         generation_elapsed_millis: 1_000,
         total_elapsed_millis: 1_500,
+        time_to_first_output_millis: None,
+        generation_preparation_elapsed_millis: None,
+        first_decode_forward_elapsed_millis: None,
+        generation_preparation_expert_source_read_byte_count: 0,
+        final_complete_expert_layer_count: None,
+        final_complete_expert_payload_bytes: None,
+        final_partial_expert_layer_count: None,
+        final_partial_expert_payload_bytes: None,
         prefill_tok_per_second: None,
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
