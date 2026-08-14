@@ -24,7 +24,8 @@ print_usage() {
     printf '%s\n' "Usage: scripts/make-astronomical-app.sh [--channel development|stable]"
     printf '%s\n' ""
     printf '%s\n' "Builds release binaries, assembles Astronomical.app, and runs"
-    printf '%s\n' "post-build validation. Output:"
+    printf '%s\n' "post-build validation. Generated apps use .noindex output directories"
+    printf '%s\n' "so Spotlight exposes only explicitly installed applications."
     printf '%s\n' "Development is the safe default. Stable builds require a clean worktree."
 }
 
@@ -65,7 +66,7 @@ finish_phase() {
 remove_previous_app_bundle() {
     bundle_path="$1"
     case "$bundle_path" in
-        *"/target/astronomical-macos-development/Astronomical Development.app"|*"/target/astronomical-macos-stable/Astronomical.app")
+        *"/target/astronomical-macos-development.noindex/Astronomical Development.app"|*"/target/astronomical-macos-stable.noindex/Astronomical.app")
             rm -rf "$bundle_path"
             ;;
         *)
@@ -117,6 +118,7 @@ main() {
     require_command sysctl
     require_command codesign
     require_command plutil
+    require_command iconutil
     require_command git
     require_command jq
     finish_phase "success"
@@ -124,7 +126,9 @@ main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
     case "$APPLICATION_CHANNEL" in
         development)
-            release_directory="${repository_root}/target/astronomical-macos-development"
+            # The .noindex suffix keeps this generated app out of Spotlight
+            # while retaining it for direct launch and validation.
+            release_directory="${repository_root}/target/astronomical-macos-development.noindex"
             app_bundle_path="${release_directory}/Astronomical Development.app"
             bundle_name="Astronomical Development"
             bundle_identifier="dev.astronomical.app.development"
@@ -132,7 +136,8 @@ main() {
             state_directory_name=".astronomical-dev"
             ;;
         stable)
-            release_directory="${repository_root}/target/astronomical-macos-stable"
+            # Only the promoted ~/Applications copy should appear in Spotlight.
+            release_directory="${repository_root}/target/astronomical-macos-stable.noindex"
             app_bundle_path="${release_directory}/Astronomical.app"
             bundle_name="Astronomical"
             bundle_identifier="dev.astronomical.app"
@@ -147,6 +152,9 @@ main() {
     application_version="$(cargo metadata --no-deps --format-version 1 | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .version')"
     build_commit="$(git rev-parse --short=12 HEAD)"
     build_number="$(git rev-list --count HEAD)"
+    # The icon and bundle metadata use one UTC date so their visible and
+    # machine-readable build identities cannot disagree around local midnight.
+    build_date_utc="$(date -u '+%Y%m%d')"
     if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
         build_dirty="true"
     else
@@ -202,7 +210,9 @@ main() {
         printf '  <key>CFBundleIdentifier</key><string>%s</string>\n' "$bundle_identifier"
         printf '  <key>CFBundleVersion</key><string>%s</string>\n' "$build_number"
         printf '  <key>CFBundleShortVersionString</key><string>%s</string>\n' "$application_version"
+        printf '%s\n' '  <key>CFBundleIconFile</key><string>Astronomical.icns</string>'
         printf '  <key>AstronomicalChannel</key><string>%s</string>\n' "$APPLICATION_CHANNEL"
+        printf '  <key>AstronomicalBuildDate</key><string>%s</string>\n' "$build_date_utc"
         printf '  <key>AstronomicalSupervisorPort</key><integer>%s</integer>\n' "$supervisor_port"
         printf '  <key>AstronomicalStateDirectoryName</key><string>%s</string>\n' "$state_directory_name"
         printf '  <key>AstronomicalBuildCommit</key><string>%s</string>\n' "$build_commit"
@@ -229,6 +239,24 @@ main() {
        "${app_bundle_path}/Contents/Resources/THIRD_PARTY_NOTICES"
     cp "${repository_root}/third-party/RUST_DEPENDENCY_NOTICES" \
        "${app_bundle_path}/Contents/Resources/RUST_DEPENDENCY_NOTICES"
+
+    # Render the complete icon family from build identity rather than storing
+    # release-specific artwork that can drift from the packaged version.
+    iconset_directory="${app_bundle_path}/Contents/Resources/Astronomical.iconset"
+    icon_resource="${app_bundle_path}/Contents/Resources/Astronomical.icns"
+    swift "${repository_root}/scripts/render-astronomical-app-icon.swift" \
+        --output-directory "$iconset_directory" \
+        --version "$application_version" \
+        --build-date "$build_date_utc"
+    iconutil --convert icns --output "$icon_resource" "$iconset_directory"
+    case "$iconset_directory" in
+        "${app_bundle_path}/Contents/Resources/Astronomical.iconset") rm -rf "$iconset_directory" ;;
+        *) print_error "refusing to remove unexpected iconset path: ${iconset_directory}"; exit 1 ;;
+    esac
+    [ -s "$icon_resource" ] || {
+        print_error "generated macOS icon is unavailable: ${icon_resource}"
+        exit 1
+    }
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-menu"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomicald"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-inference-worker"
