@@ -195,12 +195,12 @@ impl ResolvedRuntimeConfig {
                 speculative_prefill_draft_forward_tokens: self
                     .chunking
                     .speculative_prefill_draft_forward_tokens(),
-                prefill_graph_submission_layer_interval: self
+                experimental_ssd_paging_prefill_graph_submission_layer_interval: self
                     .chunking
-                    .prefill_graph_submission_layer_interval(),
-                generation_graph_submission_layer_interval: self
+                    .experimental_ssd_paging_prefill_graph_submission_layer_interval(),
+                experimental_ssd_paging_generation_graph_submission_layer_interval: self
                     .chunking
-                    .generation_graph_submission_layer_interval(),
+                    .experimental_ssd_paging_generation_graph_submission_layer_interval(),
                 prefill_optimizer_observation_window: self
                     .chunking
                     .prefill_optimizer_observation_window(),

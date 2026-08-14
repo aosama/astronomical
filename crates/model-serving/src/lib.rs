@@ -4,7 +4,6 @@ mod artifact_validation;
 mod decoder_cache;
 mod deepseek_v4;
 mod engine_backed_worker;
-#[cfg(feature = "direct-mlx")]
 mod expert_paging;
 mod inference_engine;
 mod memory;
@@ -39,15 +38,15 @@ pub use deepseek_v4::{
     deepseek_v4_unavailable_reason,
 };
 pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
-#[cfg(feature = "direct-mlx")]
 pub use expert_paging::{
-    ExpertManifestError, ExpertWeightMemoryCacheStatistics, ExpertWeightPage, QuantizationMode,
-    QuantizedExpertLayerPlan, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
-    QuantizedExpertSourceInterval, QuantizedExpertTensorRange, QuantizedTensorSource,
-    RetainedExpertLayerCache, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
-    TensorHeaderEntry, build_quantized_expert_page_manifest_from_plan, parse_safetensors_header,
-    validate_expert_ids, validate_quantization_contract, validate_source_intervals,
-    validate_virtual_intervals,
+    ExpertManifestError, ExpertPageRoutePartition, ExpertWeightMemoryCacheStatistics,
+    ExpertWeightPage, PagedDecodeLayerDisposition, QuantizationMode, QuantizedExpertLayerPlan,
+    QuantizedExpertPageManifest, QuantizedExpertShardManifest, QuantizedExpertSourceInterval,
+    QuantizedExpertTensorRange, QuantizedTensorSource, RetainedExpertLayerCache,
+    RetainedExpertPagePlanError, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
+    TensorHeaderEntry, build_quantized_expert_page_manifest_from_plan,
+    last_prefill_chunk_demand_weight, parse_safetensors_header, validate_expert_ids,
+    validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
 };
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
@@ -63,16 +62,18 @@ pub use memory::{
     ExpertMemoryAdmissionError, ExpertRetentionReclamationPlan, ForwardRecoveryDecision,
     ForwardRecoveryPolicy, ForwardRecoveryRequirements, MemoryAdmissionDecision, MemoryBoundary,
     MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, MlxActiveMemoryBreakdown,
-    MlxAllocationBudget, MlxAllocationBudgetError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
-    MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry,
-    MlxRamBudgetPhase, MlxRamBudgetSnapshot, SpeculativePrefillAdmission,
-    combined_persistent_growth_bytes, complete_residency_exceeds_ceiling_with_activation_headroom,
+    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetError,
+    MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetPhase, MlxRamBudgetSnapshot,
+    SpeculativePrefillAdmission, combined_persistent_growth_bytes,
+    complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure, persistent_context_restore_workspace_bytes,
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes, retained_expert_payload_capacity_bytes,
     safe_minimum_active_memory_ceiling_bytes, should_retry_fixed_forward_after_expert_reclamation,
 };
+#[cfg(feature = "direct-mlx")]
+pub use memory::{MlxAllocationBudget, MlxAllocationBudgetError};
 #[cfg(feature = "direct-mlx")]
 pub use model_family_runtime::ModelFamilyInferenceEngine;
 pub use model_family_runtime::{
@@ -164,12 +165,16 @@ pub use qwen3_5::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_moe::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
-    build_quantized_expert_layer_plan, build_source_manifests, contiguous_selected_runs,
-    qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,
-    qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
-    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    Qwen3_5MoESplitPageRoute, build_quantized_expert_layer_plan, build_source_manifests,
+    contiguous_selected_runs, qwen3_5_moe_combine_experts,
+    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
+    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
+    qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
-pub use qwen3_5_moe::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION};
+pub use qwen3_5_moe::{
+    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+    prefill_recovery_must_demote_complete_resident_owner, retained_expert_fill_budget_bytes,
+};
 
 /// Validates a safetensors shard where some tensors have strict dtype/shape profiles
 /// and remaining tensors are accepted by name only.

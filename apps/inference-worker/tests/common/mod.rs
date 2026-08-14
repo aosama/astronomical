@@ -9,6 +9,8 @@ use std::{collections::HashMap, path::Path, path::PathBuf, sync::Arc};
 pub(crate) mod exact_model_prompt;
 #[cfg(feature = "memory-management-acceptance")]
 pub(crate) mod real_model_rest_server;
+#[cfg(feature = "memory-management-acceptance")]
+pub(crate) mod solid_png;
 
 #[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
 pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str =

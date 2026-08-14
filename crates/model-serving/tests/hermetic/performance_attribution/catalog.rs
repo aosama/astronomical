@@ -117,6 +117,10 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "paged_router_graph_construction",
         ),
         (
+            PerformanceOperation::RetainedExpertPagePlanning,
+            "retained_expert_page_planning",
+        ),
+        (
             PerformanceOperation::RustExpertStreamingLayerPreparation,
             "rust_expert_streaming_layer_preparation",
         ),

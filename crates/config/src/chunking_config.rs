@@ -6,8 +6,8 @@ use crate::config_file::ChunkingConfigFile;
 
 pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 pub const DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS: u32 = 2_048;
-pub const DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
-pub const DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
+pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
+pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
 pub const DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW: u32 = 5;
 pub const DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS: u32 = 32_768;
 pub const DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
@@ -22,8 +22,8 @@ pub struct ChunkingConfig {
     prefill_sizing_policy: PrefillChunckSizingPolicy,
     full_attention_key_value_growth_tokens: u32,
     speculative_prefill_draft_forward_tokens: u32,
-    prefill_graph_submission_layer_interval: u32,
-    generation_graph_submission_layer_interval: u32,
+    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+    experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     prefill_optimizer_observation_window: u32,
     prefill_optimizer_position_bucket_tokens: u32,
     prompt_cache_block_tokens: Option<u32>,
@@ -48,12 +48,14 @@ impl ChunkingConfig {
             speculative_prefill_draft_forward_tokens: configured
                 .speculative_prefill_draft_forward_tokens
                 .unwrap_or(DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS),
-            prefill_graph_submission_layer_interval: configured
-                .prefill_graph_submission_layer_interval
-                .unwrap_or(DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
-            generation_graph_submission_layer_interval: configured
-                .generation_graph_submission_layer_interval
-                .unwrap_or(DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL),
+            experimental_ssd_paging_prefill_graph_submission_layer_interval: configured
+                .experimental_ssd_paging_prefill_graph_submission_layer_interval
+                .unwrap_or(DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
+            experimental_ssd_paging_generation_graph_submission_layer_interval: configured
+                .experimental_ssd_paging_generation_graph_submission_layer_interval
+                .unwrap_or(
+                    DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                ),
             prefill_optimizer_observation_window: configured
                 .prefill_optimizer_observation_window
                 .unwrap_or(DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW),
@@ -133,13 +135,13 @@ impl ChunkingConfig {
     }
 
     #[must_use]
-    pub const fn prefill_graph_submission_layer_interval(&self) -> u32 {
-        self.prefill_graph_submission_layer_interval
+    pub const fn experimental_ssd_paging_prefill_graph_submission_layer_interval(&self) -> u32 {
+        self.experimental_ssd_paging_prefill_graph_submission_layer_interval
     }
 
     #[must_use]
-    pub const fn generation_graph_submission_layer_interval(&self) -> u32 {
-        self.generation_graph_submission_layer_interval
+    pub const fn experimental_ssd_paging_generation_graph_submission_layer_interval(&self) -> u32 {
+        self.experimental_ssd_paging_generation_graph_submission_layer_interval
     }
 
     #[must_use]
@@ -173,10 +175,10 @@ impl Default for ChunkingConfig {
             full_attention_key_value_growth_tokens: DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
             speculative_prefill_draft_forward_tokens:
                 DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
-            prefill_graph_submission_layer_interval:
-                DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            generation_graph_submission_layer_interval:
-                DEFAULT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            experimental_ssd_paging_prefill_graph_submission_layer_interval:
+                DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            experimental_ssd_paging_generation_graph_submission_layer_interval:
+                DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
             prefill_optimizer_observation_window: DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
             prefill_optimizer_position_bucket_tokens:
                 DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,

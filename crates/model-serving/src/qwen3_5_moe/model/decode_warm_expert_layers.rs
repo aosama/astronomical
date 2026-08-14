@@ -1,25 +1,36 @@
-//! Barrier-safe fill of complete expert layers under the retained-expert budget.
+//! Barrier-safe fill of globally ranked demand-selected expert pages.
 //!
-//! Multi-token prefill stays operation-local. After prefill, activations shrink and
-//! leftover `retained_expert_budget_bytes` may pin a deterministic complete-layer
-//! prefix for decode and later prompt processing. Live pressure may shrink it.
+//! # What this file does not do
+//!
+//! It does not restore complete residency. That is
+//! `try_promote_experts_to_resident`. If the complete owner already exists,
+//! this fill returns zero new pages so payload is not double-counted.
+//!
+//! # What this file does
+//!
+//! Multi-token prefill streams one complete layer, uses it, and drops it.
+//! After prefill, activations shrink. The leftover composed decode budget
+//! (`retained_expert_budget_bytes`) may then pin the experts this prompt
+//! actually routed to, ranked by how often they appeared.
+//!
+//! After request-pressure demotion that leftover is still the decode fill
+//! budget. The temporary pressure cap must already have been released by
+//! decode handoff; otherwise this fill sees about one gigabyte and rejects
+//! every useful page.
 //!
 //! # Safe call boundary
 //!
 //! Call this only after a synchronization/cleanup barrier where operation-local
-//! arrays are no longer competing with refill. Loading a complete layer creates
-//! lazy MLX arrays and evaluating them materializes payload, so running this in the
+//! arrays are no longer competing with refill. Loading a page creates lazy
+//! MLX arrays and evaluating them materializes payload, so running this in the
 //! middle of a forward could invalidate the memory proof that admitted that
 //! forward.
 //!
-//! # Why a complete-layer prefix
+//! # Why route-frequency pages
 //!
-//! The current deterministic policy scans layer indices from zero upward and
-//! stops at the first layer that does not fit. The cache evicts in reverse order,
-//! so growth and shrink preserve one contiguous prefix. This gives predictable
-//! ownership and zero route-time lookup policy. It is not evidence that low-index
-//! layers are universally the most valuable; changing selection belongs to a
-//! separately measured policy.
+//! Every decode token visits every decoder layer, and a retained page is useful
+//! only when it covers that layer's routed set. Measured 23 GB journeys were
+//! closest to the source-read gate when experts were ranked by route frequency.
 //!
 //! # Best-effort does not mean unaccounted
 //!
@@ -34,11 +45,20 @@ use crate::{MlxRamBudgetPhase, PerformanceAttribution, PerformanceOperation};
 use super::super::expert_paging::expert_pager::{ExpertPagingError, Qwen3_5RetainedExpertLayer};
 
 impl Qwen3_5Model {
-    /// Fills complete expert layers for prefill, decode, or idle reuse.
+    /// Fills demand-selected expert pages for decode reuse.
     ///
-    /// Best-effort: returns the number of newly retained layers. Callers should not
-    /// fail the user request if warm fill is skipped or partially admitted.
-    pub(crate) fn fill_retained_complete_expert_layers(
+    /// `context_token_count` is the prompt length. The decode plan uses it to
+    /// reserve key/value growth so pages do not steal the leftover ceiling
+    /// from later tokens.
+    ///
+    /// `requested_retained_expert_payload_bytes` is an optional smaller caller
+    /// cap. Decode handoff passes `u64::MAX` so the composed leftover budget
+    /// wins. Do not pass "one routed page times layer count" after pressure;
+    /// that is the old 1 GB working-set trap.
+    ///
+    /// Best-effort: returns the number of newly retained layers. Callers must
+    /// not fail the user request if warm fill is skipped or partially admitted.
+    pub(crate) fn fill_retained_expert_pages(
         &self,
         context_token_count: u64,
         requested_retained_expert_payload_bytes: u64,
@@ -70,11 +90,24 @@ impl Qwen3_5Model {
 
         // The composed budget has already subtracted model core, learned
         // context reserve, activation headroom, and one complete-layer loading
-        // slot. A second fixed cap would strand usable RAM on larger machines
-        // and violate the single-source adaptive policy.
-        let retained_expert_fill_budget_bytes = planned_budget
-            .retained_expert_budget_bytes
-            .min(requested_retained_expert_payload_bytes);
+        // slot. After prefill that leftover is the decode fill budget, including
+        // after request-pressure demotion. Promotion of the complete owner is a
+        // separate admit and must not be impersonated by this page fill.
+        let decoder_layer_count = expert_pager.layer_count();
+        let composed_retained_expert_fill_budget_bytes =
+            planned_budget.retained_expert_budget_bytes;
+        let retained_expert_fill_budget_bytes = crate::retained_expert_fill_budget_bytes(
+            composed_retained_expert_fill_budget_bytes,
+            requested_retained_expert_payload_bytes,
+        );
+        if retained_expert_fill_budget_bytes == composed_retained_expert_fill_budget_bytes {
+            tracing::info!(
+                composed_retained_expert_fill_budget_bytes,
+                retained_expert_fill_budget_bytes,
+                complete_residency_fits = planned_budget.complete_residency_fits,
+                "decode-warm fill using composed retained-expert budget after prefill"
+            );
+        }
         retained_expert_layers
             .borrow_mut()
             .update_maximum_resident_payload_bytes(retained_expert_fill_budget_bytes);
@@ -105,106 +138,97 @@ impl Qwen3_5Model {
             );
         }
 
-        // Let the cache admit the exact heterogeneous payload of each layer.
-        // Dividing by the largest layer size would reject smaller later layers
-        // even though their real payload still fits the byte budget.
-        let decoder_layer_count = expert_pager.layer_count();
-        let mut newly_retained_layer_count = 0usize;
+        // Decode visits every decoder layer. Rank observed route frequency so
+        // the retained budget keeps the experts that appeared most often.
+        let mut newly_retained_page_count = 0usize;
+        let preferred_expert_ids_by_layer = performance_attribution.measure_operation(
+            PerformanceOperation::RetainedExpertPagePlanning,
+            |_performance_attribution| {
+                let layer_payloads = expert_pager
+                    .layer_plans()
+                    .iter()
+                    .map(|layer_plan| {
+                        layer_plan
+                            .complete_expert_payload_byte_count()
+                            .map_err(ExpertPagingError::from)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let expert_capacities = expert_pager
+                    .layer_plans()
+                    .iter()
+                    .map(|layer_plan| layer_plan.expert_capacity)
+                    .collect::<Vec<_>>();
+                retained_expert_layers
+                    .borrow()
+                    .preferred_expert_ids_for_global_budget(&layer_payloads, &expert_capacities)
+                    .map_err(|planner_error| ExpertPagingError::InvalidPagingPlan {
+                        description: planner_error.to_string(),
+                    })
+                    .map_err(Qwen3_5ExecutionError::from)
+            },
+        )?;
+
+        // Retire every page whose desired selection changed before loading any
+        // replacement. Otherwise an earlier growing layer can be rejected while
+        // bytes assigned away from a later stale layer are still resident.
+        {
+            let mut retained_expert_layers = retained_expert_layers.borrow_mut();
+            for (layer_index, preferred_expert_ids) in
+                preferred_expert_ids_by_layer.iter().enumerate()
+            {
+                let should_remove_stale_layer = retained_expert_layers
+                    .retained_layer(layer_index)
+                    .is_some_and(|retained_layer| {
+                        !retained_layer.has_exact_expert_ids(preferred_expert_ids)
+                    });
+                if should_remove_stale_layer {
+                    retained_expert_layers.remove_layer(layer_index);
+                }
+            }
+        }
 
         for layer_index in 0..decoder_layer_count {
+            let preferred_expert_ids = preferred_expert_ids_by_layer[layer_index].clone();
+            if preferred_expert_ids.is_empty() {
+                continue;
+            }
             if retained_expert_layers
                 .borrow()
                 .retained_layer(layer_index)
-                .is_some()
+                .is_some_and(|retained_layer| {
+                    retained_layer.has_exact_expert_ids(&preferred_expert_ids)
+                })
             {
-                // Preserve existing warm ownership and continue scanning. Request
-                // pressure can evict only a suffix, but this also remains correct
-                // if a future validated policy leaves an interior layer resident.
                 continue;
             }
-            // Obtain exact payload from immutable startup geometry. This query
-            // performs no SafeTensors payload read and is therefore safe before
-            // the admission decision.
-            let layer_plan = expert_pager.layer_plan(layer_index)?;
-            let candidate_layer_payload_bytes = layer_plan
-                .complete_expert_payload_byte_count()
-                .map_err(ExpertPagingError::from)?;
-            let retained_statistics_before_candidate = retained_expert_layers.borrow().statistics();
-            if !retained_expert_layers
-                .borrow()
-                .can_retain_additional_payload_bytes(candidate_layer_payload_bytes)
-            {
-                if performance_attribution.is_enabled() {
-                    tracing::info!(
+            let (retained_weights, page_manifest) = performance_attribution.measure_operation(
+                PerformanceOperation::RustExpertStreamingLayerPreparation,
+                |performance_attribution| {
+                    expert_pager.load_rust_streamed_expert_layer(
+                        &self.runtime,
                         layer_index,
-                        candidate_layer_payload_bytes,
-                        current_retained_expert_payload_bytes =
-                            retained_statistics_before_candidate.resident_payload_byte_count,
-                        maximum_retained_expert_payload_bytes =
-                            retained_statistics_before_candidate
-                                .maximum_resident_payload_byte_count,
-                        remaining_retained_expert_budget_bytes =
-                            retained_statistics_before_candidate
-                                .maximum_resident_payload_byte_count
-                                .saturating_sub(
-                                    retained_statistics_before_candidate
-                                        .resident_payload_byte_count
-                                ),
-                        rejection_reason = "exact_layer_payload_exceeds_remaining_budget",
-                        "retained expert layer candidate decision"
-                    );
-                }
-                break;
-            }
-            if performance_attribution.is_enabled() {
-                tracing::info!(
-                    layer_index,
-                    candidate_layer_payload_bytes,
-                    current_retained_expert_payload_bytes =
-                        retained_statistics_before_candidate.resident_payload_byte_count,
-                    maximum_retained_expert_payload_bytes =
-                        retained_statistics_before_candidate.maximum_resident_payload_byte_count,
-                    remaining_retained_expert_budget_bytes = retained_statistics_before_candidate
-                        .maximum_resident_payload_byte_count
-                        .saturating_sub(
-                            retained_statistics_before_candidate.resident_payload_byte_count
-                        ),
-                    decision = "load_and_retain",
-                    "retained expert layer candidate decision"
-                );
-            }
-            let complete_layer_expert_ids = (0..layer_plan.expert_capacity).collect::<Vec<_>>();
-            // Passing every identifier turns the same bounded routed-page loader
-            // used by decode into an exact complete-layer load. This avoids a
-            // second storage implementation and preserves source dtype/quantization.
-            let (complete_layer_weights, page_manifest) = performance_attribution
-                .measure_operation(
-                    PerformanceOperation::RustExpertStreamingLayerPreparation,
-                    |performance_attribution| {
-                        expert_pager.load_rust_streamed_expert_layer(
-                            &self.runtime,
-                            layer_index,
-                            &complete_layer_expert_ids,
-                            performance_attribution,
-                        )
-                    },
-                )?;
+                        &preferred_expert_ids,
+                        performance_attribution,
+                    )
+                },
+            )?;
 
-            let mut complete_layer_arrays = Vec::new();
-            complete_layer_weights.append_array_references(&mut complete_layer_arrays);
+            let mut retained_arrays = Vec::new();
+            retained_weights.append_array_references(&mut retained_arrays);
             // SafeTensors arrays are lazy. Evaluate before publishing to guarantee
             // that `retained_layer == Some` means all payload is materialized and
             // any read/allocation error occurs while ownership is still local.
-            self.runtime.evaluate_arrays(&complete_layer_arrays)?;
+            self.runtime.evaluate_arrays(&retained_arrays)?;
 
             retained_expert_layers.borrow_mut().record_disk_load(
-                complete_layer_expert_ids.len(),
+                preferred_expert_ids.len(),
                 page_manifest.source_manifests.len(),
             );
-            let did_retain = retained_expert_layers.borrow_mut().retain_complete_layer(
+            let candidate_layer_payload_bytes = page_manifest.payload_byte_count;
+            let did_retain = retained_expert_layers.borrow_mut().replace_layer(
                 layer_index,
                 Qwen3_5RetainedExpertLayer {
-                    weights: complete_layer_weights,
+                    weights: retained_weights,
                     manifest: page_manifest,
                 },
             );
@@ -220,9 +244,9 @@ impl Qwen3_5Model {
                         "retained expert layer candidate decision"
                     );
                 }
-                break;
+                continue;
             }
-            newly_retained_layer_count = newly_retained_layer_count.saturating_add(1);
+            newly_retained_page_count = newly_retained_page_count.saturating_add(1);
             if performance_attribution.is_enabled() {
                 let memory_snapshot_after_retention = self.runtime.memory_snapshot()?;
                 let retained_statistics_after_candidate =
@@ -246,15 +270,28 @@ impl Qwen3_5Model {
             }
         }
 
-        if newly_retained_layer_count > 0 {
+        if newly_retained_page_count > 0 {
             tracing::info!(
-                newly_retained_layer_count,
+                newly_retained_page_count,
                 retained_expert_budget_bytes = planned_budget.retained_expert_budget_bytes,
                 retained_expert_fill_budget_bytes,
                 context_token_count,
-                "filled complete expert layers under retained-expert budget"
+                "filled demand-selected expert pages under retained-expert budget"
             );
         }
-        Ok(newly_retained_layer_count)
+        // The current topology consumed this evidence. Decode and the next
+        // request now build a fresh window so an old prompt cannot dominate
+        // retention forever in a long-lived server.
+        retained_expert_layers.borrow_mut().clear_expert_demand();
+        Ok(newly_retained_page_count)
+    }
+
+    /// Applies the last-chunk or ordinary demand multiplier for later recordings.
+    pub(crate) fn set_expert_demand_assignment_weight(&self, assignment_weight: u64) {
+        if let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() {
+            retained_expert_layers
+                .borrow_mut()
+                .set_demand_assignment_weight(assignment_weight);
+        }
     }
 }

@@ -198,9 +198,10 @@ impl Qwen3_5EngineState {
                 // route expected from this token. Router output is lazy and is not
                 // known on the host at initial admission.
                 model
-                    .expert_pager
-                    .as_ref()
-                    .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes())
+                    .expert_page_reservation_bytes_for_forward(
+                        adaptive_ram_growth_context.forward_token_count(),
+                    )
+                    .map_err(InferenceEngineError::from)?
                     .try_into()
                     .map_err(|_| {
                         invalid_request_error(
