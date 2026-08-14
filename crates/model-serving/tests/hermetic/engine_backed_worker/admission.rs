@@ -459,6 +459,7 @@ impl InferenceEngine for FeedbackGrowthRejectingEngine {
             is_reasoning_token: false,
             expert_memory_mode: None,
             mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
             generation_finalization: None,
         })
     }

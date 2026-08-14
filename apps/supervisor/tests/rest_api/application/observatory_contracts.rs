@@ -5,8 +5,8 @@ use astronomical_ipc_protocol::{
     WorkerPrefillOptimizerDecisionReason, WorkerPrefillOptimizerInsight,
 };
 use astronomical_supervisor::{
-    ActiveRequestProgress, WorkerActivity, WorkerHealthSnapshot, build_application,
-    parse_macos_memory_pressure_level,
+    ActiveRequestProgress, ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot,
+    build_application, parse_macos_memory_pressure_level,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -258,6 +258,59 @@ async fn should_expose_generation_progress_with_processed_and_total_tokens_when_
             .get("completed_prefill_chunck_tokens")
             .is_none()
             || status_document["progress"]["completed_prefill_chunck_tokens"].is_null()
+    );
+}
+
+#[tokio::test]
+async fn should_expose_generation_preparation_without_inventing_token_progress() {
+    let mut health_snapshot = ready_health_snapshot_with_model();
+    let request_started_at = Instant::now() - Duration::from_millis(500);
+    let preparation_started_at = Instant::now() - Duration::from_millis(125);
+    health_snapshot.activity = WorkerActivity::GenerationPreparation;
+    health_snapshot.expert_residency = Some(ExpertResidencySnapshot {
+        total_layer_count: 40,
+        complete_layer_count: 24,
+        complete_layer_payload_bytes: 12_000_000_000,
+        partial_layer_count: 8,
+        partial_layer_payload_bytes: 1_000_000_000,
+    });
+    health_snapshot.active_request_progress = Some(ActiveRequestProgress::GenerationPreparation {
+        request_started_at,
+        preparation_started_at,
+        total_layer_count: 40,
+        complete_layer_count: 24,
+        partial_layer_count: 8,
+    });
+    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the preparation status request should be valid"),
+        )
+        .await
+        .expect("the application should return preparation status");
+    let response_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the preparation status body should be readable");
+    let status_document: serde_json::Value = serde_json::from_slice(&response_body)
+        .expect("the preparation status body should contain JSON");
+
+    assert_eq!(status_document["activity"], "generation_preparation");
+    assert_eq!(
+        status_document["progress"]["phase"],
+        "generation_preparation"
+    );
+    assert_eq!(status_document["progress"]["processed_tokens"], 0);
+    assert_eq!(status_document["progress"]["total_tokens"], 1);
+    assert_eq!(
+        status_document["expert_residency"]["complete_layer_count"],
+        24
+    );
+    assert_eq!(
+        status_document["expert_residency"]["partial_layer_count"],
+        8
     );
 }
 

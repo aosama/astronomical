@@ -370,3 +370,73 @@ fn should_use_fixed_ssd_streaming_prefill_chunck_tokens_only_while_experts_are_p
         "complete-resident execution must keep the larger fixed chunk size"
     );
 }
+
+#[test]
+fn should_coalesce_a_terminal_remainder_between_optimizer_candidates() {
+    let mut prefill_chunck_sizer =
+        optimized_prefill_chunck_sizer(4_096, vec![512, 1_024, 2_048, 4_096])
+            .expect("terminal-tail candidates should be valid");
+    let prefill_cursor = 26_624;
+    let final_prompt_index = 28_511;
+
+    prefill_chunck_sizer.start_prompt_processing_request(prefill_cursor);
+
+    assert_eq!(
+        prefill_chunck_sizer
+            .next_prefill_chunck_end_for_execution_context_with_terminal_coalescing(
+                prefill_cursor,
+                final_prompt_index,
+                Qwen3_5PrefillExecutionContext::default(),
+                true,
+            ),
+        final_prompt_index,
+        "the exact 1,887-token tail should execute in one forward"
+    );
+    assert_eq!(
+        prefill_chunck_sizer.active_prefill_chunck_tokens(),
+        2_048,
+        "optimizer evidence should retain the smallest candidate containing the tail"
+    );
+}
+
+#[test]
+fn should_execute_a_small_terminal_remainder_exactly_under_its_candidate_label() {
+    let mut prefill_chunck_sizer =
+        optimized_prefill_chunck_sizer(4_096, vec![512, 1_024, 2_048, 4_096])
+            .expect("terminal-tail candidates should be valid");
+    let prefill_cursor = 10_000;
+    let final_prompt_index = 10_351;
+
+    prefill_chunck_sizer.start_prompt_processing_request(prefill_cursor);
+
+    assert_eq!(
+        prefill_chunck_sizer
+            .next_prefill_chunck_end_for_execution_context_with_terminal_coalescing(
+                prefill_cursor,
+                final_prompt_index,
+                Qwen3_5PrefillExecutionContext::default(),
+                true,
+            ),
+        final_prompt_index
+    );
+    assert_eq!(prefill_chunck_sizer.active_prefill_chunck_tokens(), 512);
+}
+
+#[test]
+fn should_leave_fixed_terminal_chunk_selection_unchanged() {
+    let mut prefill_chunck_sizer =
+        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(1_024)
+            .expect("fixed prefill chunk size should be valid");
+
+    assert_eq!(
+        prefill_chunck_sizer
+            .next_prefill_chunck_end_for_execution_context_with_terminal_coalescing(
+                26_624,
+                28_511,
+                Qwen3_5PrefillExecutionContext::default(),
+                true,
+            ),
+        27_648,
+        "terminal coalescing must not override an explicitly fixed chunk size"
+    );
+}

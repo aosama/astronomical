@@ -434,6 +434,7 @@ pub(super) async fn generate_token_ids(
                 ..
             } => completed_prefill_chunck_token_counts.push(completed_prefill_chunck_tokens),
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
                 return (generated_token_ids, completed_prefill_chunck_token_counts);
             }

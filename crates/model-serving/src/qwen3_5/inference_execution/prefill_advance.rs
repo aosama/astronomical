@@ -21,8 +21,9 @@ use std::time::Instant;
 use astronomical_ipc_protocol::RequestId;
 
 use crate::{
-    GeneratedToken, InferenceEngineError, PerformanceCounter, PerformanceOperation,
-    last_prefill_chunk_demand_weight, persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
+    ExpertResidencyPhase, GeneratedToken, InferenceEngineError, PerformanceCounter,
+    PerformanceOperation, last_prefill_chunk_demand_weight,
+    persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
 };
 
 use super::super::model::memory_admission::invalid_request_error;
@@ -106,12 +107,59 @@ impl Qwen3_5EngineState {
                 active_request.ordinary_target_prefill_control_span_token_count,
             ),
         );
+        self.model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .refresh_phase_aware_expert_residency_plan(
+                ExpertResidencyPhase::Prefill,
+                u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX),
+                &mut active_request.performance_attribution,
+            )
+            .map_err(qwen3_5_runtime_error)?;
+        // Determine whether the prompt tail is free of every boundary that must
+        // win over optimizer convenience. Only a wholly ordinary text tail may
+        // use the smallest configured action that contains its exact remainder.
+        let ordinary_control_safe_terminal_end =
+            qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
+                prefill_start,
+                final_prompt_index,
+                active_request.ordinary_target_prefill_control_span_token_count,
+            )
+            .ok_or_else(|| fatal_engine_error("prompt-processing chunk did not advance"))?;
+        let persistent_cache_safe_terminal_end = if self.persistent_prompt_cache.is_some()
+            && active_request.can_use_persistent_prompt_cache
+            && !active_request.has_optional_prediction_session()
+            && !prefill_execution_context.is_speculative_prefill_sparse_target()
+        {
+            let persistent_prompt_cache_block_token_count = self
+                .persistent_prompt_cache
+                .as_ref()
+                .map(|persistent_prompt_cache| {
+                    persistent_prompt_cache
+                        .model_contract_ref()
+                        .block_token_count()
+                })
+                .unwrap_or(0);
+            persistent_prompt_cache_boundary_clamped_prefill_chunck_end(
+                prefill_start,
+                ordinary_control_safe_terminal_end,
+                persistent_prompt_cache_block_token_count,
+            )
+        } else {
+            ordinary_control_safe_terminal_end
+        };
+        let should_coalesce_terminal_remainder = persistent_cache_safe_terminal_end
+            == final_prompt_index
+            && !prefill_execution_context.has_visual_embeddings()
+            && !prefill_execution_context.has_optional_prediction_session()
+            && !prefill_execution_context.is_speculative_prefill_sparse_target();
         let candidate_prefill_chunck_end = self
             .prefill_chunck_sizer
-            .next_prefill_chunck_end_for_execution_context(
+            .next_prefill_chunck_end_for_execution_context_with_terminal_coalescing(
                 active_request.prefill_cursor,
                 final_prompt_index,
                 prefill_execution_context,
+                should_coalesce_terminal_remainder,
             );
         // First clamp: never combine the dense control prefix and sparse selected
         // conversation body in one call. They have different execution contracts.
@@ -449,6 +497,7 @@ impl Qwen3_5EngineState {
                     )
                 })
                 .transpose()?,
+            expert_residency_telemetry: Some(model.expert_residency_telemetry()),
             speculative_prefill_draft_memory_telemetry: active_request
                 .speculative_prefill_draft_memory_telemetry
                 .take(),

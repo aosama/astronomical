@@ -1,7 +1,6 @@
 mod advance_generation;
 mod completed_forward_memory;
-/// Prefill-to-decode expert-memory restore: lift the pressure cap, then
-/// promote the complete owner or fill demand-selected pages.
+/// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
 mod decode_expert_memory_handoff;
 mod decoder_state_reuse;
 pub(crate) mod engine_request;

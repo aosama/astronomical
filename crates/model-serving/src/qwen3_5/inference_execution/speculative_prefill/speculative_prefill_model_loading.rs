@@ -249,7 +249,6 @@ impl Qwen3_5EngineState {
                         &self.speculative_prefill,
                         draft_validated_artifact,
                         self.memory_limits,
-                        true,
                         performance_attribution,
                     )
                 },

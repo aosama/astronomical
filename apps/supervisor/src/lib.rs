@@ -32,6 +32,7 @@ mod worker_completion_event;
 mod worker_containment;
 mod worker_control_error;
 mod worker_event_handler;
+mod worker_generation_preparation;
 mod worker_handle;
 mod worker_health;
 mod worker_loop_types;
@@ -85,8 +86,8 @@ pub use worker_cache_clear::PromptCacheClearOutcome;
 pub use worker_control_error::WorkerControlError;
 pub use worker_handle::{GenerationQueueDepth, WorkerHandle};
 pub use worker_health::{
-    ActiveRequestProgress, PendingPromptCacheClear, PersistentPromptCacheSummary, WorkerActivity,
-    WorkerHealthSnapshot, WorkerHealthStatus,
+    ActiveRequestProgress, ExpertResidencySnapshot, PendingPromptCacheClear,
+    PersistentPromptCacheSummary, WorkerActivity, WorkerHealthSnapshot, WorkerHealthStatus,
 };
 pub use worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 pub use worker_process::{WorkerProcess, WorkerTerminationOutcome};

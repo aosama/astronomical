@@ -12,18 +12,17 @@
 //! limits. Recovery-only headroom is diagnostic: an actual typed MLX allocation
 //! failure owns checkpoint rollback, exact reclamation, and one unchanged retry.
 //!
-//! On successful admission this module publishes a one-shot forward reserve to the
-//! pager. That handoff prevents later bounded expert loading from consuming bytes
-//! already proven necessary for decoder growth and transient work.
+//! On successful admission this module constrains retained expert ownership to
+//! the strict-ceiling capacity left by the concrete forward reserve. That handoff
+//! prevents mandatory reads from consuming bytes already proven necessary for
+//! decoder growth, one operation-local expert page, and transient work.
 
 use crate::qwen3_5::decoder::RequestDecoderStateStack;
 use crate::qwen3_5::model::adaptive_ram_growth_logging::{
     log_adaptive_ram_growth_admission_decision, log_adaptive_ram_growth_pressure,
 };
 use crate::qwen3_5::model::memory_admission::invalid_request_error;
-use crate::qwen3_5_moe::{
-    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
-};
+use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthPhase, InferenceEngineError, PerformanceAttribution,
     PerformanceAttributionOutcome, PerformanceCounter, PerformanceOperation,
@@ -77,18 +76,6 @@ impl Qwen3_5EngineState {
         ) {
             Ok(reclaimed_expert_payload_bytes) => Ok(reclaimed_expert_payload_bytes),
             Err(context_admission_error) => {
-                if let Some(model) = self.model.as_mut()
-                    && let Err(resident_restoration_error) = model.try_promote_experts_to_resident(
-                        Qwen3_5ExpertResidencyTransitionReason::RequestFinalization,
-                        performance_attribution,
-                    )
-                {
-                    tracing::warn!(
-                        request_id = request_id.value(),
-                        error = %resident_restoration_error,
-                        "could not restore idle expert residency after request admission rejection"
-                    );
-                }
                 self.record_generation_performance_attribution(
                     std::mem::replace(performance_attribution, PerformanceAttribution::disabled()),
                     PerformanceAttributionOutcome::Rejected,
@@ -306,172 +293,155 @@ impl Qwen3_5EngineState {
                     .resident_payload_byte_count;
             }
 
-            if first_forward_projection.fits_stable_and_peak_limits() {
+            if !first_forward_projection.fits_stable_and_peak_limits() {
+                // From here onward experts must be paged. Every retained page is an
+                // elastic byte, so the pure plan's one-byte-in/one-byte-out proof is
+                // valid for stable and expected-peak deficits.
                 let model = self
                     .model
                     .as_ref()
                     .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-                // Admission runs before bounded expert loading begins.
-                // Publish the entire proven interval, not only the routed page,
-                // so loading persistent layers cannot invalidate this proof.
-                model.set_expert_pager_admitted_forward_reserve_bytes(
-                    u64::try_from(first_forward_projection.forward_reserve_bytes())
-                        .unwrap_or(u64::MAX),
-                );
-                model
-                    .runtime()
-                    .reset_peak_memory()
-                    .map_err(qwen3_5_runtime_error)?;
-                return Ok((
-                    memory_snapshot_before_growth.active_memory_bytes(),
-                    retained_expert_payload_bytes_before_growth,
-                ));
-            }
-
-            // From here onward experts must be paged. Every retained page is an
-            // elastic byte, so the pure plan's one-byte-in/one-byte-out proof is
-            // valid for stable and expected-peak deficits.
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            if model.resident_expert_weights.is_some() {
-                return Err(
-                    AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
-                        reason: "resident expert ownership remained indivisible after demotion"
-                            .to_owned(),
-                    },
-                );
-            }
-            let expert_weight_memory_cache_statistics_before_reclamation =
-                model.expert_weight_memory_cache_statistics();
-            let retained_expert_payload_bytes = usize::try_from(
-                expert_weight_memory_cache_statistics_before_reclamation
-                    .resident_payload_byte_count,
-            )
-            .unwrap_or(usize::MAX);
-            let expert_reclamation_plan = first_forward_projection
-                .expert_retention_reclamation_plan(retained_expert_payload_bytes);
-            // Whole-layer eviction may release more than requested, but the pure
-            // plan first proves whether the *available byte category* is large
-            // enough. An unresolved shortfall cannot be fixed by cache policy.
-            if !expert_reclamation_plan.can_satisfy_every_memory_boundary() {
-                log_adaptive_ram_growth_pressure(
-                    &first_forward_projection,
-                    expert_weight_memory_cache_statistics_before_reclamation,
-                    expert_weight_memory_cache_statistics_before_reclamation,
-                    memory_snapshot_before_growth.allocator_cache_memory_bytes(),
-                    expert_reclamation_plan.reclamation_target_bytes(),
-                    "reject",
-                );
-                return Err(
-                    AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
-                        reason: format!(
-                            "adaptive RAM growth exceeds reclaimable expert capacity by {} bytes",
-                            expert_reclamation_plan.unresolved_shortfall_bytes(),
-                        ),
-                    },
-                );
-            }
-            let expert_reclamation_target_bytes =
-                expert_reclamation_plan.reclamation_target_bytes();
-            let Some(memory_snapshot_after_reclamation) =
-                reclaim_retained_experts_for_request_memory_pressure(
-                    model,
-                    expert_reclamation_target_bytes,
-                )?
-            else {
-                // A nonzero reclamation target with no paged cache owner means
-                // there is no legal elastic category left. Reject instead of
-                // shrinking the fixed chunk behind the user's configuration.
-                log_adaptive_ram_growth_pressure(
-                    &first_forward_projection,
-                    expert_weight_memory_cache_statistics_before_reclamation,
-                    expert_weight_memory_cache_statistics_before_reclamation,
-                    memory_snapshot_before_growth.allocator_cache_memory_bytes(),
-                    expert_reclamation_target_bytes,
-                    "reject",
-                );
-                return Err(
-                    AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
-                        reason: format!(
-                            "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, and recovery projection of {} bytes do not fit C={} bytes and P={} bytes while retained expert paging is unavailable",
-                            first_forward_projection.stable_projected_bytes(),
-                            first_forward_projection.peak_projected_bytes(),
-                            first_forward_projection.recovery_projected_bytes(),
-                            first_forward_projection.active_memory_limit_bytes(),
-                            first_forward_projection.allowed_active_memory_bytes(),
-                        ),
-                    },
-                );
-            };
-            let expert_weight_memory_cache_statistics_after_reclamation =
-                model.expert_weight_memory_cache_statistics();
-            log_adaptive_ram_growth_pressure(
-                &first_forward_projection,
-                expert_weight_memory_cache_statistics_before_reclamation,
-                expert_weight_memory_cache_statistics_after_reclamation,
-                memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
-                expert_reclamation_target_bytes,
-                "reclaim_experts",
-            );
-            let projection_after_expert_reclamation = self
-                .adaptive_ram_growth_guard
-                .project_growth_for_context(
-                    adaptive_ram_growth_context,
-                    memory_snapshot_after_reclamation.active_memory_bytes(),
-                    exact_context_growth_bytes,
-                    routed_expert_page_reservation_bytes,
-                    exact_temporary_workspace_bytes,
-                )
-                .map_err(|adaptive_ram_growth_projection_error| {
-                    tracing::warn!(
-                        action = "reject",
-                        error = %adaptive_ram_growth_projection_error,
-                        "stopped Qwen3.5 forward after post-reclamation adaptive RAM growth projection failed"
+                if model.resident_expert_weights.is_some() {
+                    return Err(
+                        AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
+                            reason: "resident expert ownership remained indivisible after demotion"
+                                .to_owned(),
+                        },
                     );
-                    invalid_request_error(format!(
-                        "adaptive RAM growth rejected: {adaptive_ram_growth_projection_error}"
-                    ))
-                })?;
-            if !projection_after_expert_reclamation.fits_stable_and_peak_limits() {
-                // Always verify with a fresh MLX snapshot. The cache's accounting
-                // proves ownership changed, but allocator visibility and unrelated
-                // active arrays still determine whether this operation now fits.
+                }
+                let expert_weight_memory_cache_statistics_before_reclamation =
+                    model.expert_weight_memory_cache_statistics();
+                let retained_expert_payload_bytes = usize::try_from(
+                    expert_weight_memory_cache_statistics_before_reclamation
+                        .resident_payload_byte_count,
+                )
+                .unwrap_or(usize::MAX);
+                let expert_reclamation_plan = first_forward_projection
+                    .expert_retention_reclamation_plan(retained_expert_payload_bytes);
+                // Whole-layer eviction may release more than requested, but the pure
+                // plan first proves whether the *available byte category* is large
+                // enough. An unresolved shortfall cannot be fixed by cache policy.
+                if !expert_reclamation_plan.can_satisfy_every_memory_boundary() {
+                    log_adaptive_ram_growth_pressure(
+                        &first_forward_projection,
+                        expert_weight_memory_cache_statistics_before_reclamation,
+                        expert_weight_memory_cache_statistics_before_reclamation,
+                        memory_snapshot_before_growth.allocator_cache_memory_bytes(),
+                        expert_reclamation_plan.reclamation_target_bytes(),
+                        "reject",
+                    );
+                    return Err(
+                        AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
+                            reason: format!(
+                                "adaptive RAM growth exceeds reclaimable expert capacity by {} bytes",
+                                expert_reclamation_plan.unresolved_shortfall_bytes(),
+                            ),
+                        },
+                    );
+                }
+                let expert_reclamation_target_bytes =
+                    expert_reclamation_plan.reclamation_target_bytes();
+                let Some(memory_snapshot_after_reclamation) =
+                    reclaim_retained_experts_for_request_memory_pressure(
+                        model,
+                        expert_reclamation_target_bytes,
+                    )?
+                else {
+                    // A nonzero reclamation target with no paged cache owner means
+                    // there is no legal elastic category left. Reject instead of
+                    // shrinking the fixed chunk behind the user's configuration.
+                    log_adaptive_ram_growth_pressure(
+                        &first_forward_projection,
+                        expert_weight_memory_cache_statistics_before_reclamation,
+                        expert_weight_memory_cache_statistics_before_reclamation,
+                        memory_snapshot_before_growth.allocator_cache_memory_bytes(),
+                        expert_reclamation_target_bytes,
+                        "reject",
+                    );
+                    return Err(
+                        AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
+                            reason: format!(
+                                "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, and recovery projection of {} bytes do not fit C={} bytes and P={} bytes while retained expert paging is unavailable",
+                                first_forward_projection.stable_projected_bytes(),
+                                first_forward_projection.peak_projected_bytes(),
+                                first_forward_projection.recovery_projected_bytes(),
+                                first_forward_projection.active_memory_limit_bytes(),
+                                first_forward_projection.allowed_active_memory_bytes(),
+                            ),
+                        },
+                    );
+                };
+                let expert_weight_memory_cache_statistics_after_reclamation =
+                    model.expert_weight_memory_cache_statistics();
+                log_adaptive_ram_growth_pressure(
+                    &first_forward_projection,
+                    expert_weight_memory_cache_statistics_before_reclamation,
+                    expert_weight_memory_cache_statistics_after_reclamation,
+                    memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
+                    expert_reclamation_target_bytes,
+                    "reclaim_experts",
+                );
+                let projection_after_expert_reclamation = self
+                    .adaptive_ram_growth_guard
+                    .project_growth_for_context(
+                        adaptive_ram_growth_context,
+                        memory_snapshot_after_reclamation.active_memory_bytes(),
+                        exact_context_growth_bytes,
+                        routed_expert_page_reservation_bytes,
+                        exact_temporary_workspace_bytes,
+                    )
+                    .map_err(|adaptive_ram_growth_projection_error| {
+                        tracing::warn!(
+                            action = "reject",
+                            error = %adaptive_ram_growth_projection_error,
+                            "stopped Qwen3.5 forward after post-reclamation adaptive RAM growth projection failed"
+                        );
+                        invalid_request_error(format!(
+                            "adaptive RAM growth rejected: {adaptive_ram_growth_projection_error}"
+                        ))
+                    })?;
+                if !projection_after_expert_reclamation.fits_stable_and_peak_limits() {
+                    // Always verify with a fresh MLX snapshot. The cache's accounting
+                    // proves ownership changed, but allocator visibility and unrelated
+                    // active arrays still determine whether this operation now fits.
+                    log_adaptive_ram_growth_pressure(
+                        &projection_after_expert_reclamation,
+                        expert_weight_memory_cache_statistics_before_reclamation,
+                        expert_weight_memory_cache_statistics_after_reclamation,
+                        memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
+                        expert_reclamation_target_bytes,
+                        "reject",
+                    );
+                    return Err(
+                        AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
+                            reason: format!(
+                                "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, or recovery projection of {} bytes remains above C={} bytes or P={} bytes after retained-expert reclamation",
+                                projection_after_expert_reclamation.stable_projected_bytes(),
+                                projection_after_expert_reclamation.peak_projected_bytes(),
+                                projection_after_expert_reclamation.recovery_projected_bytes(),
+                                projection_after_expert_reclamation.active_memory_limit_bytes(),
+                                projection_after_expert_reclamation.allowed_active_memory_bytes(),
+                            ),
+                        },
+                    );
+                }
                 log_adaptive_ram_growth_pressure(
                     &projection_after_expert_reclamation,
                     expert_weight_memory_cache_statistics_before_reclamation,
                     expert_weight_memory_cache_statistics_after_reclamation,
                     memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
                     expert_reclamation_target_bytes,
-                    "reject",
+                    "admit",
                 );
-                return Err(
-                    AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
-                        reason: format!(
-                            "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, or recovery projection of {} bytes remains above C={} bytes or P={} bytes after retained-expert reclamation",
-                            projection_after_expert_reclamation.stable_projected_bytes(),
-                            projection_after_expert_reclamation.peak_projected_bytes(),
-                            projection_after_expert_reclamation.recovery_projected_bytes(),
-                            projection_after_expert_reclamation.active_memory_limit_bytes(),
-                            projection_after_expert_reclamation.allowed_active_memory_bytes(),
-                        ),
-                    },
-                );
+                // Continue with the post-reclamation proof and ownership baseline.
+                // Retaining either stale value would publish a reserve or teach
+                // post-forward learning from a topology that no longer exists.
+                first_forward_projection = projection_after_expert_reclamation;
+                memory_snapshot_before_growth = memory_snapshot_after_reclamation;
+                retained_expert_payload_bytes_before_growth =
+                    expert_weight_memory_cache_statistics_after_reclamation
+                        .resident_payload_byte_count;
             }
-            log_adaptive_ram_growth_pressure(
-                &projection_after_expert_reclamation,
-                expert_weight_memory_cache_statistics_before_reclamation,
-                expert_weight_memory_cache_statistics_after_reclamation,
-                memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
-                expert_reclamation_target_bytes,
-                "admit",
-            );
-            // Continue with the post-reclamation proof. Retaining the stale
-            // pre-reclamation projection here would publish a reserve derived
-            // from an ownership topology that no longer exists.
-            first_forward_projection = projection_after_expert_reclamation;
-            memory_snapshot_before_growth = memory_snapshot_after_reclamation;
         }
         // MLX's peak counter is process-global. Reset it only after admission so
         // the next sample measures this one forward pass rather than model loading
@@ -480,11 +450,30 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        // This handoff closes the gap between adaptive admission and residency
-        // planning. The pager consumes it exactly once at graph construction.
-        model.set_expert_pager_admitted_forward_reserve_bytes(
-            u64::try_from(first_forward_projection.forward_reserve_bytes()).unwrap_or(u64::MAX),
-        );
+        let admitted_forward_reserve_bytes =
+            u64::try_from(first_forward_projection.forward_reserve_bytes()).unwrap_or(u64::MAX);
+        let current_active_memory_bytes =
+            u64::try_from(memory_snapshot_before_growth.active_memory_bytes()).unwrap_or(u64::MAX);
+        let current_retained_expert_payload_bytes = model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        if model.limit_expert_retention_for_admitted_forward(
+            current_active_memory_bytes,
+            current_retained_expert_payload_bytes,
+            admitted_forward_reserve_bytes,
+        ) {
+            model
+                .runtime()
+                .synchronize_gpu_stream_and_clear_allocator_cache()
+                .map_err(qwen3_5_runtime_error)?;
+            memory_snapshot_before_growth = model
+                .runtime()
+                .memory_snapshot()
+                .map_err(qwen3_5_runtime_error)?;
+            retained_expert_payload_bytes_before_growth = model
+                .expert_weight_memory_cache_statistics()
+                .resident_payload_byte_count;
+        }
         model
             .runtime()
             .reset_peak_memory()

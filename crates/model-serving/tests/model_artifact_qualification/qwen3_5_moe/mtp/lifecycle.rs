@@ -331,6 +331,7 @@ async fn decode_next_generated_token(
             } => return (token_id, generation_finalization),
             GeneratedToken::PrefillProgress { .. } => {}
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
                 panic!("the Qwen engine should attach terminal state to an emitted token")
             }

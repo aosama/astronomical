@@ -196,6 +196,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
                     }
                 }
                 GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+                GeneratedToken::GenerationPreparationStarted { .. } => {}
                 GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
             }
         }
@@ -335,7 +336,8 @@ async fn should_stop_every_forced_speculative_prefill_execution_stage_without_ta
                 .expect("the valid baseline request should complete")
             {
                 GeneratedToken::PrefillProgress { .. }
-                | GeneratedToken::PromptProcessingPhaseStarted { .. } => continue,
+                | GeneratedToken::PromptProcessingPhaseStarted { .. }
+                | GeneratedToken::GenerationPreparationStarted { .. } => continue,
                 GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
             }
         }

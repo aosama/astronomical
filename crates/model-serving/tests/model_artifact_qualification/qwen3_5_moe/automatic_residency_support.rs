@@ -126,6 +126,7 @@ pub(super) async fn complete_started_romeo_and_juliet_request(
                 "[{progress_log_prefix} 3/5] status=progress phase=prefill processed_tokens={processed_token_count}"
             ),
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => break,
         }
     }

@@ -280,6 +280,7 @@ async fn run_generation_until_first_token(
                 );
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => return Ok(()),
         }
     }
@@ -379,6 +380,7 @@ async fn run_generation_until_output_sample(
                 );
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::TokenId { .. } => {
                 generated_token_count = generated_token_count.saturating_add(1);
                 if generated_token_count >= observed_output_token_count {

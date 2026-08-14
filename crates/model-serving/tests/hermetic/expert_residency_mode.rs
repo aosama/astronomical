@@ -1,10 +1,10 @@
-//! Policy numbers for decode-warm fill after a pressure demotion.
+//! Policy numbers for phase-aware retention after a pressure demotion.
 //!
 //! These tests do not load a model. They lock the two rules a later reader
 //! must not "simplify":
 //!
-//! 1. After request pressure, decode-warm still spends the leftover composed
-//!    budget (tens of gigabytes), not a 1 GB routed working set.
+//! 1. After request pressure, read-through retention still receives the leftover
+//!    composed budget, not a fixed routed working set.
 //! 2. Complete resident experts are one atomic owner, so native prefill
 //!    recovery must demote that owner before it can reclaim expert bytes.
 
@@ -13,7 +13,7 @@ use astronomical_model_serving::{
 };
 
 #[test]
-fn should_keep_full_decode_warm_fill_budget_when_the_model_was_not_forced_paged() {
+fn should_keep_the_full_retained_expert_budget_without_a_smaller_caller_limit() {
     // A quiet idle model still gets the leftover composed plan, not a
     // smaller "just in case" working set.
     let planned_retained_expert_budget_bytes: u64 = 30_133_404_494;
@@ -31,11 +31,9 @@ fn should_keep_full_decode_warm_fill_budget_when_the_model_was_not_forced_paged(
 }
 
 #[test]
-fn should_use_the_composed_decode_warm_fill_budget_after_request_pressure() {
-    // These bytes came from a real 25 GB Ornith 4-bit log: leftover composed
-    // decode budget was ~24.67 GB, complete experts were ~25.77 GB, and one
-    // routed page times 40 layers was only ~1.07 GB. Decode must spend the
-    // leftover, not the 1.07 GB working set.
+fn should_restore_the_composed_retained_expert_budget_after_request_pressure() {
+    // Fictional geometry proves that a composed budget is not replaced by a
+    // fixed one-page-per-layer working set.
     let planned_retained_expert_budget_bytes: u64 = 24_672_184_486;
     let complete_expert_payload_bytes: u64 = 25_769_803_776;
     let decoder_layer_count: u64 = 40;

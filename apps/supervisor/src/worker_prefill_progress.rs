@@ -25,6 +25,7 @@ pub(super) fn handle_worker_prefill_progress(
         completed_prefill_chunck_tokens,
         prefill_optimizer_insight,
         mlx_memory_snapshot,
+        expert_residency,
         speculative_prefill_draft_memory_snapshot,
     } = worker_prefill_progress_event
     else {
@@ -42,13 +43,21 @@ pub(super) fn handle_worker_prefill_progress(
     // Worker elapsed_millis is cumulative, so retain the latest amount.
     active_request.prefill_elapsed_millis = elapsed_millis;
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
-        active_request.last_mlx_peak_memory_bytes = Some(mlx_memory_snapshot.peak_memory_bytes);
+        active_request.maximum_mlx_peak_memory_bytes = Some(
+            active_request
+                .maximum_mlx_peak_memory_bytes
+                .unwrap_or(0)
+                .max(mlx_memory_snapshot.peak_memory_bytes),
+        );
         active_request.last_mlx_active_memory_bytes = Some(mlx_memory_snapshot.active_memory_bytes);
     }
     let latest_mlx_memory_snapshot =
         speculative_prefill_draft_memory_snapshot.or(mlx_memory_snapshot);
     if let Some(latest_mlx_memory_snapshot) = latest_mlx_memory_snapshot {
         publish_latest_mlx_memory_snapshot(health_snapshot, latest_mlx_memory_snapshot);
+    }
+    if let Some(expert_residency) = expert_residency {
+        crate::worker_health::publish_worker_expert_residency(health_snapshot, expert_residency);
     }
     try_send_stream_event(
         &active_request.stream_event_sender,

@@ -23,6 +23,8 @@ pub enum PrefillChunckSizeOptimizerDecisionReason {
     CumulativeLatencyPlanning,
     /// The prompt tail is shorter than the smallest registered candidate.
     Fallback,
+    /// The smallest configured action that contains the exact terminal remainder.
+    TerminalRemainder,
 }
 
 /// The candidate the optimizer chose and why.
@@ -158,6 +160,31 @@ impl PrefillChunckSizeOptimizer {
             selected_candidate_index,
             PrefillChunckSizeOptimizerDecisionReason::CumulativeLatencyPlanning,
         )
+    }
+
+    /// Selects the smallest configured action that contains one terminal remainder.
+    ///
+    /// The returned candidate remains the requested action for optimizer evidence,
+    /// while execution clamps the forward to the exact remaining token count.
+    #[must_use]
+    pub fn ask_for_terminal_remainder(
+        &mut self,
+        terminal_remainder_tokens: usize,
+        configured_maximum_prefill_chunck_tokens: usize,
+    ) -> Option<PrefillChunckSizeOptimizerDecision> {
+        let terminal_ceiling_candidate = self
+            .candidate_prefill_chunck_tokens
+            .iter()
+            .copied()
+            .find(|candidate_prefill_chunck_tokens| {
+                *candidate_prefill_chunck_tokens >= terminal_remainder_tokens
+                    && *candidate_prefill_chunck_tokens <= configured_maximum_prefill_chunck_tokens
+            })?;
+        self.decision_sequence = self.decision_sequence.saturating_add(1);
+        Some(PrefillChunckSizeOptimizerDecision {
+            candidate_prefill_chunck_tokens: terminal_ceiling_candidate,
+            reason: PrefillChunckSizeOptimizerDecisionReason::TerminalRemainder,
+        })
     }
 
     pub fn tell(

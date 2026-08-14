@@ -8,3 +8,4 @@ mod persistent_prompt_cache_diagnostics;
 mod prompt_cache_clear_protocol;
 mod runtime_feature_configuration;
 mod speculative_prefill_configuration;
+mod worker_startup_configuration;

@@ -45,6 +45,17 @@ pub struct GenerationPerformanceRecord {
     pub generation_elapsed_millis: u64,
     /// Wall-clock time from request arrival to completion, in milliseconds.
     pub total_elapsed_millis: u64,
+    /// User-visible latency from accepted request to first public output.
+    pub time_to_first_output_millis: Option<u64>,
+    /// Time between explicit preparation start and generation progress/output.
+    pub generation_preparation_elapsed_millis: Option<u64>,
+    pub first_decode_forward_elapsed_millis: Option<u64>,
+    /// Source bytes read solely during preparation; zero proves no eager warm scan.
+    pub generation_preparation_expert_source_read_byte_count: u64,
+    pub final_complete_expert_layer_count: Option<u32>,
+    pub final_complete_expert_payload_bytes: Option<u64>,
+    pub final_partial_expert_layer_count: Option<u32>,
+    pub final_partial_expert_payload_bytes: Option<u64>,
     /// Prefill throughput: `(prompt_token_count - cached_token_count) / (prefill_elapsed_millis / 1000)`.
     /// `None` when the entire prompt was cached (0 ms prefill).
     pub prefill_tok_per_second: Option<f64>,

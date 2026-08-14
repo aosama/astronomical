@@ -113,6 +113,9 @@ where
                 .map(|mlx_memory_telemetry| {
                     worker_memory_snapshot(MlxMemorySnapshotSource::Finalized, mlx_memory_telemetry)
                 });
+        let expert_residency = generation_finalization
+            .expert_residency_telemetry()
+            .map(worker_expert_residency_snapshot);
         tracing::info!(
             request_id = active_generation.request_id.value(),
             expert_memory_mode = ?expert_memory_mode,
@@ -124,6 +127,7 @@ where
                 request_id: active_generation.request_id,
                 expert_memory_mode,
                 mlx_memory_snapshot,
+                expert_residency,
             })
             .await?;
         active_generation.last_reported_expert_memory_mode = expert_memory_mode;
@@ -379,6 +383,19 @@ where
             })
             .await?;
         Ok(())
+    }
+}
+
+/// Converts engine-owned residency telemetry into the public worker snapshot.
+pub(super) fn worker_expert_residency_snapshot(
+    expert_residency: crate::ExpertResidencyTelemetry,
+) -> astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+    astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+        total_layer_count: expert_residency.total_layer_count,
+        complete_layer_count: expert_residency.complete_layer_count,
+        complete_layer_payload_bytes: expert_residency.complete_layer_payload_bytes,
+        partial_layer_count: expert_residency.partial_layer_count,
+        partial_layer_payload_bytes: expert_residency.partial_layer_payload_bytes,
     }
 }
 

@@ -26,6 +26,25 @@ pub enum PerformanceCounter {
     ExpertRouteMatchedExpertCount,
     ExpertRouteCompletelyMatchedLayerCount,
     ExpertRouteExaminedLayerCount,
+    ExpertResidencyPlanCompleteLayerCount,
+    ExpertResidencyPlanPartialLayerCount,
+    ExpertResidencyPlanStreamedLayerCount,
+    ExpertResidencyPreexistingCompletePayloadBytes,
+    ExpertResidencyPreexistingPartialPayloadBytes,
+    ExpertResidencyPreservedCompletePayloadBytes,
+    ExpertResidencyPreservedPartialPayloadBytes,
+    ExpertResidencyPromotedCompletePayloadBytes,
+    ExpertResidencyPromotedPartialPayloadBytes,
+    ExpertResidencyRetiredCompletePayloadBytes,
+    ExpertResidencyRetiredPartialPayloadBytes,
+    ExpertTopologyPreservedPayloadBytes,
+    ExpertTopologyRetiredPayloadBytes,
+    MandatoryPrefillExpertSourcePayloadBytes,
+    MandatoryDecodeExpertSourcePayloadBytes,
+    AvoidedCompleteLayerExpertSourcePayloadBytes,
+    RetainedRouteAssignmentHitCount,
+    RetainedRouteAssignmentMissCount,
+    ExpertResidencyCommitRejectionCount,
     MtpMemoryAdmissionFallbackCount,
     MtpAdmittedAttemptCount,
     SpeculativePrefillTargetOnlyPrefixChunckCount,
@@ -80,6 +99,25 @@ impl PerformanceCounter {
         Self::ExpertRouteMatchedExpertCount,
         Self::ExpertRouteCompletelyMatchedLayerCount,
         Self::ExpertRouteExaminedLayerCount,
+        Self::ExpertResidencyPlanCompleteLayerCount,
+        Self::ExpertResidencyPlanPartialLayerCount,
+        Self::ExpertResidencyPlanStreamedLayerCount,
+        Self::ExpertResidencyPreexistingCompletePayloadBytes,
+        Self::ExpertResidencyPreexistingPartialPayloadBytes,
+        Self::ExpertResidencyPreservedCompletePayloadBytes,
+        Self::ExpertResidencyPreservedPartialPayloadBytes,
+        Self::ExpertResidencyPromotedCompletePayloadBytes,
+        Self::ExpertResidencyPromotedPartialPayloadBytes,
+        Self::ExpertResidencyRetiredCompletePayloadBytes,
+        Self::ExpertResidencyRetiredPartialPayloadBytes,
+        Self::ExpertTopologyPreservedPayloadBytes,
+        Self::ExpertTopologyRetiredPayloadBytes,
+        Self::MandatoryPrefillExpertSourcePayloadBytes,
+        Self::MandatoryDecodeExpertSourcePayloadBytes,
+        Self::AvoidedCompleteLayerExpertSourcePayloadBytes,
+        Self::RetainedRouteAssignmentHitCount,
+        Self::RetainedRouteAssignmentMissCount,
+        Self::ExpertResidencyCommitRejectionCount,
         Self::MtpMemoryAdmissionFallbackCount,
         Self::MtpAdmittedAttemptCount,
         Self::SpeculativePrefillTargetOnlyPrefixChunckCount,
@@ -143,6 +181,55 @@ impl PerformanceCounter {
                 "expert_route_completely_matched_layer_count"
             }
             Self::ExpertRouteExaminedLayerCount => "expert_route_examined_layer_count",
+            Self::ExpertResidencyPlanCompleteLayerCount => {
+                "expert_residency_plan_complete_layer_count"
+            }
+            Self::ExpertResidencyPlanPartialLayerCount => {
+                "expert_residency_plan_partial_layer_count"
+            }
+            Self::ExpertResidencyPlanStreamedLayerCount => {
+                "expert_residency_plan_streamed_layer_count"
+            }
+            Self::ExpertResidencyPreexistingCompletePayloadBytes => {
+                "expert_residency_preexisting_complete_payload_bytes"
+            }
+            Self::ExpertResidencyPreexistingPartialPayloadBytes => {
+                "expert_residency_preexisting_partial_payload_bytes"
+            }
+            Self::ExpertResidencyPreservedCompletePayloadBytes => {
+                "expert_residency_preserved_complete_payload_bytes"
+            }
+            Self::ExpertResidencyPreservedPartialPayloadBytes => {
+                "expert_residency_preserved_partial_payload_bytes"
+            }
+            Self::ExpertResidencyPromotedCompletePayloadBytes => {
+                "mandatory_prefill_complete_layer_promoted_payload_byte_count"
+            }
+            Self::ExpertResidencyPromotedPartialPayloadBytes => {
+                "mandatory_decode_routed_page_promoted_payload_byte_count"
+            }
+            Self::ExpertResidencyRetiredCompletePayloadBytes => {
+                "expert_residency_retired_complete_payload_bytes"
+            }
+            Self::ExpertResidencyRetiredPartialPayloadBytes => {
+                "expert_residency_retired_partial_payload_bytes"
+            }
+            Self::ExpertTopologyPreservedPayloadBytes => {
+                "expert_topology_preserved_payload_byte_count"
+            }
+            Self::ExpertTopologyRetiredPayloadBytes => "expert_topology_retired_payload_byte_count",
+            Self::MandatoryPrefillExpertSourcePayloadBytes => {
+                "mandatory_prefill_expert_source_payload_bytes"
+            }
+            Self::MandatoryDecodeExpertSourcePayloadBytes => {
+                "mandatory_decode_expert_source_payload_bytes"
+            }
+            Self::AvoidedCompleteLayerExpertSourcePayloadBytes => {
+                "avoided_complete_layer_expert_source_payload_bytes"
+            }
+            Self::RetainedRouteAssignmentHitCount => "retained_route_assignment_hit_count",
+            Self::RetainedRouteAssignmentMissCount => "retained_route_assignment_miss_count",
+            Self::ExpertResidencyCommitRejectionCount => "expert_residency_commit_rejection_count",
             Self::MtpMemoryAdmissionFallbackCount => "mtp_memory_admission_fallback_count",
             Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
             Self::SpeculativePrefillTargetOnlyPrefixChunckCount => {
