@@ -145,7 +145,9 @@ validate_real_model() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-    APP_BUNDLE_PATH="${repository_root}/target/astronomical-macos-development/Astronomical Development.app"
+    # The generated Development app remains directly runnable even though its
+    # parent .noindex directory keeps it out of Spotlight search results.
+    APP_BUNDLE_PATH="${repository_root}/target/astronomical-macos-development.noindex/Astronomical Development.app"
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --app-bundle)
@@ -185,7 +187,7 @@ main() {
     for bundled_executable in "$daemon_executable" "$menu_executable" "$worker_executable"; do
         [ -x "$bundled_executable" ] || { print_error "bundled executable is unavailable: ${bundled_executable}"; exit 1; }
     done
-    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES; do
+    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES Astronomical.icns; do
         [ -s "${APP_BUNDLE_PATH}/Contents/Resources/${packaged_resource}" ] || {
             print_error "required bundled resource is unavailable: ${packaged_resource}"
             exit 1
@@ -198,7 +200,9 @@ main() {
     application_build_number="$(read_plist_value CFBundleVersion)"
     application_commit="$(read_plist_value AstronomicalBuildCommit)"
     application_is_dirty="$(read_plist_value AstronomicalBuildDirty)"
+    application_build_date="$(read_plist_value AstronomicalBuildDate)"
     bundle_identifier="$(read_plist_value CFBundleIdentifier)"
+    bundle_icon_file="$(read_plist_value CFBundleIconFile)"
     supervisor_port="$(read_plist_value AstronomicalSupervisorPort)"
     state_directory_name="$(read_plist_value AstronomicalStateDirectoryName)"
     case "$application_channel" in
@@ -217,8 +221,11 @@ main() {
     esac
     case "$supervisor_port" in ''|*[!0-9]*) print_error "invalid bundle supervisor port"; exit 1 ;; esac
     case "$application_build_number" in ''|*[!0-9]*) print_error "invalid bundle build number"; exit 1 ;; esac
+    case "$application_build_date" in ????????) ;; *) print_error "bundle build date must use YYYYMMDD"; exit 1 ;; esac
+    case "$application_build_date" in *[!0-9]*) print_error "bundle build date must use YYYYMMDD"; exit 1 ;; esac
     [ -n "$application_version" ] || { print_error "bundle version is unavailable"; exit 1; }
     [ -n "$application_commit" ] || { print_error "bundle commit is unavailable"; exit 1; }
+    [ "$bundle_icon_file" = "Astronomical.icns" ] || { print_error "bundle icon identity is invalid"; exit 1; }
     case "$application_is_dirty" in true|false) ;; *) print_error "invalid bundle dirty marker"; exit 1 ;; esac
     [ "$supervisor_port" = "$expected_supervisor_port" ] || { print_error "bundle channel and supervisor port disagree"; exit 1; }
     [ "$state_directory_name" = "$expected_state_directory_name" ] || { print_error "bundle channel and state directory disagree"; exit 1; }

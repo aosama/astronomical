@@ -54,7 +54,9 @@ trap cleanup 0
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-    SOURCE_APP_BUNDLE="${repository_root}/target/astronomical-macos-stable/Astronomical.app"
+    # Generated bundles live below a .noindex directory so Spotlight exposes
+    # only the explicitly promoted copy in ~/Applications.
+    SOURCE_APP_BUNDLE="${repository_root}/target/astronomical-macos-stable.noindex/Astronomical.app"
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --app-bundle)
@@ -101,7 +103,9 @@ main() {
     application_build_number="$(plutil -extract CFBundleVersion raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     application_commit="$(plutil -extract AstronomicalBuildCommit raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     application_is_dirty="$(plutil -extract AstronomicalBuildDirty raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
+    application_build_date="$(plutil -extract AstronomicalBuildDate raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     bundle_identifier="$(plutil -extract CFBundleIdentifier raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
+    bundle_icon_file="$(plutil -extract CFBundleIconFile raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     supervisor_port="$(plutil -extract AstronomicalSupervisorPort raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     state_directory_name="$(plutil -extract AstronomicalStateDirectoryName raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     [ "$application_is_dirty" = "false" ] || { print_error "dirty builds cannot be promoted to Stable"; exit 1; }
@@ -109,9 +113,12 @@ main() {
     [ "$supervisor_port" = "6732" ] || { print_error "Stable bundle must use port 6732"; exit 1; }
     [ "$state_directory_name" = ".astronomical" ] || { print_error "Stable bundle state directory is invalid"; exit 1; }
     case "$application_build_number" in ''|*[!0-9]*) print_error "Stable bundle build number must be numeric"; exit 1 ;; esac
+    case "$application_build_date" in ????????) ;; *) print_error "Stable bundle build date must use YYYYMMDD"; exit 1 ;; esac
+    case "$application_build_date" in *[!0-9]*) print_error "Stable bundle build date must use YYYYMMDD"; exit 1 ;; esac
     [ -n "$application_version" ] || { print_error "Stable bundle version is unavailable"; exit 1; }
     [ -n "$application_commit" ] || { print_error "Stable bundle commit is unavailable"; exit 1; }
-    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES; do
+    [ "$bundle_icon_file" = "Astronomical.icns" ] || { print_error "Stable bundle icon identity is invalid"; exit 1; }
+    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES Astronomical.icns; do
         [ -s "${SOURCE_APP_BUNDLE}/Contents/Resources/${packaged_resource}" ] || {
             print_error "required bundled resource is unavailable: ${packaged_resource}"
             exit 1
