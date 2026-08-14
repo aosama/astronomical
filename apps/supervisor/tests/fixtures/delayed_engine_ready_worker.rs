@@ -82,6 +82,15 @@ async fn main() {
                     })
                     .await;
             }
+            WorkerCommand::ClearPromptCache { model_id } => {
+                let _send_outcome = event_writer
+                    .send_event(&WorkerEvent::PromptCacheCleared {
+                        model_id,
+                        blocks_removed: 0,
+                        bytes_freed: 0,
+                    })
+                    .await;
+            }
         }
     }
 }

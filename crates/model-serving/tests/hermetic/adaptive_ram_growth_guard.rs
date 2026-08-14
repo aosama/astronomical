@@ -11,8 +11,6 @@ use astronomical_model_serving::{
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, false, false);
-const DEFAULT_PREFILL_CONTEXT: AdaptiveRamGrowthContext =
-    AdaptiveRamGrowthContext::prefill(128, 0, false, false, false);
 
 #[test]
 fn should_reject_a_zero_active_memory_limit() {

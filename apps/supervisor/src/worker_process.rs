@@ -214,6 +214,15 @@ impl WorkerProcess {
         .await
     }
 
+    /// Requests a global or model-scoped persistent prompt-cache deletion.
+    pub async fn clear_prompt_cache(
+        &mut self,
+        model_id: Option<String>,
+    ) -> Result<(), WorkerControlError> {
+        self.send_command_with_timeout(&WorkerCommand::ClearPromptCache { model_id })
+            .await
+    }
+
     /// Sends a SwapModel command to the worker, instructing it to unload the current
     /// model and load a new one from the given directory.
     pub async fn swap_model(

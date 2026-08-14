@@ -97,6 +97,12 @@ pub struct PersistentPromptCacheSummary {
     pub visual_embedding_rows_loaded: u64,
 }
 
+/// Scope of the newest cache clear waiting for generation to become idle.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingPromptCacheClear {
+    pub model_id: Option<String>,
+}
+
 impl PersistentPromptCacheSummary {
     pub fn from_worker_event(persistent_prompt_cache_stats: Option<&WorkerEvent>) -> Self {
         let Some(WorkerEvent::PersistentPromptCacheStats {
@@ -186,6 +192,8 @@ pub struct WorkerHealthSnapshot {
     pub minimum_mlx_memory_ceiling_bytes: u64,
     /// Latest accepted limit queued until the active generation finalizes.
     pub pending_mlx_memory_ceiling_bytes: Option<u64>,
+    /// Newest cache-clear request queued behind the active generation.
+    pub pending_prompt_cache_clear: Option<PendingPromptCacheClear>,
     /// Bounded last live-memory control failure. Cleared by a later success.
     pub mlx_memory_limit_error: Option<String>,
     pub mlx_memory_ceiling_bytes: u64,
@@ -221,6 +229,7 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
+            pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes: 0,
             serving_session: ServingSessionSnapshot::empty(),
@@ -249,6 +258,8 @@ impl WorkerHealthSnapshot {
             previous_health_snapshot.machine_mlx_memory_ceiling_bytes;
         replacement_health_snapshot.minimum_mlx_memory_ceiling_bytes =
             minimum_mlx_memory_ceiling_bytes;
+        replacement_health_snapshot.pending_prompt_cache_clear =
+            previous_health_snapshot.pending_prompt_cache_clear.clone();
         replacement_health_snapshot.serving_session =
             previous_health_snapshot.serving_session.clone();
         replacement_health_snapshot
@@ -290,6 +301,7 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
             pending_mlx_memory_ceiling_bytes: None,
+            pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes,
             serving_session: ServingSessionSnapshot::empty(),
@@ -319,6 +331,7 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
+            pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes: 0,
             serving_session: ServingSessionSnapshot::empty(),
@@ -434,6 +447,15 @@ pub(crate) fn publish_pending_mlx_memory_ceiling(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.pending_mlx_memory_ceiling_bytes = pending_mlx_memory_ceiling_bytes;
+    }
+}
+
+pub(crate) fn publish_pending_prompt_cache_clear(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    pending_prompt_cache_clear: Option<PendingPromptCacheClear>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.pending_prompt_cache_clear = pending_prompt_cache_clear;
     }
 }
 
