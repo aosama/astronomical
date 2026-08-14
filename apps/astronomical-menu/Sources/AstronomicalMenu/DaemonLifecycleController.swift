@@ -118,16 +118,20 @@ enum DaemonLifecycleError: LocalizedError {
 
 @MainActor
 final class DaemonLifecycleController {
+  private let applicationIdentity: ApplicationIdentity
   private let supervisorClient: any SupervisorClient
   private let ownershipStore: DaemonOwnershipStore
   private var ownedDaemonProcess: OwnedDaemonProcess?
   private(set) var ownsDaemon = false
 
-  init(supervisorClient: any SupervisorClient) {
+  init(
+    supervisorClient: any SupervisorClient,
+    applicationIdentity: ApplicationIdentity = .current()
+  ) {
     self.supervisorClient = supervisorClient
+    self.applicationIdentity = applicationIdentity
     ownershipStore = DaemonOwnershipStore(
-      ownershipRecordURL: FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".astronomical/menu-owned-daemon.json")
+      ownershipRecordURL: applicationIdentity.daemonOwnershipURL()
     )
   }
 
@@ -172,7 +176,10 @@ final class DaemonLifecycleController {
   }
 
   private func startOwnedDaemon(menuExecutableURL: URL, daemonExecutableURL: URL) throws {
-    let daemonProcess = try launchOwnedDaemonProcess(executableURL: daemonExecutableURL)
+    let daemonProcess = try launchOwnedDaemonProcess(
+      executableURL: daemonExecutableURL,
+      arguments: applicationIdentity.daemonArguments
+    )
     let ownershipRecord = DaemonOwnershipRecord(
       menuProcessIdentifier: getpid(),
       menuExecutablePath: menuExecutableURL.path,

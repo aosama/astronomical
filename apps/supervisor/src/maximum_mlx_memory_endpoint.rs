@@ -67,7 +67,7 @@ pub(crate) async fn update_maximum_mlx_memory(
     }
 
     let prior_config_bytes = match astronomical_config::write_maximum_mlx_memory_gb(
-        runtime_config_resolver.config_home_directory(),
+        runtime_config_resolver.state_directory(),
         maximum_mlx_memory_request.maximum_mlx_memory_gb,
     ) {
         Ok(prior_config_bytes) => prior_config_bytes,
@@ -121,7 +121,7 @@ pub(crate) async fn update_maximum_mlx_memory(
         }
         Ok(MlxMemoryLimitUpdateOutcome::Rejected) => {
             if let Err(restore_error) = astronomical_config::restore_config_file(
-                runtime_config_resolver.config_home_directory(),
+                runtime_config_resolver.state_directory(),
                 prior_config_bytes.as_deref(),
             ) {
                 tracing::error!(error = %restore_error, "could not restore config after worker rejected MLX memory limit");
@@ -149,7 +149,7 @@ pub(crate) async fn update_maximum_mlx_memory(
         }
         Err(worker_control_error) => {
             if let Err(restore_error) = astronomical_config::restore_config_file(
-                runtime_config_resolver.config_home_directory(),
+                runtime_config_resolver.state_directory(),
                 prior_config_bytes.as_deref(),
             ) {
                 tracing::error!(error = %restore_error, "could not restore config after MLX memory worker-control failure");

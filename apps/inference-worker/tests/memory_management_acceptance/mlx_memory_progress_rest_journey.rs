@@ -323,7 +323,7 @@ async fn consume_completed_stream(
 }
 
 fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
-    let configuration_directory = isolated_worker_home.join(".astronomical");
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     std::fs::create_dir(&configuration_directory)
         .expect("the MLX memory progress configuration directory should be created");
     let configuration_document = json!({

@@ -81,7 +81,7 @@ async fn should_load_a_dense_qwen3_5_vision_model_and_project_a_minimum_image() 
 
 fn configured_dense_qwen3_5_vision_artifact()
 -> Option<(std::path::PathBuf, ValidatedQwen3_5Artifact)> {
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for model qualification");
     let maximum_output_tokens = astronomical_config.max_output_tokens();
     let configured_model_directory_scans = discover_models(

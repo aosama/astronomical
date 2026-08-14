@@ -119,7 +119,7 @@ async fn run_opencode_worker_availability_rest_journey() {
 }
 
 fn write_opencode_qualification_config(isolated_worker_home: &Path, model_directory: &Path) {
-    let configuration_directory = isolated_worker_home.join(".astronomical");
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the OpenCode qualification configuration directory should be created");
     let configuration_document = json!({
@@ -144,7 +144,7 @@ fn write_opencode_qualification_config(isolated_worker_home: &Path, model_direct
 
 fn assert_authoritative_paging_attribution(isolated_worker_home: &Path) {
     let attribution_log_path = isolated_worker_home
-        .join(".astronomical")
+        .join(".astronomical-dev")
         .join("logs")
         .join("performance-attribution.jsonl");
     let attribution_log = fs::read_to_string(&attribution_log_path)

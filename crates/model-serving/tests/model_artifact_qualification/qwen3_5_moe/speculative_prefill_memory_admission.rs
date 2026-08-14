@@ -78,7 +78,7 @@ async fn run_configured_cold_cache_summary_journey(
         );
     }
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let astronomical_config = AstronomicalConfig::load_from_default_location()
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for the summary journey");
     let resolved_speculative_prefill = astronomical_config
         .speculative_prefill()

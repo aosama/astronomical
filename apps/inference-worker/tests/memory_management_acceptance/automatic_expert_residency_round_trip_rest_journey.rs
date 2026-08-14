@@ -399,7 +399,7 @@ fn assert_completed_stream(completed_stream: &CompletedStream, request_descripti
 fn generation_source_read_bytes_by_request(isolated_worker_home: &Path) -> Vec<u64> {
     let attribution_log = fs::read_to_string(
         isolated_worker_home
-            .join(".astronomical")
+            .join(".astronomical-dev")
             .join("logs")
             .join("performance-attribution.jsonl"),
     )
@@ -421,7 +421,7 @@ fn generation_source_read_bytes_by_request(isolated_worker_home: &Path) -> Vec<u
 }
 
 fn isolated_worker_log_lines(isolated_worker_home: &Path) -> Vec<String> {
-    let logging_directory = isolated_worker_home.join(".astronomical").join("logs");
+    let logging_directory = isolated_worker_home.join(".astronomical-dev").join("logs");
     fs::read_dir(logging_directory)
         .expect("the round-trip log directory should exist")
         .filter_map(Result::ok)
@@ -437,7 +437,7 @@ fn isolated_worker_log_lines(isolated_worker_home: &Path) -> Vec<String> {
 }
 
 fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
-    let configuration_directory = isolated_worker_home.join(".astronomical");
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the residency round-trip configuration directory should be created");
     let configuration_document = json!({

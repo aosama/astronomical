@@ -8,8 +8,8 @@ use std::time::Duration;
 use astronomical_supervisor::{
     ChatGenerationExecutor, GenerationPerformanceLog, ResolvedRuntimeConfig,
     ResolvedRuntimeConfigResolver, ShutdownController, WorkerHandle, WorkerHealthStatus,
-    build_application_with_full_control, build_application_with_reload,
-    build_application_with_shutdown,
+    build_application_with_full_control, build_application_with_shutdown,
+    build_development_application_with_reload,
 };
 use axum::{
     body::{Body, to_bytes},

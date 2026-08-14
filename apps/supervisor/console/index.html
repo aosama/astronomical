@@ -16,7 +16,7 @@
                 <div>
                     <p class="eyebrow">Local model control</p>
                     <h1>Astronomical</h1>
-                    <p class="brand-subtitle">Observatory</p>
+                    <p class="brand-subtitle">Observatory · <span id="application-channel">Development</span></p>
                 </div>
             </div>
             <nav class="observatory-navigation" aria-label="Observatory sections">
@@ -38,6 +38,7 @@
                         <code id="status-model-id" class="status-model-id">No model loaded</code>
                     </div>
                 </div>
+                <code id="application-build-identity" class="application-build-identity">Version unavailable</code>
             </header>
 
             <main class="observatory-main">
@@ -227,7 +228,7 @@
                             <div class="about-stat"><span id="about-disk-size" class="about-stat-value">—</span><span class="about-stat-label">size on disk</span></div>
                             <div class="about-stat"><span id="about-residency" class="about-stat-value">—</span><span class="about-stat-label">residency</span></div>
                         </div>
-                        <p class="about-note">Single-user local console. Served by astronomicald on this machine. Config: ~/.astronomical/config.json</p>
+                        <p id="about-instance-note" class="about-note">Single-user local console. Served by astronomicald on this machine.</p>
                     </section>
                 </section>
 
@@ -262,7 +263,7 @@
                     </div>
                 </section>
             </main>
-            <footer class="observatory-footer">Astronomical Observatory · Local console</footer>
+            <footer class="observatory-footer">Astronomical Observatory · <span id="footer-application-identity">Local console</span></footer>
         </div>
     </div>
     <script src="/memory-control.js" defer></script>

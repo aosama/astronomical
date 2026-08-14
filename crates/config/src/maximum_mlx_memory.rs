@@ -5,8 +5,7 @@ use serde_json::Value;
 
 use crate::config_error::AstronomicalConfigError;
 use crate::config_file::{
-    UserConfigFile, config_file_path_for_home, validate_user_config_file,
-    write_config_file_bytes_atomically,
+    UserConfigFile, validate_user_config_file, write_config_file_bytes_atomically,
 };
 
 const BYTES_PER_DECIMAL_GIGABYTE: u64 = 1_000_000_000;
@@ -29,14 +28,14 @@ pub fn maximum_mlx_memory_gb_to_bytes(
 
 /// Persists the optional MLX memory override and returns the exact prior file bytes.
 pub fn write_maximum_mlx_memory_gb(
-    home_directory: impl AsRef<Path>,
+    state_directory: impl AsRef<Path>,
     maximum_mlx_memory_gb: Option<u64>,
 ) -> Result<Option<Vec<u8>>, AstronomicalConfigError> {
     if let Some(maximum_mlx_memory_gb) = maximum_mlx_memory_gb {
         maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
     }
 
-    let config_file_path = config_file_path_for_home(home_directory.as_ref());
+    let config_file_path = state_directory.as_ref().join("config.json");
     let prior_config_bytes = match fs::read(&config_file_path) {
         Ok(config_bytes) => Some(config_bytes),
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => None,
@@ -95,10 +94,10 @@ pub fn write_maximum_mlx_memory_gb(
 
 /// Restores the exact config bytes returned by write_maximum_mlx_memory_gb.
 pub fn restore_config_file(
-    home_directory: impl AsRef<Path>,
+    state_directory: impl AsRef<Path>,
     prior_config_bytes: Option<&[u8]>,
 ) -> Result<(), AstronomicalConfigError> {
-    let config_file_path = config_file_path_for_home(home_directory.as_ref());
+    let config_file_path = state_directory.as_ref().join("config.json");
     match prior_config_bytes {
         Some(prior_config_bytes) => {
             write_config_file_bytes_atomically(&config_file_path, prior_config_bytes)

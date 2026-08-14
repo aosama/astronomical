@@ -68,6 +68,7 @@ astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
 axum.workspace = true
 futures-util.workspace = true
+fs4.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

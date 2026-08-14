@@ -16,7 +16,7 @@ pub(super) async fn post_config_reload(application: &axum::Router) -> axum::resp
 }
 
 pub(super) fn write_config_file(home_directory: &std::path::Path, config_body: &str) {
-    let config_file = home_directory.join(".astronomical").join("config.json");
+    let config_file = home_directory.join(".astronomical-dev").join("config.json");
     std::fs::create_dir_all(config_file.parent().expect("config file has a parent"))
         .expect("the config directory should be created");
     let config_body = match serde_json::from_str::<serde_json::Value>(config_body) {
@@ -56,7 +56,7 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
             PathBuf::from("/tmp/prompt-cache"),
             50_000_000_000,
         ),
-        bind_address: "127.0.0.1:6732".to_owned(),
+        bind_address: "127.0.0.1:6733".to_owned(),
         logging_config: astronomical_config::LoggingConfig::new(
             PathBuf::from("/tmp/astronomical-logs"),
             astronomical_config::LogLevel::Warn,

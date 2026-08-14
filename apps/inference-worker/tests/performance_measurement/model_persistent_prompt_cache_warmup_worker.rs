@@ -154,7 +154,7 @@ pub(super) fn persistent_prompt_cache_enabled_worker_configuration(
             .expect("Cargo should provide the production inference-worker executable path");
     let isolated_worker_home =
         tempfile::tempdir().expect("the persistent prompt-cache worker home should be created");
-    let configuration_directory = isolated_worker_home.path().join(".astronomical");
+    let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the persistent prompt-cache configuration directory should be created");
     let persistent_prompt_cache_directory = configuration_directory.join("cache");
@@ -171,7 +171,7 @@ pub(super) fn persistent_prompt_cache_enabled_worker_configuration(
     )
     .expect("the persistent prompt-cache configuration should be written");
 
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::new(
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_worker_home.path().to_path_buf(),
         PathBuf::from(&production_worker_executable_path),
     )

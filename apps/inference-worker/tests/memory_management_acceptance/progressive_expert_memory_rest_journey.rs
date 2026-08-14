@@ -158,7 +158,7 @@ async fn run_progressive_expert_memory_rest_journey() {
 
 fn generation_attribution_report_count(isolated_worker_home: &Path) -> usize {
     let attribution_log_path = isolated_worker_home
-        .join(".astronomical")
+        .join(".astronomical-dev")
         .join("logs")
         .join("performance-attribution.jsonl");
     fs::read_to_string(attribution_log_path)
@@ -205,7 +205,7 @@ fn retained_expert_fill_decision_log_lines(isolated_worker_home: &Path) -> Vec<S
 
 fn generation_expert_source_read_bytes(isolated_worker_home: &Path) -> u64 {
     let attribution_log_path = isolated_worker_home
-        .join(".astronomical")
+        .join(".astronomical-dev")
         .join("logs")
         .join("performance-attribution.jsonl");
     let attribution_log = fs::read_to_string(attribution_log_path)
@@ -232,7 +232,7 @@ fn generation_expert_source_read_bytes(isolated_worker_home: &Path) -> u64 {
 }
 
 fn isolated_worker_log_lines(isolated_worker_home: &Path) -> Vec<String> {
-    let logging_directory = isolated_worker_home.join(".astronomical").join("logs");
+    let logging_directory = isolated_worker_home.join(".astronomical-dev").join("logs");
     let logging_entries = fs::read_dir(logging_directory)
         .expect("the paging acceptance journey should create its logging directory");
     let mut log_lines = Vec::new();
@@ -366,7 +366,7 @@ async fn consume_completed_stream(
 }
 
 fn write_qualification_config(isolated_worker_home: &Path, model_directory: &Path) {
-    let configuration_directory = isolated_worker_home.join(".astronomical");
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the memory-management configuration directory should be created");
     let configuration_document = json!({

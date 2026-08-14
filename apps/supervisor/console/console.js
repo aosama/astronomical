@@ -98,6 +98,7 @@ async function pollStatus() {
         const response = await fetch(STATUS_URL);
         if (!response.ok) { setStatusUnavailable(); return; }
         const data = await response.json();
+        renderApplicationIdentity(data.application);
         renderStatusHeader(data);
         renderNowStrip(data);
         renderAboutFromStatus(data);
@@ -109,6 +110,25 @@ async function pollStatus() {
     } catch (fetchError) {
         setStatusUnavailable();
     }
+}
+
+function applicationIdentityTitle(applicationIdentity) {
+    if (!applicationIdentity) { return "Version unavailable"; }
+    const dirtySuffix = applicationIdentity.is_dirty ? "-dirty" : "";
+    const channelTitle = applicationIdentity.channel_display_name || applicationIdentity.channel || "Unknown";
+    return `${applicationIdentity.version || "unknown"} · ${channelTitle} · ${applicationIdentity.commit || "unknown"}${dirtySuffix}`;
+}
+
+function renderApplicationIdentity(applicationIdentity) {
+    const identityTitle = applicationIdentityTitle(applicationIdentity);
+    document.getElementById("application-build-identity").textContent = identityTitle;
+    document.getElementById("footer-application-identity").textContent = identityTitle;
+    if (!applicationIdentity) { return; }
+    document.getElementById("application-channel").textContent =
+        applicationIdentity.channel_display_name || applicationIdentity.channel;
+    document.getElementById("about-instance-note").textContent =
+        `Single-user local console. Served by astronomicald on this machine. Config: ${applicationIdentity.state_directory}/config.json`;
+    document.body.dataset.applicationChannel = applicationIdentity.channel || "unknown";
 }
 
 async function pollSystemTelemetry() {

@@ -4,6 +4,18 @@ use std::path::PathBuf;
 /// Failure while loading or resolving Astronomical runtime configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum AstronomicalConfigError {
+    #[error("HOME is required to derive the Astronomical instance directory")]
+    HomeDirectoryRequired,
+    #[error("failed to resolve HOME at {home_directory:?}")]
+    ResolveHomeDirectory {
+        home_directory: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("HOME must not resolve to the filesystem root")]
+    HomeDirectoryMustNotBeRoot,
+    #[error("runtime instance must be 'stable' or 'development', got '{raw_instance}'")]
+    InvalidRuntimeInstance { raw_instance: String },
     #[error("invalid {field_name}: {description}")]
     InvalidChunkingValue {
         field_name: &'static str,
@@ -48,6 +60,13 @@ pub enum AstronomicalConfigError {
     },
     #[error("refusing to bind supervisor to non-loopback address {supervisor_bind_address}")]
     NonLoopbackBindAddress { supervisor_bind_address: SocketAddr },
+    #[error(
+        "standard runtime instance must bind to {expected_bind_address}, not {configured_bind_address}"
+    )]
+    StandardInstanceBindAddressMismatch {
+        configured_bind_address: SocketAddr,
+        expected_bind_address: SocketAddr,
+    },
     #[error("invalid prompt cache max_size_gb: {description}")]
     InvalidPromptCacheMaxSizeGb { description: &'static str },
     #[error("invalid maximum_mlx_memory_gb: {description}")]
@@ -66,12 +85,6 @@ pub enum AstronomicalConfigError {
         #[source]
         source: std::io::Error,
     },
-    #[error("HOME is required to derive the default prompt cache directory")]
-    DefaultPromptCacheDirectoryRequiresHome,
-    #[error("optimizer state directory requires HOME to derive the default path")]
-    DefaultOptimizerDirectoryRequiresHome,
-    #[error("logging requires HOME to derive the default log directory")]
-    DefaultLogDirectoryRequiresHome,
     #[error("logging.retained_files must be positive")]
     InvalidRetainedLogFileCount,
     #[error("speculative_prefill.draft_model_id is required when speculative prefill is enabled")]

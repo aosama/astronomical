@@ -39,7 +39,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "astronomical-config"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "libc",
  "serde",
@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-experimental-aligned-expert-packs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "astronomical-config",
  "astronomical-model-serving",
@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-inference-worker"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-ipc-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-model-serving"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-rest-contract"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "serde",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-runtime-integration"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bindgen",
  "libc",
@@ -147,12 +147,13 @@ dependencies = [
 
 [[package]]
 name = "astronomical-supervisor"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
  "astronomical-rest-contract",
  "axum",
+ "fs4",
  "futures-util",
  "serde",
  "serde_json",

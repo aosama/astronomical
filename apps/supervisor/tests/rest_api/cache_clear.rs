@@ -259,14 +259,14 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
             temporary_directory.path().join("cache"),
             50_000_000_000,
         ),
-        bind_address: "192.0.2.1:6732".to_owned(),
+        bind_address: "127.0.0.1:6733".to_owned(),
         logging_config: astronomical_config::LoggingConfig::new(
             temporary_directory.path().join("logs"),
             astronomical_config::LogLevel::Warn,
             2,
         ),
     };
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::new(
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         temporary_directory.path().to_path_buf(),
         worker_executable_path,
     );

@@ -12,7 +12,7 @@ async fn should_complete_persistent_speculative_prefill_when_keep_percentage_is_
     tokio::time::timeout(Duration::from_secs(115), async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let target_model_directory = crate::common::configured_ornith_model_artifact_directory();
-        let astronomical_config = AstronomicalConfig::load_from_default_location()
+        let astronomical_config = AstronomicalConfig::load_from_development_location()
             .expect("the standard Astronomical configuration should load");
         let configured_speculative_prefill = astronomical_config
             .speculative_prefill()

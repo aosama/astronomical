@@ -23,7 +23,7 @@ async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
 }
 
 fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf> {
-    AstronomicalConfig::load_from_default_location()
+    AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for experiment qualification")
         .find_configured_model_directory_by_id(model_id)
         .unwrap_or_else(|discovery_error| {
