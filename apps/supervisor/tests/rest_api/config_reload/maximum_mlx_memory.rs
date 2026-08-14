@@ -27,8 +27,10 @@ async fn should_not_let_a_rejected_update_restore_over_a_newer_memory_setting() 
     let mut initial_resolved_config = sample_resolved_config();
     initial_resolved_config.worker_executable_path = worker_executable_path.clone();
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
-    let runtime_config_resolver =
-        ResolvedRuntimeConfigResolver::new(config_home_directory.clone(), worker_executable_path);
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        config_home_directory.clone(),
+        worker_executable_path,
+    );
     let application = build_application_with_full_control(
         worker_handle.clone(),
         reloadable_config,
@@ -75,7 +77,7 @@ async fn put_maximum_mlx_memory(
 }
 
 async fn wait_for_persisted_maximum(home_directory: &std::path::Path, expected_gigabytes: u64) {
-    let config_file_path = home_directory.join(".astronomical").join("config.json");
+    let config_file_path = home_directory.join(".astronomical-dev").join("config.json");
     let persistence_deadline = Instant::now() + Duration::from_secs(2);
     loop {
         let persisted_gigabytes = std::fs::read(&config_file_path)

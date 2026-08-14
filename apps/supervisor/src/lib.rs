@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 
 mod application;
+mod application_build_identity;
 mod cache_clear_endpoint;
 mod chat_diagnostics;
 mod chat_generation_executor;
@@ -9,6 +10,7 @@ mod config_reload_endpoint;
 mod console_assets;
 mod generation_output_ceiling;
 mod generation_performance_log;
+mod instance_lock;
 mod maximum_mlx_memory_endpoint;
 mod openai_chat_completion;
 mod openai_chat_endpoint;
@@ -41,9 +43,10 @@ mod worker_process;
 pub use application::{
     build_application, build_application_with_config_warning,
     build_application_with_config_warning_and_discovered_models,
-    build_application_with_full_control, build_application_with_reload,
-    build_application_with_shutdown,
+    build_application_with_full_control, build_application_with_shutdown,
+    build_development_application_with_reload,
 };
+pub use application_build_identity::ApplicationBuildIdentity;
 
 /// Returns the rolling policy shared by the supervisor process log.
 #[must_use]
@@ -64,6 +67,7 @@ pub use config_reload::{
     ResolvedRuntimeConfigResolver,
 };
 pub use generation_performance_log::{GenerationPerformanceLog, GenerationPerformanceRecord};
+pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use openai_chat_translation::{
     OpenAiChatTranslationError, translate_openai_chat_completion_request,
 };

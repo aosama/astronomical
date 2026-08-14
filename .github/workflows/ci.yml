@@ -88,7 +88,8 @@ jobs:
     needs: detect-changes
     name: 10-minute macOS hermetic verification
     runs-on: macos-26
-    timeout-minutes: 10
+    # Keep the required status-check name stable; extra job time covers cache restore and save.
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

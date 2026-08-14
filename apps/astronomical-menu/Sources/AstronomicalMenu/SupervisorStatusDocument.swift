@@ -1,5 +1,28 @@
 import Foundation
 
+struct ServerApplicationIdentity: Codable, Equatable {
+  let version: String
+  let buildNumber: UInt64
+  let commit: String
+  let isDirty: Bool
+  let channel: String
+  let channelDisplayName: String
+  let stateDirectory: String
+
+  enum CodingKeys: String, CodingKey {
+    case version, commit, channel
+    case buildNumber = "build_number"
+    case isDirty = "is_dirty"
+    case channelDisplayName = "channel_display_name"
+    case stateDirectory = "state_directory"
+  }
+
+  var buildTitle: String {
+    let dirtySuffix = isDirty ? "-dirty" : ""
+    return "\(version) · \(channelDisplayName) · \(commit)\(dirtySuffix)"
+  }
+}
+
 struct SupervisorStatusDocument: Codable, Equatable {
   struct MlxMemoryBreakdown: Equatable {
     let expertPayloadByteCount: UInt64
@@ -130,6 +153,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     }
   }
 
+  let application: ServerApplicationIdentity?
   let status: String
   let activity: String
   let readyModelIdentifier: String?
@@ -157,7 +181,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let servingSession: ServingSession
 
   enum CodingKeys: String, CodingKey {
-    case status, activity, progress
+    case application, status, activity, progress
     case readyModelIdentifier = "ready_model_id"
     case readyModelSizeBytes = "ready_model_size_bytes"
     case expertMemoryMode = "expert_memory_mode"
@@ -180,6 +204,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    application = try container.decodeIfPresent(ServerApplicationIdentity.self, forKey: .application)
     status = try container.decode(String.self, forKey: .status)
     activity = try container.decode(String.self, forKey: .activity)
     readyModelIdentifier = try container.decodeIfPresent(String.self, forKey: .readyModelIdentifier)
@@ -213,6 +238,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
   }
 
   init(
+    application: ServerApplicationIdentity? = nil,
     status: String,
     activity: String,
     readyModelIdentifier: String?,
@@ -235,6 +261,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mlxMemoryLimitError: String? = nil,
     servingSession: ServingSession
   ) {
+    self.application = application
     self.status = status
     self.activity = activity
     self.readyModelIdentifier = readyModelIdentifier

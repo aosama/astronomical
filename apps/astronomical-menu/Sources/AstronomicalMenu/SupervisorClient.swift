@@ -1,15 +1,7 @@
 import Foundation
 
-private let supervisorPort = 6732
 private let maximumSupervisorResponseByteCount = 1_048_576
 private let maximumMlxMemoryUpdateTimeoutSeconds: TimeInterval = 120
-
-func localSupervisorEndpointURL(path: String) throws -> URL {
-  guard let endpointURL = URL(string: "http://127.0.0.1:\(supervisorPort)\(path)") else {
-    throw SupervisorClientError.invalidEndpoint
-  }
-  return endpointURL
-}
 
 protocol SupervisorClient: Sendable {
   func fetchStatus() async throws -> SupervisorStatusDocument
@@ -26,16 +18,44 @@ extension SupervisorClient {
 }
 
 struct LocalSupervisorClient: SupervisorClient {
+  private let applicationIdentity: ApplicationIdentity
   private let urlSession: URLSession
 
-  init(urlSession: URLSession = .shared) { self.urlSession = urlSession }
+  init(
+    applicationIdentity: ApplicationIdentity = .current(),
+    urlSession: URLSession = .shared
+  ) {
+    self.applicationIdentity = applicationIdentity
+    self.urlSession = urlSession
+  }
 
   func fetchStatus() async throws -> SupervisorStatusDocument {
     let responseBody = try await request(path: "/v1/status", method: "GET", acceptedStatusCodes: [200])
-    return try JSONDecoder().decode(SupervisorStatusDocument.self, from: responseBody)
+    return try validateExpectedInstance(responseBody: responseBody)
+  }
+
+  private func validateExpectedInstance(responseBody: Data) throws -> SupervisorStatusDocument {
+    let statusDocument = try JSONDecoder().decode(SupervisorStatusDocument.self, from: responseBody)
+    guard let connectedChannel = statusDocument.application?.channel else {
+      // A menu cannot safely control a process until the process proves which
+      // isolated state and endpoint contract it owns.
+      throw SupervisorClientError.wrongInstance(
+        expected: applicationIdentity.channel.rawValue, connected: "unidentified")
+    }
+    guard connectedChannel == applicationIdentity.channel.rawValue else {
+      throw SupervisorClientError.wrongInstance(
+        expected: applicationIdentity.channel.rawValue, connected: connectedChannel)
+    }
+    guard statusDocument.application?.stateDirectory == applicationIdentity.expectedServerStateDirectory else {
+      throw SupervisorClientError.wrongStateDirectory(
+        expected: applicationIdentity.expectedServerStateDirectory,
+        connected: statusDocument.application?.stateDirectory ?? "unidentified")
+    }
+    return statusDocument
   }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    _ = try await fetchStatus()
     let responseBody = try await request(
       path: "/v1/config/reload", method: "POST", acceptedStatusCodes: [200, 202]
     )
@@ -43,10 +63,12 @@ struct LocalSupervisorClient: SupervisorClient {
   }
 
   func requestShutdown() async throws {
+    _ = try await fetchStatus()
     _ = try await request(path: "/v1/control/shutdown", method: "POST", acceptedStatusCodes: [202])
   }
 
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
+    _ = try await fetchStatus()
     let requestBody = try JSONEncoder().encode(
       MaximumMlxMemoryRequest(maximumMlxMemoryGigabytes: maximumMlxMemoryGigabytes))
     let responseBody = try await request(
@@ -56,6 +78,8 @@ struct LocalSupervisorClient: SupervisorClient {
   }
 
   func healthIsAvailable() async -> Bool {
+    // Lifecycle decisions only need to know whether this channel's endpoint is
+    // occupied. Every control operation separately verifies channel identity.
     (try? await request(path: "/health", method: "GET", acceptedStatusCodes: [200])) != nil
   }
 
@@ -66,7 +90,7 @@ struct LocalSupervisorClient: SupervisorClient {
     acceptedStatusCodes: Set<Int>,
     timeoutInterval: TimeInterval = 2
   ) async throws -> Data {
-    let endpointURL = try localSupervisorEndpointURL(path: path)
+    let endpointURL = try applicationIdentity.endpointURL(path: path)
     var supervisorRequest = URLRequest(url: endpointURL)
     supervisorRequest.httpMethod = method
     supervisorRequest.httpBody = requestBody
@@ -146,6 +170,8 @@ enum SupervisorClientError: LocalizedError {
   case responseTooLarge
   case unexpectedResponse
   case serverRejected(String)
+  case wrongInstance(expected: String, connected: String)
+  case wrongStateDirectory(expected: String, connected: String)
 
   var errorDescription: String? {
     switch self {
@@ -153,6 +179,10 @@ enum SupervisorClientError: LocalizedError {
     case .responseTooLarge: "The server control response was too large"
     case .unexpectedResponse: "The server returned an invalid response"
     case let .serverRejected(serverMessage): serverMessage
+    case let .wrongInstance(expected, connected):
+      "Expected the \(expected) server, but the \(connected) instance answered"
+    case let .wrongStateDirectory(expected, connected):
+      "Expected server state \(expected), but the connected instance reported \(connected)"
     }
   }
 }

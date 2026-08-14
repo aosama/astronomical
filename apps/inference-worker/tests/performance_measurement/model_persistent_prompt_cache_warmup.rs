@@ -309,15 +309,14 @@ fn configured_prompt_cache_maximum_size_gb_from_user_config() -> u64 {
     let home_directory = std::env::var_os("HOME")
         .map(PathBuf::from)
         .expect("HOME should be set for persistent prompt-cache warmup");
-    let config_file_path = home_directory.join(".astronomical/config.json");
-    let config_file_bytes = std::fs::read(&config_file_path).expect(
-        "~/.astronomical/config.json should be readable for persistent prompt-cache warmup",
-    );
+    let config_file_path = home_directory.join(".astronomical-dev/config.json");
+    let config_file_bytes = std::fs::read(&config_file_path)
+        .expect("Development config should be readable for persistent prompt-cache warmup");
     let config_document: Value = serde_json::from_slice(&config_file_bytes)
-        .expect("~/.astronomical/config.json should be valid JSON");
+        .expect("Development config should be valid JSON");
     config_document
         .get("prompt_cache")
         .and_then(|prompt_cache_document| prompt_cache_document.get("max_size_gb"))
         .and_then(Value::as_u64)
-        .expect("~/.astronomical/config.json should define prompt_cache.max_size_gb")
+        .expect("Development config should define prompt_cache.max_size_gb")
 }

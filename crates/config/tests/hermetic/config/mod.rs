@@ -15,4 +15,5 @@ mod optimizer_directory;
 mod prefill_chunck_sizing;
 mod prompt_cache;
 mod runtime;
+mod runtime_instance;
 mod speculative_prefill;

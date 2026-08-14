@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 
-use std::{env, net::SocketAddr, path::PathBuf};
+use std::{net::SocketAddr, path::PathBuf};
 
+mod astronomical_runtime_instance;
 mod chunking_config;
 mod config_error;
 mod config_file;
@@ -13,6 +14,7 @@ mod model_identity;
 mod prompt_cache_config;
 mod speculative_prefill_config;
 
+pub use astronomical_runtime_instance::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 pub use chunking_config::{
     ChunkingConfig, DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
@@ -34,49 +36,71 @@ pub use model_identity::{decode_huggingface_cache_directory_name, resolve_model_
 pub use prompt_cache_config::PromptCacheConfig;
 pub use speculative_prefill_config::SpeculativePrefillConfig;
 
-use config_file::{UserConfigFile, config_file_path_for_home, read_user_config_file};
+use config_file::{UserConfigFile, read_user_config_file};
 use speculative_prefill_config::resolve_speculative_prefill_config;
 
-const CONFIG_DIRECTORY_NAME: &str = ".astronomical";
-const CONFIG_FILE_NAME: &str = "config.json";
-const DEFAULT_SUPERVISOR_BIND_ADDRESS: &str = "127.0.0.1:6732";
 pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
 pub const DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES: [u32; 4] =
     [1_024, 2_048, 4_096, 8_192];
 const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_000_000_000;
 const DEFAULT_RETAINED_LOG_FILES: usize = 7;
 
-/// User-level Astronomical runtime configuration loaded from `~/.astronomical/config.json`.
+/// User-level Astronomical runtime configuration loaded inside one isolated instance.
 #[derive(Clone, Debug)]
 pub struct AstronomicalConfig {
-    home_directory: Option<PathBuf>,
+    instance_paths: AstronomicalInstancePaths,
     user_config_file: UserConfigFile,
 }
 
 impl AstronomicalConfig {
-    /// Loads `$HOME/.astronomical/config.json` when a home directory is known.
-    /// Missing files are accepted; malformed existing files fail startup.
+    /// Loads the Stable user configuration used by the installed application.
     pub fn load_from_default_location() -> Result<Self, AstronomicalConfigError> {
-        let Some(home_directory) = env::var_os("HOME").map(PathBuf::from) else {
-            return Ok(Self {
-                home_directory: None,
-                user_config_file: UserConfigFile::default(),
-            });
-        };
-        Self::load_from_home_directory(home_directory)
+        Self::load_from_instance_paths(AstronomicalInstancePaths::for_current_user(
+            AstronomicalRuntimeInstance::Stable,
+        )?)
     }
 
-    /// Loads the strict user config beneath an explicit home directory.
+    /// Loads the Development configuration used by direct repository workflows.
+    pub fn load_from_development_location() -> Result<Self, AstronomicalConfigError> {
+        Self::load_from_instance_paths(AstronomicalInstancePaths::for_current_user(
+            AstronomicalRuntimeInstance::Development,
+        )?)
+    }
+
+    /// Loads Development-shaped configuration beneath a supplied test home.
+    pub fn load_from_development_home_directory(
+        home_directory: impl Into<PathBuf>,
+    ) -> Result<Self, AstronomicalConfigError> {
+        Self::load_from_instance_paths(AstronomicalInstancePaths::for_home_directory(
+            home_directory,
+            AstronomicalRuntimeInstance::Development,
+        ))
+    }
+
+    /// Loads strict configuration from an explicit, already-resolved instance boundary.
+    pub fn load_from_instance_paths(
+        instance_paths: AstronomicalInstancePaths,
+    ) -> Result<Self, AstronomicalConfigError> {
+        let user_config_file = read_user_config_file(instance_paths.config_file_path())?;
+        Ok(Self {
+            instance_paths,
+            user_config_file,
+        })
+    }
+
+    /// Loads a Stable-shaped config beneath a supplied home for qualification callers.
     pub fn load_from_home_directory(
         home_directory: impl Into<PathBuf>,
     ) -> Result<Self, AstronomicalConfigError> {
-        let home_directory = home_directory.into();
-        let config_file_path = config_file_path_for_home(&home_directory);
-        let user_config_file = read_user_config_file(config_file_path)?;
-        Ok(Self {
-            home_directory: Some(home_directory),
-            user_config_file,
-        })
+        Self::load_from_instance_paths(AstronomicalInstancePaths::for_home_directory(
+            home_directory,
+            AstronomicalRuntimeInstance::Stable,
+        ))
+    }
+
+    #[must_use]
+    pub const fn instance_paths(&self) -> &AstronomicalInstancePaths {
+        &self.instance_paths
     }
 
     /// Returns absolute directories to recursively scan for supported models.
@@ -137,7 +161,7 @@ impl AstronomicalConfig {
             .supervisor
             .as_ref()
             .and_then(|supervisor_config| supervisor_config.bind_address.clone())
-            .unwrap_or_else(|| DEFAULT_SUPERVISOR_BIND_ADDRESS.to_owned());
+            .unwrap_or_else(|| self.instance_paths.default_bind_address().to_string());
         parse_loopback_bind_address(&raw_bind_address)
     }
 
@@ -166,13 +190,9 @@ impl AstronomicalConfig {
 
     /// Resolves bounded hourly file logging for the supervisor or worker.
     pub fn logging(&self) -> Result<LoggingConfig, AstronomicalConfigError> {
-        let home_directory = self
-            .home_directory
-            .as_ref()
-            .ok_or(AstronomicalConfigError::DefaultLogDirectoryRequiresHome)?;
         let configured_logging = self.user_config_file.logging.as_ref();
         Ok(LoggingConfig::new(
-            home_directory.join(CONFIG_DIRECTORY_NAME).join("logs"),
+            self.instance_paths.logging_directory(),
             configured_logging.map_or(LogLevel::Warn, |logging| logging.level),
             configured_logging
                 .and_then(|logging| logging.retained_files)
@@ -183,10 +203,7 @@ impl AstronomicalConfig {
     fn default_global_prompt_cache_root_directory(
         &self,
     ) -> Result<PathBuf, AstronomicalConfigError> {
-        self.home_directory
-            .as_ref()
-            .map(|home_directory| home_directory.join(CONFIG_DIRECTORY_NAME).join("cache"))
-            .ok_or(AstronomicalConfigError::DefaultPromptCacheDirectoryRequiresHome)
+        Ok(self.instance_paths.prompt_cache_directory())
     }
 
     /// Resolves the optimizer state directory for persisting prefill chunk-size
@@ -195,10 +212,7 @@ impl AstronomicalConfig {
     /// Defaults to `~/.astronomical/optimizer/`. Always enabled; there is no
     /// config toggle to disable optimizer persistence.
     pub fn optimizer_directory(&self) -> Result<PathBuf, AstronomicalConfigError> {
-        self.home_directory
-            .as_ref()
-            .map(|home_directory| home_directory.join(CONFIG_DIRECTORY_NAME).join("optimizer"))
-            .ok_or(AstronomicalConfigError::DefaultOptimizerDirectoryRequiresHome)
+        Ok(self.instance_paths.optimizer_directory())
     }
 
     /// Returns the per-request output-token ceiling.

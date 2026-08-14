@@ -5,10 +5,11 @@ use std::{
     time::Duration,
 };
 
-use astronomical_config::{AstronomicalConfig, AstronomicalConfigError};
+use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
 use astronomical_supervisor::{
-    GenerationPerformanceLog, ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver,
-    ShutdownController, WorkerControlError, WorkerHandle, build_application_with_full_control,
+    ApplicationBuildIdentity, AstronomicalInstanceLock, GenerationPerformanceLog,
+    ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver, ShutdownController,
+    WorkerControlError, WorkerHandle, build_application_with_full_control,
 };
 use thiserror::Error;
 use tokio::{net::TcpListener, signal};
@@ -16,16 +17,58 @@ use tracing_subscriber::{EnvFilter, fmt};
 
 const WORKER_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
+mod daemon_arguments;
+use daemon_arguments::{DaemonArguments, DaemonCommand};
+
 #[tokio::main]
 async fn main() -> ExitCode {
-    let _logging_guard = match initialize_tracing() {
+    let daemon_command = match DaemonArguments::parse(std::env::args_os()) {
+        Ok(daemon_command) => daemon_command,
+        Err(argument_error) => {
+            eprintln!(
+                "astronomicald: {argument_error}\n\n{}",
+                daemon_arguments::help_text()
+            );
+            return ExitCode::from(2);
+        }
+    };
+    let daemon_arguments = match daemon_command {
+        DaemonCommand::Help => {
+            print!("{}", daemon_arguments::help_text());
+            return ExitCode::SUCCESS;
+        }
+        DaemonCommand::Version => {
+            println!(
+                "{}",
+                ApplicationBuildIdentity::current().command_line_version()
+            );
+            return ExitCode::SUCCESS;
+        }
+        DaemonCommand::Run(daemon_arguments) => daemon_arguments,
+    };
+    let instance_paths = match daemon_arguments.resolve_instance_paths() {
+        Ok(instance_paths) => instance_paths,
+        Err(configuration_error) => {
+            eprintln!("astronomicald configuration failed: {configuration_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let _instance_lock =
+        match AstronomicalInstanceLock::acquire(&instance_paths.instance_lock_file_path()) {
+            Ok(instance_lock) => instance_lock,
+            Err(lock_error) => {
+                eprintln!("astronomicald startup failed: {lock_error}");
+                return ExitCode::FAILURE;
+            }
+        };
+    let _logging_guard = match initialize_tracing(&instance_paths) {
         Ok(logging_guard) => logging_guard,
         Err(initialization_error) => {
             eprintln!("astronomicald logging initialization failed: {initialization_error}");
             return ExitCode::FAILURE;
         }
     };
-    match run_daemon().await {
+    match run_daemon(instance_paths).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(daemon_error) => {
             eprintln!("astronomicald failed: {daemon_error}");
@@ -34,8 +77,10 @@ async fn main() -> ExitCode {
     }
 }
 
-fn initialize_tracing() -> Result<tracing_appender::non_blocking::WorkerGuard, DaemonError> {
-    let user_config = AstronomicalConfig::load_from_default_location()?;
+fn initialize_tracing(
+    instance_paths: &AstronomicalInstancePaths,
+) -> Result<tracing_appender::non_blocking::WorkerGuard, DaemonError> {
+    let user_config = AstronomicalConfig::load_from_instance_paths(instance_paths.clone())?;
     let logging_config = user_config.logging()?;
     std::fs::create_dir_all(logging_config.directory()).map_err(DaemonError::CreateLogDirectory)?;
     let file_appender = tracing_appender::rolling::Builder::new()
@@ -67,16 +112,12 @@ fn initialize_tracing() -> Result<tracing_appender::non_blocking::WorkerGuard, D
     Ok(guard)
 }
 
-async fn run_daemon() -> Result<(), DaemonError> {
-    let user_config = AstronomicalConfig::load_from_default_location()?;
-    let home_directory =
-        std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or(DaemonError::Configuration(
-                AstronomicalConfigError::DefaultLogDirectoryRequiresHome,
-            ))?;
-    let runtime_config_resolver =
-        ResolvedRuntimeConfigResolver::new(home_directory, fallback_worker_executable_path()?);
+async fn run_daemon(instance_paths: AstronomicalInstancePaths) -> Result<(), DaemonError> {
+    let user_config = AstronomicalConfig::load_from_instance_paths(instance_paths.clone())?;
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_instance(
+        instance_paths.clone(),
+        fallback_worker_executable_path()?,
+    );
     let resolved_runtime_config = runtime_config_resolver
         .resolve(&user_config)
         .map_err(DaemonError::ResolveRuntimeConfig)?;
@@ -92,6 +133,11 @@ async fn run_daemon() -> Result<(), DaemonError> {
         .map_err(DaemonError::ReadBoundSupervisorAddress)?;
     tracing::info!(
         bind_address = %bound_supervisor_address,
+        channel = instance_paths
+            .runtime_instance()
+            .map_or("explicit", astronomical_config::AstronomicalRuntimeInstance::as_str),
+        version = ApplicationBuildIdentity::current().version,
+        commit = ApplicationBuildIdentity::current().commit,
         "Astronomical REST API listener bound"
     );
     let logging_config = user_config.logging()?;
@@ -193,32 +239,32 @@ enum DaemonError {
     #[error("invalid Astronomical configuration: {0}")]
     Configuration(#[from] AstronomicalConfigError),
 
-    #[error("failed to bind supervisor listener")]
+    #[error("failed to bind supervisor listener: {0}")]
     BindSupervisor(#[source] io::Error),
 
-    #[error("failed to resolve current daemon executable path")]
+    #[error("failed to resolve current daemon executable path: {0}")]
     ResolveCurrentExecutable(#[source] io::Error),
 
     #[error("current daemon executable path does not have a parent directory")]
     MissingExecutableDirectory,
 
-    #[error("failed to read bound supervisor listener address")]
+    #[error("failed to read bound supervisor listener address: {0}")]
     ReadBoundSupervisorAddress(#[source] io::Error),
 
-    #[error("failed to serve supervisor HTTP listener")]
+    #[error("failed to serve supervisor HTTP listener: {0}")]
     ServeHttp(#[source] io::Error),
 
-    #[error("failed to shut down inference worker")]
+    #[error("failed to shut down inference worker: {0}")]
     ShutdownWorker(#[source] WorkerControlError),
-    #[error("failed to create the Astronomical log directory")]
+    #[error("failed to create the Astronomical log directory: {0}")]
     CreateLogDirectory(#[source] io::Error),
-    #[error("failed to create the Astronomical log appender")]
+    #[error("failed to create the Astronomical log appender: {0}")]
     CreateLogAppender(#[source] tracing_appender::rolling::InitError),
-    #[error("failed to create the performance log")]
+    #[error("failed to create the performance log: {0}")]
     CreatePerformanceLog(#[source] io::Error),
-    #[error("failed to resolve runtime configuration")]
+    #[error("failed to resolve runtime configuration: {0}")]
     ResolveRuntimeConfig(#[source] ResolvedRuntimeConfigError),
-    #[error("resolved supervisor bind address became invalid")]
+    #[error("resolved supervisor bind address became invalid: {0}")]
     ParseResolvedBindAddress(#[source] std::net::AddrParseError),
     #[error("failed to initialize Astronomical tracing: {reason}")]
     InitializeTracing { reason: String },

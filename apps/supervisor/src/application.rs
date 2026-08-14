@@ -44,7 +44,7 @@ pub(crate) struct ApplicationState {
     pub(crate) discovered_models: Vec<DiscoveredModel>,
     /// Reloadable runtime config shared by the config-reload endpoint and the
     /// status/models endpoints. Present only when the application was built with
-    /// reload support (`build_application_with_reload`).
+    /// Development reload support (`build_development_application_with_reload`).
     pub(crate) reloadable_config: Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
     /// Startup-equivalent resolver used for each config reload.
     pub(crate) runtime_config_resolver: Option<ResolvedRuntimeConfigResolver>,
@@ -178,19 +178,21 @@ pub fn build_application_with_shutdown(
 
 /// Builds the bounded HTTP API with config-reload support. The supplied
 /// `Arc<RwLock<ResolvedRuntimeConfig>>` is the live, reloadable runtime state.
-/// The `config_home_directory` is used to reload `config.json` at runtime.
-pub fn build_application_with_reload(
+/// The `development_home_directory` supplies isolated Development config reloads.
+pub fn build_development_application_with_reload(
     generation_executor: impl ChatGenerationExecutor,
     reloadable_config: Arc<RwLock<ResolvedRuntimeConfig>>,
-    config_home_directory: PathBuf,
+    development_home_directory: PathBuf,
 ) -> Router {
     let fallback_worker_executable_path = reloadable_config
         .read()
         .ok()
         .map(|resolved_config| resolved_config.worker_executable_path.clone())
         .unwrap_or_default();
-    let runtime_config_resolver =
-        ResolvedRuntimeConfigResolver::new(config_home_directory, fallback_worker_executable_path);
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        development_home_directory,
+        fallback_worker_executable_path,
+    );
     let initial_warning = reloadable_config
         .read()
         .ok()

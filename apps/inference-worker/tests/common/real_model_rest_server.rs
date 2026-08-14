@@ -52,7 +52,7 @@ pub(crate) async fn launch_real_model_rest_server(
     // Resolve the same standard configuration used by production, but rooted in
     // the journey's temporary home. The explicit byte ceiling below is repeated
     // in startup IPC so the test cannot accidentally exercise a machine default.
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::new(
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_worker_home_directory.to_path_buf(),
         production_worker_executable_path.clone(),
     );
@@ -84,7 +84,7 @@ pub(crate) async fn launch_real_model_rest_server(
         .local_addr()
         .expect("the real-model REST listener should expose its address");
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::new(
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_worker_home_directory.to_path_buf(),
         production_worker_executable_path,
     );

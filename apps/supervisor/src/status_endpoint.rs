@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    ActiveRequestProgress, application::ApplicationState,
+    ActiveRequestProgress, ApplicationBuildIdentity, application::ApplicationState,
     prefill_optimizer_observability::prefill_optimizer_status_document,
 };
 use axum::{
@@ -11,6 +11,32 @@ use axum::{
 };
 
 pub(super) async fn status_check(State(application_state): State<ApplicationState>) -> Response {
+    let build_identity = ApplicationBuildIdentity::current();
+    let runtime_instance = application_state
+        .runtime_config_resolver
+        .as_ref()
+        .and_then(|runtime_config_resolver| {
+            runtime_config_resolver.instance_paths().runtime_instance()
+        })
+        .unwrap_or(astronomical_config::AstronomicalRuntimeInstance::Development);
+    let state_directory_label = match (
+        application_state
+            .runtime_config_resolver
+            .as_ref()
+            .map(|runtime_config_resolver| {
+                runtime_config_resolver
+                    .instance_paths()
+                    .is_standard_state_directory()
+            })
+            .unwrap_or(false),
+        runtime_instance,
+    ) {
+        (true, astronomical_config::AstronomicalRuntimeInstance::Stable) => "~/.astronomical",
+        (true, astronomical_config::AstronomicalRuntimeInstance::Development) => {
+            "~/.astronomical-dev"
+        }
+        (false, _) => "custom",
+    };
     // Activity is supervisor-derived so the worker protocol stays focused on
     // generation data instead of duplicating phase-state events.
     let worker_health_snapshot = application_state
@@ -67,6 +93,15 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         .then(|| application_state.configured_speculative_prefill_target_model_id())
         .flatten();
     let mut status_json = serde_json::json!({
+        "application": {
+            "version": build_identity.version,
+            "build_number": build_identity.build_number,
+            "commit": build_identity.commit,
+            "is_dirty": build_identity.is_dirty,
+            "channel": runtime_instance.as_str(),
+            "channel_display_name": runtime_instance.display_name(),
+            "state_directory": state_directory_label,
+        },
         "status": worker_health_snapshot.status.as_str(),
         "activity": worker_health_snapshot.activity.as_str(),
         "config_warning": live_config_warning.as_deref(),

@@ -20,14 +20,15 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 #[ignore = "launches the production worker and public REST surface with configured SpecPrefill and persistent caching"]
 async fn should_complete_the_cold_tool_journey_through_real_config_worker_and_rest_boundaries() {
     tokio::time::timeout(E2E_TIMEOUT, async {
-        let standard_home_directory = std::env::var_os("HOME")
+        let development_home_directory = std::env::var_os("HOME")
             .map(PathBuf::from)
-            .expect("HOME should resolve the standard Astronomical configuration");
-        let standard_config = AstronomicalConfig::load_from_home_directory(&standard_home_directory)
-            .expect("the standard Astronomical configuration should load");
-        let configured_speculative_prefill = standard_config
+            .expect("HOME should resolve the Development Astronomical configuration");
+        let development_config =
+            AstronomicalConfig::load_from_development_home_directory(&development_home_directory)
+                .expect("the Development Astronomical configuration should load");
+        let configured_speculative_prefill = development_config
             .speculative_prefill()
-            .expect("the standard SpecPrefill configuration should resolve");
+            .expect("the Development SpecPrefill configuration should resolve");
         let target_model_id =
             crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID.to_owned();
         let draft_model_id = configured_speculative_prefill
@@ -122,7 +123,7 @@ async fn should_complete_the_cold_tool_journey_through_real_config_worker_and_re
             0,
         );
         assert!(
-            cache_file_count(&isolated_worker_home.path().join(".astronomical/cache")) > 0,
+            cache_file_count(&isolated_worker_home.path().join(".astronomical-dev/cache")) > 0,
             "the cold public request must publish cache-eligible state to SSD",
         );
 
@@ -140,7 +141,7 @@ fn write_enabled_speculative_prefill_config(
     draft_model_id: &str,
     draft_model_directory: &Path,
 ) {
-    let configuration_directory = isolated_worker_home.join(".astronomical");
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     std::fs::create_dir(&configuration_directory)
         .expect("the isolated Astronomical configuration directory should be created");
     let configuration_document = json!({

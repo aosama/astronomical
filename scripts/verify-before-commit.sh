@@ -16,7 +16,7 @@ print_usage() {
     printf '%s\n' "Usage: scripts/verify-before-commit.sh [--hermetic-only]"
     printf '%s\n' ""
     printf '%s\n' "Without arguments, verifies formatting, dependency notices, hermetic tests, and REST API tests."
-    printf '%s\n' "--hermetic-only  Compile and run hermetic Rust tests within the 10-minute macOS CI budget."
+    printf '%s\n' "--hermetic-only  Compile and run hermetic Rust tests within the bounded macOS CI budget."
 }
 
 parse_arguments() {
@@ -98,6 +98,16 @@ else
     run_cargo_step format "${MAXIMUM_TEST_SECONDS}" fmt --all -- --check
     hermetic_compile_timeout_seconds="${DEFAULT_COMPILE_TIMEOUT_SECONDS}"
 fi
+
+printf '\n%s\n' "[commit-verification] step=test-channel-isolation-checker timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+channel_isolation_checker_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-channel-isolation-checker-contract.sh
+printf '%s\n' "[commit-verification] PASSED step=test-channel-isolation-checker elapsed_seconds=$(( $(date +%s) - channel_isolation_checker_started_at_seconds ))"
+
+printf '\n%s\n' "[commit-verification] step=test-channel-isolation timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+channel_isolation_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/check-test-channel-isolation.sh
+printf '%s\n' "[commit-verification] PASSED step=test-channel-isolation elapsed_seconds=$(( $(date +%s) - channel_isolation_started_at_seconds ))"
 
 run_cargo_step compile-hermetic "${hermetic_compile_timeout_seconds}" test --no-fail-fast --no-run --jobs "${logical_cpu_count}" -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
 
