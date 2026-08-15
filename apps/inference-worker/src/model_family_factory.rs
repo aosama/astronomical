@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     ModelFactory, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
-    Qwen3_5PrefillChunckSizer, deepseek_v4_unavailable_reason,
+    Qwen3_5PromptProcessingChunkSizer, deepseek_v4_unavailable_reason,
 };
 
 use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
@@ -18,7 +18,7 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) optimizer_state_directory: Option<PathBuf>,
     pub(crate) performance_attribution_enabled: bool,
     pub(crate) performance_attribution_log_path: PathBuf,
-    pub(crate) prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
+    pub(crate) prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
     pub(crate) mtp_enabled: bool,
     pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub(crate) persistent_prompt_cache_enabled: bool,
@@ -39,7 +39,8 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let optimizer_state_directory = self.optimizer_state_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let prefill_chunck_sizer_override = self.prefill_chunck_sizer_override.clone();
+        let prompt_processing_chunk_sizer_override =
+            self.prompt_processing_chunk_sizer_override.clone();
         let mtp_enabled = self.mtp_enabled;
         let speculative_prefill = self.speculative_prefill.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
@@ -54,7 +55,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         model_directory_path,
                         effective_mlx_memory_ceiling_bytes,
                         prompt_cache_config,
-                        prefill_chunck_sizer_override,
+                        prompt_processing_chunk_sizer_override,
                         optimizer_state_directory,
                         max_output_tokens,
                         mtp_enabled,

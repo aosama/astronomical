@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
     WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 
-use super::EngineLoadResult;
+use super::{EngineLoadResult, PromptProcessingChunkOptimizationOutcome};
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
 pub trait InferenceEngine {
@@ -305,42 +305,6 @@ impl GenerationFinalization {
     }
 }
 
-/// Evidence for one candidate in the latest optimizer decision context.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PrefillChunckOptimizerCandidateInsight {
-    pub candidate_prefill_chunck_tokens: usize,
-    pub observation_count: usize,
-    pub average_actual_prefill_chunck_tokens: usize,
-    pub average_elapsed_millis: u64,
-    pub decisions_since_last_observation: Option<u64>,
-}
-
-/// Execution context that isolates adaptive prefill evidence.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PrefillChunckOptimizerContextInsight {
-    pub prompt_position_tokens: usize,
-    pub has_restored_prefix: bool,
-    pub is_first_chunck_after_restore: bool,
-    pub has_visual_embeddings: bool,
-    pub is_mtp_active: bool,
-    pub are_sparse_experts_paged: bool,
-    pub is_prompt_cache_capture_eligible: bool,
-    pub has_prior_capacity_reduction: bool,
-}
-
-/// Latest adaptive prefill request, measured outcome, and supporting evidence.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PrefillChunckOptimizerInsight {
-    pub requested_prefill_chunck_tokens: usize,
-    pub actual_prefill_chunck_tokens: usize,
-    pub elapsed_millis: u64,
-    pub decision_reason: crate::PrefillChunckSizeOptimizerDecisionReason,
-    pub has_observed_prefill_capacity_constraint: bool,
-    pub has_observations_for_every_candidate: bool,
-    pub context: PrefillChunckOptimizerContextInsight,
-    pub candidate_evidence: Vec<PrefillChunckOptimizerCandidateInsight>,
-}
-
 /// One bounded progress boundary from the engine.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GeneratedToken {
@@ -361,10 +325,11 @@ pub enum GeneratedToken {
         processed_token_count: u32,
         elapsed_millis: u64,
         /// Time spent evaluating the model, excluding allocator cleanup and telemetry.
-        forward_prefill_chunck_elapsed_millis: u64,
+        forward_prefill_chunk_elapsed_millis: u64,
         /// Selected `prefill_chunck_tokens` used for this completed prompt-processing chunk.
-        completed_prefill_chunck_tokens: u32,
-        prefill_optimizer_insight: Option<PrefillChunckOptimizerInsight>,
+        completed_prefill_chunk_tokens: u32,
+        prompt_processing_chunk_optimization_outcome:
+            Option<PromptProcessingChunkOptimizationOutcome>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         /// Current complete/partial retained ownership after this chunk.
         expert_residency_telemetry: Option<ExpertResidencyTelemetry>,

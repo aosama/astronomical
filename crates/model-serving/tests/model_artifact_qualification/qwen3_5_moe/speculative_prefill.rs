@@ -9,7 +9,7 @@ use astronomical_ipc_protocol::{RequestId, WorkerSpeculativePrefillConfiguration
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
     PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 
 const REPRESENTATIVE_OUTPUT_TOKEN_COUNT: u16 = 1_024;
@@ -364,7 +364,7 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         persistent_prompt_cache_disk_store_config,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(32)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(32)
             .expect("the representative prefill chunk size should be valid"),
         target_think_end_token_id,
         target_model_directory.to_path_buf(),

@@ -8,7 +8,7 @@ mod gated_delta_checkpoints;
 mod mtp_runtime;
 mod persistent_prompt_cache_boundary_checkpoint;
 mod persistent_prompt_cache_capture;
-mod prefill_chunck_sizer;
+mod prompt_processing_chunk_sizer;
 mod quantized_matmul_partition_parity;
 mod request_decoder_state;
 mod sampler;

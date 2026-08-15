@@ -12,9 +12,9 @@ pub(super) struct PrefillChunckMeasurement {
     pub(super) start_token: u32,
     pub(super) end_token: u32,
     pub(super) actual_prefill_chunck_tokens: u32,
-    pub(super) reported_completed_prefill_chunck_tokens: u32,
+    pub(super) reported_completed_prefill_chunk_tokens: u32,
     pub(super) elapsed_millis: u64,
-    pub(super) forward_prefill_chunck_elapsed_millis: u64,
+    pub(super) forward_prefill_chunk_elapsed_millis: u64,
     pub(super) mlx_active_memory_bytes: u64,
     pub(super) mlx_allocator_cache_memory_bytes: u64,
     pub(super) mlx_peak_memory_bytes: u64,
@@ -110,21 +110,21 @@ impl PrefillMeasurementAccumulator {
         &mut self,
         cumulative_processed_tokens: u32,
         cumulative_elapsed_millis: u64,
-        forward_prefill_chunck_elapsed_millis: Option<u64>,
-        completed_prefill_chunck_tokens: Option<u32>,
+        forward_prefill_chunk_elapsed_millis: Option<u64>,
+        completed_prefill_chunk_tokens: Option<u32>,
         mlx_active_memory_bytes: Option<u64>,
         mlx_allocator_cache_memory_bytes: Option<u64>,
         mlx_peak_memory_bytes: Option<u64>,
     ) {
         let (
-            Some(reported_completed_prefill_chunck_tokens),
-            Some(forward_prefill_chunck_elapsed_millis),
+            Some(reported_completed_prefill_chunk_tokens),
+            Some(forward_prefill_chunk_elapsed_millis),
             Some(mlx_active_memory_bytes),
             Some(mlx_allocator_cache_memory_bytes),
             Some(mlx_peak_memory_bytes),
         ) = (
-            completed_prefill_chunck_tokens,
-            forward_prefill_chunck_elapsed_millis,
+            completed_prefill_chunk_tokens,
+            forward_prefill_chunk_elapsed_millis,
             mlx_active_memory_bytes,
             mlx_allocator_cache_memory_bytes,
             mlx_peak_memory_bytes,
@@ -144,9 +144,9 @@ impl PrefillMeasurementAccumulator {
             start_token: self.previous_cumulative_processed_tokens,
             end_token: cumulative_processed_tokens,
             actual_prefill_chunck_tokens,
-            reported_completed_prefill_chunck_tokens,
+            reported_completed_prefill_chunk_tokens,
             elapsed_millis,
-            forward_prefill_chunck_elapsed_millis,
+            forward_prefill_chunk_elapsed_millis,
             mlx_active_memory_bytes,
             mlx_allocator_cache_memory_bytes,
             mlx_peak_memory_bytes,
@@ -205,7 +205,7 @@ pub(super) fn build_prefill_benchmark_report(
     let mut completed_chunck_histogram = BTreeMap::<u32, usize>::new();
     for chunck_measurement in prefill_measurements.chuncks() {
         *completed_chunck_histogram
-            .entry(chunck_measurement.reported_completed_prefill_chunck_tokens)
+            .entry(chunck_measurement.reported_completed_prefill_chunk_tokens)
             .or_default() += 1;
     }
     let chunck_reports = prefill_measurements
@@ -217,11 +217,11 @@ pub(super) fn build_prefill_benchmark_report(
                 "context_bucket": chunck_measurement.context_bucket(),
                 "elapsed_millis": chunck_measurement.elapsed_millis,
                 "end_token": chunck_measurement.end_token,
-                "forward_prefill_chunck_elapsed_millis": chunck_measurement.forward_prefill_chunck_elapsed_millis,
+                "forward_prefill_chunk_elapsed_millis": chunck_measurement.forward_prefill_chunk_elapsed_millis,
                 "mlx_active_memory_bytes": chunck_measurement.mlx_active_memory_bytes,
                 "mlx_allocator_cache_memory_bytes": chunck_measurement.mlx_allocator_cache_memory_bytes,
                 "mlx_peak_memory_bytes": chunck_measurement.mlx_peak_memory_bytes,
-                "reported_completed_prefill_chunck_tokens": chunck_measurement.reported_completed_prefill_chunck_tokens,
+                "reported_completed_prefill_chunk_tokens": chunck_measurement.reported_completed_prefill_chunk_tokens,
                 "sequence_number": chunck_measurement.sequence_number,
                 "start_token": chunck_measurement.start_token,
                 "tokens_per_second": chunck_measurement.tokens_per_second(),
@@ -379,7 +379,7 @@ fn should_derive_each_prefill_chunck_from_cumulative_worker_progress() {
     );
     assert_eq!(prefill_measurements.chuncks()[1].elapsed_millis, 1_400);
     assert_eq!(
-        prefill_measurements.chuncks()[1].forward_prefill_chunck_elapsed_millis,
+        prefill_measurements.chuncks()[1].forward_prefill_chunk_elapsed_millis,
         1_300
     );
     assert_eq!(

@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, InferenceEngineError, PerformanceAttribution,
     PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
-    Qwen3_5PrefillChunckSizer,
+    Qwen3_5PromptProcessingChunkSizer,
 };
 use serde_json::Value;
 use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
@@ -183,7 +183,9 @@ async fn create_automatic_residency_endurance_engine(
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(FIXED_PREFILL_CHUNCK_TOKENS)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+            FIXED_PREFILL_CHUNCK_TOKENS,
+        )
             .expect("the production-sized prefill chunck should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),

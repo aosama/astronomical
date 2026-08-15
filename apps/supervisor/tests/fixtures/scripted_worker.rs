@@ -4,9 +4,10 @@ use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatModelCapabilities, ExpertMemoryMode, MlxMemorySnapshotSource, MtpRuntimeState,
     ProtocolReader, ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand,
-    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPrefillOptimizerCandidateEvidence,
-    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
-    WorkerPrefillOptimizerInsight, WorkerPromptProcessingPhase,
+    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPromptProcessingChunkCandidateMeasurementSummary,
+    WorkerPromptProcessingChunkMeasurementSource, WorkerPromptProcessingChunkOptimizationContext,
+    WorkerPromptProcessingChunkOptimizationOutcome, WorkerPromptProcessingChunkSelectionReason,
+    WorkerPromptProcessingPhase,
 };
 
 mod scripted_worker_chat;
@@ -260,33 +261,36 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 processed_tokens: 2_048,
                                 total_tokens: 50_000,
                                 elapsed_millis: 1_500,
-                                forward_prefill_chunck_elapsed_millis: Some(1_400),
-                                completed_prefill_chunck_tokens: Some(2_048),
-                                prefill_optimizer_insight: Some(WorkerPrefillOptimizerInsight {
-                                    requested_prefill_chunck_tokens: 4_096,
-                                    actual_prefill_chunck_tokens: 2_048,
-                                    elapsed_millis: 1_500,
-                                    decision_reason:
-                                        WorkerPrefillOptimizerDecisionReason::InitialExploration,
-                                    has_observed_prefill_capacity_constraint: true,
-                                    has_observations_for_every_candidate: false,
-                                    context: WorkerPrefillOptimizerContext {
-                                        prompt_position_tokens: 0,
+                                forward_prefill_chunk_elapsed_millis: Some(1_400),
+                                completed_prefill_chunk_tokens: Some(2_048),
+                                prompt_processing_chunk_optimization_outcome: Some(WorkerPromptProcessingChunkOptimizationOutcome {
+                                    selected_candidate_chunk_size_tokens: 4_096,
+                                    processed_prompt_token_count: 2_048,
+                                    forward_elapsed_millis: 1_500,
+                                    was_reduced_by_memory_capacity: true,
+                                    selection_reason:
+                                        WorkerPromptProcessingChunkSelectionReason::ExploreUnmeasuredCandidate,
+                                    measurement_context: WorkerPromptProcessingChunkOptimizationContext {
+                                        chunk_start_token_position: 0,
+                                        position_range_start_token_position: 0,
+                                        position_range_end_token_position_exclusive: 32_768,
                                         has_restored_prefix: false,
-                                        is_first_chunck_after_restore: false,
+                                        is_first_chunk_after_restore: false,
                                         has_visual_embeddings: false,
                                         is_mtp_active: false,
                                         are_sparse_experts_paged: true,
                                         is_prompt_cache_capture_eligible: true,
                                         has_prior_capacity_reduction: false,
                                     },
-                                    candidate_evidence: vec![
-                                        WorkerPrefillOptimizerCandidateEvidence {
-                                            candidate_prefill_chunck_tokens: 4_096,
-                                            observation_count: 1,
-                                            average_actual_prefill_chunck_tokens: 2_048,
-                                            average_elapsed_millis: 1_500,
-                                            decisions_since_last_observation: Some(0),
+                                    all_candidates_have_measurements: false,
+                                    candidate_measurement_summaries: vec![
+                                        WorkerPromptProcessingChunkCandidateMeasurementSummary {
+                                            candidate_chunk_size_tokens: 4_096,
+                                            measurement_source: WorkerPromptProcessingChunkMeasurementSource::CurrentPositionRange,
+                                            measurement_count: 1,
+                                            average_processed_prompt_token_count: 2_048,
+                                            average_forward_elapsed_millis: 1_500,
+                                            selections_since_last_measurement: Some(0),
                                         },
                                     ],
                                 }),

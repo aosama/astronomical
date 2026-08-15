@@ -203,7 +203,7 @@ async fn should_apply_only_in_place_reload_fields_when_a_rest_api_restart_is_req
     write_config_file(
         &config_home_directory,
         r#"{
-            "chunking": { "prefill_size_optimizer_enabled": true },
+            "chunking": { "prompt_processing_chunk_size_optimizer_enabled": true },
             "supervisor": { "bind_address": "127.0.0.1:6734" }
         }"#,
     );
@@ -253,7 +253,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
     write_config_file(
         &config_home_directory,
         r#"{
-            "chunking": { "prefill_size_optimizer_enabled": true }
+            "chunking": { "prompt_processing_chunk_size_optimizer_enabled": true }
         }"#,
     );
     let reloadable_config = Arc::new(RwLock::new(ResolvedRuntimeConfig {

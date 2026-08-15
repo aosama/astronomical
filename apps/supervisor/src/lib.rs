@@ -21,7 +21,7 @@ mod openai_responses_assembly;
 mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
-mod prefill_optimizer_observability;
+mod prompt_processing_chunk_optimizer_status;
 mod serving_session_snapshot;
 mod shutdown_control;
 mod status_endpoint;

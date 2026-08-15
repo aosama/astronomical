@@ -2,7 +2,7 @@ use std::{path::Path, time::Instant};
 
 use astronomical_model_serving::{
     InferenceEngine, PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5PrefillChunckSizer,
+    Qwen3_5Engine, Qwen3_5PromptProcessingChunkSizer,
 };
 use tokio::time::{MissedTickBehavior, interval};
 
@@ -12,13 +12,13 @@ pub(crate) fn create_attributed_engine(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
     mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
-    fixed_prefill_chunck_tokens: u32,
+    fixed_prompt_processing_chunk_size_tokens: u32,
 ) -> (Qwen3_5Engine, Vec<u32>) {
     create_attributed_engine_with_ssd_streaming_prefill(
         model_directory,
         performance_attribution_log_path,
         mlx_memory_limits,
-        fixed_prefill_chunck_tokens,
+        fixed_prompt_processing_chunk_size_tokens,
         None,
     )
 }
@@ -27,8 +27,8 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
     mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
-    fixed_prefill_chunck_tokens: u32,
-    fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
+    fixed_prompt_processing_chunk_size_tokens: u32,
+    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
 ) -> (Qwen3_5Engine, Vec<u32>) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
@@ -45,9 +45,9 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens_with_ssd_streaming(
-            fixed_prefill_chunck_tokens,
-            fixed_ssd_streaming_prefill_chunck_tokens,
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+            fixed_prompt_processing_chunk_size_tokens,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
         )
         .expect("the benchmark prefill chunck size should be valid"),
         IMAGE_PAD_TOKEN_ID,

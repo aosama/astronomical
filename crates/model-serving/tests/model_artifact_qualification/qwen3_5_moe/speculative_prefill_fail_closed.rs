@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{RequestId, WorkerSpeculativePrefillConfiguration
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, InferenceEngineError, PerformanceAttribution,
     PerformanceAttributionLog, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
+    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5Tokenizer,
 };
 
@@ -39,7 +39,7 @@ async fn should_stop_model_activation_when_the_configured_drafter_is_unavailable
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
             None,
-            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(32)
+            Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(32)
                 .expect("the unavailable-drafter prefill chunk size should be valid"),
             target_tokenizer.think_end_token_id(),
             target_model_directory,
@@ -120,7 +120,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
             Some(persistent_prompt_cache_config),
-            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(32)
+            Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(32)
                 .expect("the memory-recovery prefill chunk size should be valid"),
             target_tokenizer.think_end_token_id(),
             target_model_directory,
@@ -181,7 +181,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
                 .expect("recoverable sparse-target memory pressure must remain inside SpecPrefill")
             {
                 GeneratedToken::PrefillProgress {
-                    completed_prefill_chunck_tokens,
+                    completed_prefill_chunk_tokens,
                     ..
                 } => {
                     recovered_prefill_progress_event_count =
@@ -191,7 +191,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
                             .is_multiple_of(RECOVERY_PROGRESS_LOG_INTERVAL)
                     {
                         eprintln!(
-                            "[speculative-prefill-memory-recovery] status=prefill-progress progress_event_count={recovered_prefill_progress_event_count} completed_prefill_chunck_tokens={completed_prefill_chunck_tokens}"
+                            "[speculative-prefill-memory-recovery] status=prefill-progress progress_event_count={recovered_prefill_progress_event_count} completed_prefill_chunk_tokens={completed_prefill_chunk_tokens}"
                         );
                     }
                 }
@@ -293,7 +293,7 @@ async fn should_stop_every_forced_speculative_prefill_execution_stage_without_ta
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
             Some(persistent_prompt_cache_config),
-            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(32)
+            Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(32)
                 .expect("the fail-closed prefill chunk size should be valid"),
             target_tokenizer.think_end_token_id(),
             target_model_directory,

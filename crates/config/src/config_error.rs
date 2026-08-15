@@ -39,19 +39,25 @@ pub enum AstronomicalConfigError {
         configured_path: PathBuf,
     },
     #[error(
-        "chunking.fixed_prefill_tokens is required when chunking.prefill_size_optimizer_enabled is false"
+        "chunking.fixed_prompt_processing_chunk_size_tokens is required when chunking.prompt_processing_chunk_size_optimizer_enabled is false"
     )]
-    FixedPrefillChunckTokensRequiredWhenOptimizerDisabled,
-    #[error("chunking.fixed_prefill_tokens must be positive")]
-    InvalidFixedPrefillChunckTokens,
-    #[error("chunking.fixed_ssd_streaming_prefill_tokens must be positive")]
-    InvalidFixedSsdStreamingPrefillChunckTokens,
-    #[error("chunking.optimizer_prefill_token_candidates must not be empty")]
-    OptimizerPrefillChunckTokenCandidatesMustNotBeEmpty,
-    #[error("chunking.optimizer_prefill_token_candidates must contain only positive values")]
-    OptimizerPrefillChunckTokenCandidatesMustBePositive,
-    #[error("chunking.optimizer_prefill_token_candidates must be strictly increasing")]
-    OptimizerPrefillChunckTokenCandidatesMustBeStrictlyIncreasing,
+    FixedPromptProcessingChunkSizeTokensRequiredWhenOptimizerDisabled,
+    #[error("chunking.fixed_prompt_processing_chunk_size_tokens must be positive")]
+    InvalidFixedPromptProcessingChunkSizeTokens,
+    #[error("chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens must be positive")]
+    InvalidFixedSsdStreamingPromptProcessingChunkSizeTokens,
+    #[error(
+        "chunking.prompt_processing_chunk_size_optimizer_candidate_token_counts must not be empty"
+    )]
+    OptimizerCandidateTokenCountsMustNotBeEmpty,
+    #[error(
+        "chunking.prompt_processing_chunk_size_optimizer_candidate_token_counts must contain only positive values"
+    )]
+    OptimizerCandidateTokenCountsMustBePositive,
+    #[error(
+        "chunking.prompt_processing_chunk_size_optimizer_candidate_token_counts must be strictly increasing"
+    )]
+    OptimizerCandidateTokenCountsMustBeStrictlyIncreasing,
     #[error("failed to parse supervisor bind address '{raw_bind_address}'")]
     ParseBindAddress {
         raw_bind_address: String,

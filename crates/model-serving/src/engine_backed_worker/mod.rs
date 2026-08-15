@@ -21,7 +21,7 @@ mod idle_command;
 mod memory_limit;
 mod model_swap;
 mod output;
-mod prefill_optimizer_insight;
+mod prompt_processing_chunk_optimization_outcome;
 mod protocol;
 mod support;
 

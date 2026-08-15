@@ -6,6 +6,7 @@ mod experimental_ssd_paging_graph_submission;
 mod minimal_protocol;
 mod persistent_prompt_cache_diagnostics;
 mod prompt_cache_clear_protocol;
+mod prompt_processing_progress_protocol;
 mod runtime_feature_configuration;
 mod speculative_prefill_configuration;
 mod worker_startup_configuration;
