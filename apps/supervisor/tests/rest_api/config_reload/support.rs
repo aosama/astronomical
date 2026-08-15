@@ -24,7 +24,7 @@ pub(super) fn write_config_file(home_directory: &std::path::Path, config_body: &
             Some(config_object) if !config_object.contains_key("chunking") => {
                 config_object.insert(
                     "chunking".to_owned(),
-                    serde_json::json!({ "prefill_size_optimizer_enabled": true }),
+                    serde_json::json!({ "prompt_processing_chunk_size_optimizer_enabled": true }),
                 );
                 parsed_config_body.to_string()
             }

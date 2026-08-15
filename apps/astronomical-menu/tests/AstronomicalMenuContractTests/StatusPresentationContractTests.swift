@@ -307,7 +307,7 @@ final class StatusPresentationContractTests: XCTestCase {
       statusDocument.elapsedTimeTitle,
       "0.2 s / Calculating"
     )
-    XCTAssertEqual(statusDocument.flightTitle, "Target · 0%")
+    XCTAssertEqual(statusDocument.flightTitle, "Prompt processing · 0%")
   }
 
   func test_should_use_plain_language_for_prompt_processing_rate() throws {
@@ -319,8 +319,8 @@ final class StatusPresentationContractTests: XCTestCase {
         """.utf8)
     )
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Target 7% · 1076 tok/s")
-    XCTAssertEqual(statusDocument.flightTitle, "Target · 7% · 1076 tok/s")
+    XCTAssertEqual(statusDocument.menuBarTitle, "Prompt 7% · 1076 avg tok/s")
+    XCTAssertEqual(statusDocument.flightTitle, "Prompt processing · 7% · 1076 avg tok/s")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed / ETA")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s / 12.4 s")
   }

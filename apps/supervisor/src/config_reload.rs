@@ -11,11 +11,11 @@ use std::sync::Arc;
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
     AstronomicalRuntimeInstance, ChunkingConfig, DiscoveredModel, DiscoveredModelError, LogLevel,
-    LoggingConfig, PrefillChunckSizingPolicy, PromptCacheConfig, SpeculativePrefillConfig,
+    LoggingConfig, PromptCacheConfig, PromptProcessingChunkSizingPolicy, SpeculativePrefillConfig,
     discover_models,
 };
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerLogLevel, WorkerPrefillChunckSizingPolicy,
+    WorkerChunkingConfiguration, WorkerLogLevel, WorkerPromptProcessingChunkSizingPolicy,
     WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
 };
 use thiserror::Error;
@@ -159,10 +159,10 @@ impl ResolvedRuntimeConfigResolver {
             max_output_tokens,
             maximum_mlx_memory_bytes: user_config.maximum_mlx_memory_bytes()?,
             config_warning: user_config
-                .ignored_fixed_prefill_chunck_tokens()
-                .map(|ignored_fixed_prefill_chunck_tokens| {
+                .ignored_fixed_prompt_processing_chunk_size_tokens()
+                .map(|ignored_fixed_prompt_processing_chunk_size_tokens| {
                     format!(
-                        "Adaptive prefill optimizer is active. The configured fixed prefill fallback of {ignored_fixed_prefill_chunck_tokens} tokens is ignored."
+                        "Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of {ignored_fixed_prompt_processing_chunk_size_tokens} tokens is ignored."
                     )
                 }),
             chunking,
@@ -196,20 +196,20 @@ impl ResolvedRuntimeConfig {
                 // Convert the complete nested policy in one place. No later
                 // worker or model layer is allowed to re-read user config or
                 // invent a default for one of these coupled boundaries.
-                prefill_sizing_policy: match self.chunking.prefill_sizing_policy() {
-                    PrefillChunckSizingPolicy::Optimized {
-                        optimizer_prefill_chunck_token_candidates,
-                    } => WorkerPrefillChunckSizingPolicy::Optimized {
-                        optimizer_prefill_chunck_token_candidates:
-                            optimizer_prefill_chunck_token_candidates.clone(),
+                prompt_processing_chunk_sizing_policy: match self.chunking.prompt_processing_chunk_sizing_policy() {
+                    PromptProcessingChunkSizingPolicy::Optimized {
+                        prompt_processing_chunk_size_optimizer_candidate_token_counts,
+                    } => WorkerPromptProcessingChunkSizingPolicy::Optimized {
+                        prompt_processing_chunk_size_optimizer_candidate_token_counts:
+                            prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
                     },
-                    PrefillChunckSizingPolicy::Fixed {
-                        fixed_prefill_chunck_tokens,
-                        fixed_ssd_streaming_prefill_chunck_tokens,
-                    } => WorkerPrefillChunckSizingPolicy::Fixed {
-                        fixed_prefill_chunck_tokens: *fixed_prefill_chunck_tokens,
-                        fixed_ssd_streaming_prefill_chunck_tokens:
-                            *fixed_ssd_streaming_prefill_chunck_tokens,
+                    PromptProcessingChunkSizingPolicy::Fixed {
+                        fixed_prompt_processing_chunk_size_tokens,
+                        fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+                    } => WorkerPromptProcessingChunkSizingPolicy::Fixed {
+                        fixed_prompt_processing_chunk_size_tokens: *fixed_prompt_processing_chunk_size_tokens,
+                        fixed_ssd_streaming_prompt_processing_chunk_size_tokens:
+                            *fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
                     },
                 },
                 full_attention_key_value_growth_tokens: self
@@ -224,12 +224,12 @@ impl ResolvedRuntimeConfig {
                 experimental_ssd_paging_generation_graph_submission_layer_interval: self
                     .chunking
                     .experimental_ssd_paging_generation_graph_submission_layer_interval(),
-                prefill_optimizer_observation_window: self
+                prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context: self
                     .chunking
-                    .prefill_optimizer_observation_window(),
-                prefill_optimizer_position_bucket_tokens: self
+                    .prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context(),
+                prompt_processing_chunk_size_optimizer_position_range_size_tokens: self
                     .chunking
-                    .prefill_optimizer_position_bucket_tokens(),
+                    .prompt_processing_chunk_size_optimizer_position_range_size_tokens(),
                 prompt_cache_block_tokens: self.chunking.prompt_cache_block_tokens(),
                 prompt_cache_common_prefix_stride_blocks: self
                     .chunking

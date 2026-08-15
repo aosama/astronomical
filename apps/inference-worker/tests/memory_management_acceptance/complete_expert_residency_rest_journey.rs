@@ -289,8 +289,8 @@ fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) 
             "retained_files": 2,
         },
         "chunking": {
-            "prefill_size_optimizer_enabled": false,
-            "fixed_prefill_tokens": 2_048,
+            "prompt_processing_chunk_size_optimizer_enabled": false,
+            "fixed_prompt_processing_chunk_size_tokens": 2_048,
         },
     });
     fs::write(

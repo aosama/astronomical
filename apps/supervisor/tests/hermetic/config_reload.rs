@@ -98,7 +98,7 @@ fn should_classify_max_output_tokens_change_as_worker_restart() {
 }
 
 #[test]
-fn should_restart_worker_when_optimizer_prefill_chunck_candidates_change() {
+fn should_restart_worker_when_optimizer_candidate_token_counts_change() {
     let current = sample_resolved_config();
     let mut candidate = sample_resolved_config();
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
@@ -106,7 +106,7 @@ fn should_restart_worker_when_optimizer_prefill_chunck_candidates_change() {
     std::fs::create_dir_all(&configuration_directory).expect("config directory should be created");
     std::fs::write(
         configuration_directory.join("config.json"),
-        r#"{ "chunking": { "prefill_size_optimizer_enabled": true, "optimizer_prefill_token_candidates": [2048, 4096, 8192] } }"#,
+        r#"{ "chunking": { "prompt_processing_chunk_size_optimizer_enabled": true, "prompt_processing_chunk_size_optimizer_candidate_token_counts": [2048, 4096, 8192] } }"#,
     )
     .expect("config file should be written");
     candidate.chunking =
@@ -360,14 +360,14 @@ fn should_resolve_reload_config_from_the_config_file() {
         &config_file_path,
         r#"{
             "chunking": {
-                "prefill_size_optimizer_enabled": true,
-                "fixed_prefill_tokens": 4096,
+                "prompt_processing_chunk_size_optimizer_enabled": true,
+                "fixed_prompt_processing_chunk_size_tokens": 4096,
                 "full_attention_key_value_growth_tokens": 192,
                 "speculative_prefill_draft_forward_tokens": 1536,
                 "experimental_ssd_paging_prefill_graph_submission_layer_interval": 0,
                 "experimental_ssd_paging_generation_graph_submission_layer_interval": 6,
-                "prefill_optimizer_observation_window": 7,
-                "prefill_optimizer_position_bucket_tokens": 16384,
+                "prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context": 7,
+                "prompt_processing_chunk_size_optimizer_position_range_size_tokens": 16384,
                 "prompt_cache_block_tokens": 768,
                 "prompt_cache_common_prefix_stride_blocks": 8
             },
@@ -400,9 +400,13 @@ fn should_resolve_reload_config_from_the_config_file() {
         worker_chunking.experimental_ssd_paging_generation_graph_submission_layer_interval,
         6
     );
-    assert_eq!(worker_chunking.prefill_optimizer_observation_window, 7);
     assert_eq!(
-        worker_chunking.prefill_optimizer_position_bucket_tokens,
+        worker_chunking
+            .prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context,
+        7
+    );
+    assert_eq!(
+        worker_chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
         16_384
     );
     assert_eq!(worker_chunking.prompt_cache_block_tokens, Some(768));
@@ -410,7 +414,7 @@ fn should_resolve_reload_config_from_the_config_file() {
     assert_eq!(
         resolved_config.config_warning.as_deref(),
         Some(
-            "Adaptive prefill optimizer is active. The configured fixed prefill fallback of 4096 tokens is ignored."
+            "Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of 4096 tokens is ignored."
         )
     );
     assert_eq!(

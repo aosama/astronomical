@@ -5,7 +5,7 @@ use astronomical_model_serving::Qwen3_5ArtifactValidator;
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
     Qwen3_5Engine, Qwen3_5FeedForwardArchitecture, Qwen3_5InferenceRequest,
-    Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 
 /// Links or copies a regular file from source to target, falling back to copy
@@ -170,12 +170,12 @@ async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expe
         .expect("the native BF16 Ornith artifact should validate before engine loading");
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let mut native_bfloat16_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
+    let mut native_bfloat16_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(2_048)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
             .expect("the BF16 qualification prefill chunk size should be valid"),
         248_069,
         model_directory,
@@ -383,7 +383,7 @@ async fn should_stop_when_the_configured_drafter_prefix_restore_fails() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
             .expect("the qualification prefill chunk size should be valid"),
         target_think_end_token_id,
         target_model_directory_path,

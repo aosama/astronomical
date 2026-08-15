@@ -3,7 +3,7 @@ use std::time::Duration;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;
 
@@ -29,12 +29,12 @@ async fn should_generate_the_certified_greedy_continuation_through_the_engine_tr
         .expect("the pinned Ornith artifact should validate before engine loading");
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
             .expect("the test prefill_chunck_tokens should be valid"),
         ORNITH_IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
@@ -91,12 +91,12 @@ async fn should_generate_the_certified_sampled_continuation_through_the_engine_t
         .expect("the pinned Ornith artifact should validate before engine loading");
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
             .expect("the test prefill_chunck_tokens should be valid"),
         ORNITH_IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
@@ -165,7 +165,9 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
                 mlx_memory_limits.active_memory_limit_bytes(),
                 mlx_memory_limits.allocator_cache_memory_limit_bytes(),
                 None,
-                Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(2_048)
+                Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+                    2_048,
+                )
                     .expect("the production prefill chunck size should be valid"),
                 ORNITH_IMAGE_PAD_TOKEN_ID,
                 model_directory,
@@ -242,7 +244,9 @@ async fn should_use_the_raised_live_memory_limit_for_adaptive_expert_eviction() 
                 LIVE_MEMORY_LIMIT_INITIAL_BYTES,
                 LIVE_MEMORY_LIMIT_INITIAL_BYTES,
                 None,
-                Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(2_048)
+                Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+                    2_048,
+                )
                     .expect("the production prefill chunck size should be valid"),
                 think_end_token_id,
                 model_directory,

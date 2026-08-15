@@ -376,3 +376,37 @@ async fn should_serve_the_embedded_observatory_stylesheet_with_correct_content_t
         "the console stylesheet should not be empty"
     );
 }
+
+#[tokio::test]
+async fn should_serve_the_embedded_optimizer_stylesheet_with_correct_content_type() {
+    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/optimizer.css")
+                .body(Body::empty())
+                .expect("the optimizer.css request should be valid"),
+        )
+        .await
+        .expect("the application should return the optimizer stylesheet");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .expect("the optimizer stylesheet should declare a content-type");
+    assert!(
+        content_type
+            .to_str()
+            .expect("the content-type should be valid ASCII")
+            .starts_with("text/css"),
+        "the optimizer stylesheet should be CSS"
+    );
+    let response_body = to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .expect("the optimizer stylesheet body should be readable");
+    assert!(
+        !response_body.is_empty(),
+        "the optimizer stylesheet should not be empty"
+    );
+}

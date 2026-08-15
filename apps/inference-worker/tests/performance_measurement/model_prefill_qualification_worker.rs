@@ -36,10 +36,14 @@ impl PreparedPrefillQualificationWorker {
     }
 
     pub(super) fn optimizer_state_file_path(&self) -> PathBuf {
-        self.isolated_worker_home_directory()
-            .join(".astronomical-dev")
-            .join("optimizer")
-            .join("prefill-chunck-size.json")
+        let optimizer_state_file_paths =
+            optimizer_state_file_paths(self.isolated_worker_home_directory());
+        assert_eq!(
+            optimizer_state_file_paths.len(),
+            1,
+            "the dedicated benchmark home should contain exactly one model optimizer state"
+        );
+        optimizer_state_file_paths[0].clone()
     }
 }
 
@@ -102,10 +106,8 @@ pub(super) fn prepare_prefill_qualification_worker(
     let configuration_directory = isolated_worker_home
         .directory_path()
         .join(".astronomical-dev");
-    let optimizer_state_file_path = configuration_directory
-        .join("optimizer")
-        .join("prefill-chunck-size.json");
-    let optimizer_state_loaded_before_run = optimizer_state_file_path.is_file();
+    let optimizer_state_loaded_before_run =
+        optimizer_state_file_paths(isolated_worker_home.directory_path()).len() == 1;
     fs::create_dir_all(&configuration_directory)
         .expect("the isolated benchmark configuration directory should be created");
     let mut configuration_document = json!({
@@ -114,12 +116,14 @@ pub(super) fn prepare_prefill_qualification_worker(
     });
     match fixed_prefill_chunck_tokens {
         Some(configured_fixed_prefill_chunck_tokens) => {
-            configuration_document["chunking"]["prefill_size_optimizer_enabled"] = json!(false);
-            configuration_document["chunking"]["fixed_prefill_tokens"] =
+            configuration_document["chunking"]["prompt_processing_chunk_size_optimizer_enabled"] =
+                json!(false);
+            configuration_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] =
                 json!(configured_fixed_prefill_chunck_tokens);
         }
         None => {
-            configuration_document["chunking"]["prefill_size_optimizer_enabled"] = json!(true);
+            configuration_document["chunking"]["prompt_processing_chunk_size_optimizer_enabled"] =
+                json!(true);
         }
     }
     if let Some(configured_maximum_mlx_memory_gb) = maximum_mlx_memory_gb {
@@ -139,6 +143,29 @@ pub(super) fn prepare_prefill_qualification_worker(
         worker_executable_path: PathBuf::from(production_worker_executable_path),
         optimizer_state_loaded_before_run,
     }
+}
+
+fn optimizer_state_file_paths(worker_home_directory: &Path) -> Vec<PathBuf> {
+    let model_profiles_directory = worker_home_directory
+        .join(".astronomical-dev")
+        .join("optimizer")
+        .join("model-profiles");
+    let model_profile_entries = match fs::read_dir(&model_profiles_directory) {
+        Ok(model_profile_entries) => model_profile_entries,
+        Err(io_error) if io_error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(io_error) => {
+            panic!("the benchmark optimizer profile directory should be readable: {io_error}")
+        }
+    };
+    model_profile_entries
+        .map(|model_profile_entry| {
+            model_profile_entry
+                .expect("the benchmark optimizer profile entry should be readable")
+                .path()
+                .join("prompt-processing-chunk-size-optimizer-state.json")
+        })
+        .filter(|optimizer_state_file_path| optimizer_state_file_path.is_file())
+        .collect()
 }
 
 pub(super) async fn launch_prepared_prefill_qualification_worker(

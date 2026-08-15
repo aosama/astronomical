@@ -12,9 +12,42 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 2,
                     elapsed_millis: 400,
-                    forward_prefill_chunck_elapsed_millis: 350,
-                    completed_prefill_chunck_tokens: 2_048,
-                    prefill_optimizer_insight: None,
+                    forward_prefill_chunk_elapsed_millis: 350,
+                    completed_prefill_chunk_tokens: 2_048,
+                    prompt_processing_chunk_optimization_outcome: Some(
+                        PromptProcessingChunkOptimizationOutcome {
+                            selected_candidate_chunk_size_tokens: 512,
+                            processed_prompt_token_count: 480,
+                            forward_elapsed_millis: 350,
+                            was_reduced_by_memory_capacity: true,
+                            selection_reason:
+                                PromptProcessingChunkSizeSelectionReason::RefreshStaleCandidateMeasurement,
+                            measurement_context: PromptProcessingChunkOptimizationContext {
+                                chunk_start_token_position: 1_024,
+                                position_range_start_token_position: 0,
+                                position_range_end_token_position_exclusive: 32_768,
+                                has_restored_prefix: true,
+                                is_first_chunk_after_restore: false,
+                                has_visual_embeddings: true,
+                                is_mtp_active: false,
+                                are_sparse_experts_paged: true,
+                                is_prompt_cache_capture_eligible: false,
+                                has_prior_capacity_reduction: true,
+                            },
+                            all_candidates_have_measurements: true,
+                            candidate_measurement_summaries: vec![
+                                PromptProcessingChunkCandidateMeasurementSummary {
+                                    candidate_chunk_size_tokens: 512,
+                                    measurement_source: CandidateMeasurementSource::
+                                        OtherPositionRangesWithSameExecutionProfile,
+                                    measurement_count: 3,
+                                    average_processed_prompt_token_count: 480,
+                                    average_forward_elapsed_millis: 350,
+                                    selections_since_last_measurement: Some(7),
+                                },
+                            ],
+                        },
+                    ),
                     expert_residency_telemetry: Some(ExpertResidencyTelemetry {
                         total_layer_count: 40,
                         complete_layer_count: 6,
@@ -56,9 +89,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 3,
                     elapsed_millis: 600,
-                    forward_prefill_chunck_elapsed_millis: 525,
-                    completed_prefill_chunck_tokens: 2_048,
-                    prefill_optimizer_insight: None,
+                    forward_prefill_chunk_elapsed_millis: 525,
+                    completed_prefill_chunk_tokens: 2_048,
+                    prompt_processing_chunk_optimization_outcome: None,
                     expert_residency_telemetry: None,
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         14_000,
@@ -119,14 +152,14 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             processed_tokens,
             total_tokens,
             elapsed_millis,
-            completed_prefill_chunck_tokens,
+            completed_prefill_chunk_tokens,
             ..
         } => {
             assert_eq!(request_id, RequestId::new(742));
             assert_eq!(processed_tokens, 0);
             assert_eq!(total_tokens, 5);
             assert_eq!(elapsed_millis, 0);
-            assert_eq!(completed_prefill_chunck_tokens, None);
+            assert_eq!(completed_prefill_chunk_tokens, None);
         }
         other_event => panic!("expected initial uncached prefill progress, got {other_event:?}"),
     }
@@ -138,9 +171,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             processed_tokens,
             total_tokens,
             elapsed_millis,
-            forward_prefill_chunck_elapsed_millis,
-            completed_prefill_chunck_tokens,
-            prefill_optimizer_insight,
+            forward_prefill_chunk_elapsed_millis,
+            completed_prefill_chunk_tokens,
+            prompt_processing_chunk_optimization_outcome,
             mlx_memory_snapshot,
             expert_residency,
             speculative_prefill_draft_memory_snapshot,
@@ -150,9 +183,43 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             assert_eq!(processed_tokens, 2);
             assert_eq!(total_tokens, 3);
             assert_eq!(elapsed_millis, 400);
-            assert_eq!(forward_prefill_chunck_elapsed_millis, Some(350));
-            assert_eq!(completed_prefill_chunck_tokens, Some(2_048));
-            assert_eq!(prefill_optimizer_insight, None);
+            assert_eq!(forward_prefill_chunk_elapsed_millis, Some(350));
+            assert_eq!(completed_prefill_chunk_tokens, Some(2_048));
+            assert_eq!(
+                prompt_processing_chunk_optimization_outcome,
+                Some(WorkerPromptProcessingChunkOptimizationOutcome {
+                    selected_candidate_chunk_size_tokens: 512,
+                    processed_prompt_token_count: 480,
+                    forward_elapsed_millis: 350,
+                    was_reduced_by_memory_capacity: true,
+                    selection_reason:
+                        WorkerPromptProcessingChunkSelectionReason::RefreshStaleCandidateMeasurement,
+                    measurement_context: WorkerPromptProcessingChunkOptimizationContext {
+                        chunk_start_token_position: 1_024,
+                        position_range_start_token_position: 0,
+                        position_range_end_token_position_exclusive: 32_768,
+                        has_restored_prefix: true,
+                        is_first_chunk_after_restore: false,
+                        has_visual_embeddings: true,
+                        is_mtp_active: false,
+                        are_sparse_experts_paged: true,
+                        is_prompt_cache_capture_eligible: false,
+                        has_prior_capacity_reduction: true,
+                    },
+                    all_candidates_have_measurements: true,
+                    candidate_measurement_summaries: vec![
+                        WorkerPromptProcessingChunkCandidateMeasurementSummary {
+                            candidate_chunk_size_tokens: 512,
+                            measurement_source: WorkerPromptProcessingChunkMeasurementSource::
+                                OtherPositionRangesWithSameExecutionProfile,
+                            measurement_count: 3,
+                            average_processed_prompt_token_count: 480,
+                            average_forward_elapsed_millis: 350,
+                            selections_since_last_measurement: Some(7),
+                        },
+                    ],
+                })
+            );
             assert_eq!(
                 expert_residency,
                 Some(WorkerExpertResidencySnapshot {
@@ -199,14 +266,14 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             processed_tokens,
             total_tokens,
             elapsed_millis,
-            completed_prefill_chunck_tokens,
+            completed_prefill_chunk_tokens,
             ..
         } => {
             assert_eq!(request_id, RequestId::new(742));
             assert_eq!(processed_tokens, 3);
             assert_eq!(total_tokens, 3);
             assert_eq!(elapsed_millis, 1_000);
-            assert_eq!(completed_prefill_chunck_tokens, Some(2_048));
+            assert_eq!(completed_prefill_chunk_tokens, Some(2_048));
         }
         other_event => panic!("expected uncached prefill progress, got {other_event:?}"),
     }
@@ -237,7 +304,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
 }
 
 #[tokio::test]
-async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
+async fn should_report_completed_prefill_chunk_tokens_after_measurement() {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(15),
         ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
@@ -247,9 +314,9 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
                     persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 2,
                     elapsed_millis: 400,
-                    forward_prefill_chunck_elapsed_millis: 350,
-                    completed_prefill_chunck_tokens: 512,
-                    prefill_optimizer_insight: None,
+                    forward_prefill_chunk_elapsed_millis: 350,
+                    completed_prefill_chunk_tokens: 512,
+                    prompt_processing_chunk_optimization_outcome: None,
                     expert_residency_telemetry: None,
                     mlx_memory_telemetry: None,
                     speculative_prefill_draft_memory_telemetry: None,
@@ -289,7 +356,7 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
         matches!(
             initial_prefill_progress_event,
             WorkerEvent::PrefillProgress {
-                completed_prefill_chunck_tokens: None,
+                completed_prefill_chunk_tokens: None,
                 ..
             }
         ),
@@ -303,7 +370,8 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
             processed_tokens,
             total_tokens,
             elapsed_millis,
-            completed_prefill_chunck_tokens,
+            completed_prefill_chunk_tokens,
+            prompt_processing_chunk_optimization_outcome,
             mlx_memory_snapshot,
             ..
         } => {
@@ -311,7 +379,8 @@ async fn should_report_completed_prefill_chunck_tokens_after_measurement() {
             assert_eq!(processed_tokens, 2);
             assert_eq!(total_tokens, 5);
             assert_eq!(elapsed_millis, 400);
-            assert_eq!(completed_prefill_chunck_tokens, Some(512));
+            assert_eq!(completed_prefill_chunk_tokens, Some(512));
+            assert_eq!(prompt_processing_chunk_optimization_outcome, None);
             assert_eq!(mlx_memory_snapshot, None);
         }
         other_event => panic!("expected measured active prefill progress, got {other_event:?}"),
@@ -335,9 +404,9 @@ async fn should_report_only_the_confirmed_active_prompt_processing_phase() {
                     persistent_prompt_cache_diagnostics: None,
                     processed_token_count: 8,
                     elapsed_millis: 400,
-                    forward_prefill_chunck_elapsed_millis: 350,
-                    completed_prefill_chunck_tokens: 8,
-                    prefill_optimizer_insight: None,
+                    forward_prefill_chunk_elapsed_millis: 350,
+                    completed_prefill_chunk_tokens: 8,
+                    prompt_processing_chunk_optimization_outcome: None,
                     expert_residency_telemetry: None,
                     mlx_memory_telemetry: None,
                     speculative_prefill_draft_memory_telemetry: None,

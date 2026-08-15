@@ -7,17 +7,21 @@ use serde::{Deserialize, Serialize};
 /// boundaries. The worker receives one authoritative partitioning contract.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum WorkerPrefillChunckSizingPolicy {
+pub enum WorkerPromptProcessingChunkSizingPolicy {
+    /// Learns among the supplied candidate capacities for each execution profile.
     Optimized {
-        optimizer_prefill_chunck_token_candidates: Vec<u32>,
+        /// Positive configured capacities considered by the online optimizer.
+        prompt_processing_chunk_size_optimizer_candidate_token_counts: Vec<u32>,
     },
+    /// Uses explicit capacities without collecting optimizer measurements.
     Fixed {
-        fixed_prefill_chunck_tokens: u32,
+        /// Capacity used for complete-resident execution and as the fallback.
+        fixed_prompt_processing_chunk_size_tokens: u32,
         /// Smaller fixed size while sparse experts stream from storage.
         ///
         /// `None` keeps the complete-resident fixed size for every residency mode.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
     },
 }
 
@@ -30,7 +34,7 @@ pub enum WorkerPrefillChunckSizingPolicy {
 #[serde(deny_unknown_fields)]
 pub struct WorkerChunkingConfiguration {
     /// Chooses fixed or measured prompt-processing chunk lengths.
-    pub prefill_sizing_policy: WorkerPrefillChunckSizingPolicy,
+    pub prompt_processing_chunk_sizing_policy: WorkerPromptProcessingChunkSizingPolicy,
     /// Capacity added when append-only attention state outgrows its current slab.
     pub full_attention_key_value_growth_tokens: u32,
     /// Maximum token rows evaluated by one speculative-prefill drafter forward.
@@ -45,10 +49,11 @@ pub struct WorkerChunkingConfiguration {
     /// Zero disables intermediate generation submission. A positive value is
     /// ignored while experts are fully memory resident.
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
-    /// Completed observations retained per optimizer candidate and context.
-    pub prefill_optimizer_observation_window: u32,
-    /// Prompt-position width represented by one optimizer context identifier.
-    pub prefill_optimizer_position_bucket_tokens: u32,
+    /// Completed measurements retained per optimizer candidate and context.
+    pub prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context:
+        u32,
+    /// Prompt-position width represented by one optimizer position range.
+    pub prompt_processing_chunk_size_optimizer_position_range_size_tokens: u32,
     /// Exact persistent-cache block length, or `None` for model-derived sizing.
     pub prompt_cache_block_tokens: Option<u32>,
     /// Number of cache blocks between retained branch restart checkpoints.

@@ -4,6 +4,7 @@ mod chat_generation;
 mod chat_generation_validation;
 mod message_codec;
 mod persistent_prompt_cache_diagnostics;
+mod prompt_processing_chunk_optimization;
 mod protocol_error;
 mod protocol_message;
 mod protocol_reader;
@@ -25,18 +26,21 @@ pub use persistent_prompt_cache_diagnostics::{
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
+pub use prompt_processing_chunk_optimization::{
+    WorkerPromptProcessingChunkCandidateMeasurementSummary,
+    WorkerPromptProcessingChunkMeasurementSource, WorkerPromptProcessingChunkOptimizationContext,
+    WorkerPromptProcessingChunkOptimizationOutcome, WorkerPromptProcessingChunkSelectionReason,
+};
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpRuntimeState, RequestId,
     SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerPrefillOptimizerCandidateEvidence,
-    WorkerPrefillOptimizerContext, WorkerPrefillOptimizerDecisionReason,
-    WorkerPrefillOptimizerInsight, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
 pub use worker_chunking_configuration::{
-    WorkerChunkingConfiguration, WorkerPrefillChunckSizingPolicy,
+    WorkerChunkingConfiguration, WorkerPromptProcessingChunkSizingPolicy,
     experimental_ssd_paging_graph_submission_layer_interval,
 };
 pub use worker_startup_configuration::{

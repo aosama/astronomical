@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use astronomical_config::{
-    AstronomicalConfig, AstronomicalConfigError, LogLevel, LoggingConfig,
-    PrefillChunckSizingPolicy, PromptCacheConfig, SpeculativePrefillConfig, restore_config_file,
+    AstronomicalConfig, AstronomicalConfigError, LogLevel, LoggingConfig, PromptCacheConfig,
+    PromptProcessingChunkSizingPolicy, SpeculativePrefillConfig, restore_config_file,
     write_maximum_mlx_memory_gb,
 };
 
@@ -12,8 +12,8 @@ mod chunking;
 mod logging;
 mod maximum_mlx_memory;
 mod optimizer_directory;
-mod prefill_chunck_sizing;
 mod prompt_cache;
+mod prompt_processing_chunk_sizing;
 mod runtime;
 mod runtime_instance;
 mod speculative_prefill;

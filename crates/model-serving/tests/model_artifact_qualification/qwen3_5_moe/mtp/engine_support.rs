@@ -5,8 +5,8 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer,
-    Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 
 pub(super) async fn load_mtp_test_engine(
@@ -35,7 +35,7 @@ pub(super) async fn load_mtp_test_engine(
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(16)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
             .expect("the MTP test prefill_chunck_tokens should be valid"),
         think_end_token_id,
         model_directory.to_path_buf(),
