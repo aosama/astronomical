@@ -17,6 +17,9 @@ use super::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,
 };
 
+type ResidentSourceTensorKey = (PathBuf, String);
+type ResidentSourceTensorMap = HashMap<ResidentSourceTensorKey, MlxArray>;
+
 impl Qwen3_5ResidentExpertWeights {
     /// Builds a private complete-model candidate from startup-validated plans.
     ///
@@ -49,6 +52,20 @@ impl Qwen3_5ResidentExpertWeights {
             )?;
             resident_source_shards.insert(source_file_path, resident_source_shard);
         }
+        tracing::debug!(
+            source_shard_count = resident_source_shards.len(),
+            "started detaching resident expert tensors from safetensors source maps"
+        );
+        let mut resident_source_tensors =
+            detach_resident_source_tensors(layer_plans, &resident_source_shards)?;
+        // MLX lazy load primitives retain their shared descriptor reader. Dropping
+        // the source maps here removes their second reference to every selected
+        // tensor, so evaluated gate/up sources can retire after one-layer fusion.
+        drop(resident_source_shards);
+        tracing::debug!(
+            resident_source_tensor_count = resident_source_tensors.len(),
+            "completed detaching resident expert tensors from safetensors source maps"
+        );
         let mut resident_layers = Vec::with_capacity(layer_plans.len());
         let mut fused_gate_up_layer_count = 0_usize;
         let mut separate_gate_up_layer_count = 0_usize;
@@ -68,7 +85,7 @@ impl Qwen3_5ResidentExpertWeights {
                 "started materializing one complete resident expert layer"
             );
             let resident_layer =
-                load_resident_layer(&model.runtime, &resident_source_shards, layer_plan)?;
+                load_resident_layer(&model.runtime, &mut resident_source_tensors, layer_plan)?;
             let gate_up_fusion_applied = resident_layer.gate_up_weights.is_fused();
             let gate_up_fusion_transient_payload_bytes = resident_layer
                 .gate_up_weights
@@ -99,6 +116,12 @@ impl Qwen3_5ResidentExpertWeights {
             );
             resident_layers.push(resident_layer);
         }
+        if let Some(((_, unconsumed_tensor_name), _)) = resident_source_tensors.iter().next() {
+            return Err(Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: unconsumed_tensor_name.clone(),
+                description: "resident expert source tensor was not consumed by its layer plan",
+            });
+        }
 
         tracing::info!(
             total_layer_count = layer_plans.len(),
@@ -117,25 +140,25 @@ impl Qwen3_5ResidentExpertWeights {
 
 fn load_resident_layer(
     runtime: &MlxRuntime,
-    resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
+    resident_source_tensors: &mut ResidentSourceTensorMap,
     layer_plan: &QuantizedExpertLayerPlan,
 ) -> Result<Qwen3_5ResidentExpertLayerWeights, Qwen3_5ExecutionError> {
     let gate_projection =
-        load_resident_projection(resident_source_shards, layer_plan, "gate_proj")?;
-    let up_projection = load_resident_projection(resident_source_shards, layer_plan, "up_proj")?;
+        load_resident_projection(resident_source_tensors, layer_plan, "gate_proj")?;
+    let up_projection = load_resident_projection(resident_source_tensors, layer_plan, "up_proj")?;
     Ok(Qwen3_5ResidentExpertLayerWeights::new(
         Qwen3_5ResidentGateUpWeights::build(runtime, layer_plan, gate_projection, up_projection)?,
-        load_resident_projection(resident_source_shards, layer_plan, "down_proj")?,
+        load_resident_projection(resident_source_tensors, layer_plan, "down_proj")?,
     ))
 }
 
 fn load_resident_projection(
-    resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
+    resident_source_tensors: &mut ResidentSourceTensorMap,
     layer_plan: &QuantizedExpertLayerPlan,
     projection_name: &str,
 ) -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
     let weight_source = projection_parameter_source(layer_plan, projection_name, "weight")?;
-    let weight = load_validated_source_tensor(resident_source_shards, weight_source)?;
+    let weight = take_validated_source_tensor(resident_source_tensors, weight_source)?;
     // Preserve the validated artifact representation exactly. Resident mode is
     // an ownership change, never an opportunity to requantize or widen weights.
     match layer_plan.quantization_mode {
@@ -145,12 +168,12 @@ fn load_resident_projection(
             let biases_source = projection_parameter_source(layer_plan, projection_name, "biases")?;
             Ok(Qwen3_5AffineWeights::Quantized {
                 packed_weight: weight,
-                quantization_scales: load_validated_source_tensor(
-                    resident_source_shards,
+                quantization_scales: take_validated_source_tensor(
+                    resident_source_tensors,
                     scales_source,
                 )?,
-                quantization_biases: load_validated_source_tensor(
-                    resident_source_shards,
+                quantization_biases: take_validated_source_tensor(
+                    resident_source_tensors,
                     biases_source,
                 )?,
                 quantization_bits: weight_source.quantization_bits,
@@ -180,16 +203,52 @@ fn projection_parameter_source<'plan>(
         })
 }
 
-fn load_validated_source_tensor(
+fn detach_resident_source_tensors(
+    layer_plans: &[QuantizedExpertLayerPlan],
     resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
+) -> Result<ResidentSourceTensorMap, Qwen3_5ExecutionError> {
+    let resident_source_tensor_capacity = layer_plans
+        .iter()
+        .map(|layer_plan| layer_plan.tensor_sources.len())
+        .sum();
+    let mut resident_source_tensors = HashMap::with_capacity(resident_source_tensor_capacity);
+    for tensor_source in layer_plans
+        .iter()
+        .flat_map(|layer_plan| layer_plan.tensor_sources.iter())
+    {
+        let source_tensor_key = (
+            tensor_source.source_file.clone(),
+            tensor_source.tensor_name.clone(),
+        );
+        if resident_source_tensors.contains_key(&source_tensor_key) {
+            return Err(Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_source.tensor_name.clone(),
+                description: "resident expert tensor appears more than once in the layer plans",
+            });
+        }
+        let resident_source_shard = resident_source_shards
+            .get(&tensor_source.source_file)
+            .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                tensor_name: tensor_source.tensor_name.clone(),
+            })?;
+        let source_tensor = resident_source_shard.tensor(&tensor_source.tensor_name)?;
+        resident_source_tensors.insert(source_tensor_key, source_tensor);
+    }
+    Ok(resident_source_tensors)
+}
+
+fn take_validated_source_tensor(
+    resident_source_tensors: &mut ResidentSourceTensorMap,
     tensor_source: &QuantizedTensorSource,
 ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-    let resident_source_shard = resident_source_shards
-        .get(&tensor_source.source_file)
+    let source_tensor = resident_source_tensors
+        .remove(&(
+            tensor_source.source_file.clone(),
+            tensor_source.tensor_name.clone(),
+        ))
         .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
             tensor_name: tensor_source.tensor_name.clone(),
         })?;
-    let source_tensor = resident_source_shard.tensor(&tensor_source.tensor_name)?;
     validate_source_tensor(tensor_source, &source_tensor)?;
     Ok(source_tensor)
 }
