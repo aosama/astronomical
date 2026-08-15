@@ -16,13 +16,11 @@ mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
 mod prefill_advance;
 mod prefill_capacity_recovery;
-mod prefill_chunck_sizer;
-mod prefill_chunck_sizer_configuration;
 mod prefill_execution_context;
-mod prefill_optimizer_insight;
 mod prompt_prefill;
 mod prompt_prefill_counters;
 mod prompt_prefill_errors;
+mod prompt_processing_chunk_sizer;
 mod request_memory_release;
 mod resident_memory_pressure;
 mod speculative_prefill;
@@ -69,9 +67,10 @@ pub use crate::qwen3_5::multi_token_prediction::{
 };
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
-pub use prefill_chunck_sizer::Qwen3_5PrefillChunckSizer;
-pub use prefill_chunck_sizer_configuration::Qwen3_5PrefillChunckSizerError;
 pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
+pub use prompt_processing_chunk_sizer::{
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
+};
 
 /// Qwen3.5 inference engine backed by the architecture-neutral MLX owner driver.
 pub type Qwen3_5Engine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
@@ -85,12 +84,12 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     /// decode while retaining their routers and shared experts.
     // Construction dependencies remain explicit to avoid another configuration facade.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_prefill_chunck_sizer(
+    pub fn new_with_prompt_processing_chunk_sizer(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
         allocator_cache_memory_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-        prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
@@ -102,7 +101,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             active_memory_limit_bytes,
             allocator_cache_memory_limit_bytes,
             persistent_prompt_cache_disk_store_config,
-            prefill_chunck_sizer,
+            prompt_processing_chunk_sizer,
             think_end_token_id,
             model_directory,
             chunking,
@@ -121,7 +120,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         allocator_cache_memory_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-        prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
@@ -190,7 +189,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             persistent_visual_embedding_model_contract: None,
             persistent_prompt_cache: None,
             speculative_prefill_draft_persistent_prompt_cache: None,
-            prefill_chunck_sizer,
+            prompt_processing_chunk_sizer,
             chunking,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
@@ -256,7 +255,7 @@ pub struct Qwen3_5InferenceExecution {
     /// SSD-backed dense decoder state owned by the configured SpecPrefill drafter.
     pub(in super::super) speculative_prefill_draft_persistent_prompt_cache:
         Option<Arc<PersistentPromptCacheDiskStore>>,
-    prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+    prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
     chunking: WorkerChunkingConfiguration,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
     vocabulary_size: u32,

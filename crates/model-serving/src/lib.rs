@@ -11,8 +11,8 @@ mod model_family_runtime;
 mod model_generation_processor;
 mod performance_attribution;
 mod persistent_cache;
-#[path = "prefill-chunck-size-optimizer/mod.rs"]
-mod prefill_chunck_size_optimizer;
+#[path = "prompt_processing_chunk_size_optimizer/mod.rs"]
+mod prompt_processing_chunk_size_optimizer;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod safetensors;
@@ -56,8 +56,9 @@ pub use expert_paging::{
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError, MlxInferenceEngine,
-    MlxInferenceExecution, PrefillChunckOptimizerCandidateInsight,
-    PrefillChunckOptimizerContextInsight, PrefillChunckOptimizerInsight, PreparedInferenceRequest,
+    MlxInferenceExecution, PreparedInferenceRequest,
+    PromptProcessingChunkCandidateMeasurementSummary, PromptProcessingChunkOptimizationContext,
+    PromptProcessingChunkOptimizationOutcome,
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
@@ -120,11 +121,11 @@ pub use persistent_cache::{
     RestoredSpeculativePrefillTargetState, build_persistent_prompt_cache_stats_event,
     clear_persistent_prompt_cache_directory,
 };
-pub use prefill_chunck_size_optimizer::{
-    PrefillChunckOptimizerCandidateEvidence, PrefillChunckOptimizerContextEvidence,
-    PrefillChunckSizeOptimizer, PrefillChunckSizeOptimizerContext,
-    PrefillChunckSizeOptimizerDecision, PrefillChunckSizeOptimizerDecisionReason,
-    PrefillChunckSizeOptimizerError, PrefillChunckSizeOptimizerObservation,
+pub use prompt_processing_chunk_size_optimizer::{
+    CandidateChunkMeasurementSummary, CandidateMeasurementSource, CandidateMeasurementSummaries,
+    PromptProcessingChunkMeasurement, PromptProcessingChunkSizeOptimizer,
+    PromptProcessingChunkSizeOptimizerError, PromptProcessingChunkSizeSelection,
+    PromptProcessingChunkSizeSelectionReason, PromptProcessingMeasurementContext,
 };
 pub use qwen3_5::{
     ModelWeightStorage, OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile,
@@ -152,8 +153,8 @@ pub use qwen3_5::{
     Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5MtpRequestState,
     Qwen3_5MtpRequestStateAllocationCheckpoint, Qwen3_5MtpRuntimeState,
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5PrefillChunckSizer,
-    Qwen3_5PrefillChunckSizerError, Qwen3_5PrefillExecutionContext,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5PrefillExecutionContext,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5SpeculativePrefillSelectionError,
     Qwen3_5TargetForwardOutput, Qwen3_5VisionModel, Qwen3_5VisionWeights, Qwen3_5Weights,
     RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,

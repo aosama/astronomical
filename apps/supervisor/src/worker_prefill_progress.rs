@@ -5,7 +5,7 @@ use astronomical_ipc_protocol::{WorkerEvent, WorkerPromptProcessingPhase};
 use crate::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
-    prefill_optimizer_observability::record_prefill_optimizer_insight,
+    prompt_processing_chunk_optimizer_status::record_prompt_processing_chunk_optimization_outcome,
     worker_health::{publish_active_request_progress, publish_latest_mlx_memory_snapshot},
     worker_loop_types::ActiveGeneration,
 };
@@ -21,9 +21,9 @@ pub(super) fn handle_worker_prefill_progress(
         processed_tokens,
         total_tokens,
         elapsed_millis,
-        forward_prefill_chunck_elapsed_millis,
-        completed_prefill_chunck_tokens,
-        prefill_optimizer_insight,
+        forward_prefill_chunk_elapsed_millis,
+        completed_prefill_chunk_tokens,
+        prompt_processing_chunk_optimization_outcome,
         mlx_memory_snapshot,
         expert_residency,
         speculative_prefill_draft_memory_snapshot,
@@ -65,8 +65,8 @@ pub(super) fn handle_worker_prefill_progress(
             processed_tokens,
             total_tokens,
             elapsed_millis,
-            forward_prefill_chunck_elapsed_millis,
-            completed_prefill_chunck_tokens,
+            forward_prefill_chunk_elapsed_millis,
+            completed_prefill_chunk_tokens,
             mlx_active_memory_bytes: mlx_memory_snapshot
                 .map(|snapshot| snapshot.active_memory_bytes),
             mlx_allocator_cache_memory_bytes: mlx_memory_snapshot
@@ -86,11 +86,16 @@ pub(super) fn handle_worker_prefill_progress(
             total_tokens,
             request_started_at: active_request.request_started_at,
             elapsed_millis,
-            completed_prefill_chunck_tokens,
+            completed_prefill_chunk_tokens,
         },
     );
-    if let Some(prefill_optimizer_insight) = prefill_optimizer_insight {
-        record_prefill_optimizer_insight(health_snapshot, prefill_optimizer_insight);
+    if let Some(prompt_processing_chunk_optimization_outcome) =
+        prompt_processing_chunk_optimization_outcome
+    {
+        record_prompt_processing_chunk_optimization_outcome(
+            health_snapshot,
+            prompt_processing_chunk_optimization_outcome,
+        );
     }
     Ok(())
 }

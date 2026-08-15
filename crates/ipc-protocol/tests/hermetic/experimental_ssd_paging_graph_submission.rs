@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerPrefillChunckSizingPolicy,
+    WorkerChunkingConfiguration, WorkerPromptProcessingChunkSizingPolicy,
     experimental_ssd_paging_graph_submission_layer_interval,
 };
 
@@ -9,15 +9,16 @@ fn experimental_ssd_paging_chunking(
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 ) -> WorkerChunkingConfiguration {
     WorkerChunkingConfiguration {
-        prefill_sizing_policy: WorkerPrefillChunckSizingPolicy::Optimized {
-            optimizer_prefill_chunck_token_candidates: vec![1_024, 2_048],
+        prompt_processing_chunk_sizing_policy:
+            WorkerPromptProcessingChunkSizingPolicy::Optimized {
+            prompt_processing_chunk_size_optimizer_candidate_token_counts: vec![1_024, 2_048],
         },
         full_attention_key_value_growth_tokens: 256,
         speculative_prefill_draft_forward_tokens: 2_048,
         experimental_ssd_paging_prefill_graph_submission_layer_interval,
         experimental_ssd_paging_generation_graph_submission_layer_interval,
-        prefill_optimizer_observation_window: 5,
-        prefill_optimizer_position_bucket_tokens: 32_768,
+        prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context: 5,
+        prompt_processing_chunk_size_optimizer_position_range_size_tokens: 32_768,
         prompt_cache_block_tokens: None,
         prompt_cache_common_prefix_stride_blocks: 4,
     }

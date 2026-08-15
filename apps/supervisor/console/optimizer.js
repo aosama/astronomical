@@ -1,99 +1,251 @@
-// Adaptive prefill optimizer evidence rendered from the existing status document.
+// Explains context-dependent prompt-processing chunk selection in user terms.
 
-function optimizerConvergenceAssessment(optimizerDocument) {
-    if (!optimizerDocument || optimizerDocument.enabled === null) {
+function optimizerAssessment(optimizerDocument) {
+    const optimizerMode = optimizerDocument ? optimizerDocument.mode : "unavailable";
+    if (optimizerMode === "fixed") {
+        const fixedChunkSizeTokens = optimizerDocument.fixed_chunk_size_token_count;
         return {
-            title: "Optimizer unavailable",
-            detail: "Configuration and runtime evidence have not reached the Observatory yet.",
-            tone: "waiting"
-        };
-    }
-    if (!optimizerDocument.enabled) {
-        const fixedPrefillChunckTokens = optimizerDocument.fixed_prefill_chunck_tokens;
-        return {
-            title: "Fixed prefill size",
-            detail: fixedPrefillChunckTokens
-                ? formatOptimizerTokenCount(fixedPrefillChunckTokens) + " tokens is configured; adaptive learning is off."
+            title: "One fixed chunk size is configured",
+            detail: fixedChunkSizeTokens
+                ? formatOptimizerTokenCount(fixedChunkSizeTokens)
+                    + " tokens is used throughout the context window; adaptive learning is off."
                 : "Adaptive learning is off.",
             tone: "fixed"
         };
     }
-    const latestInsight = optimizerDocument.latest_insight;
-    if (!latestInsight) {
+    if (optimizerMode !== "adaptive") {
         return {
-            title: "Awaiting context evidence",
-            detail: "The optimizer is enabled and will report evidence after prompt processing.",
+            title: "Optimizer information is unavailable",
+            detail: "Astronomical cannot show chunk-size learning until optimizer configuration is available.",
             tone: "waiting"
         };
     }
-    const requestedTokens = formatOptimizerTokenCount(latestInsight.requested_prefill_chunck_tokens);
-    const actualTokens = formatOptimizerTokenCount(latestInsight.actual_prefill_chunck_tokens);
-    if (latestInsight.has_observations_for_every_candidate) {
+    const latestChunkOutcome = optimizerDocument.latest_chunk_outcome;
+    if (!latestChunkOutcome) {
         return {
-            title: "Context evidence ready",
-            detail: requestedTokens + " tokens is preferred for the latest context, not a global fixed size.",
+            title: "Learning starts with the next prompt",
+            detail: "Astronomical will compare chunk sizes separately for each token range and execution profile.",
+            tone: "waiting"
+        };
+    }
+    const rangeTitle = optimizerPositionRangeTitle(latestChunkOutcome.measurement_context);
+    if (latestChunkOutcome.was_reduced_by_memory_capacity) {
+        return {
+            title: "Memory capacity changed the latest decision",
+            detail: "The requested chunk did not fit, so Astronomical processed a smaller amount without treating it as ordinary timing evidence.",
+            tone: "learning"
+        };
+    }
+    if (latestChunkOutcome.all_candidates_have_measurements) {
+        return {
+            title: "Profile ready for " + rangeTitle,
+            detail: "Every configured chunk size has usable evidence. This profile only applies to this token range and matching execution conditions.",
             tone: "ready"
         };
     }
-    const memoryPressureDetail = latestInsight.has_observed_prefill_capacity_constraint
-        ? requestedTokens + " requested, " + actualTokens + " completed under memory pressure."
-        : requestedTokens + " tokens was requested while candidate evidence is still being collected.";
-    return { title: "Still exploring", detail: memoryPressureDetail, tone: "learning" };
+    const contextScope = optimizerContextScope(latestChunkOutcome, null);
+    const measuredCandidateCount = contextScope
+        ? contextScope.directlyMeasuredCandidateCount + contextScope.equivalentContextCandidateCount
+        : 0;
+    const candidateCount = contextScope && contextScope.candidateCount > 0
+        ? contextScope.candidateCount
+        : (optimizerDocument.candidate_chunk_size_token_counts || []).length;
+    return {
+        title: "Learning " + rangeTitle,
+        detail: measuredCandidateCount + " of " + candidateCount
+            + " chunk sizes have usable evidence for this context profile.",
+        tone: "learning"
+    };
 }
 
-function renderPrefillOptimizer(optimizerDocument) {
-    const convergenceAssessment = optimizerConvergenceAssessment(optimizerDocument);
+function renderPromptProcessingOptimizer(optimizerDocument, maximumInputTokens) {
+    const assessment = optimizerAssessment(optimizerDocument);
     const assessmentPanel = document.getElementById("optimizer-assessment");
-    assessmentPanel.dataset.tone = convergenceAssessment.tone;
-    document.getElementById("optimizer-assessment-title").textContent = convergenceAssessment.title;
-    document.getElementById("optimizer-assessment-detail").textContent = convergenceAssessment.detail;
-
+    assessmentPanel.dataset.tone = assessment.tone;
+    document.getElementById("optimizer-assessment-title").textContent = assessment.title;
+    document.getElementById("optimizer-assessment-detail").textContent = assessment.detail;
     document.getElementById("optimizer-mode").textContent = optimizerModeTitle(optimizerDocument);
-    const latestInsight = optimizerDocument ? optimizerDocument.latest_insight : null;
-    document.getElementById("optimizer-requested-tokens").textContent = latestInsight
-        ? formatOptimizerTokenCount(latestInsight.requested_prefill_chunck_tokens)
-        : "—";
-    document.getElementById("optimizer-actual-tokens").textContent = latestInsight
-        ? formatOptimizerTokenCount(latestInsight.actual_prefill_chunck_tokens)
-        : "—";
-    document.getElementById("optimizer-elapsed").textContent = latestInsight
-        ? Number(latestInsight.elapsed_millis || 0).toLocaleString() + " ms"
-        : "—";
-    document.getElementById("optimizer-decision-reason").textContent = latestInsight
-        ? optimizerDecisionReasonTitle(latestInsight.decision_reason)
-        : "No measured decision";
-    renderOptimizerContext(latestInsight ? latestInsight.context : null);
-    renderOptimizerCandidateEvidence(optimizerDocument, latestInsight);
-    renderOptimizerTransitions(optimizerDocument ? optimizerDocument.recent_transitions : []);
+
+    const latestChunkOutcome = optimizerDocument ? optimizerDocument.latest_chunk_outcome : null;
+    const contextScope = optimizerContextScope(latestChunkOutcome, maximumInputTokens);
+    renderOptimizerCoverage(contextScope);
+    renderOptimizerContextWindow(contextScope);
+    renderOptimizerContext(latestChunkOutcome ? latestChunkOutcome.measurement_context : null);
+    renderOptimizerCandidateMeasurements(optimizerDocument, latestChunkOutcome);
+    renderOptimizerLatestDecision(latestChunkOutcome);
+    renderOptimizerChunkOutcomes(optimizerDocument ? optimizerDocument.recent_chunk_outcomes : []);
 }
 
 function optimizerModeTitle(optimizerDocument) {
-    if (!optimizerDocument || optimizerDocument.enabled === null) { return "Awaiting"; }
-    return optimizerDocument.enabled ? "Adaptive" : "Fixed";
+    if (!optimizerDocument || optimizerDocument.mode === "unavailable") { return "Unavailable"; }
+    if (optimizerDocument.mode === "fixed") { return "Fixed sizing"; }
+    if (optimizerDocument.mode === "adaptive") { return "Adaptive by context"; }
+    return "Unavailable";
 }
 
-function renderOptimizerContext(optimizerContext) {
+// Converts absolute token positions into one bounded context-window track and
+// counts how much evidence belongs directly or equivalently to this profile.
+function optimizerContextScope(latestChunkOutcome, maximumInputTokens) {
+    const measurementContext = latestChunkOutcome ? latestChunkOutcome.measurement_context : null;
+    if (!measurementContext) { return null; }
+    const rangeStartTokenPosition = Math.max(
+        0,
+        Number(measurementContext.position_range_start_token_position || 0)
+    );
+    const rangeEndTokenPositionExclusive = Math.max(
+        rangeStartTokenPosition,
+        Number(measurementContext.position_range_end_token_position_exclusive || 0)
+    );
+    const chunkStartTokenPosition = Math.max(
+        0,
+        Number(measurementContext.chunk_start_token_position || 0)
+    );
+    const contextWindowTokenCount = Math.max(
+        Number(maximumInputTokens || 0),
+        rangeEndTokenPositionExclusive,
+        chunkStartTokenPosition
+    );
+    const candidateMeasurements = latestChunkOutcome.candidate_measurement_summaries || [];
+    const directlyMeasuredCandidateCount = candidateMeasurements.filter(
+        (candidateMeasurement) => candidateMeasurement.measurement_count > 0
+            && candidateMeasurement.measurement_source === "current_position_range"
+    ).length;
+    const equivalentContextCandidateCount = candidateMeasurements.filter(
+        (candidateMeasurement) => candidateMeasurement.measurement_count > 0
+            && candidateMeasurement.measurement_source
+                === "other_position_ranges_with_same_execution_profile"
+    ).length;
+    const unmeasuredCandidateCount = candidateMeasurements.length
+        - directlyMeasuredCandidateCount
+        - equivalentContextCandidateCount;
+    return {
+        rangeStartTokenPosition,
+        rangeEndTokenPositionExclusive,
+        chunkStartTokenPosition,
+        contextWindowTokenCount,
+        rangeStartPercentage: optimizerTrackPercentage(
+            rangeStartTokenPosition,
+            contextWindowTokenCount
+        ),
+        rangeWidthPercentage: optimizerTrackPercentage(
+            rangeEndTokenPositionExclusive - rangeStartTokenPosition,
+            contextWindowTokenCount
+        ),
+        chunkPositionPercentage: optimizerTrackPercentage(
+            chunkStartTokenPosition,
+            contextWindowTokenCount
+        ),
+        candidateCount: candidateMeasurements.length,
+        directlyMeasuredCandidateCount,
+        equivalentContextCandidateCount,
+        unmeasuredCandidateCount
+    };
+}
+
+function optimizerTrackPercentage(tokenPosition, contextWindowTokenCount) {
+    if (contextWindowTokenCount <= 0) { return 0; }
+    return Math.max(0, Math.min(100, tokenPosition * 100 / contextWindowTokenCount));
+}
+
+// Coverage reports usable evidence rather than raw samples: measurements from
+// an equivalent execution profile are valid even when collected in another range.
+
+function renderOptimizerCoverage(contextScope) {
+    const coverageValue = document.getElementById("optimizer-coverage-value");
+    const coverageDetail = document.getElementById("optimizer-coverage-detail");
+    if (!contextScope || contextScope.candidateCount === 0) {
+        coverageValue.textContent = "No evidence yet";
+        coverageDetail.textContent = "Candidate comparisons appear after prompt processing.";
+        return;
+    }
+    const usableEvidenceCount = contextScope.directlyMeasuredCandidateCount
+        + contextScope.equivalentContextCandidateCount;
+    coverageValue.textContent = usableEvidenceCount + " of " + contextScope.candidateCount;
+    coverageDetail.textContent = contextScope.directlyMeasuredCandidateCount + " measured in this range · "
+        + contextScope.equivalentContextCandidateCount + " from matching contexts · "
+        + contextScope.unmeasuredCandidateCount + " not measured";
+}
+
+function renderOptimizerContextWindow(contextScope) {
+    const contextPanel = document.getElementById("optimizer-context-window");
+    const rangeBand = document.getElementById("optimizer-context-range-band");
+    const chunkMarker = document.getElementById("optimizer-context-chunk-marker");
+    if (!contextScope) {
+        contextPanel.dataset.state = "empty";
+        document.getElementById("optimizer-context-range-title").textContent = "No context observed yet";
+        document.getElementById("optimizer-context-range-detail").textContent =
+            "Run a prompt to see where its chunk-size evidence applies.";
+        rangeBand.style.left = "0%";
+        rangeBand.style.width = "0%";
+        chunkMarker.style.left = "0%";
+        chunkMarker.hidden = true;
+        document.getElementById("optimizer-context-window-start").textContent = "0";
+        document.getElementById("optimizer-context-window-end").textContent = "Context limit unavailable";
+        return;
+    }
+    contextPanel.dataset.state = "ready";
+    const rangeEndInclusive = Math.max(
+        contextScope.rangeStartTokenPosition,
+        contextScope.rangeEndTokenPositionExclusive - 1
+    );
+    document.getElementById("optimizer-context-range-title").textContent =
+        "Evidence for tokens " + formatOptimizerTokenCount(contextScope.rangeStartTokenPosition)
+        + "–" + formatOptimizerTokenCount(rangeEndInclusive);
+    document.getElementById("optimizer-context-range-detail").textContent =
+        "Chunk sizes are learned independently as prompts move into later token ranges.";
+    rangeBand.style.left = contextScope.rangeStartPercentage + "%";
+    rangeBand.style.width = contextScope.rangeWidthPercentage + "%";
+    chunkMarker.style.left = contextScope.chunkPositionPercentage + "%";
+    chunkMarker.hidden = false;
+    chunkMarker.setAttribute(
+        "aria-label",
+        "Latest chunk starts at token " + formatOptimizerTokenCount(contextScope.chunkStartTokenPosition)
+    );
+    document.getElementById("optimizer-context-window-start").textContent = "Token 0";
+    document.getElementById("optimizer-context-window-end").textContent =
+        formatOptimizerTokenCount(contextScope.contextWindowTokenCount) + " token limit";
+    document.getElementById("optimizer-context-chunk-position").textContent =
+        "Latest chunk starts at " + formatOptimizerTokenCount(contextScope.chunkStartTokenPosition);
+}
+
+function renderOptimizerContext(measurementContext) {
     const contextContainer = document.getElementById("optimizer-context");
     contextContainer.replaceChildren();
-    if (!optimizerContext) {
-        appendOptimizerPill(contextContainer, "No context observed", "muted");
+    if (!measurementContext) {
+        appendOptimizerPill(contextContainer, "No execution profile observed", "muted");
         return;
     }
     appendOptimizerPill(
         contextContainer,
-        "Position " + formatOptimizerTokenCount(optimizerContext.prompt_position_tokens),
-        "position"
+        measurementContext.has_restored_prefix ? "Prefix: restored from cache" : "Prefix: processed from scratch"
     );
-    appendOptimizerPill(contextContainer, optimizerContext.has_restored_prefix ? "Restored prefix" : "Cold prefix");
-    appendOptimizerPill(contextContainer, optimizerContext.has_visual_embeddings ? "Vision" : "Text only");
-    appendOptimizerPill(contextContainer, optimizerContext.is_mtp_active ? "MTP active" : "Target only");
-    appendOptimizerPill(contextContainer, optimizerContext.are_sparse_experts_paged ? "Experts paged" : "Experts resident");
-    appendOptimizerPill(contextContainer, optimizerContext.is_prompt_cache_capture_eligible ? "Cache capture eligible" : "Cache capture unavailable");
-    if (optimizerContext.is_first_chunck_after_restore) {
-        appendOptimizerPill(contextContainer, "First after restore", "attention");
+    appendOptimizerPill(
+        contextContainer,
+        measurementContext.has_visual_embeddings ? "Input: text and image" : "Input: text only"
+    );
+    appendOptimizerPill(
+        contextContainer,
+        measurementContext.is_mtp_active
+            ? "Model path: multi-token prediction active"
+            : "Model path: target model only"
+    );
+    appendOptimizerPill(
+        contextContainer,
+        measurementContext.are_sparse_experts_paged
+            ? "Expert access: streamed as needed"
+            : "Expert access: fully in memory"
+    );
+    appendOptimizerPill(
+        contextContainer,
+        measurementContext.is_prompt_cache_capture_eligible
+            ? "Prompt cache: capture eligible"
+            : "Prompt cache: capture unavailable"
+    );
+    if (measurementContext.is_first_chunk_after_restore) {
+        appendOptimizerPill(contextContainer, "First chunk after cache restore", "attention");
     }
-    if (optimizerContext.has_prior_capacity_reduction) {
-        appendOptimizerPill(contextContainer, "Prior memory reduction", "attention");
+    if (measurementContext.has_prior_capacity_reduction) {
+        appendOptimizerPill(contextContainer, "Earlier chunk reduced by memory", "attention");
     }
 }
 
@@ -104,127 +256,245 @@ function appendOptimizerPill(contextContainer, label, pillTone) {
     contextContainer.appendChild(contextPill);
 }
 
-function fastestMeasuredCandidateForLatestContext(candidateEvidence) {
-    let fastestMeasuredCandidate = null;
-    let fastestMeasuredPrefillTokensPerSecond = 0;
-    let hasEqualFastestMeasuredCandidate = false;
-    candidateEvidence.forEach((candidateMeasurement) => {
-        const observationCount = Number(candidateMeasurement.observation_count || 0);
-        const averageActualPrefillChunckTokens = Number(
-            candidateMeasurement.average_actual_prefill_chunck_tokens || 0
-        );
-        const averageElapsedMillis = Number(candidateMeasurement.average_elapsed_millis || 0);
-        if (observationCount === 0 || averageActualPrefillChunckTokens === 0 || averageElapsedMillis === 0) {
-            return;
-        }
-        const measuredPrefillTokensPerSecond =
-            averageActualPrefillChunckTokens * 1000 / averageElapsedMillis;
-        if (measuredPrefillTokensPerSecond > fastestMeasuredPrefillTokensPerSecond) {
-            fastestMeasuredCandidate = candidateMeasurement;
-            fastestMeasuredPrefillTokensPerSecond = measuredPrefillTokensPerSecond;
-            hasEqualFastestMeasuredCandidate = false;
-        } else if (measuredPrefillTokensPerSecond === fastestMeasuredPrefillTokensPerSecond) {
-            hasEqualFastestMeasuredCandidate = true;
+// The measured-rate leader is descriptive evidence for this context only. The
+// optimizer still chooses by projected remaining latency, not this simple rank.
+function highestObservedThroughputCandidate(candidateMeasurementSummaries) {
+    let highestThroughputCandidate = null;
+    let highestObservedTokensPerSecond = 0;
+    let hasEqualHighestThroughputCandidate = false;
+    candidateMeasurementSummaries.forEach((candidateMeasurement) => {
+        const observedTokensPerSecond = optimizerObservedTokensPerSecond(candidateMeasurement);
+        if (observedTokensPerSecond <= 0) { return; }
+        if (observedTokensPerSecond > highestObservedTokensPerSecond) {
+            highestThroughputCandidate = candidateMeasurement;
+            highestObservedTokensPerSecond = observedTokensPerSecond;
+            hasEqualHighestThroughputCandidate = false;
+        } else if (observedTokensPerSecond === highestObservedTokensPerSecond) {
+            hasEqualHighestThroughputCandidate = true;
         }
     });
-    return hasEqualFastestMeasuredCandidate ? null : fastestMeasuredCandidate;
+    return hasEqualHighestThroughputCandidate ? null : highestThroughputCandidate;
 }
 
-function renderOptimizerCandidateEvidence(optimizerDocument, latestInsight) {
-    const evidenceTableBody = document.getElementById("optimizer-evidence-body");
-    evidenceTableBody.replaceChildren();
+function optimizerObservedTokensPerSecond(candidateMeasurement) {
+    const measurementCount = Number(candidateMeasurement.measurement_count || 0);
+    const averageProcessedTokens = Number(candidateMeasurement.average_processed_prompt_token_count || 0);
+    const averageForwardMillis = Number(candidateMeasurement.average_forward_elapsed_millis || 0);
+    if (measurementCount === 0 || averageProcessedTokens === 0 || averageForwardMillis === 0) {
+        return 0;
+    }
+    return averageProcessedTokens * 1000 / averageForwardMillis;
+}
+
+function renderOptimizerCandidateMeasurements(optimizerDocument, latestChunkOutcome) {
+    const comparisonList = document.getElementById("optimizer-measurements-body");
+    comparisonList.replaceChildren();
+    if (!latestChunkOutcome) {
+        const emptyState = document.createElement("p");
+        emptyState.className = "optimizer-empty-state";
+        emptyState.textContent = "Run a prompt to begin a context-specific chunk-size comparison.";
+        comparisonList.appendChild(emptyState);
+        return;
+    }
     const configuredCandidates = optimizerDocument
-        ? optimizerDocument.candidate_prefill_chunck_tokens || []
+        ? optimizerDocument.candidate_chunk_size_token_counts || []
         : [];
-    const candidateEvidence = latestInsight ? latestInsight.candidate_evidence || [] : [];
-    const candidatesToRender = candidateEvidence.length > 0
-        ? candidateEvidence
-        : configuredCandidates.map((candidatePrefillChunckTokens) => ({
-            candidate_prefill_chunck_tokens: candidatePrefillChunckTokens,
-            observation_count: 0,
-            average_actual_prefill_chunck_tokens: 0,
-            average_elapsed_millis: 0,
-            decisions_since_last_observation: null
+    const candidateMeasurementSummaries = latestChunkOutcome
+        ? latestChunkOutcome.candidate_measurement_summaries || []
+        : [];
+    const candidatesToRender = candidateMeasurementSummaries.length > 0
+        ? candidateMeasurementSummaries
+        : configuredCandidates.map((candidateChunkSizeTokens) => ({
+            candidate_chunk_size_tokens: candidateChunkSizeTokens,
+            measurement_source: "no_measurements_available",
+            measurement_count: 0
         }));
-    const fastestMeasuredCandidate = fastestMeasuredCandidateForLatestContext(candidatesToRender);
+    const highestThroughputCandidate = highestObservedThroughputCandidate(candidatesToRender);
+    const highestObservedRate = highestThroughputCandidate
+        ? optimizerObservedTokensPerSecond(highestThroughputCandidate)
+        : Math.max(0, ...candidatesToRender.map(optimizerObservedTokensPerSecond));
     if (candidatesToRender.length === 0) {
-        const emptyRow = document.createElement("tr");
-        const emptyCell = document.createElement("td");
-        emptyCell.colSpan = 6;
-        emptyCell.textContent = "No candidate evidence available.";
-        emptyRow.appendChild(emptyCell);
-        evidenceTableBody.appendChild(emptyRow);
+        const emptyState = document.createElement("p");
+        emptyState.className = "optimizer-empty-state";
+        emptyState.textContent = "No configured chunk sizes are available for comparison.";
+        comparisonList.appendChild(emptyState);
         return;
     }
     candidatesToRender.forEach((candidateMeasurement) => {
-        const evidenceRow = document.createElement("tr");
-        if (candidateMeasurement === fastestMeasuredCandidate) {
-            const fastestMeasuredCandidateCell = document.createElement("td");
-            fastestMeasuredCandidateCell.textContent =
-                formatOptimizerTokenCount(candidateMeasurement.candidate_prefill_chunck_tokens)
-                + " (Fastest measured)";
-            fastestMeasuredCandidateCell.className = "optimizer-fastest-measured-cell";
-            evidenceRow.appendChild(fastestMeasuredCandidateCell);
-        } else {
-            appendOptimizerTableCell(evidenceRow, formatOptimizerTokenCount(candidateMeasurement.candidate_prefill_chunck_tokens));
-        }
-        appendOptimizerTableCell(evidenceRow, Number(candidateMeasurement.observation_count || 0).toLocaleString());
-        appendOptimizerTableCell(evidenceRow, candidateMeasurement.observation_count
-            ? formatOptimizerTokenCount(candidateMeasurement.average_actual_prefill_chunck_tokens)
-            : "—");
-        appendOptimizerTableCell(evidenceRow, candidateMeasurement.observation_count
-            ? Number(candidateMeasurement.average_elapsed_millis || 0).toLocaleString() + " ms"
-            : "—");
-        appendOptimizerTableCell(evidenceRow, candidateMeasurement.observation_count
-            && candidateMeasurement.average_elapsed_millis
-            ? Math.round(
-                candidateMeasurement.average_actual_prefill_chunck_tokens * 1000
-                / candidateMeasurement.average_elapsed_millis
-            ).toLocaleString() + " tok/s"
-            : "—");
-        appendOptimizerTableCell(evidenceRow, candidateMeasurement.decisions_since_last_observation === null
-            || candidateMeasurement.decisions_since_last_observation === undefined
-            ? "Never"
-            : Number(candidateMeasurement.decisions_since_last_observation).toLocaleString() + " decisions");
-        evidenceTableBody.appendChild(evidenceRow);
+        comparisonList.appendChild(optimizerCandidateMeasurementCard(
+            candidateMeasurement,
+            highestThroughputCandidate,
+            highestObservedRate
+        ));
     });
 }
 
-function appendOptimizerTableCell(evidenceRow, cellText) {
-    const evidenceCell = document.createElement("td");
-    evidenceCell.textContent = cellText;
-    evidenceRow.appendChild(evidenceCell);
+function optimizerCandidateMeasurementCard(
+    candidateMeasurement,
+    highestThroughputCandidate,
+    highestObservedRate
+) {
+    const candidateCard = document.createElement("article");
+    candidateCard.className = "optimizer-candidate-card";
+    const candidateHeader = document.createElement("div");
+    candidateHeader.className = "optimizer-candidate-header";
+    const candidateTitle = document.createElement("strong");
+    candidateTitle.textContent = formatOptimizerTokenCount(
+        candidateMeasurement.candidate_chunk_size_tokens
+    ) + "-token capacity";
+    const observedRate = optimizerObservedTokensPerSecond(candidateMeasurement);
+    const rateTitle = document.createElement("span");
+    rateTitle.textContent = observedRate > 0
+        ? Math.round(observedRate).toLocaleString() + " forward tok/s"
+        : "Not measured";
+    candidateHeader.append(candidateTitle, rateTitle);
+
+    const rateTrack = document.createElement("div");
+    rateTrack.className = "optimizer-candidate-rate-track";
+    const rateBar = document.createElement("span");
+    const relativeRatePercentage = highestObservedRate > 0
+        ? Math.max(0, Math.min(100, observedRate * 100 / highestObservedRate))
+        : 0;
+    rateBar.style.width = relativeRatePercentage + "%";
+    rateTrack.appendChild(rateBar);
+
+    const measurementDetail = document.createElement("p");
+    const measurementCount = Number(candidateMeasurement.measurement_count || 0);
+    if (measurementCount > 0) {
+        measurementDetail.textContent = measurementCount.toLocaleString()
+            + (measurementCount === 1 ? " measurement" : " measurements")
+            + " · average "
+            + formatOptimizerTokenCount(candidateMeasurement.average_processed_prompt_token_count)
+            + " actual tokens in "
+            + formatOptimizerDuration(candidateMeasurement.average_forward_elapsed_millis);
+    } else {
+        measurementDetail.textContent = "Astronomical has not tried this size for the active context profile yet.";
+    }
+
+    const candidateFooter = document.createElement("div");
+    candidateFooter.className = "optimizer-candidate-footer";
+    const sourceTitle = document.createElement("span");
+    sourceTitle.textContent = optimizerMeasurementSourceTitle(candidateMeasurement.measurement_source);
+    candidateFooter.appendChild(sourceTitle);
+    if (candidateMeasurement === highestThroughputCandidate) {
+        const highestRateLabel = document.createElement("span");
+        highestRateLabel.className = "optimizer-context-best";
+        highestRateLabel.textContent = "Highest forward rate for this profile";
+        candidateFooter.appendChild(highestRateLabel);
+        candidateCard.dataset.highestRate = "true";
+    }
+    candidateCard.append(candidateHeader, rateTrack, measurementDetail, candidateFooter);
+    return candidateCard;
 }
 
-function renderOptimizerTransitions(recentTransitions) {
-    const transitionList = document.getElementById("optimizer-transitions");
-    transitionList.replaceChildren();
-    if (!recentTransitions || recentTransitions.length === 0) {
-        const emptyTransition = document.createElement("li");
-        emptyTransition.textContent = "No optimizer transitions observed in this worker session.";
-        transitionList.appendChild(emptyTransition);
+function renderOptimizerLatestDecision(latestChunkOutcome) {
+    const decisionPresentation = optimizerDecisionPresentation(latestChunkOutcome);
+    document.getElementById("optimizer-latest-headline").textContent = decisionPresentation.headline;
+    document.getElementById("optimizer-latest-explanation").textContent =
+        decisionPresentation.explanation;
+    document.getElementById("optimizer-latest-technical").textContent =
+        decisionPresentation.technicalDetail;
+}
+
+// Translate internal selection reasons into the concrete user outcome and why
+// that choice made sense for this one remaining prompt segment.
+function optimizerDecisionPresentation(latestChunkOutcome) {
+    if (!latestChunkOutcome) {
+        return {
+            headline: "No chunk decision observed yet",
+            explanation: "Run a prompt to see how Astronomical applies the learned context profile.",
+            technicalDetail: "No technical details available."
+        };
+    }
+    const selectedCapacityTokens = Number(
+        latestChunkOutcome.selection.selected_candidate_chunk_size_tokens || 0
+    );
+    const processedPromptTokens = Number(latestChunkOutcome.processed_prompt_token_count || 0);
+    const reason = latestChunkOutcome.selection.reason;
+    let explanation;
+    if (reason === "explore_unmeasured_candidate") {
+        explanation = "Astronomical tried this capacity to collect missing evidence for the active token range and execution profile.";
+    } else if (reason === "refresh_stale_candidate_measurement") {
+        explanation = "Astronomical retested this capacity because its evidence for the active context profile had become stale.";
+    } else if (reason === "minimize_projected_remaining_prompt_latency") {
+        explanation = "Measurements for this context profile predicted this capacity would finish the remaining prompt sooner.";
+    } else if (reason === "remaining_tokens_below_smallest_candidate") {
+        explanation = "The remaining prompt was smaller than every configured capacity, so Astronomical processed the short tail directly.";
+    } else if (reason === "smallest_candidate_containing_final_prompt_segment") {
+        explanation = formatOptimizerTokenCount(processedPromptTokens)
+            + " tokens remained. " + formatOptimizerTokenCount(selectedCapacityTokens)
+            + " was the smallest configured capacity that could finish them in one pass.";
+    } else {
+        explanation = "Astronomical recorded the decision, but this version does not recognize its selection reason.";
+    }
+    if (latestChunkOutcome.was_reduced_by_memory_capacity) {
+        explanation += " Available model memory reduced the amount actually processed.";
+    }
+    return {
+        headline: "Processed " + formatOptimizerTokenCount(processedPromptTokens)
+            + " prompt tokens in " + formatOptimizerDuration(latestChunkOutcome.forward_elapsed_millis),
+        explanation,
+        technicalDetail: "Selected capacity: " + formatOptimizerTokenCount(selectedCapacityTokens)
+            + " tokens · Actual processed: " + formatOptimizerTokenCount(processedPromptTokens)
+            + " tokens · Reason: " + optimizerSelectionReasonTitle(reason)
+    };
+}
+
+function renderOptimizerChunkOutcomes(recentChunkOutcomes) {
+    const outcomeList = document.getElementById("optimizer-outcomes");
+    outcomeList.replaceChildren();
+    if (!recentChunkOutcomes || recentChunkOutcomes.length === 0) {
+        const emptyOutcome = document.createElement("li");
+        emptyOutcome.textContent = "No decisions observed in this worker session.";
+        outcomeList.appendChild(emptyOutcome);
         return;
     }
-    recentTransitions.slice().reverse().forEach((optimizerTransition) => {
-        const transitionListItem = document.createElement("li");
-        const transitionSummary = document.createElement("strong");
-        transitionSummary.textContent = formatOptimizerTokenCount(optimizerTransition.requested_prefill_chunck_tokens)
-            + " requested → " + formatOptimizerTokenCount(optimizerTransition.actual_prefill_chunck_tokens) + " completed";
-        const transitionDetail = document.createElement("span");
-        transitionDetail.textContent = optimizerDecisionReasonTitle(optimizerTransition.decision_reason)
-            + " · " + Number(optimizerTransition.elapsed_millis || 0).toLocaleString() + " ms";
-        transitionListItem.append(transitionSummary, transitionDetail);
-        transitionList.appendChild(transitionListItem);
+    recentChunkOutcomes.forEach((chunkOutcome) => {
+        const decisionPresentation = optimizerDecisionPresentation(chunkOutcome);
+        const outcomeListItem = document.createElement("li");
+        const outcomeSummary = document.createElement("strong");
+        outcomeSummary.textContent = decisionPresentation.headline;
+        const outcomeDetail = document.createElement("span");
+        outcomeDetail.textContent = decisionPresentation.explanation;
+        outcomeListItem.append(outcomeSummary, outcomeDetail);
+        outcomeList.appendChild(outcomeListItem);
     });
 }
 
-function optimizerDecisionReasonTitle(decisionReason) {
-    if (decisionReason === "initial_exploration") { return "Initial exploration"; }
-    if (decisionReason === "stale_observation_probe") { return "Freshness probe"; }
-    if (decisionReason === "cumulative_latency_planning") { return "Cumulative latency plan"; }
-    return "Fallback decision";
+function optimizerPositionRangeTitle(measurementContext) {
+    if (!measurementContext) { return "the next observed token range"; }
+    const rangeStart = Number(measurementContext.position_range_start_token_position || 0);
+    const rangeEndInclusive = Math.max(
+        rangeStart,
+        Number(measurementContext.position_range_end_token_position_exclusive || 0) - 1
+    );
+    return "tokens " + formatOptimizerTokenCount(rangeStart)
+        + "–" + formatOptimizerTokenCount(rangeEndInclusive);
 }
 
-function formatOptimizerTokenCount(prefillChunckTokens) {
-    return Number(prefillChunckTokens || 0).toLocaleString("en-US");
+function optimizerSelectionReasonTitle(selectionReason) {
+    if (selectionReason === "explore_unmeasured_candidate") { return "Explore unmeasured candidate"; }
+    if (selectionReason === "refresh_stale_candidate_measurement") { return "Refresh stale candidate measurement"; }
+    if (selectionReason === "minimize_projected_remaining_prompt_latency") { return "Minimize projected remaining prompt latency"; }
+    if (selectionReason === "remaining_tokens_below_smallest_candidate") { return "Remaining tokens below smallest candidate"; }
+    if (selectionReason === "smallest_candidate_containing_final_prompt_segment") { return "Smallest candidate containing final prompt segment"; }
+    return "Unknown selection reason";
+}
+
+function optimizerMeasurementSourceTitle(measurementSource) {
+    if (measurementSource === "current_position_range") { return "Measured in this token range"; }
+    if (measurementSource === "other_position_ranges_with_same_execution_profile") {
+        return "Evidence from a matching execution context";
+    }
+    return "No evidence for this context yet";
+}
+
+function formatOptimizerDuration(elapsedMillis) {
+    const normalizedMillis = Math.max(0, Number(elapsedMillis || 0));
+    if (normalizedMillis < 1000) { return normalizedMillis.toLocaleString() + " ms"; }
+    return (normalizedMillis / 1000).toFixed(2).replace(/\.00$/, "") + " seconds";
+}
+
+function formatOptimizerTokenCount(tokenCount) {
+    return Number(tokenCount || 0).toLocaleString("en-US");
 }

@@ -4,7 +4,7 @@ use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, MlxMemoryTelemetry, PerformanceAttribution,
     PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
-    Qwen3_5Model, Qwen3_5PrefillChunckSizer,
+    Qwen3_5Model, Qwen3_5PromptProcessingChunkSizer,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serde_json::Value;
@@ -180,7 +180,7 @@ async fn run_native_prefill_capacity_retry_qualification() {
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
             None,
-            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(
+            Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
                 CAPACITY_RETRY_PREFILL_CHUNCK_TOKENS,
             )
             .expect("the retry qualification prefill chunk size should be valid"),
@@ -302,18 +302,18 @@ async fn run_capacity_retry_continuation(
             .expect("the retry qualification request should advance")
         {
             GeneratedToken::PrefillProgress {
-                completed_prefill_chunck_tokens,
+                completed_prefill_chunk_tokens,
                 mlx_memory_telemetry,
                 processed_token_count,
                 ..
             } => {
-                completed_prefill_chunck_token_counts.push(completed_prefill_chunck_tokens);
+                completed_prefill_chunck_token_counts.push(completed_prefill_chunk_tokens);
                 record_peak_memory(
                     &mut maximum_observed_peak_memory_bytes,
                     mlx_memory_telemetry,
                 );
                 eprintln!(
-                    "[prefill-capacity-retry:{qualification_label}] status=progress phase=prefill processed_tokens={processed_token_count}/{} completed_chunk_tokens={completed_prefill_chunck_tokens}",
+                    "[prefill-capacity-retry:{qualification_label}] status=progress phase=prefill processed_tokens={processed_token_count}/{} completed_chunk_tokens={completed_prefill_chunk_tokens}",
                     prompt_token_ids.len() - 1
                 );
             }

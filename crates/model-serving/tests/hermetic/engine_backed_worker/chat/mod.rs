@@ -10,14 +10,20 @@ use astronomical_ipc_protocol::{
     ChatToolChoice, ChatToolDefinition, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
     SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerMlxMemorySnapshot, WorkerPromptProcessingChunkCandidateMeasurementSummary,
+    WorkerPromptProcessingChunkMeasurementSource, WorkerPromptProcessingChunkOptimizationContext,
+    WorkerPromptProcessingChunkOptimizationOutcome, WorkerPromptProcessingChunkSelectionReason,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 use astronomical_model_serving::{
-    EngineBackedWorker, EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry,
-    GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
-    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory,
-    ModelGeneratedTokenTranslation, ModelGenerationOutputError, ModelGenerationProcessor,
-    PreparedInferenceRequest, PreparedModelGeneration, WorkerRuntimeError,
+    CandidateMeasurementSource, EngineBackedWorker, EngineGenerationStart, EngineLoadResult,
+    ExpertResidencyTelemetry, GeneratedToken, GenerationFinalization, InferenceEngine,
+    InferenceEngineError, MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+    ModelFactory, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
+    ModelGenerationProcessor, PreparedInferenceRequest, PreparedModelGeneration,
+    PromptProcessingChunkCandidateMeasurementSummary, PromptProcessingChunkOptimizationContext,
+    PromptProcessingChunkOptimizationOutcome, PromptProcessingChunkSizeSelectionReason,
+    WorkerRuntimeError,
 };
 use tokio::{
     io::{AsyncWrite, duplex, split},

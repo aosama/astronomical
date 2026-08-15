@@ -138,58 +138,104 @@ test("activates a directly requested Observatory path without replacing it", () 
     assert.deepEqual(replacedPaths, []);
 });
 
-test("describes full optimizer evidence as context-ready rather than globally converged", () => {
+test("scopes complete candidate measurement coverage to one context range", () => {
     const scriptContext = createConsoleContext();
     scriptContext.optimizerDocument = {
-        enabled: true,
-        latest_insight: {
-            decision_reason: "cumulative_latency_planning",
-            requested_prefill_chunck_tokens: 4096,
-            has_observations_for_every_candidate: true
+        mode: "adaptive",
+        latest_chunk_outcome: {
+            selection: {
+                reason: "minimize_projected_remaining_prompt_latency",
+                selected_candidate_chunk_size_tokens: 4096
+            },
+            processed_prompt_token_count: 4096,
+            was_reduced_by_memory_capacity: false,
+            all_candidates_have_measurements: true,
+            measurement_context: {
+                chunk_start_token_position: 49152,
+                position_range_start_token_position: 32768,
+                position_range_end_token_position_exclusive: 65536
+            },
+            candidate_measurement_summaries: [
+                { candidate_chunk_size_tokens: 2048, measurement_count: 3 },
+                { candidate_chunk_size_tokens: 4096, measurement_count: 2 }
+            ]
         }
     };
 
-    const convergenceAssessment = vm.runInContext(
-        "optimizerConvergenceAssessment(optimizerDocument)",
+    const assessment = vm.runInContext(
+        "optimizerAssessment(optimizerDocument)",
         scriptContext
     );
 
-    assert.deepEqual(
-        JSON.parse(JSON.stringify(convergenceAssessment)),
-        {
-            title: "Context evidence ready",
-            detail: "4,096 tokens is preferred for the latest context, not a global fixed size.",
-            tone: "ready"
-        }
-    );
+    assert.equal(assessment.title, "Profile ready for tokens 32,768–65,535");
+    assert.match(assessment.detail, /only applies to this token range/i);
+    assert.equal(assessment.tone, "ready");
 });
 
-test("keeps optimizer exploration and memory reductions visible", () => {
+test("keeps candidate selection and memory reduction distinct", () => {
     const scriptContext = createConsoleContext();
     scriptContext.optimizerDocument = {
-        enabled: true,
-        latest_insight: {
-            decision_reason: "initial_exploration",
-            requested_prefill_chunck_tokens: 8192,
-            actual_prefill_chunck_tokens: 4096,
-            has_observed_prefill_capacity_constraint: true,
-            has_observations_for_every_candidate: false
+        mode: "adaptive",
+        latest_chunk_outcome: {
+            selection: {
+                reason: "explore_unmeasured_candidate",
+                selected_candidate_chunk_size_tokens: 8192
+            },
+            processed_prompt_token_count: 4096,
+            was_reduced_by_memory_capacity: true,
+            all_candidates_have_measurements: false
         }
     };
 
-    const convergenceAssessment = vm.runInContext(
-        "optimizerConvergenceAssessment(optimizerDocument)",
+    const assessment = vm.runInContext(
+        "optimizerAssessment(optimizerDocument)",
         scriptContext
     );
 
-    assert.equal(convergenceAssessment.title, "Still exploring");
-    assert.match(convergenceAssessment.detail, /8,192 requested.*4,096 completed.*memory pressure/);
-    assert.equal(convergenceAssessment.tone, "learning");
+    assert.equal(assessment.title, "Memory capacity changed the latest decision");
+    assert.match(assessment.detail, /did not fit.*smaller amount/i);
+    assert.equal(assessment.tone, "learning");
 });
 
 test("does not label unavailable optimizer configuration as fixed", () => {
     const scriptContext = createConsoleContext();
-    assert.equal(vm.runInContext("optimizerModeTitle({ enabled: null })", scriptContext), "Awaiting");
+    assert.equal(vm.runInContext("optimizerModeTitle({ mode: 'unavailable' })", scriptContext), "Unavailable");
+});
+
+test("maps every optimizer selection reason without a catch-all substitute", () => {
+    const scriptContext = createConsoleContext();
+    const mappedReasons = vm.runInContext(`[
+        optimizerSelectionReasonTitle("explore_unmeasured_candidate"),
+        optimizerSelectionReasonTitle("refresh_stale_candidate_measurement"),
+        optimizerSelectionReasonTitle("minimize_projected_remaining_prompt_latency"),
+        optimizerSelectionReasonTitle("remaining_tokens_below_smallest_candidate"),
+        optimizerSelectionReasonTitle("smallest_candidate_containing_final_prompt_segment"),
+        optimizerSelectionReasonTitle("future_reason")
+    ]`, scriptContext);
+
+    assert.deepEqual(JSON.parse(JSON.stringify(mappedReasons)), [
+        "Explore unmeasured candidate",
+        "Refresh stale candidate measurement",
+        "Minimize projected remaining prompt latency",
+        "Remaining tokens below smallest candidate",
+        "Smallest candidate containing final prompt segment",
+        "Unknown selection reason"
+    ]);
+});
+
+test("maps optimizer measurement provenance to user-facing sources", () => {
+    const scriptContext = createConsoleContext();
+    const mappedSources = vm.runInContext(`[
+        optimizerMeasurementSourceTitle("current_position_range"),
+        optimizerMeasurementSourceTitle("other_position_ranges_with_same_execution_profile"),
+        optimizerMeasurementSourceTitle("no_measurements_available")
+    ]`, scriptContext);
+
+    assert.deepEqual(JSON.parse(JSON.stringify(mappedSources)), [
+        "Measured in this token range",
+        "Evidence from a matching execution context",
+        "No evidence for this context yet"
+    ]);
 });
 
 test("selects the ready model metadata instead of the first advertised model", () => {
@@ -290,36 +336,36 @@ test("defaults observatory to the overview destination path", () => {
     assert.equal(defaultPath, "/overview");
 });
 
-test("identifies the fastest measured candidate for the latest context evidence", () => {
+test("identifies the candidate with highest observed throughput", () => {
     const scriptContext = createConsoleContext();
-    const candidateEvidence = [
+    const candidateMeasurementSummaries = [
         {
-            candidate_prefill_chunck_tokens: 1024,
-            observation_count: 5,
-            average_actual_prefill_chunck_tokens: 800,
-            average_elapsed_millis: 400
+            candidate_chunk_size_tokens: 1024,
+            measurement_count: 5,
+            average_processed_prompt_token_count: 800,
+            average_forward_elapsed_millis: 400
         },
         {
-            candidate_prefill_chunck_tokens: 2048,
-            observation_count: 3,
-            average_actual_prefill_chunck_tokens: 1500,
-            average_elapsed_millis: 600
+            candidate_chunk_size_tokens: 2048,
+            measurement_count: 3,
+            average_processed_prompt_token_count: 1500,
+            average_forward_elapsed_millis: 600
         },
         {
-            candidate_prefill_chunck_tokens: 4096,
-            observation_count: 2,
-            average_actual_prefill_chunck_tokens: 2000,
-            average_elapsed_millis: 500
+            candidate_chunk_size_tokens: 4096,
+            measurement_count: 2,
+            average_processed_prompt_token_count: 2000,
+            average_forward_elapsed_millis: 500
         }
     ];
-    scriptContext.candidateEvidence = candidateEvidence;
+    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
 
-    const fastestMeasuredCandidate = vm.runInContext(
-        "fastestMeasuredCandidateForLatestContext(candidateEvidence)",
+    const highestThroughputCandidate = vm.runInContext(
+        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
         scriptContext
     );
 
-    assert.equal(fastestMeasuredCandidate.candidate_prefill_chunck_tokens, 4096);
+    assert.equal(highestThroughputCandidate.candidate_chunk_size_tokens, 4096);
 });
 
 test("clamps memory segments so they never exceed active memory", () => {
@@ -432,60 +478,60 @@ test("keeps drafter memory separate from model core and runtime work", () => {
     );
 });
 
-test("returns null when no candidates have observations", () => {
+test("returns null when no candidates have measurements", () => {
     const scriptContext = createConsoleContext();
-    const candidateEvidence = [
+    const candidateMeasurementSummaries = [
         {
-            candidate_prefill_chunck_tokens: 1024,
-            observation_count: 0,
-            average_actual_prefill_chunck_tokens: 0,
-            average_elapsed_millis: 0
+            candidate_chunk_size_tokens: 1024,
+            measurement_count: 0,
+            average_processed_prompt_token_count: 0,
+            average_forward_elapsed_millis: 0
         }
     ];
-    scriptContext.candidateEvidence = candidateEvidence;
+    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
 
-    const fastestMeasuredCandidate = vm.runInContext(
-        "fastestMeasuredCandidateForLatestContext(candidateEvidence)",
+    const highestThroughputCandidate = vm.runInContext(
+        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
         scriptContext
     );
 
-    assert.equal(fastestMeasuredCandidate, null);
+    assert.equal(highestThroughputCandidate, null);
 });
 
 test("skips candidates with zero elapsed time", () => {
     const scriptContext = createConsoleContext();
-    const candidateEvidence = [
+    const candidateMeasurementSummaries = [
         {
-            candidate_prefill_chunck_tokens: 1024,
-            observation_count: 1,
-            average_actual_prefill_chunck_tokens: 500,
-            average_elapsed_millis: 0
+            candidate_chunk_size_tokens: 1024,
+            measurement_count: 1,
+            average_processed_prompt_token_count: 500,
+            average_forward_elapsed_millis: 0
         },
         {
-            candidate_prefill_chunck_tokens: 2048,
-            observation_count: 2,
-            average_actual_prefill_chunck_tokens: 1000,
-            average_elapsed_millis: 500
+            candidate_chunk_size_tokens: 2048,
+            measurement_count: 2,
+            average_processed_prompt_token_count: 1000,
+            average_forward_elapsed_millis: 500
         }
     ];
-    scriptContext.candidateEvidence = candidateEvidence;
+    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
 
-    const fastestMeasuredCandidate = vm.runInContext(
-        "fastestMeasuredCandidateForLatestContext(candidateEvidence)",
+    const highestThroughputCandidate = vm.runInContext(
+        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
         scriptContext
     );
 
-    assert.equal(fastestMeasuredCandidate.candidate_prefill_chunck_tokens, 2048);
+    assert.equal(highestThroughputCandidate.candidate_chunk_size_tokens, 2048);
 });
 
-test("returns null for empty candidate evidence", () => {
+test("returns null for empty candidate measurements", () => {
     const scriptContext = createConsoleContext();
-    const fastestMeasuredCandidate = vm.runInContext(
-        "fastestMeasuredCandidateForLatestContext([])",
+    const highestThroughputCandidate = vm.runInContext(
+        "highestObservedThroughputCandidate([])",
         scriptContext
     );
 
-    assert.equal(fastestMeasuredCandidate, null);
+    assert.equal(highestThroughputCandidate, null);
 });
 
 test("maps every macOS memory pressure state and unknown input to a safe presentation", () => {
@@ -506,28 +552,28 @@ test("maps every macOS memory pressure state and unknown input to a safe present
     ]);
 });
 
-test("does not declare one fastest candidate when measured throughput is tied", () => {
+test("does not declare one highest-throughput candidate when measurements are tied", () => {
     const scriptContext = createConsoleContext();
-    const candidateEvidence = [
+    const candidateMeasurementSummaries = [
         {
-            candidate_prefill_chunck_tokens: 1024,
-            observation_count: 2,
-            average_actual_prefill_chunck_tokens: 1000,
-            average_elapsed_millis: 500
+            candidate_chunk_size_tokens: 1024,
+            measurement_count: 2,
+            average_processed_prompt_token_count: 1000,
+            average_forward_elapsed_millis: 500
         },
         {
-            candidate_prefill_chunck_tokens: 2048,
-            observation_count: 2,
-            average_actual_prefill_chunck_tokens: 2000,
-            average_elapsed_millis: 1000
+            candidate_chunk_size_tokens: 2048,
+            measurement_count: 2,
+            average_processed_prompt_token_count: 2000,
+            average_forward_elapsed_millis: 1000
         }
     ];
-    scriptContext.candidateEvidence = candidateEvidence;
+    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
 
-    const fastestMeasuredCandidate = vm.runInContext(
-        "fastestMeasuredCandidateForLatestContext(candidateEvidence)",
+    const highestThroughputCandidate = vm.runInContext(
+        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
         scriptContext
     );
 
-    assert.equal(fastestMeasuredCandidate, null);
+    assert.equal(highestThroughputCandidate, null);
 });

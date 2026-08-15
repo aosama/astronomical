@@ -138,14 +138,34 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
             "Qwen inference execution must keep memory responsibilities separated: {separated_memory_execution_owner}"
         );
     }
-    assert!(
-        shared_qwen_source_directory
-            .join("inference_execution")
-            .join("prefill_chunck_sizer")
-            .join("persisted_state.rs")
-            .is_file(),
-        "Qwen prefill chunk sizing must isolate persisted-state construction"
-    );
+    let qwen_inference_execution_source_directory =
+        shared_qwen_source_directory.join("inference_execution");
+    let qwen_prompt_processing_chunk_sizer_source_directory =
+        qwen_inference_execution_source_directory.join("prompt_processing_chunk_sizer");
+    for required_prompt_processing_chunk_sizer_source_file_name in [
+        "configuration.rs",
+        "measurement_context.rs",
+        "optimization_outcome.rs",
+        "persisted_state.rs",
+    ] {
+        assert!(
+            qwen_prompt_processing_chunk_sizer_source_directory
+                .join(required_prompt_processing_chunk_sizer_source_file_name)
+                .is_file(),
+            "Qwen prompt-processing chunk sizer child source must exist: {required_prompt_processing_chunk_sizer_source_file_name}"
+        );
+    }
+    for retired_prompt_processing_chunk_sizer_sibling_source_file_name in [
+        "prompt_processing_chunk_sizer_configuration.rs",
+        "prompt_processing_chunk_optimization_outcome.rs",
+    ] {
+        assert!(
+            !qwen_inference_execution_source_directory
+                .join(retired_prompt_processing_chunk_sizer_sibling_source_file_name)
+                .exists(),
+            "Qwen prompt-processing chunk sizer helper must remain under its owner module: {retired_prompt_processing_chunk_sizer_sibling_source_file_name}"
+        );
+    }
 
     let sparse_model_module_source =
         std::fs::read_to_string(sparse_qwen_source_directory.join("model").join("mod.rs"))
@@ -191,7 +211,11 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
         inference_engine_source_directory.is_dir(),
         "model-serving must own architecture-neutral inference execution separately from Qwen"
     );
-    for architecture_neutral_source_file_name in ["contract.rs", "mlx_owner.rs"] {
+    for architecture_neutral_source_file_name in [
+        "contract.rs",
+        "mlx_owner.rs",
+        "prompt_processing_chunk_optimization.rs",
+    ] {
         let architecture_neutral_source = std::fs::read_to_string(
             inference_engine_source_directory.join(architecture_neutral_source_file_name),
         )
@@ -201,6 +225,35 @@ fn should_group_qwen_modules_by_their_concrete_domain_concern() {
             "architecture-neutral inference source must not depend on Qwen"
         );
     }
+    let inference_engine_contract_source =
+        std::fs::read_to_string(inference_engine_source_directory.join("contract.rs"))
+            .expect("architecture-neutral inference contract source must be readable");
+    let prompt_processing_chunk_optimization_source = std::fs::read_to_string(
+        inference_engine_source_directory.join("prompt_processing_chunk_optimization.rs"),
+    )
+    .expect("prompt-processing chunk optimization DTO source must be readable");
+    for prompt_processing_chunk_optimization_dto_name in [
+        "PromptProcessingChunkCandidateMeasurementSummary",
+        "PromptProcessingChunkOptimizationContext",
+        "PromptProcessingChunkOptimizationOutcome",
+    ] {
+        let prompt_processing_chunk_optimization_dto_declaration =
+            format!("pub struct {prompt_processing_chunk_optimization_dto_name}");
+        assert!(
+            !inference_engine_contract_source
+                .contains(&prompt_processing_chunk_optimization_dto_declaration),
+            "prompt-processing optimization DTOs must not enlarge the core inference contract: {prompt_processing_chunk_optimization_dto_name}"
+        );
+        assert!(
+            prompt_processing_chunk_optimization_source
+                .contains(&prompt_processing_chunk_optimization_dto_declaration),
+            "the dedicated inference-engine source must own each prompt-processing optimization DTO: {prompt_processing_chunk_optimization_dto_name}"
+        );
+    }
+    assert!(
+        !prompt_processing_chunk_optimization_source.contains("astronomical_ipc_protocol"),
+        "inference-engine prompt-processing DTOs must not translate themselves into IPC types"
+    );
     assert!(
         !shared_qwen_source_directory
             .join("engine")

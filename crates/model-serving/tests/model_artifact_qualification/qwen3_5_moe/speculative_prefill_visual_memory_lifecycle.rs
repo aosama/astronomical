@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
     PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
@@ -99,7 +99,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         Some(persistent_prompt_cache_disk_store_config.clone()),
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(4_096)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(4_096)
             .expect("the visual qualification prefill chunk size should be valid"),
         tokenizer.think_end_token_id(),
         target_model_directory.clone(),
@@ -151,7 +151,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
             }
             GeneratedToken::EndOfSequence => break,
             GeneratedToken::PrefillProgress {
-                completed_prefill_chunck_tokens,
+                completed_prefill_chunk_tokens,
                 speculative_prefill_draft_memory_telemetry,
                 ..
             } => {
@@ -168,7 +168,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
                     observed_live_speculative_prefill_draft_memory = true;
                 }
                 eprintln!(
-                    "[cache-deleted-visual-specprefill] status=prefill-progress completed_prefill_chunck_tokens={completed_prefill_chunck_tokens}"
+                    "[cache-deleted-visual-specprefill] status=prefill-progress completed_prefill_chunk_tokens={completed_prefill_chunk_tokens}"
                 );
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
@@ -263,7 +263,7 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
         restored_mlx_memory_limits.active_memory_limit_bytes(),
         restored_mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         Some(persistent_prompt_cache_disk_store_config),
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(4_096)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(4_096)
             .expect("the restored visual qualification prefill chunk size should be valid"),
         tokenizer.think_end_token_id(),
         target_model_directory,
@@ -311,10 +311,10 @@ async fn run_cache_deleted_visual_speculative_prefill_qualification() {
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::PrefillProgress {
-                completed_prefill_chunck_tokens,
+                completed_prefill_chunk_tokens,
                 ..
             } => eprintln!(
-                "[restored-visual-specprefill] status=prefill-progress completed_prefill_chunck_tokens={completed_prefill_chunck_tokens}"
+                "[restored-visual-specprefill] status=prefill-progress completed_prefill_chunk_tokens={completed_prefill_chunk_tokens}"
             ),
         }
     }

@@ -94,12 +94,12 @@ On first launch each instance creates its own `config.json`. Add one or more abs
       "maximum_mlx_memory_gb": 16,
       "persistent_prompt_cache_enabled": true,
       "chunking": {
-        "prefill_size_optimizer_enabled": true
+        "prompt_processing_chunk_size_optimizer_enabled": true
       },
       "prompt_cache_max_size_gb": 50
     }
 
-The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse.
+The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse. Adaptive prompt-processing chunk sizing is enabled by default; fixed mode requires `prompt_processing_chunk_size_optimizer_enabled` set to `false` and a positive `fixed_prompt_processing_chunk_size_tokens` value.
 
 ## Build the app
 

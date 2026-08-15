@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use astronomical_ipc_protocol::ProtocolError;
 use astronomical_model_serving::{
-    Qwen3_5ArtifactValidationError, Qwen3_5PrefillChunckSizerError, Qwen3_5TokenizerError,
+    Qwen3_5ArtifactValidationError, Qwen3_5PromptProcessingChunkSizerError, Qwen3_5TokenizerError,
     WorkerRuntimeError,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
@@ -55,7 +55,7 @@ pub enum WorkerStartupError {
         source: io::Error,
     },
     #[error("failed to configure Qwen3.5 prompt-processing chunks")]
-    PrefillChunckSizing(#[source] Qwen3_5PrefillChunckSizerError),
+    PromptProcessingChunkSizing(#[source] Qwen3_5PromptProcessingChunkSizerError),
     #[error("failed to start Qwen3.5 engine at {model_directory:?}")]
     Qwen3_5EngineInitialization {
         model_directory: PathBuf,

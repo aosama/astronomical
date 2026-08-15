@@ -13,8 +13,9 @@ use super::{
     DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
-    DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW, DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS, DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
+    DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_MAXIMUM_RETAINED_MEASUREMENTS_PER_CANDIDATE_AND_CONTEXT,
+    DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_POSITION_RANGE_SIZE_TOKENS,
     DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS, maximum_mlx_memory_gb_to_bytes,
     parse_loopback_bind_address, prompt_cache_size_gb_to_bytes,
 };
@@ -55,17 +56,17 @@ pub(crate) struct UserConfigFile {
 #[serde(deny_unknown_fields)]
 pub(crate) struct ChunkingConfigFile {
     /// Enables measured candidate selection instead of the fixed token count.
-    pub(crate) prefill_size_optimizer_enabled: Option<bool>,
+    pub(crate) prompt_processing_chunk_size_optimizer_enabled: Option<bool>,
     /// Required prompt-processing chunk length when optimization is disabled.
-    pub(crate) fixed_prefill_tokens: Option<u32>,
+    pub(crate) fixed_prompt_processing_chunk_size_tokens: Option<u32>,
     /// Fixed prompt-processing chunk length while sparse experts stream from storage.
     ///
     /// Omitted values keep the complete-resident fixed size for every residency
     /// mode. A smaller positive value shortens each forward only when experts
     /// are not fully retained in active memory.
-    pub(crate) fixed_ssd_streaming_prefill_tokens: Option<u32>,
+    pub(crate) fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
     /// Strictly increasing token lengths available to the adaptive optimizer.
-    pub(crate) optimizer_prefill_token_candidates: Option<Vec<u32>>,
+    pub(crate) prompt_processing_chunk_size_optimizer_candidate_token_counts: Option<Vec<u32>>,
     /// Append-only attention capacity added by each storage growth operation.
     pub(crate) full_attention_key_value_growth_tokens: Option<u32>,
     /// Maximum prompt rows evaluated by one speculative drafter forward.
@@ -74,10 +75,11 @@ pub(crate) struct ChunkingConfigFile {
     pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: Option<u32>,
     /// Experimental one-token layer interval used only while experts stream from disk.
     pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: Option<u32>,
-    /// Number of completed measurements retained for each optimizer candidate.
-    pub(crate) prefill_optimizer_observation_window: Option<u32>,
-    /// Prompt-position width represented by one optimizer context bucket.
-    pub(crate) prefill_optimizer_position_bucket_tokens: Option<u32>,
+    /// Number of completed measurements retained per optimizer candidate and context.
+    pub(crate) prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context:
+        Option<u32>,
+    /// Prompt-position width represented by one optimizer position range.
+    pub(crate) prompt_processing_chunk_size_optimizer_position_range_size_tokens: Option<u32>,
     /// Exact persistent-cache block length, or null for model-derived sizing.
     pub(crate) prompt_cache_block_tokens: Option<u32>,
     /// Cache-block interval between retained common-prefix restart checkpoints.
@@ -133,14 +135,14 @@ pub(crate) fn read_user_config_file(
                 "mtp_enabled": true,
                 "persistent_prompt_cache_enabled": true,
                 "chunking": {
-                    "prefill_size_optimizer_enabled": true,
-                    "optimizer_prefill_token_candidates": DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
+                    "prompt_processing_chunk_size_optimizer_enabled": true,
+                    "prompt_processing_chunk_size_optimizer_candidate_token_counts": DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
                     "full_attention_key_value_growth_tokens": DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
                     "speculative_prefill_draft_forward_tokens": DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
                     "experimental_ssd_paging_prefill_graph_submission_layer_interval": DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
                     "experimental_ssd_paging_generation_graph_submission_layer_interval": DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
-                    "prefill_optimizer_observation_window": DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
-                    "prefill_optimizer_position_bucket_tokens": DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
+                    "prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context": DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_MAXIMUM_RETAINED_MEASUREMENTS_PER_CANDIDATE_AND_CONTEXT,
+                    "prompt_processing_chunk_size_optimizer_position_range_size_tokens": DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_POSITION_RANGE_SIZE_TOKENS,
                     "prompt_cache_block_tokens": null,
                     "prompt_cache_common_prefix_stride_blocks": DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS
                 },

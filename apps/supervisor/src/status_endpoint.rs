@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     ActiveRequestProgress, ApplicationBuildIdentity, application::ApplicationState,
-    prefill_optimizer_observability::prefill_optimizer_status_document,
+    prompt_processing_chunk_optimizer_status::prompt_processing_chunk_optimizer_status_document,
 };
 use axum::{
     Json,
@@ -207,15 +207,21 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "average_prefill_tok_per_second": worker_health_snapshot.serving_session.average_prefill_tok_per_second,
         "average_generation_tok_per_second": worker_health_snapshot.serving_session.average_generation_tok_per_second,
     });
-    let live_prefill_chunck_sizing_policy = application_state
+    let live_prompt_processing_chunk_sizing_policy = application_state
         .reloadable_config
         .as_ref()
         .and_then(|reloadable_config| reloadable_config.read().ok())
-        .map(|resolved_config| resolved_config.chunking.prefill_sizing_policy().clone());
-    status_json["prefill_optimizer"] = prefill_optimizer_status_document(
-        live_prefill_chunck_sizing_policy.as_ref(),
-        &worker_health_snapshot.prefill_optimizer_insights,
-    );
+        .map(|resolved_config| {
+            resolved_config
+                .chunking
+                .prompt_processing_chunk_sizing_policy()
+                .clone()
+        });
+    status_json["prompt_processing_chunk_size_optimizer"] =
+        prompt_processing_chunk_optimizer_status_document(
+            live_prompt_processing_chunk_sizing_policy.as_ref(),
+            &worker_health_snapshot.recent_prompt_processing_chunk_optimization_outcomes,
+        );
     let persistent_prompt_cache_summary = crate::PersistentPromptCacheSummary::from_worker_event(
         worker_health_snapshot
             .persistent_prompt_cache_stats
@@ -235,7 +241,7 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                 total_tokens,
                 elapsed_millis,
                 request_started_at,
-                completed_prefill_chunck_tokens,
+                completed_prefill_chunk_tokens,
             } => {
                 let live_elapsed_millis = elapsed_millis.max(
                     u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
@@ -246,9 +252,9 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                     "total_tokens": total_tokens,
                     "elapsed_ms": live_elapsed_millis,
                 });
-                if let Some(completed_prefill_chunck_tokens) = completed_prefill_chunck_tokens {
-                    status_json["progress"]["completed_prefill_chunck_tokens"] =
-                        serde_json::json!(completed_prefill_chunck_tokens);
+                if let Some(completed_prefill_chunk_tokens) = completed_prefill_chunk_tokens {
+                    status_json["progress"]["completed_prefill_chunk_tokens"] =
+                        serde_json::json!(completed_prefill_chunk_tokens);
                 }
             }
             ActiveRequestProgress::Generation {

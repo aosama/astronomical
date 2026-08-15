@@ -263,7 +263,7 @@ fn print_status_sample(
     let elapsed_millis = status_document["progress"]["elapsed_ms"]
         .as_u64()
         .unwrap_or(0);
-    let completed_chunk_tokens = status_document["progress"]["completed_prefill_chunck_tokens"]
+    let completed_chunk_tokens = status_document["progress"]["completed_prefill_chunk_tokens"]
         .as_u64()
         .unwrap_or(0);
     let interval_elapsed_millis = elapsed_millis.saturating_sub(previous_sample.elapsed_millis);

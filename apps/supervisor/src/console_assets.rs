@@ -1,6 +1,7 @@
 //! Embedded single-page admin console served by the supervisor.
 //!
-//! The Observatory console is a fixed bundle of seven files (HTML, five JS, CSS)
+//! The Observatory console is a fixed bundle of eight files (HTML, five JavaScript files,
+//! and two stylesheets)
 //! included directly into the `astronomicald` binary through `include_str!`
 //! so the supervisor has no filesystem dependency and no separate frontend
 //! build step. The assets live at `apps/supervisor/console/` and are reached
@@ -15,6 +16,7 @@ const MEMORY_CONTROL_JS: &str = include_str!("../console/memory-control.js");
 const OPTIMIZER_JS: &str = include_str!("../console/optimizer.js");
 const PLAYGROUND_JS: &str = include_str!("../console/playground.js");
 const CONSOLE_CSS: &str = include_str!("../console/console.css");
+const OPTIMIZER_CSS: &str = include_str!("../console/optimizer.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
@@ -39,6 +41,7 @@ where
         .route("/optimizer.js", get(optimizer_script))
         .route("/playground.js", get(playground_script))
         .route("/console.css", get(console_stylesheet))
+        .route("/optimizer.css", get(optimizer_stylesheet))
 }
 
 /// `GET /` — the Observatory single-page shell. References `/console.js` and
@@ -72,6 +75,12 @@ pub(crate) async fn playground_script() -> Response {
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.
 pub(crate) async fn console_stylesheet() -> Response {
     embedded_text_response(CONSOLE_CSS, CSS_CONTENT_TYPE)
+}
+
+/// `GET /optimizer.css` — context-specific optimizer presentation kept
+/// separate from the shared Observatory shell styles.
+pub(crate) async fn optimizer_stylesheet() -> Response {
+    embedded_text_response(OPTIMIZER_CSS, CSS_CONTENT_TYPE)
 }
 
 fn embedded_text_response(body: &'static str, content_type: &'static str) -> Response {

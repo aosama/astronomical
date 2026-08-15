@@ -38,7 +38,7 @@ pub(crate) struct ApplicationState {
     pub(crate) generation_executor: Arc<dyn ChatGenerationExecutor>,
     pub(crate) worker_control: Option<WorkerHandle>,
     /// Static config warning surfaced once at daemon startup so the menu bar app
-    /// can flash a callout (e.g. ignored `fixed_prefill_chunck_tokens`).
+    /// can flash a callout for an ignored fixed prompt-processing chunk size.
     pub(crate) config_warning: Option<Arc<str>>,
     /// All Qwen3.5-MoE-family models discovered from config directories at startup.
     pub(crate) discovered_models: Vec<DiscoveredModel>,
