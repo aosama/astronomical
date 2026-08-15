@@ -111,6 +111,8 @@ async fn run_complete_expert_residency_rest_journey() {
     // have reached their isolated files.
     let memory_admission_decisions =
         memory_admission_decision_log_lines(isolated_worker_home.path());
+    let complete_residency_transitions =
+        complete_residency_transition_log_lines(isolated_worker_home.path());
     for memory_admission_decision in &memory_admission_decisions {
         eprintln!("[complete-expert-residency] status=memory_decision {memory_admission_decision}");
     }
@@ -122,6 +124,19 @@ async fn run_complete_expert_residency_rest_journey() {
                     && memory_admission_decision.contains("recovery_reserve_only_trigger=true")
             }),
         "the 25 GB journey must prove that a recovery-only shortfall was admitted: {memory_admission_decisions:?}"
+    );
+    assert!(
+        complete_residency_transitions.iter().any(|transition| {
+            transition.contains("transition_reason=Startup")
+                && transition.contains("outcome=\"promoted\"")
+        }),
+        "a fitting model must finish startup in atomic resident ownership: {complete_residency_transitions:?}"
+    );
+    assert!(
+        complete_residency_transitions
+            .iter()
+            .all(|transition| !transition.contains("outcome=\"recoverable_capacity_rejection\"")),
+        "resident materialization must not exceed an admitted ceiling: {complete_residency_transitions:?}"
     );
     assert_eq!(
         final_status["expert_memory_mode"].as_str(),
@@ -139,11 +154,30 @@ async fn run_complete_expert_residency_rest_journey() {
     );
 }
 
+fn complete_residency_transition_log_lines(isolated_worker_home: &Path) -> Vec<String> {
+    log_lines_containing(
+        isolated_worker_home,
+        "completed complete-model expert residency admission",
+    )
+}
+
 fn memory_admission_decision_log_lines(isolated_worker_home: &Path) -> Vec<String> {
+    let memory_admission_decisions = log_lines_containing(
+        isolated_worker_home,
+        "adaptive RAM growth admission decision",
+    );
+    assert!(
+        !memory_admission_decisions.is_empty(),
+        "the acceptance journey should capture adaptive memory admission decisions"
+    );
+    memory_admission_decisions
+}
+
+fn log_lines_containing(isolated_worker_home: &Path, expected_fragment: &str) -> Vec<String> {
     let logging_directory = isolated_worker_home.join(".astronomical-dev").join("logs");
     let logging_entries = fs::read_dir(&logging_directory)
         .expect("the acceptance journey should create its isolated logging directory");
-    let mut memory_admission_decisions = Vec::new();
+    let mut matching_log_lines = Vec::new();
     for logging_entry in logging_entries {
         let logging_entry = logging_entry.expect("the isolated log entry should be readable");
         let log_path = logging_entry.path();
@@ -156,18 +190,14 @@ fn memory_admission_decision_log_lines(isolated_worker_home: &Path) -> Vec<Strin
                 log_path.display()
             )
         });
-        memory_admission_decisions.extend(
+        matching_log_lines.extend(
             log_content
                 .lines()
-                .filter(|log_line| log_line.contains("adaptive RAM growth admission decision"))
+                .filter(|log_line| log_line.contains(expected_fragment))
                 .map(str::to_owned),
         );
     }
-    assert!(
-        !memory_admission_decisions.is_empty(),
-        "the acceptance journey should capture adaptive memory admission decisions"
-    );
-    memory_admission_decisions
+    matching_log_lines
 }
 
 async fn observe_resident_request_until_idle(server_address: std::net::SocketAddr) -> Value {
