@@ -8,7 +8,9 @@ use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_moe::expert_residency::Qwen3_5ResidentExpertLayerWeights;
+use crate::qwen3_5_moe::expert_residency::{
+    Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
+};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
@@ -92,22 +94,11 @@ impl Qwen3_5Model {
                 }
                 None => (&expanded_states, selected_expert_indices, false),
             };
-        let selected_up = self.resident_expert_linear(
+        let selected_activated = self.resident_gate_up_activation(
             expert_input_states,
-            &resident_expert_layer_weights.up_projection,
+            &resident_expert_layer_weights.gate_up_weights,
             expert_indices,
             are_expert_indices_sorted,
-        )?;
-        let selected_gate = self.resident_expert_linear(
-            expert_input_states,
-            &resident_expert_layer_weights.gate_projection,
-            expert_indices,
-            are_expert_indices_sorted,
-        )?;
-        let selected_activated = self.runtime.apply_compiled_swiglu(
-            &self.compiled_swiglu,
-            &selected_gate,
-            &selected_up,
         )?;
         let selected_outputs = self.resident_expert_linear(
             &selected_activated,
@@ -168,22 +159,11 @@ impl Qwen3_5Model {
         )?;
         let expanded_states = self.runtime.expand_dims(&flattened_hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        let selected_up = self.resident_expert_linear(
+        let selected_activated = self.resident_gate_up_activation(
             &expanded_states,
-            &resident_expert_layer_weights.up_projection,
+            &resident_expert_layer_weights.gate_up_weights,
             &flattened_expert_indices,
             false,
-        )?;
-        let selected_gate = self.resident_expert_linear(
-            &expanded_states,
-            &resident_expert_layer_weights.gate_projection,
-            &flattened_expert_indices,
-            false,
-        )?;
-        let selected_activated = self.runtime.apply_compiled_swiglu(
-            &self.compiled_swiglu,
-            &selected_gate,
-            &selected_up,
         )?;
         let selected_outputs = self.resident_expert_linear(
             &selected_activated,
@@ -211,6 +191,84 @@ impl Qwen3_5Model {
             false,
             execution_mode,
         )
+    }
+
+    fn resident_gate_up_activation(
+        &self,
+        activations: &MlxArray,
+        gate_up_weights: &Qwen3_5ResidentGateUpWeights,
+        selected_expert_indices: &MlxArray,
+        are_expert_indices_sorted: bool,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let (selected_gate, selected_up) = match gate_up_weights {
+            Qwen3_5ResidentGateUpWeights::Fused { projection, .. } => {
+                let selected_gate_up = self.resident_expert_linear(
+                    activations,
+                    projection,
+                    selected_expert_indices,
+                    are_expert_indices_sorted,
+                )?;
+                self.split_resident_gate_up_output(&selected_gate_up)?
+            }
+            Qwen3_5ResidentGateUpWeights::Separate {
+                gate_projection,
+                up_projection,
+                ..
+            } => {
+                // Keep the former graph-construction order for valid mixed
+                // projection pairs that cannot be fused without conversion.
+                let selected_up = self.resident_expert_linear(
+                    activations,
+                    up_projection,
+                    selected_expert_indices,
+                    are_expert_indices_sorted,
+                )?;
+                let selected_gate = self.resident_expert_linear(
+                    activations,
+                    gate_projection,
+                    selected_expert_indices,
+                    are_expert_indices_sorted,
+                )?;
+                (selected_gate, selected_up)
+            }
+        };
+        Ok(self.runtime.apply_compiled_swiglu(
+            &self.compiled_swiglu,
+            &selected_gate,
+            &selected_up,
+        )?)
+    }
+
+    fn split_resident_gate_up_output(
+        &self,
+        selected_gate_up: &MlxArray,
+    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+        let output_shape = selected_gate_up.shape();
+        let Some(last_dimension_index) = output_shape.len().checked_sub(1) else {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "resident fused gate/up output must have at least one dimension",
+            });
+        };
+        let output_dimension = output_shape[last_dimension_index];
+        if output_dimension <= 0 || output_dimension % 2 != 0 {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "resident fused gate/up output dimension must be positive and even",
+            });
+        }
+        let projection_dimension = output_dimension / 2;
+        let gate_starts = vec![0; output_shape.len()];
+        let mut gate_stops = output_shape.clone();
+        gate_stops[last_dimension_index] = projection_dimension;
+        let mut up_starts = gate_starts.clone();
+        up_starts[last_dimension_index] = projection_dimension;
+        let slice_strides = vec![1; output_shape.len()];
+        let selected_gate =
+            self.runtime
+                .slice(selected_gate_up, &gate_starts, &gate_stops, &slice_strides)?;
+        let selected_up =
+            self.runtime
+                .slice(selected_gate_up, &up_starts, &output_shape, &slice_strides)?;
+        Ok((selected_gate, selected_up))
     }
 
     fn resident_expert_linear(
