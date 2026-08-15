@@ -524,14 +524,14 @@ async fn run_one_generation(
                 }
             }
             GeneratedToken::PrefillProgress {
-                completed_prefill_chunck_tokens,
+                completed_prefill_chunk_tokens,
                 elapsed_millis,
                 mlx_memory_telemetry,
                 ..
             } => {
                 measurement
                     .completed_prefill_chunck_tokens
-                    .push(completed_prefill_chunck_tokens as usize);
+                    .push(completed_prefill_chunk_tokens as usize);
                 measurement.prefill_elapsed_millis = measurement
                     .prefill_elapsed_millis
                     .saturating_add(elapsed_millis);

@@ -384,8 +384,8 @@ fn write_qualification_config(isolated_worker_home: &Path, model_directory: &Pat
         // operation-local pages can detach instead of remaining live in a
         // multi-layer lazy tape until the terminal eval.
         "chunking": {
-            "prefill_size_optimizer_enabled": false,
-            "fixed_prefill_tokens": 2_048,
+            "prompt_processing_chunk_size_optimizer_enabled": false,
+            "fixed_prompt_processing_chunk_size_tokens": 2_048,
             "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 1,
         },

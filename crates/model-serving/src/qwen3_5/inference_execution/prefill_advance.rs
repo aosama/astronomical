@@ -153,9 +153,9 @@ impl Qwen3_5EngineState {
             && !prefill_execution_context.has_visual_embeddings()
             && !prefill_execution_context.has_optional_prediction_session()
             && !prefill_execution_context.is_speculative_prefill_sparse_target();
-        let candidate_prefill_chunck_end = self
-            .prefill_chunck_sizer
-            .next_prefill_chunck_end_for_execution_context_with_terminal_coalescing(
+        let candidate_prompt_processing_chunk_end = self
+            .prompt_processing_chunk_sizer
+            .next_prompt_processing_chunk_end_for_execution_context_with_terminal_coalescing(
                 active_request.prefill_cursor,
                 final_prompt_index,
                 prefill_execution_context,
@@ -166,7 +166,7 @@ impl Qwen3_5EngineState {
         let requested_prefill_chunck_end =
             qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
                 prefill_start,
-                candidate_prefill_chunck_end,
+                candidate_prompt_processing_chunk_end,
                 active_request.ordinary_target_prefill_control_span_token_count,
             )
             .ok_or_else(|| fatal_engine_error("prompt-processing chunk did not advance"))?;
@@ -437,19 +437,20 @@ impl Qwen3_5EngineState {
             speculative_prefill_chunck_mode,
             super::Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
         ) {
-            self.prefill_chunck_sizer
-                .discard_pending_prefill_chunck_decision();
+            self.prompt_processing_chunk_sizer
+                .discard_pending_prompt_processing_chunk_selection();
         } else {
-            self.prefill_chunck_sizer.record_prefill_chunck_transition(
-                prefill_token_count,
-                prefill_chunck_elapsed_millis,
-                has_observed_prefill_capacity_constraint,
-                next_prefill_execution_context,
-            );
+            self.prompt_processing_chunk_sizer
+                .record_prompt_processing_chunk_transition(
+                    prefill_token_count,
+                    prefill_chunck_elapsed_millis,
+                    has_observed_prefill_capacity_constraint,
+                    next_prefill_execution_context,
+                );
         }
-        let prefill_optimizer_insight = self
-            .prefill_chunck_sizer
-            .take_latest_prefill_optimizer_insight();
+        let prompt_processing_chunk_optimization_outcome = self
+            .prompt_processing_chunk_sizer
+            .take_latest_prompt_processing_chunk_optimization_outcome();
         tracing::trace!(
             request_id = request_id.value(),
             prefill_start_token = prefill_start,
@@ -462,11 +463,11 @@ impl Qwen3_5EngineState {
         Ok(Some(GeneratedToken::PrefillProgress {
             processed_token_count: prefill_token_count as u32,
             elapsed_millis: prefill_chunck_elapsed_millis,
-            forward_prefill_chunck_elapsed_millis: forward_chunk_elapsed_millis,
-            completed_prefill_chunck_tokens: u32::try_from(prefill_token_count).map_err(|_| {
-                fatal_engine_error("completed_prefill_chunck_tokens exceeds the u32 range")
+            forward_prefill_chunk_elapsed_millis: forward_chunk_elapsed_millis,
+            completed_prefill_chunk_tokens: u32::try_from(prefill_token_count).map_err(|_| {
+                fatal_engine_error("completed_prefill_chunk_tokens exceeds the u32 range")
             })?,
-            prefill_optimizer_insight,
+            prompt_processing_chunk_optimization_outcome,
             mlx_memory_telemetry: mlx_memory_snapshot
                 .map(|mlx_memory_snapshot| {
                     let active_memory_bytes =

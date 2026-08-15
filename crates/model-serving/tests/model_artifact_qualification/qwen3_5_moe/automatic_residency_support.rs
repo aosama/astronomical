@@ -7,7 +7,7 @@
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, GenerationFinalization, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 
 pub(super) const CONSTRAINED_MLX_MEMORY_CEILING_BYTES: usize = 10_000_000_000;
@@ -67,7 +67,7 @@ pub(super) fn construct_automatic_residency_engine(
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
         None,
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(2_048)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
             .expect("the test prefill_chunck_tokens should be valid"),
         think_end_token_id,
         model_directory,

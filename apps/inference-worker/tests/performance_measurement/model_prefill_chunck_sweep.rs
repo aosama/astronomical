@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use astronomical_inference_worker::worker_startup::run_configured_worker_with_prefill_chunck_sizer_override;
+use astronomical_inference_worker::worker_startup::run_configured_worker_with_prompt_processing_chunk_sizer_override;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };
-use astronomical_model_serving::Qwen3_5PrefillChunckSizer;
+use astronomical_model_serving::Qwen3_5PromptProcessingChunkSizer;
 use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use tokio::time::{Instant, timeout};
 
@@ -60,7 +60,7 @@ async fn should_measure_model_throughput_with_prefill_chunck_tokens_8192() {
 }
 
 async fn run_prefill_chunck_sweep_with_timeout(
-    prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+    prefill_chunck_sizer: Qwen3_5PromptProcessingChunkSizer,
 ) -> PrefillChunckMetrics {
     timeout(
         SWEEP_TIMEOUT,
@@ -81,13 +81,13 @@ fn assert_valid_prefill_chunck_sweep_result(prefill_chunck_metrics: PrefillChunc
 /// chunk sizer. Does not measure OS-level peak footprint, but MLX still errors
 /// on out-of-memory conditions.
 async fn run_model_artifact_with_prefill_chunck_sizer(
-    prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+    prefill_chunck_sizer: Qwen3_5PromptProcessingChunkSizer,
 ) -> PrefillChunckMetrics {
-    let prefill_chunck_tokens = prefill_chunck_sizer.prefill_chunck_tokens();
+    let prefill_chunck_tokens = prefill_chunck_sizer.maximum_prompt_processing_chunk_size_tokens();
     let (test_to_worker, worker_from_test) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let (worker_to_test, test_from_worker) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let worker_task = tokio::spawn(async move {
-        run_configured_worker_with_prefill_chunck_sizer_override(
+        run_configured_worker_with_prompt_processing_chunk_sizer_override(
             worker_from_test,
             worker_to_test,
             prefill_chunck_sizer,
@@ -206,6 +206,8 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
                 panic!("the worker failed to load the prefill sweep model");
             }
             WorkerEvent::PrefillProgress { .. }
+            | WorkerEvent::GenerationPreparationStarted { .. }
+            | WorkerEvent::FirstDecodeCompleted { .. }
             | WorkerEvent::GenerationProgress { .. }
             | WorkerEvent::PromptWorkReuse { .. }
             | WorkerEvent::MlxMemorySample { .. }
@@ -214,6 +216,7 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
             | WorkerEvent::GenerationFinalized { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::PersistentPromptCacheStats { .. }
+            | WorkerEvent::PromptCacheCleared { .. }
             | WorkerEvent::ModelSwapped { .. }
             | WorkerEvent::Idle { .. }
             | WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
@@ -249,9 +252,11 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
     }
 }
 
-fn prefill_chunck_sizer(prefill_chunck_tokens: u32) -> Qwen3_5PrefillChunckSizer {
-    Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(prefill_chunck_tokens)
-        .expect("the measured prefill_chunck_tokens should be positive")
+fn prefill_chunck_sizer(prefill_chunck_tokens: u32) -> Qwen3_5PromptProcessingChunkSizer {
+    Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+        prefill_chunck_tokens,
+    )
+    .expect("the measured prefill_chunck_tokens should be positive")
 }
 
 fn static_source_document() -> String {

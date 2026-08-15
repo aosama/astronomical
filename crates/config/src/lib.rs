@@ -18,9 +18,10 @@ pub use astronomical_runtime_instance::{AstronomicalInstancePaths, AstronomicalR
 pub use chunking_config::{
     ChunkingConfig, DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-    DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS, DEFAULT_PREFILL_OPTIMIZER_OBSERVATION_WINDOW,
-    DEFAULT_PREFILL_OPTIMIZER_POSITION_BUCKET_TOKENS,
+    DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
+    DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_MAXIMUM_RETAINED_MEASUREMENTS_PER_CANDIDATE_AND_CONTEXT,
+    DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_POSITION_RANGE_SIZE_TOKENS,
     DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
 };
 pub use config_error::AstronomicalConfigError;
@@ -130,22 +131,27 @@ impl AstronomicalConfig {
     }
 
     /// Resolves whether Qwen3.5-MoE uses adaptive or fixed prompt-processing chunks.
-    pub fn prefill_chunck_sizing_policy(
+    pub fn prompt_processing_chunk_sizing_policy(
         &self,
-    ) -> Result<PrefillChunckSizingPolicy, AstronomicalConfigError> {
-        Ok(self.chunking()?.prefill_sizing_policy().clone())
+    ) -> Result<PromptProcessingChunkSizingPolicy, AstronomicalConfigError> {
+        Ok(self
+            .chunking()?
+            .prompt_processing_chunk_sizing_policy()
+            .clone())
     }
 
-    /// Returns the `chunking.fixed_prefill_tokens` value the daemon ignored because
-    /// `chunking.prefill_size_optimizer_enabled` was `true`. The menu bar app flashes a
+    /// Returns the `chunking.fixed_prompt_processing_chunk_size_tokens` value the daemon ignored because
+    /// `chunking.prompt_processing_chunk_size_optimizer_enabled` was `true`. The menu bar app flashes a
     /// callout when this is `Some` so the user knows the fixed value has no effect.
     #[must_use]
-    pub fn ignored_fixed_prefill_chunck_tokens(&self) -> Option<u32> {
-        resolve_ignored_fixed_prefill_chunck_tokens(
+    pub fn ignored_fixed_prompt_processing_chunk_size_tokens(&self) -> Option<u32> {
+        resolve_ignored_fixed_prompt_processing_chunk_size_tokens(
             self.user_config_file
                 .chunking
-                .prefill_size_optimizer_enabled,
-            self.user_config_file.chunking.fixed_prefill_tokens,
+                .prompt_processing_chunk_size_optimizer_enabled,
+            self.user_config_file
+                .chunking
+                .fixed_prompt_processing_chunk_size_tokens,
         )
     }
 
@@ -260,94 +266,92 @@ impl AstronomicalConfig {
 
 /// Resolved Qwen3.5-MoE prompt-processing chunk selection at worker startup.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PrefillChunckSizingPolicy {
+pub enum PromptProcessingChunkSizingPolicy {
     /// Select chunk sizes online from measured context-specific observations.
     Optimized {
         /// Strictly increasing token counts the optimizer may request.
-        optimizer_prefill_chunck_token_candidates: Vec<u32>,
+        prompt_processing_chunk_size_optimizer_candidate_token_counts: Vec<u32>,
     },
     /// Process each normal full chunk with one configured token count.
     Fixed {
-        /// Required positive token count for each fixed complete-resident prefill chunk.
-        fixed_prefill_chunck_tokens: u32,
+        /// Required positive token count for each fixed complete-resident prompt-processing chunk.
+        fixed_prompt_processing_chunk_size_tokens: u32,
         /// Optional smaller fixed size used only while sparse experts stream from storage.
-        fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
     },
 }
 
-fn resolve_prefill_chunck_sizing_policy(
-    configured_prefill_chunck_size_optimizer_enabled: Option<bool>,
-    configured_fixed_prefill_chunck_tokens: Option<u32>,
-    configured_fixed_ssd_streaming_prefill_chunck_tokens: Option<u32>,
-    configured_optimizer_prefill_chunck_token_candidates: Option<&[u32]>,
-) -> Result<PrefillChunckSizingPolicy, AstronomicalConfigError> {
-    let fixed_prefill_chunck_tokens = match configured_prefill_chunck_size_optimizer_enabled {
-        Some(false) => configured_fixed_prefill_chunck_tokens.ok_or(
-            AstronomicalConfigError::FixedPrefillChunckTokensRequiredWhenOptimizerDisabled,
+fn resolve_prompt_processing_chunk_sizing_policy(
+    configured_prompt_processing_chunk_size_optimizer_enabled: Option<bool>,
+    configured_fixed_prompt_processing_chunk_size_tokens: Option<u32>,
+    configured_fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
+    configured_prompt_processing_chunk_size_optimizer_candidate_token_counts: Option<&[u32]>,
+) -> Result<PromptProcessingChunkSizingPolicy, AstronomicalConfigError> {
+    let fixed_prompt_processing_chunk_size_tokens = match configured_prompt_processing_chunk_size_optimizer_enabled {
+        Some(false) => configured_fixed_prompt_processing_chunk_size_tokens.ok_or(
+            AstronomicalConfigError::FixedPromptProcessingChunkSizeTokensRequiredWhenOptimizerDisabled,
         )?,
         Some(true) | None => {
             // Any configured fixed size is intentionally ignored in explicit
             // optimized mode. The menu bar surfaces that override separately.
-            return Ok(PrefillChunckSizingPolicy::Optimized {
-                optimizer_prefill_chunck_token_candidates:
-                    resolve_optimizer_prefill_chunck_token_candidates(
-                        configured_optimizer_prefill_chunck_token_candidates,
+            return Ok(PromptProcessingChunkSizingPolicy::Optimized {
+                prompt_processing_chunk_size_optimizer_candidate_token_counts:
+                    resolve_prompt_processing_chunk_size_optimizer_candidate_token_counts(
+                        configured_prompt_processing_chunk_size_optimizer_candidate_token_counts,
                     )?,
             });
         }
     };
-    if fixed_prefill_chunck_tokens == 0 {
-        return Err(AstronomicalConfigError::InvalidFixedPrefillChunckTokens);
+    if fixed_prompt_processing_chunk_size_tokens == 0 {
+        return Err(AstronomicalConfigError::InvalidFixedPromptProcessingChunkSizeTokens);
     }
-    let fixed_ssd_streaming_prefill_chunck_tokens =
-        match configured_fixed_ssd_streaming_prefill_chunck_tokens {
+    let fixed_ssd_streaming_prompt_processing_chunk_size_tokens =
+        match configured_fixed_ssd_streaming_prompt_processing_chunk_size_tokens {
             Some(0) => {
-                return Err(AstronomicalConfigError::InvalidFixedSsdStreamingPrefillChunckTokens);
+                return Err(AstronomicalConfigError::InvalidFixedSsdStreamingPromptProcessingChunkSizeTokens);
             }
-            Some(fixed_ssd_streaming_prefill_chunck_tokens) => {
-                Some(fixed_ssd_streaming_prefill_chunck_tokens)
+            Some(fixed_ssd_streaming_prompt_processing_chunk_size_tokens) => {
+                Some(fixed_ssd_streaming_prompt_processing_chunk_size_tokens)
             }
             None => None,
         };
-    Ok(PrefillChunckSizingPolicy::Fixed {
-        fixed_prefill_chunck_tokens,
-        fixed_ssd_streaming_prefill_chunck_tokens,
+    Ok(PromptProcessingChunkSizingPolicy::Fixed {
+        fixed_prompt_processing_chunk_size_tokens,
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
     })
 }
 
-fn resolve_optimizer_prefill_chunck_token_candidates(
-    configured_optimizer_prefill_chunck_token_candidates: Option<&[u32]>,
+fn resolve_prompt_processing_chunk_size_optimizer_candidate_token_counts(
+    configured_prompt_processing_chunk_size_optimizer_candidate_token_counts: Option<&[u32]>,
 ) -> Result<Vec<u32>, AstronomicalConfigError> {
-    let optimizer_prefill_chunck_token_candidates =
-        configured_optimizer_prefill_chunck_token_candidates.map_or_else(
+    let prompt_processing_chunk_size_optimizer_candidate_token_counts =
+        configured_prompt_processing_chunk_size_optimizer_candidate_token_counts.map_or_else(
             || DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES.to_vec(),
             <[u32]>::to_vec,
         );
-    if optimizer_prefill_chunck_token_candidates.is_empty() {
-        return Err(AstronomicalConfigError::OptimizerPrefillChunckTokenCandidatesMustNotBeEmpty);
+    if prompt_processing_chunk_size_optimizer_candidate_token_counts.is_empty() {
+        return Err(AstronomicalConfigError::OptimizerCandidateTokenCountsMustNotBeEmpty);
     }
-    if optimizer_prefill_chunck_token_candidates.contains(&0) {
-        return Err(AstronomicalConfigError::OptimizerPrefillChunckTokenCandidatesMustBePositive);
+    if prompt_processing_chunk_size_optimizer_candidate_token_counts.contains(&0) {
+        return Err(AstronomicalConfigError::OptimizerCandidateTokenCountsMustBePositive);
     }
-    if optimizer_prefill_chunck_token_candidates
+    if prompt_processing_chunk_size_optimizer_candidate_token_counts
         .windows(2)
         .any(|adjacent_candidates| adjacent_candidates[0] >= adjacent_candidates[1])
     {
-        return Err(
-            AstronomicalConfigError::OptimizerPrefillChunckTokenCandidatesMustBeStrictlyIncreasing,
-        );
+        return Err(AstronomicalConfigError::OptimizerCandidateTokenCountsMustBeStrictlyIncreasing);
     }
-    Ok(optimizer_prefill_chunck_token_candidates)
+    Ok(prompt_processing_chunk_size_optimizer_candidate_token_counts)
 }
 
-/// Returns the `fixed_prefill_chunck_tokens` value the daemon ignores because the
+/// Returns the fixed prompt-processing chunk size the daemon ignores because the
 /// optimizer is enabled, so the menu bar app can flash a callout warning the user.
-fn resolve_ignored_fixed_prefill_chunck_tokens(
-    configured_prefill_chunck_size_optimizer_enabled: Option<bool>,
-    configured_fixed_prefill_chunck_tokens: Option<u32>,
+fn resolve_ignored_fixed_prompt_processing_chunk_size_tokens(
+    configured_prompt_processing_chunk_size_optimizer_enabled: Option<bool>,
+    configured_fixed_prompt_processing_chunk_size_tokens: Option<u32>,
 ) -> Option<u32> {
-    if configured_prefill_chunck_size_optimizer_enabled == Some(true) {
-        configured_fixed_prefill_chunck_tokens
+    if configured_prompt_processing_chunk_size_optimizer_enabled == Some(true) {
+        configured_fixed_prompt_processing_chunk_size_tokens
     } else {
         None
     }

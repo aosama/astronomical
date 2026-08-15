@@ -87,8 +87,8 @@ async fn should_replace_prefill_memory_with_finalized_residency_memory() {
             processed_tokens: 2_048,
             total_tokens: 50_000,
             elapsed_millis: 1_500,
-            forward_prefill_chunck_elapsed_millis: Some(1_400),
-            completed_prefill_chunck_tokens: Some(2_048),
+            forward_prefill_chunk_elapsed_millis: Some(1_400),
+            completed_prefill_chunk_tokens: Some(2_048),
             mlx_active_memory_bytes: Some(11_000),
             mlx_allocator_cache_memory_bytes: Some(12_000),
             mlx_peak_memory_bytes: Some(13_000),
@@ -122,9 +122,15 @@ async fn should_replace_prefill_memory_with_finalized_residency_memory() {
         worker_health_snapshot.expert_memory_mode,
         Some(ExpertMemoryMode::Resident)
     );
-    assert_eq!(worker_health_snapshot.prefill_optimizer_insights.len(), 1);
     assert_eq!(
-        worker_health_snapshot.prefill_optimizer_insights[0].requested_prefill_chunck_tokens,
+        worker_health_snapshot
+            .recent_prompt_processing_chunk_optimization_outcomes
+            .len(),
+        1
+    );
+    assert_eq!(
+        worker_health_snapshot.recent_prompt_processing_chunk_optimization_outcomes[0]
+            .selected_candidate_chunk_size_tokens,
         4_096
     );
     worker_executor

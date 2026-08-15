@@ -295,7 +295,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
     activity == "prompt_processing" || activity == "generation_preparation"
       || activity == "generating"
   }
-  var currentRate: Double? {
+  // The status endpoint supplies request-elapsed time during prompt processing
+  // and phase-elapsed time during generation. Callers label those boundaries
+  // explicitly instead of presenting both as interchangeable model-forward rates.
+  var currentPhaseTokensPerSecond: Double? {
     guard let progress, progress.processedTokens > 0, progress.elapsedMilliseconds > 0 else {
       return nil
     }
@@ -303,32 +306,35 @@ struct SupervisorStatusDocument: Codable, Equatable {
   }
   var menuBarTitle: String {
     guard status == "ready" else { return status == "loading" ? " Loading" : "" }
-    if activity == "generating", let currentRate {
-      return String(format: "GEN %.1f tok/s", currentRate)
+    if activity == "generating", let currentPhaseTokensPerSecond {
+      return String(format: "GEN %.1f tok/s", currentPhaseTokensPerSecond)
     }
     if activity == "generation_preparation" { return "Preparing…" }
     guard activity == "prompt_processing", let progress else { return "" }
     let completionPercentageTitle = progress.completionPercentageTitle
     if progress.phase == "drafter" { return "Drafting…" }
-    guard let currentRate else { return "Target \(completionPercentageTitle)" }
-    return "Target \(completionPercentageTitle) · \(Int(currentRate.rounded())) tok/s"
+    guard let currentPhaseTokensPerSecond else { return "Prompt \(completionPercentageTitle)" }
+    return "Prompt \(completionPercentageTitle) · \(Int(currentPhaseTokensPerSecond.rounded())) avg tok/s"
   }
   var flightTitle: String {
     guard isActive else { return "Standing by" }
     if activity == "generating" {
-      return currentRate.map { String(format: "Generating · %.1f tok/s", $0) } ?? "Generating"
+      return currentPhaseTokensPerSecond.map { String(format: "Generating · %.1f tok/s", $0) }
+        ?? "Generating"
     }
     if activity == "generation_preparation" { return "Preparing generation…" }
     guard let progress else { return phaseTitle }
     if progress.phase == "drafter" { return "Drafting…" }
-    guard let currentRate else { return "Target · \(progress.completionPercentageTitle)" }
-    return "Target · \(progress.completionPercentageTitle) · \(Int(currentRate.rounded())) tok/s"
+    guard let currentPhaseTokensPerSecond else {
+      return "Prompt processing · \(progress.completionPercentageTitle)"
+    }
+    return "Prompt processing · \(progress.completionPercentageTitle) · \(Int(currentPhaseTokensPerSecond.rounded())) avg tok/s"
   }
   var phaseTitle: String {
     switch activity {
     case "generating": "Generating"
     case "generation_preparation": "Preparing generation"
-    case "prompt_processing": progress?.phase == "drafter" ? "Drafting…" : "Target"
+    case "prompt_processing": progress?.phase == "drafter" ? "Drafting…" : "Prompt processing"
     default:
       switch status {
       case "ready": "Ready"

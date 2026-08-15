@@ -4,7 +4,7 @@ use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PersistentPromptCacheDiskStoreConfig,
     PersistentPromptCacheModelContract, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
     qwen3_5_decoder_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
@@ -259,10 +259,12 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
     let maximum_prefill_chunck_tokens = validated_artifact.config().maximum_position_count();
     let prefill_chunck_sizer = match fixed_prefill_chunck_tokens {
         Some(fixed_prefill_chunck_tokens) => {
-            Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(fixed_prefill_chunck_tokens)
-                .expect("the selected fixed prefill size should be valid")
+            Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+                fixed_prefill_chunck_tokens,
+            )
+            .expect("the selected fixed prefill size should be valid")
         }
-        None => Qwen3_5PrefillChunckSizer::for_optimized_with_behavior(
+        None => Qwen3_5PromptProcessingChunkSizer::for_optimized_with_behavior(
             maximum_prefill_chunck_tokens,
             vec![1_024, 2_048, 4_096, 8_192],
             5,
@@ -274,7 +276,7 @@ pub(super) async fn load_persistent_prompt_cache_qualification_engine(
         crate::common::sample_machine_model_artifact_qualification_mlx_memory_limits().await;
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.prompt_cache_block_tokens = fixed_prefill_chunck_tokens;
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -430,9 +432,9 @@ pub(super) async fn generate_token_ids(
                 }
             }
             GeneratedToken::PrefillProgress {
-                completed_prefill_chunck_tokens,
+                completed_prefill_chunk_tokens,
                 ..
-            } => completed_prefill_chunck_token_counts.push(completed_prefill_chunck_tokens),
+            } => completed_prefill_chunck_token_counts.push(completed_prefill_chunk_tokens),
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => {

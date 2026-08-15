@@ -350,12 +350,15 @@
 - Qualify chunk optimization through the production configuration path as well as fixed-size tests. Candidate-selection tests can pass while execution clipping turns larger selections into discarded partial observations; persisted-state reload must also complete a large selected forward on an uncached prompt.
 - Limit exploration to candidates that fit the remaining prompt. Selecting an oversized candidate produces only a discarded partial observation while advancing the exploration cursor, delaying repeated measurements and exploitation of faster candidates that can complete.
 - Do not present the candidate with highest measured per-chunk throughput as the optimizer's global winner. The optimizer minimizes cumulative remaining-prompt latency from context-scoped transition evidence; local throughput is descriptive evidence only.
+- Persist prompt position and execution conditions with every chunk measurement. Reusing measurements across unmatched execution profiles can select a capacity from incomparable latency evidence.
+- Namespace persisted optimizer evidence by exact model and revision. One shared state file prevents cross-model reuse but still discards the previous model's measurements when another model saves, forcing repeated exploration after model switches.
 - Evaluate cumulative episode cost iteratively rather than with one call-stack frame per predicted transition. A valid one-token terminal-tail observation can otherwise turn a long prompt into tens of thousands of recursive planner calls and abort the inference process before it can return an error.
 - Keep the final partial chunk on the same runtime-T kernel path.
 - Measure peak physical footprint together with throughput; a faster chunk is invalid if it makes the laptop unsafe.
 
 ## Profiling
 
+- Label every throughput value by its timing boundary. Cumulative request prompt rate includes orchestration and waiting, while optimizer candidate rate covers model-forward time only; presenting both as unqualified tokens per second makes valid measurements look contradictory.
 - Separate central-processing-unit graph construction from graphics-processing-unit evaluation.
 - Rust graph construction was already fast. Synchronizing each layer showed that excess time was inside Metal evaluation.
 - Per-layer synchronization changes scheduling. Use it only to locate a subsystem, then remove it before final measurement.

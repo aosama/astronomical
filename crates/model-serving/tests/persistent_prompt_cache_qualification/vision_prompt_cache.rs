@@ -7,7 +7,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5PrefillChunckSizer, Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 use tokio::time::{Instant, sleep, timeout};
@@ -53,7 +53,7 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.prompt_cache_block_tokens =
         Some(VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS);
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prefill_chunck_sizer(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -62,7 +62,7 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
             prompt_cache_directory.path().to_path_buf(),
             10_000_000_000,
         )),
-        Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens(
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS,
         )
         .expect("the visual qualification prefill size should be valid"),
@@ -181,12 +181,12 @@ async fn generate_one_token(
                 return (token_id, completed_prefill_chunck_token_counts);
             }
             GeneratedToken::PrefillProgress {
-                completed_prefill_chunck_tokens,
+                completed_prefill_chunk_tokens,
                 mlx_memory_telemetry,
                 ..
             } => {
                 eprintln!(
-                    "[visual-prompt-cache-qualification] completed_prefill_chunck_tokens={completed_prefill_chunck_tokens} active_memory_bytes={:?} peak_memory_bytes={:?}",
+                    "[visual-prompt-cache-qualification] completed_prefill_chunk_tokens={completed_prefill_chunk_tokens} active_memory_bytes={:?} peak_memory_bytes={:?}",
                     mlx_memory_telemetry
                         .as_ref()
                         .map(|telemetry| telemetry.active_memory_bytes),
@@ -194,7 +194,7 @@ async fn generate_one_token(
                         .as_ref()
                         .map(|telemetry| telemetry.peak_memory_bytes),
                 );
-                completed_prefill_chunck_token_counts.push(completed_prefill_chunck_tokens);
+                completed_prefill_chunck_token_counts.push(completed_prefill_chunk_tokens);
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::GenerationPreparationStarted { .. } => {}

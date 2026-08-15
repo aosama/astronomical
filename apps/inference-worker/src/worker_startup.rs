@@ -5,7 +5,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     EngineBackedWorker, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
-    Qwen3_5PrefillChunckSizer,
+    Qwen3_5PromptProcessingChunkSizer,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -31,7 +31,7 @@ where
     ReadTransport: AsyncRead + Unpin,
     WriteTransport: AsyncWrite + Unpin,
 {
-    run_bootstrapped_worker_with_prefill_chunck_sizer_override(
+    run_bootstrapped_worker_with_prompt_processing_chunk_sizer_override(
         read_transport,
         write_transport,
         None,
@@ -39,10 +39,13 @@ where
     .await
 }
 
-async fn run_bootstrapped_worker_with_prefill_chunck_sizer_override<ReadTransport, WriteTransport>(
+async fn run_bootstrapped_worker_with_prompt_processing_chunk_sizer_override<
+    ReadTransport,
+    WriteTransport,
+>(
     read_transport: ReadTransport,
     write_transport: WriteTransport,
-    prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
+    prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
 ) -> Result<(), WorkerProcessError>
 where
     ReadTransport: AsyncRead + Unpin,
@@ -69,29 +72,29 @@ where
         worker_startup_configuration,
         command_reader,
         event_writer,
-        prefill_chunck_sizer_override,
+        prompt_processing_chunk_sizer_override,
     )
     .await
 }
 
 /// Runs the configured worker with explicit Qwen prompt-processing chunks for benchmarks.
 #[cfg(feature = "performance-measurement")]
-pub async fn run_configured_worker_with_prefill_chunck_sizer_override<
+pub async fn run_configured_worker_with_prompt_processing_chunk_sizer_override<
     ReadTransport,
     WriteTransport,
 >(
     read_transport: ReadTransport,
     write_transport: WriteTransport,
-    prefill_chunck_sizer: Qwen3_5PrefillChunckSizer,
+    prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
 ) -> Result<(), WorkerProcessError>
 where
     ReadTransport: AsyncRead + Unpin,
     WriteTransport: AsyncWrite + Unpin,
 {
-    run_bootstrapped_worker_with_prefill_chunck_sizer_override(
+    run_bootstrapped_worker_with_prompt_processing_chunk_sizer_override(
         read_transport,
         write_transport,
-        Some(prefill_chunck_sizer),
+        Some(prompt_processing_chunk_sizer),
     )
     .await
 }
@@ -100,7 +103,7 @@ async fn run_initialized_worker<ReadTransport, WriteTransport>(
     worker_startup_configuration: WorkerStartupConfiguration,
     command_reader: ProtocolReader<ReadTransport>,
     event_writer: ProtocolWriter<WriteTransport>,
-    prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
+    prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
 ) -> Result<(), WorkerProcessError>
 where
     ReadTransport: AsyncRead + Unpin,
@@ -143,7 +146,7 @@ where
     );
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
-        prefill_chunck_sizing_policy = ?chunking.prefill_sizing_policy,
+        prompt_processing_chunk_sizing_policy = ?chunking.prompt_processing_chunk_sizing_policy,
         optimizer_state_directory = ?optimizer_state_directory
             .as_ref()
             .map(|optimizer_state_directory| optimizer_state_directory.display()),
@@ -163,7 +166,7 @@ where
         optimizer_state_directory,
         performance_attribution_enabled,
         performance_attribution_log_path,
-        prefill_chunck_sizer_override,
+        prompt_processing_chunk_sizer_override,
         mtp_enabled,
         speculative_prefill: worker_startup_configuration.speculative_prefill.clone(),
         persistent_prompt_cache_enabled,

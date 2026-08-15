@@ -68,8 +68,8 @@ async fn should_keep_the_openai_stream_open_after_internal_prefill_progress() {
             processed_tokens: 2_048,
             total_tokens: 19_485,
             elapsed_millis: 1_300,
-            forward_prefill_chunck_elapsed_millis: Some(1_200),
-            completed_prefill_chunck_tokens: Some(2_048),
+            forward_prefill_chunk_elapsed_millis: Some(1_200),
+            completed_prefill_chunk_tokens: Some(2_048),
             mlx_active_memory_bytes: Some(22_164_699_392),
             mlx_allocator_cache_memory_bytes: Some(0),
             mlx_peak_memory_bytes: Some(24_754_436_684),
@@ -417,10 +417,10 @@ async fn mtp_status_document(
 }
 
 #[tokio::test]
-async fn should_report_the_ignored_fixed_prefill_chunck_tokens_warning_in_status() {
+async fn should_report_the_ignored_fixed_prompt_processing_chunk_size_warning_in_status() {
     let application = astronomical_supervisor::build_application_with_config_warning(
         ScriptedExecutor::ready(Vec::new()),
-        Some("Adaptive prefill optimizer is active. The configured fixed prefill fallback of 4096 tokens is ignored.".to_owned()),
+        Some("Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of 4096 tokens is ignored.".to_owned()),
     );
     let response = application
         .oneshot(
@@ -439,7 +439,7 @@ async fn should_report_the_ignored_fixed_prefill_chunck_tokens_warning_in_status
     assert_eq!(status_document["status"], "ready");
     assert_eq!(
         status_document["config_warning"],
-        "Adaptive prefill optimizer is active. The configured fixed prefill fallback of 4096 tokens is ignored."
+        "Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of 4096 tokens is ignored."
     );
 }
 
@@ -468,7 +468,7 @@ async fn should_report_generating_activity_for_an_active_worker() {
 }
 
 #[tokio::test]
-async fn should_report_completed_prefill_chunck_tokens_for_prompt_processing_progress() {
+async fn should_report_completed_prefill_chunk_tokens_for_prompt_processing_progress() {
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
     executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
@@ -477,7 +477,7 @@ async fn should_report_completed_prefill_chunck_tokens_for_prompt_processing_pro
         total_tokens: 2_200,
         elapsed_millis: 0,
         request_started_at: tokio::time::Instant::now(),
-        completed_prefill_chunck_tokens: Some(2_048),
+        completed_prefill_chunk_tokens: Some(2_048),
     });
     let application = build_application(executor);
     let response = application
@@ -499,13 +499,13 @@ async fn should_report_completed_prefill_chunck_tokens_for_prompt_processing_pro
     assert_eq!(status_document["activity"], "prompt_processing");
     assert_eq!(status_document["progress"]["phase"], "target");
     assert_eq!(
-        status_document["progress"]["completed_prefill_chunck_tokens"],
+        status_document["progress"]["completed_prefill_chunk_tokens"],
         2_048
     );
 }
 
 #[tokio::test]
-async fn should_omit_completed_prefill_chunck_tokens_before_the_first_measurement() {
+async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement() {
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
     executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
@@ -514,7 +514,7 @@ async fn should_omit_completed_prefill_chunck_tokens_before_the_first_measuremen
         total_tokens: 2_200,
         elapsed_millis: 0,
         request_started_at: tokio::time::Instant::now(),
-        completed_prefill_chunck_tokens: None,
+        completed_prefill_chunk_tokens: None,
     });
     let application = build_application(executor);
     let response = application
@@ -535,7 +535,7 @@ async fn should_omit_completed_prefill_chunck_tokens_before_the_first_measuremen
     assert_eq!(status_document["progress"]["phase"], "target");
     assert!(
         status_document["progress"]
-            .get("completed_prefill_chunck_tokens")
+            .get("completed_prefill_chunk_tokens")
             .is_none(),
         "initial progress must not claim a chunk size before the engine measures one"
     );

@@ -26,6 +26,7 @@ const OBSERVATORY_DEFAULT_DESTINATION = "overview";
 const OBSERVATORY_DEFAULT_PATH = "/overview";
 
 let selectedModelId = null;
+let selectedModelMaximumInputTokens = null;
 const sparklineHitRateBuffer = [];
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -106,7 +107,10 @@ async function pollStatus() {
         renderMemoryLimitControl(data);
         renderSession(data);
         renderAboutEnhanced(data);
-        renderPrefillOptimizer(data.prefill_optimizer);
+        renderPromptProcessingOptimizer(
+            data.prompt_processing_chunk_size_optimizer,
+            selectedModelMaximumInputTokens
+        );
     } catch (fetchError) {
         setStatusUnavailable();
     }
@@ -202,6 +206,7 @@ async function pollModels() {
         const selectedModel = selectAdvertisedModel(models, selectedModelId);
         if (selectedModel) {
             selectedModelId = selectedModel.id;
+            selectedModelMaximumInputTokens = Number(selectedModel.max_input_tokens || 0) || null;
             renderAboutFromModels(selectedModel);
         }
     } catch (fetchError) {

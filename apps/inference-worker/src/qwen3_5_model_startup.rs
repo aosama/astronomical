@@ -2,13 +2,13 @@ use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerPrefillChunckSizingPolicy,
+    WorkerChunkingConfiguration, WorkerPromptProcessingChunkSizingPolicy,
     WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
     PerformanceOperation, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PrefillChunckSizer,
+    Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PromptProcessingChunkSizer,
 };
 
 use crate::worker_startup_error::WorkerStartupError;
@@ -19,7 +19,7 @@ pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
-    prefill_chunck_sizer_override: Option<Qwen3_5PrefillChunckSizer>,
+    prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
     optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
     mtp_enabled: bool,
@@ -106,7 +106,8 @@ pub(crate) fn initialize_qwen3_5_model(
     let think_end_token_id = generation_processor.think_end_token_id();
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    let maximum_prefill_chunck_tokens = validated_artifact.config().maximum_position_count();
+    let maximum_prompt_processing_chunk_size_tokens =
+        validated_artifact.config().maximum_position_count();
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
         crate::worker_startup::derive_mlx_memory_limits_from_gpu_wired_limit(
             effective_mlx_memory_ceiling_bytes,
@@ -128,42 +129,46 @@ pub(crate) fn initialize_qwen3_5_model(
             per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         )
     });
-    let prefill_chunck_sizer_result = match prefill_chunck_sizer_override {
-        Some(prefill_chunck_sizer) => Ok(prefill_chunck_sizer),
-        None => match &chunking.prefill_sizing_policy {
-            WorkerPrefillChunckSizingPolicy::Fixed {
-                fixed_prefill_chunck_tokens,
-                fixed_ssd_streaming_prefill_chunck_tokens,
-            } => Qwen3_5PrefillChunckSizer::for_fixed_prefill_chunck_tokens_with_ssd_streaming(
-                *fixed_prefill_chunck_tokens,
-                *fixed_ssd_streaming_prefill_chunck_tokens,
+    // Resolve sizing only after artifact validation supplies the model context
+    // ceiling and stable model/revision identity required by persisted evidence.
+    // The supervisor-owned policy is otherwise authoritative; this layer adds
+    // only Qwen execution context and optional benchmark injection.
+    let prompt_processing_chunk_sizer_result = match prompt_processing_chunk_sizer_override {
+        Some(prompt_processing_chunk_sizer) => Ok(prompt_processing_chunk_sizer),
+        None => match &chunking.prompt_processing_chunk_sizing_policy {
+            WorkerPromptProcessingChunkSizingPolicy::Fixed {
+                fixed_prompt_processing_chunk_size_tokens,
+                fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+            } => Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+                *fixed_prompt_processing_chunk_size_tokens,
+                *fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
             ),
-            WorkerPrefillChunckSizingPolicy::Optimized {
-                optimizer_prefill_chunck_token_candidates,
+            WorkerPromptProcessingChunkSizingPolicy::Optimized {
+                prompt_processing_chunk_size_optimizer_candidate_token_counts,
             } => match optimizer_state_directory {
                 Some(optimizer_directory) => {
-                    Qwen3_5PrefillChunckSizer::for_optimized_production_with_persisted_state_and_behavior(
-                        maximum_prefill_chunck_tokens,
-                        optimizer_prefill_chunck_token_candidates.clone(),
+                    Qwen3_5PromptProcessingChunkSizer::for_optimized_production_with_persisted_state_and_behavior(
+                        maximum_prompt_processing_chunk_size_tokens,
+                        prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
                         optimizer_directory,
                         model_id,
                         model_revision,
-                        chunking.prefill_optimizer_observation_window,
-                        chunking.prefill_optimizer_position_bucket_tokens,
+                        chunking.prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context,
+                        chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
                     )
                 }
-                None => Qwen3_5PrefillChunckSizer::for_optimized_with_behavior(
-                    maximum_prefill_chunck_tokens,
-                    optimizer_prefill_chunck_token_candidates.clone(),
-                    chunking.prefill_optimizer_observation_window,
-                    chunking.prefill_optimizer_position_bucket_tokens,
+                None => Qwen3_5PromptProcessingChunkSizer::for_optimized_with_behavior(
+                    maximum_prompt_processing_chunk_size_tokens,
+                    prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
+                    chunking.prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context,
+                    chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
                 ),
             },
         },
     };
-    let prefill_chunck_sizer = match prefill_chunck_sizer_result {
-        Ok(prefill_chunck_sizer) => prefill_chunck_sizer,
-        Err(prefill_chunck_sizer_error) => {
+    let prompt_processing_chunk_sizer = match prompt_processing_chunk_sizer_result {
+        Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
+        Err(prompt_processing_chunk_sizer_error) => {
             record_failed_model_loading_performance_attribution(
                 model_loading_performance_attribution,
                 &mut performance_attribution_log,
@@ -173,8 +178,8 @@ pub(crate) fn initialize_qwen3_5_model(
                 Some(artifact_shard_count),
                 "prompt-processing chunk configuration failed",
             );
-            return Err(WorkerStartupError::PrefillChunckSizing(
-                prefill_chunck_sizer_error,
+            return Err(WorkerStartupError::PromptProcessingChunkSizing(
+                prompt_processing_chunk_sizer_error,
             ));
         }
     };
@@ -183,7 +188,7 @@ pub(crate) fn initialize_qwen3_5_model(
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
         persistent_prompt_cache_disk_store_config,
-        prefill_chunck_sizer,
+        prompt_processing_chunk_sizer,
         think_end_token_id,
         model_directory_path.clone(),
         chunking,
