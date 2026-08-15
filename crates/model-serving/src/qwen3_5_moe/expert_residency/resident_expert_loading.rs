@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxSafetensors, PositionalFileReadMetrics,
+    MlxArray, MlxDtype, MlxRuntime, MlxSafetensors, PositionalFileReadMetrics,
 };
 
 use crate::expert_paging::{
@@ -13,7 +13,9 @@ use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::ExpertPagingError;
 
-use super::{Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights};
+use super::{
+    Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,
+};
 
 impl Qwen3_5ResidentExpertWeights {
     /// Builds a private complete-model candidate from startup-validated plans.
@@ -48,6 +50,8 @@ impl Qwen3_5ResidentExpertWeights {
             resident_source_shards.insert(source_file_path, resident_source_shard);
         }
         let mut resident_layers = Vec::with_capacity(layer_plans.len());
+        let mut fused_gate_up_layer_count = 0_usize;
+        let mut separate_gate_up_layer_count = 0_usize;
 
         // Evaluate one complete layer before advancing. This bounds lazy source
         // graphs and makes each progress record correspond to materialized MLX
@@ -63,18 +67,45 @@ impl Qwen3_5ResidentExpertWeights {
                 complete_layer_payload_bytes,
                 "started materializing one complete resident expert layer"
             );
-            let resident_layer = load_resident_layer(&resident_source_shards, layer_plan)?;
+            let resident_layer =
+                load_resident_layer(&model.runtime, &resident_source_shards, layer_plan)?;
+            let gate_up_fusion_applied = resident_layer.gate_up_weights.is_fused();
+            let gate_up_fusion_transient_payload_bytes = resident_layer
+                .gate_up_weights
+                .materialization_transient_payload_bytes();
+            let gate_up_fusion_incompatibility_reason =
+                resident_layer.gate_up_weights.incompatibility_reason();
             let mut complete_layer_arrays = Vec::new();
             resident_layer.append_array_references(&mut complete_layer_arrays);
             model.runtime.evaluate_arrays(&complete_layer_arrays)?;
+            if gate_up_fusion_applied {
+                // Synchronous evaluation detached the fused owner from its source
+                // concatenation. Drain reclaimable buffers before the next layer.
+                model.runtime.clear_allocator_cache()?;
+            }
+            if gate_up_fusion_applied {
+                fused_gate_up_layer_count = fused_gate_up_layer_count.saturating_add(1);
+            } else {
+                separate_gate_up_layer_count = separate_gate_up_layer_count.saturating_add(1);
+            }
             tracing::info!(
                 completed_layer_count = layer_index + 1,
                 total_layer_count = layer_plans.len(),
                 complete_layer_payload_bytes,
+                gate_up_fusion_applied,
+                gate_up_fusion_transient_payload_bytes,
+                gate_up_fusion_incompatibility_reason,
                 "materialized one complete resident expert layer"
             );
             resident_layers.push(resident_layer);
         }
+
+        tracing::info!(
+            total_layer_count = layer_plans.len(),
+            fused_gate_up_layer_count,
+            separate_gate_up_layer_count,
+            "completed resident expert gate/up materialization"
+        );
 
         Ok(Self::new(
             resident_layers,
@@ -85,12 +116,15 @@ impl Qwen3_5ResidentExpertWeights {
 }
 
 fn load_resident_layer(
+    runtime: &MlxRuntime,
     resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
     layer_plan: &QuantizedExpertLayerPlan,
 ) -> Result<Qwen3_5ResidentExpertLayerWeights, Qwen3_5ExecutionError> {
+    let gate_projection =
+        load_resident_projection(resident_source_shards, layer_plan, "gate_proj")?;
+    let up_projection = load_resident_projection(resident_source_shards, layer_plan, "up_proj")?;
     Ok(Qwen3_5ResidentExpertLayerWeights::new(
-        load_resident_projection(resident_source_shards, layer_plan, "gate_proj")?,
-        load_resident_projection(resident_source_shards, layer_plan, "up_proj")?,
+        Qwen3_5ResidentGateUpWeights::build(runtime, layer_plan, gate_projection, up_projection)?,
         load_resident_projection(resident_source_shards, layer_plan, "down_proj")?,
     ))
 }

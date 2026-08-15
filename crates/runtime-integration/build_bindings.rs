@@ -15,7 +15,7 @@ const BINDGEN_FUNCTION_ALLOWLIST: &str = concat!(
     "array_(new|new_data|free|eval|shape|ndim|dtype|size|nbytes|data_(float32|uint32)|item_uint32|set)|",
     "default_(cpu|gpu)_stream_new|stream_free|synchronize|",
     "(add(mm)?|arange|argmax_axis|argpartition_axis|argsort_axis|astype|broadcast_to|concatenate_axis|contiguous|conv(1d|3d)|cos|cumsum|dequantize|divide|erf|exp|expand_dims|floor_divide|gather_(mm|qmm)|greater|greater_equal|log1p|logaddexp|matmul|power|",
-    "max_axis|multiply|negative|put_along_axis|quantized_matmul|repeat_axis|reshape|sigmoid|sin|slice(_update)?|softmax_axis|subtract|sum_axis|tanh|less|",
+    "max_axis|multiply|negative|put_along_axis|quantize|quantized_matmul|repeat_axis|reshape|sigmoid|sin|slice(_update)?|softmax_axis|subtract|sum_axis|tanh|less|",
     "squeeze_axis|stack_axis|take_along_axis|take_axis|topk_axis|transpose_axes|where|zeros)|",
     "fast_(rms_norm|layer_norm|rope(_dynamic)?|scaled_dot_product_attention)|fast_metal_kernel(_config)?_(new|free|apply|add_output_arg|set_grid|set_thread_group|set_init_value|add_template_arg_(dtype|int|bool))|random_(categorical|key|split)|eval|async_eval|",
     "vector_array_(new|new_data|free|get|size|set_value)|vector_string_(new_data|free)|io_(reader|writer)_(new|free)|",
