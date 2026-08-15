@@ -160,6 +160,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let readyModelSizeBytes: UInt64?
   let progress: Progress?
   let expertMemoryMode: String?
+  let expertResidency: ExpertResidencySnapshot?
   let mtpEnabled: Bool
   let mtpRuntimeState: String
   let mtpUnavailableReason: String?
@@ -185,6 +186,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     case readyModelIdentifier = "ready_model_id"
     case readyModelSizeBytes = "ready_model_size_bytes"
     case expertMemoryMode = "expert_memory_mode"
+    case expertResidency = "expert_residency"
     case mtpEnabled = "mtp_enabled"
     case mtpRuntimeState = "mtp_runtime_state"
     case mtpUnavailableReason = "mtp_unavailable_reason"
@@ -211,6 +213,8 @@ struct SupervisorStatusDocument: Codable, Equatable {
     readyModelSizeBytes = try container.decodeIfPresent(UInt64.self, forKey: .readyModelSizeBytes)
     progress = try container.decodeIfPresent(Progress.self, forKey: .progress)
     expertMemoryMode = try container.decodeIfPresent(String.self, forKey: .expertMemoryMode)
+    expertResidency = try container.decodeIfPresent(
+      ExpertResidencySnapshot.self, forKey: .expertResidency)
     mtpEnabled = try container.decodeIfPresent(Bool.self, forKey: .mtpEnabled) ?? false
     mtpRuntimeState = try container.decodeIfPresent(String.self, forKey: .mtpRuntimeState) ?? "disabled"
     mtpUnavailableReason = try container.decodeIfPresent(String.self, forKey: .mtpUnavailableReason)
@@ -245,6 +249,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     readyModelSizeBytes: UInt64? = nil,
     progress: Progress?,
     expertMemoryMode: String?,
+    expertResidency: ExpertResidencySnapshot? = nil,
     mtpEnabled: Bool = false,
     mtpRuntimeState: String = "disabled",
     mtpUnavailableReason: String? = nil,
@@ -268,6 +273,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.readyModelSizeBytes = readyModelSizeBytes
     self.progress = progress
     self.expertMemoryMode = expertMemoryMode
+    self.expertResidency = expertResidency
     self.mtpEnabled = mtpEnabled
     self.mtpRuntimeState = mtpRuntimeState
     self.mtpUnavailableReason = mtpUnavailableReason
@@ -344,8 +350,14 @@ struct SupervisorStatusDocument: Codable, Equatable {
     }
   }
   var modelFootprintTitle: String {
-    expertMemoryMode == "paged" || expertMemoryMode == "hybrid"
-      ? "RAM + SSD streaming" : expertMemoryMode == "resident" ? "Fully in memory" : "Not loaded"
+    if expertMemoryMode == "resident"
+      || (expertMemoryMode == "hybrid"
+        && expertResidency?.retainsEveryLayerCompletely == true)
+    {
+      return "Fully in memory"
+    }
+    return expertMemoryMode == "paged" || expertMemoryMode == "hybrid"
+      ? "RAM + SSD streaming" : "Not loaded"
   }
   var modelDiskSizeTitle: String {
     readyModelSizeBytes.map(decimalGigabyteText) ?? "Not measured"

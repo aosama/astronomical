@@ -238,6 +238,53 @@ final class StatusPresentationContractTests: XCTestCase {
     )
   }
 
+  func test_should_present_a_complete_pager_owned_topology_as_fully_in_memory() throws {
+    // This is the complete public-status journey that previously appeared as
+    // SSD streaming merely because its execution owner remained hybrid.
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_residency":{"total_layer_count":40,"complete_layer_count":40,"complete_layer_payload_bytes":19595788288,"partial_layer_count":0,"partial_layer_payload_bytes":0}}
+        """.utf8)
+    )
+
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "Fully in memory")
+  }
+
+  func test_should_keep_streaming_visible_when_any_expert_layer_is_incomplete() throws {
+    let incompleteResidencyCases = [
+      #"{"total_layer_count":40,"complete_layer_count":39,"complete_layer_payload_bytes":19000000000,"partial_layer_count":1,"partial_layer_payload_bytes":200000000}"#,
+      #"{"total_layer_count":40,"complete_layer_count":39,"complete_layer_payload_bytes":19000000000,"partial_layer_count":0,"partial_layer_payload_bytes":0}"#,
+    ]
+
+    for expertResidencyJSON in incompleteResidencyCases {
+      let statusDocument = try JSONDecoder().decode(
+        SupervisorStatusDocument.self,
+        from: Data(
+          """
+          {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_residency":\(expertResidencyJSON)}
+          """.utf8)
+      )
+
+      XCTAssertEqual(statusDocument.modelFootprintTitle, "RAM + SSD streaming")
+    }
+  }
+
+  func test_should_keep_paging_visible_when_the_topology_snapshot_is_stale() throws {
+    // Mode changes and detailed topology snapshots are separate worker events.
+    // A newer paged mode must win over an older all-complete snapshot.
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"paged","expert_residency":{"total_layer_count":40,"complete_layer_count":40,"complete_layer_payload_bytes":19595788288,"partial_layer_count":0,"partial_layer_payload_bytes":0}}
+        """.utf8)
+    )
+
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "RAM + SSD streaming")
+  }
+
   func test_should_label_each_worker_owned_mlx_memory_snapshot_source() throws {
     let expectedSourceTitles = [
       "model_loaded": "Model loaded",
