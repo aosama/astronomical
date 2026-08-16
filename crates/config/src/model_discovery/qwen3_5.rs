@@ -10,6 +10,8 @@ pub(super) struct Qwen3_5DiscoveredModelMetadata {
     pub max_input_tokens: u32,
     pub max_output_tokens: u32,
     pub has_vision: bool,
+    pub supports_reasoning: bool,
+    pub supports_tool_calls: bool,
     pub model_size_bytes: u64,
 }
 
@@ -80,6 +82,9 @@ pub(super) fn discover_model_metadata(
         max_input_tokens: context_window.saturating_sub(max_output_tokens),
         max_output_tokens,
         has_vision,
+        // The Qwen text processor owns both structured output contracts.
+        supports_reasoning: true,
+        supports_tool_calls: true,
         model_size_bytes: measure_model_safetensors_bytes(model_directory)?,
     })
 }

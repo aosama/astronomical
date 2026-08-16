@@ -22,8 +22,6 @@ const OPENAI_CHAT_REASONING_FORMAT: &str =
 const OPENAI_FUNCTION_CALL_FORMAT: &str = "openai_function_call";
 const CHAT_COMPLETIONS_ENDPOINT_PATH: &str = "/v1/chat/completions";
 const RESPONSES_ENDPOINT_PATH: &str = "/v1/responses";
-const DISCOVERED_QWEN_MODELS_SUPPORT_REASONING: bool = true;
-const DISCOVERED_QWEN_MODELS_SUPPORT_TOOL_CALLS: bool = true;
 
 /// Lists every model the supervisor can currently advertise safely.
 pub(crate) async fn list_models(State(application_state): State<ApplicationState>) -> Response {
@@ -73,7 +71,7 @@ fn advertised_models_for_application_state(
     application_state: &ApplicationState,
     model_advertisement_created_at_unix_seconds: u64,
 ) -> Result<Vec<OpenAiModel>, OpenAiModelValidationError> {
-    let discovered_models = discovered_models_for_application_state(application_state);
+    let discovered_models = application_state.discovered_models_snapshot();
     if discovered_models.is_empty() {
         let worker_health_snapshot = application_state
             .generation_executor
@@ -105,21 +103,6 @@ fn advertised_models_for_application_state(
         .collect()
 }
 
-fn discovered_models_for_application_state(
-    application_state: &ApplicationState,
-) -> Vec<DiscoveredModel> {
-    application_state
-        .reloadable_config
-        .as_ref()
-        .and_then(|reloadable_config| {
-            reloadable_config
-                .read()
-                .ok()
-                .map(|resolved_runtime_config| resolved_runtime_config.discovered_models.clone())
-        })
-        .unwrap_or_else(|| application_state.discovered_models.clone())
-}
-
 fn openai_model_from_ready_worker_capabilities(
     ready_model_id: String,
     model_advertisement_created_at_unix_seconds: u64,
@@ -147,8 +130,7 @@ fn openai_model_from_discovered_model(
     discovered_model: &DiscoveredModel,
     model_advertisement_created_at_unix_seconds: u64,
 ) -> Result<OpenAiModel, OpenAiModelValidationError> {
-    // Current discovered Qwen3.5-MoE-family models all use the same structured-chat
-    // processor, which enables reasoning and validated OpenAI function calls.
+    // Family discovery owns behavior; this layer owns only the common API shape.
     OpenAiModel::from_parts(OpenAiModelParts {
         model_id: discovered_model.model_id.clone(),
         created: model_advertisement_created_at_unix_seconds,
@@ -159,10 +141,10 @@ fn openai_model_from_discovered_model(
         input_modalities: input_modalities_for_model(discovered_model.has_vision),
         output_modalities: vec![TEXT_OUTPUT_MODALITY.to_owned()],
         supports_streaming: true,
-        supports_reasoning: DISCOVERED_QWEN_MODELS_SUPPORT_REASONING,
-        reasoning_format: reasoning_format_for_model(DISCOVERED_QWEN_MODELS_SUPPORT_REASONING),
-        supports_tool_calls: DISCOVERED_QWEN_MODELS_SUPPORT_TOOL_CALLS,
-        tool_call_format: tool_call_format_for_model(DISCOVERED_QWEN_MODELS_SUPPORT_TOOL_CALLS),
+        supports_reasoning: discovered_model.supports_reasoning,
+        reasoning_format: reasoning_format_for_model(discovered_model.supports_reasoning),
+        supports_tool_calls: discovered_model.supports_tool_calls,
+        tool_call_format: tool_call_format_for_model(discovered_model.supports_tool_calls),
         supported_endpoints: supported_generation_endpoint_paths(),
     })
 }
