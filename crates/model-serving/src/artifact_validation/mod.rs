@@ -15,7 +15,8 @@ pub(crate) use raw_safetensors_inventory::RawSafetensorsInventory;
 #[doc(hidden)]
 pub use required_files::validate_required_file_for_tests;
 pub(crate) use required_files::{
-    hugging_face_snapshot_model_id, validate_required_file, validate_required_files,
+    hugging_face_snapshot_model_id, read_bounded_required_file_bytes, validate_required_file,
+    validate_required_files,
 };
 pub use types::{RequiredFileProfile, TensorDtype, TensorProfile};
 pub(crate) use validated_artifact::ValidatedRequiredFile;
