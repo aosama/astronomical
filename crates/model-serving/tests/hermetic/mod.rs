@@ -23,3 +23,4 @@ mod qwen3_5_execution_error;
 mod qwen_package_structure;
 mod required_files;
 mod retained_expert_layer_cache;
+mod sparse_experts;
