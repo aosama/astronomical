@@ -269,3 +269,63 @@ async fn should_accept_named_xs_and_s_assignment_geometries() {
         );
     }
 }
+
+#[tokio::test]
+async fn should_reject_sorted_reduction_when_scores_do_not_match_assignment_geometry() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let sorted_expert_outputs = runtime
+        .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[2, 1, 2])
+        .expect("sorted outputs should be valid");
+    let inverse_order = runtime
+        .array_from_u32(&[0, 1], &[2])
+        .expect("inverse order should be valid");
+    let mismatched_scores = runtime
+        .array_from_f32(&[0.2, 0.3, 0.5], &[1, 3])
+        .expect("mismatched scores should be representable");
+    let weighted_sum_kernel =
+        sorted_expert_weighted_sum_kernel().expect("kernel should initialize");
+
+    let reduction_error = sorted_expert_weighted_sum(
+        &runtime,
+        &weighted_sum_kernel,
+        &sorted_expert_outputs,
+        &inverse_order,
+        &mismatched_scores,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .expect_err("mismatched routing scores must fail before kernel execution");
+
+    assert!(
+        reduction_error
+            .to_string()
+            .contains("must match selected scores")
+    );
+}
+
+#[tokio::test]
+async fn should_reject_sorted_reduction_when_scores_are_not_floating_point() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let sorted_expert_outputs = runtime
+        .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[2, 1, 2])
+        .expect("sorted outputs should be valid");
+    let inverse_order = runtime
+        .array_from_u32(&[0, 1], &[2])
+        .expect("inverse order should be valid");
+    let integer_scores = runtime
+        .array_from_u32(&[1, 1], &[1, 2])
+        .expect("integer scores should be representable");
+    let weighted_sum_kernel =
+        sorted_expert_weighted_sum_kernel().expect("kernel should initialize");
+
+    sorted_expert_weighted_sum(
+        &runtime,
+        &weighted_sum_kernel,
+        &sorted_expert_outputs,
+        &inverse_order,
+        &integer_scores,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .expect_err("integer routing scores must fail before kernel execution");
+}

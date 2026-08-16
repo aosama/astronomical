@@ -16,4 +16,5 @@ mod quantized_matmul_partition_parity;
 mod request_decoder_state;
 mod sampler;
 mod speculative_prefill;
+mod target_verification_quantized_linear;
 mod visual_embedding_injection;

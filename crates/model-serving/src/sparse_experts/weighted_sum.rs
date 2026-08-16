@@ -132,6 +132,8 @@ fn sorted_expert_weighted_sum_inner(
         || sorted_output_shape[1] != 1
         || score_shape.len() < 2
         || inverse_order.dtype() != MlxDtype::UInt32
+        || !is_supported_expert_activation_dtype(sorted_expert_outputs.dtype())
+        || !is_supported_expert_score_dtype(selected_scores.dtype())
     {
         return Err(geometry_error(
             "sorted expert outputs, inverse order, and scores have invalid shapes or dtypes",
@@ -187,6 +189,20 @@ fn sorted_expert_weighted_sum_inner(
     kernel_outputs
         .pop()
         .ok_or_else(|| geometry_error("sorted expert weighted-sum kernel returned no output"))
+}
+
+const fn is_supported_expert_activation_dtype(dtype: MlxDtype) -> bool {
+    matches!(
+        dtype,
+        MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
+    )
+}
+
+const fn is_supported_expert_score_dtype(dtype: MlxDtype) -> bool {
+    matches!(
+        dtype,
+        MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
+    )
 }
 
 fn empty_weighted_outputs(
