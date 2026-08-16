@@ -1,4 +1,10 @@
 mod artifact;
+mod attribution;
 mod cancel;
 mod generate;
+mod http;
+mod http_restore;
+mod malformed;
+mod rest_prefill_cancellation;
 mod restore;
+mod swap;

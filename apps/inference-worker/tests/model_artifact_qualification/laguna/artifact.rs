@@ -163,6 +163,27 @@ fn qualify_pinned_artifact(pinned_artifact: PinnedLagunaArtifact) {
         classify_model_directory(&model_directory).expect("the pinned config should be readable"),
         Some(ModelFamily::Laguna)
     );
+    let development_config =
+        astronomical_config::AstronomicalConfig::load_from_development_location()
+            .expect("Development configuration should load for executable discovery");
+    let publicly_discovered_model = astronomical_config::discover_models(
+        development_config.model_directories(),
+        development_config.max_output_tokens(),
+    )
+    .expect("executable model discovery should complete")
+    .into_iter()
+    .flat_map(|directory_scan| directory_scan.discovered_models)
+    .find(|discovered_model| {
+        discovered_model.model_family == ModelFamily::Laguna
+            && discovered_model.model_id == pinned_artifact.public_model_id()
+            && discovered_model.revision == pinned_artifact.revision
+    })
+    .expect("the pinned Laguna artifact should be publicly discoverable");
+    assert_eq!(
+        fs::canonicalize(publicly_discovered_model.model_directory)
+            .expect("the discovered Laguna path should canonicalize"),
+        model_directory
+    );
     let validated_artifact = LagunaArtifactValidator::new()
         .validate(&model_directory)
         .expect("the pinned Laguna artifact should validate before model construction");
@@ -296,6 +317,11 @@ pub(super) fn bounded_romeo_and_juliet_source() -> &'static str {
 
 pub(super) fn compact_romeo_and_juliet_source() -> &'static str {
     romeo_and_juliet_source_with_character_limit(MAXIMUM_COMPACT_QUALIFICATION_SOURCE_CHARACTERS)
+}
+
+/// Returns the complete repository fixture for long public prompt journeys.
+pub(super) const fn full_romeo_and_juliet_source() -> &'static str {
+    ROMEO_AND_JULIET_SOURCE
 }
 
 fn romeo_and_juliet_source_with_character_limit(maximum_characters: usize) -> &'static str {

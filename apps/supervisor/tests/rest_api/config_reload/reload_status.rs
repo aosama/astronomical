@@ -407,6 +407,65 @@ async fn should_keep_all_discovered_models_listed_and_routable_with_speculative_
     assert_eq!(received_generation_commands[1].model, UNCONFIGURED_MODEL_ID);
 }
 
+#[tokio::test]
+async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing() {
+    const RELOADED_MODEL_ID: &str = "astronomical/reloaded-laguna";
+    let config_home_directory = tempfile::tempdir()
+        .expect("a config home should be created")
+        .keep();
+    write_config_file(&config_home_directory, r#"{}"#);
+    let reloadable_config = Arc::new(RwLock::new(sample_resolved_config()));
+    let scripted_executor = ScriptedExecutor::ready(Vec::new());
+    let received_generation_commands = scripted_executor.received_generation_commands();
+    let application = build_development_application_with_reload(
+        scripted_executor,
+        Arc::clone(&reloadable_config),
+        config_home_directory,
+    );
+    let mut reloaded_laguna = discovered_model_for(RELOADED_MODEL_ID);
+    reloaded_laguna.model_family = astronomical_config::ModelFamily::Laguna;
+    reloadable_config
+        .write()
+        .expect("the reloadable config should remain writable")
+        .discovered_models = vec![reloaded_laguna];
+
+    let model_list_response = application
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/models")
+                .body(Body::empty())
+                .expect("the model-list request should be well formed"),
+        )
+        .await
+        .expect("the model-list request should receive a response");
+    let model_list_body = to_bytes(model_list_response.into_body(), 16 * 1024)
+        .await
+        .expect("the model-list response should be readable");
+    assert!(String::from_utf8_lossy(&model_list_body).contains(RELOADED_MODEL_ID));
+
+    let generation_response = application
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(format!(
+                    r#"{{"model":"{RELOADED_MODEL_ID}","messages":[{{"role":"user","content":"hello"}}],"stream":true}}"#
+                )))
+                .expect("the Laguna request should be well formed"),
+        )
+        .await
+        .expect("the Laguna request should receive a response");
+
+    assert_eq!(generation_response.status(), StatusCode::OK);
+    let received_generation_commands = received_generation_commands
+        .lock()
+        .expect("the scripted command log should remain readable");
+    assert_eq!(received_generation_commands.len(), 1);
+    assert_eq!(received_generation_commands[0].model, RELOADED_MODEL_ID);
+}
+
 fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel {
     astronomical_config::DiscoveredModel {
         model_id: model_id.to_owned(),
@@ -417,6 +476,8 @@ fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel 
         max_input_tokens: 1_024,
         max_output_tokens: 128,
         has_vision: false,
+        supports_reasoning: true,
+        supports_tool_calls: true,
         model_size_bytes: 0,
     }
 }

@@ -192,6 +192,7 @@
 
 ## Model lifecycle
 
+- Keep public model discovery shallow but predictive: bounded-read family metadata, validate required sidecars and safe shard references, and sum file metadata without opening or hashing multi-gigabyte weight payloads. Deep retained-descriptor validation remains model-load work, and a deep failure must preserve the already resident model.
 - Start the worker without constructing a processor or engine. Lazy first-request loading removes avoidable application-launch input/output, memory allocation, and graphics-processor residency.
 - Bound on-demand model loading and report a recoverable failure over inter-process communication. A bad discovered artifact must not stall the request queue or force a healthy idle worker to exit.
 - Preserve the model-load cause chain across the worker boundary and return a dedicated local application programming interface error. A generic worker-unavailable response hides correctable artifact or quantization failures and encourages unnecessary worker restarts.
