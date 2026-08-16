@@ -2,8 +2,8 @@ use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 
 use crate::{
     DeepSeekV4UnavailableInferenceEngine, EngineGenerationStart, EngineLoadResult, GeneratedToken,
-    GenerationFinalization, InferenceEngine, InferenceEngineError, MlxMemoryLimitAdjustment,
-    MlxMemoryTelemetry, Qwen3_5Engine,
+    GenerationFinalization, InferenceEngine, InferenceEngineError, LagunaEngine,
+    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, Qwen3_5Engine,
 };
 
 use super::ModelFamilyInferenceRequest;
@@ -11,6 +11,7 @@ use super::ModelFamilyInferenceRequest;
 /// Family-tagged inference engine used by the generic worker.
 pub enum ModelFamilyInferenceEngine {
     Qwen3_5(Qwen3_5Engine),
+    Laguna(LagunaEngine),
     DeepSeekV4(DeepSeekV4UnavailableInferenceEngine),
 }
 
@@ -20,6 +21,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.load().await,
+            Self::Laguna(engine) => engine.load().await,
             Self::DeepSeekV4(_) => Err(unavailable_engine_error()),
         }
     }
@@ -30,6 +32,9 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         match (self, inference_request) {
             (Self::Qwen3_5(engine), ModelFamilyInferenceRequest::Qwen3_5(inference_request)) => {
+                engine.start_generation(inference_request).await
+            }
+            (Self::Laguna(engine), ModelFamilyInferenceRequest::Laguna(inference_request)) => {
                 engine.start_generation(inference_request).await
             }
             (Self::DeepSeekV4(_), ModelFamilyInferenceRequest::DeepSeekV4(_)) => {
@@ -45,6 +50,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<GeneratedToken, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.decode_next_token(request_id).await,
+            Self::Laguna(engine) => engine.decode_next_token(request_id).await,
             Self::DeepSeekV4(_) => Err(unavailable_engine_error()),
         }
     }
@@ -60,6 +66,11 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
                     .inject_input_tokens(request_id, input_token_ids)
                     .await
             }
+            Self::Laguna(engine) => {
+                engine
+                    .inject_input_tokens(request_id, input_token_ids)
+                    .await
+            }
             Self::DeepSeekV4(_) => Err(unavailable_engine_error()),
         }
     }
@@ -70,6 +81,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<GenerationFinalization, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.cancel_generation(request_id).await,
+            Self::Laguna(engine) => engine.cancel_generation(request_id).await,
             Self::DeepSeekV4(_) => Err(unavailable_engine_error()),
         }
     }
@@ -79,6 +91,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.collect_persistent_prompt_cache_stats().await,
+            Self::Laguna(engine) => engine.collect_persistent_prompt_cache_stats().await,
             Self::DeepSeekV4(_) => Ok(None),
         }
     }
@@ -89,6 +102,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.clear_persistent_prompt_cache(model_id).await,
+            Self::Laguna(engine) => engine.clear_persistent_prompt_cache(model_id).await,
             Self::DeepSeekV4(_) => Ok(None),
         }
     }
@@ -98,6 +112,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.collect_mlx_memory_telemetry().await,
+            Self::Laguna(engine) => engine.collect_mlx_memory_telemetry().await,
             Self::DeepSeekV4(_) => Ok(None),
         }
     }
@@ -108,6 +123,11 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => {
+                engine
+                    .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+                    .await
+            }
+            Self::Laguna(engine) => {
                 engine
                     .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
                     .await

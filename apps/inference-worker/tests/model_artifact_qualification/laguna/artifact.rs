@@ -17,6 +17,7 @@ const QUALIFICATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const QUALIFICATION_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 const QUALIFICATION_CHILD_MODEL_ID: &str = "ASTRONOMICAL_LAGUNA_QUALIFICATION_CHILD_MODEL_ID";
 const MAXIMUM_QUALIFICATION_SOURCE_CHARACTERS: usize = 4_000;
+const MAXIMUM_COMPACT_QUALIFICATION_SOURCE_CHARACTERS: usize = 800;
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
@@ -35,6 +36,12 @@ pub(super) struct PinnedLagunaArtifact {
     expected_preserves_prior_reasoning: bool,
     expected_top_k: Option<u16>,
     expected_repetition_penalty_thousandths: u16,
+}
+
+impl PinnedLagunaArtifact {
+    pub(super) fn public_model_id(self) -> &'static str {
+        astronomical_config::leaf_model_id(self.model_id)
+    }
 }
 
 pub(super) const LAGUNA_XS: PinnedLagunaArtifact = PinnedLagunaArtifact {
@@ -285,6 +292,10 @@ fn qualify_pinned_artifact(pinned_artifact: PinnedLagunaArtifact) {
 
 pub(super) fn bounded_romeo_and_juliet_source() -> &'static str {
     romeo_and_juliet_source_with_character_limit(MAXIMUM_QUALIFICATION_SOURCE_CHARACTERS)
+}
+
+pub(super) fn compact_romeo_and_juliet_source() -> &'static str {
+    romeo_and_juliet_source_with_character_limit(MAXIMUM_COMPACT_QUALIFICATION_SOURCE_CHARACTERS)
 }
 
 fn romeo_and_juliet_source_with_character_limit(maximum_characters: usize) -> &'static str {
