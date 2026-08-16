@@ -95,9 +95,22 @@ pub enum WorkerControlError {
         unexpected_worker_event_summary: String,
     },
 
-    /// The worker closed its IPC output before the supervisor received the expected event.
+    /// A non-process fixture closed its IPC output without process diagnostics.
     #[error("worker closed its event stream before the expected event")]
     WorkerEventStreamClosed,
+
+    /// The worker process closed IPC and supplied bounded process diagnostics.
+    #[error(
+        "worker process exited after closing its event stream ({process_exit_status}) after {worker_lifetime_millis} milliseconds; worker stderr tail: {stderr_tail}"
+    )]
+    WorkerProcessExited {
+        /// Exit code, signal, or a statement that the process had not exited yet.
+        process_exit_status: String,
+        /// End-to-end lifetime from successful process spawn through IPC closure.
+        worker_lifetime_millis: u128,
+        /// Newest bounded bytes drained from worker standard error.
+        stderr_tail: String,
+    },
 
     /// The child process did not expose a writable stdin pipe.
     #[error("worker process did not expose stdin")]
@@ -112,7 +125,7 @@ pub enum WorkerControlError {
     MissingStandardError,
 
     /// A bounded IPC protocol operation failed.
-    #[error("worker protocol operation failed")]
+    #[error("worker protocol operation failed: {0}")]
     Protocol(#[from] ProtocolError),
 
     /// Starting the worker process failed.
