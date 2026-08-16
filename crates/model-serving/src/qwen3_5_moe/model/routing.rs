@@ -101,7 +101,7 @@ pub fn qwen3_5_moe_sorted_expert_weighted_sum(
     )
 }
 
-/// Reduces unsorted Qwen expert outputs through the family-neutral operation.
+/// Reduces unsorted Qwen expert outputs while restoring their activation dtype.
 pub fn qwen3_5_moe_unsorted_expert_weighted_sum(
     runtime: &MlxRuntime,
     selected_expert_outputs: &MlxArray,

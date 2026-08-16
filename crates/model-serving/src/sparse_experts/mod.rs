@@ -21,5 +21,6 @@ pub use assignment_sort::{
 pub use error::SparseExpertError;
 #[cfg(feature = "direct-mlx")]
 pub use weighted_sum::{
-    sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
+    router_weighted_expert_inputs, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
+    unsorted_expert_weighted_sum,
 };
