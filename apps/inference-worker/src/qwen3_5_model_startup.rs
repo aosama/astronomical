@@ -11,7 +11,7 @@ use astronomical_model_serving::{
     Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PromptProcessingChunkSizer,
 };
 
-use crate::worker_startup_error::WorkerStartupError;
+use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 use astronomical_model_serving::ModelLoadingPerformanceAttributionMetadata;
 
 #[allow(clippy::too_many_arguments)]
@@ -19,7 +19,6 @@ pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
-    prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
     optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
     mtp_enabled: bool,
@@ -28,7 +27,7 @@ pub(crate) fn initialize_qwen3_5_model(
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
-) -> Result<(Qwen3_5GenerationProcessor, Qwen3_5Engine), WorkerStartupError> {
+) -> Result<(Qwen3_5GenerationProcessor, Qwen3_5Engine), Qwen3_5ModelStartupError> {
     let mut model_loading_performance_attribution = if performance_attribution_enabled {
         PerformanceAttribution::enabled()
     } else {
@@ -38,10 +37,12 @@ pub(crate) fn initialize_qwen3_5_model(
         &performance_attribution_log_path,
         performance_attribution_enabled,
     )
-    .map_err(|source| WorkerStartupError::OpenPerformanceAttributionLog {
-        performance_attribution_log_path: performance_attribution_log_path.clone(),
-        source,
-    })?;
+    .map_err(
+        |source| Qwen3_5ModelStartupError::OpenPerformanceAttributionLog {
+            log_path: performance_attribution_log_path.clone(),
+            source,
+        },
+    )?;
     let validated_artifact = match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::ArtifactValidation,
         |_performance_attribution| {
@@ -64,7 +65,7 @@ pub(crate) fn initialize_qwen3_5_model(
                 None,
                 "artifact validation failed",
             );
-            return Err(WorkerStartupError::Qwen3_5ArtifactValidation {
+            return Err(Qwen3_5ModelStartupError::ArtifactValidation {
                 model_directory: model_directory_path.clone(),
                 source,
             });
@@ -97,7 +98,7 @@ pub(crate) fn initialize_qwen3_5_model(
                 Some(artifact_shard_count),
                 "tokenizer initialization failed",
             );
-            return Err(WorkerStartupError::Qwen3_5ProcessorInitialization {
+            return Err(Qwen3_5ModelStartupError::ProcessorInitialization {
                 model_directory: model_directory_path.clone(),
                 source,
             });
@@ -131,11 +132,10 @@ pub(crate) fn initialize_qwen3_5_model(
     });
     // Resolve sizing only after artifact validation supplies the model context
     // ceiling and stable model/revision identity required by persisted evidence.
-    // The supervisor-owned policy is otherwise authoritative; this layer adds
-    // only Qwen execution context and optional benchmark injection.
-    let prompt_processing_chunk_sizer_result = match prompt_processing_chunk_sizer_override {
-        Some(prompt_processing_chunk_sizer) => Ok(prompt_processing_chunk_sizer),
-        None => match &chunking.prompt_processing_chunk_sizing_policy {
+    // The supervisor-owned policy is authoritative. This family owner adds
+    // only validated Qwen context and model/revision identity.
+    let prompt_processing_chunk_sizer_result =
+        match &chunking.prompt_processing_chunk_sizing_policy {
             WorkerPromptProcessingChunkSizingPolicy::Fixed {
                 fixed_prompt_processing_chunk_size_tokens,
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
@@ -164,8 +164,7 @@ pub(crate) fn initialize_qwen3_5_model(
                     chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
                 ),
             },
-        },
-    };
+        };
     let prompt_processing_chunk_sizer = match prompt_processing_chunk_sizer_result {
         Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
         Err(prompt_processing_chunk_sizer_error) => {
@@ -178,7 +177,7 @@ pub(crate) fn initialize_qwen3_5_model(
                 Some(artifact_shard_count),
                 "prompt-processing chunk configuration failed",
             );
-            return Err(WorkerStartupError::PromptProcessingChunkSizing(
+            return Err(Qwen3_5ModelStartupError::PromptProcessingChunkSizing(
                 prompt_processing_chunk_sizer_error,
             ));
         }
@@ -198,7 +197,7 @@ pub(crate) fn initialize_qwen3_5_model(
         model_loading_performance_attribution,
         performance_attribution_log,
     )
-    .map_err(|source| WorkerStartupError::Qwen3_5EngineInitialization {
+    .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
         model_directory: model_directory_path,
         source,
     })?;

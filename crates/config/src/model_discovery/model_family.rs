@@ -1,11 +1,18 @@
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
 use thiserror::Error;
+
+use super::{deepseek_v4, laguna, qwen3_5};
+
+const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Closed model-family classification used at discovery and worker startup.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ModelFamily {
     Qwen3_5,
+    Laguna,
     DeepSeekV4,
 }
 
@@ -13,12 +20,14 @@ impl ModelFamily {
     /// Classifies a config.json model_type without claiming that the family is executable.
     #[must_use]
     pub fn from_model_type(model_type: Option<&str>) -> Option<Self> {
-        match model_type {
-            Some("qwen3_5") | Some("qwen3_5_moe") | Some("qwen3_5_moe_vision") => {
-                Some(Self::Qwen3_5)
-            }
-            Some("deepseek_v4") => Some(Self::DeepSeekV4),
-            _ => None,
+        if qwen3_5::recognizes_model_type(model_type) {
+            Some(Self::Qwen3_5)
+        } else if laguna::recognizes_model_type(model_type) {
+            Some(Self::Laguna)
+        } else if deepseek_v4::recognizes_model_type(model_type) {
+            Some(Self::DeepSeekV4)
+        } else {
+            None
         }
     }
 }
@@ -38,6 +47,13 @@ pub enum ModelFamilyClassificationError {
         #[source]
         source: serde_json::Error,
     },
+    #[error(
+        "model config.json has {actual_bytes} bytes, exceeding the {maximum_bytes}-byte classification limit"
+    )]
+    ConfigTooLarge {
+        actual_bytes: u64,
+        maximum_bytes: u64,
+    },
 }
 
 /// Reads only model_type from a selected artifact directory.
@@ -45,24 +61,54 @@ pub fn classify_model_directory(
     model_directory: &Path,
 ) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
     let config_path = model_directory.join("config.json");
-    let config_bytes = std::fs::read(&config_path).map_err(|source| {
+    let config_file = std::fs::File::open(&config_path).map_err(|source| {
         ModelFamilyClassificationError::ReadConfig {
             model_directory: model_directory.to_path_buf(),
             source,
         }
     })?;
-    let config_value: serde_json::Value =
-        serde_json::from_slice(&config_bytes).map_err(|source| {
-            ModelFamilyClassificationError::ParseConfig {
-                model_directory: model_directory.to_path_buf(),
-                source,
-            }
+    let config_size_bytes = config_file
+        .metadata()
+        .map_err(|source| ModelFamilyClassificationError::ReadConfig {
+            model_directory: model_directory.to_path_buf(),
+            source,
+        })?
+        .len();
+    if config_size_bytes > MAXIMUM_FAMILY_CONFIG_BYTES {
+        return Err(ModelFamilyClassificationError::ConfigTooLarge {
+            actual_bytes: config_size_bytes,
+            maximum_bytes: MAXIMUM_FAMILY_CONFIG_BYTES,
+        });
+    }
+    let mut config_bytes = Vec::new();
+    config_file
+        .take(MAXIMUM_FAMILY_CONFIG_BYTES + 1)
+        .read_to_end(&mut config_bytes)
+        .map_err(|source| ModelFamilyClassificationError::ReadConfig {
+            model_directory: model_directory.to_path_buf(),
+            source,
+        })?;
+    if config_bytes.len() as u64 > MAXIMUM_FAMILY_CONFIG_BYTES {
+        return Err(ModelFamilyClassificationError::ConfigTooLarge {
+            actual_bytes: config_bytes.len() as u64,
+            maximum_bytes: MAXIMUM_FAMILY_CONFIG_BYTES,
+        });
+    }
+    let config_document: ModelFamilyConfigDocument = serde_json::from_slice(&config_bytes)
+        .map_err(|source| ModelFamilyClassificationError::ParseConfig {
+            model_directory: model_directory.to_path_buf(),
+            source,
         })?;
     Ok(ModelFamily::from_model_type(
-        config_value
-            .get("model_type")
-            .and_then(serde_json::Value::as_str),
+        config_document.model_type.as_deref(),
     ))
+}
+
+/// Minimal duplicate-aware projection keeps family dispatch independent from full config shape.
+#[derive(Deserialize)]
+struct ModelFamilyConfigDocument {
+    #[serde(default)]
+    model_type: Option<String>,
 }
 
 /// Classifies a model_type without claiming that the family is executable.
