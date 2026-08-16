@@ -20,6 +20,8 @@ pub enum DecoderCacheLayoutError {
     EmptyComposite { layer_index: usize },
     #[error("decoder-cache layer {layer_index} append-only attention has zero capacity growth")]
     ZeroCapacityGrowthTokens { layer_index: usize },
+    #[error("decoder-cache layer {layer_index} rotating attention has zero window size")]
+    ZeroRotatingWindowSize { layer_index: usize },
     #[error(
         "decoder-cache layer {layer_index} sequence tensor {qualified_role_name} has no sequence axis"
     )]

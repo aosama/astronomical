@@ -30,10 +30,13 @@ pub use maximum_mlx_memory::{
     maximum_mlx_memory_gb_to_bytes, restore_config_file, write_maximum_mlx_memory_gb,
 };
 pub use model_discovery::{
-    DiscoveredModel, DiscoveredModelError, ModelDiscoveryDirectoryScan, ModelFamily,
-    ModelFamilyClassificationError, classify_model_directory, discover_models,
+    ClassifiedModelArtifact, DiscoveredModel, DiscoveredModelError, ModelDiscoveryDirectoryScan,
+    ModelFamily, ModelFamilyClassificationError, classify_model_directory,
+    discover_classified_model_artifacts, discover_models, requestable_model_id,
 };
-pub use model_identity::{decode_huggingface_cache_directory_name, resolve_model_id};
+pub use model_identity::{
+    decode_huggingface_cache_directory_name, leaf_model_id, resolve_model_id,
+};
 pub use prompt_cache_config::PromptCacheConfig;
 pub use speculative_prefill_config::SpeculativePrefillConfig;
 
