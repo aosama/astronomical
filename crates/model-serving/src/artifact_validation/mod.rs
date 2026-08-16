@@ -1,5 +1,6 @@
 mod bounded_safetensors;
 mod error;
+mod raw_safetensors_inventory;
 mod required_files;
 mod safetensors_dtype;
 mod types;
@@ -10,6 +11,7 @@ pub(crate) use bounded_safetensors::{
     validate_bounded_safetensors_with_partial_profiles,
 };
 pub use error::ArtifactValidationError;
+pub(crate) use raw_safetensors_inventory::RawSafetensorsInventory;
 #[doc(hidden)]
 pub use required_files::validate_required_file_for_tests;
 pub(crate) use required_files::{
@@ -17,4 +19,6 @@ pub(crate) use required_files::{
 };
 pub use types::{RequiredFileProfile, TensorDtype, TensorProfile};
 pub(crate) use validated_artifact::ValidatedRequiredFile;
-pub use validated_artifact::ValidatedWeightsFile;
+pub use validated_artifact::{
+    RawSafetensorsInventoryForTests, RawSafetensorsTensorDescriptorForTests, ValidatedWeightsFile,
+};

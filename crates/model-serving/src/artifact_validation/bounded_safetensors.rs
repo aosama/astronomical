@@ -9,13 +9,15 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
-use super::safetensors_dtype::{dtype_bits_per_element, parse_safetensors_dtype};
+use super::safetensors_dtype::{
+    checked_safetensors_payload_bytes, dtype_bits_per_element, parse_safetensors_dtype,
+};
 use super::{ArtifactValidationError, TensorDtype, TensorProfile};
 use crate::safetensors::{
     BoundedSafetensorsHeaderError, SafetensorsTensorView, read_bounded_safetensors_json_header,
 };
 
-const MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES: u64 = 16 * 1024 * 1024;
+pub(super) const MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES: u64 = 16 * 1024 * 1024;
 
 struct ArtifactSafetensorsHeader {
     tensors: HashMap<String, SafetensorsTensorView>,
@@ -177,9 +179,16 @@ fn validate_tensor_data_consistency(
             })?;
         let bits_per_element =
             dtype_bits_per_element(&tensor_view.dtype, weights_file_name, tensor_name)?;
-        let expected_data_bytes = element_count
-            .checked_mul(bits_per_element / 8)
-            .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
+        let Some(expected_data_bytes) =
+            checked_safetensors_payload_bytes(element_count, bits_per_element)?
+        else {
+            return Err(ArtifactValidationError::SafetensorsInvalidDataOffsets {
+                file_name: weights_file_name.to_owned(),
+                tensor_name: (*tensor_name).clone(),
+                data_start_offset: tensor_view.data_start_offset(),
+                data_end_offset: tensor_view.data_end_offset(),
+            });
+        };
         let actual_data_bytes = tensor_view
             .data_end_offset()
             .checked_sub(tensor_view.data_start_offset())
@@ -241,7 +250,7 @@ fn read_artifact_safetensors_header(
     })
 }
 
-fn artifact_safetensors_header_error(
+pub(super) fn artifact_safetensors_header_error(
     bounded_safetensors_header_error: BoundedSafetensorsHeaderError,
     weights_file_name: &str,
 ) -> ArtifactValidationError {

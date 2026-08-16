@@ -17,11 +17,15 @@ mod qwen3_5;
 mod qwen3_5_moe;
 mod safetensors;
 mod sparse_experts;
+mod strict_json;
 
-#[doc(hidden)]
-pub use artifact_validation::validate_required_file_for_tests;
 pub use artifact_validation::{
     ArtifactValidationError, RequiredFileProfile, TensorDtype, TensorProfile, ValidatedWeightsFile,
+};
+#[doc(hidden)]
+pub use artifact_validation::{
+    RawSafetensorsInventoryForTests, RawSafetensorsTensorDescriptorForTests,
+    validate_required_file_for_tests,
 };
 #[cfg(feature = "direct-mlx")]
 pub use decoder_cache::{
