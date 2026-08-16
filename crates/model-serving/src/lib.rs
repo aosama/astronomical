@@ -16,6 +16,7 @@ mod prompt_processing_chunk_size_optimizer;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod safetensors;
+mod sparse_experts;
 
 #[doc(hidden)]
 pub use artifact_validation::validate_required_file_for_tests;
@@ -185,6 +186,15 @@ pub use qwen3_5_moe::{
 pub use qwen3_5_moe::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     prefill_recovery_must_demote_complete_resident_owner, retained_expert_fill_budget_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+pub use sparse_experts::{
+    SortedExpertAssignments, restore_expert_assignment_order, router_weighted_expert_inputs,
+    sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
+    unsorted_expert_weighted_sum,
+};
+pub use sparse_experts::{
+    SparseExpertError, gathered_indices_use_sorted_contract, invert_assignment_order,
 };
 
 /// Validates a safetensors shard where some tensors have strict dtype/shape profiles
