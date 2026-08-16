@@ -172,6 +172,15 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             PerformanceOperation::MtpRejectedDraftStateRestoration,
             "mtp_rejected_draft_state_restoration",
         ),
+        (PerformanceOperation::MtpTargetRepair, "mtp_target_repair"),
+        (
+            PerformanceOperation::MtpPredictorCommitReplay,
+            "mtp_predictor_commit_replay",
+        ),
+        (
+            PerformanceOperation::MtpQueuedFrontierRestoration,
+            "mtp_queued_frontier_restoration",
+        ),
         (
             PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
             "prefill_state_async_evaluation_submission",
@@ -331,6 +340,66 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceCounter::MtpRejectedDraftCount,
             "mtp_rejected_draft_count",
+        ),
+        (
+            PerformanceCounter::MtpRequestedDepthTotal,
+            "mtp_requested_depth_total",
+        ),
+        (
+            PerformanceCounter::MtpEffectiveDepthTotal,
+            "mtp_effective_depth_total",
+        ),
+        (
+            PerformanceCounter::MtpProposedDraftCount,
+            "mtp_proposed_draft_count",
+        ),
+        (
+            PerformanceCounter::MtpEosTruncatedPrefixCount,
+            "mtp_eos_truncated_prefix_count",
+        ),
+        (
+            PerformanceCounter::MtpOutputDepthDowngradeCount,
+            "mtp_output_depth_downgrade_count",
+        ),
+        (
+            PerformanceCounter::MtpContextDepthDowngradeCount,
+            "mtp_context_depth_downgrade_count",
+        ),
+        (
+            PerformanceCounter::MtpThinkingDepthDowngradeCount,
+            "mtp_thinking_depth_downgrade_count",
+        ),
+        (
+            PerformanceCounter::MtpMemoryDepthDowngradeCount,
+            "mtp_memory_depth_downgrade_count",
+        ),
+        (
+            PerformanceCounter::MtpVerificationWorkspaceByteCount,
+            "mtp_verification_workspace_byte_count",
+        ),
+        (
+            PerformanceCounter::MtpBoundarySnapshotByteCount,
+            "mtp_boundary_snapshot_byte_count",
+        ),
+        (
+            PerformanceCounter::MtpPersistentGrowthByteCount,
+            "mtp_persistent_growth_byte_count",
+        ),
+        (
+            PerformanceCounter::MtpTargetRepairCount,
+            "mtp_target_repair_count",
+        ),
+        (
+            PerformanceCounter::MtpPredictorReplayTokenCount,
+            "mtp_predictor_replay_token_count",
+        ),
+        (
+            PerformanceCounter::MtpQueuedFrontierRestorationCount,
+            "mtp_queued_frontier_restoration_count",
+        ),
+        (
+            PerformanceCounter::MtpCancellationWithQueuedStateCount,
+            "mtp_cancellation_with_queued_state_count",
         ),
         (
             PerformanceCounter::MtpOperationalFallbackCount,

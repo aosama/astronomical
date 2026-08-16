@@ -1,8 +1,9 @@
 use astronomical_inference_worker::worker_startup::{
-    GpuWiredMemoryLimitSetting, derive_mlx_memory_limits_from_gpu_wired_limit,
-    parse_iogpu_wired_limit_setting, resolve_effective_mlx_memory_ceiling_bytes,
-    sample_iogpu_wired_limit_bytes,
+    GpuWiredMemoryLimitSetting, WorkerProcessError, WorkerStartupError,
+    derive_mlx_memory_limits_from_gpu_wired_limit, parse_iogpu_wired_limit_setting,
+    resolve_effective_mlx_memory_ceiling_bytes, sample_iogpu_wired_limit_bytes,
 };
+use astronomical_runtime_integration::MlxRuntimeError;
 
 #[test]
 fn should_parse_a_gpu_wired_limit_as_bytes() {
@@ -43,6 +44,22 @@ fn should_treat_zero_iogpu_wired_limit_as_system_default_policy() {
         wired_memory_limit_setting,
         GpuWiredMemoryLimitSetting::SystemDefaultPolicy
     );
+}
+
+#[test]
+fn should_include_the_exact_mlx_cause_in_a_worker_startup_failure() {
+    let worker_process_error = WorkerProcessError::Startup(
+        WorkerStartupError::ReadMlxRecommendedGpuWorkingSet(MlxRuntimeError::RuntimeOperation {
+            operation: "read MLX GPU recommended working set",
+            description: "synthetic device-info key failure".to_owned(),
+        }),
+    );
+
+    let worker_failure_diagnostic = worker_process_error.to_string();
+
+    assert!(worker_failure_diagnostic.contains("failed to read MLX recommended GPU working set"));
+    assert!(worker_failure_diagnostic.contains("read MLX GPU recommended working set"));
+    assert!(worker_failure_diagnostic.contains("synthetic device-info key failure"));
 }
 
 #[test]

@@ -1,29 +1,32 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::artifact_validation::{
-    ArtifactValidationError, RequiredFileProfile, TensorProfile, hugging_face_snapshot_model_id,
-    validate_required_file, validate_required_files,
+    ArtifactValidationError, RequiredFileProfile, TensorFeature, TensorSemanticRole,
+    ValidatedSafetensorsSource, hugging_face_snapshot_model_id, validate_required_file,
+    validate_required_files,
 };
-use crate::artifact_validation::{ValidatedRequiredFile, ValidatedWeightsFile};
 
-use super::Qwen3_5MtpArtifactCapability;
 use super::artifact_helpers::{
-    captured_required_file_bytes, read_required_file_bytes, recognized_tensor_names, required_file,
+    captured_required_file_bytes, read_required_file_bytes, required_file,
 };
+use super::artifact_inventory::{build_index_tensor_inventory, source_id_by_file_name};
+use super::sidecar_declaration::{Qwen3_5MtpSidecarCandidate, Qwen3_5MtpSidecarDeclaration};
 use super::tensor_spec::qwen3_5_language_tensor_profiles;
+use super::validated_artifact::ValidatedQwen3_5Artifact;
 use super::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
-use super::vision_validation::{
-    embedded_vision_tensor_profiles_for_shard, validate_vision_sidecars,
-    validate_vision_tower_inventory,
-};
+use super::vision_validation::validate_vision_tower_inventory;
 use super::{
     OptiQMetadata, OptiQMetadataError, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5VisionConfig,
 };
 use super::{Qwen3_5ArtifactError, Qwen3_5ShardIndex};
+use super::{
+    Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract, Qwen3_5MtpContractError,
+    Qwen3_5MtpTargetOnlyReason,
+};
 use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_tensor_profiles;
 
 /// Validates the complete Qwen3.5 artifact before any native allocation.
@@ -79,7 +82,7 @@ impl Qwen3_5ArtifactValidator {
             required_file_profiles.push(required_file("generation_config.json"));
         }
 
-        let mut required_files = validate_required_files(model_directory, &required_file_profiles)?;
+        let required_files = validate_required_files(model_directory, &required_file_profiles)?;
 
         // Read config.json and derive the revision hash from its bytes.
         let config_bytes = captured_required_file_bytes(&required_files, "config.json")?;
@@ -87,6 +90,7 @@ impl Qwen3_5ArtifactValidator {
 
         let mut config = Qwen3_5Config::from_json_bytes(config_bytes)?;
         let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)?;
+        let mtp_contract = parse_optional_mtp_contract(model_directory, config_bytes);
 
         // Validate optiq_metadata.json if present.
         if let Some(optiq_metadata_required_file) = required_files.get("optiq_metadata.json") {
@@ -104,9 +108,32 @@ impl Qwen3_5ArtifactValidator {
                     file_name: "model.safetensors.index.json".to_owned(),
                 })?,
         )?;
-        let shard_tensor_names =
+        let mut canonical_tensor_names =
             Qwen3_5ShardIndex::extract_language_tensor_names_from_json(&shard_index_bytes)?;
-        config.resolve_unquantized_modules_from_shard_index(&shard_tensor_names);
+        let sidecar_declaration = config.sidecar_mtp_file().and_then(|relative_path| {
+            Qwen3_5MtpSidecarDeclaration::parse(relative_path)
+                .inspect_err(|_| {
+                    tracing::debug!(
+                        "optional MTP sidecar declaration is invalid; serving target-only"
+                    )
+                })
+                .ok()
+        });
+        let sidecar_candidate = sidecar_declaration.as_ref().and_then(|declaration| {
+            Qwen3_5MtpSidecarCandidate::open(model_directory, declaration)
+                .inspect_err(|_| {
+                    tracing::debug!(
+                        "optional MTP sidecar source is unavailable; serving target-only"
+                    )
+                })
+                .ok()
+        });
+        let has_unavailable_declared_sidecar =
+            config.sidecar_mtp_file().is_some() && sidecar_candidate.is_none();
+        if let Some(candidate) = sidecar_candidate.as_ref() {
+            canonical_tensor_names.extend(candidate.canonical_names().cloned());
+        }
+        config.resolve_unquantized_modules_from_shard_index(&canonical_tensor_names);
         let language_tensor_profiles = qwen3_5_language_tensor_profiles(&config);
         let mut shard_index =
             Qwen3_5ShardIndex::from_json_bytes(&shard_index_bytes, &language_tensor_profiles)?;
@@ -119,8 +146,6 @@ impl Qwen3_5ArtifactValidator {
         for absent_optional_mtp_shard_file_name in absent_optional_mtp_shard_file_names {
             shard_index.omit_optional_mtp_shard_file(&absent_optional_mtp_shard_file_name);
         }
-        let mtp_artifact_capability =
-            Qwen3_5MtpArtifactCapability::from_shard_index(&config, &shard_index);
         let validated_vision_tower_storage =
             validate_vision_tower_inventory(&shard_index, vision_config.as_ref())?;
         let has_separate_vision_sidecar = validated_vision_tower_storage.has_separate_sidecar();
@@ -129,109 +154,184 @@ impl Qwen3_5ArtifactValidator {
             .map(qwen3_5_vision_tensor_profiles)
             .unwrap_or_default();
         let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&config);
+        let embedded_mtp_names = shard_index
+            .mtp_tensor_name_to_shard_file_name()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let has_sidecar_collision = sidecar_candidate.as_ref().is_some_and(|candidate| {
+            candidate
+                .canonical_names()
+                .any(|name| embedded_mtp_names.contains(name))
+        });
+        let had_sidecar_candidate = sidecar_candidate.is_some();
+        let validated_mtp_sidecar = if has_sidecar_collision {
+            tracing::debug!(
+                "optional MTP canonical tensor collision detected; serving target-only"
+            );
+            None
+        } else {
+            sidecar_candidate.and_then(|candidate| {
+                candidate
+                    .validate(&mtp_tensor_profiles, &embedded_mtp_names)
+                    .inspect_err(|_| {
+                        tracing::debug!(
+                            "optional MTP sidecar inventory failed validation; serving target-only"
+                        )
+                    })
+                    .ok()
+            })
+        };
+        let has_invalid_declared_sidecar = config.sidecar_mtp_file().is_some()
+            && had_sidecar_candidate
+            && validated_mtp_sidecar.is_none();
+        let mut tensor_inventory = build_index_tensor_inventory(&shard_index)?;
+        if !has_sidecar_collision && let Some(sidecar) = validated_mtp_sidecar.as_ref() {
+            for location in sidecar.inventory.locations().cloned() {
+                tensor_inventory.insert(location).map_err(|_| {
+                    ArtifactValidationError::UnexpectedTensor {
+                        tensor_name: "optional MTP canonical collision".to_owned(),
+                    }
+                })?;
+            }
+        }
+        let canonical_mtp_names = tensor_inventory
+            .locations()
+            .filter(|location| location.semantic_role() == TensorSemanticRole::MultiTokenPrediction)
+            .map(|location| location.canonical_name().to_owned())
+            .collect::<BTreeSet<_>>();
+        let mut mtp_artifact_capability = if has_sidecar_collision {
+            Qwen3_5MtpArtifactCapability::target_only(
+                Qwen3_5MtpTargetOnlyReason::CanonicalTensorCollision,
+            )
+        } else if has_unavailable_declared_sidecar {
+            Qwen3_5MtpArtifactCapability::target_only(
+                Qwen3_5MtpTargetOnlyReason::SidecarUnavailable,
+            )
+        } else if has_invalid_declared_sidecar {
+            Qwen3_5MtpArtifactCapability::target_only(
+                Qwen3_5MtpTargetOnlyReason::TensorValidationFailed,
+            )
+        } else if let Err(contract_error) = mtp_contract.as_ref() {
+            Qwen3_5MtpArtifactCapability::target_only(contract_error.into())
+        } else {
+            Qwen3_5MtpArtifactCapability::from_canonical_tensor_names(
+                &config,
+                canonical_mtp_names,
+                mtp_contract.as_ref().ok(),
+            )
+        };
         let mut recognized_tensor_profiles = language_tensor_profiles.clone();
         recognized_tensor_profiles.extend(mtp_tensor_profiles.clone());
         recognized_tensor_profiles.extend(vision_tensor_profiles.clone());
-        let recognized_tensor_names = recognized_tensor_names(&shard_index);
-
-        // Validate and register the shard files discovered from the index.
-        for shard_file_name in shard_index
-            .model_shard_file_names()
-            .iter()
-            .chain(shard_index.mtp_only_shard_file_names())
-        {
-            let shard_path = model_directory.join(shard_file_name);
-            if !shard_path.is_file() {
-                return Err(ArtifactValidationError::ProfileMissingRequiredFile {
-                    file_name: shard_file_name.clone(),
-                }
-                .into());
-            }
-            let shard_profile = RequiredFileProfile {
-                file_name: shard_file_name.clone(),
-                size_bytes: 0,
-            };
-            let validated_shard = validate_required_file(model_directory, &shard_profile)?;
-            required_files.insert(shard_file_name.clone(), validated_shard);
-        }
-
-        // If the model has a separate vision sidecar, validate and register it.
-        for vision_sidecar_file_name in shard_index.vision_sidecar_file_names() {
-            let vision_sidecar_path = model_directory.join(vision_sidecar_file_name);
-            if !vision_sidecar_path.is_file() {
-                return Err(ArtifactValidationError::ProfileMissingRequiredFile {
-                    file_name: vision_sidecar_file_name.clone(),
-                }
-                .into());
-            }
-            let vision_required_file_profile = RequiredFileProfile {
-                file_name: vision_sidecar_file_name.clone(),
-                size_bytes: 0,
-            };
-            let vision_validated_file =
-                validate_required_file(model_directory, &vision_required_file_profile)?;
-            required_files.insert(vision_sidecar_file_name.clone(), vision_validated_file);
-        }
-
-        // Validate each executable model shard's safetensors headers.
+        let mut source_id_by_file_name = source_id_by_file_name(&shard_index)?;
+        let mut safetensors_sources = HashMap::new();
         let mut total_payload_bytes = 0_u64;
-        for shard_file_name in shard_index
-            .model_shard_file_names()
-            .iter()
-            .chain(shard_index.mtp_only_shard_file_names())
-        {
-            let shard_file = required_files
-                .get(shard_file_name.as_str())
-                .ok_or_else(|| ArtifactValidationError::ProfileMissingRequiredFile {
-                    file_name: shard_file_name.clone(),
-                })?;
-            let shard_language_tensor_names =
-                shard_index.language_tensor_names_for_shard(shard_file_name);
-            let mut profiled_tensors_for_shard: Vec<TensorProfile> = language_tensor_profiles
-                .iter()
-                .filter(|tensor_profile| {
-                    shard_language_tensor_names.contains(&tensor_profile.name.as_str())
-                })
-                .cloned()
-                .collect();
-            profiled_tensors_for_shard.extend(embedded_vision_tensor_profiles_for_shard(
-                &vision_tensor_profiles,
-                &shard_index,
-                shard_file_name,
-            ));
-            if mtp_artifact_capability.is_mtp_capable() {
-                profiled_tensors_for_shard.extend(
-                    mtp_tensor_profiles
-                        .iter()
-                        .filter(|tensor_profile| {
-                            shard_index.shard_file_name_for_mtp_tensor(&tensor_profile.name)
-                                == Some(shard_file_name)
-                        })
-                        .cloned(),
-                );
+        let mut embedded_mtp_profile_validation_failed = false;
+        for (file_name, source_id) in &source_id_by_file_name {
+            if shard_index.is_mtp_only_shard_file(file_name) {
+                continue;
             }
-            let shard_metadata =
-                crate::artifact_validation::validate_bounded_safetensors_with_indexed_profiles(
-                    shard_file.file(),
-                    shard_file.size_bytes(),
-                    shard_file_name,
-                    &profiled_tensors_for_shard,
-                    &recognized_tensor_profiles,
-                    &recognized_tensor_names,
-                )?;
-            total_payload_bytes = total_payload_bytes
-                .checked_add(shard_metadata.total_payload_bytes)
-                .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
-        }
-
-        if has_separate_vision_sidecar {
-            validate_vision_sidecars(
-                &required_files,
-                &shard_index,
-                &vision_tensor_profiles,
-                &recognized_tensor_profiles,
-                &recognized_tensor_names,
+            let required_file = validate_required_file(
+                model_directory,
+                &RequiredFileProfile {
+                    file_name: file_name.clone(),
+                    size_bytes: 0,
+                },
             )?;
+            let source = ValidatedSafetensorsSource::parse(*source_id, required_file)?;
+            // Required target and vision tensors remain load-bearing even when the same physical
+            // shard also contains an optional MTP head. Validate required profiles first, then
+            // classify an MTP-only profile defect as target-only instead of rejecting the model.
+            source.validate_required_inventory_profiles(
+                &tensor_inventory,
+                &recognized_tensor_profiles,
+            )?;
+            if source
+                .validate_feature_inventory_profiles(
+                    &tensor_inventory,
+                    &recognized_tensor_profiles,
+                    TensorFeature::MultiTokenPrediction,
+                )
+                .is_err()
+            {
+                embedded_mtp_profile_validation_failed = true;
+            }
+            total_payload_bytes = total_payload_bytes
+                .checked_add(source.payload_bytes())
+                .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
+            safetensors_sources.insert(*source_id, source);
+        }
+        if embedded_mtp_profile_validation_failed {
+            tracing::debug!(
+                "optional embedded MTP tensor profile failed validation; serving target-only"
+            );
+            mtp_artifact_capability = Qwen3_5MtpArtifactCapability::target_only(
+                Qwen3_5MtpTargetOnlyReason::TensorValidationFailed,
+            );
+        }
+        if mtp_artifact_capability.is_mtp_capable() {
+            let mut optional_mtp_sources = Vec::new();
+            let optional_mtp_validation = shard_index
+                .mtp_only_shard_file_names()
+                .iter()
+                .try_for_each(|file_name| -> Result<(), ArtifactValidationError> {
+                    let source_id =
+                        source_id_by_file_name
+                            .get(file_name)
+                            .copied()
+                            .ok_or_else(|| ArtifactValidationError::ProfileMissingRequiredFile {
+                                file_name: file_name.clone(),
+                            })?;
+                    let required_file = validate_required_file(
+                        model_directory,
+                        &RequiredFileProfile {
+                            file_name: file_name.clone(),
+                            size_bytes: 0,
+                        },
+                    )?;
+                    let source = ValidatedSafetensorsSource::parse(source_id, required_file)?;
+                    source.validate_inventory_profiles(
+                        &tensor_inventory,
+                        &recognized_tensor_profiles,
+                    )?;
+                    optional_mtp_sources.push(source);
+                    Ok(())
+                });
+            if optional_mtp_validation.is_err() {
+                tracing::debug!(
+                    "optional indexed MTP source failed validation; serving target-only"
+                );
+                mtp_artifact_capability = Qwen3_5MtpArtifactCapability::target_only(
+                    Qwen3_5MtpTargetOnlyReason::TensorValidationFailed,
+                );
+            } else {
+                for source in optional_mtp_sources {
+                    total_payload_bytes =
+                        total_payload_bytes
+                            .checked_add(source.payload_bytes())
+                            .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
+                    safetensors_sources.insert(source.source_id(), source);
+                }
+            }
+        }
+        if !mtp_artifact_capability.is_mtp_capable() {
+            tensor_inventory.remove_feature(TensorFeature::MultiTokenPrediction);
+        }
+        let should_retain_mtp_sidecar = mtp_artifact_capability.is_mtp_capable();
+        let mtp_sidecar_file_name = validated_mtp_sidecar
+            .as_ref()
+            .filter(|_| should_retain_mtp_sidecar)
+            .map(|sidecar| sidecar.source.file_name().to_owned());
+        if should_retain_mtp_sidecar && let Some(sidecar) = validated_mtp_sidecar {
+            total_payload_bytes = total_payload_bytes
+                .checked_add(sidecar.source.payload_bytes())
+                .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
+            source_id_by_file_name.insert(
+                sidecar.source.file_name().to_owned(),
+                sidecar.source.source_id(),
+            );
+            safetensors_sources.insert(sidecar.source.source_id(), sidecar.source);
         }
 
         // Derive model_id from the leaf directory name.
@@ -251,10 +351,54 @@ impl Qwen3_5ArtifactValidator {
             has_separate_vision_sidecar,
             has_validated_vision_tower: validated_vision_tower_storage.has_validated_vision_tower(),
             mtp_artifact_capability,
+            tensor_inventory,
+            safetensors_sources,
+            source_id_by_file_name,
+            mtp_sidecar_file_name,
             model_id,
             revision,
             max_output_tokens,
         })
+    }
+}
+
+fn parse_optional_mtp_contract(
+    model_directory: &Path,
+    config_bytes: &[u8],
+) -> Result<Qwen3_5MtpContract, Qwen3_5MtpContractError> {
+    let runtime_path = model_directory.join("mtplx_runtime.json");
+    let optional_runtime_bytes = if runtime_path.exists() {
+        let runtime_file = validate_required_file(
+            model_directory,
+            &RequiredFileProfile {
+                file_name: "mtplx_runtime.json".to_owned(),
+                size_bytes: 0,
+            },
+        )
+        .map_err(|_| Qwen3_5MtpContractError::Malformed)?;
+        if runtime_file.size_bytes() > super::MAXIMUM_MTPLX_RUNTIME_BYTES as u64 {
+            return Err(Qwen3_5MtpContractError::RuntimeDocumentTooLarge);
+        }
+        Some(
+            read_required_file_bytes(&runtime_file)
+                .map_err(|_| Qwen3_5MtpContractError::Malformed)?,
+        )
+    } else {
+        None
+    };
+    Qwen3_5MtpContract::parse(config_bytes, optional_runtime_bytes.as_deref())
+}
+
+impl From<&Qwen3_5MtpContractError> for Qwen3_5MtpTargetOnlyReason {
+    fn from(contract_error: &Qwen3_5MtpContractError) -> Self {
+        match contract_error {
+            Qwen3_5MtpContractError::Malformed => Self::ContractMalformed,
+            Qwen3_5MtpContractError::RuntimeDocumentTooLarge => {
+                Self::ContractRuntimeDocumentTooLarge
+            }
+            Qwen3_5MtpContractError::FieldDisagreement => Self::ContractFieldDisagreement,
+            Qwen3_5MtpContractError::Incompatible => Self::ContractIncompatible,
+        }
     }
 }
 
@@ -281,162 +425,4 @@ pub enum Qwen3_5ArtifactValidationError {
     OptiQMetadata(#[from] OptiQMetadataError),
     #[error("Qwen3.5 shard-index validation failed")]
     Qwen3_5ShardIndex(#[from] Qwen3_5ArtifactError),
-}
-
-/// Descriptor-backed validated ownership of the complete Qwen3.5 artifact.
-#[derive(Debug)]
-pub struct ValidatedQwen3_5Artifact {
-    config: Qwen3_5Config,
-    vision_config: Option<Qwen3_5VisionConfig>,
-    required_files: HashMap<String, ValidatedRequiredFile>,
-    shard_index: Qwen3_5ShardIndex,
-    total_payload_bytes: u64,
-    /// Whether this model has a complete separate vision sidecar file.
-    /// When false, the validated visual tower is embedded or absent.
-    has_separate_vision_sidecar: bool,
-    /// Whether the complete visual tower has validated physical weights.
-    has_validated_vision_tower: bool,
-    /// MTP capability discovered from validated tensor inventory.
-    mtp_artifact_capability: Qwen3_5MtpArtifactCapability,
-    /// Discovered model identity from the leaf directory name.
-    model_id: String,
-    /// SHA-256 hash of config.json bytes (12 hex chars).
-    revision: String,
-    /// Per-request output-token ceiling from user config or default.
-    max_output_tokens: u32,
-}
-
-impl ValidatedQwen3_5Artifact {
-    #[must_use]
-    pub const fn config(&self) -> &Qwen3_5Config {
-        &self.config
-    }
-
-    /// Returns the validated Qwen3.5 vision configuration.
-    #[must_use]
-    pub const fn vision_config(&self) -> Option<&Qwen3_5VisionConfig> {
-        self.vision_config.as_ref()
-    }
-
-    /// Returns whether this validated artifact accepts image input.
-    ///
-    /// Image capability requires complete validated physical visual weights, not metadata alone.
-    #[must_use]
-    pub const fn supports_image_input(&self) -> bool {
-        self.has_validated_vision_tower
-    }
-
-    #[must_use]
-    pub const fn shard_index(&self) -> &Qwen3_5ShardIndex {
-        &self.shard_index
-    }
-
-    /// Returns whether this model has a separate vision sidecar file.
-    /// When false, vision tensors are embedded in model shards or absent.
-    #[must_use]
-    pub const fn has_separate_vision_sidecar(&self) -> bool {
-        self.has_separate_vision_sidecar
-    }
-
-    /// Returns the MTP capability discovered from artifact tensor inventory.
-    #[must_use]
-    pub const fn mtp_artifact_capability(&self) -> &Qwen3_5MtpArtifactCapability {
-        &self.mtp_artifact_capability
-    }
-
-    /// Returns the discovered model identity from the leaf directory name.
-    #[must_use]
-    pub fn model_id(&self) -> &str {
-        &self.model_id
-    }
-
-    /// Returns the SHA-256 hash of config.json bytes (12 hex chars).
-    #[must_use]
-    pub fn revision(&self) -> &str {
-        &self.revision
-    }
-
-    /// Returns the per-request output-token ceiling.
-    #[must_use]
-    pub const fn max_output_tokens(&self) -> u32 {
-        self.max_output_tokens
-    }
-
-    #[must_use]
-    pub fn shard_count(&self) -> usize {
-        self.shard_index.shard_count()
-    }
-
-    #[must_use]
-    pub const fn total_payload_bytes(&self) -> u64 {
-        self.total_payload_bytes
-    }
-
-    #[must_use]
-    pub fn tokenizer_bytes(&self) -> Option<&[u8]> {
-        self.required_files
-            .get("tokenizer.json")
-            .and_then(ValidatedRequiredFile::captured_bytes)
-    }
-
-    /// Returns optional model-provided sampler defaults retained during validation.
-    #[must_use]
-    pub fn generation_config_bytes(&self) -> Option<&[u8]> {
-        self.required_files
-            .get("generation_config.json")
-            .and_then(ValidatedRequiredFile::captured_bytes)
-    }
-
-    /// Consumes the artifact and transfers all validated shard descriptors in load order.
-    pub fn into_shard_files(
-        mut self,
-    ) -> Result<Vec<ValidatedWeightsFile>, ArtifactValidationError> {
-        let shard_file_names = self.shard_index.model_shard_file_names().to_vec();
-        let mut shard_files = Vec::with_capacity(shard_file_names.len());
-        for shard_file_name in &shard_file_names {
-            let required_file = self.required_files.remove(shard_file_name).ok_or_else(|| {
-                ArtifactValidationError::ProfileMissingRequiredFile {
-                    file_name: shard_file_name.clone(),
-                }
-            })?;
-            shard_files.push(required_file.into_validated_weights_file()?);
-        }
-        Ok(shard_files)
-    }
-
-    /// Transfers the validated vision sidecars while retaining language shard descriptors.
-    pub fn take_vision_sidecar_files(
-        &mut self,
-    ) -> Result<Vec<ValidatedWeightsFile>, ArtifactValidationError> {
-        let vision_sidecar_file_names = self.shard_index.vision_sidecar_file_names().to_vec();
-        let mut vision_sidecar_files = Vec::with_capacity(vision_sidecar_file_names.len());
-        for vision_sidecar_file_name in vision_sidecar_file_names {
-            let required_file = self
-                .required_files
-                .remove(&vision_sidecar_file_name)
-                .ok_or_else(|| ArtifactValidationError::ProfileMissingRequiredFile {
-                    file_name: vision_sidecar_file_name,
-                })?;
-            vision_sidecar_files.push(required_file.into_validated_weights_file()?);
-        }
-        Ok(vision_sidecar_files)
-    }
-
-    /// Transfers optional MTP-only files without consuming target shard descriptors.
-    pub fn take_mtp_only_shard_files(
-        &mut self,
-    ) -> Result<Vec<ValidatedWeightsFile>, ArtifactValidationError> {
-        let mtp_only_shard_file_names = self.shard_index.mtp_only_shard_file_names().to_vec();
-        let mut mtp_only_shard_files = Vec::with_capacity(mtp_only_shard_file_names.len());
-        for mtp_only_shard_file_name in mtp_only_shard_file_names {
-            let required_file = self
-                .required_files
-                .remove(&mtp_only_shard_file_name)
-                .ok_or_else(|| ArtifactValidationError::ProfileMissingRequiredFile {
-                    file_name: mtp_only_shard_file_name,
-                })?;
-            mtp_only_shard_files.push(required_file.into_validated_weights_file()?);
-        }
-        Ok(mtp_only_shard_files)
-    }
 }

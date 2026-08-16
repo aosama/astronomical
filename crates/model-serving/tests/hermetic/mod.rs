@@ -28,3 +28,4 @@ mod required_files;
 mod retained_expert_layer_cache;
 mod source_package_guard;
 mod sparse_experts;
+mod tensor_inventory;

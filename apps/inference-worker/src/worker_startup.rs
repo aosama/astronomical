@@ -78,11 +78,13 @@ where
         .logging_directory
         .join(PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME);
     let mtp_enabled = worker_startup_configuration.mtp_enabled;
+    let mtp_draft_depth = worker_startup_configuration.mtp_draft_depth;
     let persistent_prompt_cache_enabled =
         worker_startup_configuration.persistent_prompt_cache_enabled;
     let worker_runtime_feature_configuration = WorkerRuntimeFeatureConfiguration {
         persistent_prompt_cache_enabled,
         mtp_enabled,
+        mtp_draft_depth,
         speculative_prefill_enabled: worker_startup_configuration.speculative_prefill.enabled,
     };
     let machine_mlx_memory_ceiling_bytes = sample_iogpu_wired_limit_bytes()
@@ -105,6 +107,7 @@ where
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
         mtp_enabled,
+        mtp_draft_depth,
         speculative_prefill = ?worker_startup_configuration.speculative_prefill,
         persistent_prompt_cache_enabled,
         chunking = ?chunking,
@@ -117,6 +120,7 @@ where
         performance_attribution_enabled,
         performance_attribution_log_path,
         mtp_enabled,
+        mtp_draft_depth,
         speculative_prefill: worker_startup_configuration.speculative_prefill.clone(),
         persistent_prompt_cache_enabled,
         chunking,

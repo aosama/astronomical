@@ -160,6 +160,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
+        mtp_draft_depth: None,
         speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
@@ -271,6 +272,7 @@ async fn should_update_status_config_warning_after_successful_reload() {
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: true,
+        mtp_draft_depth: None,
         speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(

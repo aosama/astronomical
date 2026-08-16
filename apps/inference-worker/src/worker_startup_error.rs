@@ -24,13 +24,13 @@ pub enum WorkerStartupError {
     InitializeTracing { description: String },
     #[error("invalid iogpu.wired_limit_mb value: {description}")]
     InvalidGpuWiredMemoryLimit { description: &'static str },
-    #[error("failed to sample iogpu.wired_limit_mb")]
+    #[error("failed to sample iogpu.wired_limit_mb: {0}")]
     SampleGpuWiredMemoryLimit(#[source] io::Error),
     #[error("sampling iogpu.wired_limit_mb timed out")]
     GpuWiredMemoryLimitSampleTimedOut,
     #[error("sysctl could not read iogpu.wired_limit_mb")]
     GpuWiredMemoryLimitSampleFailed,
-    #[error("failed to read MLX recommended GPU working set")]
+    #[error("failed to read MLX recommended GPU working set: {0}")]
     ReadMlxRecommendedGpuWorkingSet(#[source] MlxRuntimeError),
 }
 

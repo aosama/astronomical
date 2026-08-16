@@ -62,6 +62,7 @@ pub(super) fn ready_event_with_speculative_prefill_load_details(
         },
         mtp_runtime_state,
         mtp_unavailable_reason,
+        mtp_depth_status: Default::default(),
         speculative_prefill_runtime_state,
         speculative_prefill_unavailable_reason,
         speculative_prefill_draft_model_id,

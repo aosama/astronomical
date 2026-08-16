@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
 
+use crate::artifact_validation::{TensorInventory, TensorSourceId};
 use crate::qwen3_5::model::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
     Qwen3_5DecoderLayerWeights,
@@ -29,8 +30,11 @@ pub(crate) struct Qwen3_5MtpWeights {
     pub(super) decoder_layer_weights: Qwen3_5DecoderLayerWeights,
     pub(super) final_normalization_weight: MlxArray,
     /// Owners for MTP tensors stored outside target-language shards.
+    ///
+    /// The opaque source identity handles both indexed MTP-only files and architecture sidecars;
+    /// tensor binding never needs to reverse-map either category through a file-name position.
     #[allow(dead_code)]
-    mtp_only_shards: Vec<MlxSafetensors>,
+    auxiliary_mtp_sources: HashMap<TensorSourceId, MlxSafetensors>,
     tensor_count: usize,
 }
 
@@ -38,11 +42,16 @@ impl Qwen3_5MtpWeights {
     pub(crate) fn bind(
         qwen3_5_config: &Qwen3_5Config,
         shard_index: &Qwen3_5ShardIndex,
+        tensor_inventory: &TensorInventory,
         model_shards: &[MlxSafetensors],
-        mtp_only_shards: Vec<MlxSafetensors>,
+        auxiliary_mtp_sources: HashMap<TensorSourceId, MlxSafetensors>,
     ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
         let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(qwen3_5_config);
-        if mtp_tensor_profiles.is_empty() || shard_index.mtp_tensor_count() == 0 {
+        if mtp_tensor_profiles.is_empty()
+            || !mtp_tensor_profiles
+                .iter()
+                .any(|profile| tensor_inventory.location(&profile.name).is_some())
+        {
             return Ok(None);
         }
         let resident_mtp_tensor_profiles = match qwen3_5_config.feed_forward_architecture() {
@@ -56,33 +65,30 @@ impl Qwen3_5MtpWeights {
         };
         let mut bound_mtp_tensors = HashMap::with_capacity(resident_mtp_tensor_profiles.len());
         for tensor_profile in &resident_mtp_tensor_profiles {
-            let shard_file_name = shard_index
-                .shard_file_name_for_mtp_tensor(&tensor_profile.name)
+            let location = tensor_inventory
+                .location(&tensor_profile.name)
                 .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
                     tensor_name: tensor_profile.name.clone(),
                 })?;
-            let target_shard_position = shard_index
-                .model_shard_file_names()
-                .iter()
-                .position(|model_shard_file_name| model_shard_file_name == shard_file_name);
+            let shard_file_name = shard_index.shard_file_name_for_mtp_tensor(&tensor_profile.name);
+            let target_shard_position =
+                shard_index
+                    .model_shard_file_names()
+                    .iter()
+                    .position(|model_shard_file_name| {
+                        Some(model_shard_file_name.as_str()) == shard_file_name
+                    });
             let mtp_tensor_owner = if let Some(target_shard_position) = target_shard_position {
                 model_shards.get(target_shard_position)
             } else {
-                shard_index
-                    .mtp_only_shard_file_names()
-                    .iter()
-                    .position(|mtp_only_shard_file_name| {
-                        mtp_only_shard_file_name == shard_file_name
-                    })
-                    .and_then(|mtp_only_shard_position| {
-                        mtp_only_shards.get(mtp_only_shard_position)
-                    })
+                auxiliary_mtp_sources.get(&location.source_id())
             }
             .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
                 tensor_name: tensor_profile.name.clone(),
-                description: "MTP tensor resolves outside loaded target and MTP-only shards",
+                description: "MTP tensor resolves outside loaded target and auxiliary sources",
             })?;
-            let bound_tensor = mtp_tensor_owner.tensor(&tensor_profile.name)?;
+            // Canonical profile identity and physical SafeTensors identity may differ.
+            let bound_tensor = mtp_tensor_owner.tensor(location.stored_name())?;
             validate_bound_tensor(tensor_profile, &bound_tensor)?;
             validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
             bound_mtp_tensors.insert(tensor_profile.name.clone(), bound_tensor);
@@ -150,7 +156,7 @@ impl Qwen3_5MtpWeights {
             fusion_projection,
             decoder_layer_weights,
             final_normalization_weight,
-            mtp_only_shards,
+            auxiliary_mtp_sources,
             tensor_count: resident_mtp_tensor_profiles.len(),
         }))
     }
@@ -335,25 +341,31 @@ pub(crate) fn bind_optional_weights(
     mtp_artifact_capability: &Qwen3_5MtpArtifactCapability,
     qwen3_5_config: &Qwen3_5Config,
     shard_index: &Qwen3_5ShardIndex,
+    tensor_inventory: &TensorInventory,
     model_shards: &[MlxSafetensors],
-    mtp_only_shards: Vec<MlxSafetensors>,
+    auxiliary_mtp_sources: HashMap<TensorSourceId, MlxSafetensors>,
     target_weights: &Qwen3_5Weights,
     runtime: &MlxRuntime,
 ) -> Option<Qwen3_5MtpWeights> {
     if !bind_mtp_weights || !mtp_artifact_capability.is_mtp_capable() {
         return None;
     }
-    let mut mtp_weights =
-        match Qwen3_5MtpWeights::bind(qwen3_5_config, shard_index, model_shards, mtp_only_shards) {
-            Ok(mtp_weights) => mtp_weights,
-            Err(mtp_weight_binding_error) => {
-                tracing::warn!(
-                    error = %mtp_weight_binding_error,
-                    "optional MTP weight binding failed; serving target-only"
-                );
-                None
-            }
-        };
+    let mut mtp_weights = match Qwen3_5MtpWeights::bind(
+        qwen3_5_config,
+        shard_index,
+        tensor_inventory,
+        model_shards,
+        auxiliary_mtp_sources,
+    ) {
+        Ok(mtp_weights) => mtp_weights,
+        Err(mtp_weight_binding_error) => {
+            tracing::warn!(
+                error = %mtp_weight_binding_error,
+                "optional MTP weight binding failed; serving target-only"
+            );
+            None
+        }
+    };
     if let Some(bound_mtp_weights) = mtp_weights.as_mut()
         && let Err(mtp_normalization_repair_error) =
             bound_mtp_weights.repair_raw_normalization_weights(runtime, target_weights)

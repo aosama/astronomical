@@ -45,12 +45,15 @@ impl Qwen3_5Weights {
     /// Consumes validated descriptors and binds every executable tensor exactly once.
     pub fn load_with_performance_attribution(
         runtime: &MlxRuntime,
-        validated_artifact: ValidatedQwen3_5Artifact,
+        mut validated_artifact: ValidatedQwen3_5Artifact,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let qwen3_5_config = validated_artifact.config().clone();
         let shard_index = validated_artifact.shard_index().clone();
-        let model_shard_files = validated_artifact.into_shard_files()?;
+        let model_shard_source_ids =
+            validated_artifact.source_ids_for_file_names(shard_index.model_shard_file_names())?;
+        let model_shard_files =
+            validated_artifact.take_safetensors_sources(&model_shard_source_ids)?;
         let model_shards = performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
             |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {

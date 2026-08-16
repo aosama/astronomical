@@ -1,8 +1,9 @@
 use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, ExpertMemoryMode, MtpRuntimeState, SpeculativePrefillRuntimeState,
-    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPromptProcessingChunkOptimizationOutcome,
-    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
+    ChatModelCapabilities, ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState,
+    SpeculativePrefillRuntimeState, WorkerEvent, WorkerMlxMemorySnapshot,
+    WorkerPromptProcessingChunkOptimizationOutcome, WorkerPromptProcessingPhase,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -205,6 +206,8 @@ pub struct WorkerHealthSnapshot {
     pub mtp_runtime_state: MtpRuntimeState,
     /// Concise reason when MTP runtime state is Unavailable.
     pub mtp_unavailable_reason: Option<String>,
+    /// Configured, artifact, resolved, and current execution depth metadata.
+    pub mtp_depth_status: MtpDepthStatus,
     /// Actual optional draft-assisted speculative-prefill runtime state.
     pub speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
     /// Concise reason when speculative prefill is Unavailable.
@@ -255,6 +258,7 @@ impl WorkerHealthSnapshot {
             expert_residency: None,
             mtp_runtime_state,
             mtp_unavailable_reason,
+            mtp_depth_status: MtpDepthStatus::EMPTY,
             speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
             speculative_prefill_unavailable_reason: None,
             speculative_prefill_draft_model_id: None,
@@ -328,6 +332,7 @@ impl WorkerHealthSnapshot {
             expert_residency: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            mtp_depth_status: MtpDepthStatus::EMPTY,
             speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
             speculative_prefill_unavailable_reason: None,
             speculative_prefill_draft_model_id: None,
@@ -359,6 +364,7 @@ impl WorkerHealthSnapshot {
             expert_residency: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            mtp_depth_status: MtpDepthStatus::EMPTY,
             speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
             speculative_prefill_unavailable_reason: None,
             speculative_prefill_draft_model_id: None,
@@ -385,6 +391,12 @@ impl WorkerHealthSnapshot {
     #[must_use]
     pub fn mtp_unavailable_reason(&self) -> Option<&str> {
         self.mtp_unavailable_reason.as_deref()
+    }
+
+    #[must_use]
+    pub const fn with_mtp_depth_status(mut self, mtp_depth_status: MtpDepthStatus) -> Self {
+        self.mtp_depth_status = mtp_depth_status;
+        self
     }
 
     /// Adds worker-reported optional draft-assisted speculative-prefill metadata.

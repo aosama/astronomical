@@ -31,6 +31,7 @@ impl Qwen3_5EngineState {
                     .map(|loaded_model| loaded_model.expert_memory_mode()),
             )
             .with_mtp_runtime_state(mtp_runtime_state)
+            .with_mtp_depth_status(self.mtp_depth_status)
             .with_speculative_prefill_runtime(
                 self.speculative_prefill_runtime_state,
                 self.speculative_prefill_unavailable_reason.clone(),

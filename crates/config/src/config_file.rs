@@ -44,6 +44,8 @@ pub(crate) struct UserConfigFile {
     /// Defaults to enabled when omitted.
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     pub(crate) mtp_enabled: Option<bool>,
+    /// Optional fixed MTP proposal depth. Omission selects artifact metadata.
+    pub(crate) mtp_draft_depth: Option<u8>,
     /// Optional draft-assisted sparse prompt-prefill policy.
     #[serde(default)]
     pub(crate) speculative_prefill: SpeculativePrefillConfigFile,
@@ -192,6 +194,12 @@ pub(crate) fn validate_user_config_file(
     )?;
     if let Some(maximum_mlx_memory_gb) = user_config_file.maximum_mlx_memory_gb {
         maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
+    }
+    if user_config_file
+        .mtp_draft_depth
+        .is_some_and(|depth| !(1..=3).contains(&depth))
+    {
+        return Err(AstronomicalConfigError::InvalidMtpDraftDepth);
     }
     if let Some(supervisor_config) = user_config_file.supervisor.as_ref() {
         if let Some(bind_address) = supervisor_config.bind_address.as_ref() {

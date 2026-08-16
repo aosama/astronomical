@@ -73,9 +73,11 @@ where
         let mtp_unavailable_reason = engine_load_result
             .mtp_unavailable_reason()
             .map(String::from);
+        let mtp_depth_status = engine_load_result.mtp_depth_status();
         let model_swapped_event = match replacement_model.processor.ready_event(
             mtp_runtime_state,
             mtp_unavailable_reason,
+            mtp_depth_status,
             engine_load_result.speculative_prefill_runtime_state(),
             engine_load_result
                 .speculative_prefill_unavailable_reason()
@@ -92,6 +94,7 @@ where
                 capabilities,
                 mtp_runtime_state,
                 mtp_unavailable_reason,
+                mtp_depth_status,
                 speculative_prefill_runtime_state,
                 speculative_prefill_unavailable_reason,
                 speculative_prefill_draft_model_id,
@@ -103,6 +106,7 @@ where
                 minimum_mlx_memory_ceiling_bytes,
                 mtp_runtime_state,
                 mtp_unavailable_reason,
+                mtp_depth_status,
                 speculative_prefill_runtime_state,
                 speculative_prefill_unavailable_reason,
                 speculative_prefill_draft_model_id,

@@ -54,6 +54,7 @@ pub(super) fn handle_worker_event(
             capabilities,
             mtp_runtime_state,
             mtp_unavailable_reason,
+            mtp_depth_status,
             speculative_prefill_runtime_state,
             speculative_prefill_unavailable_reason,
             speculative_prefill_draft_model_id,
@@ -73,6 +74,7 @@ pub(super) fn handle_worker_event(
                     mtp_runtime_state,
                     mtp_unavailable_reason,
                 )
+                .with_mtp_depth_status(mtp_depth_status)
                 .with_speculative_prefill_runtime(
                     speculative_prefill_runtime_state,
                     speculative_prefill_unavailable_reason,
@@ -141,6 +143,7 @@ pub(super) fn handle_worker_event(
             minimum_mlx_memory_ceiling_bytes,
             mtp_runtime_state,
             mtp_unavailable_reason,
+            mtp_depth_status,
             speculative_prefill_runtime_state,
             speculative_prefill_unavailable_reason,
             speculative_prefill_draft_model_id,
@@ -160,6 +163,7 @@ pub(super) fn handle_worker_event(
                         mtp_unavailable_reason,
                         &previous_health_snapshot,
                     )
+                    .with_mtp_depth_status(mtp_depth_status)
                     .with_speculative_prefill_runtime(
                         speculative_prefill_runtime_state,
                         speculative_prefill_unavailable_reason,
@@ -173,6 +177,8 @@ pub(super) fn handle_worker_event(
                         mtp_runtime_state,
                         mtp_unavailable_reason,
                     );
+                    replacement_health_snapshot =
+                        replacement_health_snapshot.with_mtp_depth_status(mtp_depth_status);
                     replacement_health_snapshot = replacement_health_snapshot
                         .with_speculative_prefill_runtime(
                             speculative_prefill_runtime_state,

@@ -8,6 +8,7 @@ use astronomical_runtime_integration::{
     MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime,
 };
 
+use crate::artifact_validation::TensorDeclarationOrigin;
 use crate::expert_paging::RetainedExpertLayerCache;
 use crate::qwen3_5_moe::{
     Qwen3_5ExpertPager, Qwen3_5RetainedExpertLayer, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
@@ -70,7 +71,19 @@ impl Qwen3_5Model {
             && validated_artifact.supports_image_input()
             && !has_separate_vision_sidecar;
         let mtp_artifact_capability = validated_artifact.mtp_artifact_capability().clone();
+        let tensor_inventory = validated_artifact.tensor_inventory().clone();
+        let mtp_sidecar_file_name = validated_artifact
+            .mtp_sidecar_file_name()
+            .map(str::to_owned);
         let shard_index = validated_artifact.shard_index().clone();
+        let model_shard_source_ids =
+            validated_artifact.source_ids_for_file_names(shard_index.model_shard_file_names())?;
+        let mtp_only_shard_source_ids = validated_artifact
+            .source_ids_for_file_names(shard_index.mtp_only_shard_file_names())?;
+        let mtp_sidecar_source_id = mtp_sidecar_file_name
+            .as_ref()
+            .map(|file_name| validated_artifact.source_id_for_file_name(file_name))
+            .transpose()?;
         let sidecar_vision_model = if has_separate_vision_sidecar {
             performance_attribution.measure_operation(
                 PerformanceOperation::ModelSafetensorsMapping,
@@ -84,16 +97,31 @@ impl Qwen3_5Model {
         let should_load_mtp_only_shards =
             bind_mtp_weights && mtp_artifact_capability.is_mtp_capable();
         let mtp_only_shard_files = if should_load_mtp_only_shards {
-            validated_artifact.take_mtp_only_shard_files()?
+            validated_artifact.take_safetensors_sources(&mtp_only_shard_source_ids)?
         } else {
             Vec::new()
         };
-        let (model_shards, mtp_only_shards) = performance_attribution.measure_operation(
+        // Transfer the optional source once by its opaque validated identity.
+        let mtp_sidecar_source = if should_load_mtp_only_shards {
+            mtp_sidecar_source_id
+                .map(|source_id| {
+                    validated_artifact
+                        .take_safetensors_source(source_id)
+                        .map(|source| (source_id, source))
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let (model_shards, auxiliary_mtp_sources) = performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
             |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
-                let model_shard_files = validated_artifact.into_shard_files()?;
+                let model_shard_files =
+                    validated_artifact.take_safetensors_sources(&model_shard_source_ids)?;
                 let mut model_shards = Vec::with_capacity(model_shard_files.len());
-                let mut mtp_only_shards = Vec::with_capacity(mtp_only_shard_files.len());
+                let mut auxiliary_mtp_sources = HashMap::with_capacity(
+                    mtp_only_shard_files.len() + usize::from(mtp_sidecar_source.is_some()),
+                );
                 let positional_file_read_metrics =
                     performance_attribution.positional_file_read_metrics();
                 for model_shard_file in model_shard_files {
@@ -106,8 +134,13 @@ impl Qwen3_5Model {
                         )?,
                     );
                 }
-                for mtp_only_shard_file in mtp_only_shard_files {
-                    mtp_only_shards.push(
+                for (source_id, mtp_only_shard_file) in mtp_only_shard_source_ids
+                    .iter()
+                    .copied()
+                    .zip(mtp_only_shard_files)
+                {
+                    auxiliary_mtp_sources.insert(
+                        source_id,
                         runtime.load_safetensors(
                             mtp_only_shard_file.into_file(),
                             positional_file_read_metrics
@@ -116,7 +149,19 @@ impl Qwen3_5Model {
                         )?,
                     );
                 }
-                Ok((model_shards, mtp_only_shards))
+                // Preserve the source ID because stored names are source-local.
+                if let Some((source_id, mtp_sidecar_file)) = mtp_sidecar_source {
+                    auxiliary_mtp_sources.insert(
+                        source_id,
+                        runtime.load_safetensors(
+                            mtp_sidecar_file.into_file(),
+                            positional_file_read_metrics
+                                .as_ref()
+                                .map(std::sync::Arc::clone),
+                        )?,
+                    );
+                }
+                Ok((model_shards, auxiliary_mtp_sources))
             },
         )?;
         let (weights, vision_model, mtp_weights) = performance_attribution.measure_operation(
@@ -133,7 +178,7 @@ impl Qwen3_5Model {
                     let vision_tensor_name_to_shard_index =
                         build_vision_tensor_shard_map(&shard_index);
                     Some(Qwen3_5VisionModel::load_from_model_shards(
-                        &vision_config,
+                        vision_config,
                         &model_shards,
                         &vision_tensor_name_to_shard_index,
                     )?)
@@ -147,8 +192,9 @@ impl Qwen3_5Model {
                     &mtp_artifact_capability,
                     &config,
                     &shard_index,
+                    &tensor_inventory,
                     weights.model_shards(),
-                    mtp_only_shards,
+                    auxiliary_mtp_sources,
                     &weights,
                     &runtime,
                 );
@@ -167,6 +213,27 @@ impl Qwen3_5Model {
                             (tensor_name.clone(), shard_file_name.clone())
                         })
                         .collect();
+                    let mut tensor_name_to_shard_file_name = tensor_name_to_shard_file_name;
+                    if let Some(sidecar_file_name) = mtp_sidecar_file_name.as_ref() {
+                        for location in tensor_inventory.locations().filter(|location| {
+                            location.declaration_origin()
+                                == TensorDeclarationOrigin::ArchitectureSidecar
+                        }) {
+                            tensor_name_to_shard_file_name.insert(
+                                location.canonical_name().to_owned(),
+                                sidecar_file_name.clone(),
+                            );
+                        }
+                    }
+                    let stored_tensor_name_by_canonical_name = tensor_inventory
+                        .locations()
+                        .map(|location| {
+                            (
+                                location.canonical_name().to_owned(),
+                                location.stored_name().to_owned(),
+                            )
+                        })
+                        .collect::<HashMap<_, _>>();
                     let expert_pager = performance_attribution.measure_operation(
                         PerformanceOperation::ExpertPagerPlanConstruction,
                         |_performance_attribution| {
@@ -174,6 +241,7 @@ impl Qwen3_5Model {
                                 &runtime,
                                 model_directory.to_path_buf(),
                                 &tensor_name_to_shard_file_name,
+                                &stored_tensor_name_by_canonical_name,
                                 &config,
                                 // The live configurable MLX active-memory ceiling is the only
                                 // paging budget. Reading the runtime policy here lets reloads

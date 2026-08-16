@@ -17,7 +17,7 @@ use super::{
         qwen3_5_speculative_prefill_request_eligibility,
     },
 };
-use crate::qwen3_5::multi_token_prediction::create_optional_prediction_session;
+use crate::qwen3_5::multi_token_prediction::{MtpDraftDepth, create_optional_prediction_session};
 
 impl Qwen3_5EngineState {
     pub(super) fn start_generation(
@@ -400,6 +400,11 @@ impl Qwen3_5EngineState {
                 prompt_token_ids.len(),
                 persistent_prompt_cache_token_count,
                 self.full_attention_kv_state_growth_tokens,
+                self.mtp_depth_status
+                    .effective_execution_draft_depth
+                    .map(MtpDraftDepth::new)
+                    .transpose()
+                    .map_err(|_| fatal_engine_error("loaded MTP depth is outside 1 through 3"))?,
             )
             .map_err(qwen3_5_runtime_error)?;
             performance_attribution.record_counter(
