@@ -189,8 +189,9 @@ pub use qwen3_5_moe::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
-    SortedExpertAssignments, restore_expert_assignment_order, sort_expert_assignments,
-    sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
+    SortedExpertAssignments, restore_expert_assignment_order, router_weighted_expert_inputs,
+    sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
+    unsorted_expert_weighted_sum,
 };
 pub use sparse_experts::{
     SparseExpertError, gathered_indices_use_sorted_contract, invert_assignment_order,

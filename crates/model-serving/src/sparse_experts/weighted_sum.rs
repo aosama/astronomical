@@ -54,6 +54,23 @@ pub fn unsorted_expert_weighted_sum(
     })
 }
 
+/// Applies router scores to expert inputs while preserving the activation dtype.
+///
+/// Some model contracts place routing weights before the expert projections.
+/// Float32 score arithmetic must not widen the gathered matrix input because
+/// that can select a different, slower matrix kernel for every expert projection.
+pub fn router_weighted_expert_inputs(
+    runtime: &MlxRuntime,
+    hidden_states: &MlxArray,
+    selected_scores: &MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let expanded_hidden_states = runtime.expand_dims(hidden_states, -2)?;
+    let expanded_scores = runtime.expand_dims(selected_scores, -1)?;
+    let weighted_hidden_states = runtime.multiply(&expanded_hidden_states, &expanded_scores)?;
+    let activation_dtype_inputs = runtime.astype(&weighted_hidden_states, hidden_states.dtype())?;
+    runtime.expand_dims(&activation_dtype_inputs, -2)
+}
+
 /// Reduces sorted gather outputs with original scores through the inverse map.
 pub fn sorted_expert_weighted_sum(
     runtime: &MlxRuntime,
@@ -94,7 +111,12 @@ fn unsorted_expert_weighted_sum_inner(
     }
     let expanded_scores = runtime.expand_dims(selected_scores, -1)?;
     let weighted_outputs = runtime.multiply(selected_expert_outputs, &expanded_scores)?;
-    runtime.sum_axis(&weighted_outputs, -2, false)
+    let float32_accumulated_output = runtime.sum_axis(&weighted_outputs, -2, false)?;
+    // Router probabilities remain Float32 through multiplication and reduction
+    // for numerical stability. Restore the expert activation dtype only after
+    // accumulation so one-token MoE decode cannot widen every following layer
+    // to Float32 and disable MLX's low-precision matrix kernels.
+    runtime.astype(&float32_accumulated_output, selected_expert_outputs.dtype())
 }
 
 fn sorted_expert_weighted_sum_inner(
