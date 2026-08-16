@@ -505,7 +505,7 @@ pub(super) fn assert_successful_streaming_chat_response(chat_response: &str) {
     );
 }
 
-fn assert_successful_streaming_responses_response(responses_response: &str) {
+pub(super) fn assert_successful_streaming_responses_response(responses_response: &str) {
     assert!(
         responses_response.starts_with("HTTP/1.1 200 OK"),
         "unexpected Responses response: {responses_response}"

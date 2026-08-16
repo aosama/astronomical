@@ -278,6 +278,8 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
             max_input_tokens: 241_664,
             max_output_tokens: 20_480,
             has_vision: true,
+            supports_reasoning: true,
+            supports_tool_calls: true,
             model_size_bytes: 18_420_000_000,
         }],
     );

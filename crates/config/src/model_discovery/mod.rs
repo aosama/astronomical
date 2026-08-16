@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use self::model_family::classify_model_family;
 use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
 
 mod classified_artifacts;
@@ -27,7 +26,7 @@ pub struct DiscoveredModel {
     pub model_id: String,
     /// The architecture family recognized from config.json.
     pub model_family: ModelFamily,
-    /// SHA-256 hash of config.json bytes (12 hex chars).
+    /// Family-owned artifact revision used by public identity and serving state.
     pub revision: String,
     /// Absolute path to the validated family artifact directory.
     pub model_directory: PathBuf,
@@ -39,6 +38,10 @@ pub struct DiscoveredModel {
     pub max_output_tokens: u32,
     /// Whether the checkpoint index declares physically present visual weights.
     pub has_vision: bool,
+    /// Whether family-owned text metadata declares a supported reasoning contract.
+    pub supports_reasoning: bool,
+    /// Whether family-owned text metadata declares a supported tool-call contract.
+    pub supports_tool_calls: bool,
     /// Unique safetensors shard payload bytes measured from the discovered files.
     pub model_size_bytes: u64,
 }
@@ -218,14 +221,34 @@ fn try_discover_model_with_id(
     // Read the one neutral family marker before dispatching artifact validation.
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
-    let model_type = config_value.get("model_type").and_then(|v| v.as_str());
-    let model_family = classify_model_family(model_type)?;
+    // The typed classifier rejects ambiguous duplicate family markers before
+    // the looser metadata document can participate in executable discovery.
+    let model_family = model_family::classify_model_directory(model_directory)
+        .ok()
+        .flatten()?;
     let family_metadata = match model_family {
         ModelFamily::Qwen3_5 => {
             qwen3_5::discover_model_metadata(model_directory, &config_value, max_output_tokens)?
         }
+        ModelFamily::Laguna => {
+            let laguna_metadata =
+                laguna::discover_model_metadata(model_directory, &config_bytes, max_output_tokens)?;
+            return Some(DiscoveredModel {
+                model_id: model_id.to_owned(),
+                model_family,
+                revision: laguna_metadata.revision,
+                model_directory: model_directory.to_path_buf(),
+                context_window: laguna_metadata.context_window,
+                max_input_tokens: laguna_metadata.max_input_tokens,
+                max_output_tokens: laguna_metadata.max_output_tokens,
+                has_vision: laguna_metadata.has_vision,
+                supports_reasoning: laguna_metadata.supports_reasoning,
+                supports_tool_calls: laguna_metadata.supports_tool_calls,
+                model_size_bytes: laguna_metadata.model_size_bytes,
+            });
+        }
         // Classification is intentionally broader than executable discovery.
-        ModelFamily::Laguna | ModelFamily::DeepSeekV4 => return None,
+        ModelFamily::DeepSeekV4 => return None,
     };
 
     // Derive revision from SHA-256 of config.json.
@@ -240,6 +263,8 @@ fn try_discover_model_with_id(
         max_input_tokens: family_metadata.max_input_tokens,
         max_output_tokens: family_metadata.max_output_tokens,
         has_vision: family_metadata.has_vision,
+        supports_reasoning: family_metadata.supports_reasoning,
+        supports_tool_calls: family_metadata.supports_tool_calls,
         model_size_bytes: family_metadata.model_size_bytes,
     })
 }

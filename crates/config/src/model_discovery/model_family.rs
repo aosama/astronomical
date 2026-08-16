@@ -110,8 +110,3 @@ struct ModelFamilyConfigDocument {
     #[serde(default)]
     model_type: Option<String>,
 }
-
-/// Classifies a model_type without claiming that the family is executable.
-pub(super) fn classify_model_family(model_type: Option<&str>) -> Option<ModelFamily> {
-    ModelFamily::from_model_type(model_type)
-}

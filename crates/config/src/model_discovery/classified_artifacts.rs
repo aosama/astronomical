@@ -57,7 +57,7 @@ fn scan_classified_artifacts(
         {
             classified_artifacts.push(ClassifiedModelArtifact {
                 model_id,
-                upstream_revision: model_revision(current_directory),
+                upstream_revision: immutable_model_revision(current_directory),
                 model_directory: current_directory.to_path_buf(),
                 model_family,
             });
@@ -125,7 +125,8 @@ fn model_identity(model_directory: &Path) -> Option<String> {
     Some(format!("{organization_name}/{repository_name}"))
 }
 
-fn model_revision(model_directory: &Path) -> Option<String> {
+/// Returns artifact provenance only when its source records an immutable revision candidate.
+pub(super) fn immutable_model_revision(model_directory: &Path) -> Option<String> {
     let local_metadata_path =
         model_directory.join(".cache/huggingface/download/config.json.metadata");
     if local_metadata_path

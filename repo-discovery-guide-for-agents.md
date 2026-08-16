@@ -6,7 +6,7 @@ Agent orientation map for non-obvious repository facts; this is not user-facing 
 
 Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old.
 
-Last verified: 2026-08-15 (spot-checked: prompt-processing optimizer/Qwen/engine ownership boundaries, Stable/Development instance isolation and Spotlight-excluded app build paths, Rust bounded expert streaming, phase-aware expert residency, native build graph, fixed-prefill qualification, worker compilation, centralized memory policy, native expert cache deletion)
+Last verified: 2026-08-16 (spot-checked: executable Laguna discovery and public REST routing, prompt-processing optimizer/Qwen/engine ownership boundaries, Stable/Development isolation, Rust bounded expert streaming, phase-aware expert residency, native build graph, centralized memory policy, native expert cache deletion)
 
 ## Project overview
 
@@ -33,8 +33,8 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 - InferenceEngineError::InvalidRequest is request-scoped at generation start, token advancement, and injected-token advancement: emit WorkerEvent::Failed and keep the loaded worker reusable. Truly fatal worker returns use a bounded Tokio runtime shutdown because Tokio standard-input reads cannot be cancelled and must not leave a half-dead process retaining MLX memory.
 - Qwen prefill capacity recovery classifies typed Machine Learning framework for Apple silicon errors from direct execution and Rust bounded expert loading. Both paths restore the request checkpoint before a request can be rejected.
 - Normal worker builds include direct-mlx. The supervisor resolves user configuration and sends worker-owned startup paths over typed IPC. The inference worker starts without a model directory and receives a selected directory only through SwapModel.
-- ModelFamily classifies Qwen3.5 and DeepSeek-V4 model types, but discovery returns only executable Qwen families. DeepSeek-V4 is intentionally absent from /v1/models and the worker factory rejects it before replacing a ready Qwen model.
-- Laguna owns strict artifact/text contracts plus descriptor-driven attention, sparse-expert residency and paging, prompt optimization, persistent prompt caching, and generation under `crates/model-serving/src/laguna/`. The worker can execute a directly selected validated Laguna artifact, but discovery keeps it unadvertised until the public serving layer lands.
+- ModelFamily classifies Qwen3.5, Laguna, and DeepSeek-V4 model types. Discovery advertises executable Qwen and Laguna artifacts; DeepSeek-V4 remains intentionally absent from `/v1/models` and is rejected before replacing a ready model.
+- Laguna owns strict artifact/text contracts plus descriptor-driven attention, sparse-expert residency and paging, prompt optimization, persistent prompt caching, and generation under `crates/model-serving/src/laguna/`. Family-owned shallow discovery requires bounded text sidecars, supported parser/template metadata, a safe complete nonzero shard index, a nonzero context, and an immutable revision before public listing and routing use the same discovered-model snapshot.
 - model_family_runtime owns the only concrete family enum boundary. inference_engine, engine_backed_worker, IPC, REST, and runtime-integration remain architecture-neutral; the worker selects a family once during model creation.
 - model_directories entries in the standard Astronomical configuration are recursive scan roots, not guaranteed leaf model directories. Ignored model qualification and measurement tests must resolve an exact model ID through Astronomical discovery and must not fall back to an external model-manager directory.
 - Qwen3_5MoEArtifactValidator discovers executable model shards and optional vision files from the index, accepts missing MTP-only files for target-only serving, validates optional OptiQ metadata when present, ignores unrelated files, and does not full-hash model payloads.
@@ -149,11 +149,11 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 
 ## What to verify
 
-- Whether the active OpenAI SSE path still streams real Qwen3.5 output.
+- Whether the active OpenAI SSE path still streams real Qwen3.5 and Laguna output through Chat and Responses.
 - Whether docs or code reintroduced alternate transports, periodic RSS/heartbeat policy, automatic replacement/backoff, or multi-layer worker management.
 - Whether REST/SSE DTOs and IPC DTOs remain bounded and separate, with image bytes compact on the Generate wire and oversized requests remaining non-fatal to the worker.
 - Whether the family runtime enum delegates Qwen3.5 chat preparation without changing Qwen3_5InferenceRequest behavior and worker startup constructs one EngineBackedWorker directly; do not restore pass-through prepared-chat or configured-worker wrappers.
-- Whether DeepSeek-V4 remains a typed unavailable stub only, excluded from discovery and the models endpoint until its real artifact implementation is intentionally onboarded.
+- Whether DeepSeek-V4 remains a typed unavailable stub excluded from discovery, while incomplete Laguna artifacts remain unadvertised and deep Laguna load failures preserve the healthy resident model.
 - Whether expert_paging remains free of concrete Qwen and DeepSeek tensor semantics, qwen3_5_moe retains Qwen layer plans and routing, and production expert streaming remains Rust bounded loading over ordinary MLX arrays.
 - Whether the centralized memory policy in memory/ (`MlxRamBudget`, `AllocationAdmission`, `ExpertMemoryAdmission`, `ResidencyAdmission`, `ForwardRecovery`, `LiveAllocationBudget`, `AdaptiveRamGrowthGuard`) handles all cross-component budget decisions without re-introducing scattered admission logic.
 - Whether phase-aware expert residency preserves a complete-layer prefill foundation, overlays routed decode demand within remaining capacity, reclaims partial pages first, and does not require the removed native cache.
@@ -171,4 +171,4 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 
 ## Maintenance snapshot
 
-Verified prompt-processing optimizer, Qwen integration, engine telemetry, and IPC ownership boundaries on 2026-08-15. Stable/Development isolation, complete-model fast path, Rust bounded expert streaming, phase-aware prefill/decode residency, centralized memory policy, and native expert-cache deletion were last spot-checked on 2026-08-14. Rust 1.97.1, edition 2024.
+Verified executable Laguna discovery, family-derived public capabilities, shared listing/routing snapshots, and public Chat/Responses, cache, cancellation, swap, malformed-load, and attribution journeys on 2026-08-16. Rust 1.97.1, edition 2024.

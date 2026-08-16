@@ -65,6 +65,8 @@ pub(crate) fn discovered_model_artifact(
         max_input_tokens: CONTEXT_WINDOW.saturating_sub(max_output_tokens),
         max_output_tokens,
         has_vision: true,
+        supports_reasoning: true,
+        supports_tool_calls: true,
         model_size_bytes: 0,
     }
 }

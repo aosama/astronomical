@@ -99,6 +99,8 @@ async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
             max_input_tokens: 1_024,
             max_output_tokens: 128,
             has_vision: false,
+            supports_reasoning: true,
+            supports_tool_calls: true,
             model_size_bytes: 0,
         }],
     );
