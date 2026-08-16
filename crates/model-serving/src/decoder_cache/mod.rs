@@ -12,6 +12,10 @@ mod layout;
 mod layout_error;
 #[cfg(feature = "direct-mlx")]
 mod live_state;
+mod persistence_layouts;
+#[cfg(feature = "direct-mlx")]
+mod rotating_attention_state;
+mod rotating_layout;
 mod storage_geometry;
 
 #[cfg(feature = "direct-mlx")]
@@ -34,4 +38,8 @@ pub use layout_error::DecoderCacheLayoutError;
 #[cfg(feature = "direct-mlx")]
 pub use live_state::{
     DecoderCacheState, DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint,
+};
+#[cfg(feature = "direct-mlx")]
+pub use rotating_attention_state::{
+    RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
 };

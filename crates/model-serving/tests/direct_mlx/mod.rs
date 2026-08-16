@@ -1,3 +1,4 @@
+mod attention;
 mod persistent_prompt_cache_block_topology;
 mod persistent_prompt_cache_block_transaction;
 mod persistent_prompt_cache_direct_writer;

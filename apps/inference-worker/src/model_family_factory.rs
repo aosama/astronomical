@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     ModelFactory, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
-    Qwen3_5PromptProcessingChunkSizer, deepseek_v4_unavailable_reason,
+    deepseek_v4_unavailable_reason,
 };
 
 use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
@@ -18,7 +18,6 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) optimizer_state_directory: Option<PathBuf>,
     pub(crate) performance_attribution_enabled: bool,
     pub(crate) performance_attribution_log_path: PathBuf,
-    pub(crate) prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
     pub(crate) mtp_enabled: bool,
     pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub(crate) persistent_prompt_cache_enabled: bool,
@@ -39,8 +38,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let optimizer_state_directory = self.optimizer_state_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let prompt_processing_chunk_sizer_override =
-            self.prompt_processing_chunk_sizer_override.clone();
         let mtp_enabled = self.mtp_enabled;
         let speculative_prefill = self.speculative_prefill.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
@@ -55,7 +52,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         model_directory_path,
                         effective_mlx_memory_ceiling_bytes,
                         prompt_cache_config,
-                        prompt_processing_chunk_sizer_override,
                         optimizer_state_directory,
                         max_output_tokens,
                         mtp_enabled,
@@ -70,6 +66,9 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
                         ModelFamilyInferenceEngine::Qwen3_5(qwen3_5_engine),
                     ))
+                }
+                Some(ModelFamily::Laguna) => {
+                    Err("selected Laguna model family is not executable yet".to_owned())
                 }
                 Some(ModelFamily::DeepSeekV4) => Err(deepseek_v4_unavailable_reason().to_owned()),
                 None => Err("selected model has an unsupported model family".to_owned()),

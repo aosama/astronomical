@@ -1,15 +1,11 @@
 use std::io;
-use std::path::PathBuf;
 
 use astronomical_ipc_protocol::ProtocolError;
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidationError, Qwen3_5PromptProcessingChunkSizerError, Qwen3_5TokenizerError,
-    WorkerRuntimeError,
-};
+use astronomical_model_serving::WorkerRuntimeError;
 use astronomical_runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
-const MAXIMUM_PUBLIC_MODEL_LOAD_FAILURE_REASON_CHARACTER_COUNT: usize = 512;
+pub(crate) const MAXIMUM_PUBLIC_MODEL_LOAD_FAILURE_REASON_CHARACTER_COUNT: usize = 512;
 
 /// Failure while starting or running the configured worker.
 #[derive(Debug, Error)]
@@ -36,73 +32,10 @@ pub enum WorkerStartupError {
     GpuWiredMemoryLimitSampleFailed,
     #[error("failed to read MLX recommended GPU working set")]
     ReadMlxRecommendedGpuWorkingSet(#[source] MlxRuntimeError),
-    #[error("failed to validate Qwen3.5 artifact at {model_directory:?}")]
-    Qwen3_5ArtifactValidation {
-        model_directory: PathBuf,
-        #[source]
-        source: Qwen3_5ArtifactValidationError,
-    },
-    #[error("failed to initialize Qwen3.5 processor at {model_directory:?}")]
-    Qwen3_5ProcessorInitialization {
-        model_directory: PathBuf,
-        #[source]
-        source: Qwen3_5TokenizerError,
-    },
-    #[error("failed to open performance-attribution log at {performance_attribution_log_path:?}")]
-    OpenPerformanceAttributionLog {
-        performance_attribution_log_path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-    #[error("failed to configure Qwen3.5 prompt-processing chunks")]
-    PromptProcessingChunkSizing(#[source] Qwen3_5PromptProcessingChunkSizerError),
-    #[error("failed to start Qwen3.5 engine at {model_directory:?}")]
-    Qwen3_5EngineInitialization {
-        model_directory: PathBuf,
-        #[source]
-        source: astronomical_model_serving::InferenceEngineError,
-    },
 }
 
-impl WorkerStartupError {
-    /// Describes a model-load failure with safe detail but no local paths.
-    #[must_use]
-    pub fn public_model_load_failure_reason(&self) -> String {
-        let unbounded_public_model_load_failure_reason = match self {
-            Self::Qwen3_5ArtifactValidation {
-                source: Qwen3_5ArtifactValidationError::OptiQMetadata(metadata_error),
-                ..
-            } => {
-                format!("Qwen3.5 OptiQ metadata validation failed: {metadata_error}")
-            }
-            Self::Qwen3_5ArtifactValidation {
-                source: Qwen3_5ArtifactValidationError::Config(config_error),
-                ..
-            } => {
-                format!("Qwen3.5 config validation failed: {config_error}")
-            }
-            Self::Qwen3_5ArtifactValidation {
-                source: Qwen3_5ArtifactValidationError::Qwen3_5ShardIndex(shard_index_error),
-                ..
-            } => {
-                format!("Qwen3.5 shard-index validation failed: {shard_index_error}")
-            }
-            Self::Qwen3_5ArtifactValidation { .. } => {
-                "Qwen3.5 artifact validation failed".to_owned()
-            }
-            Self::Qwen3_5ProcessorInitialization { .. } => {
-                "Qwen3.5 processor initialization failed".to_owned()
-            }
-            Self::Qwen3_5EngineInitialization { .. } => {
-                "Qwen3.5 engine initialization failed".to_owned()
-            }
-            _ => "model initialization failed".to_owned(),
-        };
-        bound_public_model_load_failure_reason(unbounded_public_model_load_failure_reason)
-    }
-}
-
-fn bound_public_model_load_failure_reason(
+/// Bounds family-owned model failure detail before it crosses the worker boundary.
+pub(crate) fn bound_public_model_load_failure_reason(
     unbounded_public_model_load_failure_reason: String,
 ) -> String {
     let mut public_model_load_failure_reason_character_indices =

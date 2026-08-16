@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use astronomical_inference_worker::worker_startup::run_configured_worker_with_prompt_processing_chunk_sizer_override;
+use astronomical_inference_worker::worker_startup::run_bootstrapped_worker;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    WorkerPromptProcessingChunkSizingPolicy,
 };
-use astronomical_model_serving::Qwen3_5PromptProcessingChunkSizer;
 use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use tokio::time::{Instant, timeout};
 
@@ -18,7 +18,7 @@ const SWEEP_TIMEOUT: Duration = Duration::from_secs(115);
 #[derive(Debug)]
 #[allow(dead_code)]
 struct PrefillChunckMetrics {
-    prefill_chunck_tokens: usize,
+    prefill_chunck_tokens: u32,
     prompt_tokens_per_second: f64,
     generation_tokens_per_second: f64,
     prompt_token_count: u64,
@@ -30,41 +30,31 @@ struct PrefillChunckMetrics {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 1024"]
 async fn should_measure_model_throughput_with_prefill_chunck_tokens_1024() {
-    assert_valid_prefill_chunck_sweep_result(
-        run_prefill_chunck_sweep_with_timeout(prefill_chunck_sizer(1024)).await,
-    );
+    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(1024).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 2048 (baseline)"]
 async fn should_measure_model_throughput_with_prefill_chunck_tokens_2048() {
-    assert_valid_prefill_chunck_sweep_result(
-        run_prefill_chunck_sweep_with_timeout(prefill_chunck_sizer(2048)).await,
-    );
+    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(2048).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 4096"]
 async fn should_measure_model_throughput_with_prefill_chunck_tokens_4096() {
-    assert_valid_prefill_chunck_sweep_result(
-        run_prefill_chunck_sweep_with_timeout(prefill_chunck_sizer(4096)).await,
-    );
+    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(4096).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 8192"]
 async fn should_measure_model_throughput_with_prefill_chunck_tokens_8192() {
-    assert_valid_prefill_chunck_sweep_result(
-        run_prefill_chunck_sweep_with_timeout(prefill_chunck_sizer(8192)).await,
-    );
+    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(8192).await);
 }
 
-async fn run_prefill_chunck_sweep_with_timeout(
-    prefill_chunck_sizer: Qwen3_5PromptProcessingChunkSizer,
-) -> PrefillChunckMetrics {
+async fn run_prefill_chunck_sweep_with_timeout(prefill_chunck_tokens: u32) -> PrefillChunckMetrics {
     timeout(
         SWEEP_TIMEOUT,
-        run_model_artifact_with_prefill_chunck_sizer(prefill_chunck_sizer),
+        run_model_artifact_with_prefill_chunck_tokens(prefill_chunck_tokens),
     )
     .await
     .expect("the prefill_chunck_tokens benchmark must finish within 115 seconds")
@@ -77,23 +67,16 @@ fn assert_valid_prefill_chunck_sweep_result(prefill_chunck_metrics: PrefillChunc
     );
 }
 
-/// Loads the Ornith model in-process over duplex pipes with an explicit model-serving
-/// chunk sizer. Does not measure OS-level peak footprint, but MLX still errors
-/// on out-of-memory conditions.
-async fn run_model_artifact_with_prefill_chunck_sizer(
-    prefill_chunck_sizer: Qwen3_5PromptProcessingChunkSizer,
+/// Loads the Ornith model over duplex pipes with one neutral fixed chunk policy.
+async fn run_model_artifact_with_prefill_chunck_tokens(
+    prefill_chunck_tokens: u32,
 ) -> PrefillChunckMetrics {
-    let prefill_chunck_tokens = prefill_chunck_sizer.maximum_prompt_processing_chunk_size_tokens();
     let (test_to_worker, worker_from_test) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let (worker_to_test, test_from_worker) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let worker_task = tokio::spawn(async move {
-        run_configured_worker_with_prompt_processing_chunk_sizer_override(
-            worker_from_test,
-            worker_to_test,
-            prefill_chunck_sizer,
-        )
-        .await
-        .expect("the in-process worker should run successfully");
+        run_bootstrapped_worker(worker_from_test, worker_to_test)
+            .await
+            .expect("the in-process worker should run successfully");
     });
 
     let mut protocol_writer = ProtocolWriter::new(test_to_worker);
@@ -106,9 +89,16 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
     )
     .load()
     .expect("the prefill sweep worker configuration should resolve");
+    let mut worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
+    worker_startup_configuration
+        .chunking
+        .prompt_processing_chunk_sizing_policy = WorkerPromptProcessingChunkSizingPolicy::Fixed {
+        fixed_prompt_processing_chunk_size_tokens: prefill_chunck_tokens,
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+    };
     protocol_writer
         .send_command(&WorkerCommand::InitializeWorker(
-            worker_runtime_config.worker_startup_configuration(),
+            worker_startup_configuration,
         ))
         .await
         .expect("the benchmark should initialize its worker");
@@ -250,13 +240,6 @@ async fn run_model_artifact_with_prefill_chunck_sizer(
         prompt_processing_seconds: prompt_processing_duration.as_secs_f64(),
         generation_seconds: generation_duration.as_secs_f64(),
     }
-}
-
-fn prefill_chunck_sizer(prefill_chunck_tokens: u32) -> Qwen3_5PromptProcessingChunkSizer {
-    Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-        prefill_chunck_tokens,
-    )
-    .expect("the measured prefill_chunck_tokens should be positive")
 }
 
 fn static_source_document() -> String {
