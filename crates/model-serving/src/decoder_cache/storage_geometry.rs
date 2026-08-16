@@ -103,6 +103,9 @@ fn checked_layer_persistence_alignment(
             capacity_growth_tokens,
             ..
         } => checked_least_common_multiple(current_alignment_token_count, *capacity_growth_tokens),
+        DecoderCacheLayerLayout::RotatingWindowAttention { .. } => {
+            Ok(current_alignment_token_count)
+        }
         DecoderCacheLayerLayout::RecurrentTensor { .. } => Ok(current_alignment_token_count),
         DecoderCacheLayerLayout::Composite { components } => components.iter().try_fold(
             current_alignment_token_count,

@@ -8,6 +8,7 @@ pub enum DecoderCacheTensorDtype {
     Float16,
     BFloat16,
     Float32,
+    Int32,
 }
 
 impl DecoderCacheTensorDtype {
@@ -18,6 +19,7 @@ impl DecoderCacheTensorDtype {
             Self::Float16 => 2,
             Self::BFloat16 => 2,
             Self::Float32 => 4,
+            Self::Int32 => 4,
         }
     }
 
@@ -28,6 +30,7 @@ impl DecoderCacheTensorDtype {
             Self::Float16 => "F16",
             Self::BFloat16 => "BF16",
             Self::Float32 => "F32",
+            Self::Int32 => "I32",
         }
     }
 
@@ -39,6 +42,7 @@ impl DecoderCacheTensorDtype {
             Self::Float16 => astronomical_runtime_integration::MlxDtype::Float16,
             Self::BFloat16 => astronomical_runtime_integration::MlxDtype::BFloat16,
             Self::Float32 => astronomical_runtime_integration::MlxDtype::Float32,
+            Self::Int32 => astronomical_runtime_integration::MlxDtype::Int32,
         }
     }
 }
@@ -60,6 +64,13 @@ pub struct DecoderCachePersistedTensorLayout {
 }
 
 impl DecoderCachePersistedTensorLayout {
+    pub(super) fn new(decoder_layer_index: usize, tensor_layout: DecoderCacheTensorLayout) -> Self {
+        Self {
+            decoder_layer_index,
+            tensor_layout,
+        }
+    }
+
     /// Returns the zero-based decoder-layer position.
     #[must_use]
     pub const fn decoder_layer_index(&self) -> usize {
@@ -205,6 +216,12 @@ pub enum DecoderCacheLayerLayout {
         values: DecoderCacheTensorLayout,
         capacity_growth_tokens: usize,
     },
+    /// Bounded rotating attention state persisted at complete boundaries.
+    RotatingWindowAttention {
+        keys: DecoderCacheTensorLayout,
+        values: DecoderCacheTensorLayout,
+        window_size: usize,
+    },
     /// Fixed state restored only from the newest complete prompt boundary.
     RecurrentTensor { tensor: DecoderCacheTensorLayout },
     /// Ordered state components for hybrid decoder layers.
@@ -293,77 +310,6 @@ impl DecoderCacheLayout {
     pub const fn boundary_tensor_count(&self) -> usize {
         self.boundary_tensor_count
     }
-
-    #[must_use]
-    pub fn sequence_tensor_layouts(&self) -> Vec<DecoderCachePersistedTensorLayout> {
-        self.persisted_tensor_layouts(true)
-    }
-
-    #[must_use]
-    pub fn boundary_tensor_layouts(&self) -> Vec<DecoderCachePersistedTensorLayout> {
-        self.persisted_tensor_layouts(false)
-    }
-
-    fn persisted_tensor_layouts(
-        &self,
-        include_sequence_tensors: bool,
-    ) -> Vec<DecoderCachePersistedTensorLayout> {
-        let expected_tensor_count = if include_sequence_tensors {
-            self.sequence_tensor_count
-        } else {
-            self.boundary_tensor_count
-        };
-        let mut persisted_tensor_layouts = Vec::with_capacity(expected_tensor_count);
-        for (decoder_layer_index, layer_layout) in self.layers.iter().enumerate() {
-            collect_persisted_tensor_layouts(
-                layer_layout,
-                decoder_layer_index,
-                include_sequence_tensors,
-                &mut persisted_tensor_layouts,
-            );
-        }
-        persisted_tensor_layouts
-    }
-}
-
-fn collect_persisted_tensor_layouts(
-    layer_layout: &DecoderCacheLayerLayout,
-    decoder_layer_index: usize,
-    include_sequence_tensors: bool,
-    persisted_tensor_layouts: &mut Vec<DecoderCachePersistedTensorLayout>,
-) {
-    match layer_layout {
-        DecoderCacheLayerLayout::AppendOnlyAttention { keys, values, .. } => {
-            if include_sequence_tensors {
-                persisted_tensor_layouts.push(DecoderCachePersistedTensorLayout {
-                    decoder_layer_index,
-                    tensor_layout: keys.clone(),
-                });
-                persisted_tensor_layouts.push(DecoderCachePersistedTensorLayout {
-                    decoder_layer_index,
-                    tensor_layout: values.clone(),
-                });
-            }
-        }
-        DecoderCacheLayerLayout::RecurrentTensor { tensor } => {
-            if !include_sequence_tensors {
-                persisted_tensor_layouts.push(DecoderCachePersistedTensorLayout {
-                    decoder_layer_index,
-                    tensor_layout: tensor.clone(),
-                });
-            }
-        }
-        DecoderCacheLayerLayout::Composite { components } => {
-            for component_layout in components {
-                collect_persisted_tensor_layouts(
-                    component_layout,
-                    decoder_layer_index,
-                    include_sequence_tensors,
-                    persisted_tensor_layouts,
-                );
-            }
-        }
-    }
 }
 
 fn validate_layer_layout(
@@ -390,6 +336,29 @@ fn validate_layer_layout(
                 });
             }
             *sequence_tensor_count = sequence_tensor_count.saturating_add(2);
+        }
+        DecoderCacheLayerLayout::RotatingWindowAttention {
+            keys,
+            values,
+            window_size,
+        } => {
+            if *window_size == 0 {
+                return Err(DecoderCacheLayoutError::ZeroRotatingWindowSize { layer_index });
+            }
+            validate_boundary_tensor(keys, layer_index, layer_tensor_role_names)?;
+            validate_boundary_tensor(values, layer_index, layer_tensor_role_names)?;
+            if keys.dimensions != values.dimensions
+                || keys.dimensions.get(2).copied() != Some(*window_size)
+            {
+                return Err(DecoderCacheLayoutError::AttentionTensorContractMismatch {
+                    layer_index,
+                });
+            }
+            *boundary_tensor_count = boundary_tensor_count.saturating_add(2);
+            for counter_layout in super::rotating_layout::rotating_window_counter_layouts() {
+                validate_boundary_tensor(&counter_layout, layer_index, layer_tensor_role_names)?;
+                *boundary_tensor_count = boundary_tensor_count.saturating_add(1);
+            }
         }
         DecoderCacheLayerLayout::RecurrentTensor { tensor } => {
             validate_boundary_tensor(tensor, layer_index, layer_tensor_role_names)?;

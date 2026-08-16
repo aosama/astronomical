@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod artifact_validation;
+mod attention;
 mod decoder_cache;
 mod deepseek_v4;
 mod engine_backed_worker;
@@ -28,10 +29,20 @@ pub use artifact_validation::{
     validate_required_file_for_tests,
 };
 #[cfg(feature = "direct-mlx")]
+pub use attention::build_causal_sliding_window_mask;
+pub use attention::{
+    RopeFrequencyError, RotatingAdmissionError, SlidingWindowVisibilityError,
+    YarnRopeFrequencyDenominators, compute_default_rope_frequency_denominators,
+    compute_yarn_rope_frequency_denominators, rotating_committed_token_count,
+    rotating_prefill_transient_token_count, sliding_window_position_is_visible,
+    sliding_window_visibility_table,
+};
+#[cfg(feature = "direct-mlx")]
 pub use decoder_cache::{
     ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, DecoderCacheState,
     DecoderCacheStateAllocationCheckpoint, FullAttentionKeyValueState,
     FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
+    RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
 };
 pub use decoder_cache::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError,
