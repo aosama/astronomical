@@ -115,6 +115,11 @@ pub(super) fn request_decoder_layer_state_from_layout(
         DecoderCacheLayerLayout::RecurrentTensor { .. } => Err(request_decoder_state_error(
             "Qwen decoder layers cannot contain a standalone recurrent tensor",
         )),
+        DecoderCacheLayerLayout::RotatingWindowAttention { .. } => {
+            Err(request_decoder_state_error(
+                "Qwen decoder layers cannot contain rotating window attention state",
+            ))
+        }
     }
 }
 
