@@ -12,7 +12,7 @@ use super::{
 };
 use crate::qwen3_5::model::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5::multi_token_prediction::{
-    materialize_optional_weights, qwen3_5_mtp_runtime_state_after_load,
+    materialize_optional_weights, qwen3_5_mtp_runtime_configuration_after_load,
 };
 use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model, Qwen3_5MtpArtifactCapability};
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
@@ -45,7 +45,9 @@ impl Qwen3_5EngineState {
         let mut total_artifact_payload_bytes = None;
         let mut model_shard_count = None;
         let mut target_token_identifier_mapping_digest = None;
-        let mut qwen3_5_mtp_artifact_capability = Qwen3_5MtpArtifactCapability::TargetOnly;
+        let mut qwen3_5_mtp_artifact_capability = Qwen3_5MtpArtifactCapability::target_only(
+            crate::qwen3_5::multi_token_prediction::Qwen3_5MtpTargetOnlyReason::NoTensorInventory,
+        );
         let model_loading_result: Result<_, InferenceEngineError> = (|| {
             let validated_artifact = self.validated_artifact.take().ok_or_else(|| {
                 fatal_engine_error("validated Qwen3.5 artifact is unavailable during MLX load")
@@ -57,6 +59,9 @@ impl Qwen3_5EngineState {
             let target_max_output_tokens = validated_artifact.max_output_tokens();
             let qwen3_5_vision_config = validated_artifact.vision_config().cloned();
             qwen3_5_mtp_artifact_capability = validated_artifact.mtp_artifact_capability().clone();
+            let should_bind_mtp_weights = self.mtp_enabled
+                && qwen3_5_mtp_artifact_capability
+                    .supports_configured_depth(self.configured_mtp_draft_depth);
             model_id = Some(validated_artifact.model_id().to_owned());
             model_revision = Some(validated_artifact.revision().to_owned());
             total_artifact_payload_bytes = Some(validated_artifact.total_payload_bytes());
@@ -93,7 +98,7 @@ impl Qwen3_5EngineState {
                 runtime,
                 validated_artifact,
                 &self.model_directory,
-                self.mtp_enabled,
+                should_bind_mtp_weights,
                 true,
                 model_chunking,
                 &mut model_loading_performance_attribution,
@@ -105,7 +110,7 @@ impl Qwen3_5EngineState {
                     |_performance_attribution| model.materialize_target_weights(),
                 )
                 .map_err(qwen3_5_runtime_error)?;
-            if self.mtp_enabled
+            if should_bind_mtp_weights
                 && model.mtp_weights()
                 && let Err(mtp_materialization_error) = model_loading_performance_attribution
                     .measure_operation(
@@ -414,14 +419,16 @@ impl Qwen3_5EngineState {
                 let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;
                 let model_has_mtp_weights = model.mtp_weights();
                 self.model = Some(model);
-                let (mtp_runtime_state, mtp_unavailable_reason) =
-                    qwen3_5_mtp_runtime_state_after_load(
+                let (mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status) =
+                    qwen3_5_mtp_runtime_configuration_after_load(
                         self.mtp_enabled,
+                        self.configured_mtp_draft_depth,
                         &qwen3_5_mtp_artifact_capability,
                         model_has_mtp_weights,
                     );
                 self.mtp_runtime_state = mtp_runtime_state;
                 self.mtp_unavailable_reason = mtp_unavailable_reason;
+                self.mtp_depth_status = mtp_depth_status;
                 match self.mtp_runtime_state {
                     Qwen3_5MtpRuntimeState::Disabled => {}
                     Qwen3_5MtpRuntimeState::TargetOnly => tracing::info!(

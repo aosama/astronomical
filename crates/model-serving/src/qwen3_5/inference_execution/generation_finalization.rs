@@ -77,6 +77,14 @@ impl Qwen3_5EngineState {
     ) -> GenerationFinalization {
         let request_id = active_request.request_id;
         let configured_maximum_output_tokens = active_request.maximum_output_tokens;
+        if outcome == PerformanceAttributionOutcome::Cancelled
+            && active_request.has_queued_prediction_tokens()
+        {
+            active_request.performance_attribution.record_counter(
+                crate::PerformanceCounter::MtpCancellationWithQueuedStateCount,
+                1,
+            );
+        }
         // Attribution must outlive the request because cleanup and the final
         // memory snapshot are part of the user-visible request cost.
         let mut performance_attribution = std::mem::replace(

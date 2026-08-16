@@ -40,15 +40,18 @@ impl Qwen3_5VisionWeights {
                     description: "validated visual sidecar has no vision configuration",
                 })?;
         let vision_tensor_profiles = qwen3_5_vision_tensor_profiles(vision_config);
-        let vision_sidecar_files = validated_artifact.take_vision_sidecar_files()?;
-        if vision_sidecar_files.is_empty() {
-            // The artifact either embeds visual weights or has none.
-            return Ok(None);
-        }
         let vision_sidecar_file_names = validated_artifact
             .shard_index()
             .vision_sidecar_file_names()
             .to_vec();
+        let vision_sidecar_source_ids =
+            validated_artifact.source_ids_for_file_names(&vision_sidecar_file_names)?;
+        let vision_sidecar_files =
+            validated_artifact.take_safetensors_sources(&vision_sidecar_source_ids)?;
+        if vision_sidecar_files.is_empty() {
+            // The artifact either embeds visual weights or has none.
+            return Ok(None);
+        }
         let mut vision_sidecars = Vec::with_capacity(vision_sidecar_files.len());
         for vision_sidecar_file in vision_sidecar_files {
             vision_sidecars.push(runtime.load_safetensors(vision_sidecar_file.into_file(), None)?);

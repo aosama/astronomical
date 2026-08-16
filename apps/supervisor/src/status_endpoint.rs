@@ -42,6 +42,24 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();
+    // Read both user-facing MTP fields under one lock so a concurrent config replacement cannot
+    // publish an enabled flag from one generation and a draft depth from another.
+    let reloadable_mtp_configuration = application_state
+        .reloadable_config
+        .as_ref()
+        .and_then(|reloadable_config| reloadable_config.read().ok())
+        .map(|resolved_config| (resolved_config.mtp_enabled, resolved_config.mtp_draft_depth));
+    // Prefer the reloadable user policy when the application owns one. Test embeddings and other
+    // non-reloadable hosts still receive the worker's explicit acknowledgement, so status never
+    // reports MTP disabled while that same worker reports an active MTP runtime.
+    let mtp_enabled = reloadable_mtp_configuration
+        .map(|(mtp_enabled, _mtp_draft_depth)| mtp_enabled)
+        .or_else(|| {
+            worker_health_snapshot
+                .worker_runtime_feature_configuration
+                .map(|configuration| configuration.mtp_enabled)
+        })
+        .unwrap_or(false);
     // When reload support is enabled, read the live config_warning from the
     // reloadable snapshot so /v1/status reflects the latest reload.
     let live_config_warning = match application_state.reloadable_config.as_ref() {
@@ -105,11 +123,17 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "status": worker_health_snapshot.status.as_str(),
         "activity": worker_health_snapshot.activity.as_str(),
         "config_warning": live_config_warning.as_deref(),
-        "mtp_enabled": application_state
-            .reloadable_config
-            .as_ref()
-            .and_then(|reloadable_config| reloadable_config.read().ok())
-            .is_some_and(|resolved_config| resolved_config.mtp_enabled),
+        "mtp_enabled": mtp_enabled,
+        "mtp_configured_draft_depth": reloadable_mtp_configuration
+            .and_then(|(_mtp_enabled, mtp_draft_depth)| mtp_draft_depth)
+            .or_else(|| worker_health_snapshot
+                .worker_runtime_feature_configuration
+                .and_then(|configuration| configuration.mtp_draft_depth))
+            .or(worker_health_snapshot.mtp_depth_status.configured_draft_depth),
+        "mtp_artifact_maximum_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_maximum_draft_depth,
+        "mtp_artifact_default_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_default_draft_depth,
+        "mtp_resolved_requested_draft_depth": worker_health_snapshot.mtp_depth_status.resolved_requested_draft_depth,
+        "mtp_effective_execution_draft_depth": worker_health_snapshot.mtp_depth_status.effective_execution_draft_depth,
         "mtp_runtime_state": serde_json::to_value(worker_health_snapshot.mtp_runtime_state())
             .unwrap_or_else(|_| serde_json::json!("disabled")),
         "mtp_unavailable_reason": worker_health_snapshot.mtp_unavailable_reason(),

@@ -69,6 +69,9 @@ pub enum PerformanceOperation {
     MtpPromptHistoryInitializationSpan,
     MtpTargetVerificationSynchronizationWait,
     MtpRejectedDraftStateRestoration,
+    MtpTargetRepair,
+    MtpPredictorCommitReplay,
+    MtpQueuedFrontierRestoration,
     PrefillStateAsyncEvaluationSubmission,
     PrefillStateGraphicsProcessorCompletionWait,
     ExpertPagingDiagnosticLogging,
@@ -147,6 +150,9 @@ impl PerformanceOperation {
         Self::MtpPromptHistoryInitializationSpan,
         Self::MtpTargetVerificationSynchronizationWait,
         Self::MtpRejectedDraftStateRestoration,
+        Self::MtpTargetRepair,
+        Self::MtpPredictorCommitReplay,
+        Self::MtpQueuedFrontierRestoration,
         Self::PrefillStateAsyncEvaluationSubmission,
         Self::PrefillStateGraphicsProcessorCompletionWait,
         Self::ExpertPagingDiagnosticLogging,
@@ -274,6 +280,9 @@ impl PerformanceOperation {
                 "mtp_target_verification_synchronization_wait"
             }
             Self::MtpRejectedDraftStateRestoration => "mtp_rejected_draft_state_restoration",
+            Self::MtpTargetRepair => "mtp_target_repair",
+            Self::MtpPredictorCommitReplay => "mtp_predictor_commit_replay",
+            Self::MtpQueuedFrontierRestoration => "mtp_queued_frontier_restoration",
             Self::PrefillStateAsyncEvaluationSubmission => {
                 "prefill_state_async_evaluation_submission"
             }

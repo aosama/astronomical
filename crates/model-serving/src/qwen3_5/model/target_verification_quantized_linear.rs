@@ -12,29 +12,29 @@ const TARGET_VERIFICATION_QUANTIZED_LINEAR_HEADER: &str = r#"
 using namespace metal;
 
 constant constexpr int SIMD_SIZE = 32;
-constant constexpr int PACK_FACTOR = (BITS == 5 ? 8 : 32 / BITS);
-constant constexpr int BYTES_PER_PACK = (BITS == 5 ? 5 : 32 / 8);
 constant constexpr int PACKS_PER_THREAD = 2;
-constant constexpr int VALUES_PER_THREAD = PACK_FACTOR * PACKS_PER_THREAD;
-constant constexpr int BLOCK_SIZE = VALUES_PER_THREAD * SIMD_SIZE;
-constant constexpr int SCALE_STEP_PER_THREAD = GS / VALUES_PER_THREAD;
 constant constexpr int RESULTS_PER_SIMDGROUP = 4;
 constant constexpr int NUM_SIMDGROUPS = 2;
 constant constexpr int BN = RESULTS_PER_SIMDGROUP * NUM_SIMDGROUPS;
 
-template <typename T>
+// MLX inserts custom-kernel template arguments inside the generated kernel
+// function, so header helpers must receive quantization geometry explicitly
+// rather than referring to BITS or GS from global scope.
+template <typename T, int Bits>
 inline float load_vector_exact(const device T* x, thread float* x_thread) {
+  constexpr int pack_factor = (Bits == 5 ? 8 : 32 / Bits);
+  constexpr int values_per_thread = pack_factor * PACKS_PER_THREAD;
   float sum = 0.0f;
-  if (BITS == 4) {
-    for (int i = 0; i < VALUES_PER_THREAD; i += 4) {
+  if constexpr (Bits == 4) {
+    for (int i = 0; i < values_per_thread; i += 4) {
       sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3];
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 16.0f;
       x_thread[i + 2] = x[i + 2] / 256.0f;
       x_thread[i + 3] = x[i + 3] / 4096.0f;
     }
-  } else if (BITS == 5) {
-    for (int i = 0; i < VALUES_PER_THREAD; i += 8) {
+  } else if constexpr (Bits == 5) {
+    for (int i = 0; i < values_per_thread; i += 8) {
       sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3] +
           x[i + 4] + x[i + 5] + x[i + 6] + x[i + 7];
       x_thread[i] = x[i];
@@ -50,6 +50,7 @@ inline float load_vector_exact(const device T* x, thread float* x_thread) {
   return sum;
 }
 
+template <int Bits>
 inline float qdot_exact(
     const device uint8_t* w,
     const thread float* x_thread,
@@ -57,17 +58,19 @@ inline float qdot_exact(
     float bias,
     float sum) {
   float accum = 0.0f;
-  if (BITS == 4) {
+  constexpr int pack_factor = (Bits == 5 ? 8 : 32 / Bits);
+  constexpr int values_per_thread = pack_factor * PACKS_PER_THREAD;
+  if constexpr (Bits == 4) {
     const device uint16_t* ws = (const device uint16_t*)w;
-    for (int i = 0; i < (VALUES_PER_THREAD / 4); i++) {
+    for (int i = 0; i < (values_per_thread / 4); i++) {
       accum +=
           x_thread[4 * i] * (ws[i] & 0x000f) +
           x_thread[4 * i + 1] * (ws[i] & 0x00f0) +
           x_thread[4 * i + 2] * (ws[i] & 0x0f00) +
           x_thread[4 * i + 3] * (ws[i] & 0xf000);
     }
-  } else if (BITS == 5) {
-    for (int i = 0; i < (VALUES_PER_THREAD / 8); i++) {
+  } else if constexpr (Bits == 5) {
+    for (int i = 0; i < (values_per_thread / 8); i++) {
       const thread float* xt = x_thread + 8 * i;
       const device uint8_t* wb = w + 5 * i;
       accum += (wb[0] & 0x1f) * xt[0];
@@ -89,6 +92,12 @@ inline float qdot_exact(
 "#;
 
 const TARGET_VERIFICATION_QUANTIZED_LINEAR_SOURCE: &str = r#"
+constexpr int PACK_FACTOR = (BITS == 5 ? 8 : 32 / BITS);
+constexpr int BYTES_PER_PACK = (BITS == 5 ? 5 : 32 / 8);
+constexpr int VALUES_PER_THREAD = PACK_FACTOR * PACKS_PER_THREAD;
+constexpr int BLOCK_SIZE = VALUES_PER_THREAD * SIMD_SIZE;
+constexpr int SCALE_STEP_PER_THREAD = GS / VALUES_PER_THREAD;
+
 uint n_tile = threadgroup_position_in_grid.y;
 uint batch_index = threadgroup_position_in_grid.z;
 uint simd_group_index = simdgroup_index_in_threadgroup;
@@ -127,7 +136,7 @@ for (int input_dimension_offset = 0; input_dimension_offset < K_SIZE;
      input_dimension_offset += BLOCK_SIZE) {
   float activation_sums[VERIFY_T];
   for (int token_position_index = 0; token_position_index < VERIFY_T; ++token_position_index) {
-    activation_sums[token_position_index] = load_vector_exact<T>(
+    activation_sums[token_position_index] = load_vector_exact<T, BITS>(
         current_activations + token_position_index * K_SIZE,
         activation_fragments[token_position_index]);
   }
@@ -140,7 +149,7 @@ for (int input_dimension_offset = 0; input_dimension_offset < K_SIZE;
     float quantization_bias = float(row_biases[0]);
     for (int token_position_index = 0; token_position_index < VERIFY_T;
          ++token_position_index) {
-      projection_sums[token_position_index][row] += qdot_exact(
+      projection_sums[token_position_index][row] += qdot_exact<BITS>(
           row_packed_weights,
           activation_fragments[token_position_index],
           quantization_scale,

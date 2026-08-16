@@ -1,7 +1,5 @@
 use astronomical_config::DiscoveredModel;
-use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationFailureReason, MtpRuntimeState,
-};
+use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use astronomical_supervisor::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerActivity, build_application,
     build_application_with_config_warning_and_discovered_models,
@@ -355,65 +353,6 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         serde_json::Value::Null,
         "a status response without a config warning must explicitly serialize the null field so the menu poller can distinguish absent from unset"
     );
-}
-
-#[tokio::test]
-async fn should_report_target_only_mtp_runtime_state_in_status() {
-    let status_document = mtp_status_document(MtpRuntimeState::TargetOnly, None).await;
-
-    assert_eq!(status_document["mtp_runtime_state"], "target_only");
-    assert_eq!(
-        status_document["mtp_unavailable_reason"],
-        serde_json::Value::Null
-    );
-}
-
-#[tokio::test]
-async fn should_report_active_mtp_runtime_state_without_an_unavailable_reason() {
-    let status_document = mtp_status_document(MtpRuntimeState::Active, None).await;
-
-    assert_eq!(status_document["mtp_runtime_state"], "active");
-    assert_eq!(
-        status_document["mtp_unavailable_reason"],
-        serde_json::Value::Null
-    );
-}
-
-#[tokio::test]
-async fn should_report_unavailable_mtp_runtime_state_with_its_reason() {
-    let status_document = mtp_status_document(
-        MtpRuntimeState::Unavailable,
-        Some("MTP sidecar tensor inventory is incomplete".to_owned()),
-    )
-    .await;
-
-    assert_eq!(status_document["mtp_runtime_state"], "unavailable");
-    assert_eq!(
-        status_document["mtp_unavailable_reason"],
-        "MTP sidecar tensor inventory is incomplete"
-    );
-}
-
-async fn mtp_status_document(
-    mtp_runtime_state: MtpRuntimeState,
-    mtp_unavailable_reason: Option<String>,
-) -> serde_json::Value {
-    let mut scripted_executor = ScriptedExecutor::ready(Vec::new());
-    scripted_executor.health_snapshot.mtp_runtime_state = mtp_runtime_state;
-    scripted_executor.health_snapshot.mtp_unavailable_reason = mtp_unavailable_reason;
-    let response = build_application(scripted_executor)
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
-    let status_body = to_bytes(response.into_body(), 4 * 1024)
-        .await
-        .expect("the status body should be readable");
-    serde_json::from_slice(&status_body).expect("the status body should contain JSON")
 }
 
 #[tokio::test]

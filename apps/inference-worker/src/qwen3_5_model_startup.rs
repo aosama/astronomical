@@ -23,6 +23,7 @@ pub(crate) fn initialize_qwen3_5_model(
     optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
     mtp_enabled: bool,
+    mtp_draft_depth: Option<u8>,
     speculative_prefill: WorkerSpeculativePrefillConfiguration,
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
@@ -183,7 +184,7 @@ pub(crate) fn initialize_qwen3_5_model(
             ));
         }
     };
-    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
@@ -194,6 +195,7 @@ pub(crate) fn initialize_qwen3_5_model(
         chunking,
         true,
         mtp_enabled,
+        mtp_draft_depth,
         loaded_model_speculative_prefill_configuration,
         model_loading_performance_attribution,
         performance_attribution_log,

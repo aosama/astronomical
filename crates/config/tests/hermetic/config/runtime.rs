@@ -12,6 +12,7 @@ fn should_load_supported_runtime_settings_from_user_config_file() {
             "fixed_prompt_processing_chunk_size_tokens": 2048
           },
           "mtp_enabled": true,
+          "mtp_draft_depth": 2,
           "supervisor": { "bind_address": "127.0.0.1:7000" },
           "logging": { "level": "debug", "retained_files": 3 }
         }"#,
@@ -38,6 +39,7 @@ fn should_load_supported_runtime_settings_from_user_config_file() {
         }
     );
     assert!(astronomical_config.mtp_enabled());
+    assert_eq!(astronomical_config.mtp_draft_depth(), Some(2));
     assert_eq!(
         astronomical_config
             .supervisor_bind_address()
@@ -70,6 +72,23 @@ fn should_enable_mtp_when_omitted_from_user_config_file() {
             .expect("config should load");
 
     assert!(astronomical_config.mtp_enabled());
+    assert_eq!(astronomical_config.mtp_draft_depth(), None);
+}
+
+#[test]
+fn should_reject_configured_mtp_draft_depth_outside_one_through_three() {
+    for invalid_depth in [0, 4] {
+        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+        write_config(
+            temporary_home_directory.path(),
+            &format!(r#"{{"model_directories":[],"mtp_draft_depth":{invalid_depth}}}"#),
+        );
+
+        assert!(matches!(
+            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+            Err(AstronomicalConfigError::InvalidMtpDraftDepth)
+        ));
+    }
 }
 
 #[test]

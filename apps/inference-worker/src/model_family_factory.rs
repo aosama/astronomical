@@ -20,6 +20,7 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) performance_attribution_log_path: PathBuf,
     pub(crate) prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
     pub(crate) mtp_enabled: bool,
+    pub(crate) mtp_draft_depth: Option<u8>,
     pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub(crate) persistent_prompt_cache_enabled: bool,
     pub(crate) chunking: WorkerChunkingConfiguration,
@@ -42,6 +43,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let prompt_processing_chunk_sizer_override =
             self.prompt_processing_chunk_sizer_override.clone();
         let mtp_enabled = self.mtp_enabled;
+        let mtp_draft_depth = self.mtp_draft_depth;
         let speculative_prefill = self.speculative_prefill.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
         let chunking = self.chunking.clone();
@@ -59,6 +61,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         optimizer_state_directory,
                         max_output_tokens,
                         mtp_enabled,
+                        mtp_draft_depth,
                         speculative_prefill,
                         persistent_prompt_cache_enabled,
                         performance_attribution_enabled,

@@ -350,4 +350,11 @@ impl Qwen3_5Config {
     pub const fn mtp_layer_count(&self) -> u32 {
         self.text_config.mtp_num_hidden_layers
     }
+
+    /// Returns the MTP sidecar file path declared in `mlx_lm_extra_tensors.mtp_file`,
+    /// or `None` when MTP weights are embedded in the shard index or absent.
+    #[must_use]
+    pub fn sidecar_mtp_file(&self) -> Option<&str> {
+        self.sidecar_mtp_file.as_deref()
+    }
 }

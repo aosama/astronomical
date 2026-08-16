@@ -253,6 +253,7 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
+        mtp_draft_depth: None,
         speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(

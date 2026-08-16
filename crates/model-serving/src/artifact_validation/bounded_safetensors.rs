@@ -65,39 +65,6 @@ pub fn validate_bounded_safetensors_with_partial_profiles(
         total_payload_bytes: bounded_metadata.total_payload_bytes,
     })
 }
-/// Validates indexed tensor ownership while checking recognized physical duplicates.
-pub(crate) fn validate_bounded_safetensors_with_indexed_profiles(
-    weights_file: &File,
-    file_size_bytes: u64,
-    weights_file_name: &str,
-    required_tensor_profiles: &[TensorProfile],
-    recognized_tensor_profiles: &[TensorProfile],
-    recognized_tensor_names: &HashSet<&str>,
-) -> Result<PartialProfileMetadata, ArtifactValidationError> {
-    let required_tensor_names = required_tensor_profiles
-        .iter()
-        .map(|tensor_profile| tensor_profile.name.as_str())
-        .collect::<HashSet<_>>();
-    let mut recognized_profile_names = recognized_tensor_profiles
-        .iter()
-        .map(|tensor_profile| tensor_profile.name.as_str())
-        .collect::<HashSet<_>>();
-    recognized_profile_names.extend(recognized_tensor_names.iter().copied());
-    let bounded_metadata = validate_bounded_safetensors_internal(
-        weights_file,
-        file_size_bytes,
-        weights_file_name,
-        &required_tensor_names,
-        &recognized_profile_names,
-        required_tensor_profiles,
-        recognized_tensor_profiles,
-    )?;
-
-    Ok(PartialProfileMetadata {
-        total_payload_bytes: bounded_metadata.total_payload_bytes,
-    })
-}
-
 fn validate_bounded_safetensors_internal(
     weights_file: &File,
     file_size_bytes: u64,

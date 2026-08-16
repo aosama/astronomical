@@ -1,5 +1,6 @@
 use astronomical_model_serving::{
-    Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex, qwen3_5_mtp_tensor_names,
+    MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5MtpTargetOnlyReason, Qwen3_5ShardIndex,
+    qwen3_5_mtp_tensor_names,
 };
 use serde_json::Value;
 
@@ -23,7 +24,9 @@ fn should_classify_empty_mtp_inventory_as_target_only() {
 
     assert_eq!(
         mtp_artifact_capability,
-        Qwen3_5MtpArtifactCapability::TargetOnly
+        Qwen3_5MtpArtifactCapability::TargetOnly {
+            reason: Qwen3_5MtpTargetOnlyReason::NoTensorInventory,
+        }
     );
 }
 
@@ -44,8 +47,9 @@ fn should_classify_complete_mtp_inventory_as_mtp_capable() {
     assert_eq!(
         mtp_artifact_capability,
         Qwen3_5MtpArtifactCapability::MtpCapable {
-            discovered_mtp_layer_count: 1,
-            supported_mtp_draft_depth: 1,
+            stored_mtp_layer_count: 1,
+            artifact_maximum_draft_depth: MtpDraftDepth::DEPTH_ONE,
+            artifact_default_draft_depth: None,
             mtp_tensor_count: 42,
         }
     );
@@ -69,7 +73,9 @@ fn should_fall_back_to_target_only_for_a_partial_mtp_inventory() {
 
     assert_eq!(
         mtp_artifact_capability,
-        Qwen3_5MtpArtifactCapability::TargetOnly
+        Qwen3_5MtpArtifactCapability::TargetOnly {
+            reason: Qwen3_5MtpTargetOnlyReason::IncompleteTensorInventory,
+        }
     );
 }
 

@@ -67,17 +67,26 @@ fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
         link_or_copy_file(&entry_path, &target_path);
     }
 
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
+    let mut validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(text_artifact_directory.path(), 20_480)
         .expect("a text-only artifact should validate without the vision sidecar");
 
     let shard_count = validated_artifact.shard_count();
     let total_payload_bytes = validated_artifact.total_payload_bytes();
-    let shard_index = validated_artifact.shard_index();
-    assert_eq!(shard_count, shard_index.shard_count());
-    assert_eq!(total_payload_bytes, shard_index.total_payload_bytes());
+    let model_shard_file_names = validated_artifact
+        .shard_index()
+        .model_shard_file_names()
+        .to_vec();
+    assert_eq!(shard_count, model_shard_file_names.len());
+    assert_eq!(
+        total_payload_bytes,
+        validated_artifact.shard_index().total_payload_bytes()
+    );
+    let model_shard_source_ids = validated_artifact
+        .source_ids_for_file_names(&model_shard_file_names)
+        .expect("all retained language shards should resolve to source identities");
     let shard_files = validated_artifact
-        .into_shard_files()
+        .take_safetensors_sources(&model_shard_source_ids)
         .expect("all retained language shard descriptors should transfer safely");
     assert_eq!(shard_files.len(), shard_count);
 }
@@ -121,10 +130,17 @@ fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
         .validate(vision_artifact_directory.path(), 20_480)
         .expect("a vision-enabled artifact should validate with the vision sidecar");
 
-    // The vision sidecar should be present in the validated artifact.
+    // The vision sidecar should be present and transferable through opaque source identities.
+    let vision_sidecar_file_names = validated_artifact
+        .shard_index()
+        .vision_sidecar_file_names()
+        .to_vec();
+    let vision_sidecar_source_ids = validated_artifact
+        .source_ids_for_file_names(&vision_sidecar_file_names)
+        .expect("the vision sidecars should resolve to source identities");
     assert!(
         !validated_artifact
-            .take_vision_sidecar_files()
+            .take_safetensors_sources(&vision_sidecar_source_ids)
             .expect("the vision sidecars should be available for transfer")
             .is_empty()
     );

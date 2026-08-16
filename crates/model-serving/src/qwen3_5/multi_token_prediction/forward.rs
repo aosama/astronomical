@@ -27,6 +27,10 @@ impl Qwen3_5MtpForwardOutput {
     pub fn post_normalization_hidden_states(&self) -> &MlxArray {
         &self.post_normalization_hidden_states
     }
+
+    pub(super) fn into_arrays(self) -> (MlxArray, MlxArray) {
+        (self.draft_logits, self.post_normalization_hidden_states)
+    }
 }
 
 impl Qwen3_5Model {
@@ -147,7 +151,7 @@ impl Qwen3_5Model {
         Ok((mtp_forward_output, draft_token_indices.item_u32()?))
     }
 
-    fn evaluate_mtp_updated_state(
+    pub(super) fn evaluate_mtp_updated_state(
         &self,
         mtp_request_state: &Qwen3_5MtpRequestState,
         forward_evaluation_roots: &[&MlxArray],
@@ -173,7 +177,7 @@ impl Qwen3_5Model {
         )?)
     }
 
-    fn build_mtp_draft_graph(
+    pub(super) fn build_mtp_draft_graph(
         &self,
         hidden_states_for_mtp_fusion: &MlxArray,
         next_token_indices: &MlxArray,
