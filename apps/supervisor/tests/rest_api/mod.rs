@@ -15,3 +15,4 @@ mod openai_responses_assembly;
 mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
+mod worker_failure_diagnostics;

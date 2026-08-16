@@ -77,6 +77,8 @@ pub enum AstronomicalConfigError {
     InvalidPromptCacheMaxSizeGb { description: &'static str },
     #[error("invalid maximum_mlx_memory_gb: {description}")]
     InvalidMaximumMlxMemoryGb { description: &'static str },
+    #[error("mtp_draft_depth must be between 1 and 3")]
+    InvalidMtpDraftDepth,
     #[error("Astronomical config file at {config_file_path:?} must contain a JSON object")]
     ConfigFileMustBeJsonObject { config_file_path: PathBuf },
     #[error("failed to serialize Astronomical config file at {config_file_path:?}")]

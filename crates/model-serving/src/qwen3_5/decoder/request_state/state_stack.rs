@@ -201,15 +201,16 @@ impl RequestDecoderStateStack {
         Ok(())
     }
 
-    /// Restores the valid first row retained during a two-token verification window.
-    pub(crate) fn restore_verified_prefix(
+    /// Restores any validated verifier-prefix boundary retained by fixed-depth MTP.
+    #[doc(hidden)]
+    pub fn restore_verified_prefix(
         &mut self,
         verified_prefix_position_tokens: u32,
         mut verified_prefix_boundary_checkpoint: Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     ) -> Result<(), MlxRuntimeError> {
-        if verified_prefix_boundary_checkpoint.completed_prefill_chunck_tokens != 1 {
+        if verified_prefix_boundary_checkpoint.completed_prefill_chunck_tokens == 0 {
             return Err(request_decoder_state_error(
-                "verification boundary must retain exactly the first verifier row",
+                "verification boundary must retain at least one verifier row",
             ));
         }
         let verified_prefix_attention_offset_tokens =

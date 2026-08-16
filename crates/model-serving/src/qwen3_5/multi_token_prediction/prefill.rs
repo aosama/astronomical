@@ -79,28 +79,6 @@ pub(in crate::qwen3_5) fn record_terminal_history_token_count(
     );
 }
 
-pub(in crate::qwen3_5) fn initialize_prompt_history_from_token_ids_with_performance_attribution(
-    model: &Qwen3_5Model,
-    target_pre_final_normalization_hidden_states: &MlxArray,
-    shifted_prompt_token_ids: &[u32],
-    active_request: &mut Qwen3_5EngineRequest,
-) -> Result<(), Qwen3_5ExecutionError> {
-    let initialization_outcome = active_request
-        .with_optional_prediction_session_and_performance_attribution(
-            |multi_token_prediction_request, performance_attribution| {
-                model.prefill_mtp_history_from_token_ids_with_performance_attribution(
-                    target_pre_final_normalization_hidden_states,
-                    shifted_prompt_token_ids,
-                    multi_token_prediction_request.request_state_mut(),
-                    performance_attribution,
-                )
-            },
-        );
-    initialization_outcome.ok_or(Qwen3_5ExecutionError::InvalidInput {
-        description: "MTP request session disappeared during prompt-history initialization",
-    })?
-}
-
 pub(in crate::qwen3_5) fn initialize_prompt_history_for_prompt_range_with_performance_attribution(
     model: &Qwen3_5Model,
     target_pre_final_normalization_hidden_states: &MlxArray,

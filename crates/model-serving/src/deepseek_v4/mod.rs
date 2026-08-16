@@ -40,6 +40,7 @@ impl ModelGenerationProcessor for DeepSeekV4UnavailableGenerationProcessor {
         &self,
         _mtp_runtime_state: astronomical_ipc_protocol::MtpRuntimeState,
         _mtp_unavailable_reason: Option<String>,
+        _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
         _speculative_prefill_runtime_state:
             astronomical_ipc_protocol::SpeculativePrefillRuntimeState,
         _speculative_prefill_unavailable_reason: Option<String>,

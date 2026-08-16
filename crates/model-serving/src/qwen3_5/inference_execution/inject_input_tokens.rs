@@ -6,9 +6,8 @@ use super::super::model::memory_admission::invalid_request_error;
 use super::completed_forward_memory::record_completed_adaptive_ram_growth;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 use crate::qwen3_5::multi_token_prediction::{
-    disable_prediction_after_optional_injection_failure, forward_final_injected_prediction_token,
-    projected_injected_prediction_growth_bytes, reseed_prediction_after_injected_prefix,
-    reset_prediction_after_injection, restore_queued_prediction_prefix_before_injection,
+    disable_prediction_after_optional_injection_failure,
+    projected_injected_prediction_growth_bytes, restore_queued_prediction_prefix_before_injection,
 };
 
 impl Qwen3_5EngineState {
@@ -64,6 +63,15 @@ impl Qwen3_5EngineState {
         input_token_ids: &[u32],
     ) -> Result<(), InferenceEngineError> {
         restore_queued_prediction_prefix_before_injection(active_request)?;
+        if active_request.has_optional_prediction_session() {
+            // Exact predictor replay needs historical target hidden rows that are
+            // not retained across arbitrary feedback. Quarantine optional MTP
+            // instead of preserving an approximate predictor suffix.
+            disable_prediction_after_optional_injection_failure(active_request);
+            active_request
+                .performance_attribution_mut()
+                .record_counter(crate::PerformanceCounter::MtpOperationalFallbackCount, 1);
+        }
         let remaining_output_tokens = active_request
             .maximum_output_tokens
             .saturating_sub(active_request.generated_token_count)
@@ -102,10 +110,6 @@ impl Qwen3_5EngineState {
         // one-token-ahead successor and its rollback verdict before forwarding
         // feedback; neither belongs to the newly injected token sequence.
         active_request.pending_generated_token = None;
-        let mut should_reseed_prediction_after_injection = reset_prediction_after_injection(
-            active_request,
-            self.full_attention_kv_state_growth_tokens,
-        )?;
         let final_input_token_position = input_token_ids.len() - 1;
         if final_input_token_position > 0 {
             let model = self
@@ -151,32 +155,14 @@ impl Qwen3_5EngineState {
                 .model
                 .as_ref()
                 .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            if should_reseed_prediction_after_injection {
-                let shifted_feedback_token_ids = &input_token_ids[1..];
-                if let Err(prediction_history_error) = reseed_prediction_after_injected_prefix(
-                    model,
-                    active_request,
+            model
+                .prefill_chunck_with_performance_attribution(
                     feedback_prefix_token_ids,
-                    shifted_feedback_token_ids,
-                ) {
-                    tracing::warn!(
-                        request_id = active_request.request_id.value(),
-                        error = %prediction_history_error,
-                        "optional prediction feedback-history prefill failed; continuing target-only"
-                    );
-                    disable_prediction_after_optional_injection_failure(active_request);
-                    should_reseed_prediction_after_injection = false;
-                }
-            } else {
-                model
-                    .prefill_chunck_with_performance_attribution(
-                        feedback_prefix_token_ids,
-                        active_request.next_position_tokens,
-                        &mut active_request.request_decoder_state,
-                        &mut active_request.performance_attribution,
-                    )
-                    .map_err(InferenceEngineError::from)?;
-            }
+                    active_request.next_position_tokens,
+                    &mut active_request.request_decoder_state,
+                    &mut active_request.performance_attribution,
+                )
+                .map_err(InferenceEngineError::from)?;
             active_request.advance_position(feedback_prefix_token_ids.len())?;
             record_completed_adaptive_ram_growth(
                 &mut self.adaptive_ram_growth_guard,
@@ -196,11 +182,8 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .sparse_experts_are_paged();
-        let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
-            1,
-            should_reseed_prediction_after_injection,
-            sparse_experts_are_paged,
-        );
+        let adaptive_ram_growth_context =
+            AdaptiveRamGrowthContext::decode(1, false, sparse_experts_are_paged);
         let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) = self
             .measure_adaptive_ram_growth_memory_admission(
                 adaptive_ram_growth_context,
@@ -213,23 +196,16 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let next_generated_token = if should_reseed_prediction_after_injection {
-            forward_final_injected_prediction_token(model, active_request, final_input_token_id)?
-                .ok_or_else(|| {
-                    fatal_engine_error("prediction request disappeared before injected final token")
-                })?
-        } else {
-            let feedback_logits = model
-                .build_forward_chunk_with_performance_attribution(
-                    &[final_input_token_id],
-                    active_request.next_position_tokens,
-                    &mut active_request.request_decoder_state,
-                    &mut active_request.performance_attribution,
-                )
-                .map_err(InferenceEngineError::from)?;
-            active_request.advance_position(1)?;
-            active_request.build_generated_token(model, &feedback_logits)?
-        };
+        let feedback_logits = model
+            .build_forward_chunk_with_performance_attribution(
+                &[final_input_token_id],
+                active_request.next_position_tokens,
+                &mut active_request.request_decoder_state,
+                &mut active_request.performance_attribution,
+            )
+            .map_err(InferenceEngineError::from)?;
+        active_request.advance_position(1)?;
+        let next_generated_token = active_request.build_generated_token(model, &feedback_logits)?;
         active_request
             .performance_attribution
             .measure_operation(

@@ -1,7 +1,7 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ChatMessage,
-    ChatModelCapabilities, ChatToolChoice, MtpRuntimeState, SpeculativePrefillRuntimeState,
-    WorkerEvent,
+    ChatModelCapabilities, ChatToolChoice, MtpDepthStatus, MtpRuntimeState,
+    SpeculativePrefillRuntimeState, WorkerEvent,
 };
 
 use crate::{
@@ -190,6 +190,7 @@ impl ModelGenerationProcessor for LagunaGenerationProcessor {
         &self,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
+        mtp_depth_status: MtpDepthStatus,
         speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
         speculative_prefill_unavailable_reason: Option<String>,
         speculative_prefill_draft_model_id: Option<String>,
@@ -214,6 +215,7 @@ impl ModelGenerationProcessor for LagunaGenerationProcessor {
             },
             mtp_runtime_state,
             mtp_unavailable_reason,
+            mtp_depth_status,
             speculative_prefill_runtime_state,
             speculative_prefill_unavailable_reason,
             speculative_prefill_draft_model_id,

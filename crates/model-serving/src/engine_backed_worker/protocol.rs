@@ -59,6 +59,7 @@ where
                         engine_load_result
                             .mtp_unavailable_reason()
                             .map(String::from),
+                        engine_load_result.mtp_depth_status(),
                         engine_load_result.speculative_prefill_runtime_state(),
                         engine_load_result
                             .speculative_prefill_unavailable_reason()

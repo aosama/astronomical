@@ -312,6 +312,12 @@ impl Qwen3_5EngineRequest {
         self.optional_prediction_session.is_some()
     }
 
+    pub(crate) fn has_queued_prediction_tokens(&self) -> bool {
+        self.optional_prediction_session
+            .as_ref()
+            .is_some_and(|prediction_request| prediction_request.has_verified_generated_token_ids())
+    }
+
     pub(crate) fn additional_context_state_payload_bytes(&self) -> u64 {
         self.optional_prediction_session
             .as_ref()
@@ -358,6 +364,10 @@ impl Qwen3_5EngineRequest {
 
     pub(crate) fn set_pending_generated_token(&mut self, pending_generated_token: MlxArray) {
         self.pending_generated_token = Some(pending_generated_token);
+    }
+
+    pub(crate) fn clear_pending_generated_token(&mut self) {
+        self.pending_generated_token = None;
     }
 
     pub(crate) fn performance_attribution_mut(&mut self) -> &mut PerformanceAttribution {

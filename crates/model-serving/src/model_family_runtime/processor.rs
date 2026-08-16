@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, MtpRuntimeState,
-    SpeculativePrefillRuntimeState, WorkerEvent,
+    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, MtpDepthStatus,
+    MtpRuntimeState, SpeculativePrefillRuntimeState, WorkerEvent,
 };
 
 use crate::{
@@ -26,6 +26,7 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
         &self,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
+        mtp_depth_status: MtpDepthStatus,
         speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
         speculative_prefill_unavailable_reason: Option<String>,
         speculative_prefill_draft_model_id: Option<String>,
@@ -35,6 +36,7 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             Self::Qwen3_5(processor) => processor.ready_event(
                 mtp_runtime_state,
                 mtp_unavailable_reason,
+                mtp_depth_status,
                 speculative_prefill_runtime_state,
                 speculative_prefill_unavailable_reason,
                 speculative_prefill_draft_model_id,
@@ -43,6 +45,7 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             Self::Laguna(processor) => processor.ready_event(
                 mtp_runtime_state,
                 mtp_unavailable_reason,
+                mtp_depth_status,
                 speculative_prefill_runtime_state,
                 speculative_prefill_unavailable_reason,
                 speculative_prefill_draft_model_id,
@@ -51,6 +54,7 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             Self::DeepSeekV4(processor) => processor.ready_event(
                 mtp_runtime_state,
                 mtp_unavailable_reason,
+                mtp_depth_status,
                 speculative_prefill_runtime_state,
                 speculative_prefill_unavailable_reason,
                 speculative_prefill_draft_model_id,

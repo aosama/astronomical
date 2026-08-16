@@ -251,6 +251,12 @@ impl AstronomicalConfig {
         self.user_config_file.mtp_enabled.unwrap_or(true)
     }
 
+    /// Returns the explicit fixed MTP draft depth, or `None` for artifact selection.
+    #[must_use]
+    pub fn mtp_draft_depth(&self) -> Option<u8> {
+        self.user_config_file.mtp_draft_depth
+    }
+
     /// Resolves the optional draft-assisted speculative-prefill policy.
     pub fn speculative_prefill(&self) -> Result<SpeculativePrefillConfig, AstronomicalConfigError> {
         resolve_speculative_prefill_config(&self.user_config_file.speculative_prefill)

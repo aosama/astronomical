@@ -7,11 +7,49 @@ use astronomical_ipc_protocol::{
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
     GenerationStartError, MlxMemoryLimitUpdateOutcome, WorkerHandle, WorkerHealthSnapshot,
-    WorkerHealthStatus,
+    WorkerHealthStatus, WorkerProcess,
 };
 use tokio::time::{Instant, sleep, timeout};
 
 const DEFAULT_MAX_OUTPUT_TOKENS: u32 = 20480;
+
+#[tokio::test]
+async fn should_report_worker_exit_status_and_stderr_when_the_event_stream_closes() {
+    let worker_executable_path = PathBuf::from(
+        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-stderr-probe-worker")
+            .expect("Cargo should provide the stderr-probe worker fixture path"),
+    );
+    let mut worker_process = WorkerProcess::launch_with_timeouts(
+        worker_executable_path,
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+    )
+    .await
+    .expect("the stderr-probe worker should launch");
+
+    assert!(
+        worker_process
+            .next_event()
+            .await
+            .expect("the readiness event should be readable")
+            .is_some()
+    );
+    let worker_exit_error = worker_process
+        .next_event()
+        .await
+        .expect_err("closing the event stream should carry process diagnostics");
+    let worker_exit_diagnostic = worker_exit_error.to_string();
+
+    assert!(
+        worker_exit_diagnostic.contains("worker process exited after closing its event stream")
+    );
+    assert!(worker_exit_diagnostic.contains("exit code 0"));
+    assert!(worker_exit_diagnostic.contains("stderr-probe worker observed visible stderr"));
+    assert!(
+        worker_exit_diagnostic.len() < 9_000,
+        "worker stderr diagnostics must remain bounded"
+    );
+}
 
 #[tokio::test]
 async fn should_launch_without_a_literal_host_memory_envelope() {

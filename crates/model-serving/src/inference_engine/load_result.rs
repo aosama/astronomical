@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::{
-    ExpertMemoryMode, MtpRuntimeState, SpeculativePrefillRuntimeState,
+    ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, SpeculativePrefillRuntimeState,
 };
 
 /// Immutable readiness metadata captured after all engine load transitions.
@@ -11,6 +11,7 @@ pub struct EngineLoadResult {
     expert_memory_mode: Option<ExpertMemoryMode>,
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
+    mtp_depth_status: MtpDepthStatus,
     speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
     speculative_prefill_unavailable_reason: Option<String>,
     speculative_prefill_draft_model_id: Option<String>,
@@ -26,6 +27,7 @@ impl EngineLoadResult {
             expert_memory_mode: None,
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
+            mtp_depth_status: MtpDepthStatus::default(),
             speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
             speculative_prefill_unavailable_reason: None,
             speculative_prefill_draft_model_id: None,
@@ -55,6 +57,12 @@ impl EngineLoadResult {
     #[must_use]
     pub fn with_mtp_unavailable_reason(mut self, reason: String) -> Self {
         self.mtp_unavailable_reason = Some(reason);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_mtp_depth_status(mut self, mtp_depth_status: MtpDepthStatus) -> Self {
+        self.mtp_depth_status = mtp_depth_status;
         self
     }
 
@@ -100,6 +108,11 @@ impl EngineLoadResult {
     #[must_use]
     pub fn mtp_unavailable_reason(&self) -> Option<&str> {
         self.mtp_unavailable_reason.as_deref()
+    }
+
+    #[must_use]
+    pub const fn mtp_depth_status(&self) -> MtpDepthStatus {
+        self.mtp_depth_status
     }
 
     /// Returns the optional draft-assisted speculative-prefill runtime state.
