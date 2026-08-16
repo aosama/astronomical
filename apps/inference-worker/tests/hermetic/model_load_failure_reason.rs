@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use astronomical_inference_worker::worker_startup::WorkerStartupError;
+use astronomical_inference_worker::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 use astronomical_model_serving::{
     ArtifactValidationError, OptiQMetadataError, Qwen3_5ArtifactError,
     Qwen3_5ArtifactValidationError, Qwen3_5ConfigError,
@@ -9,7 +9,7 @@ use astronomical_model_serving::{
 #[test]
 fn should_explain_the_root_model_validation_failure_without_exposing_its_local_path() {
     let local_model_directory = PathBuf::from("/private/models/example-optiq-model");
-    let model_startup_error = WorkerStartupError::Qwen3_5ArtifactValidation {
+    let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: local_model_directory.clone(),
         source: Qwen3_5ArtifactValidationError::OptiQMetadata(
             OptiQMetadataError::UnsupportedBits {
@@ -31,7 +31,7 @@ fn should_explain_the_root_model_validation_failure_without_exposing_its_local_p
 #[test]
 fn should_omit_local_model_paths_from_other_artifact_validation_failures() {
     let local_model_directory = PathBuf::from("/private/models/missing-checkpoint");
-    let model_startup_error = WorkerStartupError::Qwen3_5ArtifactValidation {
+    let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: local_model_directory.clone(),
         source: Qwen3_5ArtifactValidationError::Artifact(
             ArtifactValidationError::ModelDirectoryNotFound {
@@ -48,7 +48,7 @@ fn should_omit_local_model_paths_from_other_artifact_validation_failures() {
 
 #[test]
 fn should_explain_safe_model_configuration_validation_failures() {
-    let model_startup_error = WorkerStartupError::Qwen3_5ArtifactValidation {
+    let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/text-only-qwen"),
         source: Qwen3_5ArtifactValidationError::Config(Qwen3_5ConfigError::MissingActivationDtype),
     };
@@ -61,7 +61,7 @@ fn should_explain_safe_model_configuration_validation_failures() {
 
 #[test]
 fn should_explain_visual_tensors_without_a_vision_config() {
-    let model_startup_error = WorkerStartupError::Qwen3_5ArtifactValidation {
+    let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/text-only-qwen"),
         source: Qwen3_5ArtifactValidationError::Qwen3_5ShardIndex(
             Qwen3_5ArtifactError::MissingVisionConfig,
@@ -77,7 +77,7 @@ fn should_explain_visual_tensors_without_a_vision_config() {
 #[test]
 fn should_bound_optiq_metadata_failure_reason_length() {
     let untrusted_module_name = "untrusted_module_name_".repeat(64);
-    let model_startup_error = WorkerStartupError::Qwen3_5ArtifactValidation {
+    let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/example-optiq-model"),
         source: Qwen3_5ArtifactValidationError::OptiQMetadata(
             OptiQMetadataError::UnsupportedBits {

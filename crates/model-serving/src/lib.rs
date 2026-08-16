@@ -1,11 +1,13 @@
 #![forbid(unsafe_code)]
 
 mod artifact_validation;
+mod attention;
 mod decoder_cache;
 mod deepseek_v4;
 mod engine_backed_worker;
 mod expert_paging;
 mod inference_engine;
+mod laguna;
 mod memory;
 mod model_family_runtime;
 mod model_generation_processor;
@@ -16,6 +18,8 @@ mod prompt_processing_chunk_size_optimizer;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod safetensors;
+mod sparse_experts;
+mod strict_json;
 
 #[doc(hidden)]
 pub use artifact_validation::validate_required_file_for_tests;
@@ -26,11 +30,26 @@ pub use artifact_validation::{
     TensorFeature, TensorInventory, TensorInventoryError, TensorLocation, TensorProfile,
     TensorSemanticRole, TensorSourceId, ValidatedWeightsFile,
 };
+#[doc(hidden)]
+pub use artifact_validation::{
+    RawSafetensorsInventoryForTests, RawSafetensorsTensorDescriptorForTests,
+};
+pub use astronomical_ipc_protocol::ExpertMemoryMode;
+#[cfg(feature = "direct-mlx")]
+pub use attention::build_causal_sliding_window_mask;
+pub use attention::{
+    RopeFrequencyError, RotatingAdmissionError, SlidingWindowVisibilityError,
+    YarnRopeFrequencyDenominators, compute_default_rope_frequency_denominators,
+    compute_yarn_rope_frequency_denominators, rotating_committed_token_count,
+    rotating_prefill_transient_token_count, sliding_window_position_is_visible,
+    sliding_window_visibility_table,
+};
 #[cfg(feature = "direct-mlx")]
 pub use decoder_cache::{
     ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, DecoderCacheState,
     DecoderCacheStateAllocationCheckpoint, FullAttentionKeyValueState,
     FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
+    RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
 };
 pub use decoder_cache::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError,
@@ -63,6 +82,50 @@ pub use inference_engine::{
     MlxInferenceExecution, PreparedInferenceRequest,
     PromptProcessingChunkCandidateMeasurementSummary, PromptProcessingChunkOptimizationContext,
     PromptProcessingChunkOptimizationOutcome,
+};
+pub use laguna::{
+    LagunaAffineProfile, LagunaArtifactValidationError, LagunaArtifactValidator,
+    LagunaAttentionDescriptor, LagunaAttentionKind, LagunaAttentionProjection,
+    LagunaBlockFp8Profile, LagunaCacheDescriptor, LagunaCanonicalSourceLayout,
+    LagunaCanonicalTensorAssemblyKind, LagunaCanonicalTensorDescriptor,
+    LagunaCompressedFeedForwardProjection, LagunaCompressedIgnoreScope,
+    LagunaCompressedInputActivationDescriptor, LagunaCompressedModuleScope,
+    LagunaCompressedStorageDescriptor, LagunaCompressedWeightEncoding, LagunaDefaultRopeDescriptor,
+    LagunaDenseFeedForwardDescriptor, LagunaDirectAffineStorageDescriptor,
+    LagunaExactStorageSupport, LagunaExecutionDtype, LagunaExecutionError,
+    LagunaExpertGateUpLayout, LagunaExpertPagingPlan, LagunaExpertProjection,
+    LagunaFeedForwardDescriptor, LagunaFp8InputActivationDescriptor, LagunaFp8KvCacheDescriptor,
+    LagunaGatingKind, LagunaGenerationProcessor, LagunaGlobalTensorRole,
+    LagunaIndexTotalSizeSemantics, LagunaInferenceRequest, LagunaLayerDescriptor,
+    LagunaLayerTensorRole, LagunaModelDescriptor, LagunaMoeDescriptor,
+    LagunaNonExecutableMetadataDescriptor, LagunaNormalizationError,
+    LagunaNvfp4InputActivationDescriptor, LagunaNvfp4Profile, LagunaOutputEvent,
+    LagunaOutputParser, LagunaOutputParserError, LagunaPagingError, LagunaPreparationError,
+    LagunaPreparedGeneration, LagunaPromptProcessingChunkSizer,
+    LagunaPromptProcessingChunkSizerError, LagunaPromptProcessingExecutionProfile,
+    LagunaPromptRenderer, LagunaPromptRendererError, LagunaRawTensorNameRecord,
+    LagunaRequestMemoryRequirements, LagunaRequestOutput, LagunaRequestOutputError,
+    LagunaRetainedArtifactFiles, LagunaRopeDescriptor, LagunaRouterKind, LagunaRouterSelection,
+    LagunaSamplerConfig, LagunaSamplingStrategy, LagunaShardIndex, LagunaShardIndexError,
+    LagunaSparseLayerPagingPlan, LagunaStorageDescriptor, LagunaSymmetricPackedAffineProfile,
+    LagunaTargetContract, LagunaTargetNormalizer, LagunaTensorAssembly, LagunaTensorComponent,
+    LagunaTensorContract, LagunaTensorId, LagunaTensorNameContract,
+    LagunaTensorNameNormalizationError, LagunaTensorNameNormalizer, LagunaTensorSource,
+    LagunaTensorSourceDescriptor, LagunaTensorSourceRole, LagunaTensorStorageEncoding,
+    LagunaTextArtifactDescriptor, LagunaTextArtifactError, LagunaTextArtifactNormalizer,
+    LagunaTextArtifactSources, LagunaTokenDecoder, LagunaTokenizer, LagunaTokenizerError,
+    LagunaYarnRopeDescriptor, ValidatedLagunaArtifact, apply_router_logit_softcap,
+    laguna_decoder_cache_layout, laguna_sliding_prefill_transient_token_count,
+    select_laguna_router_experts,
+};
+#[cfg(feature = "direct-mlx")]
+pub use laguna::{
+    LagunaDecoderState, LagunaEngine, LagunaExpertWeightPage, LagunaInferenceExecution,
+    LagunaModel, LagunaNativeWeights, LagunaServingSettings, LagunaStartupError,
+    forward_paged_routed_swiglu, initialize_laguna_execution,
+    initialize_laguna_execution_with_serving_settings, initialize_laguna_model,
+    initialize_laguna_model_with_serving_settings, load_laguna_expert_page,
+    route_laguna_native_experts,
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
@@ -198,6 +261,15 @@ pub use qwen3_5_moe::{
 pub use qwen3_5_moe::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     prefill_recovery_must_demote_complete_resident_owner, retained_expert_fill_budget_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+pub use sparse_experts::{
+    SortedExpertAssignments, restore_expert_assignment_order, router_weighted_expert_inputs,
+    sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
+    unsorted_expert_weighted_sum,
+};
+pub use sparse_experts::{
+    SparseExpertError, gathered_indices_use_sorted_contract, invert_assignment_order,
 };
 
 /// Validates a safetensors shard where some tensors have strict dtype/shape profiles

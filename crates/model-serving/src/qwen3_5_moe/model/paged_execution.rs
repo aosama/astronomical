@@ -11,7 +11,7 @@ use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination::combine_sparse_and_shared_experts;
 use super::routing::{
     MINIMUM_SORTED_EXPERT_ASSIGNMENTS, qwen3_5_moe_sort_expert_assignments,
-    qwen3_5_moe_sorted_expert_weighted_sum,
+    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
 use super::split_page_route::{Qwen3_5MoESplitPageRoute, qwen3_5_moe_remap_expert_page_slots};
 
@@ -79,10 +79,11 @@ impl Qwen3_5Model {
                     &selected_outputs,
                     &[batch_size, token_count, experts_per_token, hidden_dimension],
                 )?;
-                let expanded_scores = self.runtime.expand_dims(selected_scores, -1)?;
-                let weighted_outputs =
-                    self.runtime.multiply(&selected_outputs, &expanded_scores)?;
-                let sparse_output = self.runtime.sum_axis(&weighted_outputs, -2, false)?;
+                let sparse_output = qwen3_5_moe_unsorted_expert_weighted_sum(
+                    &self.runtime,
+                    &selected_outputs,
+                    selected_scores,
+                )?;
                 self.combine_paged_sparse_and_shared_outputs(
                     hidden_states,
                     mixture_of_experts_weights,
@@ -251,10 +252,11 @@ impl Qwen3_5Model {
             )?,
             None => {
                 let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
-                let expanded_scores = self.runtime.expand_dims(selected_scores, -1)?;
-                let weighted_outputs =
-                    self.runtime.multiply(&selected_outputs, &expanded_scores)?;
-                self.runtime.sum_axis(&weighted_outputs, -2, false)?
+                qwen3_5_moe_unsorted_expert_weighted_sum(
+                    &self.runtime,
+                    &selected_outputs,
+                    selected_scores,
+                )?
             }
         };
         Ok(sparse_output)

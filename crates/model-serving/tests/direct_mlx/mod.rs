@@ -1,3 +1,5 @@
+mod attention;
+mod laguna;
 mod persistent_prompt_cache_block_topology;
 mod persistent_prompt_cache_block_transaction;
 mod persistent_prompt_cache_direct_writer;
@@ -18,3 +20,4 @@ mod persistent_speculative_prefill_selection;
 mod persistent_speculative_prefill_target_state;
 mod qwen3_5;
 mod qwen3_5_moe;
+mod sparse_experts;

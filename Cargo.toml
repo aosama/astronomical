@@ -37,6 +37,7 @@ futures-util = { version = "0.3", features = ["sink"] }
 fs4 = "1.1.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = "0.2"
+minijinja = { version = "2", features = ["fuel", "json", "preserve_order"] }
 safetensors = "=0.8.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -56,7 +57,28 @@ unused_must_use = "deny"
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 
+# Keep source-line backtraces for Astronomical code without retaining full
+# variable-level debug information or unpacked macOS object-file diagnostics.
+# Incremental compilation is disabled because this workspace exercises many
+# feature combinations and otherwise retains an unbounded artifact graph.
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "packed"
+incremental = false
+
+# Third-party dependencies do not need local debug information.
 [profile.dev.package."*"]
+debug = false
+
+# Tests share target/debug with development builds. Give them the same bounded
+# diagnostics policy so qualification feature combinations do not recreate the
+# object-file and incremental-cache growth avoided by the development profile.
+[profile.test]
+debug = "line-tables-only"
+split-debuginfo = "packed"
+incremental = false
+
+[profile.test.package."*"]
 debug = false
 
 [profile.full-debug]

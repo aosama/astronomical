@@ -39,7 +39,7 @@ for qualification_cell in ${qualification_cells}; do
         cargo --verbose test \
             --package astronomical-model-serving \
             --features direct-mlx \
-            --test qwen3_5_persistent_prompt_cache_qualification_tests \
+            --test persistent_prompt_cache_qualification_tests \
             "${qualification_test_name}" \
             -- \
             --ignored \

@@ -1,6 +1,7 @@
 use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
 
 use super::routing::combine_experts_error;
+use crate::{PerformanceAttribution, unsorted_expert_weighted_sum};
 
 /// Combines selected expert outputs and the separately gated shared expert.
 pub fn qwen3_5_moe_combine_experts(
@@ -16,9 +17,12 @@ pub fn qwen3_5_moe_combine_experts(
         shared_expert_output,
         shared_expert_gate_logits,
     )?;
-    let expanded_scores = runtime.expand_dims(selected_scores, -1)?;
-    let weighted_expert_outputs = runtime.multiply(selected_expert_outputs, &expanded_scores)?;
-    let sparse_expert_output = runtime.sum_axis(&weighted_expert_outputs, -2, false)?;
+    let sparse_expert_output = unsorted_expert_weighted_sum(
+        runtime,
+        selected_expert_outputs,
+        selected_scores,
+        &mut PerformanceAttribution::disabled(),
+    )?;
     combine_sparse_and_shared_experts(
         runtime,
         &sparse_expert_output,
