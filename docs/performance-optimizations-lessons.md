@@ -421,3 +421,6 @@
 - When raising a live ceiling, change native Machine Learning framework for Apple silicon limits before attempting exact whole-model promotion. If the model still does not fit, apply the next Rust-selected complete-layer plan and preserve the explicit streaming workspace.
 
 When native MLX is slower than the Python reference, assume graph or kernel-path divergence first. Compare source, disable one reference optimization, inspect compiled feature gates, and profile evaluation before redesigning architecture.
+## Preserve bounded child-process diagnostics at the supervisor boundary
+
+When a model worker closes its protocol stream during startup, forwarding child stderr to the parent terminal is insufficient for a menu-launched application because that terminal may not exist. Retain a fixed-size stderr tail in the supervisor, report the child exit status and worker lifetime with the protocol-closure error, and include nested native-runtime causes in the worker's diagnostic text. This keeps failure logging bounded while making startup failures attributable from the persistent supervisor log alone.

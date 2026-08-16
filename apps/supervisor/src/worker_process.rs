@@ -1,7 +1,7 @@
 use std::{
     path::Path,
     process::{ExitStatus, Stdio},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use astronomical_ipc_protocol::{
@@ -9,12 +9,16 @@ use astronomical_ipc_protocol::{
     WorkerStartupConfiguration,
 };
 use tokio::{
+    io::AsyncReadExt,
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
     task::JoinHandle,
     time::timeout,
 };
 
-use crate::WorkerControlError;
+use crate::{WorkerControlError, worker_stderr_tail::WorkerStderrTail};
+
+const WORKER_STDERR_READ_BYTES: usize = 1_024;
+const WORKER_EXIT_DIAGNOSTIC_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Outcome reported after a worker process is terminated and reaped.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -55,7 +59,9 @@ pub struct WorkerProcess {
     event_reader: ProtocolReader<ChildStdout>,
     command_write_timeout: Duration,
     shutdown_timeout: Duration,
-    _stderr_drain_task: JoinHandle<()>,
+    stderr_drain_task: Option<JoinHandle<()>>,
+    worker_stderr_tail: WorkerStderrTail,
+    worker_started_at: Instant,
     worker_process: Child,
 }
 
@@ -114,9 +120,20 @@ impl WorkerProcess {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        let worker_launch_started_at = Instant::now();
+        tracing::info!("starting local inference worker process");
         let mut worker_process = command.spawn().map_err(WorkerControlError::StartWorker)?;
+        let worker_started_at = Instant::now();
+        tracing::info!(
+            worker_process_id = ?worker_process.id(),
+            launch_elapsed_millis = worker_launch_started_at.elapsed().as_millis(),
+            "started local inference worker process"
+        );
+        let worker_stderr_tail = WorkerStderrTail::default();
         let stderr_drain_task = match worker_process.stderr.take() {
-            Some(worker_stderr) => spawn_worker_stderr_drain(worker_stderr),
+            Some(worker_stderr) => {
+                spawn_worker_stderr_drain(worker_stderr, worker_stderr_tail.clone())
+            }
             None => {
                 return Err(cleanup_startup_failure(
                     WorkerControlError::MissingStandardError,
@@ -176,7 +193,9 @@ impl WorkerProcess {
             event_reader: ProtocolReader::new(worker_stdout),
             command_write_timeout,
             shutdown_timeout,
-            _stderr_drain_task: stderr_drain_task,
+            stderr_drain_task: Some(stderr_drain_task),
+            worker_stderr_tail,
+            worker_started_at,
             worker_process,
         })
     }
@@ -238,7 +257,15 @@ impl WorkerProcess {
     }
 
     pub async fn next_event(&mut self) -> Result<Option<WorkerEvent>, WorkerControlError> {
-        self.event_reader.next_event().await.map_err(Into::into)
+        match self
+            .event_reader
+            .next_event()
+            .await
+            .map_err(WorkerControlError::from)?
+        {
+            Some(worker_event) => Ok(Some(worker_event)),
+            None => Err(self.worker_process_exit_error().await),
+        }
     }
 
     #[must_use]
@@ -304,15 +331,76 @@ impl WorkerProcess {
         })??;
         Ok(())
     }
+
+    /// Collects bounded child diagnostics after stdout can no longer carry IPC.
+    async fn worker_process_exit_error(&mut self) -> WorkerControlError {
+        // Stdout and stderr are independent pipes. Give the bounded stderr
+        // drain a short failure-only interval to consume bytes written beside
+        // the final stdout close before snapshotting the diagnostic tail.
+        if let Some(mut stderr_drain_task) = self.stderr_drain_task.take() {
+            match timeout(
+                WORKER_EXIT_DIAGNOSTIC_SETTLE_TIMEOUT,
+                &mut stderr_drain_task,
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(stderr_join_error)) => {
+                    self.worker_stderr_tail
+                        .append(
+                            format!("worker stderr drain task failed: {stderr_join_error}")
+                                .as_bytes(),
+                        )
+                        .await;
+                }
+                Err(_) => {
+                    self.stderr_drain_task = Some(stderr_drain_task);
+                }
+            }
+        }
+        let process_exit_status = match self.worker_process.try_wait() {
+            Ok(Some(worker_exit_status)) => worker_exit_status_description(worker_exit_status),
+            Ok(None) => "process still running after closing stdout".to_owned(),
+            Err(wait_error) => format!("failed to inspect process exit status: {wait_error}"),
+        };
+        WorkerControlError::WorkerProcessExited {
+            process_exit_status,
+            worker_lifetime_millis: self.worker_started_at.elapsed().as_millis(),
+            stderr_tail: self.worker_stderr_tail.diagnostic_snapshot().await,
+        }
+    }
 }
 
-fn spawn_worker_stderr_drain(mut worker_stderr: ChildStderr) -> JoinHandle<()> {
+fn spawn_worker_stderr_drain(
+    mut worker_stderr: ChildStderr,
+    worker_stderr_tail: WorkerStderrTail,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let mut parent_stderr = tokio::io::stderr();
-        if let Err(drain_error) = tokio::io::copy(&mut worker_stderr, &mut parent_stderr).await {
-            eprintln!("worker stderr drain failed: {drain_error}");
+        let mut stderr_read_bytes = [0_u8; WORKER_STDERR_READ_BYTES];
+        loop {
+            match worker_stderr.read(&mut stderr_read_bytes).await {
+                Ok(0) => return,
+                Ok(read_byte_count) => {
+                    worker_stderr_tail
+                        .append(&stderr_read_bytes[..read_byte_count])
+                        .await;
+                }
+                Err(drain_error) => {
+                    worker_stderr_tail
+                        .append(format!("worker stderr drain failed: {drain_error}").as_bytes())
+                        .await;
+                    return;
+                }
+            }
         }
     })
+}
+
+fn worker_exit_status_description(worker_exit_status: ExitStatus) -> String {
+    match worker_exit_status.code() {
+        Some(exit_code) => format!("exit code {exit_code}"),
+        None => "terminated by signal".to_owned(),
+    }
 }
 
 async fn wait_for_worker(
@@ -345,6 +433,12 @@ async fn force_terminate_and_reap(
     worker_process: &mut Child,
     shutdown_timeout: Duration,
 ) -> Result<ExitStatus, WorkerControlError> {
+    if let Some(worker_exit_status) = worker_process
+        .try_wait()
+        .map_err(WorkerControlError::WaitForWorker)?
+    {
+        return Ok(worker_exit_status);
+    }
     match worker_process.start_kill() {
         Ok(()) => {}
         Err(kill_error) if kill_error.kind() == std::io::ErrorKind::NotFound => {}

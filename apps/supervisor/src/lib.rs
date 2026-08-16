@@ -40,6 +40,7 @@ mod worker_memory_limit;
 mod worker_model_swap;
 mod worker_prefill_progress;
 mod worker_process;
+mod worker_stderr_tail;
 
 pub use application::{
     build_application, build_application_with_config_warning,
