@@ -40,7 +40,7 @@ pub(crate) struct ApplicationState {
     /// Static config warning surfaced once at daemon startup so the menu bar app
     /// can flash a callout for an ignored fixed prompt-processing chunk size.
     pub(crate) config_warning: Option<Arc<str>>,
-    /// All Qwen3.5-MoE-family models discovered from config directories at startup.
+    /// Executable models discovered from configured directories at startup.
     pub(crate) discovered_models: Vec<DiscoveredModel>,
     /// Reloadable runtime config shared by the config-reload endpoint and the
     /// status/models endpoints. Present only when the application was built with
@@ -72,6 +72,21 @@ impl Clone for ApplicationState {
 }
 
 impl ApplicationState {
+    /// Returns one consistent model-discovery snapshot for listing and routing.
+    pub(crate) fn discovered_models_snapshot(&self) -> Vec<DiscoveredModel> {
+        self.reloadable_config
+            .as_ref()
+            .and_then(|reloadable_config| {
+                reloadable_config
+                    .read()
+                    .ok()
+                    .map(|resolved_runtime_config| {
+                        resolved_runtime_config.discovered_models.clone()
+                    })
+            })
+            .unwrap_or_else(|| self.discovered_models.clone())
+    }
+
     pub(crate) fn configured_speculative_prefill_target_model_id(&self) -> Option<String> {
         self.reloadable_config
             .as_ref()
@@ -92,16 +107,15 @@ impl ApplicationState {
         requested_model_id: &str,
         ready_model_id: Option<&str>,
     ) -> Option<String> {
-        let known_model_ids: Vec<&str> = self
-            .discovered_models
+        let discovered_models = self.discovered_models_snapshot();
+        let known_model_ids: Vec<&str> = discovered_models
             .iter()
             .map(|discovered_model| discovered_model.model_id.as_str())
             .collect();
         let resolved_model_id =
             astronomical_config::resolve_model_id(requested_model_id, &known_model_ids);
         let is_ready_model = ready_model_id == Some(resolved_model_id);
-        let is_discovered_model = self
-            .discovered_models
+        let is_discovered_model = discovered_models
             .iter()
             .any(|discovered_model| discovered_model.model_id == resolved_model_id);
         (is_ready_model || is_discovered_model).then(|| resolved_model_id.to_owned())

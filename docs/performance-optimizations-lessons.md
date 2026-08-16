@@ -99,6 +99,7 @@
 - Compile only composites isolated by controlled reference mutations. For Qwen3.5-MoE decode, shapeless native-dtype SwiGLU fusion matters; compiling sampling, precise gated normalization, or decay arithmetic did not.
 - Retain one shapeless compiled SwiGLU with the model and reuse it across expert layers and prompt or decode shapes.
 - Keep mixture-of-experts SwiGLU in the activation dtype. Reserve 32-bit floating-point casts for the gated normalization that requires them; unnecessary precision adds conversion work and can inhibit the intended fused path.
+- Router probabilities may remain 32-bit floating point through weighted expert multiplication and accumulation, but cast the reduced output back to the expert activation dtype before adding the residual or shared expert. Architectures that apply router weights to expert inputs must likewise restore the hidden-state dtype before gathered matrix multiplication. Otherwise, one-token routing can silently widen every downstream layer or expert projection and disable Machine Learning framework for Apple silicon low-precision Metal matrix kernels. Assert one dtype contract across sorted reduction, unsorted reduction, empty assignments, and input-weighted routing.
 - mlx_closure_new intentionally returns a null-context output placeholder. Accept it only before mlx_compile, then require compilation to populate it before application.
 - A Rust callback invoked through C must own every temporary MLX handle, return status codes, and never unwind across the foreign-function boundary.
 - Benchmark compiled composites separately for multi-token prefill and one-token decode. Full-attention output gating, gated-delta decay arithmetic, and sparse/shared expert combination can favor prompt processing, while the shapeless precise SwiGLU graph also improves one-token decode.
@@ -192,6 +193,7 @@
 
 ## Model lifecycle
 
+- Keep public model discovery shallow but predictive: bounded-read family metadata, validate required sidecars and safe shard references, and sum file metadata without opening or hashing multi-gigabyte weight payloads. Deep retained-descriptor validation remains model-load work, and a deep failure must preserve the already resident model.
 - Start the worker without constructing a processor or engine. Lazy first-request loading removes avoidable application-launch input/output, memory allocation, and graphics-processor residency.
 - Bound on-demand model loading and report a recoverable failure over inter-process communication. A bad discovered artifact must not stall the request queue or force a healthy idle worker to exit.
 - Preserve the model-load cause chain across the worker boundary and return a dedicated local application programming interface error. A generic worker-unavailable response hides correctable artifact or quantization failures and encourages unnecessary worker restarts.

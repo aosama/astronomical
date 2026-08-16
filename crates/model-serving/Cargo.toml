@@ -21,6 +21,7 @@ astronomical-runtime-integration = { path = "../runtime-integration", features =
 fs4.workspace = true
 image.workspace = true
 libc.workspace = true
+minijinja.workspace = true
 safetensors.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -1,18 +1,23 @@
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use self::model_family::classify_model_family;
 use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
 
+mod classified_artifacts;
+mod deepseek_v4;
+mod laguna;
 mod model_family;
 mod qwen3_5;
 
+pub use classified_artifacts::{
+    ClassifiedModelArtifact, discover_classified_model_artifacts, requestable_model_id,
+};
 pub use model_family::{ModelFamily, ModelFamilyClassificationError, classify_model_directory};
 
-/// One supported Qwen3.5-family model discovered by recursive directory scanning.
+/// One executable model discovered by recursive directory scanning.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiscoveredModel {
     /// The model identity from the leaf directory name (e.g. "Ornith-1.0-35B-OptiQ-4bit").
@@ -21,9 +26,9 @@ pub struct DiscoveredModel {
     pub model_id: String,
     /// The architecture family recognized from config.json.
     pub model_family: ModelFamily,
-    /// SHA-256 hash of config.json bytes (12 hex chars).
+    /// Family-owned artifact revision used by public identity and serving state.
     pub revision: String,
-    /// Absolute path to the model directory containing config.json, tokenizer.json, etc.
+    /// Absolute path to the validated family artifact directory.
     pub model_directory: PathBuf,
     /// Total prompt + generation position capacity from config.json.
     pub context_window: u32,
@@ -33,11 +38,15 @@ pub struct DiscoveredModel {
     pub max_output_tokens: u32,
     /// Whether the checkpoint index declares physically present visual weights.
     pub has_vision: bool,
+    /// Whether family-owned text metadata declares a supported reasoning contract.
+    pub supports_reasoning: bool,
+    /// Whether family-owned text metadata declares a supported tool-call contract.
+    pub supports_tool_calls: bool,
     /// Unique safetensors shard payload bytes measured from the discovered files.
     pub model_size_bytes: u64,
 }
 
-/// Failure while scanning directories for supported Qwen3.5-family models.
+/// Failure while scanning configured directories for executable models.
 #[derive(Debug, Error)]
 pub enum DiscoveredModelError {
     #[error("failed to read directory {directory_path:?}: {source}")]
@@ -46,29 +55,12 @@ pub enum DiscoveredModelError {
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to read config.json in {model_directory:?}: {source}")]
-    ReadConfig {
-        model_directory: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("failed to parse config.json in {model_directory:?}: {source}")]
-    ParseConfig {
-        model_directory: PathBuf,
-        #[source]
-        source: serde_json::Error,
-    },
     #[error(
-        "config.json in {model_directory:?} is not a supported Qwen3.5-family model (expected model_type qwen3_5, qwen3_5_moe, or qwen3_5_moe_vision, found {found_type:?})"
+        "duplicate discovered model ID {model_id:?} resolves to multiple directories: {model_directories:?}"
     )]
-    IncompatibleModelType {
-        model_directory: PathBuf,
-        found_type: Option<String>,
-    },
-    #[error("missing required file {file_name} in model directory {model_directory:?}")]
-    MissingRequiredFile {
-        model_directory: PathBuf,
-        file_name: String,
+    DuplicateModelId {
+        model_id: String,
+        model_directories: Vec<PathBuf>,
     },
 }
 
@@ -81,12 +73,11 @@ pub struct ModelDiscoveryDirectoryScan {
     pub discovered_models: Vec<DiscoveredModel>,
 }
 
-/// Recursively scans configured directories for supported Qwen3.5-family models.
+/// Recursively scans configured directories for executable model families.
 ///
 /// For each directory, walks subdirectories one level deep looking for
-/// `config.json`. When a subdirectory contains `config.json` with a
-/// compatible `model_type`, it also checks for `model.safetensors.index.json`
-/// and `tokenizer.json`, then records the model as discovered.
+/// `config.json`. Family-specific shallow completeness rules decide whether a
+/// classified artifact can be returned as executable.
 ///
 /// Scan errors for individual directories are logged and skipped — the
 /// function returns all successfully discovered models.
@@ -97,21 +88,22 @@ pub fn discover_models(
     let mut directory_scans = Vec::with_capacity(model_directories.len());
     for directory_path in model_directories {
         let discovered_models =
-            scan_directory_for_qwen3_5_models(directory_path, max_output_tokens)?;
+            scan_directory_for_executable_models(directory_path, max_output_tokens)?;
         directory_scans.push(ModelDiscoveryDirectoryScan {
             path: directory_path.clone(),
             discovered_models,
         });
     }
+    reject_duplicate_model_ids(&directory_scans)?;
     Ok(directory_scans)
 }
 
-/// Scans a single root directory recursively for supported Qwen3.5 models.
+/// Scans a single root directory recursively for executable models.
 ///
 /// Walks up to 3 levels deep (supporting paths like
 /// `hub/models--org--model/snapshots/abc123/` and `models/Org-Model-OptiQ-4bit/`).
 /// Each subdirectory containing `config.json` is checked for Qwen3.5 compatibility.
-fn scan_directory_for_qwen3_5_models(
+fn scan_directory_for_executable_models(
     root_directory: &Path,
     max_output_tokens: u32,
 ) -> Result<Vec<DiscoveredModel>, DiscoveredModelError> {
@@ -201,14 +193,13 @@ fn scan_directory_recursive(
     Ok(())
 }
 
-/// Attempts to discover a supported Qwen3.5 model from a directory containing `config.json`.
+/// Attempts to discover an executable model from a directory containing `config.json`.
 ///
 /// Uses the leaf directory name as `model_id`. For HuggingFace cache entries
 /// where the snapshot hash is not a meaningful model ID, use
 /// `try_discover_model_with_id` instead.
 ///
-/// Returns `Some(DiscoveredModel)` if the directory contains a compatible model,
-/// `None` if config.json doesn't identify a supported Qwen3.5-family model.
+/// Returns `None` for classified families that are not executable yet.
 fn try_discover_model(model_directory: &Path, max_output_tokens: u32) -> Option<DiscoveredModel> {
     let model_id = model_directory
         .file_name()
@@ -217,7 +208,7 @@ fn try_discover_model(model_directory: &Path, max_output_tokens: u32) -> Option<
     try_discover_model_with_id(model_directory, &model_id, max_output_tokens)
 }
 
-/// Attempts to discover a supported Qwen3.5 model from a directory with an explicit model_id.
+/// Attempts to discover an executable model from a directory with an explicit model ID.
 ///
 /// This variant accepts a custom `model_id`, useful for HuggingFace cache entries
 /// where the model_id is derived from the decoded `models--org--repo` directory name
@@ -227,127 +218,82 @@ fn try_discover_model_with_id(
     model_id: &str,
     max_output_tokens: u32,
 ) -> Option<DiscoveredModel> {
-    // Check for required files first (fast path).
-    if !model_directory
-        .join("model.safetensors.index.json")
-        .is_file()
-    {
-        return None;
-    }
-    if !model_directory.join("tokenizer.json").is_file() {
-        return None;
-    }
-
-    // Read and parse config.json.
+    // Read the one neutral family marker before dispatching artifact validation.
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
-
-    // Check model_type compatibility.
-    let model_type = config_value.get("model_type").and_then(|v| v.as_str());
-    let model_family = classify_model_family(model_type)?;
-    if !matches!(model_family, ModelFamily::Qwen3_5) {
-        return None;
-    }
-
-    // Verify that all shard files referenced in the safetensors index actually
-    // exist on disk. Incomplete model downloads (missing shards) pass the
-    // config/index/tokenizer checks but crash the worker on hot-swap. The
-    // Vision tensors can be embedded in language shards or stored in a required
-    // sidecar. The optional MTP sidecar may be absent.
-    let index_path = model_directory.join("model.safetensors.index.json");
-    let has_vision = if let Ok(index_bytes) = fs::read(&index_path)
-        && let Ok(index_document) = serde_json::from_slice::<serde_json::Value>(&index_bytes)
-        && let Some(weight_map) = index_document
-            .get("weight_map")
-            .and_then(|weight_map| weight_map.as_object())
-    {
-        let mut shard_file_names = HashSet::new();
-        let mut required_shard_file_names = HashSet::new();
-        for (tensor_name, tensor_shard_file_name) in weight_map {
-            if let Some(tensor_shard_file_name) = tensor_shard_file_name.as_str() {
-                shard_file_names.insert(tensor_shard_file_name.to_owned());
-                if !contains_mtp_component(tensor_name) {
-                    required_shard_file_names.insert(tensor_shard_file_name.to_owned());
-                }
-            }
+    // The typed classifier rejects ambiguous duplicate family markers before
+    // the looser metadata document can participate in executable discovery.
+    let model_family = model_family::classify_model_directory(model_directory)
+        .ok()
+        .flatten()?;
+    let family_metadata = match model_family {
+        ModelFamily::Qwen3_5 => {
+            qwen3_5::discover_model_metadata(model_directory, &config_value, max_output_tokens)?
         }
-        for shard_file_name in &shard_file_names {
-            let shard_path = model_directory.join(shard_file_name);
-            if !shard_path.is_file() && required_shard_file_names.contains(shard_file_name) {
-                return None;
-            }
+        ModelFamily::Laguna => {
+            let laguna_metadata =
+                laguna::discover_model_metadata(model_directory, &config_bytes, max_output_tokens)?;
+            return Some(DiscoveredModel {
+                model_id: model_id.to_owned(),
+                model_family,
+                revision: laguna_metadata.revision,
+                model_directory: model_directory.to_path_buf(),
+                context_window: laguna_metadata.context_window,
+                max_input_tokens: laguna_metadata.max_input_tokens,
+                max_output_tokens: laguna_metadata.max_output_tokens,
+                has_vision: laguna_metadata.has_vision,
+                supports_reasoning: laguna_metadata.supports_reasoning,
+                supports_tool_calls: laguna_metadata.supports_tool_calls,
+                model_size_bytes: laguna_metadata.model_size_bytes,
+            });
         }
-        weight_map
-            .keys()
-            .any(|tensor_name| tensor_name.starts_with("vision_tower."))
-    } else {
-        false
+        // Classification is intentionally broader than executable discovery.
+        ModelFamily::DeepSeekV4 => return None,
     };
-    let model_size_bytes = measure_model_safetensors_bytes(model_directory)?;
 
     // Derive revision from SHA-256 of config.json.
     let revision = derive_revision_from_config_bytes(&config_bytes);
-
-    // Extract context window from text_config.
-    let max_position_embeddings = config_value
-        .get("text_config")
-        .and_then(|tc| tc.get("max_position_embeddings"))
-        .or_else(|| config_value.get("max_position_embeddings"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
-
-    // Derive context_window from max_position_embeddings.
-    let context_window = max_position_embeddings;
-    let max_input_tokens = context_window.saturating_sub(max_output_tokens);
 
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
         model_family,
         revision,
         model_directory: model_directory.to_path_buf(),
-        context_window,
-        max_input_tokens,
-        max_output_tokens,
-        has_vision,
-        model_size_bytes,
+        context_window: family_metadata.context_window,
+        max_input_tokens: family_metadata.max_input_tokens,
+        max_output_tokens: family_metadata.max_output_tokens,
+        has_vision: family_metadata.has_vision,
+        supports_reasoning: family_metadata.supports_reasoning,
+        supports_tool_calls: family_metadata.supports_tool_calls,
+        model_size_bytes: family_metadata.model_size_bytes,
     })
 }
 
-fn contains_mtp_component(tensor_name: &str) -> bool {
-    tensor_name
-        .split('.')
-        .any(|tensor_name_component| tensor_name_component == "mtp")
-}
-
-fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
-    let mut pending_directories = vec![model_directory.to_path_buf()];
-    let mut measured_safetensors_paths = HashSet::new();
-    let mut model_size_bytes = 0_u64;
-    while let Some(pending_directory) = pending_directories.pop() {
-        for directory_entry in fs::read_dir(pending_directory).ok()? {
-            let directory_entry = directory_entry.ok()?;
-            let entry_path = directory_entry.path();
-            let entry_file_type = directory_entry.file_type().ok()?;
-            if entry_file_type.is_dir() {
-                pending_directories.push(entry_path);
-                continue;
-            }
-            if entry_path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                != Some("safetensors")
-                || !entry_path.is_file()
-            {
-                continue;
-            }
-            let canonical_safetensors_path = fs::canonicalize(&entry_path).ok()?;
-            if measured_safetensors_paths.insert(canonical_safetensors_path) {
-                model_size_bytes =
-                    model_size_bytes.checked_add(fs::metadata(entry_path).ok()?.len())?;
-            }
-        }
+/// Rejects ambiguous public identities before callers can build lookup maps.
+fn reject_duplicate_model_ids(
+    directory_scans: &[ModelDiscoveryDirectoryScan],
+) -> Result<(), DiscoveredModelError> {
+    let mut model_id_to_directories: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+    for discovered_model in directory_scans
+        .iter()
+        .flat_map(|directory_scan| &directory_scan.discovered_models)
+    {
+        model_id_to_directories
+            .entry(discovered_model.model_id.clone())
+            .or_default()
+            .push(discovered_model.model_directory.clone());
     }
-    Some(model_size_bytes)
+    for (model_id, mut model_directories) in model_id_to_directories {
+        if model_directories.len() < 2 {
+            continue;
+        }
+        model_directories.sort();
+        return Err(DiscoveredModelError::DuplicateModelId {
+            model_id,
+            model_directories,
+        });
+    }
+    Ok(())
 }
 
 /// Derives a 12-character hex revision string from the SHA-256 hash of config.json bytes.

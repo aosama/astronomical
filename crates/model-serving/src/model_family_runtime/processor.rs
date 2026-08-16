@@ -4,9 +4,9 @@ use astronomical_ipc_protocol::{
 };
 
 use crate::{
-    DeepSeekV4UnavailableGenerationProcessor, ModelGeneratedTokenTranslation,
-    ModelGenerationOutputError, ModelGenerationProcessor, PreparedModelGeneration,
-    Qwen3_5GenerationProcessor,
+    DeepSeekV4UnavailableGenerationProcessor, LagunaGenerationProcessor,
+    ModelGeneratedTokenTranslation, ModelGenerationOutputError, ModelGenerationProcessor,
+    PreparedModelGeneration, Qwen3_5GenerationProcessor,
 };
 
 use super::{ModelFamilyInferenceRequest, ModelFamilyRequestOutput};
@@ -14,6 +14,7 @@ use super::{ModelFamilyInferenceRequest, ModelFamilyRequestOutput};
 /// Family-tagged prompt and output processor used by EngineBackedWorker.
 pub enum ModelFamilyGenerationProcessor {
     Qwen3_5(Qwen3_5GenerationProcessor),
+    Laguna(LagunaGenerationProcessor),
     DeepSeekV4(DeepSeekV4UnavailableGenerationProcessor),
 }
 
@@ -33,6 +34,15 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     ) -> WorkerEvent {
         match self {
             Self::Qwen3_5(processor) => processor.ready_event(
+                mtp_runtime_state,
+                mtp_unavailable_reason,
+                mtp_depth_status,
+                speculative_prefill_runtime_state,
+                speculative_prefill_unavailable_reason,
+                speculative_prefill_draft_model_id,
+                speculative_prefill_draft_model_revision,
+            ),
+            Self::Laguna(processor) => processor.ready_event(
                 mtp_runtime_state,
                 mtp_unavailable_reason,
                 mtp_depth_status,
@@ -69,6 +79,14 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
                         ModelFamilyRequestOutput::Qwen3_5(prepared_generation.request_output),
                     )
                 }),
+            Self::Laguna(processor) => processor
+                .prepare_chat_generation(chat_generation_command)
+                .map(|prepared_generation| {
+                    PreparedModelGeneration::new(
+                        ModelFamilyInferenceRequest::Laguna(prepared_generation.inference_request),
+                        ModelFamilyRequestOutput::Laguna(prepared_generation.request_output),
+                    )
+                }),
             Self::DeepSeekV4(processor) => processor
                 .prepare_chat_generation(chat_generation_command)
                 .map(|prepared_generation| {
@@ -85,6 +103,7 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     fn is_end_of_sequence_token(&self, generated_token_id: u32) -> bool {
         match self {
             Self::Qwen3_5(processor) => processor.is_end_of_sequence_token(generated_token_id),
+            Self::Laguna(processor) => processor.is_end_of_sequence_token(generated_token_id),
             Self::DeepSeekV4(processor) => processor.is_end_of_sequence_token(generated_token_id),
         }
     }
@@ -96,6 +115,9 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     ) -> Result<ModelGeneratedTokenTranslation, ModelGenerationOutputError> {
         match (self, request_output) {
             (Self::Qwen3_5(processor), ModelFamilyRequestOutput::Qwen3_5(request_output)) => {
+                processor.translate_generated_token(request_output, generated_token_id)
+            }
+            (Self::Laguna(processor), ModelFamilyRequestOutput::Laguna(request_output)) => {
                 processor.translate_generated_token(request_output, generated_token_id)
             }
             (Self::DeepSeekV4(processor), ModelFamilyRequestOutput::DeepSeekV4(request_output)) => {
@@ -113,6 +135,9 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     ) -> Result<Vec<ChatGenerationOutput>, ModelGenerationOutputError> {
         match (self, request_output) {
             (Self::Qwen3_5(processor), ModelFamilyRequestOutput::Qwen3_5(request_output)) => {
+                processor.finish_request_output(request_output)
+            }
+            (Self::Laguna(processor), ModelFamilyRequestOutput::Laguna(request_output)) => {
                 processor.finish_request_output(request_output)
             }
             (Self::DeepSeekV4(processor), ModelFamilyRequestOutput::DeepSeekV4(request_output)) => {

@@ -18,6 +18,12 @@ pub fn resolve_model_id<'model_id>(
     requested_model_id
 }
 
+/// Returns the leaf model ID used for serving and request routing.
+#[must_use]
+pub fn leaf_model_id(model_id: &str) -> &str {
+    model_id.rsplit('/').next().unwrap_or(model_id)
+}
+
 /// Decodes a Hugging Face cache directory name into an `organization/model` ID.
 pub fn decode_huggingface_cache_directory_name(directory_name: &str) -> Option<String> {
     let encoded_model_id = directory_name.strip_prefix("models--")?;

@@ -3,7 +3,7 @@ use astronomical_model_serving::{
     qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
     qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
@@ -65,6 +65,45 @@ async fn should_route_normalize_and_combine_selected_and_shared_experts() {
             .expect("combined experts should evaluate as float32"),
         &[12.0, 20.0],
     );
+}
+
+#[tokio::test]
+async fn should_preserve_bfloat16_qwen_expert_output_with_float32_router_scores() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = MlxRuntime::initialize(
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        )
+        .expect("the MoE test memory limits should be valid"),
+    )
+    .expect("the direct MLX runtime should initialize");
+    let selected_expert_outputs = runtime
+        .array_from_f32(&[2.0, 4.0, 6.0, 8.0], &[1, 1, 2, 2])
+        .and_then(|outputs| runtime.astype(&outputs, MlxDtype::BFloat16))
+        .expect("BF16 expert outputs should be valid");
+    let selected_scores = runtime
+        .array_from_f32(&[0.25, 0.75], &[1, 1, 2])
+        .expect("Float32 router scores should be valid");
+    let shared_expert_output = runtime
+        .array_from_f32(&[0.0, 0.0], &[1, 1, 2])
+        .and_then(|output| runtime.astype(&output, MlxDtype::BFloat16))
+        .expect("BF16 shared output should be valid");
+    let shared_gate_logits = runtime
+        .array_from_f32(&[0.0], &[1, 1, 1])
+        .and_then(|logits| runtime.astype(&logits, MlxDtype::BFloat16))
+        .expect("BF16 shared gate should be valid");
+
+    let combined_output = qwen3_5_moe_combine_experts(
+        &runtime,
+        &selected_expert_outputs,
+        &selected_scores,
+        &shared_expert_output,
+        &shared_gate_logits,
+    )
+    .expect("mixed-dtype Qwen expert combination should succeed");
+
+    assert_eq!(combined_output.dtype(), MlxDtype::BFloat16);
 }
 
 #[tokio::test]

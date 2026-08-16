@@ -47,6 +47,8 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
             max_input_tokens: 241_664,
             max_output_tokens: 20_480,
             has_vision: true,
+            supports_reasoning: true,
+            supports_tool_calls: true,
             model_size_bytes: 9,
         },
         DiscoveredModel {
@@ -58,6 +60,8 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
             max_input_tokens: 241_664,
             max_output_tokens: 20_480,
             has_vision: true,
+            supports_reasoning: true,
+            supports_tool_calls: true,
             model_size_bytes: 3,
         },
         DiscoveredModel {
@@ -69,6 +73,8 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
             max_input_tokens: 241_664,
             max_output_tokens: 20_480,
             has_vision: true,
+            supports_reasoning: true,
+            supports_tool_calls: true,
             model_size_bytes: 3,
         },
     ];

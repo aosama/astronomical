@@ -6,7 +6,7 @@
 //! kernel selection, and BF16 rounding; do not replace their internals with Rust
 //! scalar math over copied device values.
 
-use crate::{MlxArray, MlxRuntime, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, raw};
 
 impl MlxRuntime {
     /// Applies numerically stable softplus through MLX `logaddexp(input, 0)`.
@@ -113,4 +113,51 @@ impl MlxRuntime {
         let half_times_x = self.multiply_scalar(input, 0.5)?;
         self.multiply(&half_times_x, &one_plus_tanh)
     }
+
+    /// Applies `attention_output * softplus(gate_logits)` without widening output storage.
+    pub fn apply_softplus_attention_gate(
+        &self,
+        attention_output: &MlxArray,
+        gate_logits: &MlxArray,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        validate_softplus_attention_gate_shapes(attention_output, gate_logits)?;
+        // Float32 preserves stable softplus for low-precision logits; cast the
+        // gate back before multiplication so activations retain their dtype.
+        let gate_logits_f32 = self.astype(gate_logits, MlxDtype::Float32)?;
+        let softplus_gate = self.softplus(&gate_logits_f32)?;
+        let activation_dtype_gate = self.astype(&softplus_gate, attention_output.dtype())?;
+        self.multiply(attention_output, &activation_dtype_gate)
+    }
+}
+
+fn validate_softplus_attention_gate_shapes(
+    attention_output: &MlxArray,
+    gate_logits: &MlxArray,
+) -> Result<(), MlxRuntimeError> {
+    const OPERATION: &str = "apply the softplus attention output gate";
+    let attention_output_shape = attention_output.shape();
+    let gate_logits_shape = gate_logits.shape();
+    if attention_output_shape.is_empty() || gate_logits_shape.is_empty() {
+        return Err(MlxRuntimeError::RuntimeOperation {
+            operation: OPERATION,
+            description: "attention output and gate logits must have positive rank".to_owned(),
+        });
+    }
+    if gate_logits_shape.len() > attention_output_shape.len() {
+        return Err(MlxRuntimeError::RuntimeOperation {
+            operation: OPERATION,
+            description: "gate logits rank must not exceed the attention output rank".to_owned(),
+        });
+    }
+    let rank_offset = attention_output_shape.len() - gate_logits_shape.len();
+    for (gate_axis_index, gate_axis_length) in gate_logits_shape.iter().enumerate() {
+        let attention_axis_length = attention_output_shape[rank_offset + gate_axis_index];
+        if *gate_axis_length != 1 && *gate_axis_length != attention_axis_length {
+            return Err(MlxRuntimeError::RuntimeOperation {
+                operation: OPERATION,
+                description: "gate logits must broadcast to the attention output".to_owned(),
+            });
+        }
+    }
+    Ok(())
 }

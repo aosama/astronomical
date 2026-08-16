@@ -9,7 +9,7 @@
 //! cache Cargo alias:
 //!
 //! ```sh
-//! cargo qualify-qwen3-5-persistent-prompt-cache
+//! cargo qualify-persistent-prompt-cache
 //! ```
 
 #[cfg(feature = "model-artifact-qualification")]

@@ -1,11 +1,17 @@
 //! Shared bounded safetensors framing and raw JSON-header parsing.
 
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::os::unix::fs::FileExt;
 
-use serde::Deserialize;
+use serde::de::{Error as _, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
+
+use crate::strict_json::DuplicateAwareJsonValue;
+
+const MAXIMUM_DUPLICATE_HEADER_KEY_CHARACTERS: usize = 256;
 
 /// Size of the safetensors little-endian header-length prefix.
 pub(crate) const SAFETENSORS_HEADER_LENGTH_PREFIX_BYTES: u64 = 8;
@@ -17,6 +23,52 @@ pub(crate) struct BoundedSafetensorsJsonHeader {
     pub(crate) metadata_json_value: Option<Value>,
     pub(crate) data_section_start_bytes: u64,
     pub(crate) file_size_bytes: u64,
+}
+
+/// Raw header object that rejects repeated keys before a JSON map can replace them.
+struct UniqueSafetensorsHeaderEntries(Map<String, Value>);
+
+impl<'de> Deserialize<'de> for UniqueSafetensorsHeaderEntries {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_map(UniqueSafetensorsHeaderEntriesVisitor)
+    }
+}
+
+struct UniqueSafetensorsHeaderEntriesVisitor;
+
+impl<'de> Visitor<'de> for UniqueSafetensorsHeaderEntriesVisitor {
+    type Value = UniqueSafetensorsHeaderEntries;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a safetensors JSON header object with unique keys")
+    }
+
+    fn visit_map<A>(self, mut header_entries: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut unique_header_entries = Map::new();
+        while let Some((header_entry_name, header_entry_value)) =
+            header_entries.next_entry::<String, DuplicateAwareJsonValue>()?
+        {
+            // Duplicate tensor names are ambiguous before any consumer can
+            // classify metadata or apply family-specific normalization.
+            if unique_header_entries.contains_key(&header_entry_name) {
+                let bounded_header_entry_name = header_entry_name
+                    .chars()
+                    .take(MAXIMUM_DUPLICATE_HEADER_KEY_CHARACTERS)
+                    .collect::<String>();
+                return Err(A::Error::custom(format!(
+                    "duplicate safetensors header key {bounded_header_entry_name}"
+                )));
+            }
+            unique_header_entries.insert(header_entry_name, header_entry_value.0);
+        }
+        Ok(UniqueSafetensorsHeaderEntries(unique_header_entries))
+    }
 }
 
 /// One raw tensor declaration shared by artifact and persistent-cache readers.
@@ -94,8 +146,9 @@ pub(crate) fn read_bounded_safetensors_json_header(
         SAFETENSORS_HEADER_LENGTH_PREFIX_BYTES,
     )
     .map_err(BoundedSafetensorsHeaderError::ReadHeader)?;
-    let mut raw_header_entries: Map<String, Value> = serde_json::from_slice(&header_json_bytes)
-        .map_err(BoundedSafetensorsHeaderError::InvalidHeaderJson)?;
+    let UniqueSafetensorsHeaderEntries(mut raw_header_entries) =
+        serde_json::from_slice(&header_json_bytes)
+            .map_err(BoundedSafetensorsHeaderError::InvalidHeaderJson)?;
     let metadata_json_value = raw_header_entries.remove("__metadata__");
     Ok(BoundedSafetensorsJsonHeader {
         tensor_json_values: raw_header_entries,

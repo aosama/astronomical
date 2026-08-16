@@ -96,6 +96,16 @@ pub enum ArtifactValidationError {
         source: io::Error,
     },
 
+    /// A retained required-file descriptor could not supply its validated bytes.
+    #[error("failed to read validated required model file {file_name} within its byte limit")]
+    ReadBoundedRequiredFile {
+        /// Required file name from the artifact profile.
+        file_name: String,
+        /// Underlying conversion, allocation, or filesystem error.
+        #[source]
+        source: io::Error,
+    },
+
     /// A required file could not be read for bounded structural validation.
     #[error("failed to read required model file {file_name} for bounded structural validation")]
     ReadRequiredFileForStructuralValidation {
@@ -123,6 +133,19 @@ pub enum ArtifactValidationError {
         /// Actual file size in bytes.
         actual_size_bytes: u64,
         /// Maximum captured size in bytes.
+        maximum_size_bytes: u64,
+    },
+
+    /// A retained required file exceeds its caller's explicit read limit.
+    #[error(
+        "required model file {file_name} is {actual_size_bytes} bytes, exceeding bounded-read limit {maximum_size_bytes}"
+    )]
+    BoundedRequiredFileTooLarge {
+        /// Profile-relative file name.
+        file_name: String,
+        /// Validated file size in bytes.
+        actual_size_bytes: u64,
+        /// Maximum size accepted by the caller.
         maximum_size_bytes: u64,
     },
 
@@ -180,6 +203,19 @@ pub enum ArtifactValidationError {
         /// JSON decoding error.
         #[source]
         source: serde_json::Error,
+    },
+
+    /// A safetensors tensor name is empty or exceeds the bounded header allowance.
+    #[error(
+        "safetensors tensor name has {tensor_name_length_bytes} bytes, expected 1..={maximum_tensor_name_length_bytes} bytes in weight file {file_name}"
+    )]
+    InvalidSafetensorsTensorName {
+        /// Weight file name from the artifact profile.
+        file_name: String,
+        /// UTF-8 byte length of the invalid tensor name.
+        tensor_name_length_bytes: u64,
+        /// Maximum name length already bounded by the raw header limit.
+        maximum_tensor_name_length_bytes: u64,
     },
 
     /// A safetensors tensor data offset extends beyond the weights file.

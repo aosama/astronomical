@@ -5,8 +5,9 @@ use astronomical_ipc_protocol::{
     WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
-    ModelFactory, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
-    Qwen3_5PromptProcessingChunkSizer, deepseek_v4_unavailable_reason,
+    LagunaServingSettings, ModelFactory, ModelFamilyGenerationProcessor,
+    ModelFamilyInferenceEngine, deepseek_v4_unavailable_reason,
+    initialize_laguna_model_with_serving_settings,
 };
 
 use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
@@ -18,7 +19,6 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) optimizer_state_directory: Option<PathBuf>,
     pub(crate) performance_attribution_enabled: bool,
     pub(crate) performance_attribution_log_path: PathBuf,
-    pub(crate) prompt_processing_chunk_sizer_override: Option<Qwen3_5PromptProcessingChunkSizer>,
     pub(crate) mtp_enabled: bool,
     pub(crate) mtp_draft_depth: Option<u8>,
     pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
@@ -40,8 +40,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let optimizer_state_directory = self.optimizer_state_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let prompt_processing_chunk_sizer_override =
-            self.prompt_processing_chunk_sizer_override.clone();
         let mtp_enabled = self.mtp_enabled;
         let mtp_draft_depth = self.mtp_draft_depth;
         let speculative_prefill = self.speculative_prefill.clone();
@@ -57,7 +55,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         model_directory_path,
                         effective_mlx_memory_ceiling_bytes,
                         prompt_cache_config,
-                        prompt_processing_chunk_sizer_override,
                         optimizer_state_directory,
                         max_output_tokens,
                         mtp_enabled,
@@ -74,12 +71,42 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         ModelFamilyInferenceEngine::Qwen3_5(qwen3_5_engine),
                     ))
                 }
+                Some(ModelFamily::Laguna) => {
+                    let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
+                        crate::worker_startup::derive_mlx_memory_limits_from_gpu_wired_limit(
+                            effective_mlx_memory_ceiling_bytes,
+                        );
+                    let (generation_processor, laguna_engine) =
+                        initialize_laguna_model_with_serving_settings(
+                            &model_directory_path,
+                            active_memory_limit_bytes,
+                            allocator_cache_memory_limit_bytes,
+                            performance_attribution_enabled,
+                            LagunaServingSettings {
+                                chunking: Some(chunking),
+                                optimizer_state_directory,
+                                persistent_prompt_cache_enabled,
+                                prompt_cache_config: persistent_prompt_cache_enabled
+                                    .then_some(prompt_cache_config),
+                                performance_attribution_log_path: Some(
+                                    performance_attribution_log_path,
+                                ),
+                            },
+                        )
+                        .map_err(|startup_error| {
+                            startup_error.public_model_load_failure_reason()
+                        })?;
+                    Ok((
+                        ModelFamilyGenerationProcessor::Laguna(generation_processor),
+                        ModelFamilyInferenceEngine::Laguna(laguna_engine),
+                    ))
+                }
                 Some(ModelFamily::DeepSeekV4) => Err(deepseek_v4_unavailable_reason().to_owned()),
                 None => Err("selected model has an unsupported model family".to_owned()),
             }
         })
         .await
-        .map_err(|join_error| join_error.to_string())?
+        .map_err(|_| "model-family initialization task failed".to_owned())?
     }
 
     fn update_mlx_memory_ceiling_bytes(&mut self, effective_mlx_memory_ceiling_bytes: u64) {

@@ -134,6 +134,39 @@ async fn should_list_text_only_input_modality_for_a_discovered_model_without_vis
 }
 
 #[tokio::test]
+async fn should_project_family_derived_reasoning_and_tool_capabilities() {
+    let mut discovered_model = discovered_model_with_vision_support(false);
+    discovered_model.supports_reasoning = false;
+    discovered_model.supports_tool_calls = false;
+    let application = build_application_with_config_warning_and_discovered_models(
+        ScriptedExecutor::ready(Vec::new()),
+        None,
+        vec![discovered_model],
+    );
+
+    let models_response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/models")
+                .body(Body::empty())
+                .expect("the model-list request should be valid"),
+        )
+        .await
+        .expect("the application should return a model list");
+    let models_body = to_bytes(models_response.into_body(), 8 * 1024)
+        .await
+        .expect("the model-list body should be readable");
+    let model_list_document: serde_json::Value =
+        serde_json::from_slice(&models_body).expect("the model-list body should contain JSON");
+    let advertised_model = &model_list_document["data"][0];
+
+    assert_eq!(advertised_model["supports_reasoning"], false);
+    assert!(advertised_model["reasoning_format"].is_null());
+    assert_eq!(advertised_model["supports_tool_calls"], false);
+    assert!(advertised_model["tool_call_format"].is_null());
+}
+
+#[tokio::test]
 async fn should_return_an_openai_model_not_found_error_for_an_unknown_model() {
     let application = build_application(ScriptedExecutor::ready(Vec::new()));
     let model_response = application
@@ -216,6 +249,8 @@ fn discovered_model_with_vision_support(has_vision: bool) -> DiscoveredModel {
         max_input_tokens: 241_664,
         max_output_tokens: 20_480,
         has_vision,
+        supports_reasoning: true,
+        supports_tool_calls: true,
         model_size_bytes: 0,
     }
 }
