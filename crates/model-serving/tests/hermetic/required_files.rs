@@ -126,3 +126,133 @@ fn should_reject_a_required_file_name_with_parent_directory_components() {
             if file_name == "../outside.json"
     ));
 }
+
+#[test]
+fn should_read_an_ordinary_json_sidecar_through_its_retained_descriptor() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    let sidecar_file_name = "model.safetensors.index.json";
+    let sidecar_path = model_directory.path().join(sidecar_file_name);
+    let retained_sidecar_bytes = br#"{"weight_map":{"model.weight":"model.safetensors"}}"#;
+    std::fs::write(&sidecar_path, retained_sidecar_bytes)
+        .expect("the test should write the original JSON sidecar");
+    let required_file_profile = RequiredFileProfile {
+        file_name: sidecar_file_name.to_owned(),
+        size_bytes: retained_sidecar_bytes.len() as u64,
+    };
+    let validated_required_file =
+        validate_required_file_for_tests(model_directory.path(), &required_file_profile)
+            .expect("the ordinary JSON sidecar should validate");
+
+    // Replacing the pathname proves that the read stays on the retained inode.
+    std::fs::rename(
+        &sidecar_path,
+        model_directory.path().join("validated-index.json"),
+    )
+    .expect("the test should preserve the validated inode under another name");
+    std::fs::write(&sidecar_path, br#"{"replacement":true}"#)
+        .expect("the test should replace the original pathname");
+
+    let actual_sidecar_bytes = validated_required_file
+        .read_bounded_bytes_for_tests(retained_sidecar_bytes.len() as u64)
+        .expect("the exact bounded read should use the validated descriptor");
+
+    assert_eq!(actual_sidecar_bytes, retained_sidecar_bytes);
+}
+
+#[test]
+fn should_reject_a_bounded_required_file_read_above_its_explicit_limit() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    let sidecar_file_name = "model.safetensors.index.json";
+    let sidecar_bytes = br#"{"weight_map":{}}"#;
+    std::fs::write(
+        model_directory.path().join(sidecar_file_name),
+        sidecar_bytes,
+    )
+    .expect("the test should write the JSON sidecar");
+    let validated_required_file = validate_required_file_for_tests(
+        model_directory.path(),
+        &RequiredFileProfile {
+            file_name: sidecar_file_name.to_owned(),
+            size_bytes: sidecar_bytes.len() as u64,
+        },
+    )
+    .expect("the ordinary JSON sidecar should validate");
+
+    let validation_error = validated_required_file
+        .read_bounded_bytes_for_tests((sidecar_bytes.len() - 1) as u64)
+        .expect_err("a sidecar above the caller's explicit limit must fail closed");
+
+    assert!(matches!(
+        validation_error,
+        ArtifactValidationError::BoundedRequiredFileTooLarge {
+            file_name,
+            actual_size_bytes,
+            maximum_size_bytes,
+        } if file_name == sidecar_file_name
+            && actual_size_bytes == sidecar_bytes.len() as u64
+            && maximum_size_bytes == (sidecar_bytes.len() - 1) as u64
+    ));
+}
+
+#[test]
+fn should_preserve_the_source_when_a_retained_descriptor_becomes_short() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    let sidecar_file_name = "model.safetensors.index.json";
+    let sidecar_path = model_directory.path().join(sidecar_file_name);
+    let sidecar_bytes = br#"{"weight_map":{"model.weight":"model.safetensors"}}"#;
+    std::fs::write(&sidecar_path, sidecar_bytes).expect("the test should write the JSON sidecar");
+    let validated_required_file = validate_required_file_for_tests(
+        model_directory.path(),
+        &RequiredFileProfile {
+            file_name: sidecar_file_name.to_owned(),
+            size_bytes: sidecar_bytes.len() as u64,
+        },
+    )
+    .expect("the ordinary JSON sidecar should validate");
+    std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&sidecar_path)
+        .expect("the test should truncate the validated inode");
+
+    let validation_error = validated_required_file
+        .read_bounded_bytes_for_tests(sidecar_bytes.len() as u64)
+        .expect_err("a short retained descriptor must fail with its read source");
+
+    assert!(matches!(
+        validation_error,
+        ArtifactValidationError::ReadBoundedRequiredFile { file_name, source }
+            if file_name == sidecar_file_name
+                && source.kind() == std::io::ErrorKind::UnexpectedEof
+    ));
+}
+
+#[test]
+fn should_reject_a_duplicate_required_profile_before_replacing_the_first_file() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    let config_bytes = br#"{"model_type":"example"}"#;
+    std::fs::write(model_directory.path().join("config.json"), config_bytes)
+        .expect("the test should write the required file");
+    let duplicate_profiles = [
+        RequiredFileProfile {
+            file_name: "config.json".to_owned(),
+            size_bytes: config_bytes.len() as u64,
+        },
+        RequiredFileProfile {
+            file_name: "config.json".to_owned(),
+            size_bytes: config_bytes.len() as u64 + 1,
+        },
+    ];
+
+    let validation_error =
+        RequiredFileProfile::validate_all_for_tests(model_directory.path(), &duplicate_profiles)
+            .expect_err(
+                "a repeated profile name must fail instead of replacing its first descriptor",
+            );
+
+    assert!(matches!(
+        validation_error,
+        ArtifactValidationError::DuplicateProfileFileName { file_name }
+            if file_name == "config.json"
+    ));
+}

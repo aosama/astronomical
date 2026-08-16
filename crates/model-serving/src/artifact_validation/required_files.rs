@@ -23,11 +23,60 @@ pub(crate) fn validate_required_files(
 ) -> Result<HashMap<String, ValidatedRequiredFile>, ArtifactValidationError> {
     let mut required_file_paths = HashMap::with_capacity(required_file_profiles.len());
     for required_file_profile in required_file_profiles {
+        // A profile name owns exactly one retained descriptor. Reject a repeat
+        // before validating its conflicting metadata or replacing the first file.
+        if required_file_paths.contains_key(&required_file_profile.file_name) {
+            return Err(ArtifactValidationError::DuplicateProfileFileName {
+                file_name: required_file_profile.file_name.clone(),
+            });
+        }
         let required_file_path = validate_required_file(model_directory, required_file_profile)?;
         required_file_paths.insert(required_file_profile.file_name.clone(), required_file_path);
     }
 
     Ok(required_file_paths)
+}
+
+pub(crate) fn read_bounded_required_file_bytes(
+    required_file: &ValidatedRequiredFile,
+    maximum_size_bytes: u64,
+) -> Result<Vec<u8>, ArtifactValidationError> {
+    let actual_size_bytes = required_file.size_bytes();
+    if actual_size_bytes > maximum_size_bytes {
+        return Err(ArtifactValidationError::BoundedRequiredFileTooLarge {
+            file_name: required_file.file_name().to_owned(),
+            actual_size_bytes,
+            maximum_size_bytes,
+        });
+    }
+
+    // Conversion and allocation are fallible even after the caller's u64 bound,
+    // especially on platforms whose address space is narrower than the file size.
+    let required_file_size = usize::try_from(actual_size_bytes).map_err(|source| {
+        ArtifactValidationError::ReadBoundedRequiredFile {
+            file_name: required_file.file_name().to_owned(),
+            source: io::Error::new(io::ErrorKind::InvalidData, source),
+        }
+    })?;
+    let mut required_file_bytes = Vec::new();
+    required_file_bytes
+        .try_reserve_exact(required_file_size)
+        .map_err(|source| ArtifactValidationError::ReadBoundedRequiredFile {
+            file_name: required_file.file_name().to_owned(),
+            source: io::Error::other(source),
+        })?;
+    required_file_bytes.resize(required_file_size, 0);
+
+    // Positional exact reading ignores descriptor cursor state and never reopens
+    // the mutable artifact pathname after validation retained this descriptor.
+    required_file
+        .file()
+        .read_exact_at(&mut required_file_bytes, 0)
+        .map_err(|source| ArtifactValidationError::ReadBoundedRequiredFile {
+            file_name: required_file.file_name().to_owned(),
+            source,
+        })?;
+    Ok(required_file_bytes)
 }
 
 pub(crate) fn validate_required_file(
@@ -145,6 +194,19 @@ pub fn validate_required_file_for_tests(
     required_file_profile: &RequiredFileProfile,
 ) -> Result<ValidatedWeightsFile, ArtifactValidationError> {
     validate_required_file(model_directory, required_file_profile)?.into_validated_weights_file()
+}
+
+impl RequiredFileProfile {
+    /// Integration-test seam for validating a complete required-file profile.
+    #[doc(hidden)]
+    pub fn validate_all_for_tests(
+        model_directory: &Path,
+        required_file_profiles: &[Self],
+    ) -> Result<(), ArtifactValidationError> {
+        // Production keeps descriptor ownership crate-private; tests need only
+        // the journey outcome and intentionally discard successful descriptors.
+        validate_required_files(model_directory, required_file_profiles).map(drop)
+    }
 }
 
 fn validate_required_file_relative_path(
