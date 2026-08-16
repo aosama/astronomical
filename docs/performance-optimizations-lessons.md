@@ -53,6 +53,7 @@
 
 ## Custom recurrent Metal kernel
 
+- MLX custom Metal template arguments are declared inside the generated kernel function and are unavailable to global header declarations. Parameterize header helper templates explicitly with quantization bits and group geometry, then derive template-dependent constants inside the kernel body; otherwise first-use pipeline compilation fails even though graph construction succeeds.
 - A token-by-token recurrent loop built from generic MLX operations creates excessive graph nodes and kernel launches.
 - Fuse the complete gated-delta sequence recurrence into one Metal kernel while keeping recurrent state in 32-bit floating point.
 - Construct and retain the kernel object once with the loaded model. Never recreate it per layer, chunk, or token.
@@ -335,6 +336,7 @@
 - Attribute exact MTP verifier-boundary workspace consistently at admission and completion, including recoverable verifier fallback. Recording zero exact workspace after allocating the boundary teaches the adaptive guard that the same bytes are unexplained transient growth, so later attempts can reserve them twice and disable otherwise safe speculation.
 - Treat an artifact-declared MTP layer count as architecture metadata rather than proof that MTP can execute. Enable the predictor only when the validated shard index contains the complete supported MTP tensor inventory; a model such as Ornith-1.0-35B-OptiQ-4bit can declare one MTP layer while shipping no indexed MTP tensors and must therefore remain target-only.
 - Do not force MLX two-row quantized matrix-vector dispatch onto the one-row kernel solely to pursue exact MTP parity. On Qwen3.6 oQ6 this made the first verification window exact and delayed sequence divergence, but later state-dependent and mixture-of-experts differences remained while the isolated MTP speed advantage disappeared. Retain the release gate and fix the complete target-verification arithmetic rather than accumulating projection-specific exceptions.
+- Skinny multi-row verification needs its own quantized matrix-multiplication kernel. A custom kernel is not equivalent to a fast kernel: output-column tile width, simdgroup count, packed-word loading, and explicit accumulator layout determine whether a 2–4-row verification graph avoids tiny-tile scheduling overhead. Validate the complete inner kernel against the stock MLX path before changing launch geometry alone.
 - Target verification should consume the same immutable page-table snapshot and original graphics-processor routing indices as ordinary paged execution. Do not rebuild an executable payload representation.
 - Do not retain a custom fused expert reduction because a short parity probe runs faster. Require the representative input/output gate to improve; otherwise keep the simpler MLX gather, projection, and reduction path.
 - Build greedy token selection on the graphics processor before synchronizing prediction and verification graphs. Synchronizing vocabulary logits first adds a second graphics-processor barrier without improving token selection.

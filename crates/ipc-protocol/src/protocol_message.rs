@@ -78,6 +78,26 @@ pub enum MtpRuntimeState {
     Unavailable,
 }
 
+/// Fixed MTP depth metadata resolved by the loaded model and active executor.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MtpDepthStatus {
+    pub configured_draft_depth: Option<u8>,
+    pub artifact_maximum_draft_depth: Option<u8>,
+    pub artifact_default_draft_depth: Option<u8>,
+    pub resolved_requested_draft_depth: Option<u8>,
+    pub effective_execution_draft_depth: Option<u8>,
+}
+
+impl MtpDepthStatus {
+    pub const EMPTY: Self = Self {
+        configured_draft_depth: None,
+        artifact_maximum_draft_depth: None,
+        artifact_default_draft_depth: None,
+        resolved_requested_draft_depth: None,
+        effective_execution_draft_depth: None,
+    };
+}
+
 /// Runtime execution state of optional draft-assisted speculative prefill.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -238,6 +258,7 @@ pub enum WorkerEvent {
         mtp_runtime_state: MtpRuntimeState,
         /// Present when MTP is unavailable despite the preference being enabled.
         mtp_unavailable_reason: Option<String>,
+        mtp_depth_status: MtpDepthStatus,
         /// Actual optional speculative-prefill state reported after model load.
         speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
         /// Present when speculative prefill is enabled but the draft model is unavailable.
@@ -333,6 +354,7 @@ pub enum WorkerEvent {
         mtp_runtime_state: MtpRuntimeState,
         /// Present when MTP is unavailable despite the preference being enabled.
         mtp_unavailable_reason: Option<String>,
+        mtp_depth_status: MtpDepthStatus,
         /// Actual optional speculative-prefill state reported after the swap.
         speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
         /// Present when speculative prefill is enabled but the draft model is unavailable.

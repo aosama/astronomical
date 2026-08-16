@@ -47,8 +47,10 @@ pub struct ResolvedRuntimeConfig {
     pub performance_attribution_enabled: bool,
     /// Whether the worker may read and write the persistent prompt cache.
     pub persistent_prompt_cache_enabled: bool,
-    /// Explicit user choice surfaced while Qwen MTP runtime support is parked.
+    /// Whether the worker may activate Qwen multi-token prediction.
     pub mtp_enabled: bool,
+    /// Explicit fixed MTP depth, or automatic artifact selection when absent.
+    pub mtp_draft_depth: Option<u8>,
     /// Optional draft-assisted sparse prompt-prefill policy.
     pub speculative_prefill: SpeculativePrefillConfig,
     /// Discovered draft artifact directory resolved from speculative_prefill.draft_model_id.
@@ -170,6 +172,7 @@ impl ResolvedRuntimeConfigResolver {
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
             mtp_enabled: user_config.mtp_enabled(),
+            mtp_draft_depth: user_config.mtp_draft_depth(),
             speculative_prefill,
             speculative_prefill_draft_model_directory,
             prompt_cache_config,
@@ -238,6 +241,7 @@ impl ResolvedRuntimeConfig {
             optimizer_state_directory: Some(self.optimizer_state_directory.clone()),
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             mtp_enabled: self.mtp_enabled,
+            mtp_draft_depth: self.mtp_draft_depth,
             speculative_prefill: worker_speculative_prefill_configuration(
                 &self.speculative_prefill,
                 self.speculative_prefill_draft_model_directory.clone(),
@@ -383,6 +387,10 @@ impl ConfigReloadDiff {
         }
         if current.mtp_enabled != candidate.mtp_enabled {
             worker_restart_reloaded_fields.push("mtp_enabled".to_owned());
+            worker_restart_required = true;
+        }
+        if current.mtp_draft_depth != candidate.mtp_draft_depth {
+            worker_restart_reloaded_fields.push("mtp_draft_depth".to_owned());
             worker_restart_required = true;
         }
         if current.speculative_prefill != candidate.speculative_prefill {

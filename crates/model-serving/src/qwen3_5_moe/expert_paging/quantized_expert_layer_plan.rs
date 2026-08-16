@@ -1,7 +1,7 @@
 //! Startup-validated layer plan construction and source manifest building.
 //!
-//! `build_quantized_expert_layer_plan()` reads safetensors headers at startup
-//! once per layer and validates all tensor geometry. `build_source_manifests()`
+//! Complete pager construction shares one SafeTensors header cache across every layer and validates
+//! all tensor geometry. Standalone callers retain a one-layer cache. `build_source_manifests()`
 //! groups selected expert intervals by shard file for bounded native reads.
 //! `contiguous_selected_runs()` groups adjacent selected experts for efficient
 //! sequential I/O.
@@ -36,8 +36,50 @@ pub fn build_quantized_expert_layer_plan(
     qwen3_5_config: &Qwen3_5Config,
     quantization_mode: QuantizationMode,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
+    build_quantized_expert_layer_plan_with_stored_names(
+        model_dir,
+        weight_map,
+        &HashMap::new(),
+        layer_prefix,
+        qwen3_5_config,
+        quantization_mode,
+    )
+}
+
+pub(crate) fn build_quantized_expert_layer_plan_with_stored_names(
+    model_dir: &std::path::Path,
+    weight_map: &HashMap<String, String>,
+    stored_tensor_name_by_canonical_name: &HashMap<String, String>,
+    layer_prefix: &str,
+    qwen3_5_config: &Qwen3_5Config,
+    quantization_mode: QuantizationMode,
+) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
+    let mut header_cache = HashMap::new();
+    build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+        model_dir,
+        weight_map,
+        stored_tensor_name_by_canonical_name,
+        layer_prefix,
+        qwen3_5_config,
+        quantization_mode,
+        &mut header_cache,
+    )
+}
+
+/// Builds one layer while reusing headers retained by the complete pager construction pass.
+///
+/// Qwen sparse layers commonly share a small set of SafeTensors files. Keeping this cache outside
+/// the per-layer loop guarantees each unique header is parsed once instead of once per layer.
+pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+    model_dir: &Path,
+    weight_map: &HashMap<String, String>,
+    stored_tensor_name_by_canonical_name: &HashMap<String, String>,
+    layer_prefix: &str,
+    qwen3_5_config: &Qwen3_5Config,
+    quantization_mode: QuantizationMode,
+    header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
+) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
     let mut tensor_sources = Vec::new();
-    let mut header_cache: HashMap<PathBuf, SafetensorsHeader> = HashMap::new();
 
     for projection_name in PROJECTION_NAMES {
         let projection_module_name = format!("{layer_prefix}.switch_mlp.{projection_name}");
@@ -70,6 +112,9 @@ pub fn build_quantized_expert_layer_plan(
                 }
             })?;
             let source_file = model_dir.join(source_file_name);
+            let stored_tensor_name = stored_tensor_name_by_canonical_name
+                .get(&tensor_name)
+                .map_or(tensor_name.as_str(), String::as_str);
             let header = match header_cache.entry(source_file.clone()) {
                 Entry::Occupied(cached_header_entry) => cached_header_entry.into_mut(),
                 Entry::Vacant(vacant_header_entry) => vacant_header_entry.insert(
@@ -78,11 +123,11 @@ pub fn build_quantized_expert_layer_plan(
                     )?,
                 ),
             };
-            let tensor_entry = header.tensor_entry_for_name(&tensor_name).ok_or_else(|| {
-                ExpertManifestError::MissingShardTensor {
+            let tensor_entry = header
+                .tensor_entry_for_name(stored_tensor_name)
+                .ok_or_else(|| ExpertManifestError::MissingShardTensor {
                     tensor_name: tensor_name.clone(),
-                }
-            })?;
+                })?;
             let source = validate_quantized_tensor_source(
                 &tensor_name,
                 projection_name,

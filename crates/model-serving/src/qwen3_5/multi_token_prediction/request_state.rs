@@ -1,19 +1,12 @@
-use std::collections::VecDeque;
-
 use astronomical_runtime_integration::MlxArray;
 use astronomical_runtime_integration::MlxRuntimeError;
 
+use super::MtpDraftDepth;
+use super::verified_emission_queue::{VerifiedEmissionQueue, VerifiedTargetFrontier};
 use crate::decoder_cache::{
     FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,
 };
 use crate::qwen3_5::Qwen3_5SamplingStrategy;
-use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
-
-/// Target-state rollback retained while a verified MTP draft is queued.
-pub(crate) struct AcceptedMultiTokenPredictionDraftRollback {
-    pub(crate) verified_prefix_boundary_checkpoint: Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    pub(crate) verified_prefix_position_tokens: u32,
-}
 
 pub(crate) type MultiTokenPredictionRequestAllocationCheckpoint =
     Qwen3_5MtpRequestStateAllocationCheckpoint;
@@ -21,9 +14,9 @@ pub(crate) type MultiTokenPredictionRequestAllocationCheckpoint =
 /// Optional request-local MTP session owned outside the standard target request state.
 pub(crate) struct Qwen3_5MultiTokenPredictionRequest {
     request_state: Qwen3_5MtpRequestState,
+    requested_depth: MtpDraftDepth,
     target_hidden_states: Option<MlxArray>,
-    verified_generated_token_ids: VecDeque<u32>,
-    accepted_draft_rollback: Option<AcceptedMultiTokenPredictionDraftRollback>,
+    verified_emission_queue: Option<VerifiedEmissionQueue>,
     force_next_draft_rejection_for_tests: bool,
 }
 
@@ -40,6 +33,7 @@ impl Qwen3_5MultiTokenPredictionRequest {
         prompt_token_count: usize,
         restored_prompt_token_count: u32,
         full_attention_kv_state_growth_tokens: i32,
+        requested_depth: Option<MtpDraftDepth>,
     ) -> Result<Option<Self>, MlxRuntimeError> {
         let is_eligible = mtp_enabled
             && mtp_runtime_is_active
@@ -55,19 +49,27 @@ impl Qwen3_5MultiTokenPredictionRequest {
         if !is_eligible {
             return Ok(None);
         }
+        let requested_depth = requested_depth.ok_or_else(|| MlxRuntimeError::RuntimeOperation {
+            operation: "create Qwen3.5 MTP request",
+            description: "active MTP runtime has no resolved draft depth".to_owned(),
+        })?;
         Ok(Some(Self {
             request_state: Qwen3_5MtpRequestState::empty_with_growth_tokens(
                 full_attention_kv_state_growth_tokens,
             )?,
+            requested_depth,
             target_hidden_states: None,
-            verified_generated_token_ids: VecDeque::new(),
-            accepted_draft_rollback: None,
+            verified_emission_queue: None,
             force_next_draft_rejection_for_tests: false,
         }))
     }
 
     pub(crate) fn request_state_mut(&mut self) -> &mut Qwen3_5MtpRequestState {
         &mut self.request_state
+    }
+
+    pub(crate) const fn requested_depth(&self) -> MtpDraftDepth {
+        self.requested_depth
     }
 
     pub(crate) fn target_hidden_states(&self) -> Option<&MlxArray> {
@@ -83,36 +85,34 @@ impl Qwen3_5MultiTokenPredictionRequest {
     }
 
     pub(crate) fn has_verified_generated_token_ids(&self) -> bool {
-        !self.verified_generated_token_ids.is_empty()
+        self.verified_emission_queue
+            .as_ref()
+            .is_some_and(|queue| !queue.is_empty())
     }
 
     pub(crate) fn take_verified_generated_token_id(&mut self) -> Option<u32> {
-        self.verified_generated_token_ids.pop_front()
+        let queued_token_id = self
+            .verified_emission_queue
+            .as_mut()
+            .and_then(VerifiedEmissionQueue::pop_front);
+        if self
+            .verified_emission_queue
+            .as_ref()
+            .is_some_and(VerifiedEmissionQueue::is_empty)
+        {
+            self.verified_emission_queue = None;
+        }
+        queued_token_id
     }
 
-    pub(crate) fn clear_verified_generated_token_ids(&mut self) {
-        self.verified_generated_token_ids.clear();
+    pub(crate) fn set_verified_emission_queue(&mut self, queue: VerifiedEmissionQueue) {
+        self.verified_emission_queue = Some(queue);
     }
 
-    pub(crate) fn queue_verified_generated_token_id(&mut self, token_id: u32) {
-        self.verified_generated_token_ids.push_back(token_id);
-    }
-
-    pub(crate) fn accepted_draft_rollback(
-        &mut self,
-    ) -> Option<AcceptedMultiTokenPredictionDraftRollback> {
-        self.accepted_draft_rollback.take()
-    }
-
-    pub(crate) fn set_accepted_draft_rollback(
-        &mut self,
-        accepted_draft_rollback: AcceptedMultiTokenPredictionDraftRollback,
-    ) {
-        self.accepted_draft_rollback = Some(accepted_draft_rollback);
-    }
-
-    pub(crate) fn clear_accepted_draft_rollback(&mut self) {
-        self.accepted_draft_rollback = None;
+    pub(crate) fn take_public_verified_frontier(&mut self) -> Option<VerifiedTargetFrontier> {
+        self.verified_emission_queue
+            .as_mut()
+            .and_then(VerifiedEmissionQueue::take_public_frontier)
     }
 
     pub(crate) fn force_next_draft_rejection_for_tests(&mut self) {
@@ -137,16 +137,12 @@ impl Qwen3_5MultiTokenPredictionRequest {
             .restore_allocation_checkpoint(allocation_checkpoint)
     }
 
-    pub(crate) fn reset_history(
-        &mut self,
-        full_attention_kv_state_growth_tokens: i32,
-    ) -> Result<(), MlxRuntimeError> {
-        self.request_state
-            .reset_with_growth_tokens(full_attention_kv_state_growth_tokens)
-    }
-
     pub(crate) fn context_state_payload_byte_count(&self) -> u64 {
-        self.request_state.payload_byte_count()
+        self.request_state.payload_byte_count().saturating_add(
+            self.verified_emission_queue
+                .as_ref()
+                .map_or(0, VerifiedEmissionQueue::payload_byte_count),
+        )
     }
 
     pub(crate) fn projected_full_attention_growth_bytes(
@@ -188,6 +184,7 @@ pub(crate) fn create_optional_prediction_session(
     prompt_token_count: usize,
     restored_prompt_token_count: u32,
     full_attention_kv_state_growth_tokens: i32,
+    requested_depth: Option<MtpDraftDepth>,
 ) -> Result<Option<Qwen3_5MultiTokenPredictionRequest>, MlxRuntimeError> {
     Qwen3_5MultiTokenPredictionRequest::new_if_eligible(
         user_enabled_optional_prediction,
@@ -200,6 +197,7 @@ pub(crate) fn create_optional_prediction_session(
         prompt_token_count,
         restored_prompt_token_count,
         full_attention_kv_state_growth_tokens,
+        requested_depth,
     )
 }
 

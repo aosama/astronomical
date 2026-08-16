@@ -40,6 +40,10 @@ pub struct Qwen3_5Config {
     pub(super) text_config: Qwen3_5TextConfig,
     pub(super) activation_dtype: String,
     pub(super) feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+    /// Path to the MTP sidecar safetensors file, relative to the model directory.
+    /// Populated from config.json's `mlx_lm_extra_tensors.mtp_file`.
+    /// `None` when MTP weights are embedded in the shard index or absent.
+    pub(super) sidecar_mtp_file: Option<String>,
 }
 
 impl Qwen3_5Config {
@@ -150,6 +154,9 @@ impl Qwen3_5Config {
                 )
             }
         };
+        let sidecar_mtp_file = config_document
+            .mlx_lm_extra_tensors
+            .and_then(|extra_tensors| extra_tensors.mtp_file);
         Ok(Self {
             eos_token_ids,
             has_tied_embeddings: config_document.tie_word_embeddings,
@@ -161,6 +168,7 @@ impl Qwen3_5Config {
             text_config: config_document.text_config,
             activation_dtype,
             feed_forward_architecture,
+            sidecar_mtp_file,
         })
     }
 }

@@ -1,9 +1,10 @@
 use astronomical_model_serving::{
     ConvolutionState, DecoderCacheLayerLayout, DecoderCacheState, DecoderCacheTensorDtype,
     DecoderCacheTensorLayout, FullAttentionKeyValueState, GatedDeltaRecurrentState,
-    Qwen3_5MtpRequestState, RequestDecoderStateStack,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint, RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use std::collections::HashMap;
 use tokio::sync::MutexGuard;
 
 use crate::common::qwen3_5_moe::{certified_ornith_config, persistent_prompt_cache_model_contract};
@@ -22,6 +23,65 @@ async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
     )
     .expect("the direct MLX runtime should initialize");
     (direct_mlx_guard, runtime)
+}
+
+#[tokio::test]
+async fn should_restore_attention_only_state_at_a_three_row_verifier_boundary() {
+    let (_direct_mlx_guard, runtime) = test_runtime().await;
+    let decoder_cache_layout = astronomical_model_serving::DecoderCacheLayout::new(vec![
+        DecoderCacheLayerLayout::append_only_attention(
+            DecoderCacheTensorLayout::sequence(
+                "attention.keys",
+                DecoderCacheTensorDtype::BFloat16,
+                vec![1, 1, 0, 1],
+                2,
+            ),
+            DecoderCacheTensorLayout::sequence(
+                "attention.values",
+                DecoderCacheTensorDtype::BFloat16,
+                vec![1, 1, 0, 1],
+                2,
+            ),
+            4,
+        ),
+    ])
+    .expect("the attention-only cache layout should validate");
+    let mut request_state =
+        RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
+            .expect("the attention-only request state should initialize");
+    let DecoderCacheState::AppendOnlyAttention { attention } = request_state
+        .layer_mut(0)
+        .expect("the request should retain its attention layer")
+    else {
+        panic!("the synthetic layer should use append-only attention");
+    };
+    let keys = runtime
+        .array_from_f32(&[0.0; 4], &[1, 1, 4, 1])
+        .expect("the verifier keys should be valid");
+    let values = runtime
+        .array_from_f32(&[0.0; 4], &[1, 1, 4, 1])
+        .expect("the verifier values should be valid");
+    attention
+        .update_and_fetch(&runtime, &keys, &values, 0)
+        .expect("the verifier update should populate attention state");
+
+    request_state
+        .restore_verified_prefix(
+            3,
+            Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
+                completed_prefill_chunck_tokens: 3,
+                recurrent_snapshot_tensors: HashMap::new(),
+            },
+        )
+        .expect("a three-row verifier boundary should restore exactly");
+
+    let DecoderCacheState::AppendOnlyAttention { attention } = request_state
+        .layer(0)
+        .expect("the request should retain its attention layer")
+    else {
+        panic!("the synthetic layer should use append-only attention");
+    };
+    assert_eq!(attention.offset_tokens(), 3);
 }
 
 #[tokio::test]
@@ -237,114 +297,6 @@ fn should_project_zero_fixed_state_growth_after_composite_state_is_materialized(
         .expect("warm composite state growth should be projectable");
 
     assert_eq!(warm_state_growth_bytes, 60);
-}
-
-#[tokio::test]
-async fn should_not_grow_the_mtp_slab_when_the_next_update_fits_current_capacity() {
-    let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let mut mtp_request_state = Qwen3_5MtpRequestState::empty_with_growth_tokens(4)
-        .expect("a positive MTP growth step should create request state");
-    let initial_keys = runtime
-        .array_from_f32(&[0.0; 3], &[1, 1, 3, 1])
-        .expect("the initial MTP keys should be valid");
-    let initial_values = runtime
-        .array_from_f32(&[0.0; 3], &[1, 1, 3, 1])
-        .expect("the initial MTP values should be valid");
-    mtp_request_state
-        .full_attention_key_value_state_mut_for_tests()
-        .update_and_fetch(&runtime, &initial_keys, &initial_values, 0)
-        .expect("the initial MTP update should allocate one four-token slab");
-
-    assert_eq!(
-        mtp_request_state
-            .projected_capacity_growth_tokens(1)
-            .expect("an update within the MTP slab should have a valid projection"),
-        0
-    );
-
-    let fitting_keys = runtime
-        .array_from_f32(&[1.0], &[1, 1, 1, 1])
-        .expect("the fitting MTP keys should be valid");
-    let fitting_values = runtime
-        .array_from_f32(&[1.0], &[1, 1, 1, 1])
-        .expect("the fitting MTP values should be valid");
-    mtp_request_state
-        .full_attention_key_value_state_mut_for_tests()
-        .update_and_fetch(&runtime, &fitting_keys, &fitting_values, 3)
-        .expect("the fitting MTP update should reuse current slab capacity");
-
-    assert_eq!(
-        mtp_request_state
-            .full_attention_key_value_state_mut_for_tests()
-            .capacity_tokens(),
-        4
-    );
-}
-
-#[tokio::test]
-async fn should_project_sequential_mtp_updates_across_a_slab_boundary() {
-    let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let mut mtp_request_state = Qwen3_5MtpRequestState::empty_with_growth_tokens(4)
-        .expect("a positive MTP growth step should create request state");
-    let initial_keys = runtime
-        .array_from_f32(&[0.0; 3], &[1, 1, 3, 1])
-        .expect("the initial MTP keys should be valid");
-    let initial_values = runtime
-        .array_from_f32(&[0.0; 3], &[1, 1, 3, 1])
-        .expect("the initial MTP values should be valid");
-    mtp_request_state
-        .full_attention_key_value_state_mut_for_tests()
-        .update_and_fetch(&runtime, &initial_keys, &initial_values, 0)
-        .expect("the initial MTP update should allocate one four-token slab");
-
-    assert_eq!(
-        mtp_request_state
-            .projected_sequential_capacity_growth_bytes(1, &[1, 1])
-            .expect("sequential MTP updates should have a valid projection"),
-        4
-    );
-}
-
-#[tokio::test]
-async fn should_grow_the_mtp_slab_by_one_configured_step_when_update_crosses_capacity() {
-    let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let mut mtp_request_state = Qwen3_5MtpRequestState::empty_with_growth_tokens(4)
-        .expect("a positive MTP growth step should create request state");
-    let initial_keys = runtime
-        .array_from_f32(&[0.0; 4], &[1, 1, 4, 1])
-        .expect("the initial MTP keys should be valid");
-    let initial_values = runtime
-        .array_from_f32(&[0.0; 4], &[1, 1, 4, 1])
-        .expect("the initial MTP values should be valid");
-    mtp_request_state
-        .full_attention_key_value_state_mut_for_tests()
-        .update_and_fetch(&runtime, &initial_keys, &initial_values, 0)
-        .expect("the initial MTP update should fill one four-token slab");
-
-    assert_eq!(
-        mtp_request_state
-            .projected_capacity_growth_tokens(1)
-            .expect("an update crossing MTP capacity should have a valid projection"),
-        4
-    );
-
-    let crossing_keys = runtime
-        .array_from_f32(&[1.0], &[1, 1, 1, 1])
-        .expect("the crossing MTP keys should be valid");
-    let crossing_values = runtime
-        .array_from_f32(&[1.0], &[1, 1, 1, 1])
-        .expect("the crossing MTP values should be valid");
-    mtp_request_state
-        .full_attention_key_value_state_mut_for_tests()
-        .update_and_fetch(&runtime, &crossing_keys, &crossing_values, 4)
-        .expect("the crossing MTP update should allocate one configured step");
-
-    assert_eq!(
-        mtp_request_state
-            .full_attention_key_value_state_mut_for_tests()
-            .capacity_tokens(),
-        8
-    );
 }
 
 #[tokio::test]

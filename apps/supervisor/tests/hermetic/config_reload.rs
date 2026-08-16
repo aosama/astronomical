@@ -148,6 +148,22 @@ fn should_classify_mtp_config_as_worker_restart() {
 }
 
 #[test]
+fn should_classify_mtp_draft_depth_change_as_worker_restart() {
+    let mut current = sample_resolved_config();
+    current.mtp_draft_depth = None;
+    let mut candidate = sample_resolved_config();
+    candidate.mtp_draft_depth = Some(3);
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(
+        matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields == &["mtp_draft_depth".to_owned()]),
+        "an mtp_draft_depth change must trigger worker replacement, got {decision:?}"
+    );
+}
+
+#[test]
 fn should_classify_performance_attribution_change_as_worker_restart() {
     let mut current = sample_resolved_config();
     current.performance_attribution_enabled = false;
@@ -259,6 +275,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
+        mtp_draft_depth: None,
         speculative_prefill: SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: PromptCacheConfig::new(

@@ -33,9 +33,10 @@ pub use prompt_processing_chunk_optimization::{
 };
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
-    ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpRuntimeState, RequestId,
-    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpDepthStatus,
+    MtpRuntimeState, RequestId, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase,
+    WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;

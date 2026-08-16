@@ -3,17 +3,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::artifact_validation::TensorProfile;
-
 use super::tensor_spec::validate_language_tensor_names;
+use crate::artifact_validation::TensorProfile;
 
 pub const MAXIMUM_INDEX_BYTES: usize = 1024 * 1024;
 const MAXIMUM_TENSOR_NAME_BYTES: usize = 512;
-
 /// The bounded executable tensor-to-shard inventory for a Qwen3.5 artifact.
 ///
 /// Tracks both language model tensors (`language_model.*`) and vision tower
-/// tensors (`vision_tower.*`) and their shard file locations.
+/// tensors (`vision_tower.*`) declared only by the main shard index.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Qwen3_5ShardIndex {
     tensor_name_to_shard_file_name: BTreeMap<String, String>,

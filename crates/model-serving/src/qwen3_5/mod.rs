@@ -14,10 +14,13 @@ mod text;
 mod vision;
 
 pub use artifacts::{
-    Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
-    Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
-    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
-    qwen3_5_resident_language_tensor_profiles,
+    MAXIMUM_MTPLX_RUNTIME_BYTES, Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError,
+    Qwen3_5ArtifactValidator, Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract,
+    Qwen3_5MtpContractError, Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
+    Qwen3_5MtpSidecarValidationOutcome, Qwen3_5MtpTargetOnlyReason, Qwen3_5ShardIndex,
+    ValidatedQwen3_5Artifact, qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names,
+    qwen3_5_mtp_tensor_profiles, qwen3_5_resident_language_tensor_profiles,
+    validate_qwen3_5_mtp_sidecar_for_tests,
 };
 pub use configuration::{
     ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
@@ -36,7 +39,8 @@ pub use inference_execution::{
     Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5SpeculativePrefillSelectionError,
     persistent_prompt_cache_publication_advances_parent_chain, qwen3_5_depth_one_mtp_window_fits,
-    qwen3_5_mtp_runtime_state_after_load, qwen3_5_mtp_verification_may_cross_thinking_budget,
+    qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
+    qwen3_5_mtp_verification_may_cross_thinking_budget,
     qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_selected_speculative_prefill_positions_for_range,
     safe_minimum_mlx_memory_ceiling_bytes,
@@ -50,6 +54,16 @@ pub use model::{
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_step, qwen3_5_select_speculative_prefill_token_positions_on_gpu,
 };
+pub use multi_token_prediction::{
+    MtpDepthDowngradeReason, MtpDraftDepth, MtpDraftDepthError, MtpMemoryAdmission,
+    MtpMemoryCandidate, MtpMemoryProjection, MtpMemoryProjectionError, MtpVerificationDecision,
+    MtpVerificationDecisionError, qwen3_5_mtp_effective_depth_and_reason_for_windows,
+    qwen3_5_mtp_effective_depth_for_windows, qwen3_5_mtp_memory_admission,
+    qwen3_5_mtp_verification_decision, qwen3_5_mtp_verification_transient_array_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use multi_token_prediction::{VerifiedEmissionQueue, VerifiedTargetFrontier};
 pub use quantizations::optiq::{OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile};
 #[cfg(feature = "direct-mlx")]
 pub use text::qwen3_5_apply_top_p_mask;

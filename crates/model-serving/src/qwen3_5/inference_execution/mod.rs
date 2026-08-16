@@ -12,6 +12,7 @@ pub(in crate::qwen3_5) mod memory_admission;
 mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
+mod mtp_decode_attempt;
 mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
 mod prefill_advance;
@@ -33,8 +34,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::{
-    RequestId, SpeculativePrefillRuntimeState, WorkerChunkingConfiguration, WorkerEvent,
-    WorkerSpeculativePrefillConfiguration,
+    MtpDepthStatus, RequestId, SpeculativePrefillRuntimeState, WorkerChunkingConfiguration,
+    WorkerEvent, WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 
@@ -57,13 +58,15 @@ pub use self::speculative_prefill::{
     qwen3_5_selected_speculative_prefill_positions_for_range,
     qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
 };
-use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
+use super::{MtpDraftDepth, ValidatedQwen3_5Artifact};
 
 pub use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRuntimeState;
-pub use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_runtime_state_after_load;
 pub use crate::qwen3_5::multi_token_prediction::{
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_verification_may_cross_thinking_budget,
+};
+pub use crate::qwen3_5::multi_token_prediction::{
+    qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
 };
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
@@ -130,6 +133,46 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+        Self::new_with_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
+            validated_artifact,
+            active_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            persistent_prompt_cache_disk_store_config,
+            prompt_processing_chunk_sizer,
+            think_end_token_id,
+            model_directory,
+            chunking,
+            adaptive_ram_growth_guard_enabled,
+            mtp_enabled,
+            None,
+            speculative_prefill,
+            model_loading_performance_attribution,
+            performance_attribution_log,
+        )
+    }
+
+    /// Starts the owner thread with explicit fixed MTP depth selection metadata.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
+        validated_artifact: ValidatedQwen3_5Artifact,
+        active_memory_limit_bytes: usize,
+        allocator_cache_memory_limit_bytes: usize,
+        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+        think_end_token_id: u32,
+        model_directory: PathBuf,
+        chunking: WorkerChunkingConfiguration,
+        adaptive_ram_growth_guard_enabled: bool,
+        mtp_enabled: bool,
+        mtp_draft_depth: Option<u8>,
+        speculative_prefill: WorkerSpeculativePrefillConfiguration,
+        model_loading_performance_attribution: PerformanceAttribution,
+        performance_attribution_log: PerformanceAttributionLog,
+    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+        let configured_mtp_draft_depth = mtp_draft_depth
+            .map(MtpDraftDepth::new)
+            .transpose()
+            .map_err(|_| fatal_engine_error("MTP draft depth must be between 1 and 3"))?;
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
                 fatal_engine_error("full-attention growth tokens exceed Int32 range")
@@ -194,6 +237,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
             mtp_enabled,
+            configured_mtp_draft_depth,
             speculative_prefill,
             mtp_runtime_state: if mtp_enabled {
                 Qwen3_5MtpRuntimeState::Unavailable
@@ -201,6 +245,10 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
                 Qwen3_5MtpRuntimeState::Disabled
             },
             mtp_unavailable_reason: None,
+            mtp_depth_status: MtpDepthStatus {
+                configured_draft_depth: mtp_draft_depth,
+                ..MtpDepthStatus::default()
+            },
             speculative_prefill_runtime_state: initial_speculative_prefill_runtime_state,
             speculative_prefill_unavailable_reason: None,
         })
@@ -262,12 +310,14 @@ pub struct Qwen3_5InferenceExecution {
     /// User preference: whether MTP is enabled.
     /// Defaults to false until the worker passes the real config value.
     mtp_enabled: bool,
+    configured_mtp_draft_depth: Option<MtpDraftDepth>,
     /// Resolved optional draft-assisted speculative-prefill configuration.
     pub(super) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     /// Actual MTP runtime state after model loading.
     mtp_runtime_state: Qwen3_5MtpRuntimeState,
     /// Concise reason when MTP runtime state is Unavailable.
     mtp_unavailable_reason: Option<String>,
+    mtp_depth_status: MtpDepthStatus,
     /// Actual optional draft-assisted speculative-prefill state after model loading.
     speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
     /// Concise reason when speculative prefill is Unavailable.

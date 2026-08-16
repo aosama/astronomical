@@ -281,4 +281,8 @@ pub enum ArtifactValidationError {
     /// Tensor payload sizes overflowed the validator's accounting type.
     #[error("safetensors payload byte count overflowed u64")]
     TensorPayloadSizeOverflow,
+
+    /// The bounded artifact declared more physical sources than an opaque source ID can represent.
+    #[error("safetensors source count overflowed the validated source identity range")]
+    TensorSourceCountOverflow,
 }

@@ -37,6 +37,7 @@ async fn should_round_trip_worker_startup_configuration() {
         optimizer_state_directory: None,
         configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
         mtp_enabled: true,
+        mtp_draft_depth: Some(3),
         speculative_prefill: WorkerSpeculativePrefillConfiguration {
             enabled: true,
             target_model_id: Some("astronomical/target-model".to_owned()),

@@ -51,6 +51,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             persistent_prompt_cache_enabled: worker_startup_configuration
                                 .persistent_prompt_cache_enabled,
                             mtp_enabled: worker_startup_configuration.mtp_enabled,
+                            mtp_draft_depth: worker_startup_configuration.mtp_draft_depth,
                             speculative_prefill_enabled: worker_startup_configuration
                                 .speculative_prefill
                                 .enabled,
@@ -96,6 +97,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             minimum_mlx_memory_ceiling_bytes: 3_000_000_000,
                             mtp_runtime_state: MtpRuntimeState::Disabled,
                             mtp_unavailable_reason: None,
+                            mtp_depth_status: Default::default(),
                             speculative_prefill_runtime_state:
                                 SpeculativePrefillRuntimeState::Disabled,
                             speculative_prefill_unavailable_reason: None,

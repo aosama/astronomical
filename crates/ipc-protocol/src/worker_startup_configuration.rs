@@ -51,6 +51,8 @@ pub struct WorkerRuntimeFeatureConfiguration {
     pub persistent_prompt_cache_enabled: bool,
     /// Whether the worker may activate multi-token prediction for a compatible model.
     pub mtp_enabled: bool,
+    /// Explicit user depth, or `None` for the artifact default and then depth one.
+    pub mtp_draft_depth: Option<u8>,
     /// Whether the currently bound target model may execute draft-assisted prefill.
     pub speculative_prefill_enabled: bool,
 }
@@ -66,6 +68,7 @@ pub struct WorkerStartupConfiguration {
     pub optimizer_state_directory: Option<PathBuf>,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub mtp_enabled: bool,
+    pub mtp_draft_depth: Option<u8>,
     pub speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub performance_attribution_enabled: bool,
     pub logging_directory: PathBuf,

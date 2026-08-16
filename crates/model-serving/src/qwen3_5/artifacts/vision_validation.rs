@@ -1,9 +1,4 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
-
-use crate::artifact_validation::{
-    ArtifactValidationError, TensorProfile, ValidatedRequiredFile,
-    validate_bounded_safetensors_with_indexed_profiles,
-};
+use std::collections::BTreeSet;
 
 use super::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
 use super::{Qwen3_5ArtifactError, Qwen3_5ShardIndex, Qwen3_5VisionConfig};
@@ -93,60 +88,4 @@ pub(super) fn validate_vision_tower_inventory(
         }
     }
     Ok(ValidatedVisionTowerStorage::EmbeddedInModelShards)
-}
-
-/// Returns strict visual tensor profiles stored in one embedded model shard.
-#[must_use]
-pub(super) fn embedded_vision_tensor_profiles_for_shard(
-    vision_tensor_profiles: &[TensorProfile],
-    shard_index: &Qwen3_5ShardIndex,
-    shard_file_name: &str,
-) -> Vec<TensorProfile> {
-    vision_tensor_profiles
-        .iter()
-        .filter(|tensor_profile| {
-            shard_index
-                .vision_tensor_name_to_shard_file_name()
-                .get(&tensor_profile.name)
-                .is_some_and(|vision_shard_file_name| vision_shard_file_name == shard_file_name)
-        })
-        .cloned()
-        .collect()
-}
-
-/// Validates the complete separate visual-tower sidecar before MLX mapping.
-pub(super) fn validate_vision_sidecars(
-    required_files: &HashMap<String, ValidatedRequiredFile>,
-    shard_index: &Qwen3_5ShardIndex,
-    vision_tensor_profiles: &[TensorProfile],
-    recognized_tensor_profiles: &[TensorProfile],
-    recognized_tensor_names: &HashSet<&str>,
-) -> Result<(), ArtifactValidationError> {
-    for vision_sidecar_file_name in shard_index.vision_sidecar_file_names() {
-        let vision_sidecar_file =
-            required_files
-                .get(vision_sidecar_file_name)
-                .ok_or_else(|| ArtifactValidationError::ProfileMissingRequiredFile {
-                    file_name: vision_sidecar_file_name.clone(),
-                })?;
-        let profiled_vision_tensors_for_file = vision_tensor_profiles
-            .iter()
-            .filter(|tensor_profile| {
-                shard_index
-                    .vision_tensor_name_to_shard_file_name()
-                    .get(&tensor_profile.name)
-                    .is_some_and(|indexed_file_name| indexed_file_name == vision_sidecar_file_name)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        validate_bounded_safetensors_with_indexed_profiles(
-            vision_sidecar_file.file(),
-            vision_sidecar_file.size_bytes(),
-            vision_sidecar_file_name,
-            &profiled_vision_tensors_for_file,
-            recognized_tensor_profiles,
-            recognized_tensor_names,
-        )?;
-    }
-    Ok(())
 }

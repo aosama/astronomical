@@ -13,6 +13,15 @@ const EXPECTED_MOE_TEXT_MODEL_TYPE: &str = "qwen3_5_moe_text";
 const EXPECTED_DENSE_TEXT_MODEL_TYPE: &str = "qwen3_5_text";
 const EXPECTED_HIDDEN_ACTIVATION: &str = "silu";
 
+/// Qwen MTP sidecar declaration parsed from `mlx_lm_extra_tensors`.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub(super) struct MlxLmExtraTensors {
+    /// Path to the MTP sidecar safetensors file, relative to the model directory.
+    /// E.g., "mtp.safetensors" or "optiq/mtp.safetensors".
+    #[serde(default, rename = "mtp_file")]
+    pub(super) mtp_file: Option<String>,
+}
+
 /// Private wire schema retained only while validating one model config document.
 #[derive(Debug, Deserialize)]
 pub(super) struct Qwen3_5ConfigDocument {
@@ -30,6 +39,10 @@ pub(super) struct Qwen3_5ConfigDocument {
     pub(super) tie_word_embeddings: bool,
     #[serde(rename = "dtype", alias = "torch_dtype", default)]
     pub(super) activation_dtype: Option<String>,
+    /// Sidecar file declarations from config.json's `mlx_lm_extra_tensors` field.
+    /// Absent when models store all tensors in the shard index.
+    #[serde(default)]
+    pub(super) mlx_lm_extra_tensors: Option<MlxLmExtraTensors>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
