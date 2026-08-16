@@ -9,10 +9,16 @@ mod compressed_storage_boundaries;
 mod configuration;
 mod direct_affine_artifact_validation;
 mod exact_storage_edge_cases;
+mod execution;
 mod index_total_size;
 mod kv_cache_metadata;
+mod optimizer_context;
 mod optional_artifacts;
+mod paging;
+mod prompt_cache_topology;
 mod rope;
+mod routing;
+mod startup_boundary;
 mod storage;
 mod strict_configuration;
 mod support;
@@ -21,11 +27,3 @@ mod text_artifacts;
 mod text_generation;
 mod text_output_parser;
 mod text_support;
-
-#[test]
-fn should_keep_contract_only_laguna_unavailable_for_execution() {
-    assert_eq!(
-        astronomical_model_serving::laguna_unavailable_reason(),
-        "Laguna model execution is not implemented in this build"
-    );
-}
