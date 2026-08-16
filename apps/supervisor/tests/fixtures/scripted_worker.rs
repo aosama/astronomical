@@ -17,6 +17,13 @@ use scripted_worker_chat::{send_accepted_chat, send_activity_transition, send_si
 const READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
 const DEFAULT_READY_MODEL_ID: &str = "astronomical/test-worker";
 
+/// Selects the memory telemetry emitted before a cancellation acknowledgement.
+enum CancellationMlxTelemetry {
+    None,
+    Publish,
+    Clear,
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     match run_fixture().await {
@@ -35,6 +42,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut cancellation_acknowledgement_delay = Duration::ZERO;
     let mut should_acknowledge_cancellation = true;
     let mut should_emit_unexpected_cancellation_event = false;
+    let mut should_emit_cache_stats_before_cancellation_acknowledgement = false;
+    let mut cancellation_mlx_telemetry = CancellationMlxTelemetry::None;
     let ready_model_id = std::env::var(READY_MODEL_ID_ENVIRONMENT_VARIABLE)
         .unwrap_or_else(|_| DEFAULT_READY_MODEL_ID.to_owned());
     event_writer
@@ -112,6 +121,28 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         active_request_id = Some(request_id);
                         should_acknowledge_cancellation = true;
                         should_emit_unexpected_cancellation_event = true;
+                    }
+                    "astronomical/cache-stats-during-cancellation-fixture" => {
+                        active_request_id = Some(request_id);
+                        should_acknowledge_cancellation = true;
+                        should_emit_cache_stats_before_cancellation_acknowledgement = true;
+                    }
+                    "astronomical/mlx-memory-during-cancellation-fixture" => {
+                        active_request_id = Some(request_id);
+                        should_acknowledge_cancellation = true;
+                        cancellation_mlx_telemetry = CancellationMlxTelemetry::Publish;
+                    }
+                    "astronomical/mlx-memory-clear-during-cancellation-fixture" => {
+                        active_request_id = Some(request_id);
+                        should_acknowledge_cancellation = true;
+                        // Seed a visible snapshot so the cancellation event can
+                        // prove that `None` clears previously published memory.
+                        event_writer
+                            .send_event(&WorkerEvent::MlxMemorySample {
+                                mlx_memory_snapshot: Some(cancellation_memory_snapshot(33_000)),
+                            })
+                            .await?;
+                        cancellation_mlx_telemetry = CancellationMlxTelemetry::Clear;
                     }
                     "astronomical/activity-transition-fixture" => {
                         send_activity_transition(request_id, &mut event_writer).await?;
@@ -382,6 +413,46 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .await?;
                     continue;
                 }
+                if should_emit_cache_stats_before_cancellation_acknowledgement {
+                    should_emit_cache_stats_before_cancellation_acknowledgement = false;
+                    event_writer
+                        .send_event(&WorkerEvent::PersistentPromptCacheStats {
+                            persistent_prompt_cache_hits: 1,
+                            persistent_prompt_cache_misses: 0,
+                            persistent_prompt_cache_tokens_saved: 2_048,
+                            persistent_prompt_cache_block_token_count: 2_048,
+                            persistent_prompt_cache_sequence_state_block_count: 1,
+                            persistent_prompt_cache_boundary_state_snapshot_count: 1,
+                            persistent_prompt_cache_visual_embedding_count: 0,
+                            persistent_prompt_cache_total_size_bytes: 4_096,
+                            persistent_prompt_cache_visual_embedding_total_size_bytes: 0,
+                            persistent_prompt_cache_maximum_size_bytes: 50_000_000_000,
+                            persistent_prompt_cache_visual_embedding_hits: 0,
+                            persistent_prompt_cache_visual_embedding_misses: 0,
+                            persistent_prompt_cache_visual_embedding_rows_loaded: 0,
+                        })
+                        .await?;
+                }
+                match std::mem::replace(
+                    &mut cancellation_mlx_telemetry,
+                    CancellationMlxTelemetry::None,
+                ) {
+                    CancellationMlxTelemetry::None => {}
+                    CancellationMlxTelemetry::Publish => {
+                        event_writer
+                            .send_event(&WorkerEvent::MlxMemorySample {
+                                mlx_memory_snapshot: Some(cancellation_memory_snapshot(44_000)),
+                            })
+                            .await?;
+                    }
+                    CancellationMlxTelemetry::Clear => {
+                        event_writer
+                            .send_event(&WorkerEvent::MlxMemorySample {
+                                mlx_memory_snapshot: None,
+                            })
+                            .await?;
+                    }
+                }
                 event_writer
                     .send_event(&WorkerEvent::Completed {
                         request_id,
@@ -427,4 +498,18 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
     Ok(())
+}
+
+/// Builds deterministic memory telemetry for cancellation-containment tests.
+fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMlxMemorySnapshot {
+    WorkerMlxMemorySnapshot {
+        source: MlxMemorySnapshotSource::Finalized,
+        active_memory_bytes,
+        allocator_cache_memory_bytes: 2_000,
+        peak_memory_bytes: active_memory_bytes + 1_000,
+        expert_payload_bytes: 20_000,
+        model_core_payload_bytes: 10_000,
+        context_state_payload_bytes: 5_000,
+        speculative_prefill_draft_memory_bytes: 0,
+    }
 }

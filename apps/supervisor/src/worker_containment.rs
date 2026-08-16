@@ -8,6 +8,7 @@ use crate::chat_generation_executor::try_send_stream_event;
 use crate::worker_health::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
     publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
+    publish_persistent_prompt_cache_stats,
 };
 use crate::worker_loop_types::ActiveGeneration;
 use crate::{
@@ -105,6 +106,20 @@ async fn cancel_worker_request(
                             health_snapshot,
                             expert_residency,
                         );
+                    }
+                }
+                WorkerEvent::PersistentPromptCacheStats { .. } => {
+                    // Cache publication can finish after the client drops the
+                    // stream. Keep the worker reusable and record the telemetry.
+                    publish_persistent_prompt_cache_stats(health_snapshot, worker_event);
+                }
+                WorkerEvent::MlxMemorySample {
+                    mlx_memory_snapshot,
+                } => {
+                    if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
+                        publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
+                    } else {
+                        clear_latest_mlx_memory_snapshot(health_snapshot);
                     }
                 }
                 WorkerEvent::Completed {
