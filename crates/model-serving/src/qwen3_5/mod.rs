@@ -49,10 +49,12 @@ pub use inference_execution::{
 pub use model::{
     Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
     Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput,
+    Qwen3_5TargetVerificationProjection, Qwen3_5TargetVerificationProjectionDispatch,
     Qwen3_5Weights, qwen3_5_aggregate_speculative_prefill_attention_weights,
     qwen3_5_full_attention_step, qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_step, qwen3_5_select_speculative_prefill_token_positions_on_gpu,
+    qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
 };
 pub use multi_token_prediction::{
     MtpDepthDowngradeReason, MtpDraftDepth, MtpDraftDepthError, MtpMemoryAdmission,

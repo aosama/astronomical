@@ -1,6 +1,6 @@
 use astronomical_runtime_integration::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntimeError,
+    MlxRuntime, MlxRuntimeError,
 };
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
@@ -177,8 +177,39 @@ for (int row = 0; row < RESULTS_PER_SIMDGROUP; ++row) {
 }
 "#;
 
-pub(super) fn target_verification_quantized_linear_kernel()
--> Result<MlxMetalKernel, MlxRuntimeError> {
+/// Identifies whether target verification used the specialized Metal kernel or
+/// the token-local MLX reference path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Qwen3_5TargetVerificationProjectionDispatch {
+    OptimizedMetal,
+    TokenLocalMlxFallback,
+}
+
+/// One target-verification projection and the geometry-derived dispatch used
+/// to produce it.
+#[derive(Debug)]
+pub struct Qwen3_5TargetVerificationProjection {
+    projected_activations: MlxArray,
+    dispatch: Qwen3_5TargetVerificationProjectionDispatch,
+}
+
+impl Qwen3_5TargetVerificationProjection {
+    /// Returns the dispatch selected from validated tensor geometry.
+    #[must_use]
+    pub const fn dispatch(&self) -> Qwen3_5TargetVerificationProjectionDispatch {
+        self.dispatch
+    }
+
+    /// Consumes the diagnostic wrapper and returns the projected activations.
+    #[must_use]
+    pub fn into_projected_activations(self) -> MlxArray {
+        self.projected_activations
+    }
+}
+
+/// Builds the retained custom Metal kernel used by eligible target-verification
+/// projections.
+pub fn target_verification_quantized_linear_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
     MlxMetalKernel::new_with_header(
         "astronomical_qwen3_5_target_verification_quantized_linear",
         &[
@@ -193,81 +224,45 @@ pub(super) fn target_verification_quantized_linear_kernel()
     )
 }
 
-impl Qwen3_5Model {
-    pub(crate) fn quantized_linear_for_paged_prefill_execution_mode(
-        &self,
-        activations: &MlxArray,
-        affine_weights: &Qwen3_5AffineWeights,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let activation_shape = activations.shape();
-        if paged_prefill_execution_mode
-            != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
-            || activation_shape.len() != 3
-            || activation_shape[1] <= 1
-        {
-            return self.quantized_linear(activations, affine_weights);
-        }
-        if let Some(projected_activations) = self.try_target_verification_quantized_linear(
-            activations,
-            affine_weights,
-            &activation_shape,
-        )? {
-            return Ok(projected_activations);
-        }
-
-        let mut token_projection_outputs = Vec::with_capacity(activation_shape[1] as usize);
-        for token_position_index in 0..activation_shape[1] {
-            let token_activations = self.runtime.slice(
-                activations,
-                &[0, token_position_index, 0],
-                &[
-                    activation_shape[0],
-                    token_position_index + 1,
-                    activation_shape[2],
-                ],
-                &[1, 1, 1],
-            )?;
-            token_projection_outputs
-                .push(self.quantized_linear(&token_activations, affine_weights)?);
-        }
-        let token_projection_output_references =
-            token_projection_outputs.iter().collect::<Vec<_>>();
-        Ok(self
-            .runtime
-            .concatenate_axis(&token_projection_output_references, 1)?)
-    }
-
-    fn try_target_verification_quantized_linear(
-        &self,
-        activations: &MlxArray,
-        affine_weights: &Qwen3_5AffineWeights,
-        activation_shape: &[i32],
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
-        let Qwen3_5AffineWeights::Quantized {
-            packed_weight,
-            quantization_scales,
-            quantization_biases,
-            quantization_group_size,
-            quantization_bits,
-        } = affine_weights
-        else {
-            return Ok(None);
-        };
-        let packed_weight_shape = packed_weight.shape();
-        let output_dimension = packed_weight_shape[0];
-        let input_dimension = activation_shape[2];
-        if !matches!(*quantization_bits, 4 | 5)
-            || input_dimension % 512 != 0
-            || output_dimension % 8 != 0
-            || activations.dtype() != quantization_scales.dtype()
-            || quantization_biases.dtype() != quantization_scales.dtype()
-            || !matches!(activations.dtype(), MlxDtype::BFloat16 | MlxDtype::Float16)
-        {
-            return Ok(None);
-        }
-        let mut kernel_outputs = self.runtime.apply_metal_kernel(
-            &self.target_verification_quantized_linear_kernel,
+/// Projects one multi-token target-verification window through the specialized
+/// Metal route when its geometry is supported. Every other valid affine shape
+/// uses repeated one-token MLX quantized matrix multiplication so fallback
+/// arithmetic remains identical to ordinary decode.
+#[allow(clippy::too_many_arguments)]
+pub fn qwen3_5_target_verification_quantized_linear(
+    runtime: &MlxRuntime,
+    target_verification_kernel: &MlxMetalKernel,
+    activations: &MlxArray,
+    packed_weight: &MlxArray,
+    quantization_scales: &MlxArray,
+    quantization_biases: &MlxArray,
+    quantization_group_size: i32,
+    quantization_bits: i32,
+) -> Result<Qwen3_5TargetVerificationProjection, MlxRuntimeError> {
+    let activation_shape = activations.shape();
+    let packed_weight_shape = packed_weight.shape();
+    validate_target_verification_projection(
+        packed_weight,
+        quantization_scales,
+        quantization_biases,
+        quantization_group_size,
+        quantization_bits,
+        &activation_shape,
+        &packed_weight_shape,
+    )?;
+    let output_dimension = packed_weight_shape[0];
+    let input_dimension = activation_shape[2];
+    if target_verification_uses_optimized_dispatch(
+        activations,
+        quantization_scales,
+        quantization_biases,
+        quantization_group_size,
+        quantization_bits,
+        input_dimension,
+        output_dimension,
+    ) {
+        let mut kernel_outputs = runtime.apply_metal_kernel(
+            target_verification_kernel,
             &[
                 activations,
                 packed_weight,
@@ -287,11 +282,11 @@ impl Qwen3_5Model {
                 },
                 MlxMetalKernelTemplateArgument::Integer {
                     name: "BITS",
-                    integer_template_argument: *quantization_bits,
+                    integer_template_argument: quantization_bits,
                 },
                 MlxMetalKernelTemplateArgument::Integer {
                     name: "GS",
-                    integer_template_argument: *quantization_group_size,
+                    integer_template_argument: quantization_group_size,
                 },
                 MlxMetalKernelTemplateArgument::Integer {
                     name: "VERIFY_T",
@@ -307,6 +302,188 @@ impl Qwen3_5Model {
                 },
             ],
         )?;
-        Ok(kernel_outputs.pop())
+        let projected_activations = kernel_outputs.pop().ok_or_else(|| {
+            target_verification_projection_error(
+                "target-verification Metal kernel returned no projected activations",
+            )
+        })?;
+        return Ok(Qwen3_5TargetVerificationProjection {
+            projected_activations,
+            dispatch: Qwen3_5TargetVerificationProjectionDispatch::OptimizedMetal,
+        });
+    }
+
+    let projected_activations = token_local_quantized_linear(
+        runtime,
+        activations,
+        packed_weight,
+        quantization_scales,
+        quantization_biases,
+        quantization_group_size,
+        quantization_bits,
+        &activation_shape,
+    )?;
+    Ok(Qwen3_5TargetVerificationProjection {
+        projected_activations,
+        dispatch: Qwen3_5TargetVerificationProjectionDispatch::TokenLocalMlxFallback,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn target_verification_uses_optimized_dispatch(
+    activations: &MlxArray,
+    quantization_scales: &MlxArray,
+    quantization_biases: &MlxArray,
+    quantization_group_size: i32,
+    quantization_bits: i32,
+    input_dimension: i32,
+    output_dimension: i32,
+) -> bool {
+    matches!(quantization_bits, 4 | 5)
+        && matches!(quantization_group_size, 32 | 64 | 128)
+        && input_dimension > 0
+        && input_dimension % 512 == 0
+        && output_dimension > 0
+        && output_dimension % 8 == 0
+        && output_dimension
+            .checked_div(8)
+            .and_then(|tile_count| tile_count.checked_mul(2))
+            .is_some()
+        && activations.dtype() == quantization_scales.dtype()
+        && quantization_biases.dtype() == quantization_scales.dtype()
+        && matches!(activations.dtype(), MlxDtype::BFloat16 | MlxDtype::Float16)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn token_local_quantized_linear(
+    runtime: &MlxRuntime,
+    activations: &MlxArray,
+    packed_weight: &MlxArray,
+    quantization_scales: &MlxArray,
+    quantization_biases: &MlxArray,
+    quantization_group_size: i32,
+    quantization_bits: i32,
+    activation_shape: &[i32],
+) -> Result<MlxArray, MlxRuntimeError> {
+    let mut token_projection_outputs = Vec::with_capacity(activation_shape[1] as usize);
+    for token_position_index in 0..activation_shape[1] {
+        let token_activations = runtime.slice(
+            activations,
+            &[0, token_position_index, 0],
+            &[
+                activation_shape[0],
+                token_position_index + 1,
+                activation_shape[2],
+            ],
+            &[1, 1, 1],
+        )?;
+        token_projection_outputs.push(runtime.quantized_matmul_affine(
+            &token_activations,
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            true,
+            quantization_group_size,
+            quantization_bits,
+        )?);
+    }
+    let token_projection_output_references = token_projection_outputs.iter().collect::<Vec<_>>();
+    runtime.concatenate_axis(&token_projection_output_references, 1)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_target_verification_projection(
+    packed_weight: &MlxArray,
+    quantization_scales: &MlxArray,
+    quantization_biases: &MlxArray,
+    quantization_group_size: i32,
+    quantization_bits: i32,
+    activation_shape: &[i32],
+    packed_weight_shape: &[i32],
+) -> Result<(), MlxRuntimeError> {
+    let has_positive_activation_geometry =
+        activation_shape.len() == 3 && activation_shape.iter().all(|dimension| *dimension > 0);
+    let has_positive_weight_geometry = packed_weight_shape.len() == 2
+        && packed_weight_shape.iter().all(|dimension| *dimension > 0);
+    if !has_positive_activation_geometry || !has_positive_weight_geometry {
+        return Err(target_verification_projection_error(
+            "target-verification arrays must have positive rank-three activations and rank-two weights",
+        ));
+    }
+    if packed_weight.dtype() != MlxDtype::UInt32
+        || !matches!(quantization_group_size, 32 | 64 | 128)
+        || !matches!(quantization_bits, 2 | 3 | 4 | 5 | 6 | 8)
+    {
+        return Err(target_verification_projection_error(
+            "target-verification affine metadata is not supported by MLX",
+        ));
+    }
+    let input_dimension = activation_shape[2];
+    let expanded_weight_input =
+        packed_weight_shape[1]
+            .checked_mul(32)
+            .and_then(|packed_bit_count| {
+                (packed_bit_count % quantization_bits == 0)
+                    .then_some(packed_bit_count / quantization_bits)
+            });
+    let expected_affine_shape = vec![
+        packed_weight_shape[0],
+        input_dimension / quantization_group_size,
+    ];
+    if expanded_weight_input != Some(input_dimension)
+        || input_dimension % quantization_group_size != 0
+        || quantization_scales.shape() != expected_affine_shape
+        || quantization_biases.shape() != expected_affine_shape
+    {
+        return Err(target_verification_projection_error(
+            "target-verification affine arrays do not match activation and weight geometry",
+        ));
+    }
+    Ok(())
+}
+
+fn target_verification_projection_error(description: &'static str) -> MlxRuntimeError {
+    MlxRuntimeError::RuntimeOperation {
+        operation: "project Qwen3.5 target-verification tokens",
+        description: description.to_owned(),
+    }
+}
+
+impl Qwen3_5Model {
+    pub(crate) fn quantized_linear_for_paged_prefill_execution_mode(
+        &self,
+        activations: &MlxArray,
+        affine_weights: &Qwen3_5AffineWeights,
+        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let activation_shape = activations.shape();
+        if paged_prefill_execution_mode
+            != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
+            || activation_shape.len() != 3
+            || activation_shape[1] <= 1
+        {
+            return self.quantized_linear(activations, affine_weights);
+        }
+        let Qwen3_5AffineWeights::Quantized {
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            quantization_group_size,
+            quantization_bits,
+        } = affine_weights
+        else {
+            return self.quantized_linear(activations, affine_weights);
+        };
+        Ok(qwen3_5_target_verification_quantized_linear(
+            &self.runtime,
+            &self.target_verification_quantized_linear_kernel,
+            activations,
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            *quantization_group_size,
+            *quantization_bits,
+        )?
+        .into_projected_activations())
     }
 }

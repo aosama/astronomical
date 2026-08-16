@@ -93,6 +93,12 @@ pub use speculative_prefill_attention_capture::qwen3_5_aggregate_speculative_pre
 #[cfg(feature = "direct-mlx")]
 pub use speculative_prefill_selection::qwen3_5_select_speculative_prefill_token_positions_on_gpu;
 #[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use target_verification_quantized_linear::{
+    Qwen3_5TargetVerificationProjection, Qwen3_5TargetVerificationProjectionDispatch,
+    qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
+};
+#[cfg(feature = "direct-mlx")]
 pub use weights::Qwen3_5Weights;
 
 #[cfg(feature = "direct-mlx")]
