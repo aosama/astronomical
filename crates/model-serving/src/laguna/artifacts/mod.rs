@@ -25,6 +25,8 @@ pub use canonical_tensor_contract::{
     LagunaCanonicalTensorDescriptor, LagunaNonExecutableMetadataDescriptor, LagunaTensorContract,
     LagunaTensorSourceDescriptor, LagunaTensorSourceRole,
 };
+#[cfg(feature = "direct-mlx")]
+pub(crate) use expected_tensors::laguna_canonical_module_name;
 pub use retained_artifact::{
     LagunaIndexTotalSizeSemantics, LagunaRetainedArtifactFiles, ValidatedLagunaArtifact,
 };
