@@ -230,8 +230,9 @@ pub use qwen3_5::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5PrefillExecutionContext,
     Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
     Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5SpeculativePrefillSelectionError,
-    Qwen3_5TargetForwardOutput, Qwen3_5VisionModel, Qwen3_5VisionWeights, Qwen3_5Weights,
-    RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
+    Qwen3_5TargetForwardOutput, Qwen3_5TargetVerificationProjection,
+    Qwen3_5TargetVerificationProjectionDispatch, Qwen3_5VisionModel, Qwen3_5VisionWeights,
+    Qwen3_5Weights, RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
     RequestDecoderStateStackCheckpoint, VerifiedEmissionQueue, VerifiedTargetFrontier,
     persistent_prompt_cache_publication_advances_parent_chain,
     qwen3_5_aggregate_speculative_prefill_attention_weights, qwen3_5_apply_top_p_mask,
@@ -244,7 +245,8 @@ pub use qwen3_5::{
     qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_select_speculative_prefill_token_positions_on_gpu,
     qwen3_5_selected_speculative_prefill_positions_for_range,
-    safe_minimum_mlx_memory_ceiling_bytes,
+    qwen3_5_target_verification_quantized_linear, safe_minimum_mlx_memory_ceiling_bytes,
+    target_verification_quantized_linear_kernel,
 };
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
