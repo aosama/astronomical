@@ -353,6 +353,24 @@ fn storage_encoding_for_module(
     }
 }
 
+#[cfg(feature = "direct-mlx")]
+pub(crate) fn laguna_canonical_module_name(tensor_id: LagunaTensorId) -> Option<String> {
+    match tensor_id {
+        LagunaTensorId::Global {
+            role: LagunaGlobalTensorRole::TokenEmbedding,
+            ..
+        } => Some("model.embed_tokens".to_owned()),
+        LagunaTensorId::Global {
+            role: LagunaGlobalTensorRole::OutputHead,
+            ..
+        } => Some("lm_head".to_owned()),
+        LagunaTensorId::Global { .. } => None,
+        LagunaTensorId::Layer {
+            layer_index, role, ..
+        } => canonical_layer_module_name(layer_index, role),
+    }
+}
+
 fn canonical_layer_module_name(layer_index: usize, role: LagunaLayerTensorRole) -> Option<String> {
     let layer_prefix = format!("model.layers.{layer_index}");
     let module_suffix = match role {

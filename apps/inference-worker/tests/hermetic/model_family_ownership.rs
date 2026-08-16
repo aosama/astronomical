@@ -81,15 +81,17 @@ fn should_keep_qwen_chunk_sizer_construction_in_qwen_startup() {
 }
 
 #[test]
-fn should_keep_laguna_classified_but_non_executable_at_the_staged_boundary() {
+fn should_route_classified_laguna_through_its_family_owned_runtime() {
     let worker_source_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let family_factory_source =
         fs::read_to_string(worker_source_directory.join("model_family_factory.rs"))
             .expect("model family factory source should be readable");
 
     assert!(family_factory_source.contains("Some(ModelFamily::Laguna)"));
-    assert!(family_factory_source.contains("Laguna model family is not executable yet"));
-    assert!(!family_factory_source.contains("initialize_laguna_model"));
+    assert!(family_factory_source.contains("initialize_laguna_model_with_serving_settings"));
+    assert!(family_factory_source.contains("ModelFamilyGenerationProcessor::Laguna"));
+    assert!(family_factory_source.contains("ModelFamilyInferenceEngine::Laguna"));
+    assert!(!family_factory_source.contains("Laguna model family is not executable yet"));
 }
 
 fn rust_source_files_recursively(source_directory: &Path) -> Vec<PathBuf> {
