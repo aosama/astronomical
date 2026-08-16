@@ -7,6 +7,7 @@ mod deepseek_v4;
 mod engine_backed_worker;
 mod expert_paging;
 mod inference_engine;
+mod laguna;
 mod memory;
 mod model_family_runtime;
 mod model_generation_processor;
@@ -75,6 +76,36 @@ pub use inference_engine::{
     MlxInferenceExecution, PreparedInferenceRequest,
     PromptProcessingChunkCandidateMeasurementSummary, PromptProcessingChunkOptimizationContext,
     PromptProcessingChunkOptimizationOutcome,
+};
+pub use laguna::{
+    LagunaAffineProfile, LagunaArtifactValidationError, LagunaArtifactValidator,
+    LagunaAttentionDescriptor, LagunaAttentionKind, LagunaAttentionProjection,
+    LagunaBlockFp8Profile, LagunaCacheDescriptor, LagunaCanonicalSourceLayout,
+    LagunaCanonicalTensorAssemblyKind, LagunaCanonicalTensorDescriptor,
+    LagunaCompressedFeedForwardProjection, LagunaCompressedIgnoreScope,
+    LagunaCompressedInputActivationDescriptor, LagunaCompressedModuleScope,
+    LagunaCompressedStorageDescriptor, LagunaCompressedWeightEncoding, LagunaDefaultRopeDescriptor,
+    LagunaDenseFeedForwardDescriptor, LagunaDirectAffineStorageDescriptor,
+    LagunaExactStorageSupport, LagunaExecutionDtype, LagunaExpertGateUpLayout,
+    LagunaExpertProjection, LagunaFeedForwardDescriptor, LagunaFp8InputActivationDescriptor,
+    LagunaFp8KvCacheDescriptor, LagunaGatingKind, LagunaGenerationProcessor,
+    LagunaGlobalTensorRole, LagunaIndexTotalSizeSemantics, LagunaInferenceRequest,
+    LagunaLayerDescriptor, LagunaLayerTensorRole, LagunaModelDescriptor, LagunaMoeDescriptor,
+    LagunaNonExecutableMetadataDescriptor, LagunaNormalizationError,
+    LagunaNvfp4InputActivationDescriptor, LagunaNvfp4Profile, LagunaOutputEvent,
+    LagunaOutputParser, LagunaOutputParserError, LagunaPreparationError, LagunaPreparedGeneration,
+    LagunaPromptRenderer, LagunaPromptRendererError, LagunaRawTensorNameRecord,
+    LagunaRequestOutput, LagunaRequestOutputError, LagunaRetainedArtifactFiles,
+    LagunaRopeDescriptor, LagunaRouterKind, LagunaSamplerConfig, LagunaSamplingStrategy,
+    LagunaShardIndex, LagunaShardIndexError, LagunaStorageDescriptor,
+    LagunaSymmetricPackedAffineProfile, LagunaTargetContract, LagunaTargetNormalizer,
+    LagunaTensorAssembly, LagunaTensorComponent, LagunaTensorContract, LagunaTensorId,
+    LagunaTensorNameContract, LagunaTensorNameNormalizationError, LagunaTensorNameNormalizer,
+    LagunaTensorSource, LagunaTensorSourceDescriptor, LagunaTensorSourceRole,
+    LagunaTensorStorageEncoding, LagunaTextArtifactDescriptor, LagunaTextArtifactError,
+    LagunaTextArtifactNormalizer, LagunaTextArtifactSources, LagunaTokenDecoder, LagunaTokenizer,
+    LagunaTokenizerError, LagunaYarnRopeDescriptor, ValidatedLagunaArtifact,
+    laguna_unavailable_reason,
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
