@@ -124,13 +124,18 @@ fn run_real_laguna_memory_journey() {
         crate::common::configured_model_artifact_directory_by_id(LAGUNA_XS_PUBLIC_MODEL_ID);
     let machine_memory_ceiling_bytes = maximum_recommended_gpu_working_set_size_bytes()
         .expect("the machine GPU working-set recommendation should be readable");
+    let startup_memory_ceiling_bytes = machine_memory_ceiling_bytes.saturating_sub(1);
+    assert!(
+        startup_memory_ceiling_bytes > 0,
+        "the Laguna acceptance journey needs a positive startup ceiling"
+    );
     eprintln!(
-        "[laguna-memory-acceptance] status=progress phase=load ceiling_bytes={machine_memory_ceiling_bytes}"
+        "[laguna-memory-acceptance] status=progress phase=load ceiling_bytes={startup_memory_ceiling_bytes}"
     );
     let (generation_processor, mut execution) = initialize_laguna_execution(
         &model_directory,
-        machine_memory_ceiling_bytes,
-        machine_memory_ceiling_bytes,
+        startup_memory_ceiling_bytes,
+        startup_memory_ceiling_bytes,
         true,
     )
     .expect("configured Laguna XS startup should prepare");
@@ -177,6 +182,11 @@ fn run_real_laguna_memory_journey() {
     let raised_adjustment = execution
         .update_mlx_memory_limit(machine_memory_ceiling_bytes as u64)
         .expect("raising the Laguna ceiling should succeed without eager reads");
+    assert_eq!(
+        raised_adjustment.allocator_cache_memory_limit_bytes(),
+        startup_memory_ceiling_bytes as u64,
+        "raising the active ceiling must retain Laguna's startup allocator-cache cap"
+    );
     assert_ne!(
         raised_adjustment.expert_memory_mode(),
         ExpertMemoryMode::Resident,

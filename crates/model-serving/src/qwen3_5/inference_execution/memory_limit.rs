@@ -92,6 +92,13 @@ impl Qwen3_5EngineState {
         );
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
+            u64::try_from(updated_mlx_memory_limits.allocator_cache_memory_limit_bytes()).map_err(
+                |_| {
+                    super::fatal_engine_error(
+                        "updated MLX allocator-cache limit exceeds the u64 range",
+                    )
+                },
+            )?,
             minimum_mlx_memory_ceiling_bytes,
             expert_memory_mode,
             mlx_memory_telemetry,

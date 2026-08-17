@@ -5,52 +5,6 @@ pub(super) struct ScriptedChatProcessor {
     prompt_token_count: usize,
 }
 
-pub(super) struct LazyScriptedModelFactory {
-    pub(super) model_factory_call_count: Arc<AtomicUsize>,
-    pub(super) mlx_memory_ceiling_bytes: Arc<AtomicU64>,
-    /// Lets lifecycle tests prove readiness propagation without model-serving.
-    pub(super) expert_memory_mode: Option<ExpertMemoryMode>,
-}
-
-pub(super) struct FirstCreationFailsScriptedModelFactory {
-    pub(super) model_factory_call_count: Arc<AtomicUsize>,
-}
-
-impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedModelFactory {
-    async fn create(
-        &self,
-        _model_directory: &str,
-        _max_output_tokens: u32,
-    ) -> Result<(ScriptedChatProcessor, ScriptedChatEngine), String> {
-        self.model_factory_call_count.fetch_add(1, Ordering::SeqCst);
-        let mut scripted_engine = ScriptedChatEngine::new();
-        scripted_engine.initial_expert_memory_mode = self.expert_memory_mode;
-        Ok((ScriptedChatProcessor::new(), scripted_engine))
-    }
-
-    fn update_mlx_memory_ceiling_bytes(&mut self, effective_mlx_memory_ceiling_bytes: u64) {
-        self.mlx_memory_ceiling_bytes
-            .store(effective_mlx_memory_ceiling_bytes, Ordering::SeqCst);
-    }
-}
-
-impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>
-    for FirstCreationFailsScriptedModelFactory
-{
-    async fn create(
-        &self,
-        _model_directory: &str,
-        _max_output_tokens: u32,
-    ) -> Result<(ScriptedChatProcessor, ScriptedChatEngine), String> {
-        let model_factory_call_number =
-            self.model_factory_call_count.fetch_add(1, Ordering::SeqCst);
-        if model_factory_call_number == 0 {
-            return Err("the scripted first model is invalid".to_owned());
-        }
-        Ok((ScriptedChatProcessor::new(), ScriptedChatEngine::new()))
-    }
-}
-
 pub(super) struct MalformedFinishProcessor;
 pub(super) struct CorrectionRequestingProcessor;
 
@@ -322,6 +276,7 @@ pub(super) struct ScriptedChatEngine {
     speculative_prefill_draft_model_revision: Option<String>,
     active_generation_prompt_cache_stats: Option<WorkerEvent>,
     prompt_cache_clear_event: Option<WorkerEvent>,
+    pub(super) maximum_allocator_cache_memory_limit_bytes: u64,
 }
 
 impl ScriptedChatEngine {
@@ -375,6 +330,7 @@ impl ScriptedChatEngine {
             speculative_prefill_draft_model_revision: None,
             active_generation_prompt_cache_stats: None,
             prompt_cache_clear_event: None,
+            maximum_allocator_cache_memory_limit_bytes: u64::MAX,
         }
     }
 
@@ -559,6 +515,8 @@ impl InferenceEngine for ScriptedChatEngine {
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
+            self.maximum_allocator_cache_memory_limit_bytes
+                .min(requested_mlx_memory_ceiling_bytes),
             1,
             ExpertMemoryMode::Resident,
             None,

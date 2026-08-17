@@ -107,8 +107,11 @@ where
         chunking = ?chunking,
         "starting idle inference worker"
     );
+    let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
+        derive_mlx_memory_limits_from_gpu_wired_limit(effective_mlx_memory_ceiling_bytes);
     let model_factory = ModelFamilyFactory {
-        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes: active_memory_limit_bytes,
+        allocator_cache_memory_limit_bytes,
         prompt_cache_config,
         performance_attribution_enabled,
         performance_attribution_log_path,
