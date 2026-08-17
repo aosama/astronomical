@@ -2,10 +2,13 @@
 
 use astronomical_runtime_integration::{MlxMemorySnapshot, MlxRuntime};
 
-use crate::laguna::{LagunaModel, laguna_retained_expert_budget_after_completed_forward};
+use crate::laguna::{LagunaDecoderState, LagunaModel};
+use crate::memory::context_token_bucket;
 use crate::{
-    InferenceEngineError, MlxActiveMemoryBreakdown, MlxMemoryTelemetry, MlxRamBudget,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthPhase, InferenceEngineError,
+    MlxActiveMemoryBreakdown, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetMeasurement,
     MlxRamBudgetPhase, MlxRamBudgetSnapshot, PerformanceAttribution, PerformanceOperation,
+    measured_non_expert_forward_growth_bytes,
 };
 
 use super::execution::LagunaInferenceExecution;
@@ -14,12 +17,151 @@ use super::execution::LagunaInferenceExecution;
 pub(super) struct LagunaForwardMemoryBaseline {
     active_memory_bytes: u64,
     retained_expert_payload_bytes: u64,
+    exact_temporary_workspace_bytes: usize,
+}
+
+/// Applies centralized stable/peak admission before one Laguna forward mutates state.
+pub(super) fn admit_laguna_forward_memory(
+    runtime: &MlxRuntime,
+    model: &mut LagunaModel,
+    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
+    decoder_state: &LagunaDecoderState,
+    forward_token_count: usize,
+    operation_temporary_workspace_bytes: usize,
+    adaptive_ram_growth_phase: AdaptiveRamGrowthPhase,
+    context_token_count_after_forward: u64,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<(AdaptiveRamGrowthContext, LagunaForwardMemoryBaseline), InferenceEngineError> {
+    let sparse_experts_are_paged = !matches!(
+        model.expert_memory_mode(),
+        astronomical_ipc_protocol::ExpertMemoryMode::Resident
+    );
+    let adaptive_ram_growth_context = match adaptive_ram_growth_phase {
+        AdaptiveRamGrowthPhase::Prefill => AdaptiveRamGrowthContext::prefill(
+            forward_token_count,
+            context_token_bucket(context_token_count_after_forward),
+            false,
+            false,
+            sparse_experts_are_paged,
+        ),
+        AdaptiveRamGrowthPhase::Decode => {
+            AdaptiveRamGrowthContext::decode(forward_token_count, false, sparse_experts_are_paged)
+        }
+    };
+    let decoder_memory_projection = decoder_state
+        .projected_forward_memory(model.contract(), forward_token_count)
+        .map_err(|growth_error| InferenceEngineError::Fatal {
+            reason: format!("Laguna decoder growth projection failed: {growth_error}"),
+        })?;
+    let exact_persistent_growth_bytes = decoder_memory_projection.persistent_growth_bytes();
+    let exact_temporary_workspace_bytes = decoder_memory_projection
+        .sliding_temporary_workspace_bytes()
+        .checked_add(operation_temporary_workspace_bytes)
+        .ok_or(InferenceEngineError::InvalidRequest {
+            reason: "Laguna forward temporary workspace projection overflowed".to_owned(),
+        })?;
+    let routed_expert_page_reservation_bytes = if sparse_experts_are_paged {
+        usize::try_from(model.maximum_expert_page_bytes()).unwrap_or(usize::MAX)
+    } else {
+        0
+    };
+    let mut memory_snapshot = performance_attribution
+        .measure_operation(PerformanceOperation::MemoryAdmissionSnapshot, |_| {
+            runtime.memory_snapshot()
+        })
+        .map_err(|memory_error| InferenceEngineError::Fatal {
+            reason: format!("Laguna forward admission could not sample MLX memory: {memory_error}"),
+        })?;
+    let mut projection = adaptive_ram_growth_guard
+        .project_growth_for_context(
+            adaptive_ram_growth_context,
+            memory_snapshot.active_memory_bytes(),
+            exact_persistent_growth_bytes,
+            routed_expert_page_reservation_bytes,
+            exact_temporary_workspace_bytes,
+        )
+        .map_err(|projection_error| InferenceEngineError::InvalidRequest {
+            reason: format!("Laguna forward memory projection failed: {projection_error}"),
+        })?;
+    if !projection.fits_stable_and_peak_limits() {
+        if model.native_routed_experts_are_resident() {
+            model
+                .demote_native_routed_experts(runtime, performance_attribution)
+                .map_err(|demotion_error| InferenceEngineError::Fatal {
+                    reason: format!(
+                        "Laguna forward admission could not demote experts: {demotion_error}"
+                    ),
+                })?;
+        }
+        let retained_payload_bytes = usize::try_from(
+            model
+                .expert_weight_memory_cache_statistics()
+                .resident_payload_byte_count,
+        )
+        .unwrap_or(usize::MAX);
+        let reclamation_plan = projection.expert_retention_reclamation_plan(retained_payload_bytes);
+        if reclamation_plan.required_reclamation_bytes() > 0 {
+            model.reclaim_retained_experts_for_request_pressure(
+                u64::try_from(reclamation_plan.reclamation_target_bytes()).unwrap_or(u64::MAX),
+            );
+        }
+        performance_attribution
+            .measure_operation(PerformanceOperation::MlxAllocatorCacheCleanup, |_| {
+                runtime.synchronize_gpu_stream_and_clear_allocator_cache()
+            })
+            .map_err(|cleanup_error| InferenceEngineError::Fatal {
+                reason: format!("Laguna forward-admission cleanup failed: {cleanup_error}"),
+            })?;
+        memory_snapshot = performance_attribution
+            .measure_operation(PerformanceOperation::MemoryAdmissionSnapshot, |_| {
+                runtime.memory_snapshot()
+            })
+            .map_err(|memory_error| InferenceEngineError::Fatal {
+                reason: format!(
+                    "Laguna forward re-admission could not sample memory: {memory_error}"
+                ),
+            })?;
+        projection = adaptive_ram_growth_guard
+            .project_growth_for_context(
+                adaptive_ram_growth_context.with_sparse_experts_are_paged(true),
+                memory_snapshot.active_memory_bytes(),
+                exact_persistent_growth_bytes,
+                usize::try_from(model.maximum_expert_page_bytes()).unwrap_or(usize::MAX),
+                exact_temporary_workspace_bytes,
+            )
+            .map_err(|projection_error| InferenceEngineError::InvalidRequest {
+                reason: format!("Laguna forward re-admission failed: {projection_error}"),
+            })?;
+        if !projection.fits_stable_and_peak_limits() {
+            return Err(InferenceEngineError::InvalidRequest {
+                reason: "Laguna forward cannot fit the configured MLX memory ceiling after expert reclamation"
+                    .to_owned(),
+            });
+        }
+    }
+    tracing::debug!(
+        forward_token_count,
+        exact_temporary_workspace_bytes,
+        stable_projected_bytes = projection.stable_projected_bytes(),
+        peak_projected_bytes = projection.peak_projected_bytes(),
+        recovery_projected_bytes = projection.recovery_projected_bytes(),
+        recovery_reserve_shortfall_bytes = projection.recovery_reserve_shortfall_bytes(),
+        "Laguna applied centralized adaptive RAM growth admission"
+    );
+    let baseline = begin_laguna_forward_memory_observation(
+        runtime,
+        model,
+        exact_temporary_workspace_bytes,
+        performance_attribution,
+    )?;
+    Ok((adaptive_ram_growth_context, baseline))
 }
 
 /// Resets the operation peak and captures owners needed to separate promotion from workspace.
 pub(super) fn begin_laguna_forward_memory_observation(
     runtime: &MlxRuntime,
     model: &LagunaModel,
+    exact_temporary_workspace_bytes: usize,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<LagunaForwardMemoryBaseline, InferenceEngineError> {
     let memory_snapshot = performance_attribution.measure_operation(
@@ -41,6 +183,7 @@ pub(super) fn begin_laguna_forward_memory_observation(
         retained_expert_payload_bytes: model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count,
+        exact_temporary_workspace_bytes,
     })
 }
 
@@ -48,8 +191,11 @@ pub(super) fn begin_laguna_forward_memory_observation(
 pub(super) fn complete_laguna_forward_memory_observation(
     runtime: &MlxRuntime,
     model: &LagunaModel,
-    mlx_ram_budget: &MlxRamBudget,
+    adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
+    adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+    mlx_ram_budget: &mut MlxRamBudget,
     memory_baseline: LagunaForwardMemoryBaseline,
+    context_token_count_after_forward: u64,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxMemorySnapshot, InferenceEngineError> {
     let memory_snapshot = performance_attribution.measure_operation(
@@ -67,14 +213,42 @@ pub(super) fn complete_laguna_forward_memory_observation(
     let retained_expert_payload_bytes = model
         .expert_weight_memory_cache_statistics()
         .resident_payload_byte_count;
-    let retained_expert_budget_bytes = laguna_retained_expert_budget_after_completed_forward(
-        mlx_ram_budget,
-        u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX),
-        u64::try_from(memory_snapshot.peak_memory_bytes()).unwrap_or(u64::MAX),
-        retained_expert_payload_bytes,
-        mlx_ram_budget
-            .model_geometry()
-            .complete_expert_payload_bytes,
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        adaptive_ram_growth_context,
+        true,
+        usize::try_from(memory_baseline.active_memory_bytes).unwrap_or(usize::MAX),
+        memory_snapshot.active_memory_bytes(),
+        memory_snapshot.peak_memory_bytes(),
+        memory_baseline.exact_temporary_workspace_bytes,
+    );
+    let observed_transient_high_water_bytes = adaptive_ram_growth_guard
+        .observed_transient_high_water_bytes_for_context(adaptive_ram_growth_context);
+    let phase = match adaptive_ram_growth_context.adaptive_ram_growth_phase() {
+        AdaptiveRamGrowthPhase::Prefill => MlxRamBudgetPhase::Prefill,
+        AdaptiveRamGrowthPhase::Decode => MlxRamBudgetPhase::Decode,
+    };
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase,
+        context_token_count: context_token_count_after_forward,
+        measured_context_and_activation_bytes: measured_non_expert_forward_growth_bytes(
+            memory_baseline.active_memory_bytes,
+            u64::try_from(memory_snapshot.peak_memory_bytes()).unwrap_or(u64::MAX),
+            memory_baseline.retained_expert_payload_bytes,
+            retained_expert_payload_bytes,
+        ),
+        observed_activation_headroom_bytes: u64::try_from(observed_transient_high_water_bytes)
+            .unwrap_or(u64::MAX),
+        exact_temporary_workspace_bytes: u64::try_from(
+            memory_baseline.exact_temporary_workspace_bytes,
+        )
+        .unwrap_or(u64::MAX),
+    });
+    let retained_expert_budget_bytes =
+        laguna_ram_budget_snapshot(mlx_ram_budget, phase, context_token_count_after_forward)
+            .retained_expert_budget_bytes;
+    model.update_expert_allocation_transient_high_water(
+        u64::try_from(adaptive_ram_growth_guard.admission_transient_high_water_bytes())
+            .unwrap_or(u64::MAX),
     );
     model
         .set_retained_expert_ceiling(retained_expert_budget_bytes)
@@ -154,38 +328,11 @@ impl LagunaInferenceExecution {
     }
 }
 
-/// Composes Laguna's retained expert allowance with a laptop-relative reserve.
-///
-/// The common budget protects model core, context, activations, and one streamed
-/// page. Laguna additionally reserves room for its first large prompt graph so
-/// the policy adapts to the configured machine ceiling instead of one laptop.
+/// Composes Laguna geometry through the shared model-core, context, activation, and page budget.
 pub(super) fn laguna_ram_budget_snapshot(
     mlx_ram_budget: &MlxRamBudget,
     phase: MlxRamBudgetPhase,
     context_token_count: u64,
 ) -> MlxRamBudgetSnapshot {
-    let request_operational_reserve_bytes = mlx_ram_budget.mlx_active_memory_ceiling_bytes() / 8;
-    let mut ram_budget_snapshot = mlx_ram_budget.plan(
-        phase,
-        context_token_count,
-        request_operational_reserve_bytes,
-    );
-    let model_geometry = mlx_ram_budget.model_geometry();
-    // Synchronous MLX evaluation detaches an evaluated layer when the next graph
-    // consumes it. Paged execution therefore needs one slot for that boundary
-    // output and a second slot for the next mandatory page allocation.
-    let two_layer_stream_reserve_bytes = model_geometry
-        .largest_complete_expert_layer_bytes
-        .saturating_mul(2);
-    let maximum_safe_retained_expert_payload_bytes = model_geometry
-        .complete_expert_payload_bytes
-        .saturating_sub(two_layer_stream_reserve_bytes);
-    // Keep at least half the resolved MLX ceiling for attention, key/value state,
-    // routing, and the evaluated expert boundary. The common budget may reserve more.
-    let maximum_paged_expert_share_bytes = mlx_ram_budget.mlx_active_memory_ceiling_bytes() / 2;
-    ram_budget_snapshot.retained_expert_budget_bytes = ram_budget_snapshot
-        .retained_expert_budget_bytes
-        .min(maximum_safe_retained_expert_payload_bytes)
-        .min(maximum_paged_expert_share_bytes);
-    ram_budget_snapshot
+    mlx_ram_budget.plan(phase, context_token_count, 0)
 }

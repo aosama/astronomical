@@ -2,6 +2,8 @@ use thiserror::Error;
 
 use crate::expert_paging::ExpertManifestError;
 use crate::laguna::artifacts::LagunaTensorId;
+#[cfg(feature = "direct-mlx")]
+use astronomical_runtime_integration::MlxRuntimeError;
 
 /// Fail-closed Laguna paging construction from canonical descriptors.
 #[derive(Debug, Error)]
@@ -45,6 +47,9 @@ pub enum LagunaPagingError {
     MissingPagedTensor { tensor_name: String },
     #[error("Laguna streamed page execution failed: {description}")]
     PageExecution { description: &'static str },
+    #[cfg(feature = "direct-mlx")]
+    #[error("Laguna expert paging reached an MLX runtime boundary: {0}")]
+    Runtime(#[from] MlxRuntimeError),
     #[error("Laguna sliding-window prefill transient is invalid")]
     InvalidSlidingTransient,
 }

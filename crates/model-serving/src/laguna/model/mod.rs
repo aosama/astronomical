@@ -5,6 +5,8 @@
 
 mod cache_layout;
 mod error;
+mod expert_coverage;
+mod expert_release;
 
 #[cfg(feature = "direct-mlx")]
 mod attention;
@@ -22,6 +24,7 @@ mod expert_residency;
 pub(in crate::laguna) use expert_residency::LagunaLastExpertForward;
 #[cfg(feature = "direct-mlx")]
 mod dense_feed_forward;
+mod memory_policy;
 #[cfg(feature = "direct-mlx")]
 mod model;
 #[cfg(feature = "direct-mlx")]
@@ -36,6 +39,8 @@ pub use error::LagunaExecutionError;
 
 #[cfg(feature = "direct-mlx")]
 pub use decoder_state::LagunaDecoderState;
+#[cfg(feature = "direct-mlx")]
+pub(in crate::laguna) use decoder_state::LagunaDecoderStateAllocationCheckpoint;
 #[cfg(feature = "direct-mlx")]
 pub use model::LagunaModel;
 #[cfg(feature = "direct-mlx")]

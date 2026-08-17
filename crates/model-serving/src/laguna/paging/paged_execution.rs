@@ -181,11 +181,3 @@ fn gathered_page_swiglu(
         performance_attribution,
     )?)
 }
-
-impl From<astronomical_runtime_integration::MlxRuntimeError> for LagunaPagingError {
-    fn from(_error: astronomical_runtime_integration::MlxRuntimeError) -> Self {
-        Self::PageExecution {
-            description: "an MLX runtime operation failed during Laguna page execution",
-        }
-    }
-}

@@ -102,6 +102,14 @@ impl SyntheticTensor {
 }
 
 pub(super) fn write_sparse_artifact(model_directory: &std::path::Path, is_per_expert: bool) {
+    write_sparse_artifact_with_maximum_position(model_directory, is_per_expert, 32);
+}
+
+pub(super) fn write_sparse_artifact_with_maximum_position(
+    model_directory: &std::path::Path,
+    is_per_expert: bool,
+    maximum_position_count: u32,
+) {
     let config = json!({
         "architectures": ["LagunaForCausalLM"],
         "model_type": "laguna",
@@ -112,7 +120,7 @@ pub(super) fn write_sparse_artifact(model_directory: &std::path::Path, is_per_ex
         "num_attention_heads": 2,
         "num_key_value_heads": 1,
         "head_dim": 2,
-        "max_position_embeddings": 32,
+        "max_position_embeddings": maximum_position_count,
         "rms_norm_eps": 0.00001,
         "tie_word_embeddings": false,
         "torch_dtype": "float32",

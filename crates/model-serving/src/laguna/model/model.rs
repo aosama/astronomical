@@ -4,7 +4,10 @@ use astronomical_ipc_protocol::ExpertMemoryMode;
 use astronomical_runtime_integration::{MlxArray, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime};
 
 use crate::ExpertResidencyTelemetry;
-use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, PhaseAwareExpertResidencyPlan};
+use crate::MlxAllocationBudget;
+use crate::expert_paging::{
+    ExpertResidencyPhase, ExpertWeightMemoryCacheStatistics, PhaseAwareExpertResidencyPlan,
+};
 use crate::laguna::artifacts::LagunaGlobalTensorRole;
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetContract};
 use crate::laguna::paging::LagunaExpertPagingPlan;
@@ -15,16 +18,18 @@ use super::attention::LagunaAttentionMaskCache;
 use super::decoder_layer::forward_decoder_layer;
 use super::decoder_state::LagunaDecoderState;
 use super::error::LagunaExecutionError;
-use super::expert_residency::{LagunaExpertResidencyState, validate_sparse_coverage};
+use super::expert_coverage::validate_sparse_coverage;
+use super::expert_residency::LagunaExpertResidencyState;
 use super::weights::LagunaNativeWeights;
 
 /// Executable Laguna model bound to one canonical contract and native weights.
 pub struct LagunaModel {
-    contract: LagunaTargetContract,
-    weights: LagunaNativeWeights,
+    pub(super) contract: LagunaTargetContract,
+    pub(super) weights: LagunaNativeWeights,
     compiled_swiglu: MlxCompiledSwiGlu,
     sorted_expert_reduction_kernel: Option<MlxMetalKernel>,
-    residency: LagunaExpertResidencyState,
+    pub(super) residency: LagunaExpertResidencyState,
+    pub(super) expert_allocation_budget: Option<MlxAllocationBudget>,
 }
 
 impl LagunaModel {
@@ -54,6 +59,7 @@ impl LagunaModel {
             compiled_swiglu,
             sorted_expert_reduction_kernel,
             residency: LagunaExpertResidencyState::new(),
+            expert_allocation_budget: None,
         })
     }
 
@@ -63,6 +69,22 @@ impl LagunaModel {
         paging_plan: LagunaExpertPagingPlan,
     ) -> Result<Self, LagunaExecutionError> {
         validate_sparse_coverage(&self.contract, &self.weights, Some(&paging_plan))?;
+        let maximum_expert_page_bytes = paging_plan.sparse_layers().iter().try_fold(
+            0_u64,
+            |maximum_page_bytes, sparse_layer| {
+                Ok::<u64, crate::laguna::paging::LagunaPagingError>(
+                    maximum_page_bytes.max(
+                        sparse_layer
+                            .complete_layer_payload_byte_count()?
+                            .max(sparse_layer.routed_page_payload_byte_count()?),
+                    ),
+                )
+            },
+        )?;
+        self.expert_allocation_budget = Some(MlxAllocationBudget::new(
+            maximum_expert_page_bytes,
+            u64::MAX,
+        ));
         self.residency.attach_paging_plan(paging_plan);
         Ok(self)
     }
@@ -84,12 +106,6 @@ impl LagunaModel {
     ) -> Result<(), LagunaExecutionError> {
         self.residency
             .set_retained_expert_ceiling(retained_expert_ceiling_bytes)
-    }
-
-    /// Returns the current retained-expert ownership ceiling.
-    #[must_use]
-    pub fn retained_expert_ceiling_bytes(&self) -> u64 {
-        self.residency.retained_expert_ceiling_bytes()
     }
 
     /// Returns the canonical contract this model executes.
@@ -145,10 +161,67 @@ impl LagunaModel {
         decoder_state: &mut LagunaDecoderState,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, LagunaExecutionError> {
+        let expert_residency_phase = if token_count_from_token_ids(token_ids)? > 1 {
+            ExpertResidencyPhase::Prefill
+        } else {
+            ExpertResidencyPhase::Decode
+        };
+        self.forward_with_expert_residency_phase(
+            runtime,
+            token_ids,
+            decoder_state,
+            expert_residency_phase,
+            performance_attribution,
+        )
+    }
+
+    /// Engine orchestration supplies phase explicitly because a valid prefill chunk can hold one token.
+    pub fn forward_prefill(
+        &self,
+        runtime: &MlxRuntime,
+        token_ids: &MlxArray,
+        decoder_state: &mut LagunaDecoderState,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, LagunaExecutionError> {
+        self.forward_with_expert_residency_phase(
+            runtime,
+            token_ids,
+            decoder_state,
+            ExpertResidencyPhase::Prefill,
+            performance_attribution,
+        )
+    }
+
+    /// Decode phase remains explicit so its retention evidence cannot consume prompt policy.
+    pub(in crate::laguna) fn forward_decode(
+        &self,
+        runtime: &MlxRuntime,
+        token_ids: &MlxArray,
+        decoder_state: &mut LagunaDecoderState,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, LagunaExecutionError> {
+        self.forward_with_expert_residency_phase(
+            runtime,
+            token_ids,
+            decoder_state,
+            ExpertResidencyPhase::Decode,
+            performance_attribution,
+        )
+    }
+
+    fn forward_with_expert_residency_phase(
+        &self,
+        runtime: &MlxRuntime,
+        token_ids: &MlxArray,
+        decoder_state: &mut LagunaDecoderState,
+        expert_residency_phase: ExpertResidencyPhase,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, LagunaExecutionError> {
         let terminal_normalized = self.forward_terminal_hidden_states(
             runtime,
             token_ids,
             decoder_state,
+            expert_residency_phase,
             performance_attribution,
         )?;
         performance_attribution.measure_operation(
@@ -182,6 +255,7 @@ impl LagunaModel {
             runtime,
             token_ids,
             decoder_state,
+            ExpertResidencyPhase::Prefill,
             performance_attribution,
         )
     }
@@ -191,10 +265,11 @@ impl LagunaModel {
         runtime: &MlxRuntime,
         token_ids: &MlxArray,
         decoder_state: &mut LagunaDecoderState,
+        expert_residency_phase: ExpertResidencyPhase,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, LagunaExecutionError> {
         self.residency
-            .refresh_phase_plan(token_count_from_token_ids(token_ids)?);
+            .refresh_explicit_phase_plan(expert_residency_phase);
         let embedding_weight = self
             .weights
             .global(LagunaGlobalTensorRole::TokenEmbedding)?;
@@ -230,6 +305,7 @@ impl LagunaModel {
                 layer_descriptor,
                 decoder_state,
                 &mut attention_mask_cache,
+                expert_residency_phase,
                 rms_norm_epsilon,
                 router_logit_softcap,
                 self.sorted_expert_reduction_kernel.as_ref(),

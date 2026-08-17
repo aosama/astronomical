@@ -411,7 +411,8 @@ impl MlxRamBudget {
     }
 }
 
-fn context_token_bucket(context_token_count: u64) -> u64 {
+/// Shared coarse bucket keeps context-growth evidence comparable across memory policies.
+pub(crate) const fn context_token_bucket(context_token_count: u64) -> u64 {
     context_token_count / CONTEXT_TOKEN_BUCKET_WIDTH
 }
 

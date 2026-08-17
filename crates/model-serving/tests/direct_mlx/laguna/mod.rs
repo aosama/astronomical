@@ -1,6 +1,7 @@
 mod affine_moe;
 mod hybrid_attention;
 mod hybrid_attention_reference;
+mod memory_policy;
 mod mixed_moe;
 mod model_reference;
 mod page_artifact;

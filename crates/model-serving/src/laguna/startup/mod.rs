@@ -19,8 +19,9 @@ use crate::laguna::{
     LagunaPromptProcessingChunkSizer, LagunaTensorContract,
 };
 use crate::{
-    MlxInferenceEngine, MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution,
-    PerformanceAttributionLog, PerformanceOperation,
+    CompleteResidencyDecision, MlxInferenceEngine, MlxRamBudget, MlxRamBudgetModelGeometry,
+    PerformanceAttribution, PerformanceAttributionLog, PerformanceOperation,
+    safe_minimum_active_memory_ceiling_bytes,
 };
 
 pub use error::LagunaStartupError;
@@ -213,36 +214,40 @@ fn prepare_laguna_startup(
         },
     )
     .map_err(|_| LagunaStartupError::RuntimeInitialization)?;
-    // Complete residency must charge the packed artifact plus the 10% activation
-    // floor. Passing zero here previously treated a 35 GB model as free.
-    let projected_resident_active_memory_bytes = validated_artifact
-        .total_tensor_payload_bytes()
-        .max(complete_expert_payload_bytes);
     let can_bind_routed_experts =
         routed_experts_use_direct_or_stacked_assembly(validated_artifact.tensor_contract());
-    let activation_headroom_bytes = complete_expert_payload_bytes / 10;
+    let activation_headroom_bytes = crate::required_complete_residency_activation_headroom_bytes(
+        complete_expert_payload_bytes,
+        0,
+    );
     let mandatory_page_and_transient_reserve_bytes = largest_complete_expert_layer_bytes
         .saturating_mul(2)
         .saturating_add(largest_routed_expert_page_bytes)
         .saturating_add(activation_headroom_bytes);
-    let minimum_mlx_memory_ceiling_bytes = model_core_payload_bytes
-        .saturating_add(mandatory_page_and_transient_reserve_bytes)
-        .max(1);
-    let remaining_after_complete_residency_bytes = ceiling_bytes
-        .saturating_sub(projected_resident_active_memory_bytes)
-        .saturating_sub(activation_headroom_bytes);
-    // Leave one eighth of the machine ceiling for the first prompt graph. A
-    // packed-artifact projection undercounts dequantized embeddings and MLX
-    // workspace, so a 10% expert floor alone still fills a 40 GB S load.
-    let first_request_slack_bytes = ceiling_bytes / 8;
+    let minimum_mlx_memory_ceiling_bytes = safe_minimum_active_memory_ceiling_bytes(
+        model_core_payload_bytes,
+        0,
+        mandatory_page_and_transient_reserve_bytes,
+    );
+    let complete_residency_decision = paging_plan
+        .complete_residency_decision(model_core_payload_bytes, 0, ceiling_bytes, 0)
+        .map_err(|_| LagunaStartupError::PagingPlan)?;
     let load_routed_experts = can_bind_routed_experts
         && (paging_plan.sparse_layers().is_empty()
-            || (paging_plan.complete_residency_fits_ceiling(
-                projected_resident_active_memory_bytes,
-                ceiling_bytes,
-                complete_expert_payload_bytes,
-                0,
-            ) && remaining_after_complete_residency_bytes >= first_request_slack_bytes));
+            || matches!(
+                complete_residency_decision,
+                CompleteResidencyDecision::Admit { .. }
+            ));
+    tracing::info!(
+        ?complete_residency_decision,
+        model_core_payload_bytes,
+        complete_expert_payload_bytes,
+        activation_headroom_bytes,
+        ceiling_bytes,
+        can_bind_routed_experts,
+        load_routed_experts,
+        "Laguna applied centralized complete-residency admission at startup"
+    );
     let prompt_processing_chunk_sizer = build_prompt_processing_chunk_sizer(
         &serving_settings,
         validated_artifact
