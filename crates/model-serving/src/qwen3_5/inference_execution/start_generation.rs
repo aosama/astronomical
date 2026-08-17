@@ -387,8 +387,6 @@ impl Qwen3_5EngineState {
                 } else {
                     Vec::new()
                 };
-            self.prompt_processing_chunk_sizer
-                .start_prompt_processing_request(prefill_cursor);
             let optional_prediction_session = create_optional_prediction_session(
                 self.mtp_enabled,
                 self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active,

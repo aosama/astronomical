@@ -8,7 +8,6 @@ fn should_load_supported_runtime_settings_from_user_config_file() {
         r#"{
           "model_directories": ["/models/ornith", "/models/qwen"],
           "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": false,
             "fixed_prompt_processing_chunk_size_tokens": 2048
           },
           "mtp_enabled": true,
@@ -31,12 +30,10 @@ fn should_load_supported_runtime_settings_from_user_config_file() {
     );
     assert_eq!(
         astronomical_config
-            .prompt_processing_chunk_sizing_policy()
-            .expect("fixed policy should resolve"),
-        PromptProcessingChunkSizingPolicy::Fixed {
-            fixed_prompt_processing_chunk_size_tokens: 2_048,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
-        }
+            .chunking()
+            .expect("fixed chunking should resolve")
+            .fixed_prompt_processing_chunk_size_tokens(),
+        2_048
     );
     assert!(astronomical_config.mtp_enabled());
     assert_eq!(astronomical_config.mtp_draft_depth(), Some(2));
@@ -131,10 +128,8 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
         Some(true)
     );
     assert_eq!(
-        generated_config_json.get("chunking").and_then(|chunking| {
-            chunking.get("prompt_processing_chunk_size_optimizer_candidate_token_counts")
-        }),
-        Some(&serde_json::json!([1_024, 2_048, 4_096, 8_192]))
+        generated_config_json["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
+        2_048
     );
     assert_eq!(
         generated_config_json.get("chunking").and_then(|chunking| {

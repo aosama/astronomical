@@ -2,7 +2,7 @@ use astronomical_config::DiscoveredModel;
 use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use astronomical_supervisor::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerActivity, build_application,
-    build_application_with_config_warning_and_discovered_models,
+    build_application_with_discovered_models,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -264,9 +264,8 @@ async fn should_not_expose_the_removed_legacy_text_route() {
 async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worker() {
     let mut scripted_executor = ScriptedExecutor::ready(Vec::new());
     scripted_executor.health_snapshot.mlx_memory_ceiling_bytes = 40_000_000_000;
-    let application = build_application_with_config_warning_and_discovered_models(
+    let application = build_application_with_discovered_models(
         scripted_executor,
-        None,
         vec![DiscoveredModel {
             model_id: MODEL_ID.to_owned(),
             model_family: astronomical_config::ModelFamily::Qwen3_5,
@@ -350,38 +349,6 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         0
     );
     assert_eq!(status_document["persistent_prompt_cache"]["hit_rate"], 0.0);
-    assert_eq!(
-        status_document["config_warning"],
-        serde_json::Value::Null,
-        "a status response without a config warning must explicitly serialize the null field so the menu poller can distinguish absent from unset"
-    );
-}
-
-#[tokio::test]
-async fn should_report_the_ignored_fixed_prompt_processing_chunk_size_warning_in_status() {
-    let application = astronomical_supervisor::build_application_with_config_warning(
-        ScriptedExecutor::ready(Vec::new()),
-        Some("Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of 4096 tokens is ignored.".to_owned()),
-    );
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
-    let status_body = to_bytes(response.into_body(), 4 * 1024)
-        .await
-        .expect("the status body should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&status_body).expect("the status body should contain JSON");
-    assert_eq!(status_document["status"], "ready");
-    assert_eq!(
-        status_document["config_warning"],
-        "Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of 4096 tokens is ignored."
-    );
 }
 
 #[tokio::test]

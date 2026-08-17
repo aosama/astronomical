@@ -65,7 +65,7 @@ fn should_keep_cache_scaling_fixture_at_exactly_fifty_thousand_words() {
 }
 
 #[test]
-fn should_disable_prefill_chunck_optimizer_for_summary_metrics_worker() {
+fn should_configure_fixed_prompt_processing_chunks_for_summary_metrics_worker() {
     let (isolated_worker_home, _worker_executable_path) = isolated_prompt_cache_worker_launcher(
         Path::new("/bin/true"),
         Path::new("/tmp/model-artifact-measurement"),
@@ -79,10 +79,6 @@ fn should_disable_prefill_chunck_optimizer_for_summary_metrics_worker() {
     )
     .expect("the metrics worker config should be JSON");
 
-    assert_eq!(
-        configuration_document["chunking"]["prompt_processing_chunk_size_optimizer_enabled"], false,
-        "summary metrics must measure fixed-size prefill chunks, not adaptive optimizer output"
-    );
     assert_eq!(
         configuration_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
         FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS,
@@ -252,7 +248,6 @@ fn isolated_prompt_cache_worker_launcher(
     let configuration_document = json!({
         "model_directories": [model_directory],
         "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": false,
             "fixed_prompt_processing_chunk_size_tokens": FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS,
         },
     });

@@ -352,7 +352,6 @@ fn apply_in_place_reload_fields(
 ) {
     // Copy only fields that are safe to apply without a worker or REST restart.
     // Worker and listener settings remain live-old until the requested restart succeeds.
-    live_config.config_warning = candidate_resolved.config_warning.clone();
     live_config.maximum_mlx_memory_bytes = candidate_resolved.maximum_mlx_memory_bytes;
 }
 
