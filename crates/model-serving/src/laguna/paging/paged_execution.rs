@@ -79,17 +79,16 @@ fn forward_paged_routed_swiglu_inner(
         Some(sorted) => (&sorted.sorted_states, &sorted.sorted_indices, true),
         None => (&gather_states, &page_slot_indices, false),
     };
-    let selected_outputs = performance_attribution.measure_operation(
-        PerformanceOperation::GatheredExpertExecution,
-        |_| {
-            gathered_page_swiglu(
-                runtime,
-                expert_page,
-                expert_input_states,
-                expert_indices,
-                are_indices_sorted,
-            )
-        },
+    // gathered_page_swiglu forwards attribution to each neutral projection.
+    // Keeping attribution at that leaf avoids counting this orchestration span
+    // and its child projections as though they were independent matrix work.
+    let selected_outputs = gathered_page_swiglu(
+        runtime,
+        expert_page,
+        expert_input_states,
+        expert_indices,
+        are_indices_sorted,
+        performance_attribution,
     )?;
     if let Some(sorted) = sorted_assignments {
         return Ok(sorted_expert_weighted_sum(
@@ -137,6 +136,7 @@ fn gathered_page_swiglu(
     expert_input_states: &MlxArray,
     expert_indices: &MlxArray,
     are_indices_sorted: bool,
+    performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaPagingError> {
     let (gate, up) = if let Some(fused_gate_up) = expert_page.fused_gate_up() {
         let fused_output = fused_gate_up.project_gathered(
@@ -144,6 +144,7 @@ fn gathered_page_swiglu(
             expert_input_states,
             expert_indices,
             are_indices_sorted,
+            performance_attribution,
         )?;
         LagunaBoundLinear::split_fused_gate_up(runtime, &fused_output)?
     } else {
@@ -159,12 +160,14 @@ fn gathered_page_swiglu(
                 expert_input_states,
                 expert_indices,
                 are_indices_sorted,
+                performance_attribution,
             )?,
             up_projection.project_gathered(
                 runtime,
                 expert_input_states,
                 expert_indices,
                 are_indices_sorted,
+                performance_attribution,
             )?,
         )
     };
@@ -175,6 +178,7 @@ fn gathered_page_swiglu(
         &hidden_product,
         expert_indices,
         are_indices_sorted,
+        performance_attribution,
     )?)
 }
 

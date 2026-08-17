@@ -2,6 +2,11 @@
 
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
 
+use crate::performance_attribution::PerformanceAttribution;
+use crate::sparse_experts::{
+    ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
+};
+
 use super::error::LagunaExecutionError;
 
 /// Resident projection weights for one canonical linear module.
@@ -84,22 +89,41 @@ impl LagunaBoundLinear {
     }
 
     /// Selects stacked expert rows inside the matrix product.
+    ///
+    /// Laguna owns the storage enum above, but the actual gathered projection is
+    /// family-neutral. This adapter translates Laguna's dense-or-affine storage
+    /// into the canonical neutral enum without exposing Laguna metadata there.
     pub(in crate::laguna) fn project_gathered(
         &self,
         runtime: &MlxRuntime,
         activations: &MlxArray,
         selected_indices: &MlxArray,
         are_indices_sorted: bool,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, LagunaExecutionError> {
+        // The caller performed any sorting and moved activation rows alongside
+        // the IDs. Converting the caller's policy here does not sort anything;
+        // it only forwards the proven ordering contract to the MLX operation.
+        let assignment_order = if are_indices_sorted {
+            ExpertAssignmentOrder::SortedByExpert
+        } else {
+            ExpertAssignmentOrder::Original
+        };
         match self {
             Self::Native { weight } => {
+                // Native checkpoint matrices are `[expert, output, input]`.
+                // gather_mm needs `[expert, input, output]`; transpose is lazy,
+                // so this changes the graph view rather than copying all weights.
                 let transposed_weight = runtime.transpose_axes(weight, &[0, 2, 1])?;
-                Ok(runtime.gather_dense_matmul(
+                Ok(gather_expert_projection(
+                    runtime,
                     activations,
-                    &transposed_weight,
-                    None,
-                    Some(selected_indices),
-                    are_indices_sorted,
+                    StackedExpertProjection::Dense {
+                        transposed_weights: &transposed_weight,
+                    },
+                    selected_indices,
+                    assignment_order,
+                    performance_attribution,
                 )?)
             }
             Self::Affine {
@@ -108,17 +132,22 @@ impl LagunaBoundLinear {
                 biases,
                 bits,
                 group_size,
-            } => Ok(runtime.gather_quantized_matmul_affine(
+            } => Ok(gather_expert_projection(
+                runtime,
                 activations,
-                packed_weight,
-                scales,
-                biases,
-                None,
-                Some(selected_indices),
-                true,
-                *group_size,
-                *bits,
-                are_indices_sorted,
+                // Affine storage is already in MLX's canonical packed layout.
+                // Passing borrowed companions preserves each source dtype and
+                // avoids dequantizing or materializing selected expert copies.
+                StackedExpertProjection::Affine {
+                    packed_weights: packed_weight,
+                    scales,
+                    biases,
+                    group_size: *group_size,
+                    bits: *bits,
+                },
+                selected_indices,
+                assignment_order,
+                performance_attribution,
             )?),
         }
     }
