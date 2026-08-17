@@ -1,8 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
 use astronomical_supervisor::{
-    GenerationPerformanceLog, WorkerHandle,
-    build_application_with_config_warning_and_discovered_models,
+    GenerationPerformanceLog, WorkerHandle, build_application_with_discovered_models,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},

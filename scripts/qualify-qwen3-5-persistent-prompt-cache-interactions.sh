@@ -19,15 +19,12 @@ fi
 readonly qualification_test_name="persistent_prompt_cache_qualification::cache_interaction_matrix::should_qualify_selected_pinned_ornith_cache_interaction_matrix_cell"
 readonly qualification_cells="
 fixed-live-reuse
-optimized-live-reuse
 fixed-worker-restart
-optimized-worker-restart
 fixed-deleted-while-live
-optimized-deleted-while-live
 "
 
 completed_cell_count=0
-total_cell_count=6
+total_cell_count=3
 matrix_started_at_seconds="$(date +%s)"
 
 for qualification_cell in ${qualification_cells}; do

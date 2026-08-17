@@ -356,7 +356,7 @@ async fn spawn_daemon_with_worker_ready_model(
     // they intend to exercise.
     write_config(
         temp_home.path(),
-        r#"{"chunking":{"prompt_processing_chunk_size_optimizer_enabled":true},"supervisor":{"bind_address":"127.0.0.1:0"}}"#,
+        r#"{"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048},"supervisor":{"bind_address":"127.0.0.1:0"}}"#,
     );
     let mut daemon_command = Command::new(daemon_executable_path);
     daemon_command
@@ -569,7 +569,7 @@ pub(super) fn write_instance_config(state_directory: &Path, bind_address: &str) 
     std::fs::write(
         state_directory.join("config.json"),
         format!(
-            r#"{{"chunking":{{"prompt_processing_chunk_size_optimizer_enabled":true}},"supervisor":{{"bind_address":"{bind_address}"}}}}"#
+            r#"{{"chunking":{{"fixed_prompt_processing_chunk_size_tokens":2048}},"supervisor":{{"bind_address":"{bind_address}"}}}}"#
         ),
     )
     .expect("instance config should be written");

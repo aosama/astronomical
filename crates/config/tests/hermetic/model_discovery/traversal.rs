@@ -17,7 +17,7 @@ fn should_resolve_model_directory_paths_from_the_configuration_array() {
     fs::create_dir_all(&configured_model_directory).expect("model directory should be created");
     let config_json = serde_json::json!({
         "model_directories": [configured_model_directory],
-        "chunking": {"prompt_processing_chunk_size_optimizer_enabled": true}
+        "chunking": {"fixed_prompt_processing_chunk_size_tokens": 2048}
     });
     fs::write(
         config_directory.join("config.json"),
@@ -50,7 +50,7 @@ fn should_resolve_an_exact_model_directory_from_configured_recursive_roots() {
         temporary_home_directory.path(),
         &serde_json::json!({
             "model_directories": [configured_model_root],
-            "chunking": { "prompt_processing_chunk_size_optimizer_enabled": true },
+            "chunking": { "fixed_prompt_processing_chunk_size_tokens": 2048 },
         })
         .to_string(),
     );

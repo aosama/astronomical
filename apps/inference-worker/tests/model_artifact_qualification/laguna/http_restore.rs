@@ -89,7 +89,7 @@ fn write_cache_enabled_config(isolated_home: &std::path::Path, model_directory: 
         "performance_attribution_enabled": true,
         "mtp_enabled": false,
         "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": false,
+
             "fixed_prompt_processing_chunk_size_tokens": 8192,
             "prompt_cache_block_tokens": PROMPT_CACHE_BLOCK_TOKEN_COUNT,
             "prompt_cache_common_prefix_stride_blocks": 1

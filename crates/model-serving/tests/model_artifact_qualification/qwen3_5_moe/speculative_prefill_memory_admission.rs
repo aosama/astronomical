@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use astronomical_config::{AstronomicalConfig, PromptProcessingChunkSizingPolicy};
+use astronomical_config::AstronomicalConfig;
 use astronomical_ipc_protocol::{
     RequestId, WorkerPromptProcessingPhase, WorkerSpeculativePrefillConfiguration,
 };
@@ -325,39 +325,15 @@ async fn run_configured_cold_cache_summary_journey(
 fn configured_prefill_chunck_sizer(
     astronomical_config: &AstronomicalConfig,
     target_maximum_position_count: u32,
-    target_model_id: &str,
-    target_model_revision: &str,
+    _target_model_id: &str,
+    _target_model_revision: &str,
 ) -> Qwen3_5PromptProcessingChunkSizer {
     let chunking = astronomical_config
         .chunking()
         .expect("the configured chunking policy should resolve");
-    match astronomical_config
-        .prompt_processing_chunk_sizing_policy()
-        .expect("the configured prefill chunk policy should resolve")
-    {
-        PromptProcessingChunkSizingPolicy::Fixed {
-            fixed_prompt_processing_chunk_size_tokens,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-        } => Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
-            fixed_prompt_processing_chunk_size_tokens,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-        )
-        .expect("the configured fixed prefill chunk size should be valid"),
-        PromptProcessingChunkSizingPolicy::Optimized {
-            prompt_processing_chunk_size_optimizer_candidate_token_counts,
-        } => {
-            let temporary_optimizer_state_directory = tempfile::tempdir()
-                .expect("the 60K journey should create an isolated optimizer directory");
-            Qwen3_5PromptProcessingChunkSizer::for_optimized_production_with_persisted_state_and_behavior(
-                target_maximum_position_count,
-                prompt_processing_chunk_size_optimizer_candidate_token_counts,
-                temporary_optimizer_state_directory.keep(),
-                target_model_id.to_owned(),
-                target_model_revision.to_owned(),
-                chunking.prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context(),
-                chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens(),
-            )
-            .expect("the configured optimized prefill policy should be valid")
-        }
-    }
+    Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+        chunking.fixed_prompt_processing_chunk_size_tokens(),
+        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
+    )
+    .expect("the configured fixed prefill chunk size should be valid")
 }

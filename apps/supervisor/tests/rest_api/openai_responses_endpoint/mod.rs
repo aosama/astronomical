@@ -7,7 +7,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
-    build_application, build_application_with_config_warning_and_discovered_models,
+    build_application, build_application_with_discovered_models,
 };
 use axum::{
     body::{Body, to_bytes},

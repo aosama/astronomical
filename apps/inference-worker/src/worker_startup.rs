@@ -69,9 +69,6 @@ where
             .clone(),
         worker_startup_configuration.global_prompt_cache_maximum_size_bytes,
     );
-    let optimizer_state_directory = worker_startup_configuration
-        .optimizer_state_directory
-        .clone();
     let performance_attribution_enabled =
         worker_startup_configuration.performance_attribution_enabled;
     let performance_attribution_log_path = worker_startup_configuration
@@ -98,10 +95,7 @@ where
     );
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
-        prompt_processing_chunk_sizing_policy = ?chunking.prompt_processing_chunk_sizing_policy,
-        optimizer_state_directory = ?optimizer_state_directory
-            .as_ref()
-            .map(|optimizer_state_directory| optimizer_state_directory.display()),
+        fixed_prompt_processing_chunk_size_tokens = chunking.fixed_prompt_processing_chunk_size_tokens,
         performance_attribution_enabled,
         machine_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
@@ -116,7 +110,6 @@ where
     let model_factory = ModelFamilyFactory {
         effective_mlx_memory_ceiling_bytes,
         prompt_cache_config,
-        optimizer_state_directory,
         performance_attribution_enabled,
         performance_attribution_log_path,
         mtp_enabled,

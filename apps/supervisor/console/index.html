@@ -7,7 +7,6 @@
     <title>Astronomical Observatory</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/console.css">
-    <link rel="stylesheet" href="/optimizer.css">
 </head>
 <body class="observatory">
     <div class="observatory-shell">
@@ -23,7 +22,6 @@
             <nav class="observatory-navigation" aria-label="Observatory sections">
                 <button class="navigation-button" type="button" data-observatory-destination="overview" aria-controls="overview-view" aria-current="page">Overview</button>
                 <button class="navigation-button" type="button" data-observatory-destination="chat" aria-controls="chat-view">Chat</button>
-                <button class="navigation-button" type="button" data-observatory-destination="optimizer" aria-controls="optimizer-view">Optimizer</button>
                 <button class="navigation-button" type="button" data-observatory-destination="model" aria-controls="model-view">Model</button>
                 <button class="navigation-button" type="button" data-observatory-destination="settings" aria-controls="settings-view">Settings</button>
             </nav>
@@ -171,77 +169,6 @@
                     </section>
                 </section>
 
-                <section id="optimizer-view" class="observatory-view" data-observatory-view="optimizer" aria-labelledby="optimizer-title" hidden>
-                    <div class="view-heading">
-                        <div><p class="eyebrow">Adaptive prompt processing</p><h2 id="optimizer-title">Chunk Size Optimizer</h2></div>
-                        <p>There is no single best chunk size. Astronomical learns what works for each part of the context window.</p>
-                    </div>
-                    <div class="optimizer-layout">
-                        <section id="optimizer-assessment" class="panel optimizer-assessment" data-tone="waiting" aria-live="polite">
-                            <div>
-                                <p id="optimizer-mode" class="optimizer-mode">Adaptive by context</p>
-                                <h3 id="optimizer-assessment-title">Learning starts with the next prompt</h3>
-                                <p id="optimizer-assessment-detail" class="optimizer-assessment-detail">Astronomical compares chunk sizes separately for each token range and execution profile.</p>
-                                <p id="optimizer-configuration-note" class="optimizer-configuration-note" aria-live="off" hidden>Optimizer configuration note</p>
-                            </div>
-                            <div class="optimizer-coverage" aria-label="Measurement coverage for the active context profile">
-                                <span id="optimizer-coverage-value" class="optimizer-coverage-value">No evidence yet</span>
-                                <span class="optimizer-coverage-label">chunk sizes with usable evidence</span>
-                                <span id="optimizer-coverage-detail" class="optimizer-coverage-detail">Candidate comparisons appear after prompt processing.</span>
-                            </div>
-                        </section>
-                        <section class="panel optimizer-how" aria-labelledby="optimizer-how-title">
-                            <div class="panel-heading-row">
-                                <div><p class="eyebrow">The mental model</p><h3 id="optimizer-how-title">How Astronomical adapts</h3></div>
-                            </div>
-                            <ol class="optimizer-how-steps">
-                                <li><strong>Locate the prompt</strong><span>Split the context window into token ranges.</span></li>
-                                <li><strong>Compare like with like</strong><span>Keep cache, input, model path, and memory conditions separate.</span></li>
-                                <li><strong>Minimize total time</strong><span>Choose for the remaining prompt while continuing to refresh evidence.</span></li>
-                            </ol>
-                            <p class="optimizer-principle">A chunk size that works well near the beginning may not be the best choice deeper in the same context window.</p>
-                        </section>
-                        <section id="optimizer-context-window" class="panel optimizer-context-window" data-state="empty">
-                            <div class="panel-heading-row">
-                                <div><p class="eyebrow">Current evidence scope</p><h3 id="optimizer-context-range-title">No context observed yet</h3></div>
-                                <span class="panel-note">Only this highlighted range</span>
-                            </div>
-                            <p id="optimizer-context-range-detail" class="optimizer-context-range-detail">Run a prompt to see where its chunk-size evidence applies.</p>
-                            <div class="optimizer-context-track-wrapper">
-                                <div class="optimizer-context-track" role="img" aria-label="Active optimizer range within the model context window">
-                                    <span id="optimizer-context-range-band" class="optimizer-context-range-band"></span>
-                                    <span id="optimizer-context-chunk-marker" class="optimizer-context-chunk-marker" hidden></span>
-                                </div>
-                                <div class="optimizer-context-track-labels">
-                                    <span id="optimizer-context-window-start">0</span>
-                                    <span id="optimizer-context-window-end">Context limit unavailable</span>
-                                </div>
-                                <p id="optimizer-context-chunk-position" class="optimizer-context-chunk-position">No latest chunk position</p>
-                            </div>
-                            <div class="optimizer-profile-heading"><h4>Matching execution conditions</h4><span>Changing any of these creates a different performance profile.</span></div>
-                            <div id="optimizer-context" class="optimizer-context" aria-label="Execution conditions for the active optimizer profile"><span class="optimizer-context-pill muted">No execution profile observed</span></div>
-                        </section>
-                        <section class="panel optimizer-evidence">
-                            <div class="panel-heading-row"><div><p class="eyebrow">Context-specific comparison</p><h3>What works in this range</h3></div><span class="panel-note">Forward-only rate is evidence, not a global recommendation.</span></div>
-                            <p class="optimizer-evidence-intro">Each bar divides actual chunk tokens by model-forward time for the highlighted range and matching conditions. The menu bar’s average rate includes the rest of request processing, so the numbers measure different boundaries.</p>
-                            <div id="optimizer-measurements-body" class="optimizer-candidate-list"><p class="optimizer-empty-state">No candidate evidence available.</p></div>
-                        </section>
-                        <section class="panel optimizer-latest">
-                            <div class="panel-heading-row"><div><p class="eyebrow">Most recent forward pass</p><h3>Latest decision</h3></div><span class="panel-note">One decision, not a universal setting</span></div>
-                            <p id="optimizer-latest-headline" class="optimizer-latest-headline">No chunk decision observed yet</p>
-                            <p id="optimizer-latest-explanation" class="optimizer-latest-explanation">Run a prompt to see how Astronomical applies the learned context profile.</p>
-                            <details class="optimizer-technical-details">
-                                <summary>Technical decision details</summary>
-                                <p id="optimizer-latest-technical">No technical details available.</p>
-                            </details>
-                        </section>
-                        <section class="panel optimizer-history">
-                            <div class="panel-heading-row"><div><p class="eyebrow">Decision trail</p><h3>Recent decisions</h3></div><span class="panel-note">Newest first · this worker session</span></div>
-                            <ol id="optimizer-outcomes" class="optimizer-transition-list"><li>No decisions observed in this worker session.</li></ol>
-                        </section>
-                    </div>
-                </section>
-
                 <section id="model-view" class="observatory-view" data-observatory-view="model" aria-labelledby="model-title" hidden>
                     <div class="view-heading">
                         <div><p class="eyebrow">Resident model</p><h2 id="model-title">Model</h2></div>
@@ -299,7 +226,6 @@
         </div>
     </div>
     <script src="/memory-control.js" defer></script>
-    <script src="/optimizer.js" defer></script>
     <script src="/console.js" defer></script>
     <script src="/overview-compact.js" defer></script>
     <script src="/playground.js" defer></script>

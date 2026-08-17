@@ -53,7 +53,6 @@ pub use paging::{
 pub use paging::{LagunaExpertWeightPage, forward_paged_routed_swiglu, load_laguna_expert_page};
 pub use prompt_processing_chunk_sizer::{
     LagunaPromptProcessingChunkSizer, LagunaPromptProcessingChunkSizerError,
-    LagunaPromptProcessingExecutionProfile,
 };
 #[cfg(feature = "direct-mlx")]
 pub use startup::{

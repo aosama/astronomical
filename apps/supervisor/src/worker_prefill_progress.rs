@@ -5,7 +5,6 @@ use astronomical_ipc_protocol::{WorkerEvent, WorkerPromptProcessingPhase};
 use crate::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
-    prompt_processing_chunk_optimizer_status::record_prompt_processing_chunk_optimization_outcome,
     worker_health::{publish_active_request_progress, publish_latest_mlx_memory_snapshot},
     worker_loop_types::ActiveGeneration,
 };
@@ -23,7 +22,6 @@ pub(super) fn handle_worker_prefill_progress(
         elapsed_millis,
         forward_prefill_chunk_elapsed_millis,
         completed_prefill_chunk_tokens,
-        prompt_processing_chunk_optimization_outcome,
         mlx_memory_snapshot,
         expert_residency,
         speculative_prefill_draft_memory_snapshot,
@@ -89,13 +87,5 @@ pub(super) fn handle_worker_prefill_progress(
             completed_prefill_chunk_tokens,
         },
     );
-    if let Some(prompt_processing_chunk_optimization_outcome) =
-        prompt_processing_chunk_optimization_outcome
-    {
-        record_prompt_processing_chunk_optimization_outcome(
-            health_snapshot,
-            prompt_processing_chunk_optimization_outcome,
-        );
-    }
     Ok(())
 }

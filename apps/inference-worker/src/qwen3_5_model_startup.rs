@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerPromptProcessingChunkSizingPolicy,
-    WorkerSpeculativePrefillConfiguration,
+    WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
@@ -19,7 +18,6 @@ pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
-    optimizer_state_directory: Option<PathBuf>,
     max_output_tokens: u32,
     mtp_enabled: bool,
     mtp_draft_depth: Option<u8>,
@@ -108,8 +106,6 @@ pub(crate) fn initialize_qwen3_5_model(
     let think_end_token_id = generation_processor.think_end_token_id();
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    let maximum_prompt_processing_chunk_size_tokens =
-        validated_artifact.config().maximum_position_count();
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
         crate::worker_startup::derive_mlx_memory_limits_from_gpu_wired_limit(
             effective_mlx_memory_ceiling_bytes,
@@ -131,41 +127,11 @@ pub(crate) fn initialize_qwen3_5_model(
             per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         )
     });
-    // Resolve sizing only after artifact validation supplies the model context
-    // ceiling and stable model/revision identity required by persisted evidence.
-    // The supervisor-owned policy is authoritative. This family owner adds
-    // only validated Qwen context and model/revision identity.
     let prompt_processing_chunk_sizer_result =
-        match &chunking.prompt_processing_chunk_sizing_policy {
-            WorkerPromptProcessingChunkSizingPolicy::Fixed {
-                fixed_prompt_processing_chunk_size_tokens,
-                fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-            } => Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
-                *fixed_prompt_processing_chunk_size_tokens,
-                *fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-            ),
-            WorkerPromptProcessingChunkSizingPolicy::Optimized {
-                prompt_processing_chunk_size_optimizer_candidate_token_counts,
-            } => match optimizer_state_directory {
-                Some(optimizer_directory) => {
-                    Qwen3_5PromptProcessingChunkSizer::for_optimized_production_with_persisted_state_and_behavior(
-                        maximum_prompt_processing_chunk_size_tokens,
-                        prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
-                        optimizer_directory,
-                        model_id,
-                        model_revision,
-                        chunking.prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context,
-                        chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
-                    )
-                }
-                None => Qwen3_5PromptProcessingChunkSizer::for_optimized_with_behavior(
-                    maximum_prompt_processing_chunk_size_tokens,
-                    prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
-                    chunking.prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context,
-                    chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
-                ),
-            },
-        };
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+            chunking.fixed_prompt_processing_chunk_size_tokens,
+            chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+        );
     let prompt_processing_chunk_sizer = match prompt_processing_chunk_sizer_result {
         Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
         Err(prompt_processing_chunk_sizer_error) => {

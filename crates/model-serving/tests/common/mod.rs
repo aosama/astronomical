@@ -28,17 +28,12 @@ pub(crate) mod qwen3_5_moe;
 pub(crate) fn standard_worker_chunking_configuration()
 -> astronomical_ipc_protocol::WorkerChunkingConfiguration {
     astronomical_ipc_protocol::WorkerChunkingConfiguration {
-        prompt_processing_chunk_sizing_policy:
-            astronomical_ipc_protocol::WorkerPromptProcessingChunkSizingPolicy::Optimized {
-                prompt_processing_chunk_size_optimizer_candidate_token_counts:
-                    vec![1_024, 2_048, 4_096, 8_192],
-            },
+        fixed_prompt_processing_chunk_size_tokens: 2_048,
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
         full_attention_key_value_growth_tokens: 256,
         speculative_prefill_draft_forward_tokens: 2_048,
         experimental_ssd_paging_prefill_graph_submission_layer_interval: 0,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-        prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context: 5,
-        prompt_processing_chunk_size_optimizer_position_range_size_tokens: 32_768,
         prompt_cache_block_tokens: None,
         prompt_cache_common_prefix_stride_blocks: 4,
     }

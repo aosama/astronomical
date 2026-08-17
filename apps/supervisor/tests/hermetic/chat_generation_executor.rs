@@ -122,17 +122,7 @@ async fn should_replace_prefill_memory_with_finalized_residency_memory() {
         worker_health_snapshot.expert_memory_mode,
         Some(ExpertMemoryMode::Resident)
     );
-    assert_eq!(
-        worker_health_snapshot
-            .recent_prompt_processing_chunk_optimization_outcomes
-            .len(),
-        1
-    );
-    assert_eq!(
-        worker_health_snapshot.recent_prompt_processing_chunk_optimization_outcomes[0]
-            .selected_candidate_chunk_size_tokens,
-        4_096
-    );
+
     worker_executor
         .shutdown()
         .await

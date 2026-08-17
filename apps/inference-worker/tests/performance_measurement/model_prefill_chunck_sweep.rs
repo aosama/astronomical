@@ -4,7 +4,6 @@ use astronomical_inference_worker::worker_startup::run_bootstrapped_worker;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
-    WorkerPromptProcessingChunkSizingPolicy,
 };
 use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use tokio::time::{Instant, timeout};
@@ -92,10 +91,7 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
     let mut worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
     worker_startup_configuration
         .chunking
-        .prompt_processing_chunk_sizing_policy = WorkerPromptProcessingChunkSizingPolicy::Fixed {
-        fixed_prompt_processing_chunk_size_tokens: prefill_chunck_tokens,
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
-    };
+        .fixed_prompt_processing_chunk_size_tokens = prefill_chunck_tokens;
     protocol_writer
         .send_command(&WorkerCommand::InitializeWorker(
             worker_startup_configuration,

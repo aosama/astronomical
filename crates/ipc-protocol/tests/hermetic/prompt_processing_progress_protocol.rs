@@ -1,10 +1,6 @@
 use astronomical_ipc_protocol::{
     MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
-    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot,
-    WorkerPromptProcessingChunkCandidateMeasurementSummary,
-    WorkerPromptProcessingChunkMeasurementSource, WorkerPromptProcessingChunkOptimizationContext,
-    WorkerPromptProcessingChunkOptimizationOutcome, WorkerPromptProcessingChunkSelectionReason,
-    WorkerPromptProcessingPhase,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase,
 };
 use tokio::io::duplex;
 
@@ -20,38 +16,6 @@ async fn should_round_trip_prefill_progress_event() {
         elapsed_millis: 1_200,
         forward_prefill_chunk_elapsed_millis: Some(1_100),
         completed_prefill_chunk_tokens: Some(2_048),
-        prompt_processing_chunk_optimization_outcome: Some(
-            WorkerPromptProcessingChunkOptimizationOutcome {
-                selected_candidate_chunk_size_tokens: 4_096,
-                processed_prompt_token_count: 2_048,
-                forward_elapsed_millis: 1_200,
-                was_reduced_by_memory_capacity: true,
-                selection_reason: WorkerPromptProcessingChunkSelectionReason::MinimizeProjectedRemainingPromptLatency,
-                measurement_context: WorkerPromptProcessingChunkOptimizationContext {
-                    chunk_start_token_position: 8_192,
-                    position_range_start_token_position: 0,
-                    position_range_end_token_position_exclusive: 32_768,
-                    has_restored_prefix: false,
-                    is_first_chunk_after_restore: false,
-                    has_visual_embeddings: false,
-                    is_mtp_active: false,
-                    are_sparse_experts_paged: true,
-                    is_prompt_cache_capture_eligible: true,
-                    has_prior_capacity_reduction: false,
-                },
-                all_candidates_have_measurements: true,
-                candidate_measurement_summaries: vec![
-                    WorkerPromptProcessingChunkCandidateMeasurementSummary {
-                        candidate_chunk_size_tokens: 4_096,
-                        measurement_source: WorkerPromptProcessingChunkMeasurementSource::CurrentPositionRange,
-                        measurement_count: 3,
-                        average_processed_prompt_token_count: 3_413,
-                        average_forward_elapsed_millis: 900,
-                        selections_since_last_measurement: Some(0),
-                    },
-                ],
-            },
-        ),
         mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
             source: MlxMemorySnapshotSource::Prefill,
             active_memory_bytes: 11_000,
@@ -85,7 +49,7 @@ async fn should_round_trip_prefill_progress_event() {
 }
 
 #[tokio::test]
-async fn should_round_trip_prefill_progress_before_a_chunk_measurement() {
+async fn should_round_trip_prefill_progress_before_the_first_completed_forward() {
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(82),
         prompt_processing_phase: WorkerPromptProcessingPhase::Drafter,
@@ -94,7 +58,6 @@ async fn should_round_trip_prefill_progress_before_a_chunk_measurement() {
         elapsed_millis: 0,
         forward_prefill_chunk_elapsed_millis: None,
         completed_prefill_chunk_tokens: None,
-        prompt_processing_chunk_optimization_outcome: None,
         mlx_memory_snapshot: None,
         expert_residency: None,
         speculative_prefill_draft_memory_snapshot: None,
