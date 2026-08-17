@@ -108,9 +108,8 @@ pub fn qwen3_5_full_attention_step(
             attention_shape.active_key_value_token_count,
         )?
     } else if is_causal {
-        // This is the O(query_tokens x active_tokens) relationship calculation.
-        // MLX fuses scaling, causal masking, softmax, and V weighting so Rust
-        // does not materialize intermediate score or probability tensors.
+        // Keep the stock MLX route so each Apple GPU receives the fastest
+        // supported fused or matrix-kernel graph for this head geometry.
         runtime.causal_scaled_dot_product_attention(
             rotated_queries,
             active_keys,
