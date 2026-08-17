@@ -13,13 +13,15 @@ use crate::laguna::{
 use crate::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngineError, MlxInferenceExecution, MlxMemoryLimitAdjustment, MlxRamBudget,
-    MlxRamBudgetPhase, PerformanceAttribution, PerformanceAttributionLog, PerformanceCounter,
+    PerformanceAttribution, PerformanceAttributionLog, PerformanceCounter,
     PersistentPromptCacheCounters, PersistentPromptCacheDiskStore,
     PersistentPromptCacheDiskStoreConfig, build_persistent_prompt_cache_stats_event,
 };
 
 use super::active_generation::LagunaActiveGeneration;
-use super::memory::laguna_ram_budget_snapshot;
+use super::memory::{
+    begin_laguna_forward_memory_observation, complete_laguna_forward_memory_observation,
+};
 
 /// Deferred Laguna construction that must run on the MLX owner thread.
 pub(in crate::laguna) struct LagunaPendingStartup {
@@ -143,19 +145,6 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             });
         };
         let prompt_context_token_count = u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX);
-        if let Some(mlx_ram_budget) = self.mlx_ram_budget.as_ref() {
-            let retained_expert_budget_bytes = laguna_ram_budget_snapshot(
-                mlx_ram_budget,
-                MlxRamBudgetPhase::Prefill,
-                prompt_context_token_count,
-            )
-            .retained_expert_budget_bytes;
-            model
-                .set_retained_expert_ceiling(retained_expert_budget_bytes)
-                .map_err(|_| InferenceEngineError::Fatal {
-                    reason: "Laguna prefill expert budget could not be applied".to_owned(),
-                })?;
-        }
         let mut decoder_state = LagunaDecoderState::empty(model.contract()).map_err(|_| {
             InferenceEngineError::Fatal {
                 reason: "Laguna decoder state could not be allocated".to_owned(),
@@ -220,7 +209,7 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             .as_ref()
             .is_some_and(|active_request| active_request.remaining_output_tokens == 0)
         {
-            self.active_request = None;
+            let _generation_finalization = self.cancel_generation(request_id)?;
             return Ok(GeneratedToken::EndOfSequence);
         }
         if let Some(prefill_progress) = self.advance_pending_prompt_prefill(request_id)? {
@@ -236,6 +225,12 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 reason: "the Laguna model is not loaded".to_owned(),
             });
         };
+        let mlx_ram_budget = self
+            .mlx_ram_budget
+            .as_ref()
+            .ok_or(InferenceEngineError::Fatal {
+                reason: "the Laguna RAM budget is not loaded".to_owned(),
+            })?;
         let active_request =
             self.active_request
                 .as_mut()
@@ -260,19 +255,6 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             )?;
             active_request.next_input_token_ids = vec![first_generated_token_id];
         }
-        if let Some(mlx_ram_budget) = self.mlx_ram_budget.as_ref() {
-            let decode_retained_expert_budget_bytes = laguna_ram_budget_snapshot(
-                mlx_ram_budget,
-                MlxRamBudgetPhase::Decode,
-                active_request.context_token_count,
-            )
-            .retained_expert_budget_bytes;
-            model
-                .set_retained_expert_ceiling(decode_retained_expert_budget_bytes)
-                .map_err(|_| InferenceEngineError::Fatal {
-                    reason: "Laguna decode expert budget could not be applied".to_owned(),
-                })?;
-        }
         let token_id = active_request.next_input_token_ids.last().copied().ok_or(
             InferenceEngineError::Fatal {
                 reason: "Laguna decode is missing the previously sampled token".to_owned(),
@@ -286,7 +268,12 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 })?;
         let next_token_id = active_request.performance_attribution.measure_operation(
             crate::PerformanceOperation::DecodeAdvanceSpan,
-            |performance_attribution| {
+            |performance_attribution| -> Result<u32, InferenceEngineError> {
+                let memory_baseline = begin_laguna_forward_memory_observation(
+                    runtime,
+                    model,
+                    performance_attribution,
+                )?;
                 let decode_logits = model
                     .forward(
                         runtime,
@@ -300,7 +287,16 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                             reason: "Laguna token generation failed".to_owned(),
                         }
                     })?;
-                Self::sample_next_token_id(runtime, &decode_logits, performance_attribution)
+                let next_token_id =
+                    Self::sample_next_token_id(runtime, &decode_logits, performance_attribution)?;
+                complete_laguna_forward_memory_observation(
+                    runtime,
+                    model,
+                    mlx_ram_budget,
+                    memory_baseline,
+                    performance_attribution,
+                )?;
+                Ok(next_token_id)
             },
         )?;
         active_request.next_input_token_ids = vec![next_token_id];
@@ -401,6 +397,19 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 drop(active_request);
             },
         );
+        let runtime = self.runtime.as_ref().ok_or(InferenceEngineError::Fatal {
+            reason: "the Laguna runtime is not loaded".to_owned(),
+        })?;
+        performance_attribution
+            .measure_operation(
+                crate::PerformanceOperation::MlxAllocatorCacheCleanup,
+                |_performance_attribution| {
+                    runtime.synchronize_gpu_stream_and_clear_allocator_cache()
+                },
+            )
+            .map_err(|cleanup_error| InferenceEngineError::Fatal {
+                reason: format!("Laguna request-finalization cleanup failed: {cleanup_error}"),
+            })?;
         self.record_generation_performance_attribution(
             performance_attribution,
             request_id,

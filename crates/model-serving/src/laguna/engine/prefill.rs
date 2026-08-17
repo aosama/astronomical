@@ -6,9 +6,12 @@ use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::execution::LagunaInferenceExecution;
+use super::memory::{
+    begin_laguna_forward_memory_observation, complete_laguna_forward_memory_observation,
+};
 use crate::laguna::LagunaModel;
 use crate::persistent_prompt_cache_boundary_clamped_prefill_chunck_end;
-use crate::{GeneratedToken, InferenceEngineError, PerformanceOperation};
+use crate::{GeneratedToken, InferenceEngineError, MlxRamBudget, PerformanceOperation};
 
 impl LagunaInferenceExecution {
     /// Forwards one remaining prompt chunk and returns visible prefill progress.
@@ -26,6 +29,12 @@ impl LagunaInferenceExecution {
                 reason: "the Laguna model is not loaded".to_owned(),
             });
         };
+        let mlx_ram_budget = self
+            .mlx_ram_budget
+            .as_ref()
+            .ok_or(InferenceEngineError::Fatal {
+                reason: "the Laguna RAM budget is not loaded".to_owned(),
+            })?;
         let active_request =
             self.active_request
                 .as_mut()
@@ -79,6 +88,7 @@ impl LagunaInferenceExecution {
                     forward_one_prompt_chunk(
                         runtime,
                         model,
+                        mlx_ram_budget,
                         chunk_token_ids,
                         chunk_start_token_position,
                         chunk_end_token_position_exclusive,
@@ -133,6 +143,7 @@ impl LagunaInferenceExecution {
 fn forward_one_prompt_chunk(
     runtime: &MlxRuntime,
     model: &LagunaModel,
+    mlx_ram_budget: &MlxRamBudget,
     chunk_token_ids: &[u32],
     chunk_start_token_position: usize,
     chunk_end_token_position_exclusive: usize,
@@ -148,6 +159,8 @@ fn forward_one_prompt_chunk(
         .map_err(|_| InferenceEngineError::Fatal {
             reason: "Laguna prompt tokens could not be placed on the runtime".to_owned(),
         })?;
+    let memory_baseline =
+        begin_laguna_forward_memory_observation(runtime, model, performance_attribution)?;
     let chunk_started_at = Instant::now();
     let chunk_evaluation_root = if is_terminal_prompt_chunk {
         model.forward(
@@ -195,6 +208,13 @@ fn forward_one_prompt_chunk(
                 "Laguna prompt-processing chunk could not be materialized: {evaluation_error}"
             ),
         })?;
+    complete_laguna_forward_memory_observation(
+        runtime,
+        model,
+        mlx_ram_budget,
+        memory_baseline,
+        performance_attribution,
+    )?;
     let forward_elapsed_millis = u64::try_from(chunk_started_at.elapsed().as_millis())
         .unwrap_or(u64::MAX)
         .max(1);

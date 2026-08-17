@@ -16,6 +16,7 @@ mod optional_artifacts;
 mod paging;
 mod prompt_cache_topology;
 mod prompt_processing_chunk_sizer;
+mod residency_feedback;
 mod rope;
 mod routing;
 mod startup_boundary;
