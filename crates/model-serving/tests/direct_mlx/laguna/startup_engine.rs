@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngineError, LagunaServingSettings, MlxInferenceExecution,
-    initialize_laguna_execution, initialize_laguna_execution_with_serving_settings,
+    initialize_laguna_execution_with_serving_settings,
 };
 
 use super::page_artifact::write_sparse_artifact;
@@ -19,11 +19,18 @@ async fn should_start_a_laguna_engine_from_a_validated_artifact_and_generate_tok
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("Laguna startup directory");
     write_sparse_artifact(model_directory.path(), false);
-    let (generation_processor, mut engine) = initialize_laguna_execution(
+    let attribution_directory = tempfile::tempdir().expect("Laguna attribution directory");
+    let attribution_log_path = attribution_directory
+        .path()
+        .join("performance-attribution.jsonl");
+    let mut serving_settings = LagunaServingSettings::default_fixed();
+    serving_settings.performance_attribution_log_path = Some(attribution_log_path.clone());
+    let (generation_processor, mut engine) = initialize_laguna_execution_with_serving_settings(
         model_directory.path(),
         DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
         DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
         true,
+        serving_settings,
     )
     .expect("a synthetic Laguna artifact should start through the family startup module");
     let load_result = engine
@@ -96,6 +103,7 @@ async fn should_start_a_laguna_engine_from_a_validated_artifact_and_generate_tok
     engine
         .cancel_generation(chat_command.request_id)
         .expect("cancelling the Laguna request should leave the engine reusable");
+    assert_laguna_attribution_matrix(&attribution_log_path);
 }
 
 #[tokio::test]
@@ -125,4 +133,63 @@ async fn should_fail_model_loading_when_required_prompt_cache_cannot_initialize(
         Err(InferenceEngineError::Fatal { reason })
             if reason == "required Laguna prompt cache initialization failed"
     ));
+}
+
+fn assert_laguna_attribution_matrix(attribution_log_path: &std::path::Path) {
+    let reports = fs::read_to_string(attribution_log_path)
+        .expect("Laguna attribution reports should be readable")
+        .lines()
+        .map(serde_json::from_str::<serde_json::Value>)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("every Laguna attribution report should be valid JSON");
+    let model_loading_report = reports
+        .iter()
+        .find(|report| report["report_kind"] == "model_loading")
+        .expect("Laguna should publish model-loading attribution");
+    let generation_report = reports
+        .iter()
+        .find(|report| report["report_kind"] == "generation")
+        .expect("Laguna should publish generation attribution");
+
+    assert_report_operations(
+        model_loading_report,
+        &[
+            "artifact_validation",
+            "mlx_runtime_initialization",
+            "model_safetensors_mapping",
+            "model_tensor_binding",
+        ],
+    );
+    assert_report_operations(
+        generation_report,
+        &[
+            "chat_command_validation",
+            "prompt_rendering",
+            "prompt_tokenization",
+            "prompt_prefill_advance_span",
+            "decode_advance_span",
+            "attention_forward_span",
+            "router_score_selection",
+            "generated_token_item_synchronization_wait",
+            "generation_finalization",
+        ],
+    );
+}
+
+fn assert_report_operations(report: &serde_json::Value, required_operations: &[&str]) {
+    let recorded_operations = report["operations"]
+        .as_array()
+        .expect("attribution operations should be an array");
+    for required_operation in required_operations {
+        assert!(
+            recorded_operations.iter().any(|operation| {
+                operation["operation"].as_str() == Some(required_operation)
+                    && operation["occurrence_count"].as_u64().unwrap_or(0) > 0
+                    && operation["last_ended_offset_nanoseconds"]
+                        .as_u64()
+                        .is_some()
+            }),
+            "Laguna attribution did not record start/end timing for {required_operation}"
+        );
+    }
 }

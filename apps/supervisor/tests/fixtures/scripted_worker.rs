@@ -300,6 +300,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     processed_prompt_token_count: 2_048,
                                     forward_elapsed_millis: 1_500,
                                     was_reduced_by_memory_capacity: true,
+                                    was_accepted_for_learning: false,
                                     selection_reason:
                                         WorkerPromptProcessingChunkSelectionReason::ExploreUnmeasuredCandidate,
                                     measurement_context: WorkerPromptProcessingChunkOptimizationContext {
@@ -315,14 +316,14 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                         has_prior_capacity_reduction: false,
                                     },
                                     all_candidates_have_measurements: false,
+                                    is_execution_profile_converged: false,
                                     candidate_measurement_summaries: vec![
                                         WorkerPromptProcessingChunkCandidateMeasurementSummary {
                                             candidate_chunk_size_tokens: 4_096,
-                                            measurement_source: WorkerPromptProcessingChunkMeasurementSource::CurrentPositionRange,
-                                            measurement_count: 1,
-                                            average_processed_prompt_token_count: 2_048,
-                                            average_forward_elapsed_millis: 1_500,
-                                            selections_since_last_measurement: Some(0),
+                                            measurement_source: WorkerPromptProcessingChunkMeasurementSource::NoMeasurementsAvailable,
+                                            measurement_count: 0,
+                                            average_processed_prompt_token_count: 0,
+                                            average_forward_elapsed_millis: 0,
                                         },
                                     ],
                                 }),

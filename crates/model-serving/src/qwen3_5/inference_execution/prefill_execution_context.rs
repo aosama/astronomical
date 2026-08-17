@@ -90,9 +90,4 @@ impl Qwen3_5PrefillExecutionContext {
     pub const fn is_prompt_cache_capture_eligible(self) -> bool {
         self.is_prompt_cache_capture_eligible
     }
-
-    #[must_use]
-    pub(super) const fn is_speculative_prefill_sparse_target(self) -> bool {
-        self.is_speculative_prefill_sparse_target
-    }
 }

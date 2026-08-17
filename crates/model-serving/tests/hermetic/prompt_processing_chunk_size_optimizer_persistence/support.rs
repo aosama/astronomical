@@ -66,16 +66,18 @@ pub(super) fn measure_all_candidates(
     measurement_context: PromptProcessingMeasurementContext,
     forward_elapsed_millis_per_measurement: u64,
 ) {
-    for _candidate_chunk_size_tokens in DEFAULT_CANDIDATES {
-        let selection = chunk_size_optimizer.select_candidate_chunk_size(measurement_context);
-        record_chunk_measurement(
-            chunk_size_optimizer,
-            measurement_context,
-            selection.selected_candidate_chunk_size_tokens,
-            selection.selected_candidate_chunk_size_tokens,
-            forward_elapsed_millis_per_measurement,
-            measurement_context,
-        );
+    for _exploration_round in 0..2 {
+        for _candidate_chunk_size_tokens in DEFAULT_CANDIDATES {
+            let selection = chunk_size_optimizer.select_candidate_chunk_size(measurement_context);
+            record_chunk_measurement(
+                chunk_size_optimizer,
+                measurement_context,
+                selection.selected_candidate_chunk_size_tokens,
+                selection.selected_candidate_chunk_size_tokens,
+                forward_elapsed_millis_per_measurement,
+                measurement_context,
+            );
+        }
     }
 }
 

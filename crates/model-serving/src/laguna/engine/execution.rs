@@ -298,23 +298,24 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 .map_err(|_| InferenceEngineError::Fatal {
                     reason: "Laguna decode tokens could not be placed on the runtime".to_owned(),
                 })?;
-        let decode_logits = model
-            .forward(
-                runtime,
-                &decode_token_array,
-                &mut active_request.decoder_state,
-                &mut active_request.performance_attribution,
-            )
-            .map_err(|decode_error| {
-                tracing::error!(?decode_error, "Laguna decode forward failed");
-                InferenceEngineError::Fatal {
-                    reason: "Laguna token generation failed".to_owned(),
-                }
-            })?;
-        let next_token_id = Self::sample_next_token_id(
-            runtime,
-            &decode_logits,
-            &mut active_request.performance_attribution,
+        let next_token_id = active_request.performance_attribution.measure_operation(
+            crate::PerformanceOperation::DecodeAdvanceSpan,
+            |performance_attribution| {
+                let decode_logits = model
+                    .forward(
+                        runtime,
+                        &decode_token_array,
+                        &mut active_request.decoder_state,
+                        performance_attribution,
+                    )
+                    .map_err(|decode_error| {
+                        tracing::error!(?decode_error, "Laguna decode forward failed");
+                        InferenceEngineError::Fatal {
+                            reason: "Laguna token generation failed".to_owned(),
+                        }
+                    })?;
+                Self::sample_next_token_id(runtime, &decode_logits, performance_attribution)
+            },
         )?;
         active_request.next_input_token_ids = vec![next_token_id];
         active_request.remaining_output_tokens =
@@ -403,12 +404,17 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             });
         }
         let configured_maximum_output_tokens = active_request.configured_maximum_output_tokens;
-        let performance_attribution = std::mem::replace(
+        let mut performance_attribution = std::mem::replace(
             &mut active_request.performance_attribution,
             PerformanceAttribution::disabled(),
         );
-        // Release request-owned context before measuring and publishing stable model state.
-        drop(active_request);
+        performance_attribution.measure_operation(
+            crate::PerformanceOperation::GenerationFinalization,
+            |_performance_attribution| {
+                // Request arrays must be released before the stable model-memory snapshot.
+                drop(active_request);
+            },
+        );
         self.record_generation_performance_attribution(
             performance_attribution,
             request_id,
