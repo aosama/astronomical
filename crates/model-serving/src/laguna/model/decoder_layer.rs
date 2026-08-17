@@ -2,7 +2,7 @@
 
 use astronomical_runtime_integration::{MlxArray, MlxMetalKernel, MlxRuntime};
 
-use crate::expert_paging::ExpertWeightPage;
+use crate::expert_paging::ExpertResidencyPhase;
 use crate::laguna::artifacts::LagunaLayerTensorRole;
 use crate::laguna::moe::{
     execute_paged_mixture_on_page, forward_paged_mixture_of_experts,
@@ -26,6 +26,7 @@ pub(super) fn forward_decoder_layer(
     layer_descriptor: &LagunaLayerDescriptor,
     decoder_state: &mut LagunaDecoderState,
     attention_mask_cache: &mut LagunaAttentionMaskCache,
+    expert_residency_phase: ExpertResidencyPhase,
     rms_norm_epsilon: f32,
     router_logit_softcap: f64,
     sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
@@ -79,6 +80,7 @@ pub(super) fn forward_decoder_layer(
                 model,
                 moe_descriptor,
                 layer_index,
+                expert_residency_phase,
                 router_logit_softcap,
                 reduction_kernel,
                 performance_attribution,
@@ -95,6 +97,7 @@ fn forward_sparse_feed_forward(
     model: &LagunaModel,
     moe_descriptor: &crate::laguna::normalization::LagunaMoeDescriptor,
     layer_index: usize,
+    expert_residency_phase: ExpertResidencyPhase,
     router_logit_softcap: f64,
     reduction_kernel: &MlxMetalKernel,
     performance_attribution: &mut PerformanceAttribution,
@@ -154,6 +157,11 @@ fn forward_sparse_feed_forward(
         performance_attribution,
     )?;
     let selected_expert_ids = unique_routed_expert_ids(&selected_indices)?;
+    model.residency().record_expert_demand(
+        paging_slot_index,
+        sparse_layer_plan.expert_capacity(),
+        &selected_expert_ids,
+    );
     if model
         .residency()
         .retained_page_covers_experts(paging_slot_index, &selected_expert_ids)
@@ -176,6 +184,19 @@ fn forward_sparse_feed_forward(
             },
         );
     }
+    let should_stream_complete_layer = expert_residency_phase == ExpertResidencyPhase::Prefill;
+    let pending_page_payload_bytes = if should_stream_complete_layer {
+        sparse_layer_plan.complete_layer_payload_byte_count()?
+    } else {
+        sparse_layer_plan
+            .routed_page(&selected_expert_ids)?
+            .payload_byte_count
+    };
+    model.admit_expert_page_allocation(
+        runtime,
+        pending_page_payload_bytes,
+        performance_attribution,
+    )?;
     let (output, last_forward, streamed_page) = forward_paged_mixture_of_experts(
         runtime,
         hidden_states,
@@ -183,62 +204,29 @@ fn forward_sparse_feed_forward(
         moe_descriptor,
         layer_index,
         &sparse_layer_plan,
+        should_stream_complete_layer,
         router_logit_softcap,
         reduction_kernel,
         performance_attribution,
     )?;
-    model.residency().record_disk_page_load();
+    let streamed_expert_count = streamed_page.manifest().expert_ids.len();
+    model.residency().record_disk_load(streamed_expert_count, 1);
     model.residency().record_forward(last_forward);
-    let hidden_token_count = hidden_states
-        .shape()
-        .get(hidden_states.shape().len().saturating_sub(2))
-        .copied()
-        .unwrap_or(1);
-    if hidden_token_count > 1 {
-        if loaded_page_can_remain_resident_for_next_page(
-            runtime,
-            streamed_page.resident_payload_byte_count(),
-        )? {
-            model.residency().try_commit_complete_layer(
-                paging_slot_index,
-                sparse_layer_plan.expert_capacity(),
-                streamed_page,
-                performance_attribution,
-            )?;
-        }
+    if should_stream_complete_layer {
+        model.residency().try_commit_complete_layer(
+            paging_slot_index,
+            sparse_layer_plan.expert_capacity(),
+            streamed_page,
+            performance_attribution,
+        )?;
     } else {
-        if loaded_page_can_remain_resident_for_next_page(
-            runtime,
-            streamed_page.resident_payload_byte_count(),
-        )? {
-            model.residency().try_commit_routed_page(
-                paging_slot_index,
-                sparse_layer_plan.expert_capacity(),
-                selected_expert_ids,
-                streamed_page,
-                performance_attribution,
-            )?;
-        }
+        model.residency().try_commit_routed_page(
+            paging_slot_index,
+            sparse_layer_plan.expert_capacity(),
+            selected_expert_ids,
+            streamed_page,
+            performance_attribution,
+        )?;
     }
     Ok(output)
-}
-
-/// Keeps one page only when the next mandatory page still fits below MLX's
-/// strict configured ceiling. The current active count already includes the
-/// just-executed page; two additional slots cover its evaluated boundary graph
-/// and the next mandatory page allocation.
-fn loaded_page_can_remain_resident_for_next_page(
-    runtime: &MlxRuntime,
-    next_page_payload_bytes: u64,
-) -> Result<bool, LagunaExecutionError> {
-    let memory_snapshot = runtime.memory_snapshot()?;
-    let current_active_memory_bytes =
-        u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX);
-    let configured_memory_ceiling_bytes =
-        u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).unwrap_or(u64::MAX);
-    let next_two_page_payload_bytes = next_page_payload_bytes.saturating_mul(2);
-    Ok(
-        current_active_memory_bytes.saturating_add(next_two_page_payload_bytes)
-            <= configured_memory_ceiling_bytes,
-    )
 }

@@ -3,16 +3,25 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
-use crate::laguna::{LagunaDecoderState, LagunaTargetContract, laguna_decoder_cache_layout};
+use crate::laguna::{
+    LagunaDecoderState, LagunaExecutionError, LagunaTargetContract, laguna_decoder_cache_layout,
+};
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
-    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
-    PersistentPromptCacheModelContractError, PersistentPromptCachePrefixLookup,
+    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheDiskStoreError,
+    PersistentPromptCacheModelContract, PersistentPromptCacheModelContractError,
+    PersistentPromptCachePrefixLookup, PersistentPromptCachePrefixLookupResult,
     PersistentPromptCachePublicationOutcome,
 };
+
+/// Separates recoverable allocation pressure from durable cache/publication failures.
+pub(super) enum LagunaPromptCacheCaptureError {
+    Capacity(LagunaExecutionError),
+    Engine(InferenceEngineError),
+}
 
 /// Opens the SSD store for one loaded Laguna revision.
 pub(super) fn open_prompt_cache_store(
@@ -108,15 +117,13 @@ fn resolve_quota_bounded_prompt_cache_contract(
     }
 }
 
-/// Restores the longest matching prefix and returns the last block key plus restored token count.
-pub(super) fn restore_prompt_prefix(
-    runtime: &MlxRuntime,
+/// Finds the longest usable prefix without creating any MLX array owners.
+pub(super) fn lookup_prompt_prefix(
     persistent_prompt_cache: &PersistentPromptCacheDiskStore,
     prompt_token_ids: &[u32],
-    decoder_state: &mut LagunaDecoderState,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<(Option<PersistentPromptCacheBlockKey>, u32), InferenceEngineError> {
-    let lookup_result = performance_attribution.measure_operation(
+) -> PersistentPromptCachePrefixLookupResult {
+    performance_attribution.measure_operation(
         PerformanceOperation::PersistentPromptCachePrefixLookup,
         |_performance_attribution| {
             PersistentPromptCachePrefixLookup::for_prompt(
@@ -126,7 +133,18 @@ pub(super) fn restore_prompt_prefix(
                 |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
             )
         },
-    );
+    )
+}
+
+/// Restores a previously admitted prefix and returns its last block key and token count.
+pub(super) fn restore_prompt_prefix(
+    runtime: &MlxRuntime,
+    persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+    prompt_token_ids: &[u32],
+    lookup_result: &PersistentPromptCachePrefixLookupResult,
+    decoder_state: &mut LagunaDecoderState,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<(Option<PersistentPromptCacheBlockKey>, u32), InferenceEngineError> {
     let restored_token_count = lookup_result.restored_token_count();
     if restored_token_count == 0 {
         return Ok((None, 0));
@@ -170,24 +188,34 @@ pub(super) fn restore_prompt_prefix(
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "Laguna prompt-cache restore lost the snapshot key".to_owned(),
             })?;
-    let boundary_snapshot = performance_attribution
-        .measure_operation(
-            PerformanceOperation::PersistentPromptCacheRecurrentSnapshotRead,
-            |attribution| {
-                persistent_prompt_cache.load_recurrent_snapshot(
-                    runtime,
-                    snapshot_key,
-                    attribution.positional_file_read_metrics(),
-                )
-            },
-        )
-        .map_err(|store_error| InferenceEngineError::Fatal {
-            reason: format!("Laguna prompt-cache boundary snapshot could not load: {store_error}"),
-        })?
-        .ok_or_else(|| InferenceEngineError::Fatal {
-            reason: "Laguna prompt-cache boundary snapshot was reported present but missing"
-                .to_owned(),
-        })?;
+    let boundary_snapshot = if persistent_prompt_cache
+        .model_contract
+        .decoder_cache_layout()
+        .has_boundary_state()
+    {
+        performance_attribution
+            .measure_operation(
+                PerformanceOperation::PersistentPromptCacheRecurrentSnapshotRead,
+                |attribution| {
+                    persistent_prompt_cache.load_recurrent_snapshot(
+                        runtime,
+                        snapshot_key,
+                        attribution.positional_file_read_metrics(),
+                    )
+                },
+            )
+            .map_err(|store_error| InferenceEngineError::Fatal {
+                reason: format!(
+                    "Laguna prompt-cache boundary snapshot could not load: {store_error}"
+                ),
+            })?
+            .ok_or_else(|| InferenceEngineError::Fatal {
+                reason: "Laguna prompt-cache boundary snapshot was reported present but missing"
+                    .to_owned(),
+            })?
+    } else {
+        HashMap::new()
+    };
     performance_attribution
         .measure_operation(
             PerformanceOperation::PersistentPromptCacheStateReconstruction,
@@ -219,7 +247,7 @@ pub(super) fn capture_completed_cache_blocks(
     absolute_chunk_end: usize,
     last_published_block_key: &mut Option<PersistentPromptCacheBlockKey>,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<(), InferenceEngineError> {
+) -> Result<(), LagunaPromptCacheCaptureError> {
     let block_token_count = persistent_prompt_cache.model_contract.block_token_count();
     if block_token_count == 0 || !absolute_chunk_end.is_multiple_of(block_token_count) {
         return Ok(());
@@ -233,7 +261,8 @@ pub(super) fn capture_completed_cache_blocks(
         &persistent_prompt_cache.model_contract,
         block_tokens,
         last_published_block_key.as_ref(),
-    )?;
+    )
+    .map_err(LagunaPromptCacheCaptureError::Engine)?;
     let (sequence_state_tensors, boundary_state_tensors) = performance_attribution
         .measure_operation(
             PerformanceOperation::PersistentPromptCacheStateExtraction,
@@ -241,10 +270,16 @@ pub(super) fn capture_completed_cache_blocks(
                 decoder_state.extract_cache_block_tensors(runtime, block_start, absolute_chunk_end)
             },
         )
-        .map_err(|extract_error| InferenceEngineError::InvalidRequest {
-            reason: format!(
-                "persistent prompt cache failed during required persistent prompt-state capture; the request was stopped: {extract_error:?}"
-            ),
+        .map_err(|extract_error| {
+            if extract_error.is_recoverable_memory_pressure() {
+                LagunaPromptCacheCaptureError::Capacity(extract_error)
+            } else {
+                LagunaPromptCacheCaptureError::Engine(InferenceEngineError::InvalidRequest {
+                    reason: format!(
+                        "persistent prompt cache failed during required persistent prompt-state capture; the request was stopped: {extract_error:?}"
+                    ),
+                })
+            }
         })?;
     let publication_outcome = persistent_prompt_cache
         .publish_block_with_performance_attribution(
@@ -255,11 +290,7 @@ pub(super) fn capture_completed_cache_blocks(
             &boundary_state_tensors,
             performance_attribution,
         )
-        .map_err(|publish_error| InferenceEngineError::InvalidRequest {
-            reason: format!(
-                "persistent prompt cache failed during required persistent prompt-state capture; the request was stopped: {publish_error}"
-            ),
-        })?;
+        .map_err(prompt_cache_publication_error)?;
     if matches!(
         publication_outcome,
         PersistentPromptCachePublicationOutcome::Published
@@ -267,9 +298,29 @@ pub(super) fn capture_completed_cache_blocks(
     ) {
         *last_published_block_key = Some(block_key);
     }
-    let _unused_maps: (HashMap<String, MlxArray>, HashMap<String, MlxArray>) =
-        (sequence_state_tensors, boundary_state_tensors);
     Ok(())
+}
+
+fn prompt_cache_publication_error(
+    publish_error: PersistentPromptCacheDiskStoreError,
+) -> LagunaPromptCacheCaptureError {
+    match publish_error {
+        PersistentPromptCacheDiskStoreError::SaveSafetensors { source }
+            if matches!(
+                &source,
+                astronomical_runtime_integration::MlxRuntimeError::ActiveMemoryLimitExceeded { .. }
+            ) || source.is_recoverable_graphics_processor_out_of_memory() =>
+        {
+            LagunaPromptCacheCaptureError::Capacity(LagunaExecutionError::Runtime(source))
+        }
+        publish_error => {
+            LagunaPromptCacheCaptureError::Engine(InferenceEngineError::InvalidRequest {
+                reason: format!(
+                    "persistent prompt cache failed during required persistent prompt-state capture; the request was stopped: {publish_error}"
+                ),
+            })
+        }
+    }
 }
 
 fn cache_block_key(

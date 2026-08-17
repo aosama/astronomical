@@ -1,12 +1,35 @@
 use crate::decoder_cache::DecoderCacheLayoutError;
+#[cfg(feature = "direct-mlx")]
+use crate::laguna::paging::LagunaPagingError;
+#[cfg(feature = "direct-mlx")]
+use astronomical_runtime_integration::MlxRuntimeError;
+use thiserror::Error;
 
 /// Typed failure from Laguna model construction or a single forward.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum LagunaExecutionError {
+    #[error("a required Laguna weight is missing: {description}")]
     MissingWeight { description: &'static str },
+    #[error("Laguna activation geometry is invalid: {description}")]
     InvalidActivationGeometry { description: &'static str },
+    #[error("Laguna runtime operation failed: {description}")]
     RuntimeOperation { description: String },
-    DecoderCache(DecoderCacheLayoutError),
+    #[cfg(feature = "direct-mlx")]
+    #[error(
+        "Laguna expert allocation requires {pending_allocation_bytes} bytes and exceeds the active ceiling by {shortfall_bytes} bytes"
+    )]
+    ExpertAllocationRejected {
+        pending_allocation_bytes: u64,
+        shortfall_bytes: u64,
+    },
+    #[error("Laguna decoder cache failed: {0}")]
+    DecoderCache(#[from] DecoderCacheLayoutError),
+    #[cfg(feature = "direct-mlx")]
+    #[error("Laguna expert paging failed: {0}")]
+    Paging(LagunaPagingError),
+    #[cfg(feature = "direct-mlx")]
+    #[error("Laguna reached an MLX runtime boundary: {0}")]
+    Runtime(MlxRuntimeError),
 }
 
 impl LagunaExecutionError {
@@ -18,6 +41,20 @@ impl LagunaExecutionError {
     pub(crate) fn invalid_geometry(description: &'static str) -> Self {
         Self::InvalidActivationGeometry { description }
     }
+
+    #[cfg(feature = "direct-mlx")]
+    /// Capacity recovery must never classify structural model failures as memory pressure.
+    #[must_use]
+    pub fn is_recoverable_memory_pressure(&self) -> bool {
+        match self {
+            Self::Runtime(MlxRuntimeError::ActiveMemoryLimitExceeded { .. }) => true,
+            Self::Runtime(runtime_error) => {
+                runtime_error.is_recoverable_graphics_processor_out_of_memory()
+            }
+            Self::ExpertAllocationRejected { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 #[cfg(feature = "direct-mlx")]
@@ -28,25 +65,18 @@ impl From<crate::expert_paging::RetainedExpertLayerCommitError> for LagunaExecut
 }
 
 #[cfg(feature = "direct-mlx")]
-impl From<super::super::paging::LagunaPagingError> for LagunaExecutionError {
-    fn from(_error: super::super::paging::LagunaPagingError) -> Self {
-        Self::invalid_geometry("Laguna expert paging failed during model execution")
-    }
-}
-
-impl From<DecoderCacheLayoutError> for LagunaExecutionError {
-    fn from(error: DecoderCacheLayoutError) -> Self {
-        Self::DecoderCache(error)
+impl From<LagunaPagingError> for LagunaExecutionError {
+    fn from(error: LagunaPagingError) -> Self {
+        match error {
+            LagunaPagingError::Runtime(runtime_error) => Self::Runtime(runtime_error),
+            paging_error => Self::Paging(paging_error),
+        }
     }
 }
 
 #[cfg(feature = "direct-mlx")]
-impl From<astronomical_runtime_integration::MlxRuntimeError> for LagunaExecutionError {
-    fn from(error: astronomical_runtime_integration::MlxRuntimeError) -> Self {
-        Self::RuntimeOperation {
-            description: format!(
-                "an MLX runtime operation failed during Laguna execution: {error}"
-            ),
-        }
+impl From<MlxRuntimeError> for LagunaExecutionError {
+    fn from(error: MlxRuntimeError) -> Self {
+        Self::Runtime(error)
     }
 }

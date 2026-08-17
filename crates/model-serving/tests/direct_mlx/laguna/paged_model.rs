@@ -9,6 +9,9 @@ use astronomical_model_serving::{
 
 use super::page_artifact::{filled, paging_plan, test_runtime, write_sparse_artifact};
 
+#[path = "paged_model/demotion.rs"]
+mod demotion;
+
 fn weight_id(role: LagunaGlobalTensorRole) -> LagunaTensorId {
     LagunaTensorId::Global {
         role,
@@ -142,16 +145,16 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     let prompt_tokens = runtime
-        .array_from_u32(&[1, 2], &[2])
+        .array_from_u32(&[1], &[1])
         .expect("Romeo-shaped prompt tokens should be valid");
     let prompt_logits = model
-        .forward(
+        .forward_prefill(
             &runtime,
             &prompt_tokens,
             &mut decoder_state,
             &mut performance_attribution,
         )
-        .expect("paged prefill should execute");
+        .expect("one-token paged prefill should retain prefill residency semantics");
     assert_eq!(prompt_logits.shape(), vec![1, 1, 8]);
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Paged);
     let prefill_telemetry = model.expert_residency_telemetry();
@@ -160,7 +163,8 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
     assert!(prefill_telemetry.complete_layer_payload_bytes > 0);
     assert_eq!(prefill_telemetry.partial_layer_count, 0);
     let prefill_statistics = model.expert_weight_memory_cache_statistics();
-    assert_eq!(prefill_statistics.disk_page_load_count, 1);
+    assert_eq!(prefill_statistics.disk_page_load_count, 2);
+    assert_eq!(prefill_statistics.disk_batch_load_count, 1);
     assert_eq!(prefill_statistics.complete_layer_count, 1);
     assert!(
         performance_attribution
@@ -215,7 +219,7 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        2
+        3
     );
     assert!(
         performance_attribution
@@ -338,7 +342,7 @@ async fn should_retain_a_complete_layer_when_the_ceiling_fits_and_reuse_it() {
             &mut performance_attribution,
         )
         .expect("first prefill should stream and commit");
-    assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Hybrid);
+    assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Resident);
     let first_telemetry = model.expert_residency_telemetry();
     assert_eq!(first_telemetry.complete_layer_count, 1);
     assert!(first_telemetry.complete_layer_payload_bytes > 0);
@@ -346,7 +350,7 @@ async fn should_retain_a_complete_layer_when_the_ceiling_fits_and_reuse_it() {
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        1
+        2
     );
     assert!(
         performance_attribution
@@ -365,12 +369,12 @@ async fn should_retain_a_complete_layer_when_the_ceiling_fits_and_reuse_it() {
             &mut performance_attribution,
         )
         .expect("second prefill should reuse the retained complete layer");
-    assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Hybrid);
+    assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Resident);
     assert_eq!(
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        1
+        2
     );
     let reuse_plan = model
         .active_expert_residency_plan()
@@ -414,7 +418,7 @@ async fn should_evict_a_retained_layer_when_the_ceiling_drops_to_zero() {
             &mut performance_attribution,
         )
         .expect("prefill should retain the complete layer");
-    assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Hybrid);
+    assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Resident);
 
     model
         .set_retained_expert_ceiling(0)
@@ -434,7 +438,7 @@ async fn should_evict_a_retained_layer_when_the_ceiling_drops_to_zero() {
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        2
+        4
     );
 }
 
@@ -476,7 +480,7 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        1
+        2
     );
 
     let decode_tokens = runtime
@@ -499,7 +503,7 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        2
+        3
     );
 
     let second_decode_tokens = runtime
@@ -518,7 +522,7 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        2
+        3
     );
     let reuse_plan = model
         .active_expert_residency_plan()
@@ -527,4 +531,45 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
         reuse_plan.layer_targets[0],
         ExpertLayerResidencyTarget::PreservePartial
     );
+}
+
+#[tokio::test]
+async fn should_restore_decoder_allocation_ownership_after_a_failed_prefill_attempt() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let model_directory = tempfile::tempdir().expect("checkpoint model directory");
+    write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = paging_plan(model_directory.path());
+    let runtime = test_runtime();
+    let contract = artifact.target_contract().clone();
+    let weights = bind_core_page_weights(&runtime, &contract, false)
+        .expect("core Laguna weights should bind without stacked experts");
+    let model = LagunaModel::new(contract, weights)
+        .expect("a checkpoint model should construct")
+        .with_paging_plan(plan)
+        .expect("a checkpoint model needs paging");
+    let mut decoder_state =
+        LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
+    let allocation_checkpoint = decoder_state
+        .allocation_checkpoint()
+        .expect("an empty decoder checkpoint should retain safely");
+    let prompt_tokens = runtime
+        .array_from_u32(&[1, 2], &[2])
+        .expect("Romeo-shaped prompt tokens should be valid");
+    let mut performance_attribution = PerformanceAttribution::disabled();
+
+    model
+        .forward(
+            &runtime,
+            &prompt_tokens,
+            &mut decoder_state,
+            &mut performance_attribution,
+        )
+        .expect("the attempted prefill should mutate decoder state");
+    assert_eq!(decoder_state.absolute_position(0), Some(2));
+
+    decoder_state
+        .restore_allocation_checkpoint(allocation_checkpoint)
+        .expect("checkpoint restoration should return to the pre-attempt state");
+    assert_eq!(decoder_state.absolute_position(0), Some(0));
+    assert_eq!(decoder_state.payload_byte_count(), 0);
 }

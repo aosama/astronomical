@@ -65,4 +65,15 @@ impl LagunaPromptProcessingChunkSizer {
             .saturating_add(configured_chunk_size_tokens)
             .min(final_prompt_end_token_position_exclusive)
     }
+
+    /// Selects one deterministic fallback after memory pressure rejects a fixed attempt.
+    #[must_use]
+    pub const fn next_smaller_executable_chunk_size_tokens(
+        attempted_chunk_size_tokens: usize,
+    ) -> Option<usize> {
+        if attempted_chunk_size_tokens <= 1 {
+            return None;
+        }
+        Some(attempted_chunk_size_tokens / 2)
+    }
 }

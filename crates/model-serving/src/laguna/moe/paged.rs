@@ -25,6 +25,7 @@ pub(in crate::laguna) fn forward_paged_mixture_of_experts(
     moe_descriptor: &LagunaMoeDescriptor,
     layer_index: usize,
     sparse_layer_plan: &LagunaSparseLayerPagingPlan,
+    should_stream_complete_layer: bool,
     router_logit_softcap: f64,
     sorted_expert_reduction_kernel: &MlxMetalKernel,
     performance_attribution: &mut PerformanceAttribution,
@@ -45,8 +46,7 @@ pub(in crate::laguna) fn forward_paged_mixture_of_experts(
         router_logit_softcap,
         performance_attribution,
     )?;
-    let token_count = token_count_from_hidden_states(hidden_states)?;
-    let page_expert_ids = if token_count > 1 {
+    let page_expert_ids = if should_stream_complete_layer {
         (0..sparse_layer_plan.expert_capacity()).collect::<Vec<_>>()
     } else {
         sorted_unique_expert_ids(&selected_indices)?
@@ -81,7 +81,7 @@ pub(in crate::laguna) fn forward_paged_mixture_of_experts(
         crate::performance_attribution::PerformanceOperation::PagedMoeOutputMaterializationSynchronizationWait,
         |_| runtime.evaluate_arrays(&[&output]),
     )?;
-    let last_forward = if token_count > 1 {
+    let last_forward = if should_stream_complete_layer {
         LagunaLastExpertForward::StreamedCompleteLayer {
             layer_count: 1,
             payload_bytes: expert_page.resident_payload_byte_count(),
@@ -198,18 +198,6 @@ pub(in crate::laguna) fn unique_routed_expert_ids(
     selected_indices: &MlxArray,
 ) -> Result<Vec<usize>, LagunaExecutionError> {
     sorted_unique_expert_ids(selected_indices)
-}
-
-fn token_count_from_hidden_states(hidden_states: &MlxArray) -> Result<usize, LagunaExecutionError> {
-    let hidden_shape = hidden_states.shape();
-    let token_axis = if hidden_shape.len() >= 2 {
-        hidden_shape[hidden_shape.len() - 2]
-    } else {
-        hidden_shape.first().copied().unwrap_or(0)
-    };
-    usize::try_from(token_axis).map_err(|_| {
-        LagunaExecutionError::invalid_geometry("hidden token count exceeds the usize range")
-    })
 }
 
 fn sorted_unique_expert_ids(
