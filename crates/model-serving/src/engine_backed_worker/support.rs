@@ -23,8 +23,13 @@ pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
         max_output_tokens: u32,
     ) -> impl std::future::Future<Output = Result<(Processor, Engine), String>> + Send;
 
-    /// Updates the ceiling used by a future lazy model load.
-    fn update_mlx_memory_ceiling_bytes(&mut self, _effective_mlx_memory_ceiling_bytes: u64) {}
+    /// Updates the complete process-global limit pair used by a future lazy model load.
+    fn update_mlx_memory_limits(
+        &mut self,
+        _effective_mlx_memory_ceiling_bytes: u64,
+        _allocator_cache_memory_limit_bytes: u64,
+    ) {
+    }
 
     /// Returns the global prompt-cache root directory, if the factory manages one.
     ///

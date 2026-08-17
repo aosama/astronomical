@@ -44,7 +44,10 @@ where
                     )
                     .await;
             };
-            model_factory.update_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
+            model_factory.update_mlx_memory_limits(
+                requested_mlx_memory_ceiling_bytes,
+                requested_mlx_memory_ceiling_bytes,
+            );
             self.effective_mlx_memory_ceiling_bytes = requested_mlx_memory_ceiling_bytes;
             event_writer
                 .send_event(&WorkerEvent::MlxMemoryLimitChanged {
@@ -67,8 +70,10 @@ where
                 self.minimum_mlx_memory_ceiling_bytes =
                     mlx_memory_limit_adjustment.minimum_mlx_memory_ceiling_bytes();
                 if let Some(model_factory) = self.model_factory.as_mut() {
-                    model_factory
-                        .update_mlx_memory_ceiling_bytes(self.effective_mlx_memory_ceiling_bytes);
+                    model_factory.update_mlx_memory_limits(
+                        self.effective_mlx_memory_ceiling_bytes,
+                        mlx_memory_limit_adjustment.allocator_cache_memory_limit_bytes(),
+                    );
                 }
                 event_writer
                     .send_event(&WorkerEvent::MlxMemoryLimitChanged {
