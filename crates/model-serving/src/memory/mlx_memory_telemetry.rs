@@ -103,6 +103,7 @@ impl MlxMemoryTelemetry {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxMemoryLimitAdjustment {
     effective_mlx_memory_ceiling_bytes: u64,
+    allocator_cache_memory_limit_bytes: u64,
     minimum_mlx_memory_ceiling_bytes: u64,
     expert_memory_mode: ExpertMemoryMode,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
@@ -113,12 +114,14 @@ impl MlxMemoryLimitAdjustment {
     #[must_use]
     pub const fn new(
         effective_mlx_memory_ceiling_bytes: u64,
+        allocator_cache_memory_limit_bytes: u64,
         minimum_mlx_memory_ceiling_bytes: u64,
         expert_memory_mode: ExpertMemoryMode,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     ) -> Self {
         Self {
             effective_mlx_memory_ceiling_bytes,
+            allocator_cache_memory_limit_bytes,
             minimum_mlx_memory_ceiling_bytes,
             expert_memory_mode,
             mlx_memory_telemetry,
@@ -128,6 +131,12 @@ impl MlxMemoryLimitAdjustment {
     #[must_use]
     pub const fn effective_mlx_memory_ceiling_bytes(self) -> u64 {
         self.effective_mlx_memory_ceiling_bytes
+    }
+
+    /// Returns the allocator-retention limit paired with the active-memory ceiling.
+    #[must_use]
+    pub const fn allocator_cache_memory_limit_bytes(self) -> u64 {
+        self.allocator_cache_memory_limit_bytes
     }
 
     #[must_use]

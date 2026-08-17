@@ -1,6 +1,6 @@
 use std::sync::{
-    Arc,
-    atomic::{AtomicU64, AtomicUsize, Ordering},
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
 };
 use std::time::Duration;
 
@@ -33,6 +33,7 @@ mod prefill_progress;
 mod prompt_cache_stats;
 mod ready_and_model_lifecycle;
 mod scripted_chat_test_doubles;
+mod scripted_model_factory_test_doubles;
 mod support;
 mod tracking_chat_engine;
 
@@ -53,8 +54,11 @@ impl PreparedInferenceRequest for ScriptedInferenceRequest {
 }
 
 use scripted_chat_test_doubles::{
-    CorrectionRequestingProcessor, FirstCreationFailsScriptedModelFactory,
-    LazyScriptedModelFactory, MalformedFinishProcessor, ScriptedChatEngine, ScriptedChatProcessor,
+    CorrectionRequestingProcessor, MalformedFinishProcessor, ScriptedChatEngine,
+    ScriptedChatProcessor,
+};
+use scripted_model_factory_test_doubles::{
+    FirstCreationFailsScriptedModelFactory, LazyScriptedModelFactory,
 };
 use support::{
     chat_command, close_worker_transport, next_event, ready_event, ready_event_with_load_details,

@@ -67,6 +67,8 @@ impl LagunaInferenceExecution {
         if ceiling_change_decision == MemoryCeilingChangeDecision::Unchanged {
             return Ok(MlxMemoryLimitAdjustment::new(
                 requested_mlx_memory_ceiling_bytes,
+                u64::try_from(current_memory_limits.allocator_cache_memory_limit_bytes())
+                    .unwrap_or(u64::MAX),
                 minimum_mlx_memory_ceiling_bytes,
                 expert_memory_mode,
                 self.collect_current_mlx_memory_telemetry(),
@@ -255,6 +257,7 @@ impl LagunaInferenceExecution {
             .update_expert_allocation_ceiling(requested_mlx_memory_ceiling_bytes);
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
+            u64::try_from(updated_limits.allocator_cache_memory_limit_bytes()).unwrap_or(u64::MAX),
             minimum_mlx_memory_ceiling_bytes,
             self.model
                 .as_ref()
