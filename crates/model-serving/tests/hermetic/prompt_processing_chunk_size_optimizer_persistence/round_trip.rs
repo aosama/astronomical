@@ -25,7 +25,7 @@ fn should_round_trip_a_fresh_optimizer_deterministically() {
 }
 
 #[test]
-fn should_round_trip_reduced_measurements_and_next_context() {
+fn should_round_trip_measurements_and_next_execution_profile() {
     let temporary_directory = temporary_directory();
     let optimizer_directory = temporary_directory.path().join("optimizer");
     let mut original_optimizer = create_optimizer_with_default_candidates();
@@ -38,7 +38,7 @@ fn should_round_trip_reduced_measurements_and_next_context() {
             &mut original_optimizer,
             unconstrained_context,
             candidate_chunk_size_tokens,
-            candidate_chunk_size_tokens.min(512),
+            candidate_chunk_size_tokens,
             candidate_chunk_size_tokens as u64,
             capacity_reduced_context,
         );
@@ -61,7 +61,7 @@ fn should_round_trip_reduced_measurements_and_next_context() {
 }
 
 #[test]
-fn should_preserve_recent_window_and_selection_sequence() {
+fn should_preserve_the_recent_measurement_window() {
     let temporary_directory = temporary_directory();
     let optimizer_directory = temporary_directory.path().join("optimizer");
     let mut original_optimizer = create_optimizer_with_default_candidates();
@@ -95,4 +95,55 @@ fn should_preserve_recent_window_and_selection_sequence() {
         original_optimizer.select_candidate_chunk_size(measurement_context),
         loaded_optimizer.select_candidate_chunk_size(measurement_context)
     );
+}
+
+#[test]
+fn should_resume_the_converged_winner_across_positions_after_restart() {
+    let temporary_directory = temporary_directory();
+    let optimizer_directory = temporary_directory.path().join("optimizer");
+    let mut original_optimizer = create_optimizer_with_default_candidates();
+    let execution_profile_identifier = 42;
+    for (position_range_identifier, candidate_chunk_size_tokens) in
+        DEFAULT_CANDIDATES.into_iter().enumerate()
+    {
+        let measurement_context =
+            PromptProcessingMeasurementContext::with_position_independent_execution_profile(
+                position_range_identifier as u64,
+                execution_profile_identifier,
+            );
+        for _sample_index in 0..2 {
+            record_chunk_measurement(
+                &mut original_optimizer,
+                measurement_context,
+                candidate_chunk_size_tokens,
+                candidate_chunk_size_tokens,
+                if candidate_chunk_size_tokens == 2_048 {
+                    100
+                } else {
+                    5_000
+                },
+                measurement_context,
+            );
+        }
+    }
+    original_optimizer
+        .save_to_directory(&optimizer_directory, "test-model", "rev-1")
+        .expect("save should succeed");
+
+    let mut loaded_optimizer = load_expect_some(
+        &state_file_path_for_model(&optimizer_directory, "test-model", "rev-1"),
+        "test-model",
+        "rev-1",
+        &DEFAULT_CANDIDATES,
+        MAXIMUM_RETAINED_MEASUREMENTS,
+    );
+    for position_range_identifier in 100..300 {
+        let measurement_context =
+            PromptProcessingMeasurementContext::with_position_independent_execution_profile(
+                position_range_identifier,
+                execution_profile_identifier,
+            );
+        let selection = loaded_optimizer.select_candidate_chunk_size(measurement_context);
+        assert_eq!(selection.selected_candidate_chunk_size_tokens, 2_048);
+    }
 }

@@ -24,7 +24,7 @@ function optimizerAssessment(optimizerDocument) {
     if (!latestChunkOutcome) {
         return {
             title: "Learning starts with the next prompt",
-            detail: "Astronomical will compare chunk sizes separately for each token range and execution profile.",
+            detail: "Astronomical will compare chunk sizes for each material execution profile.",
             tone: "waiting"
         };
     }
@@ -36,16 +36,16 @@ function optimizerAssessment(optimizerDocument) {
             tone: "learning"
         };
     }
-    if (latestChunkOutcome.all_candidates_have_measurements) {
+    if (latestChunkOutcome.is_execution_profile_converged) {
         return {
-            title: "Profile ready for " + rangeTitle,
-            detail: "Every configured chunk size has usable evidence. This profile only applies to this token range and matching execution conditions.",
+            title: "Execution profile converged",
+            detail: "Every configured chunk size has usable evidence. Position ranges remain observation telemetry and do not restart learning.",
             tone: "ready"
         };
     }
     const contextScope = optimizerContextScope(latestChunkOutcome, null);
     const measuredCandidateCount = contextScope
-        ? contextScope.directlyMeasuredCandidateCount + contextScope.equivalentContextCandidateCount
+        ? contextScope.measuredProfileCandidateCount
         : 0;
     const candidateCount = contextScope && contextScope.candidateCount > 0
         ? contextScope.candidateCount
@@ -84,7 +84,7 @@ function optimizerModeTitle(optimizerDocument) {
 }
 
 // Converts absolute token positions into one bounded context-window track and
-// counts how much evidence belongs directly or equivalently to this profile.
+// counts how much evidence belongs to the material execution profile.
 function optimizerContextScope(latestChunkOutcome, maximumInputTokens) {
     const measurementContext = latestChunkOutcome ? latestChunkOutcome.measurement_context : null;
     if (!measurementContext) { return null; }
@@ -106,18 +106,12 @@ function optimizerContextScope(latestChunkOutcome, maximumInputTokens) {
         chunkStartTokenPosition
     );
     const candidateMeasurements = latestChunkOutcome.candidate_measurement_summaries || [];
-    const directlyMeasuredCandidateCount = candidateMeasurements.filter(
+    const measuredProfileCandidateCount = candidateMeasurements.filter(
         (candidateMeasurement) => candidateMeasurement.measurement_count > 0
-            && candidateMeasurement.measurement_source === "current_position_range"
-    ).length;
-    const equivalentContextCandidateCount = candidateMeasurements.filter(
-        (candidateMeasurement) => candidateMeasurement.measurement_count > 0
-            && candidateMeasurement.measurement_source
-                === "other_position_ranges_with_same_execution_profile"
+            && candidateMeasurement.measurement_source === "execution_profile"
     ).length;
     const unmeasuredCandidateCount = candidateMeasurements.length
-        - directlyMeasuredCandidateCount
-        - equivalentContextCandidateCount;
+        - measuredProfileCandidateCount;
     return {
         rangeStartTokenPosition,
         rangeEndTokenPositionExclusive,
@@ -136,8 +130,7 @@ function optimizerContextScope(latestChunkOutcome, maximumInputTokens) {
             contextWindowTokenCount
         ),
         candidateCount: candidateMeasurements.length,
-        directlyMeasuredCandidateCount,
-        equivalentContextCandidateCount,
+        measuredProfileCandidateCount,
         unmeasuredCandidateCount
     };
 }
@@ -147,8 +140,7 @@ function optimizerTrackPercentage(tokenPosition, contextWindowTokenCount) {
     return Math.max(0, Math.min(100, tokenPosition * 100 / contextWindowTokenCount));
 }
 
-// Coverage reports usable evidence rather than raw samples: measurements from
-// an equivalent execution profile are valid even when collected in another range.
+// Coverage reports usable profile evidence rather than raw position observations.
 
 function renderOptimizerCoverage(contextScope) {
     const coverageValue = document.getElementById("optimizer-coverage-value");
@@ -158,11 +150,9 @@ function renderOptimizerCoverage(contextScope) {
         coverageDetail.textContent = "Candidate comparisons appear after prompt processing.";
         return;
     }
-    const usableEvidenceCount = contextScope.directlyMeasuredCandidateCount
-        + contextScope.equivalentContextCandidateCount;
+    const usableEvidenceCount = contextScope.measuredProfileCandidateCount;
     coverageValue.textContent = usableEvidenceCount + " of " + contextScope.candidateCount;
-    coverageDetail.textContent = contextScope.directlyMeasuredCandidateCount + " measured in this range · "
-        + contextScope.equivalentContextCandidateCount + " from matching contexts · "
+    coverageDetail.textContent = contextScope.measuredProfileCandidateCount + " measured for this profile · "
         + contextScope.unmeasuredCandidateCount + " not measured";
 }
 
@@ -413,17 +403,11 @@ function optimizerDecisionPresentation(latestChunkOutcome) {
     const reason = latestChunkOutcome.selection.reason;
     let explanation;
     if (reason === "explore_unmeasured_candidate") {
-        explanation = "Astronomical tried this capacity to collect missing evidence for the active token range and execution profile.";
-    } else if (reason === "refresh_stale_candidate_measurement") {
-        explanation = "Astronomical retested this capacity because its evidence for the active context profile had become stale.";
+        explanation = "Astronomical tried this capacity to collect missing evidence for the material execution profile.";
     } else if (reason === "minimize_projected_remaining_prompt_latency") {
         explanation = "Measurements for this context profile predicted this capacity would finish the remaining prompt sooner.";
     } else if (reason === "remaining_tokens_below_smallest_candidate") {
         explanation = "The remaining prompt was smaller than every configured capacity, so Astronomical processed the short tail directly.";
-    } else if (reason === "smallest_candidate_containing_final_prompt_segment") {
-        explanation = formatOptimizerTokenCount(processedPromptTokens)
-            + " tokens remained. " + formatOptimizerTokenCount(selectedCapacityTokens)
-            + " was the smallest configured capacity that could finish them in one pass.";
     } else {
         explanation = "Astronomical recorded the decision, but this version does not recognize its selection reason.";
     }
@@ -474,18 +458,13 @@ function optimizerPositionRangeTitle(measurementContext) {
 
 function optimizerSelectionReasonTitle(selectionReason) {
     if (selectionReason === "explore_unmeasured_candidate") { return "Explore unmeasured candidate"; }
-    if (selectionReason === "refresh_stale_candidate_measurement") { return "Refresh stale candidate measurement"; }
     if (selectionReason === "minimize_projected_remaining_prompt_latency") { return "Minimize projected remaining prompt latency"; }
     if (selectionReason === "remaining_tokens_below_smallest_candidate") { return "Remaining tokens below smallest candidate"; }
-    if (selectionReason === "smallest_candidate_containing_final_prompt_segment") { return "Smallest candidate containing final prompt segment"; }
     return "Unknown selection reason";
 }
 
 function optimizerMeasurementSourceTitle(measurementSource) {
-    if (measurementSource === "current_position_range") { return "Measured in this token range"; }
-    if (measurementSource === "other_position_ranges_with_same_execution_profile") {
-        return "Evidence from a matching execution context";
-    }
+    if (measurementSource === "execution_profile") { return "Evidence for this execution profile"; }
     return "No evidence for this context yet";
 }
 

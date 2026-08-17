@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn should_require_fixed_prompt_processing_chunk_size_when_optimizer_is_disabled() {
+fn should_use_the_fixed_default_when_optimizer_is_disabled_without_a_size() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
@@ -10,10 +10,18 @@ fn should_require_fixed_prompt_processing_chunk_size_when_optimizer_is_disabled(
         }"#,
     );
 
-    assert!(matches!(
-        AstronomicalConfig::load_from_home_directory(temp_home.path()),
-        Err(AstronomicalConfigError::FixedPromptProcessingChunkSizeTokensRequiredWhenOptimizerDisabled)
-    ));
+    let user_config = AstronomicalConfig::load_from_home_directory(temp_home.path())
+        .expect("fixed mode should use the qualified default chunk size");
+
+    assert_eq!(
+        user_config
+            .prompt_processing_chunk_sizing_policy()
+            .expect("the fixed policy should resolve"),
+        PromptProcessingChunkSizingPolicy::Fixed {
+            fixed_prompt_processing_chunk_size_tokens: 2_048,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+        }
+    );
 }
 
 #[test]
@@ -155,7 +163,7 @@ fn should_not_report_ignored_fixed_size_when_only_optimizer_is_enabled() {
 }
 
 #[test]
-fn should_ignore_fixed_chunk_size_when_optimizer_setting_is_omitted() {
+fn should_use_configured_fixed_chunk_size_when_optimizer_setting_is_omitted() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
@@ -163,16 +171,15 @@ fn should_ignore_fixed_chunk_size_when_optimizer_setting_is_omitted() {
     );
 
     let user_config = AstronomicalConfig::load_from_home_directory(temp_home.path())
-        .expect("config should default to optimized prompt processing");
+        .expect("config should use the configured fixed prompt-processing size");
 
     assert_eq!(
         user_config
             .prompt_processing_chunk_sizing_policy()
-            .expect("the optimized prefill policy should resolve"),
-        PromptProcessingChunkSizingPolicy::Optimized {
-            prompt_processing_chunk_size_optimizer_candidate_token_counts: vec![
-                1_024, 2_048, 4_096, 8_192
-            ],
+            .expect("the fixed prefill policy should resolve"),
+        PromptProcessingChunkSizingPolicy::Fixed {
+            fixed_prompt_processing_chunk_size_tokens: 4_096,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
         }
     );
     assert_eq!(
@@ -183,7 +190,7 @@ fn should_ignore_fixed_chunk_size_when_optimizer_setting_is_omitted() {
 }
 
 #[test]
-fn should_default_to_optimized_prompt_processing_when_setting_is_omitted() {
+fn should_default_to_fixed_prompt_processing_when_setting_is_omitted() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     let config_directory = temp_home.path().join(".astronomical");
     std::fs::create_dir_all(&config_directory).expect("config directory should be created");
@@ -191,16 +198,15 @@ fn should_default_to_optimized_prompt_processing_when_setting_is_omitted() {
         .expect("config file should be written");
 
     let user_config = AstronomicalConfig::load_from_home_directory(temp_home.path())
-        .expect("omitted sizing settings should select the optimizer");
+        .expect("omitted sizing settings should select the qualified fixed default");
 
     assert_eq!(
         user_config
             .prompt_processing_chunk_sizing_policy()
-            .expect("optimized policy should resolve"),
-        PromptProcessingChunkSizingPolicy::Optimized {
-            prompt_processing_chunk_size_optimizer_candidate_token_counts: vec![
-                1_024, 2_048, 4_096, 8_192
-            ],
+            .expect("fixed policy should resolve"),
+        PromptProcessingChunkSizingPolicy::Fixed {
+            fixed_prompt_processing_chunk_size_tokens: 2_048,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
         }
     );
 }

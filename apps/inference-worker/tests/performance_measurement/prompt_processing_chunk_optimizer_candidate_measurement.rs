@@ -150,14 +150,14 @@ fn assert_persisted_chunk_measurements(optimizer_state_file_path: &Path) {
         .expect("the configuration-enabled optimizer should persist measurement state");
     let optimizer_state: serde_json::Value = serde_json::from_str(&serialized_optimizer_state)
         .expect("the persisted optimizer state should be valid JSON");
-    assert_eq!(optimizer_state["format_version"], 5);
-    let context_buckets = optimizer_state["context_buckets"]
+    assert_eq!(optimizer_state["format_version"], 6);
+    let execution_profile_buckets = optimizer_state["execution_profile_buckets"]
         .as_array()
-        .expect("optimizer context buckets should be an array");
-    let persisted_measurement_count = context_buckets
+        .expect("optimizer execution-profile buckets should be an array");
+    let persisted_measurement_count = execution_profile_buckets
         .iter()
-        .flat_map(|context_bucket| {
-            context_bucket["candidates"]
+        .flat_map(|execution_profile_bucket| {
+            execution_profile_bucket["candidates"]
                 .as_array()
                 .into_iter()
                 .flatten()

@@ -20,8 +20,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                             processed_prompt_token_count: 480,
                             forward_elapsed_millis: 350,
                             was_reduced_by_memory_capacity: true,
+                            was_accepted_for_learning: false,
                             selection_reason:
-                                PromptProcessingChunkSizeSelectionReason::RefreshStaleCandidateMeasurement,
+                                PromptProcessingChunkSizeSelectionReason::MinimizeProjectedRemainingPromptLatency,
                             measurement_context: PromptProcessingChunkOptimizationContext {
                                 chunk_start_token_position: 1_024,
                                 position_range_start_token_position: 0,
@@ -35,15 +36,15 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                                 has_prior_capacity_reduction: true,
                             },
                             all_candidates_have_measurements: true,
+                            is_execution_profile_converged: true,
                             candidate_measurement_summaries: vec![
                                 PromptProcessingChunkCandidateMeasurementSummary {
                                     candidate_chunk_size_tokens: 512,
-                                    measurement_source: CandidateMeasurementSource::
-                                        OtherPositionRangesWithSameExecutionProfile,
+                                    measurement_source:
+                                        CandidateMeasurementSource::ExecutionProfile,
                                     measurement_count: 3,
                                     average_processed_prompt_token_count: 480,
                                     average_forward_elapsed_millis: 350,
-                                    selections_since_last_measurement: Some(7),
                                 },
                             ],
                         },
@@ -192,8 +193,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     processed_prompt_token_count: 480,
                     forward_elapsed_millis: 350,
                     was_reduced_by_memory_capacity: true,
+                    was_accepted_for_learning: false,
                     selection_reason:
-                        WorkerPromptProcessingChunkSelectionReason::RefreshStaleCandidateMeasurement,
+                        WorkerPromptProcessingChunkSelectionReason::MinimizeProjectedRemainingPromptLatency,
                     measurement_context: WorkerPromptProcessingChunkOptimizationContext {
                         chunk_start_token_position: 1_024,
                         position_range_start_token_position: 0,
@@ -207,15 +209,15 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                         has_prior_capacity_reduction: true,
                     },
                     all_candidates_have_measurements: true,
+                    is_execution_profile_converged: true,
                     candidate_measurement_summaries: vec![
                         WorkerPromptProcessingChunkCandidateMeasurementSummary {
                             candidate_chunk_size_tokens: 512,
-                            measurement_source: WorkerPromptProcessingChunkMeasurementSource::
-                                OtherPositionRangesWithSameExecutionProfile,
+                            measurement_source:
+                                WorkerPromptProcessingChunkMeasurementSource::ExecutionProfile,
                             measurement_count: 3,
                             average_processed_prompt_token_count: 480,
                             average_forward_elapsed_millis: 350,
-                            selections_since_last_measurement: Some(7),
                         },
                     ],
                 })

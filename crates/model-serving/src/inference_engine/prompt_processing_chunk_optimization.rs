@@ -7,7 +7,7 @@ use crate::{CandidateMeasurementSource, PromptProcessingChunkSizeSelectionReason
 pub struct PromptProcessingChunkCandidateMeasurementSummary {
     /// Candidate capacity represented by this summary, in tokens.
     pub candidate_chunk_size_tokens: usize,
-    /// Exact-range, equivalent-profile, or unavailable measurement provenance.
+    /// Execution-profile or unavailable measurement provenance.
     pub measurement_source: CandidateMeasurementSource,
     /// Number of retained measurements included in the averages.
     pub measurement_count: usize,
@@ -15,8 +15,6 @@ pub struct PromptProcessingChunkCandidateMeasurementSummary {
     pub average_processed_prompt_token_count: usize,
     /// Mean model-forward duration in milliseconds.
     pub average_forward_elapsed_millis: u64,
-    /// Optimizer selections elapsed since the profile was measured.
-    pub selections_since_last_measurement: Option<u64>,
 }
 
 /// Execution context that isolates prompt-processing measurements.
@@ -55,12 +53,16 @@ pub struct PromptProcessingChunkOptimizationOutcome {
     pub forward_elapsed_millis: u64,
     /// Whether memory admission reduced the executed work below its request.
     pub was_reduced_by_memory_capacity: bool,
+    /// Whether this full-capacity observation changed optimizer evidence.
+    pub was_accepted_for_learning: bool,
     /// Optimizer rule that selected the candidate.
     pub selection_reason: PromptProcessingChunkSizeSelectionReason,
     /// Human-readable execution context for the completed measurement.
     pub measurement_context: PromptProcessingChunkOptimizationContext,
     /// Whether every configured candidate now has usable evidence.
     pub all_candidates_have_measurements: bool,
+    /// Whether the material profile has evidence for every configured candidate.
+    pub is_execution_profile_converged: bool,
     /// Evidence summaries in ascending configured-candidate order.
     pub candidate_measurement_summaries: Vec<PromptProcessingChunkCandidateMeasurementSummary>,
 }

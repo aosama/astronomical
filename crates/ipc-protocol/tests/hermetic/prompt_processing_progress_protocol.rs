@@ -26,6 +26,7 @@ async fn should_round_trip_prefill_progress_event() {
                 processed_prompt_token_count: 2_048,
                 forward_elapsed_millis: 1_200,
                 was_reduced_by_memory_capacity: true,
+                was_accepted_for_learning: false,
                 selection_reason: WorkerPromptProcessingChunkSelectionReason::MinimizeProjectedRemainingPromptLatency,
                 measurement_context: WorkerPromptProcessingChunkOptimizationContext {
                     chunk_start_token_position: 8_192,
@@ -40,14 +41,14 @@ async fn should_round_trip_prefill_progress_event() {
                     has_prior_capacity_reduction: false,
                 },
                 all_candidates_have_measurements: true,
+                is_execution_profile_converged: true,
                 candidate_measurement_summaries: vec![
                     WorkerPromptProcessingChunkCandidateMeasurementSummary {
                         candidate_chunk_size_tokens: 4_096,
-                        measurement_source: WorkerPromptProcessingChunkMeasurementSource::CurrentPositionRange,
+                        measurement_source: WorkerPromptProcessingChunkMeasurementSource::ExecutionProfile,
                         measurement_count: 3,
                         average_processed_prompt_token_count: 3_413,
                         average_forward_elapsed_millis: 900,
-                        selections_since_last_measurement: Some(0),
                     },
                 ],
             },

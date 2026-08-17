@@ -1,33 +1,28 @@
 //! Qwen3.5 prompt-processing chunk selection and transition learning.
 //!
-//! Fixed mode returns configured sizes without learning. Optimized mode selects one
-//! context-aware optimizer candidate, remembers the exact selection, and records the
-//! measurement only after the corresponding chunk completes. Context identifiers isolate
-//! measurements whose costs differ because of prompt position, restored prefixes,
-//! visual input, prediction state, sparse paging, cache capture, or prior pressure.
-//!
-//! Persisted optimizer construction lives in the child module so loading/recovery
-//! policy does not obscure the request-time selection/measurement state machine below.
-//! A pending selection is consumed only after its corresponding chunk completes,
-//! preserving the exact candidate-to-measurement relationship across retries.
+//! Fixed mode bypasses learning. Optimized mode retains each selection until its
+//! chunk completes, then learns only from full-capacity execution. Position remains
+//! telemetry while material execution conditions isolate learning. Persistence stays
+//! in its child module so loading policy cannot obscure this request-time state machine.
 
 mod configuration;
 mod measurement_context;
 mod optimization_outcome;
+mod pending_selection;
 mod persisted_state;
 
 use std::path::PathBuf;
 
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use crate::{
-    PromptProcessingChunkMeasurement, PromptProcessingChunkOptimizationContext,
-    PromptProcessingChunkOptimizationOutcome, PromptProcessingChunkSizeOptimizer,
-    PromptProcessingMeasurementContext,
+    PromptProcessingChunkMeasurement, PromptProcessingChunkOptimizationOutcome,
+    PromptProcessingChunkSizeOptimizer,
 };
 use configuration::{
     configured_candidate_chunk_size_tokens, maximum_prompt_processing_chunk_size_tokens_from_u32,
 };
 use optimization_outcome::prompt_processing_chunk_optimization_outcome;
+use pending_selection::PendingPromptProcessingChunkSelection;
 
 pub use configuration::Qwen3_5PromptProcessingChunkSizerError;
 
@@ -275,11 +270,8 @@ impl Qwen3_5PromptProcessingChunkSizer {
             next_chunk_start_token_position,
             next_prompt_processing_execution_context,
         );
-        let chunk_measurement = PromptProcessingChunkMeasurement::transition(
-            processed_prompt_token_count,
-            forward_elapsed_millis,
-            next_measurement_context,
-        );
+        let was_accepted_for_learning = processed_prompt_token_count
+            == pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens;
         let PromptProcessingChunkSizingMode::Optimized {
             prompt_processing_chunk_size_optimizer,
             optimizer_state_persistence,
@@ -288,19 +280,29 @@ impl Qwen3_5PromptProcessingChunkSizer {
         else {
             return;
         };
-        let measurement_was_accepted = if let Err(chunk_optimizer_error) =
-            prompt_processing_chunk_size_optimizer.record_measurement(
-                pending_prompt_processing_chunk_selection.measurement_context,
-                pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens,
-                chunk_measurement,
-            ) {
-            tracing::warn!(
-                error = %chunk_optimizer_error,
-                "Qwen3.5 prompt-processing chunk size optimizer rejected a measurement"
+        let measurement_was_accepted = if was_accepted_for_learning {
+            let chunk_measurement = PromptProcessingChunkMeasurement::transition(
+                processed_prompt_token_count,
+                forward_elapsed_millis,
+                next_measurement_context,
             );
-            false
+            if let Err(chunk_optimizer_error) = prompt_processing_chunk_size_optimizer
+                .record_measurement(
+                    pending_prompt_processing_chunk_selection.measurement_context,
+                    pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens,
+                    chunk_measurement,
+                )
+            {
+                tracing::warn!(
+                    error = %chunk_optimizer_error,
+                    "Qwen3.5 prompt-processing chunk size optimizer rejected a measurement"
+                );
+                false
+            } else {
+                true
+            }
         } else {
-            true
+            false
         };
         tracing::trace!(
             selected_candidate_chunk_size_tokens = pending_prompt_processing_chunk_selection
@@ -309,25 +311,27 @@ impl Qwen3_5PromptProcessingChunkSizer {
             forward_elapsed_millis,
             was_reduced_by_memory_capacity,
             reason = ?pending_prompt_processing_chunk_selection.selection_reason,
-            "Qwen3.5 prompt-processing chunk optimizer recorded a transition"
-        );
-        Self::persist_optimizer_state(
-            prompt_processing_chunk_size_optimizer,
-            optimizer_state_persistence.as_ref(),
+            measurement_was_accepted,
+            "Qwen3.5 prompt-processing chunk optimizer observed a transition"
         );
         if measurement_was_accepted {
-            self.latest_prompt_processing_chunk_optimization_outcome =
-                Some(prompt_processing_chunk_optimization_outcome(
-                    prompt_processing_chunk_size_optimizer,
-                    pending_prompt_processing_chunk_selection.measurement_context,
-                    pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens,
-                    processed_prompt_token_count,
-                    forward_elapsed_millis,
-                    pending_prompt_processing_chunk_selection.selection_reason,
-                    was_reduced_by_memory_capacity,
-                    pending_prompt_processing_chunk_selection.optimization_context,
-                ));
+            Self::persist_optimizer_state(
+                prompt_processing_chunk_size_optimizer,
+                optimizer_state_persistence.as_ref(),
+            );
         }
+        self.latest_prompt_processing_chunk_optimization_outcome =
+            Some(prompt_processing_chunk_optimization_outcome(
+                prompt_processing_chunk_size_optimizer,
+                pending_prompt_processing_chunk_selection.measurement_context,
+                pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens,
+                processed_prompt_token_count,
+                forward_elapsed_millis,
+                pending_prompt_processing_chunk_selection.selection_reason,
+                was_reduced_by_memory_capacity,
+                measurement_was_accepted,
+                pending_prompt_processing_chunk_selection.optimization_context,
+            ));
     }
 
     /// Takes the latest prompt-processing chunk optimization outcome for worker telemetry.
@@ -383,25 +387,20 @@ impl Qwen3_5PromptProcessingChunkSizer {
         final_prompt_end_token_position_exclusive: usize,
         prompt_processing_execution_context: Qwen3_5PrefillExecutionContext,
     ) -> usize {
-        self.next_prompt_processing_chunk_end_for_execution_context_with_terminal_coalescing(
+        self.next_prompt_processing_chunk_end_with_maximum_executable_capacity(
             chunk_start_token_position,
             final_prompt_end_token_position_exclusive,
             prompt_processing_execution_context,
-            false,
+            usize::MAX,
         )
     }
 
-    /// Returns the exclusive next end and optionally coalesces a safe terminal remainder.
-    ///
-    /// Coalescing labels the measured tail with the smallest registered candidate
-    /// that could contain it; fixed mode always retains its explicit capacity.
-    #[must_use]
-    pub fn next_prompt_processing_chunk_end_for_execution_context_with_terminal_coalescing(
+    pub fn next_prompt_processing_chunk_end_with_maximum_executable_capacity(
         &mut self,
         chunk_start_token_position: usize,
         final_prompt_end_token_position_exclusive: usize,
         prompt_processing_execution_context: Qwen3_5PrefillExecutionContext,
-        should_coalesce_terminal_remainder: bool,
+        maximum_executable_chunk_size_tokens: usize,
     ) -> usize {
         let measurement_context = self.measurement_context_for_chunk_start(
             chunk_start_token_position,
@@ -436,25 +435,13 @@ impl Qwen3_5PromptProcessingChunkSizer {
             };
             let remaining_prompt_tokens = final_prompt_end_token_position_exclusive
                 .saturating_sub(chunk_start_token_position);
-            let chunk_selection = if should_coalesce_terminal_remainder {
-                prompt_processing_chunk_size_optimizer
-                    .select_candidate_for_terminal_remainder(
-                        remaining_prompt_tokens,
-                        self.maximum_prompt_processing_chunk_size_tokens,
-                    )
-                    .unwrap_or_else(|| {
-                        prompt_processing_chunk_size_optimizer
-                            .select_candidate_chunk_size_with_maximum(
-                                measurement_context,
-                                remaining_prompt_tokens,
-                            )
-                    })
-            } else {
-                prompt_processing_chunk_size_optimizer.select_candidate_chunk_size_with_maximum(
+            let maximum_admissible_candidate_tokens =
+                remaining_prompt_tokens.min(maximum_executable_chunk_size_tokens);
+            let chunk_selection = prompt_processing_chunk_size_optimizer
+                .select_candidate_chunk_size_with_maximum(
                     measurement_context,
-                    remaining_prompt_tokens,
-                )
-            };
+                    maximum_admissible_candidate_tokens,
+                );
             let selected_candidate_chunk_size_tokens = chunk_selection
                 .selected_candidate_chunk_size_tokens
                 .min(self.maximum_prompt_processing_chunk_size_tokens);
@@ -485,13 +472,26 @@ impl Qwen3_5PromptProcessingChunkSizer {
             .saturating_add(selected_candidate_chunk_size_tokens)
             .min(final_prompt_end_token_position_exclusive)
     }
-}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct PendingPromptProcessingChunkSelection {
-    measurement_context: PromptProcessingMeasurementContext,
-    selected_candidate_chunk_size_tokens: usize,
-    chunk_start_token_position: usize,
-    selection_reason: crate::PromptProcessingChunkSizeSelectionReason,
-    optimization_context: PromptProcessingChunkOptimizationContext,
+    #[must_use]
+    pub fn next_smaller_candidate_chunk_size_tokens(
+        &self,
+        attempted_chunk_size_tokens: usize,
+    ) -> Option<usize> {
+        let PromptProcessingChunkSizingMode::Optimized {
+            prompt_processing_chunk_size_optimizer,
+            ..
+        } = &self.prompt_processing_chunk_sizing_mode
+        else {
+            return None;
+        };
+        prompt_processing_chunk_size_optimizer
+            .candidate_chunk_size_tokens()
+            .iter()
+            .rev()
+            .copied()
+            .find(|candidate_chunk_size_tokens| {
+                *candidate_chunk_size_tokens < attempted_chunk_size_tokens
+            })
+    }
 }

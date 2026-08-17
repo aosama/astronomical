@@ -200,6 +200,11 @@ impl Qwen3_5EngineRequest {
         )
     }
 
+    #[must_use]
+    pub(super) const fn maximum_successful_prefill_chunck_tokens(&self) -> Option<usize> {
+        self.maximum_successful_prefill_chunck_tokens
+    }
+
     pub(super) fn record_successful_capacity_prefill_chunck(
         &mut self,
         successful_prefill_chunck_token_count: usize,

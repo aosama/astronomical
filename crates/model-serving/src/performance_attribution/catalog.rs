@@ -92,6 +92,7 @@ pub enum PerformanceOperation {
     RouterScoreSelection,
     SharedExpertExecution,
     MlpForwardSpan,
+    GenerationFinalization,
     MlxAllocatorCacheCleanup,
     FinalizedMlxMemorySnapshot,
 }
@@ -183,6 +184,7 @@ impl PerformanceOperation {
         Self::RouterScoreSelection,
         Self::SharedExpertExecution,
         Self::MlpForwardSpan,
+        Self::GenerationFinalization,
         Self::MlxAllocatorCacheCleanup,
         Self::FinalizedMlxMemorySnapshot,
     ];
@@ -331,6 +333,7 @@ impl PerformanceOperation {
             Self::RouterScoreSelection => "router_score_selection",
             Self::SharedExpertExecution => "shared_expert_execution",
             Self::MlpForwardSpan => "mlp_forward_span",
+            Self::GenerationFinalization => "generation_finalization",
             Self::MlxAllocatorCacheCleanup => "mlx_allocator_cache_cleanup",
             Self::FinalizedMlxMemorySnapshot => "finalized_mlx_memory_snapshot",
         }

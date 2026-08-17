@@ -8,7 +8,6 @@ use astronomical_model_serving::{
 };
 
 mod invalid_state;
-mod measurement_refresh;
 mod round_trip;
 mod state_file;
 mod support;

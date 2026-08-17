@@ -18,6 +18,7 @@ pub use astronomical_runtime_instance::{AstronomicalInstancePaths, AstronomicalR
 pub use chunking_config::{
     ChunkingConfig, DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+    DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
     DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_MAXIMUM_RETAINED_MEASUREMENTS_PER_CANDIDATE_AND_CONTEXT,
@@ -296,21 +297,21 @@ fn resolve_prompt_processing_chunk_sizing_policy(
     configured_fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
     configured_prompt_processing_chunk_size_optimizer_candidate_token_counts: Option<&[u32]>,
 ) -> Result<PromptProcessingChunkSizingPolicy, AstronomicalConfigError> {
-    let fixed_prompt_processing_chunk_size_tokens = match configured_prompt_processing_chunk_size_optimizer_enabled {
-        Some(false) => configured_fixed_prompt_processing_chunk_size_tokens.ok_or(
-            AstronomicalConfigError::FixedPromptProcessingChunkSizeTokensRequiredWhenOptimizerDisabled,
-        )?,
-        Some(true) | None => {
-            // Any configured fixed size is intentionally ignored in explicit
-            // optimized mode. The menu bar surfaces that override separately.
-            return Ok(PromptProcessingChunkSizingPolicy::Optimized {
-                prompt_processing_chunk_size_optimizer_candidate_token_counts:
-                    resolve_prompt_processing_chunk_size_optimizer_candidate_token_counts(
-                        configured_prompt_processing_chunk_size_optimizer_candidate_token_counts,
-                    )?,
-            });
-        }
-    };
+    let fixed_prompt_processing_chunk_size_tokens =
+        match configured_prompt_processing_chunk_size_optimizer_enabled {
+            Some(true) => {
+                // Any configured fixed size is intentionally ignored in explicit
+                // optimized mode. The menu bar surfaces that override separately.
+                return Ok(PromptProcessingChunkSizingPolicy::Optimized {
+                    prompt_processing_chunk_size_optimizer_candidate_token_counts:
+                        resolve_prompt_processing_chunk_size_optimizer_candidate_token_counts(
+                            configured_prompt_processing_chunk_size_optimizer_candidate_token_counts,
+                        )?,
+                });
+            }
+            Some(false) | None => configured_fixed_prompt_processing_chunk_size_tokens
+                .unwrap_or(DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS),
+        };
     if fixed_prompt_processing_chunk_size_tokens == 0 {
         return Err(AstronomicalConfigError::InvalidFixedPromptProcessingChunkSizeTokens);
     }

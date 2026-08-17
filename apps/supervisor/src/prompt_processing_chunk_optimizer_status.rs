@@ -84,6 +84,12 @@ pub(crate) fn prompt_processing_chunk_optimizer_status_document(
             "processed_prompt_token_count": outcome.processed_prompt_token_count,
             "forward_elapsed_millis": outcome.forward_elapsed_millis,
             "was_reduced_by_memory_capacity": outcome.was_reduced_by_memory_capacity,
+            "was_accepted_for_learning": outcome.was_accepted_for_learning,
+            "execution_profile_state": if outcome.is_execution_profile_converged {
+                "converged"
+            } else {
+                "exploring"
+            },
             "measurement_context": {
                 "chunk_start_token_position": outcome.measurement_context.chunk_start_token_position,
                 "position_range_start_token_position": outcome.measurement_context.position_range_start_token_position,
@@ -112,6 +118,12 @@ pub(crate) fn prompt_processing_chunk_optimizer_status_document(
                 "processed_prompt_token_count": outcome.processed_prompt_token_count,
                 "forward_elapsed_millis": outcome.forward_elapsed_millis,
                 "was_reduced_by_memory_capacity": outcome.was_reduced_by_memory_capacity,
+                "was_accepted_for_learning": outcome.was_accepted_for_learning,
+                "execution_profile_state": if outcome.is_execution_profile_converged {
+                    "converged"
+                } else {
+                    "exploring"
+                },
             })
         })
         .collect::<Vec<_>>();

@@ -15,6 +15,7 @@ pub(super) fn prompt_processing_chunk_optimization_outcome(
     forward_elapsed_millis: u64,
     selection_reason: PromptProcessingChunkSizeSelectionReason,
     was_reduced_by_memory_capacity: bool,
+    was_accepted_for_learning: bool,
     optimizer_context: PromptProcessingChunkOptimizationContext,
 ) -> PromptProcessingChunkOptimizationOutcome {
     let candidate_measurement_summaries =
@@ -24,9 +25,12 @@ pub(super) fn prompt_processing_chunk_optimization_outcome(
         processed_prompt_token_count,
         forward_elapsed_millis,
         was_reduced_by_memory_capacity,
+        was_accepted_for_learning,
         selection_reason,
         measurement_context: optimizer_context,
         all_candidates_have_measurements: candidate_measurement_summaries
+            .all_candidates_have_measurements,
+        is_execution_profile_converged: candidate_measurement_summaries
             .all_candidates_have_measurements,
         candidate_measurement_summaries: candidate_measurement_summaries
             .candidate_measurement_summaries
@@ -41,8 +45,6 @@ pub(super) fn prompt_processing_chunk_optimization_outcome(
                         .average_processed_prompt_token_count,
                     average_forward_elapsed_millis: candidate_measurement_summary
                         .average_forward_elapsed_millis,
-                    selections_since_last_measurement: candidate_measurement_summary
-                        .selections_since_last_measurement,
                 },
             )
             .collect(),

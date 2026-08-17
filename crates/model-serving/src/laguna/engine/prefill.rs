@@ -78,16 +78,22 @@ impl LagunaInferenceExecution {
         let prompt_chunk_started_at = Instant::now();
         let is_terminal_prompt_chunk =
             chunk_end_token_position_exclusive == final_prompt_end_token_position_exclusive;
-        let (terminal_chunk_logits, forward_elapsed_millis) = forward_one_prompt_chunk(
-            runtime,
-            model,
-            chunk_token_ids,
-            chunk_start_token_position,
-            chunk_end_token_position_exclusive,
-            is_terminal_prompt_chunk,
-            &mut active_request.decoder_state,
-            &mut active_request.performance_attribution,
-        )?;
+        let (terminal_chunk_logits, forward_elapsed_millis) =
+            active_request.performance_attribution.measure_operation(
+                PerformanceOperation::PromptPrefillAdvanceSpan,
+                |performance_attribution| {
+                    forward_one_prompt_chunk(
+                        runtime,
+                        model,
+                        chunk_token_ids,
+                        chunk_start_token_position,
+                        chunk_end_token_position_exclusive,
+                        is_terminal_prompt_chunk,
+                        &mut active_request.decoder_state,
+                        performance_attribution,
+                    )
+                },
+            )?;
         prompt_processing_chunk_sizer.record_prompt_processing_chunk_transition(
             processed_prompt_token_count,
             forward_elapsed_millis,

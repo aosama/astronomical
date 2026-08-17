@@ -255,7 +255,7 @@ fn should_not_consume_the_next_optimizer_decision_when_recording_a_completed_chu
 }
 
 #[test]
-fn should_retain_final_prompt_tail_transitions() {
+fn should_observe_final_prompt_tail_without_learning_from_it() {
     let mut prompt_processing_chunk_sizer =
         optimized_prompt_processing_chunk_sizer(2_048, vec![128, 256, 512, 1_024, 2_048])
             .expect("the explicit maximum prompt-processing chunk size should be valid");
@@ -266,6 +266,16 @@ fn should_retain_final_prompt_tail_transitions() {
         64
     );
     prompt_processing_chunk_sizer.record_prompt_processing_chunk_elapsed_millis(64, 11_000);
+    let tail_outcome = prompt_processing_chunk_sizer
+        .take_latest_prompt_processing_chunk_optimization_outcome()
+        .expect("a final prompt tail should remain observable");
+    assert!(!tail_outcome.was_accepted_for_learning);
+    assert!(
+        tail_outcome
+            .candidate_measurement_summaries
+            .iter()
+            .all(|candidate_summary| candidate_summary.measurement_count == 0)
+    );
 
     assert_eq!(
         prompt_processing_chunk_sizer.active_prompt_processing_chunk_size_tokens(),
@@ -363,6 +373,10 @@ fn should_enter_a_capacity_reduced_context_after_an_admission_retry() {
         true,
         execution_context,
     );
+    let reduced_outcome = prompt_processing_chunk_sizer
+        .take_latest_prompt_processing_chunk_optimization_outcome()
+        .expect("a memory-reduced chunk should remain observable");
+    assert!(!reduced_outcome.was_accepted_for_learning);
     assert_eq!(
         prompt_processing_chunk_sizer.next_prompt_processing_chunk_end_for_execution_context(
             512,
@@ -371,6 +385,66 @@ fn should_enter_a_capacity_reduced_context_after_an_admission_retry() {
         ),
         1_536,
         "capacity-reduced execution should begin independent largest-first discovery"
+    );
+}
+
+#[test]
+fn should_learn_from_full_capacity_work_that_required_expert_reclamation() {
+    let mut prompt_processing_chunk_sizer =
+        optimized_prompt_processing_chunk_sizer(1_024, vec![128, 256, 512, 1_024])
+            .expect("the optimizer maximum should be valid");
+    let execution_context = Qwen3_5PrefillExecutionContext::default();
+    prompt_processing_chunk_sizer.start_prompt_processing_request(0);
+    assert_eq!(
+        prompt_processing_chunk_sizer.next_prompt_processing_chunk_end_for_execution_context(
+            0,
+            10_000,
+            execution_context,
+        ),
+        1_024
+    );
+
+    prompt_processing_chunk_sizer.record_prompt_processing_chunk_transition(
+        1_024,
+        2_000,
+        true,
+        execution_context,
+    );
+
+    let pressure_outcome = prompt_processing_chunk_sizer
+        .take_latest_prompt_processing_chunk_optimization_outcome()
+        .expect("full-capacity pressure should remain observable");
+    assert!(pressure_outcome.was_reduced_by_memory_capacity);
+    assert!(pressure_outcome.was_accepted_for_learning);
+    assert_eq!(
+        pressure_outcome.candidate_measurement_summaries[3].measurement_count,
+        1
+    );
+}
+
+#[test]
+fn should_limit_optimizer_selection_to_the_request_proven_executable_capacity() {
+    let mut prompt_processing_chunk_sizer =
+        optimized_prompt_processing_chunk_sizer(1_024, vec![128, 256, 512, 1_024])
+            .expect("the optimizer maximum should be valid");
+    prompt_processing_chunk_sizer.start_prompt_processing_request(0);
+
+    let chunk_end = prompt_processing_chunk_sizer
+        .next_prompt_processing_chunk_end_with_maximum_executable_capacity(
+            0,
+            10_000,
+            Qwen3_5PrefillExecutionContext::default(),
+            256,
+        );
+
+    assert_eq!(chunk_end, 256);
+    assert_eq!(
+        prompt_processing_chunk_sizer.next_smaller_candidate_chunk_size_tokens(256),
+        Some(128)
+    );
+    assert_eq!(
+        prompt_processing_chunk_sizer.next_smaller_candidate_chunk_size_tokens(128),
+        None
     );
 }
 
@@ -439,7 +513,7 @@ fn should_use_fixed_ssd_streaming_chunk_size_only_while_experts_are_paged() {
 }
 
 #[test]
-fn should_coalesce_a_terminal_remainder_between_optimizer_candidates() {
+fn should_continue_with_an_admissible_candidate_before_the_terminal_remainder() {
     let mut prompt_processing_chunk_sizer =
         optimized_prompt_processing_chunk_sizer(4_096, vec![512, 1_024, 2_048, 4_096])
             .expect("terminal-tail candidates should be valid");
@@ -449,20 +523,18 @@ fn should_coalesce_a_terminal_remainder_between_optimizer_candidates() {
     prompt_processing_chunk_sizer.start_prompt_processing_request(chunk_start_token_position);
 
     assert_eq!(
-        prompt_processing_chunk_sizer
-            .next_prompt_processing_chunk_end_for_execution_context_with_terminal_coalescing(
-                chunk_start_token_position,
-                final_prompt_end_token_position_exclusive,
-                Qwen3_5PrefillExecutionContext::default(),
-                true,
-            ),
-        final_prompt_end_token_position_exclusive,
-        "the exact 1,887-token tail should execute in one forward"
+        prompt_processing_chunk_sizer.next_prompt_processing_chunk_end_for_execution_context(
+            chunk_start_token_position,
+            final_prompt_end_token_position_exclusive,
+            Qwen3_5PrefillExecutionContext::default(),
+        ),
+        27_648,
+        "an oversized candidate must not turn an unmeasured partial tail into the terminal forward"
     );
     assert_eq!(
         prompt_processing_chunk_sizer.active_prompt_processing_chunk_size_tokens(),
-        2_048,
-        "optimizer evidence should retain the smallest candidate containing the tail"
+        1_024,
+        "the optimizer should retain the largest candidate that can execute at full capacity"
     );
 }
 
@@ -477,13 +549,11 @@ fn should_execute_a_small_terminal_remainder_exactly_under_its_candidate_label()
     prompt_processing_chunk_sizer.start_prompt_processing_request(chunk_start_token_position);
 
     assert_eq!(
-        prompt_processing_chunk_sizer
-            .next_prompt_processing_chunk_end_for_execution_context_with_terminal_coalescing(
-                chunk_start_token_position,
-                final_prompt_end_token_position_exclusive,
-                Qwen3_5PrefillExecutionContext::default(),
-                true,
-            ),
+        prompt_processing_chunk_sizer.next_prompt_processing_chunk_end_for_execution_context(
+            chunk_start_token_position,
+            final_prompt_end_token_position_exclusive,
+            Qwen3_5PrefillExecutionContext::default(),
+        ),
         final_prompt_end_token_position_exclusive
     );
     assert_eq!(
@@ -499,14 +569,12 @@ fn should_leave_fixed_terminal_chunk_selection_unchanged() {
             .expect("fixed prefill chunk size should be valid");
 
     assert_eq!(
-        prompt_processing_chunk_sizer
-            .next_prompt_processing_chunk_end_for_execution_context_with_terminal_coalescing(
-                26_624,
-                28_511,
-                Qwen3_5PrefillExecutionContext::default(),
-                true,
-            ),
+        prompt_processing_chunk_sizer.next_prompt_processing_chunk_end_for_execution_context(
+            26_624,
+            28_511,
+            Qwen3_5PrefillExecutionContext::default(),
+        ),
         27_648,
-        "terminal coalescing must not override an explicitly fixed chunk size"
+        "adaptive terminal selection must not override an explicitly fixed chunk size"
     );
 }

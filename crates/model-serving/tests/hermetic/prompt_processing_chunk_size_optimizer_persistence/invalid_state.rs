@@ -19,7 +19,7 @@ fn should_return_none_when_optimizer_state_file_does_not_exist() {
 
 #[test]
 fn should_return_none_for_corrupt_empty_or_truncated_state() {
-    for serialized_state in ["", "not json", "{\"format_version\":5"] {
+    for serialized_state in ["", "not json", "{\"format_version\":6"] {
         let temporary_directory = temporary_directory();
         let state_file_path = temporary_directory.path().join(OPTIMIZER_STATE_FILE_NAME);
         fs::write(&state_file_path, serialized_state).expect("state fixture should be written");
@@ -37,7 +37,7 @@ fn should_return_none_for_corrupt_empty_or_truncated_state() {
 fn should_return_none_for_previous_format_without_migration() {
     let temporary_directory = temporary_directory();
     let state_file_path = temporary_directory.path().join(OPTIMIZER_STATE_FILE_NAME);
-    let previous_state = r#"{"format_version":4,"model_id":"test-model","model_revision":"rev-1","candidate_prefill_chunck_tokens":[128,256,512,1024,2048],"sliding_window_observation_count":5,"context_buckets":[]}"#;
+    let previous_state = r#"{"format_version":5,"model_id":"test-model","model_revision":"rev-1","candidate_chunk_size_tokens":[128,256,512,1024,2048],"maximum_retained_measurements_per_candidate_and_context":5,"measurement_sequence":0,"execution_profile_buckets":[]}"#;
     fs::write(&state_file_path, previous_state).expect("previous state should be written");
     load_expect_none(
         &state_file_path,
