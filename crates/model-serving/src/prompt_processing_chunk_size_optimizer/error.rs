@@ -18,6 +18,13 @@ pub enum PromptProcessingChunkSizeOptimizerError {
     MeasurementForwardElapsedMillisMustBePositive,
     #[error("measured prompt-processing chunk processed token count must be positive")]
     MeasurementProcessedTokenCountMustBePositive,
+    #[error(
+        "measured prompt-processing chunk must complete the selected candidate capacity: selected {selected_candidate_chunk_size_tokens}, processed {processed_prompt_token_count}"
+    )]
+    MeasurementMustCompleteSelectedCandidateCapacity {
+        selected_candidate_chunk_size_tokens: usize,
+        processed_prompt_token_count: usize,
+    },
     #[error("failed to create optimizer state directory {directory}")]
     OptimizerStateDirectoryCreationFailed {
         directory: PathBuf,

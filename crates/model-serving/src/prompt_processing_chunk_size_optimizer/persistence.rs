@@ -18,7 +18,7 @@ use super::optimizer::{CandidateChunkMeasurement, PromptProcessingChunkSizeOptim
 use super::{PromptProcessingChunkSizeOptimizerError, PromptProcessingMeasurementContext};
 
 /// Disposable schema version for prompt-processing terminology and transition evidence.
-const FORMAT_VERSION: u32 = 5;
+const FORMAT_VERSION: u32 = 6;
 const STATE_FILE_NAME: &str = "prompt-processing-chunk-size-optimizer-state.json";
 const MODEL_PROFILE_DIRECTORY_NAME: &str = "model-profiles";
 const MODEL_PROFILE_NAMESPACE: &[u8] =
@@ -31,30 +31,26 @@ struct PersistedOptimizerState {
     model_revision: String,
     candidate_chunk_size_tokens: Vec<usize>,
     maximum_retained_measurements_per_candidate_and_context: usize,
-    selection_sequence: u64,
     measurement_sequence: u64,
-    context_buckets: Vec<PersistedContextBucket>,
+    execution_profile_buckets: Vec<PersistedExecutionProfileBucket>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct PersistedContextBucket {
-    exact_measurement_context_identifier: u64,
-    position_independent_execution_profile_identifier: u64,
+struct PersistedExecutionProfileBucket {
+    execution_profile_identifier: u64,
     candidates: Vec<PersistedCandidateStatistics>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct PersistedCandidateStatistics {
     measurements: Vec<PersistedMeasurement>,
-    last_measured_selection_sequence: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct PersistedMeasurement {
     processed_prompt_token_count: usize,
     forward_elapsed_millis: u64,
-    next_exact_measurement_context_identifier: u64,
-    next_position_independent_execution_profile_identifier: u64,
+    next_execution_profile_identifier: u64,
     measurement_sequence: u64,
 }
 
@@ -199,16 +195,14 @@ impl PersistedOptimizerState {
         model_id: &str,
         model_revision: &str,
     ) -> Self {
-        let context_buckets = optimizer
+        let execution_profile_buckets = optimizer
             .context_statistics()
             .iter()
             .map(
-                |(measurement_context, context_statistics)| PersistedContextBucket {
-                    exact_measurement_context_identifier: measurement_context
-                        .exact_measurement_context_identifier(),
-                    position_independent_execution_profile_identifier: measurement_context
+                |(execution_profile, profile_statistics)| PersistedExecutionProfileBucket {
+                    execution_profile_identifier: execution_profile
                         .position_independent_execution_profile_identifier(),
-                    candidates: context_statistics
+                    candidates: profile_statistics
                         .candidate_statistics
                         .iter()
                         .map(|candidate_statistics| PersistedCandidateStatistics {
@@ -219,18 +213,12 @@ impl PersistedOptimizerState {
                                     processed_prompt_token_count: measurement
                                         .processed_prompt_token_count,
                                     forward_elapsed_millis: measurement.forward_elapsed_millis,
-                                    next_exact_measurement_context_identifier: measurement
+                                    next_execution_profile_identifier: measurement
                                         .next_measurement_context
-                                        .exact_measurement_context_identifier(),
-                                    next_position_independent_execution_profile_identifier:
-                                        measurement
-                                            .next_measurement_context
-                                            .position_independent_execution_profile_identifier(),
+                                        .position_independent_execution_profile_identifier(),
                                     measurement_sequence: measurement.measurement_sequence,
                                 })
                                 .collect(),
-                            last_measured_selection_sequence: candidate_statistics
-                                .last_measured_selection_sequence,
                         })
                         .collect(),
                 },
@@ -243,9 +231,8 @@ impl PersistedOptimizerState {
             candidate_chunk_size_tokens: optimizer.candidate_chunk_size_tokens().to_vec(),
             maximum_retained_measurements_per_candidate_and_context: optimizer
                 .maximum_retained_measurements_per_candidate_and_context(),
-            selection_sequence: optimizer.selection_sequence(),
             measurement_sequence: optimizer.measurement_sequence(),
-            context_buckets,
+            execution_profile_buckets,
         }
     }
 
@@ -257,45 +244,35 @@ impl PersistedOptimizerState {
             PromptProcessingMeasurementContext,
             ContextCandidateStatistics,
         > = self
-            .context_buckets
+            .execution_profile_buckets
             .into_iter()
-            .map(|persisted_context_bucket| {
-                let measurement_context =
-                    PromptProcessingMeasurementContext::with_position_independent_execution_profile(
-                        persisted_context_bucket.exact_measurement_context_identifier,
-                        persisted_context_bucket.position_independent_execution_profile_identifier,
-                    );
-                let candidate_statistics = persisted_context_bucket
+            .map(|persisted_profile_bucket| {
+                let execution_profile = PromptProcessingMeasurementContext::isolated(
+                    persisted_profile_bucket.execution_profile_identifier,
+                );
+                let candidate_statistics = persisted_profile_bucket
                     .candidates
                     .into_iter()
-                    .map(
-                        |persisted_candidate_statistics| CandidateChunkStatistics {
-                            measurements: persisted_candidate_statistics
-                                .measurements
-                                .into_iter()
-                                .map(|persisted_measurement| CandidateChunkMeasurement {
-                                    processed_prompt_token_count: persisted_measurement
-                                        .processed_prompt_token_count,
-                                    forward_elapsed_millis: persisted_measurement
-                                        .forward_elapsed_millis,
-                                    next_measurement_context:
-                                        PromptProcessingMeasurementContext::with_position_independent_execution_profile(
-                                            persisted_measurement
-                                                .next_exact_measurement_context_identifier,
-                                            persisted_measurement
-                                                .next_position_independent_execution_profile_identifier,
-                                        ),
-                                    measurement_sequence: persisted_measurement
-                                        .measurement_sequence,
-                                })
-                                .collect(),
-                            last_measured_selection_sequence: persisted_candidate_statistics
-                                .last_measured_selection_sequence,
-                        },
-                    )
+                    .map(|persisted_candidate_statistics| CandidateChunkStatistics {
+                        measurements: persisted_candidate_statistics
+                            .measurements
+                            .into_iter()
+                            .map(|persisted_measurement| CandidateChunkMeasurement {
+                                processed_prompt_token_count: persisted_measurement
+                                    .processed_prompt_token_count,
+                                forward_elapsed_millis: persisted_measurement
+                                    .forward_elapsed_millis,
+                                next_measurement_context:
+                                    PromptProcessingMeasurementContext::isolated(
+                                        persisted_measurement.next_execution_profile_identifier,
+                                    ),
+                                measurement_sequence: persisted_measurement.measurement_sequence,
+                            })
+                            .collect(),
+                    })
                     .collect();
                 (
-                    measurement_context,
+                    execution_profile,
                     ContextCandidateStatistics {
                         candidate_statistics,
                     },
@@ -305,7 +282,6 @@ impl PersistedOptimizerState {
         PromptProcessingChunkSizeOptimizer::new_from_persisted_state(
             candidate_chunk_size_tokens,
             self.maximum_retained_measurements_per_candidate_and_context,
-            self.selection_sequence,
             self.measurement_sequence,
             context_statistics,
         )

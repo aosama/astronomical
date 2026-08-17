@@ -22,6 +22,7 @@ async fn should_expose_structured_prompt_processing_chunk_outcome() {
             processed_prompt_token_count: 4_096,
             forward_elapsed_millis: 720,
             was_reduced_by_memory_capacity: false,
+            was_accepted_for_learning: true,
             selection_reason:
                 WorkerPromptProcessingChunkSelectionReason::MinimizeProjectedRemainingPromptLatency,
             measurement_context: WorkerPromptProcessingChunkOptimizationContext {
@@ -37,15 +38,15 @@ async fn should_expose_structured_prompt_processing_chunk_outcome() {
                 has_prior_capacity_reduction: false,
             },
             all_candidates_have_measurements: true,
+            is_execution_profile_converged: true,
             candidate_measurement_summaries: vec![
                 WorkerPromptProcessingChunkCandidateMeasurementSummary {
                     candidate_chunk_size_tokens: 4_096,
                     measurement_source:
-                        WorkerPromptProcessingChunkMeasurementSource::CurrentPositionRange,
+                        WorkerPromptProcessingChunkMeasurementSource::ExecutionProfile,
                     measurement_count: 5,
                     average_processed_prompt_token_count: 4_096,
                     average_forward_elapsed_millis: 710,
-                    selections_since_last_measurement: Some(0),
                 },
             ],
         });
@@ -82,7 +83,15 @@ async fn should_expose_structured_prompt_processing_chunk_outcome() {
     );
     assert_eq!(
         optimizer_document["latest_chunk_outcome"]["candidate_measurement_summaries"][0]["measurement_source"],
-        "current_position_range"
+        "execution_profile"
+    );
+    assert_eq!(
+        optimizer_document["latest_chunk_outcome"]["was_accepted_for_learning"],
+        true
+    );
+    assert_eq!(
+        optimizer_document["latest_chunk_outcome"]["execution_profile_state"],
+        "converged"
     );
     assert_eq!(
         optimizer_document["recent_chunk_outcomes"]

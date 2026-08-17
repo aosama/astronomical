@@ -11,12 +11,12 @@ use super::model_prefill_benchmark_report::{
     PrefillMeasurementAccumulator, TypedOutputEventDigest, build_prefill_benchmark_report,
 };
 use super::model_prefill_qualification_worker::{
-    PREFILL_QUALIFICATION_MAXIMUM_OUTPUT_TOKENS, PREFILL_QUALIFICATION_MODEL_ID,
-    build_prefill_qualification_prompt, configured_prefill_qualification_model_directory,
-    expert_memory_mode_label, launch_prepared_prefill_qualification_worker,
-    observed_final_expert_memory_mode, prefill_memory_limit_validation_error,
-    prepare_prefill_qualification_worker, required_prefill_qualification_u32,
-    wait_until_prefill_qualification_worker_is_idle, warm_prefill_qualification_worker,
+    PREFILL_QUALIFICATION_MODEL_ID, build_prefill_qualification_prompt,
+    configured_prefill_qualification_model_directory, expert_memory_mode_label,
+    launch_prepared_prefill_qualification_worker, observed_final_expert_memory_mode,
+    prefill_memory_limit_validation_error, prepare_prefill_qualification_worker,
+    required_prefill_qualification_u32, wait_until_prefill_qualification_worker_is_idle,
+    warm_prefill_qualification_worker,
 };
 use super::model_process_metrics::{
     WorkerPhysicalFootprint, find_worker_process_id, measure_worker_physical_footprint,
@@ -27,6 +27,7 @@ const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 const TARGET_PROMPT_TOKENS: usize = 90_000;
 const WARMUP_PROMPT_TOKENS: usize = 1_024;
 const WARM_REQUEST_MAXIMUM_OUTPUT_TOKENS: u16 = 1;
+const PREFILL_COMPARISON_MAXIMUM_OUTPUT_TOKENS: u16 = 1;
 
 #[derive(Clone, Copy, Debug)]
 enum PrefillBenchmarkMode {
@@ -74,7 +75,7 @@ async fn should_measure_ninety_thousand_prompt_tokens_with_fixed_2048_prefill_ch
         run_prefill_benchmark_with_peak_gate(
             PrefillBenchmarkMode::Fixed2_048,
             TARGET_PROMPT_TOKENS,
-            None,
+            benchmark_maximum_mlx_memory_gb_from_environment(),
         ),
     )
     .await
@@ -89,7 +90,7 @@ async fn should_measure_ninety_thousand_prompt_tokens_with_the_optimizer() {
         run_prefill_benchmark_with_peak_gate(
             PrefillBenchmarkMode::Optimizer,
             TARGET_PROMPT_TOKENS,
-            None,
+            benchmark_maximum_mlx_memory_gb_from_environment(),
         ),
     )
     .await
@@ -105,7 +106,7 @@ async fn should_measure_one_selected_prefill_candidate_qualification_cell() {
     );
     let prompt_token_count = required_prefill_qualification_u32(
         "ASTRONOMICAL_PREFILL_QUALIFICATION_PROMPT_TOKENS",
-        &[1_024, 4_097, 8_193],
+        &[1_024, 4_097, 8_193, 60_000, 90_000],
     ) as usize;
     let maximum_mlx_memory_gb = required_prefill_qualification_u32(
         "ASTRONOMICAL_PREFILL_QUALIFICATION_MAXIMUM_MLX_MEMORY_GB",
@@ -121,6 +122,25 @@ async fn should_measure_one_selected_prefill_candidate_qualification_cell() {
     )
     .await
     .expect("the selected prefill qualification cell must finish within 115 seconds");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "runs one selected production-worker optimizer proof prompt"]
+async fn should_measure_one_selected_optimizer_proof_prompt() {
+    let prompt_token_count = required_prefill_qualification_u32(
+        "ASTRONOMICAL_PREFILL_OPTIMIZER_PROOF_PROMPT_TOKENS",
+        &[20_000, 60_000],
+    ) as usize;
+    timeout(
+        BENCHMARK_TIMEOUT,
+        run_prefill_benchmark_with_peak_gate(
+            PrefillBenchmarkMode::Optimizer,
+            prompt_token_count,
+            benchmark_maximum_mlx_memory_gb_from_environment(),
+        ),
+    )
+    .await
+    .expect("the selected optimizer proof prompt must finish within 115 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -226,7 +246,7 @@ async fn run_prefill_benchmark(
     let mut stream_receiver = worker_handle
         .start_chat_generation(benchmark_command(
             exact_prompt_content,
-            PREFILL_QUALIFICATION_MAXIMUM_OUTPUT_TOKENS,
+            PREFILL_COMPARISON_MAXIMUM_OUTPUT_TOKENS,
         ))
         .await
         .expect("the benchmark request should start");
@@ -355,8 +375,8 @@ async fn run_prefill_benchmark(
         "the benchmark must perform cold prefill"
     );
     assert_eq!(
-        generated_token_count, PREFILL_QUALIFICATION_MAXIMUM_OUTPUT_TOKENS,
-        "the benchmark must include the representative 512 generated tokens"
+        generated_token_count, PREFILL_COMPARISON_MAXIMUM_OUTPUT_TOKENS,
+        "the prompt-processing comparison should generate one boundary token"
     );
     if matches!(benchmark_mode, PrefillBenchmarkMode::Optimizer) {
         assert_cumulative_latency_optimizer_measurements(&prefill_measurements);
@@ -372,7 +392,7 @@ async fn run_prefill_benchmark(
         benchmark_mode.label(),
         benchmark_mode.fixed_prefill_chunck_tokens(),
         target_prompt_tokens,
-        PREFILL_QUALIFICATION_MAXIMUM_OUTPUT_TOKENS,
+        PREFILL_COMPARISON_MAXIMUM_OUTPUT_TOKENS,
         worker_startup_seconds,
         request_started_at,
         first_output_at,
@@ -450,6 +470,17 @@ async fn record_first_output_footprint(
 
 fn benchmark_report_path() -> Option<PathBuf> {
     std::env::var_os("ASTRONOMICAL_BENCHMARK_REPORT_PATH").map(PathBuf::from)
+}
+
+fn benchmark_maximum_mlx_memory_gb_from_environment() -> Option<u64> {
+    std::env::var("ASTRONOMICAL_PREFILL_BENCHMARK_MAXIMUM_MLX_MEMORY_GB")
+        .ok()
+        .map(|configured_gigabytes| {
+            configured_gigabytes
+                .parse::<u64>()
+                .expect("the benchmark MLX memory ceiling must be a positive integer")
+        })
+        .filter(|configured_gigabytes| *configured_gigabytes > 0)
 }
 
 #[test]

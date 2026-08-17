@@ -11,6 +11,7 @@ use super::{
     AstronomicalConfigError,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+    DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS, DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
@@ -59,7 +60,7 @@ pub(crate) struct UserConfigFile {
 pub(crate) struct ChunkingConfigFile {
     /// Enables measured candidate selection instead of the fixed token count.
     pub(crate) prompt_processing_chunk_size_optimizer_enabled: Option<bool>,
-    /// Required prompt-processing chunk length when optimization is disabled.
+    /// Prompt-processing chunk length used in fixed mode; omission selects the qualified default.
     pub(crate) fixed_prompt_processing_chunk_size_tokens: Option<u32>,
     /// Fixed prompt-processing chunk length while sparse experts stream from storage.
     ///
@@ -137,7 +138,8 @@ pub(crate) fn read_user_config_file(
                 "mtp_enabled": true,
                 "persistent_prompt_cache_enabled": true,
                 "chunking": {
-                    "prompt_processing_chunk_size_optimizer_enabled": true,
+                    "prompt_processing_chunk_size_optimizer_enabled": false,
+                    "fixed_prompt_processing_chunk_size_tokens": DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
                     "prompt_processing_chunk_size_optimizer_candidate_token_counts": DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES,
                     "full_attention_key_value_growth_tokens": DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
                     "speculative_prefill_draft_forward_tokens": DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,

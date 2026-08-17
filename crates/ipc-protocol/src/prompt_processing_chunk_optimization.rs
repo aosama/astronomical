@@ -8,14 +8,10 @@ use serde::{Deserialize, Serialize};
 pub enum WorkerPromptProcessingChunkSelectionReason {
     /// Largest feasible candidate without usable measurements.
     ExploreUnmeasuredCandidate,
-    /// Feasible candidate whose retained evidence is stalest.
-    RefreshStaleCandidateMeasurement,
     /// Candidate with the lowest predicted cumulative remaining-prompt latency.
     MinimizeProjectedRemainingPromptLatency,
     /// Remaining prompt is shorter than the smallest registered capacity.
     RemainingTokensBelowSmallestCandidate,
-    /// Smallest registered candidate capable of labeling the final prompt segment.
-    SmallestCandidateContainingFinalPromptSegment,
 }
 
 /// Measurement summary for one configured prompt-processing chunk candidate.
@@ -23,7 +19,7 @@ pub enum WorkerPromptProcessingChunkSelectionReason {
 pub struct WorkerPromptProcessingChunkCandidateMeasurementSummary {
     /// Registered candidate capacity in tokens.
     pub candidate_chunk_size_tokens: u32,
-    /// Range/profile provenance for the retained measurements.
+    /// Profile provenance for the retained measurements.
     pub measurement_source: WorkerPromptProcessingChunkMeasurementSource,
     /// Bounded number of retained measurements included in the averages.
     pub measurement_count: u32,
@@ -31,18 +27,14 @@ pub struct WorkerPromptProcessingChunkCandidateMeasurementSummary {
     pub average_processed_prompt_token_count: u32,
     /// Mean model-forward duration in milliseconds.
     pub average_forward_elapsed_millis: u64,
-    /// Optimizer selections elapsed since this execution profile was measured.
-    pub selections_since_last_measurement: Option<u64>,
 }
 
 /// Measurement source for one candidate's summary data.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkerPromptProcessingChunkMeasurementSource {
-    /// Evidence was collected in the exact reported position range.
-    CurrentPositionRange,
-    /// Evidence came from another position with the same execution profile.
-    OtherPositionRangesWithSameExecutionProfile,
+    /// Evidence belongs to the material execution profile regardless of position.
+    ExecutionProfile,
     /// No retained measurement can represent this candidate and profile.
     NoMeasurementsAvailable,
 }
@@ -83,12 +75,16 @@ pub struct WorkerPromptProcessingChunkOptimizationOutcome {
     pub forward_elapsed_millis: u64,
     /// Whether memory capacity reduced the executed work.
     pub was_reduced_by_memory_capacity: bool,
+    /// Whether this observation was accepted as full-capacity learning evidence.
+    pub was_accepted_for_learning: bool,
     /// Rule that selected the candidate.
     pub selection_reason: WorkerPromptProcessingChunkSelectionReason,
     /// Execution conditions associated with this measurement.
     pub measurement_context: WorkerPromptProcessingChunkOptimizationContext,
     /// Whether all configured candidates now have usable evidence.
     pub all_candidates_have_measurements: bool,
+    /// Whether every configured candidate has evidence in this execution profile.
+    pub is_execution_profile_converged: bool,
     /// Bounded evidence summaries in ascending candidate order.
     pub candidate_measurement_summaries:
         Vec<WorkerPromptProcessingChunkCandidateMeasurementSummary>,

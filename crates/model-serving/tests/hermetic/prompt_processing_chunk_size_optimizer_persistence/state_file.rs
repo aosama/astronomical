@@ -110,7 +110,7 @@ fn should_preserve_independent_measurements_for_two_model_revisions() {
         first_model_measurements
             .candidate_measurement_summaries
             .iter()
-            .all(|candidate_measurement| candidate_measurement.measurement_count == 1)
+            .all(|candidate_measurement| candidate_measurement.measurement_count == 2)
     );
 }
 
@@ -135,8 +135,8 @@ fn should_write_valid_json_that_can_be_parsed_independently() {
     let parsed_state_file_json: serde_json::Value =
         serde_json::from_str(&state_file_content).expect("saved file should be valid JSON");
     assert_eq!(
-        parsed_state_file_json["format_version"], 5,
-        "format version 5 identifies the renamed measurement schema"
+        parsed_state_file_json["format_version"], 6,
+        "format version 6 identifies execution-profile-owned evidence"
     );
     assert_eq!(
         parsed_state_file_json["model_id"], "test-model",
@@ -147,8 +147,8 @@ fn should_write_valid_json_that_can_be_parsed_independently() {
         "model_revision should match"
     );
     assert!(
-        parsed_state_file_json["context_buckets"].is_array(),
-        "context_buckets should be a JSON array"
+        parsed_state_file_json["execution_profile_buckets"].is_array(),
+        "execution_profile_buckets should be a JSON array"
     );
 }
 
