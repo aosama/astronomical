@@ -126,11 +126,19 @@ jobs:
       - name: Set maximum parallel build jobs
         run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
-        run: cargo test --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
+        run: cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
         timeout-minutes: 7
       - name: Run hermetic tests
         run: cargo test --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
         timeout-minutes: 2
+      - name: Upload Cargo timing report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-macos-hermetic-${{ github.run_attempt }}
+          path: target/cargo-timings/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Print compiler cache statistics
         run: sccache --show-stats
         if: always()
