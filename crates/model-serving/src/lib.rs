@@ -79,6 +79,7 @@ pub use inference_engine::{
     GenerationFinalization, InferenceEngine, InferenceEngineError, MlxInferenceEngine,
     MlxInferenceExecution, PreparedInferenceRequest,
 };
+pub use laguna::laguna_retained_expert_budget_after_completed_forward;
 pub use laguna::{
     LagunaAffineProfile, LagunaArtifactValidationError, LagunaArtifactValidator,
     LagunaAttentionDescriptor, LagunaAttentionKind, LagunaAttentionProjection,

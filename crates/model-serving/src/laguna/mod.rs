@@ -8,6 +8,7 @@ mod moe;
 mod normalization;
 mod paging;
 mod prompt_processing_chunk_sizer;
+mod residency_feedback;
 #[cfg(feature = "direct-mlx")]
 mod startup;
 mod text;
@@ -54,6 +55,7 @@ pub use paging::{LagunaExpertWeightPage, forward_paged_routed_swiglu, load_lagun
 pub use prompt_processing_chunk_sizer::{
     LagunaPromptProcessingChunkSizer, LagunaPromptProcessingChunkSizerError,
 };
+pub use residency_feedback::laguna_retained_expert_budget_after_completed_forward;
 #[cfg(feature = "direct-mlx")]
 pub use startup::{
     LagunaServingSettings, LagunaStartupError, initialize_laguna_execution,

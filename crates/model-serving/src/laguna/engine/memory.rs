@@ -1,11 +1,100 @@
 //! Laguna memory-budget composition and measured MLX telemetry.
 
+use astronomical_runtime_integration::{MlxMemorySnapshot, MlxRuntime};
+
+use crate::laguna::{LagunaModel, laguna_retained_expert_budget_after_completed_forward};
 use crate::{
-    MlxActiveMemoryBreakdown, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetPhase,
-    MlxRamBudgetSnapshot,
+    InferenceEngineError, MlxActiveMemoryBreakdown, MlxMemoryTelemetry, MlxRamBudget,
+    MlxRamBudgetPhase, MlxRamBudgetSnapshot, PerformanceAttribution, PerformanceOperation,
 };
 
 use super::execution::LagunaInferenceExecution;
+
+/// Active ownership sampled immediately before one Laguna forward.
+pub(super) struct LagunaForwardMemoryBaseline {
+    active_memory_bytes: u64,
+    retained_expert_payload_bytes: u64,
+}
+
+/// Resets the operation peak and captures owners needed to separate promotion from workspace.
+pub(super) fn begin_laguna_forward_memory_observation(
+    runtime: &MlxRuntime,
+    model: &LagunaModel,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<LagunaForwardMemoryBaseline, InferenceEngineError> {
+    let memory_snapshot = performance_attribution.measure_operation(
+        PerformanceOperation::CompletedForwardMemorySnapshot,
+        |_performance_attribution| {
+            runtime
+                .reset_peak_memory()
+                .and_then(|()| runtime.memory_snapshot())
+                .map_err(|memory_error| InferenceEngineError::Fatal {
+                    reason: format!(
+                        "Laguna could not begin forward memory observation: {memory_error}"
+                    ),
+                })
+        },
+    )?;
+    Ok(LagunaForwardMemoryBaseline {
+        active_memory_bytes: u64::try_from(memory_snapshot.active_memory_bytes())
+            .unwrap_or(u64::MAX),
+        retained_expert_payload_bytes: model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count,
+    })
+}
+
+/// Applies measured forward pressure to the next mandatory expert-read plan.
+pub(super) fn complete_laguna_forward_memory_observation(
+    runtime: &MlxRuntime,
+    model: &LagunaModel,
+    mlx_ram_budget: &MlxRamBudget,
+    memory_baseline: LagunaForwardMemoryBaseline,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<MlxMemorySnapshot, InferenceEngineError> {
+    let memory_snapshot = performance_attribution.measure_operation(
+        PerformanceOperation::CompletedForwardMemorySnapshot,
+        |_performance_attribution| {
+            runtime
+                .memory_snapshot()
+                .map_err(|memory_error| InferenceEngineError::Fatal {
+                    reason: format!(
+                        "Laguna could not complete forward memory observation: {memory_error}"
+                    ),
+                })
+        },
+    )?;
+    let retained_expert_payload_bytes = model
+        .expert_weight_memory_cache_statistics()
+        .resident_payload_byte_count;
+    let retained_expert_budget_bytes = laguna_retained_expert_budget_after_completed_forward(
+        mlx_ram_budget,
+        u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX),
+        u64::try_from(memory_snapshot.peak_memory_bytes()).unwrap_or(u64::MAX),
+        retained_expert_payload_bytes,
+        mlx_ram_budget
+            .model_geometry()
+            .complete_expert_payload_bytes,
+    );
+    model
+        .set_retained_expert_ceiling(retained_expert_budget_bytes)
+        .map_err(|residency_error| InferenceEngineError::Fatal {
+            reason: format!(
+                "Laguna could not apply completed-forward expert residency: {residency_error:?}"
+            ),
+        })?;
+    tracing::debug!(
+        active_memory_bytes_before_forward = memory_baseline.active_memory_bytes,
+        active_memory_bytes_after_forward = memory_snapshot.active_memory_bytes(),
+        peak_memory_bytes = memory_snapshot.peak_memory_bytes(),
+        retained_expert_payload_bytes_before_forward =
+            memory_baseline.retained_expert_payload_bytes,
+        retained_expert_payload_bytes_after_forward = retained_expert_payload_bytes,
+        retained_expert_budget_bytes,
+        "Laguna updated expert residency from completed-forward memory evidence"
+    );
+    Ok(memory_snapshot)
+}
 
 impl LagunaInferenceExecution {
     /// Publishes one allocator snapshot using family-owned model and expert owners.
