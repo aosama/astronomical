@@ -21,8 +21,8 @@ use super::router_correction_bias::bind_optional_router_correction_bias;
 /// Resident weight map bound from canonical tensor IDs.
 pub struct LagunaNativeWeights {
     vectors: HashMap<LagunaTensorId, MlxArray>,
-    linears: HashMap<LagunaTensorId, LagunaBoundLinear>,
-    fused_routed_gate_up: HashMap<usize, LagunaBoundLinear>,
+    pub(super) linears: HashMap<LagunaTensorId, LagunaBoundLinear>,
+    pub(super) fused_routed_gate_up: HashMap<usize, LagunaBoundLinear>,
     fused_shared_gate_up: HashMap<usize, LagunaBoundLinear>,
 }
 
@@ -307,15 +307,6 @@ impl LagunaNativeWeights {
         layer_index: usize,
     ) -> Option<&LagunaBoundLinear> {
         self.fused_shared_gate_up.get(&layer_index)
-    }
-
-    /// Returns whether this layer owns stacked routed-expert projections.
-    pub(in crate::laguna) fn has_routed_experts(&self, layer_index: usize) -> bool {
-        self.fused_routed_gate_up.contains_key(&layer_index)
-            || self.linears.contains_key(&layer_id(
-                layer_index,
-                LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Gate),
-            ))
     }
 }
 

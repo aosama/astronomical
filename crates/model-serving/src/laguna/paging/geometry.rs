@@ -4,7 +4,7 @@ use crate::expert_paging::{
     plan_phase_aware_expert_residency,
 };
 use crate::memory::{
-    complete_residency_exceeds_ceiling_with_activation_headroom,
+    CompleteResidencyDecision, CompleteResidencyRequirements,
     required_complete_residency_activation_headroom_bytes,
 };
 
@@ -15,6 +15,7 @@ use super::layer_plan::LagunaExpertPagingPlan;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LagunaRequestMemoryRequirements {
     complete_expert_payload_bytes: u64,
+    complete_prefill_page_bytes: u64,
     routed_decode_page_bytes: u64,
     sliding_prefill_transient_token_count: u32,
 }
@@ -24,6 +25,12 @@ impl LagunaRequestMemoryRequirements {
     #[must_use]
     pub const fn complete_expert_payload_bytes(&self) -> u64 {
         self.complete_expert_payload_bytes
+    }
+
+    /// Returns the largest complete sparse-layer page that one prefill step can own.
+    #[must_use]
+    pub const fn complete_prefill_page_bytes(&self) -> u64 {
+        self.complete_prefill_page_bytes
     }
 
     /// Returns the sum of one contract top-K page per sparse layer.
@@ -56,21 +63,23 @@ impl LagunaExpertPagingPlan {
         prefill_chunk_token_count: u32,
     ) -> Result<LagunaRequestMemoryRequirements, LagunaPagingError> {
         let mut complete_expert_payload_bytes = 0_u64;
+        let mut complete_prefill_page_bytes = 0_u64;
         let mut routed_decode_page_bytes = 0_u64;
         for sparse_layer in self.sparse_layers() {
+            let complete_layer_payload_bytes = sparse_layer.complete_layer_payload_byte_count()?;
             complete_expert_payload_bytes = complete_expert_payload_bytes
-                .checked_add(sparse_layer.complete_layer_payload_byte_count()?)
+                .checked_add(complete_layer_payload_bytes)
                 .ok_or(LagunaPagingError::ExpertPayloadOverflow {
                     layer_index: sparse_layer.decoder_layer_index(),
                 })?;
-            routed_decode_page_bytes = routed_decode_page_bytes
-                .checked_add(sparse_layer.routed_page_payload_byte_count()?)
-                .ok_or(LagunaPagingError::ExpertPayloadOverflow {
-                    layer_index: sparse_layer.decoder_layer_index(),
-                })?;
+            complete_prefill_page_bytes =
+                complete_prefill_page_bytes.max(complete_layer_payload_bytes);
+            routed_decode_page_bytes =
+                routed_decode_page_bytes.max(sparse_layer.routed_page_payload_byte_count()?);
         }
         Ok(LagunaRequestMemoryRequirements {
             complete_expert_payload_bytes,
+            complete_prefill_page_bytes,
             routed_decode_page_bytes,
             sliding_prefill_transient_token_count: laguna_sliding_prefill_transient_token_count(
                 sliding_window_token_count,
@@ -96,24 +105,36 @@ impl LagunaExpertPagingPlan {
         .map_err(|_| LagunaPagingError::ExpertPayloadOverflow { layer_index: 0 })
     }
 
-    /// Returns whether complete expert residency plus activation headroom fits the ceiling.
-    #[must_use]
-    pub fn complete_residency_fits_ceiling(
+    /// Translates Laguna geometry into the centralized replacement-aware residency decision.
+    pub fn complete_residency_decision(
         &self,
-        projected_resident_active_memory_bytes: u64,
-        stable_memory_ceiling_bytes: u64,
-        complete_expert_payload_bytes: u64,
+        current_active_memory_bytes: u64,
+        retained_paged_expert_payload_bytes: u64,
+        active_memory_ceiling_bytes: u64,
         observed_transient_high_water_bytes: u64,
-    ) -> bool {
+    ) -> Result<CompleteResidencyDecision, LagunaPagingError> {
+        let complete_expert_payload_bytes =
+            self.sparse_layers()
+                .iter()
+                .try_fold(0_u64, |total_payload_bytes, sparse_layer| {
+                    total_payload_bytes
+                        .checked_add(sparse_layer.complete_layer_payload_byte_count()?)
+                        .ok_or(LagunaPagingError::ExpertPayloadOverflow {
+                            layer_index: sparse_layer.decoder_layer_index(),
+                        })
+                })?;
         let required_activation_headroom_bytes =
             required_complete_residency_activation_headroom_bytes(
                 complete_expert_payload_bytes,
                 observed_transient_high_water_bytes,
             );
-        !complete_residency_exceeds_ceiling_with_activation_headroom(
-            projected_resident_active_memory_bytes,
-            stable_memory_ceiling_bytes,
-            required_activation_headroom_bytes,
-        )
+        Ok(CompleteResidencyRequirements {
+            current_active_memory_bytes,
+            retained_paged_expert_payload_bytes,
+            complete_expert_payload_bytes,
+            required_headroom_bytes: required_activation_headroom_bytes,
+            active_memory_ceiling_bytes,
+        }
+        .decide())
     }
 }

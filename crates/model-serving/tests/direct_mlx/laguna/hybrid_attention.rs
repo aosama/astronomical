@@ -189,6 +189,14 @@ async fn should_grow_full_state_and_bound_sliding_state_through_prefill_and_deco
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     assert_eq!(decoder_state.payload_byte_count(), 0);
+    let prefill_memory_projection = decoder_state
+        .projected_forward_memory(model.contract(), 6)
+        .expect("mixed prefill memory geometry should be exact");
+    assert_eq!(prefill_memory_projection.persistent_growth_bytes(), 8_320);
+    assert_eq!(
+        prefill_memory_projection.sliding_temporary_workspace_bytes(),
+        288
+    );
     let mut performance_attribution = PerformanceAttribution::enabled();
     let prompt_tokens = runtime
         .array_from_u32(&[1, 2, 3, 4, 5, 6], &[6])
@@ -207,6 +215,14 @@ async fn should_grow_full_state_and_bound_sliding_state_through_prefill_and_deco
     assert!(
         decoder_state.payload_byte_count() > 0,
         "a written Laguna decoder cache must report live context payload"
+    );
+    let decode_memory_projection = decoder_state
+        .projected_forward_memory(model.contract(), 1)
+        .expect("mixed decode memory geometry should be exact");
+    assert_eq!(decode_memory_projection.persistent_growth_bytes(), 0);
+    assert_eq!(
+        decode_memory_projection.sliding_temporary_workspace_bytes(),
+        0
     );
 
     let decode_tokens = runtime

@@ -3,7 +3,9 @@
 use astronomical_ipc_protocol::{RequestId, WorkerPromptWorkReuse};
 use astronomical_runtime_integration::MlxArray;
 
-use crate::laguna::LagunaDecoderState;
+use crate::laguna::{
+    LagunaDecoderState, LagunaDecoderStateAllocationCheckpoint, LagunaExecutionError,
+};
 use crate::{PerformanceAttribution, PersistentPromptCacheBlockKey};
 
 /// One active Laguna request whose prompt and decode work advance incrementally.
@@ -32,4 +34,36 @@ pub(super) struct LagunaActiveGeneration {
     pub(super) terminal_prompt_logits: Option<MlxArray>,
     /// Eligible and restored model work reported consistently on every progress boundary.
     pub(super) prompt_work_reuse: WorkerPromptWorkReuse,
+}
+
+/// Mutable request ownership restored when one prefill attempt does not complete.
+pub(super) struct LagunaPrefillRequestCheckpoint {
+    pub(super) decoder_allocation: LagunaDecoderStateAllocationCheckpoint,
+    pub(super) prompt_cursor: usize,
+    pub(super) cache_publication_cursor: Option<PersistentPromptCacheBlockKey>,
+}
+
+impl LagunaActiveGeneration {
+    /// Captures every mutable owner before a potentially recoverable prefill allocation.
+    pub(super) fn prefill_request_checkpoint(
+        &self,
+    ) -> Result<LagunaPrefillRequestCheckpoint, LagunaExecutionError> {
+        Ok(LagunaPrefillRequestCheckpoint {
+            decoder_allocation: self.decoder_state.allocation_checkpoint()?,
+            prompt_cursor: self.next_prompt_token_position,
+            cache_publication_cursor: self.last_published_block_key.clone(),
+        })
+    }
+
+    /// Rolls request ownership back before reclamation or a smaller-chunk retry.
+    pub(super) fn restore_prefill_request_checkpoint(
+        &mut self,
+        checkpoint: LagunaPrefillRequestCheckpoint,
+    ) -> Result<(), LagunaExecutionError> {
+        self.decoder_state
+            .restore_allocation_checkpoint(checkpoint.decoder_allocation)?;
+        self.next_prompt_token_position = checkpoint.prompt_cursor;
+        self.last_published_block_key = checkpoint.cache_publication_cursor;
+        Ok(())
+    }
 }
