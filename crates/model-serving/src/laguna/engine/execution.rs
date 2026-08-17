@@ -8,8 +8,7 @@ use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 use crate::artifact_validation::ValidatedWeightsFile;
 use crate::laguna::{
     LagunaDecoderState, LagunaExpertPagingPlan, LagunaInferenceRequest, LagunaModel,
-    LagunaPromptProcessingChunkSizer, LagunaPromptProcessingExecutionProfile, LagunaTargetContract,
-    LagunaTensorContract,
+    LagunaPromptProcessingChunkSizer, LagunaTargetContract, LagunaTensorContract,
 };
 use crate::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
@@ -33,8 +32,6 @@ pub(in crate::laguna) struct LagunaPendingStartup {
     pub(in crate::laguna) effective_mlx_memory_ceiling_bytes: usize,
     pub(in crate::laguna) allocator_cache_memory_limit_bytes: usize,
     pub(in crate::laguna) prompt_processing_chunk_sizer: LagunaPromptProcessingChunkSizer,
-    pub(in crate::laguna) prompt_processing_execution_profile:
-        LagunaPromptProcessingExecutionProfile,
     pub(in crate::laguna) minimum_mlx_memory_ceiling_bytes: u64,
     pub(in crate::laguna) prompt_cache_disk_store_config:
         Option<PersistentPromptCacheDiskStoreConfig>,
@@ -60,10 +57,8 @@ pub struct LagunaInferenceExecution {
     pub(super) model: Option<LagunaModel>,
     /// Request state returned to the protocol loop after every bounded advance.
     pub(super) active_request: Option<LagunaActiveGeneration>,
-    /// Adaptive or fixed selector that bounds one prompt advance.
+    /// Deterministic fixed-size planner that bounds one prompt advance.
     pub(super) prompt_processing_chunk_sizer: Option<LagunaPromptProcessingChunkSizer>,
-    /// Descriptor-derived identity used to isolate optimizer measurements.
-    pub(super) prompt_processing_execution_profile: Option<LagunaPromptProcessingExecutionProfile>,
     /// Optional model-and-revision SSD cache shared by sequential requests.
     pub(super) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
     /// Resolved global quota retained for process-scoped cache statistics.
@@ -91,7 +86,6 @@ impl LagunaInferenceExecution {
             model: None,
             active_request: None,
             prompt_processing_chunk_sizer: None,
-            prompt_processing_execution_profile: None,
             persistent_prompt_cache: None,
             persistent_prompt_cache_disk_store_config: None,
             persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
@@ -168,12 +162,6 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             }
         })?;
         let mut performance_attribution = inference_request.into_performance_attribution();
-        let prompt_processing_chunk_sizer =
-            self.prompt_processing_chunk_sizer
-                .as_mut()
-                .ok_or(InferenceEngineError::Fatal {
-                    reason: "Laguna prompt-processing chunk sizer is missing".to_owned(),
-                })?;
         let persistent_prompt_cache = self.persistent_prompt_cache.clone();
         let (last_published_block_key, restored_prompt_prefix_token_count) =
             if let Some(persistent_prompt_cache) = persistent_prompt_cache.as_deref() {
@@ -195,8 +183,6 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                     .record_cache_hit(restored_prompt_prefix_token_count as usize);
             }
         }
-        prompt_processing_chunk_sizer
-            .start_prompt_processing_request(restored_prompt_prefix_token_count as usize);
         let prompt_token_count = u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX);
         let expert_memory_mode = model.expert_memory_mode();
         self.active_request = Some(LagunaActiveGeneration {

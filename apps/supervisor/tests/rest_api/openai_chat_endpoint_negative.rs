@@ -4,7 +4,7 @@ use astronomical_config::DiscoveredModel;
 use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities, MtpRuntimeState};
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
-    build_application, build_application_with_config_warning_and_discovered_models,
+    build_application, build_application_with_discovered_models,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -98,9 +98,8 @@ async fn should_explain_why_the_requested_chat_model_could_not_be_loaded() {
 
 #[tokio::test]
 async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
-    let application = build_application_with_config_warning_and_discovered_models(
+    let application = build_application_with_discovered_models(
         IdleWorkerCapacityExecutor,
-        None,
         vec![discovered_model()],
     );
     let chat_response = application

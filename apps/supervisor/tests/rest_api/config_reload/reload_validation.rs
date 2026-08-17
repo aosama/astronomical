@@ -84,7 +84,7 @@ async fn should_return_invalid_config_feedback_when_fixed_prompt_processing_toke
     let config_home_directory = temp_config_directory.path().to_path_buf();
     write_config_file(
         &config_home_directory,
-        r#"{ "chunking": { "prompt_processing_chunk_size_optimizer_enabled": false, "fixed_prompt_processing_chunk_size_tokens": 0 } }"#,
+        r#"{ "chunking": { "fixed_prompt_processing_chunk_size_tokens": 0 } }"#,
     );
     let initial_resolved_config = sample_resolved_config();
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
@@ -104,7 +104,7 @@ async fn should_return_invalid_config_feedback_when_fixed_prompt_processing_toke
     assert_eq!(response_json["status"], "invalid_config");
     assert_eq!(
         response_json["message"],
-        "invalid Astronomical configuration: chunking.fixed_prompt_processing_chunk_size_tokens must be positive"
+        "invalid Astronomical configuration: invalid chunking.fixed_prompt_processing_chunk_size_tokens: must be positive"
     );
     let live_config = reloadable_config
         .read()

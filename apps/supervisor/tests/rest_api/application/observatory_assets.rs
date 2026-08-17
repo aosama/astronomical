@@ -12,9 +12,6 @@ const EXPECTED_CHAT_TRANSCRIPT_MARKER: &str = "<section id=\"chat-transcript\" c
 const EXPECTED_NAVIGATION_LABEL_MARKER: &str = "aria-label=\"Observatory sections\"";
 const EXPECTED_OVERVIEW_REGION_MARKER: &str =
     "data-observatory-view=\"overview\" aria-labelledby=\"overview-title\"";
-const EXPECTED_OPTIMIZER_DESTINATION_MARKER: &str = "data-observatory-destination=\"optimizer\"";
-const EXPECTED_OPTIMIZER_REGION_MARKER: &str =
-    "data-observatory-view=\"optimizer\" aria-labelledby=\"optimizer-title\"";
 const EXPECTED_COMPACT_OVERVIEW_MARKER: &str =
     "id=\"compact-memory-panel\" class=\"overview-summary-section compact-memory-panel\"";
 const EXPECTED_MEMORY_PRESSURE_MARKER: &str =
@@ -58,7 +55,7 @@ async fn should_serve_the_embedded_observatory_index_html_at_root() {
 
 #[tokio::test]
 async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
-    for observatory_path in ["/overview", "/chat", "/optimizer", "/model", "/settings"] {
+    for observatory_path in ["/overview", "/chat", "/model", "/settings"] {
         let application = build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
@@ -88,8 +85,8 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
 }
 
 #[tokio::test]
-async fn should_not_serve_removed_memory_and_cache_destinations() {
-    for removed_observatory_path in ["/memory", "/cache"] {
+async fn should_not_serve_removed_memory_cache_and_optimizer_destinations() {
+    for removed_observatory_path in ["/memory", "/cache", "/optimizer"] {
         let application = build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
@@ -174,14 +171,6 @@ async fn should_expose_named_observatory_navigation_and_overview_region() {
     assert!(
         shell_text.contains(EXPECTED_OVERVIEW_REGION_MARKER),
         "the Observatory must expose a labelled Overview region"
-    );
-    assert!(
-        shell_text.contains(EXPECTED_OPTIMIZER_DESTINATION_MARKER),
-        "the Observatory must expose a direct Optimizer destination"
-    );
-    assert!(
-        shell_text.contains(EXPECTED_OPTIMIZER_REGION_MARKER),
-        "the Observatory must expose a labelled Optimizer region"
     );
     assert!(
         shell_text.contains(EXPECTED_COMPACT_OVERVIEW_MARKER),
@@ -316,34 +305,6 @@ async fn should_serve_the_embedded_observatory_playground_javascript() {
 }
 
 #[tokio::test]
-async fn should_serve_the_embedded_optimizer_javascript() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/optimizer.js")
-                .body(Body::empty())
-                .expect("the optimizer.js request should be valid"),
-        )
-        .await
-        .expect("the application should return the optimizer script");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert!(
-        response
-            .headers()
-            .get(header::CONTENT_TYPE)
-            .is_some_and(|content_type| content_type
-                .to_str()
-                .is_ok_and(|content_type| content_type.starts_with("application/javascript")))
-    );
-    let response_body = to_bytes(response.into_body(), 1024 * 1024)
-        .await
-        .expect("the optimizer script body should be readable");
-    assert!(!response_body.is_empty());
-}
-
-#[tokio::test]
 async fn should_serve_the_embedded_observatory_stylesheet_with_correct_content_type() {
     let application = build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
@@ -374,39 +335,5 @@ async fn should_serve_the_embedded_observatory_stylesheet_with_correct_content_t
     assert!(
         !response_body.is_empty(),
         "the console stylesheet should not be empty"
-    );
-}
-
-#[tokio::test]
-async fn should_serve_the_embedded_optimizer_stylesheet_with_correct_content_type() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/optimizer.css")
-                .body(Body::empty())
-                .expect("the optimizer.css request should be valid"),
-        )
-        .await
-        .expect("the application should return the optimizer stylesheet");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let content_type = response
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .expect("the optimizer stylesheet should declare a content-type");
-    assert!(
-        content_type
-            .to_str()
-            .expect("the content-type should be valid ASCII")
-            .starts_with("text/css"),
-        "the optimizer stylesheet should be CSS"
-    );
-    let response_body = to_bytes(response.into_body(), 1024 * 1024)
-        .await
-        .expect("the optimizer stylesheet body should be readable");
-    assert!(
-        !response_body.is_empty(),
-        "the optimizer stylesheet should not be empty"
     );
 }

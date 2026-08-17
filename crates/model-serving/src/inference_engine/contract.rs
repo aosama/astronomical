@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
     WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 
-use super::{EngineLoadResult, PromptProcessingChunkOptimizationOutcome};
+use super::EngineLoadResult;
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
 pub trait InferenceEngine {
@@ -328,8 +328,6 @@ pub enum GeneratedToken {
         forward_prefill_chunk_elapsed_millis: u64,
         /// Selected `prefill_chunck_tokens` used for this completed prompt-processing chunk.
         completed_prefill_chunk_tokens: u32,
-        prompt_processing_chunk_optimization_outcome:
-            Option<PromptProcessingChunkOptimizationOutcome>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         /// Current complete/partial retained ownership after this chunk.
         expert_residency_telemetry: Option<ExpertResidencyTelemetry>,

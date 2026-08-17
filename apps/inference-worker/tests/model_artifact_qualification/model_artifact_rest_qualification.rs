@@ -7,8 +7,7 @@ use std::{
 
 use astronomical_supervisor::{
     GenerationPerformanceLog, ResolvedRuntimeConfigResolver, WorkerHandle,
-    build_application_with_config_warning_and_discovered_models,
-    build_development_application_with_reload,
+    build_application_with_discovered_models, build_development_application_with_reload,
 };
 use serde_json::json;
 use tokio::{
@@ -302,9 +301,8 @@ pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limi
                 isolated_worker_home_directory.to_path_buf(),
             )
         }
-        None => build_application_with_config_warning_and_discovered_models(
+        None => build_application_with_discovered_models(
             worker_handle.clone(),
-            None,
             vec![discovered_model_artifact(
                 model_id,
                 &model_directory,

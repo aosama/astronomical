@@ -198,11 +198,6 @@ impl AstronomicalInstancePaths {
     }
 
     #[must_use]
-    pub fn optimizer_directory(&self) -> PathBuf {
-        self.state_directory.join("optimizer")
-    }
-
-    #[must_use]
     pub fn logging_directory(&self) -> PathBuf {
         self.state_directory.join("logs")
     }

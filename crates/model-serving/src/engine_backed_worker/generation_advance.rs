@@ -6,7 +6,6 @@ use astronomical_ipc_protocol::{
 use tokio::io::AsyncWrite;
 
 use super::fatal::report_fatal_engine_error;
-use super::prompt_processing_chunk_optimization_outcome::to_worker_prompt_processing_chunk_optimization_outcome;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{GeneratedToken, InferenceEngine, InferenceEngineError};
@@ -228,7 +227,6 @@ where
                 elapsed_millis,
                 forward_prefill_chunk_elapsed_millis,
                 completed_prefill_chunk_tokens,
-                prompt_processing_chunk_optimization_outcome,
                 mlx_memory_telemetry,
                 expert_residency_telemetry,
                 speculative_prefill_draft_memory_telemetry,
@@ -289,10 +287,6 @@ where
                             forward_prefill_chunk_elapsed_millis,
                         ),
                         completed_prefill_chunk_tokens: Some(completed_prefill_chunk_tokens),
-                        prompt_processing_chunk_optimization_outcome:
-                            prompt_processing_chunk_optimization_outcome
-                                .map(to_worker_prompt_processing_chunk_optimization_outcome)
-                                .transpose()?,
                         mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
                             super::output::worker_memory_snapshot(
                                 MlxMemorySnapshotSource::Prefill,
@@ -327,7 +321,6 @@ where
                         elapsed_millis: 0,
                         forward_prefill_chunk_elapsed_millis: None,
                         completed_prefill_chunk_tokens: None,
-                        prompt_processing_chunk_optimization_outcome: None,
                         mlx_memory_snapshot: None,
                         expert_residency: None,
                         speculative_prefill_draft_memory_snapshot: None,

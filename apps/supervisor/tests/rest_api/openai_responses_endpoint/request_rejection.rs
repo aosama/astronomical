@@ -87,9 +87,8 @@ async fn should_explain_why_the_requested_responses_model_could_not_be_loaded() 
 
 #[tokio::test]
 async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
-    let application = build_application_with_config_warning_and_discovered_models(
+    let application = build_application_with_discovered_models(
         ScriptedResponsesExecutor::idle_with_expected_model("requested-model"),
-        None,
         vec![DiscoveredModel {
             model_id: "requested-model".to_owned(),
             model_family: astronomical_config::ModelFamily::Qwen3_5,
