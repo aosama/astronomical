@@ -45,7 +45,7 @@ pub(super) fn write_interaction_config(isolated_worker_home: &Path, model_direct
         "mtp_enabled": false,
         "logging": {"level": "debug", "retained_files": 2},
         "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": false,
+
             "fixed_prompt_processing_chunk_size_tokens": PREFILL_CHUNCK_TOKEN_COUNT,
             "experimental_ssd_paging_prefill_graph_submission_layer_interval": PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL,

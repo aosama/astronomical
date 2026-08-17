@@ -58,7 +58,6 @@ async fn should_expose_ready_model_id_and_serving_session_in_status_when_ready_a
         status_document["ready_model_id"],
         OBSERVATORY_CONTRACT_MODEL_ID
     );
-    assert_eq!(status_document["config_warning"], serde_json::Value::Null);
     assert_eq!(status_document["speculative_prefill_enabled"], false);
     assert_eq!(
         status_document["speculative_prefill_runtime_state"],

@@ -56,7 +56,7 @@ async fn run_startup_cleanup_attribution_journey() {
         load_persistent_prompt_cache_qualification_engine(
             &model_directory,
             persistent_prompt_cache_directory.path(),
-            Some(4_096),
+            4_096,
         )
         .await;
     let short_request_id = RequestId::new(41_001);

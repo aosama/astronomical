@@ -10,8 +10,6 @@ const memoryControlScriptPath = path.join(__dirname, "memory-control.js");
 const memoryControlScript = fs.readFileSync(memoryControlScriptPath, "utf8");
 const playgroundScriptPath = path.join(__dirname, "playground.js");
 const playgroundScript = fs.readFileSync(playgroundScriptPath, "utf8");
-const optimizerScriptPath = path.join(__dirname, "optimizer.js");
-const optimizerScript = fs.readFileSync(optimizerScriptPath, "utf8");
 const overviewCompactScriptPath = path.join(__dirname, "overview-compact.js");
 const overviewCompactScript = fs.readFileSync(overviewCompactScriptPath, "utf8");
 
@@ -28,7 +26,6 @@ function createConsoleContext() {
         TextEncoder
     });
     vm.runInContext(memoryControlScript, scriptContext, { filename: memoryControlScriptPath });
-    vm.runInContext(optimizerScript, scriptContext, { filename: optimizerScriptPath });
     vm.runInContext(consoleScript, scriptContext, { filename: consoleScriptPath });
     vm.runInContext(overviewCompactScript, scriptContext, { filename: overviewCompactScriptPath });
     vm.runInContext(playgroundScript, scriptContext, { filename: playgroundScriptPath });
@@ -112,8 +109,8 @@ test("moves Observatory visibility and current state to a selected destination",
 
 test("activates a directly requested Observatory path without replacing it", () => {
     const scriptContext = createConsoleContext();
-    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("optimizer")];
-    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("optimizer")];
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("model")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("model")];
     const replacedPaths = [];
     scriptContext.document = {
         querySelectorAll(selector) {
@@ -121,7 +118,7 @@ test("activates a directly requested Observatory path without replacing it", () 
         }
     };
     scriptContext.window = {
-        location: { pathname: "/optimizer" },
+        location: { pathname: "/model" },
         addEventListener() {}
     };
     scriptContext.history = {
@@ -136,101 +133,6 @@ test("activates a directly requested Observatory path without replacing it", () 
     assert.equal(navigationButtons[1].attributes["aria-current"], "page");
     assert.equal(observatoryViews[1].hidden, false);
     assert.deepEqual(replacedPaths, []);
-});
-
-test("reports convergence across position ranges in one execution profile", () => {
-    const scriptContext = createConsoleContext();
-    scriptContext.optimizerDocument = {
-        mode: "adaptive",
-        latest_chunk_outcome: {
-            selection: {
-                reason: "minimize_projected_remaining_prompt_latency",
-                selected_candidate_chunk_size_tokens: 4096
-            },
-            processed_prompt_token_count: 4096,
-            was_reduced_by_memory_capacity: false,
-            all_candidates_have_measurements: true,
-            is_execution_profile_converged: true,
-            measurement_context: {
-                chunk_start_token_position: 49152,
-                position_range_start_token_position: 32768,
-                position_range_end_token_position_exclusive: 65536
-            },
-            candidate_measurement_summaries: [
-                { candidate_chunk_size_tokens: 2048, measurement_count: 3 },
-                { candidate_chunk_size_tokens: 4096, measurement_count: 2 }
-            ]
-        }
-    };
-
-    const assessment = vm.runInContext(
-        "optimizerAssessment(optimizerDocument)",
-        scriptContext
-    );
-
-    assert.equal(assessment.title, "Execution profile converged");
-    assert.match(assessment.detail, /position ranges remain observation telemetry/i);
-    assert.equal(assessment.tone, "ready");
-});
-
-test("keeps candidate selection and memory reduction distinct", () => {
-    const scriptContext = createConsoleContext();
-    scriptContext.optimizerDocument = {
-        mode: "adaptive",
-        latest_chunk_outcome: {
-            selection: {
-                reason: "explore_unmeasured_candidate",
-                selected_candidate_chunk_size_tokens: 8192
-            },
-            processed_prompt_token_count: 4096,
-            was_reduced_by_memory_capacity: true,
-            all_candidates_have_measurements: false
-        }
-    };
-
-    const assessment = vm.runInContext(
-        "optimizerAssessment(optimizerDocument)",
-        scriptContext
-    );
-
-    assert.equal(assessment.title, "Memory capacity changed the latest decision");
-    assert.match(assessment.detail, /did not fit.*smaller amount/i);
-    assert.equal(assessment.tone, "learning");
-});
-
-test("does not label unavailable optimizer configuration as fixed", () => {
-    const scriptContext = createConsoleContext();
-    assert.equal(vm.runInContext("optimizerModeTitle({ mode: 'unavailable' })", scriptContext), "Unavailable");
-});
-
-test("maps every optimizer selection reason without a catch-all substitute", () => {
-    const scriptContext = createConsoleContext();
-    const mappedReasons = vm.runInContext(`[
-        optimizerSelectionReasonTitle("explore_unmeasured_candidate"),
-        optimizerSelectionReasonTitle("minimize_projected_remaining_prompt_latency"),
-        optimizerSelectionReasonTitle("remaining_tokens_below_smallest_candidate"),
-        optimizerSelectionReasonTitle("future_reason")
-    ]`, scriptContext);
-
-    assert.deepEqual(JSON.parse(JSON.stringify(mappedReasons)), [
-        "Explore unmeasured candidate",
-        "Minimize projected remaining prompt latency",
-        "Remaining tokens below smallest candidate",
-        "Unknown selection reason"
-    ]);
-});
-
-test("maps optimizer measurement provenance to user-facing sources", () => {
-    const scriptContext = createConsoleContext();
-    const mappedSources = vm.runInContext(`[
-        optimizerMeasurementSourceTitle("execution_profile"),
-        optimizerMeasurementSourceTitle("no_measurements_available")
-    ]`, scriptContext);
-
-    assert.deepEqual(JSON.parse(JSON.stringify(mappedSources)), [
-        "Evidence for this execution profile",
-        "No evidence for this context yet"
-    ]);
 });
 
 test("selects the ready model metadata instead of the first advertised model", () => {
@@ -302,7 +204,6 @@ test("maps every observatory destination to a stable URL path", () => {
     assert.equal(pathMap.chat, "/chat");
     assert.equal(pathMap.memory, undefined);
     assert.equal(pathMap.cache, undefined);
-    assert.equal(pathMap.optimizer, "/optimizer");
     assert.equal(pathMap.model, "/model");
     assert.equal(pathMap.settings, "/settings");
 });
@@ -316,7 +217,6 @@ test("maps every observatory URL path back to its destination", () => {
     assert.equal(reverseMap["/chat"], "chat");
     assert.equal(reverseMap["/memory"], undefined);
     assert.equal(reverseMap["/cache"], undefined);
-    assert.equal(reverseMap["/optimizer"], "optimizer");
     assert.equal(reverseMap["/model"], "model");
     assert.equal(reverseMap["/settings"], "settings");
 });
@@ -329,38 +229,6 @@ test("defaults observatory to the overview destination path", () => {
 
     assert.equal(defaultDestination, "overview");
     assert.equal(defaultPath, "/overview");
-});
-
-test("identifies the candidate with highest observed throughput", () => {
-    const scriptContext = createConsoleContext();
-    const candidateMeasurementSummaries = [
-        {
-            candidate_chunk_size_tokens: 1024,
-            measurement_count: 5,
-            average_processed_prompt_token_count: 800,
-            average_forward_elapsed_millis: 400
-        },
-        {
-            candidate_chunk_size_tokens: 2048,
-            measurement_count: 3,
-            average_processed_prompt_token_count: 1500,
-            average_forward_elapsed_millis: 600
-        },
-        {
-            candidate_chunk_size_tokens: 4096,
-            measurement_count: 2,
-            average_processed_prompt_token_count: 2000,
-            average_forward_elapsed_millis: 500
-        }
-    ];
-    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
-
-    const highestThroughputCandidate = vm.runInContext(
-        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
-        scriptContext
-    );
-
-    assert.equal(highestThroughputCandidate.candidate_chunk_size_tokens, 4096);
 });
 
 test("clamps memory segments so they never exceed active memory", () => {
@@ -473,62 +341,6 @@ test("keeps drafter memory separate from model core and runtime work", () => {
     );
 });
 
-test("returns null when no candidates have measurements", () => {
-    const scriptContext = createConsoleContext();
-    const candidateMeasurementSummaries = [
-        {
-            candidate_chunk_size_tokens: 1024,
-            measurement_count: 0,
-            average_processed_prompt_token_count: 0,
-            average_forward_elapsed_millis: 0
-        }
-    ];
-    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
-
-    const highestThroughputCandidate = vm.runInContext(
-        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
-        scriptContext
-    );
-
-    assert.equal(highestThroughputCandidate, null);
-});
-
-test("skips candidates with zero elapsed time", () => {
-    const scriptContext = createConsoleContext();
-    const candidateMeasurementSummaries = [
-        {
-            candidate_chunk_size_tokens: 1024,
-            measurement_count: 1,
-            average_processed_prompt_token_count: 500,
-            average_forward_elapsed_millis: 0
-        },
-        {
-            candidate_chunk_size_tokens: 2048,
-            measurement_count: 2,
-            average_processed_prompt_token_count: 1000,
-            average_forward_elapsed_millis: 500
-        }
-    ];
-    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
-
-    const highestThroughputCandidate = vm.runInContext(
-        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
-        scriptContext
-    );
-
-    assert.equal(highestThroughputCandidate.candidate_chunk_size_tokens, 2048);
-});
-
-test("returns null for empty candidate measurements", () => {
-    const scriptContext = createConsoleContext();
-    const highestThroughputCandidate = vm.runInContext(
-        "highestObservedThroughputCandidate([])",
-        scriptContext
-    );
-
-    assert.equal(highestThroughputCandidate, null);
-});
-
 test("maps every macOS memory pressure state and unknown input to a safe presentation", () => {
     const scriptContext = createConsoleContext();
     const memoryPressureStatePresentations = vm.runInContext(
@@ -545,30 +357,4 @@ test("maps every macOS memory pressure state and unknown input to a safe present
         { state: "unavailable", title: "Unavailable" },
         { state: "unavailable", title: "Unavailable" }
     ]);
-});
-
-test("does not declare one highest-throughput candidate when measurements are tied", () => {
-    const scriptContext = createConsoleContext();
-    const candidateMeasurementSummaries = [
-        {
-            candidate_chunk_size_tokens: 1024,
-            measurement_count: 2,
-            average_processed_prompt_token_count: 1000,
-            average_forward_elapsed_millis: 500
-        },
-        {
-            candidate_chunk_size_tokens: 2048,
-            measurement_count: 2,
-            average_processed_prompt_token_count: 2000,
-            average_forward_elapsed_millis: 1000
-        }
-    ];
-    scriptContext.candidateMeasurementSummaries = candidateMeasurementSummaries;
-
-    const highestThroughputCandidate = vm.runInContext(
-        "highestObservedThroughputCandidate(candidateMeasurementSummaries)",
-        scriptContext
-    );
-
-    assert.equal(highestThroughputCandidate, null);
 });

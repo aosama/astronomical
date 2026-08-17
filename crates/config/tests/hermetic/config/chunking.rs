@@ -7,14 +7,11 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         temporary_home_directory.path(),
         r#"{
           "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": true,
-            "prompt_processing_chunk_size_optimizer_candidate_token_counts": [512, 1024],
+            "fixed_prompt_processing_chunk_size_tokens": 1024,
             "full_attention_key_value_growth_tokens": 192,
             "speculative_prefill_draft_forward_tokens": 1536,
             "experimental_ssd_paging_prefill_graph_submission_layer_interval": 0,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
-            "prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context": 7,
-            "prompt_processing_chunk_size_optimizer_position_range_size_tokens": 16384,
             "prompt_cache_block_tokens": 1024,
             "prompt_cache_common_prefix_stride_blocks": 6
           }
@@ -38,15 +35,7 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         0
     );
-    assert_eq!(
-        chunking
-            .prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context(),
-        7
-    );
-    assert_eq!(
-        chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens(),
-        16_384
-    );
+    assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 1_024);
     assert_eq!(chunking.prompt_cache_block_tokens(), Some(1_024));
     assert_eq!(chunking.prompt_cache_common_prefix_stride_blocks(), 6);
 }
@@ -57,9 +46,7 @@ fn should_default_omitted_experimental_ssd_paging_intervals() {
     write_config(
         temporary_home_directory.path(),
         r#"{
-          "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": true
-          }
+          "chunking": {}
         }"#,
     );
 
@@ -85,8 +72,6 @@ fn should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled() {
     for field_name in [
         "full_attention_key_value_growth_tokens",
         "speculative_prefill_draft_forward_tokens",
-        "prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context",
-        "prompt_processing_chunk_size_optimizer_position_range_size_tokens",
         "prompt_cache_block_tokens",
         "prompt_cache_common_prefix_stride_blocks",
     ] {
@@ -96,7 +81,6 @@ fn should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled() {
             &format!(
                 r#"{{
                   "chunking": {{
-                    "prompt_processing_chunk_size_optimizer_enabled": true,
                     "{field_name}": 0
                   }}
                 }}"#
@@ -117,7 +101,6 @@ fn should_reject_unknown_nested_chunking_fields() {
         temporary_home_directory.path(),
         r#"{
           "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": true,
             "unrecognized_boundary": 512
           }
         }"#,
@@ -137,7 +120,6 @@ fn should_reject_full_attention_growth_that_cannot_cross_the_mlx_dimension_bound
         &format!(
             r#"{{
               "chunking": {{
-                "prompt_processing_chunk_size_optimizer_enabled": true,
                 "full_attention_key_value_growth_tokens": {}
               }}
             }}"#,
@@ -166,7 +148,6 @@ fn should_reject_retired_graph_submission_layer_interval_fields() {
             &format!(
                 r#"{{
                   "chunking": {{
-                    "prompt_processing_chunk_size_optimizer_enabled": true,
                     "{retired_field_name}": 1
                   }}
                 }}"#
@@ -187,7 +168,6 @@ fn should_reject_retired_gated_delta_dispatch_field() {
         temporary_home_directory.path(),
         r#"{
           "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": true,
             "gated_delta_maximum_tokens_per_dispatch": 512
           }
         }"#,

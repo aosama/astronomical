@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use astronomical_ipc_protocol::RequestId;
+use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::execution::LagunaInferenceExecution;
@@ -40,14 +40,9 @@ impl LagunaInferenceExecution {
         if active_request.next_prompt_token_position >= active_request.prompt_token_ids.len() {
             return Ok(None);
         }
-        let prompt_processing_execution_profile =
-            self.prompt_processing_execution_profile
-                .ok_or(InferenceEngineError::Fatal {
-                    reason: "Laguna prompt-processing execution profile is missing".to_owned(),
-                })?;
         let prompt_processing_chunk_sizer =
             self.prompt_processing_chunk_sizer
-                .as_mut()
+                .as_ref()
                 .ok_or(InferenceEngineError::Fatal {
                     reason: "Laguna prompt-processing chunk sizer is missing".to_owned(),
                 })?;
@@ -58,7 +53,7 @@ impl LagunaInferenceExecution {
             .next_prompt_processing_chunk_end(
                 chunk_start_token_position,
                 final_prompt_end_token_position_exclusive,
-                prompt_processing_execution_profile,
+                !matches!(model.expert_memory_mode(), ExpertMemoryMode::Resident),
             );
         let chunk_end_token_position_exclusive = persistent_prompt_cache
             .as_ref()
@@ -74,7 +69,6 @@ impl LagunaInferenceExecution {
             .min(final_prompt_end_token_position_exclusive);
         let chunk_token_ids = &active_request.prompt_token_ids
             [chunk_start_token_position..chunk_end_token_position_exclusive];
-        let processed_prompt_token_count = chunk_token_ids.len();
         let prompt_chunk_started_at = Instant::now();
         let is_terminal_prompt_chunk =
             chunk_end_token_position_exclusive == final_prompt_end_token_position_exclusive;
@@ -94,12 +88,6 @@ impl LagunaInferenceExecution {
                     )
                 },
             )?;
-        prompt_processing_chunk_sizer.record_prompt_processing_chunk_transition(
-            processed_prompt_token_count,
-            forward_elapsed_millis,
-            false,
-            prompt_processing_execution_profile,
-        );
         if let Some(persistent_prompt_cache) = persistent_prompt_cache.as_deref() {
             super::prompt_cache::capture_completed_cache_blocks(
                 runtime,
@@ -124,14 +112,11 @@ impl LagunaInferenceExecution {
             u32::try_from(chunk_end_token_position_exclusive - chunk_start_token_position)
                 .unwrap_or(u32::MAX);
         let prompt_work_reuse = active_request.prompt_work_reuse;
-        let optimization_outcome = prompt_processing_chunk_sizer
-            .take_latest_prompt_processing_chunk_optimization_outcome();
         Ok(Some(GeneratedToken::PrefillProgress {
             processed_token_count,
             elapsed_millis: prompt_chunk_elapsed_millis,
             forward_prefill_chunk_elapsed_millis: forward_elapsed_millis,
             completed_prefill_chunk_tokens: processed_token_count,
-            prompt_processing_chunk_optimization_outcome: optimization_outcome,
             mlx_memory_telemetry: self.collect_current_mlx_memory_telemetry(),
             expert_residency_telemetry: self
                 .model

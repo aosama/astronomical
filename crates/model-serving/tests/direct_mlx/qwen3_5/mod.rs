@@ -11,7 +11,6 @@ mod mtp_runtime;
 mod mtp_verified_emission_queue;
 mod persistent_prompt_cache_boundary_checkpoint;
 mod persistent_prompt_cache_capture;
-mod prompt_processing_chunk_sizer;
 mod quantized_matmul_partition_parity;
 mod request_decoder_state;
 mod sampler;

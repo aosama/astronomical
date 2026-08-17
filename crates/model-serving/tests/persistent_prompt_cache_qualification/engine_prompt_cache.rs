@@ -50,7 +50,7 @@ async fn run_persistent_prompt_cache_restore_qualification() {
             .await,
         ),
         1,
-        None,
+        2_048,
     )
     .await;
 
@@ -77,7 +77,7 @@ async fn should_preserve_ornith_greedy_tokens_after_persistent_prompt_cache_rest
                 .await,
             ),
             MAXIMUM_GREEDY_OUTPUT_TOKEN_COUNT,
-            None,
+            2_048,
         )
         .await;
 
@@ -131,7 +131,7 @@ async fn should_qualify_one_selected_large_prefill_size_with_exact_cache_restore
             &model_directory,
             representative_prompt_token_ids,
             LARGE_PREFILL_QUALIFICATION_OUTPUT_TOKEN_COUNT,
-            Some(configured_prefill_chunck_tokens),
+            configured_prefill_chunck_tokens,
         )
         .await;
 
@@ -167,7 +167,7 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
     model_directory: &Path,
     prompt_token_ids: Vec<u32>,
     generated_token_count: usize,
-    fixed_prefill_chunck_tokens: Option<u32>,
+    fixed_prefill_chunck_tokens: u32,
 ) -> PersistentPromptCacheParityQualificationOutcome {
     let persistent_prompt_cache_directory =
         tempfile::tempdir().expect("the test should create a prompt-cache directory");
@@ -199,12 +199,10 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
     assert_eq!(first_generation_start.cached_token_count(), 0);
     let (cold_generated_token_ids, cold_completed_prefill_chunck_token_counts) =
         generate_token_ids(&mut qwen3_5_engine, first_request_id, generated_token_count).await;
-    let minimum_expected_sequence_state_block_count = fixed_prefill_chunck_tokens
-        .map(|fixed_prefill_chunck_tokens| {
-            usize::try_from(fixed_prefill_chunck_tokens).unwrap_or(usize::MAX)
-                / prompt_cache_block_token_count
-        })
-        .unwrap_or(1);
+    let minimum_expected_sequence_state_block_count =
+        (usize::try_from(fixed_prefill_chunck_tokens).unwrap_or(usize::MAX)
+            / prompt_cache_block_token_count)
+            .max(1);
     wait_for_persistent_prompt_cache_blocks(
         &qwen3_5_engine,
         minimum_expected_sequence_state_block_count,
@@ -249,33 +247,22 @@ async fn run_persistent_prompt_cache_greedy_parity_qualification(
 pub(super) async fn load_persistent_prompt_cache_qualification_engine(
     model_directory: &Path,
     persistent_prompt_cache_directory: &Path,
-    fixed_prefill_chunck_tokens: Option<u32>,
+    fixed_prefill_chunck_tokens: u32,
 ) -> (Qwen3_5Engine, String, String, usize) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    let maximum_prefill_chunck_tokens = validated_artifact.config().maximum_position_count();
-    let prefill_chunck_sizer = match fixed_prefill_chunck_tokens {
-        Some(fixed_prefill_chunck_tokens) => {
-            Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-                fixed_prefill_chunck_tokens,
-            )
-            .expect("the selected fixed prefill size should be valid")
-        }
-        None => Qwen3_5PromptProcessingChunkSizer::for_optimized_with_behavior(
-            maximum_prefill_chunck_tokens,
-            vec![1_024, 2_048, 4_096, 8_192],
-            5,
-            32_768,
+    let prefill_chunck_sizer =
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+            fixed_prefill_chunck_tokens,
         )
-        .expect("the configured candidates should configure the optimizer"),
-    };
+        .expect("the selected fixed prefill size should be valid");
     let mlx_memory_limits =
         crate::common::sample_machine_model_artifact_qualification_mlx_memory_limits().await;
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
-    worker_chunking_configuration.prompt_cache_block_tokens = fixed_prefill_chunck_tokens;
+    worker_chunking_configuration.prompt_cache_block_tokens = Some(fixed_prefill_chunck_tokens);
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
