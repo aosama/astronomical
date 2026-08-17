@@ -2,6 +2,7 @@ mod affine_moe;
 mod hybrid_attention;
 mod hybrid_attention_reference;
 mod mixed_moe;
+mod model_reference;
 mod page_artifact;
 mod paged_model;
 mod paged_moe;
