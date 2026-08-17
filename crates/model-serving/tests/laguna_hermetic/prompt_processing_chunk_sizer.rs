@@ -47,3 +47,19 @@ fn should_reject_invalid_resident_and_ssd_streaming_chunk_sizes() {
             .is_err()
     );
 }
+
+#[test]
+fn should_halve_a_capacity_constrained_chunk_without_falling_below_one_token() {
+    assert_eq!(
+        LagunaPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(2_048),
+        Some(1_024)
+    );
+    assert_eq!(
+        LagunaPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(3),
+        Some(1)
+    );
+    assert_eq!(
+        LagunaPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(1),
+        None
+    );
+}

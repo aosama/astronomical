@@ -5,7 +5,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::laguna::startup::weight_loader::load_laguna_bindable_tensors;
 use crate::laguna::{LagunaModel, LagunaNativeWeights};
 use crate::{
-    EngineLoadResult, InferenceEngineError, MlxRamBudgetPhase,
+    AdaptiveRamGrowthGuard, EngineLoadResult, InferenceEngineError, MlxRamBudgetPhase,
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
@@ -116,6 +116,9 @@ impl LagunaInferenceExecution {
                     })?;
             }
         }
+        model.update_expert_allocation_ceiling(
+            u64::try_from(pending_startup.effective_mlx_memory_ceiling_bytes).unwrap_or(u64::MAX),
+        );
         let expert_memory_mode = model.expert_memory_mode();
         self.persistent_prompt_cache_disk_store_config =
             pending_startup.prompt_cache_disk_store_config.clone();
@@ -144,6 +147,14 @@ impl LagunaInferenceExecution {
         self.runtime = Some(runtime);
         self.model = Some(model);
         self.mlx_ram_budget = Some(pending_startup.mlx_ram_budget);
+        self.adaptive_ram_growth_guard = Some(
+            AdaptiveRamGrowthGuard::new(pending_startup.effective_mlx_memory_ceiling_bytes)
+                .map_err(|guard_error| InferenceEngineError::Fatal {
+                    reason: format!(
+                        "Laguna adaptive RAM growth initialization failed: {guard_error}"
+                    ),
+                })?,
+        );
         self.prompt_processing_chunk_sizer = Some(pending_startup.prompt_processing_chunk_sizer);
         self.attribution_model_id = Some(pending_startup.attribution_model_id.clone());
         self.attribution_model_revision = Some(pending_startup.attribution_model_revision.clone());

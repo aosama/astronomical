@@ -276,6 +276,12 @@ fn should_translate_laguna_geometry_into_phase_aware_residency_and_sliding_trans
             .expect("complete bytes")
     );
     assert_eq!(
+        requirements.complete_prefill_page_bytes(),
+        plan.sparse_layers()[0]
+            .complete_layer_payload_byte_count()
+            .expect("complete bytes")
+    );
+    assert_eq!(
         requirements.routed_decode_page_bytes(),
         plan.sparse_layers()[0]
             .routed_page_payload_byte_count()
@@ -290,13 +296,17 @@ fn should_translate_laguna_geometry_into_phase_aware_residency_and_sliding_trans
         )
         .expect("a fitting complete payload should plan complete residency");
     assert_eq!(residency_plan.complete_layer_targets, vec![0]);
-    assert!(plan.complete_residency_fits_ceiling(
-        requirements.complete_expert_payload_bytes(),
-        requirements.complete_expert_payload_bytes()
-            + requirements.complete_expert_payload_bytes() / 10
-            + 1,
-        requirements.complete_expert_payload_bytes(),
-        0,
+    assert!(matches!(
+        plan.complete_residency_decision(
+            0,
+            0,
+            requirements.complete_expert_payload_bytes()
+                + requirements.complete_expert_payload_bytes() / 10
+                + 1,
+            0,
+        )
+        .expect("centralized residency decision"),
+        astronomical_model_serving::CompleteResidencyDecision::Admit { .. }
     ));
 }
 

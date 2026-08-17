@@ -8,12 +8,17 @@ use crate::ExpertResidencyTelemetry;
 use crate::expert_paging::{
     ExpertLayerResidencyTarget, ExpertResidencyPhase, ExpertWeightMemoryCacheStatistics,
     ExpertWeightPage, PhaseAwareExpertResidencyPlan, RetainedExpertLayerCache,
+    RetainedExpertReclamation,
 };
-use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetContract};
+use crate::laguna::normalization::LagunaTargetContract;
 use crate::laguna::paging::{LagunaExpertPagingPlan, LagunaExpertWeightPage};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::error::LagunaExecutionError;
+use super::expert_coverage::{
+    resident_complete_payload_bytes, resident_sparse_layer_count, sparse_layer_count,
+    sparse_layer_counts,
+};
 use super::weights::LagunaNativeWeights;
 
 /// Last sparse-expert grain executed by the model.
@@ -36,7 +41,6 @@ pub(super) struct LagunaExpertResidencyState {
     paging_plan: Option<LagunaExpertPagingPlan>,
     active_plan: RefCell<Option<PhaseAwareExpertResidencyPlan>>,
     last_forward: RefCell<LagunaLastExpertForward>,
-    disk_page_load_count: Cell<u64>,
     retained_layers: RefCell<Option<RetainedExpertLayerCache<LagunaExpertWeightPage>>>,
     retained_expert_ceiling_bytes: Cell<u64>,
 }
@@ -47,7 +51,6 @@ impl LagunaExpertResidencyState {
             paging_plan: None,
             active_plan: RefCell::new(None),
             last_forward: RefCell::new(LagunaLastExpertForward::None),
-            disk_page_load_count: Cell::new(0),
             retained_layers: RefCell::new(None),
             retained_expert_ceiling_bytes: Cell::new(0),
         }
@@ -87,20 +90,16 @@ impl LagunaExpertResidencyState {
         *self.last_forward.borrow_mut() = last_forward;
     }
 
-    pub(super) fn record_disk_page_load(&self) {
-        self.disk_page_load_count
-            .set(self.disk_page_load_count.get().saturating_add(1));
+    pub(super) fn record_disk_load(&self, expert_count: usize, batch_count: usize) {
+        if let Some(retained_layers) = self.retained_layers.borrow_mut().as_mut() {
+            retained_layers.record_disk_load(expert_count, batch_count);
+        }
     }
 
-    pub(super) fn refresh_phase_plan(&self, token_count: usize) {
+    pub(super) fn refresh_explicit_phase_plan(&self, phase: ExpertResidencyPhase) {
         let Some(paging_plan) = self.paging_plan.as_ref() else {
             self.active_plan.replace(None);
             return;
-        };
-        let phase = if token_count > 1 {
-            ExpertResidencyPhase::Prefill
-        } else {
-            ExpertResidencyPhase::Decode
         };
         let current_residencies = self
             .retained_layers
@@ -115,10 +114,50 @@ impl LagunaExpertResidencyState {
         ) {
             Ok(active_plan) => {
                 self.active_plan.replace(Some(active_plan));
+                if phase == ExpertResidencyPhase::GenerationPreparation
+                    && let Some(retained_layers) = self.retained_layers.borrow_mut().as_mut()
+                {
+                    retained_layers.clear_expert_demand();
+                }
             }
             Err(_) => {
                 self.active_plan.replace(None);
             }
+        }
+    }
+
+    pub(super) fn reclaim_for_request_pressure(
+        &self,
+        required_reclamation_bytes: u64,
+    ) -> RetainedExpertReclamation {
+        let mut retained_layers = self.retained_layers.borrow_mut();
+        let Some(retained_layers) = retained_layers.as_mut() else {
+            return RetainedExpertReclamation::default();
+        };
+        let reclamation = retained_layers.reclaim_for_request_pressure(required_reclamation_bytes);
+        let admitted_payload_ceiling = retained_layers.statistics().resident_payload_byte_count;
+        retained_layers.limit_for_request_pressure_to_maximum(admitted_payload_ceiling);
+        reclamation
+    }
+
+    pub(super) fn resume_after_request_pressure(&self) {
+        if let Some(retained_layers) = self.retained_layers.borrow_mut().as_mut() {
+            retained_layers.resume_after_request_pressure();
+        }
+    }
+
+    pub(super) fn record_expert_demand(
+        &self,
+        paging_slot_index: usize,
+        expert_capacity: usize,
+        selected_expert_ids: &[usize],
+    ) {
+        if let Some(retained_layers) = self.retained_layers.borrow_mut().as_mut() {
+            retained_layers.record_expert_demand(
+                paging_slot_index,
+                expert_capacity,
+                selected_expert_ids,
+            );
         }
     }
 
@@ -269,7 +308,16 @@ impl LagunaExpertResidencyState {
         weights: &LagunaNativeWeights,
     ) -> ExpertMemoryMode {
         let (sparse_layer_count, resident_layer_count) = sparse_layer_counts(contract, weights);
-        if sparse_layer_count == 0 || resident_layer_count == sparse_layer_count {
+        let retained_complete_layer_count = self
+            .retained_layers
+            .borrow()
+            .as_ref()
+            .map(|retained_layers| retained_layers.statistics().complete_layer_count)
+            .unwrap_or(0);
+        if sparse_layer_count == 0
+            || resident_layer_count.saturating_add(retained_complete_layer_count)
+                == sparse_layer_count
+        {
             return ExpertMemoryMode::Resident;
         }
         let retained_payload_bytes = self
@@ -311,6 +359,12 @@ impl LagunaExpertResidencyState {
     ) -> ExpertWeightMemoryCacheStatistics {
         let mode = self.expert_memory_mode(contract, weights);
         let last_forward = *self.last_forward.borrow();
+        let cache_statistics = self
+            .retained_layers
+            .borrow()
+            .as_ref()
+            .map(RetainedExpertLayerCache::statistics)
+            .unwrap_or_default();
         let (
             complete_layer_count,
             complete_layer_payload_byte_count,
@@ -319,32 +373,25 @@ impl LagunaExpertResidencyState {
         ) = match (mode, last_forward) {
             (ExpertMemoryMode::Resident, _) => {
                 let complete_layer_count = resident_sparse_layer_count(contract, weights);
-                let complete_layer_payload_byte_count = self
+                let native_complete_layer_payload_byte_count = self
                     .paging_plan
                     .as_ref()
                     .and_then(|plan| resident_complete_payload_bytes(plan, contract, weights))
                     .unwrap_or(0);
                 (
-                    complete_layer_count,
-                    complete_layer_payload_byte_count,
+                    complete_layer_count.saturating_add(cache_statistics.complete_layer_count),
+                    native_complete_layer_payload_byte_count
+                        .saturating_add(cache_statistics.complete_layer_payload_byte_count),
                     0,
                     0,
                 )
             }
-            (ExpertMemoryMode::Hybrid, _) => {
-                let cache_statistics = self
-                    .retained_layers
-                    .borrow()
-                    .as_ref()
-                    .map(RetainedExpertLayerCache::statistics)
-                    .unwrap_or_default();
-                (
-                    cache_statistics.complete_layer_count,
-                    cache_statistics.complete_layer_payload_byte_count,
-                    cache_statistics.partial_layer_count,
-                    cache_statistics.partial_layer_payload_byte_count,
-                )
-            }
+            (ExpertMemoryMode::Hybrid, _) => (
+                cache_statistics.complete_layer_count,
+                cache_statistics.complete_layer_payload_byte_count,
+                cache_statistics.partial_layer_count,
+                cache_statistics.partial_layer_payload_byte_count,
+            ),
             (
                 _,
                 LagunaLastExpertForward::StreamedCompleteLayer {
@@ -365,111 +412,22 @@ impl LagunaExpertResidencyState {
             entry_count: complete_layer_count.saturating_add(partial_layer_count),
             resident_payload_byte_count: complete_layer_payload_byte_count
                 .saturating_add(partial_layer_payload_byte_count),
-            maximum_resident_payload_byte_count: complete_layer_payload_byte_count
-                .saturating_add(partial_layer_payload_byte_count),
-            eviction_count: 0,
-            disk_page_load_count: self.disk_page_load_count.get(),
-            disk_batch_load_count: self.disk_page_load_count.get(),
+            maximum_resident_payload_byte_count: cache_statistics
+                .maximum_resident_payload_byte_count
+                .max(
+                    complete_layer_payload_byte_count
+                        .saturating_add(partial_layer_payload_byte_count),
+                ),
+            eviction_count: cache_statistics.eviction_count,
+            disk_page_load_count: cache_statistics.disk_page_load_count,
+            disk_batch_load_count: cache_statistics.disk_batch_load_count,
             complete_layer_count,
             complete_layer_payload_byte_count,
             partial_layer_count,
             partial_layer_payload_byte_count,
-            mandatory_read_promotion_count: 0,
-            complete_layer_eviction_count: 0,
-            partial_layer_eviction_count: 0,
+            mandatory_read_promotion_count: cache_statistics.mandatory_read_promotion_count,
+            complete_layer_eviction_count: cache_statistics.complete_layer_eviction_count,
+            partial_layer_eviction_count: cache_statistics.partial_layer_eviction_count,
         }
     }
-}
-
-/// Confirms every sparse layer either owns stacked experts or appears in the plan.
-pub(super) fn validate_sparse_coverage(
-    contract: &LagunaTargetContract,
-    weights: &LagunaNativeWeights,
-    paging_plan: Option<&LagunaExpertPagingPlan>,
-) -> Result<(), LagunaExecutionError> {
-    for layer_descriptor in contract.layers() {
-        if !matches!(
-            layer_descriptor.feed_forward(),
-            LagunaFeedForwardDescriptor::Moe(_)
-        ) {
-            continue;
-        }
-        let layer_index = layer_descriptor.layer_index();
-        if weights.has_routed_experts(layer_index) {
-            continue;
-        }
-        let Some(paging_plan) = paging_plan else {
-            return Err(LagunaExecutionError::invalid_geometry(
-                "a sparse Laguna layer without resident routed experts requires a paging plan",
-            ));
-        };
-        if paging_plan.sparse_layer_for_decoder(layer_index).is_none() {
-            return Err(LagunaExecutionError::invalid_geometry(
-                "a sparse Laguna layer is missing from the paging plan",
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn sparse_layer_count(contract: &LagunaTargetContract) -> usize {
-    contract
-        .layers()
-        .iter()
-        .filter(|layer_descriptor| {
-            matches!(
-                layer_descriptor.feed_forward(),
-                LagunaFeedForwardDescriptor::Moe(_)
-            )
-        })
-        .count()
-}
-
-fn sparse_layer_counts(
-    contract: &LagunaTargetContract,
-    weights: &LagunaNativeWeights,
-) -> (usize, usize) {
-    let mut sparse_count = 0_usize;
-    let mut resident_count = 0_usize;
-    for layer_descriptor in contract.layers() {
-        if !matches!(
-            layer_descriptor.feed_forward(),
-            LagunaFeedForwardDescriptor::Moe(_)
-        ) {
-            continue;
-        }
-        sparse_count = sparse_count.saturating_add(1);
-        if weights.has_routed_experts(layer_descriptor.layer_index()) {
-            resident_count = resident_count.saturating_add(1);
-        }
-    }
-    (sparse_count, resident_count)
-}
-
-fn resident_sparse_layer_count(
-    contract: &LagunaTargetContract,
-    weights: &LagunaNativeWeights,
-) -> usize {
-    sparse_layer_counts(contract, weights).1
-}
-
-fn resident_complete_payload_bytes(
-    paging_plan: &LagunaExpertPagingPlan,
-    contract: &LagunaTargetContract,
-    weights: &LagunaNativeWeights,
-) -> Option<u64> {
-    let mut complete_payload_bytes = 0_u64;
-    for layer_descriptor in contract.layers() {
-        if !matches!(
-            layer_descriptor.feed_forward(),
-            LagunaFeedForwardDescriptor::Moe(_)
-        ) || !weights.has_routed_experts(layer_descriptor.layer_index())
-        {
-            continue;
-        }
-        let sparse_layer = paging_plan.sparse_layer_for_decoder(layer_descriptor.layer_index())?;
-        complete_payload_bytes = complete_payload_bytes
-            .checked_add(sparse_layer.complete_layer_payload_byte_count().ok()?)?;
-    }
-    Some(complete_payload_bytes)
 }

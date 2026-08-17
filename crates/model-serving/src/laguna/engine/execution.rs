@@ -11,17 +11,16 @@ use crate::laguna::{
     LagunaPromptProcessingChunkSizer, LagunaTargetContract, LagunaTensorContract,
 };
 use crate::{
-    EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
-    InferenceEngineError, MlxInferenceExecution, MlxMemoryLimitAdjustment, MlxRamBudget,
-    PerformanceAttribution, PerformanceAttributionLog, PerformanceCounter,
-    PersistentPromptCacheCounters, PersistentPromptCacheDiskStore,
+    AdaptiveRamGrowthGuard, AdaptiveRamGrowthPhase, EngineGenerationStart, EngineLoadResult,
+    GeneratedToken, GenerationFinalization, InferenceEngineError, MlxInferenceExecution,
+    MlxMemoryLimitAdjustment, MlxRamBudget, PerformanceAttribution, PerformanceAttributionLog,
+    PerformanceCounter, PersistentPromptCacheCounters, PersistentPromptCacheDiskStore,
     PersistentPromptCacheDiskStoreConfig, build_persistent_prompt_cache_stats_event,
 };
 
 use super::active_generation::LagunaActiveGeneration;
-use super::memory::{
-    begin_laguna_forward_memory_observation, complete_laguna_forward_memory_observation,
-};
+use super::memory::complete_laguna_forward_memory_observation;
+use super::prefill_capacity_recovery::LagunaPrefillFailureInjection;
 
 /// Deferred Laguna construction that must run on the MLX owner thread.
 pub(in crate::laguna) struct LagunaPendingStartup {
@@ -70,18 +69,26 @@ pub struct LagunaInferenceExecution {
     pub(super) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
     /// Machine-relative memory policy recomposed for prefill and decode.
     pub(super) mlx_ram_budget: Option<MlxRamBudget>,
+    /// Exact-context forward admission and learned transient high-water evidence.
+    pub(super) adaptive_ram_growth_guard: Option<AdaptiveRamGrowthGuard>,
     /// Smallest ceiling that preserves model core plus mandatory page/transient work.
     pub(super) minimum_mlx_memory_ceiling_bytes: u64,
+    /// Startup-resolved allocator-cache cap restored when a lowered active ceiling rises again.
+    pub(super) maximum_allocator_cache_memory_limit_bytes: usize,
     /// Family-owned writer for model-load and generation timing reports.
     pub(super) performance_attribution_log: PerformanceAttributionLog,
     /// Loaded identity copied into every completed generation report.
     pub(super) attribution_model_id: Option<String>,
     pub(super) attribution_model_revision: Option<String>,
+    /// Direct-MLX acceptance seam that is a zero-sized no-op in production builds.
+    pub(super) prefill_failure_injection: LagunaPrefillFailureInjection,
 }
 
 impl LagunaInferenceExecution {
     pub(in crate::laguna) fn pending(pending_startup: LagunaPendingStartup) -> Self {
         let minimum_mlx_memory_ceiling_bytes = pending_startup.minimum_mlx_memory_ceiling_bytes;
+        let maximum_allocator_cache_memory_limit_bytes =
+            pending_startup.allocator_cache_memory_limit_bytes;
         Self {
             pending_startup: Some(pending_startup),
             runtime: None,
@@ -92,11 +99,21 @@ impl LagunaInferenceExecution {
             persistent_prompt_cache_disk_store_config: None,
             persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
             mlx_ram_budget: None,
+            adaptive_ram_growth_guard: None,
             minimum_mlx_memory_ceiling_bytes,
+            maximum_allocator_cache_memory_limit_bytes,
             performance_attribution_log: PerformanceAttributionLog::disabled(),
             attribution_model_id: None,
             attribution_model_revision: None,
+            prefill_failure_injection: LagunaPrefillFailureInjection::default(),
         }
+    }
+
+    /// Forces two typed failures to prove one unchanged retry followed by bounded fallback.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn inject_two_prefill_capacity_failures_for_test(&mut self) {
+        self.prefill_failure_injection.arm_two_failures();
     }
 
     fn sample_next_token_id(
@@ -134,12 +151,30 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 reason: "a Laguna generation requires prompt tokens".to_owned(),
             });
         }
+        let mut performance_attribution = inference_request.into_performance_attribution();
+        let persistent_prompt_cache = self.persistent_prompt_cache.clone();
+        let prompt_cache_lookup = persistent_prompt_cache.as_deref().map(|store| {
+            super::prompt_cache::lookup_prompt_prefix(
+                store,
+                &prompt_token_ids,
+                &mut performance_attribution,
+            )
+        });
+        let restored_prompt_prefix_token_count = prompt_cache_lookup
+            .as_ref()
+            .map_or(0, |lookup_result| lookup_result.restored_token_count());
+        self.admit_generation_context(
+            prompt_token_ids.len(),
+            true,
+            restored_prompt_prefix_token_count,
+            &mut performance_attribution,
+        )?;
         let Some(runtime) = self.runtime.as_ref() else {
             return Err(InferenceEngineError::Fatal {
                 reason: "the Laguna runtime is not loaded".to_owned(),
             });
         };
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.model.as_mut() else {
             return Err(InferenceEngineError::Fatal {
                 reason: "the Laguna model is not loaded".to_owned(),
             });
@@ -150,20 +185,35 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 reason: "Laguna decoder state could not be allocated".to_owned(),
             }
         })?;
-        let mut performance_attribution = inference_request.into_performance_attribution();
-        let persistent_prompt_cache = self.persistent_prompt_cache.clone();
         let (last_published_block_key, restored_prompt_prefix_token_count) =
-            if let Some(persistent_prompt_cache) = persistent_prompt_cache.as_deref() {
+            if let (Some(persistent_prompt_cache), Some(prompt_cache_lookup)) = (
+                persistent_prompt_cache.as_deref(),
+                prompt_cache_lookup.as_ref(),
+            ) {
                 super::prompt_cache::restore_prompt_prefix(
                     runtime,
                     persistent_prompt_cache,
                     &prompt_token_ids,
+                    prompt_cache_lookup,
                     &mut decoder_state,
                     &mut performance_attribution,
                 )?
             } else {
                 (None, 0)
             };
+        if restored_prompt_prefix_token_count > 0 {
+            super::memory_admission::admit_generation_context(
+                runtime,
+                model,
+                Some(&decoder_state),
+                prompt_token_ids
+                    .len()
+                    .saturating_sub(restored_prompt_prefix_token_count as usize),
+                false,
+                0,
+                &mut performance_attribution,
+            )?;
+        }
         if persistent_prompt_cache.is_some() {
             if restored_prompt_prefix_token_count == 0 {
                 self.persistent_prompt_cache_counters.record_cache_miss();
@@ -220,17 +270,23 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 reason: "the Laguna runtime is not loaded".to_owned(),
             });
         };
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.model.as_mut() else {
             return Err(InferenceEngineError::Fatal {
                 reason: "the Laguna model is not loaded".to_owned(),
             });
         };
         let mlx_ram_budget = self
             .mlx_ram_budget
-            .as_ref()
+            .as_mut()
             .ok_or(InferenceEngineError::Fatal {
                 reason: "the Laguna RAM budget is not loaded".to_owned(),
             })?;
+        let adaptive_ram_growth_guard =
+            self.adaptive_ram_growth_guard
+                .as_mut()
+                .ok_or(InferenceEngineError::Fatal {
+                    reason: "the Laguna adaptive RAM growth guard is not loaded".to_owned(),
+                })?;
         let active_request =
             self.active_request
                 .as_mut()
@@ -269,13 +325,20 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
         let next_token_id = active_request.performance_attribution.measure_operation(
             crate::PerformanceOperation::DecodeAdvanceSpan,
             |performance_attribution| -> Result<u32, InferenceEngineError> {
-                let memory_baseline = begin_laguna_forward_memory_observation(
-                    runtime,
-                    model,
-                    performance_attribution,
-                )?;
+                let (adaptive_ram_growth_context, memory_baseline) =
+                    super::memory::admit_laguna_forward_memory(
+                        runtime,
+                        model,
+                        adaptive_ram_growth_guard,
+                        &active_request.decoder_state,
+                        1,
+                        0,
+                        AdaptiveRamGrowthPhase::Decode,
+                        active_request.context_token_count.saturating_add(1),
+                        performance_attribution,
+                    )?;
                 let decode_logits = model
-                    .forward(
+                    .forward_decode(
                         runtime,
                         &decode_token_array,
                         &mut active_request.decoder_state,
@@ -292,8 +355,11 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 complete_laguna_forward_memory_observation(
                     runtime,
                     model,
+                    adaptive_ram_growth_guard,
+                    adaptive_ram_growth_context,
                     mlx_ram_budget,
                     memory_baseline,
+                    active_request.context_token_count.saturating_add(1),
                     performance_attribution,
                 )?;
                 Ok(next_token_id)
@@ -306,11 +372,12 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::GeneratedTokenCount, 1);
+        let expert_memory_mode = model.expert_memory_mode();
         let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         Ok(GeneratedToken::TokenId {
             token_id,
             is_reasoning_token: false,
-            expert_memory_mode: Some(model.expert_memory_mode()),
+            expert_memory_mode: Some(expert_memory_mode),
             mlx_memory_telemetry,
             first_decode_forward_elapsed_millis: None,
             generation_finalization: None,
@@ -322,52 +389,7 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
         request_id: RequestId,
         input_token_ids: Vec<u32>,
     ) -> Result<(), InferenceEngineError> {
-        if input_token_ids.is_empty() {
-            return Ok(());
-        }
-        let Some(runtime) = self.runtime.as_ref() else {
-            return Err(InferenceEngineError::Fatal {
-                reason: "the Laguna runtime is not loaded".to_owned(),
-            });
-        };
-        let Some(model) = self.model.as_ref() else {
-            return Err(InferenceEngineError::Fatal {
-                reason: "the Laguna model is not loaded".to_owned(),
-            });
-        };
-        let active_request =
-            self.active_request
-                .as_mut()
-                .ok_or(InferenceEngineError::InvalidRequest {
-                    reason: "no Laguna generation is active".to_owned(),
-                })?;
-        if active_request.request_id != request_id {
-            return Err(InferenceEngineError::InvalidRequest {
-                reason: "Laguna generation request identifiers do not match".to_owned(),
-            });
-        }
-        let injected_token_array = runtime
-            .array_from_u32(
-                &input_token_ids,
-                &[i32::try_from(input_token_ids.len()).unwrap_or(i32::MAX)],
-            )
-            .map_err(|_| InferenceEngineError::Fatal {
-                reason: "Laguna injected tokens could not be placed on the runtime".to_owned(),
-            })?;
-        model
-            .forward(
-                runtime,
-                &injected_token_array,
-                &mut active_request.decoder_state,
-                &mut active_request.performance_attribution,
-            )
-            .map_err(|_| InferenceEngineError::Fatal {
-                reason: "Laguna injected-token processing failed".to_owned(),
-            })?;
-        if let Some(last_injected_token_id) = input_token_ids.last().copied() {
-            active_request.next_input_token_ids = vec![last_injected_token_id];
-        }
-        Ok(())
+        super::injected_tokens::inject_input_tokens(self, request_id, input_token_ids)
     }
 
     fn cancel_generation(
@@ -397,6 +419,9 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 drop(active_request);
             },
         );
+        if let Some(model) = self.model.as_ref() {
+            model.resume_expert_retention_after_request_pressure();
+        }
         let runtime = self.runtime.as_ref().ok_or(InferenceEngineError::Fatal {
             reason: "the Laguna runtime is not loaded".to_owned(),
         })?;
