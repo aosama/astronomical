@@ -88,10 +88,6 @@ jobs:
     needs: detect-changes
     name: 10-minute macOS hermetic verification
     runs-on: macos-26
-    env:
-      RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
-      SCCACHE_GHA_VERSION: astronomical-ci-v1
     # Keep the required status-check name stable; extra job time covers cache restore and save.
     timeout-minutes: 15
     steps:
@@ -100,64 +96,40 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install and configure sccache
-        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
-        with:
-          version: v0.17.0
-      - name: Restore Cargo downloads
+      - name: Configure compiler cache
+        run: |
+          printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache" >> "$GITHUB_ENV"
+          printf '%s\n' 'RUSTC_WRAPPER=sccache' >> "$GITHUB_ENV"
+      - name: Restore Rust and native build state
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-downloads-v1-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+            target
+            ~/Library/Caches/Astronomical/sccache
+            ~/Library/Caches/Astronomical/native-dependencies
+          key: ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'third-party/native-dependency-manifest.cmake', 'third-party/pins/**', 'third-party/patches/**', 'crates/runtime-integration/build.rs', 'crates/runtime-integration/native/**') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-cargo-downloads-v1-
-      - name: Restore verified native dependency archives
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Caches/Astronomical/native-dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-native-dependencies-v1-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-native-dependencies-v1-
+            ${{ runner.os }}-${{ runner.arch }}-rust-
       - name: Install verification tools
         run: |
           case "$(brew tap)" in
             *aws/tap*) brew untap aws/tap ;;
           esac
-          brew install cargo-about
+          brew install cargo-about sccache
       - name: Verify Rust dependency notices
         run: scripts/generate-rust-dependency-notices.sh --check
         timeout-minutes: 2
       - name: Provision verified native dependencies
         run: scripts/bootstrap-native-dependencies.sh
       - name: Set maximum parallel build jobs
-        run: |
-          printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
-          sccache --zero-stats
+        run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
-        run: cargo test --profile ci --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
+        run: cargo test --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
         timeout-minutes: 7
-      - name: Report CI artifact footprint
-        run: |
-          printf '%s\n' '[ci-artifacts] status=start profile=ci'
-          du -sh target/ci target/cargo-timings
-          debug_symbol_bundle_path="$(find target/ci -type d -name '*.dSYM' -print -quit)"
-          if [ -n "$debug_symbol_bundle_path" ]; then
-            printf 'Error: CI profile produced a debug-symbol bundle: %s\n' "$debug_symbol_bundle_path" >&2
-            exit 1
-          fi
-          printf '%s\n' '[ci-artifacts] status=success d_sym_bundle_count=0'
-      - name: Upload Cargo timing report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cargo-timings-${{ github.run_id }}-${{ github.run_attempt }}
-          path: target/cargo-timings
-          if-no-files-found: warn
-          retention-days: 7
       - name: Run hermetic tests
-        run: cargo test --profile ci --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
+        run: cargo test --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
         timeout-minutes: 2
       - name: Print compiler cache statistics
         run: sccache --show-stats
