@@ -68,21 +68,6 @@ fn should_classify_no_changes_as_no_worker_restart() {
 }
 
 #[test]
-fn should_classify_config_warning_only_change_as_no_worker_restart() {
-    let mut current = sample_resolved_config();
-    current.config_warning = Some("old warning".to_owned());
-    let mut candidate = sample_resolved_config();
-    candidate.config_warning = Some("new warning".to_owned());
-
-    let decision = ConfigReloadDiff::compare(&current, &candidate);
-
-    assert!(
-        matches!(decision, ConfigReloadDecision::NoWorkerRestart { ref reloaded_fields, .. } if reloaded_fields.contains(&"config_warning".to_owned())),
-        "a config-warning text change must be a no-worker-restart reload, got {decision:?}"
-    );
-}
-
-#[test]
 fn should_classify_max_output_tokens_change_as_worker_restart() {
     let mut current = sample_resolved_config();
     current.max_output_tokens = 20_480;
@@ -98,7 +83,7 @@ fn should_classify_max_output_tokens_change_as_worker_restart() {
 }
 
 #[test]
-fn should_restart_worker_when_optimizer_candidate_token_counts_change() {
+fn should_restart_worker_when_fixed_prompt_processing_chunk_size_changes() {
     let current = sample_resolved_config();
     let mut candidate = sample_resolved_config();
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
@@ -106,7 +91,7 @@ fn should_restart_worker_when_optimizer_candidate_token_counts_change() {
     std::fs::create_dir_all(&configuration_directory).expect("config directory should be created");
     std::fs::write(
         configuration_directory.join("config.json"),
-        r#"{ "chunking": { "prompt_processing_chunk_size_optimizer_enabled": true, "prompt_processing_chunk_size_optimizer_candidate_token_counts": [2048, 4096, 8192] } }"#,
+        r#"{ "chunking": { "fixed_prompt_processing_chunk_size_tokens": 4096 } }"#,
     )
     .expect("config file should be written");
     candidate.chunking =
@@ -122,7 +107,7 @@ fn should_restart_worker_when_optimizer_candidate_token_counts_change() {
     assert!(
         matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
             if reloaded_fields == &["chunking".to_owned()]),
-        "changing optimizer candidates must restart the worker, got {decision:?}"
+        "changing the fixed prompt-processing chunk size must restart the worker, got {decision:?}"
     );
 }
 
@@ -269,9 +254,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         model_directories: Arc::new(HashMap::new()),
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
-        config_warning: None,
         chunking: ChunkingConfig::default(),
-        optimizer_state_directory: PathBuf::from("/tmp/astronomical-optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
@@ -377,14 +360,11 @@ fn should_resolve_reload_config_from_the_config_file() {
         &config_file_path,
         r#"{
             "chunking": {
-                "prompt_processing_chunk_size_optimizer_enabled": true,
                 "fixed_prompt_processing_chunk_size_tokens": 4096,
                 "full_attention_key_value_growth_tokens": 192,
                 "speculative_prefill_draft_forward_tokens": 1536,
                 "experimental_ssd_paging_prefill_graph_submission_layer_interval": 0,
                 "experimental_ssd_paging_generation_graph_submission_layer_interval": 6,
-                "prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context": 7,
-                "prompt_processing_chunk_size_optimizer_position_range_size_tokens": 16384,
                 "prompt_cache_block_tokens": 768,
                 "prompt_cache_common_prefix_stride_blocks": 8
             },
@@ -418,22 +398,11 @@ fn should_resolve_reload_config_from_the_config_file() {
         6
     );
     assert_eq!(
-        worker_chunking
-            .prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context,
-        7
-    );
-    assert_eq!(
-        worker_chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
-        16_384
+        worker_chunking.fixed_prompt_processing_chunk_size_tokens,
+        4_096
     );
     assert_eq!(worker_chunking.prompt_cache_block_tokens, Some(768));
     assert_eq!(worker_chunking.prompt_cache_common_prefix_stride_blocks, 8);
-    assert_eq!(
-        resolved_config.config_warning.as_deref(),
-        Some(
-            "Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of 4096 tokens is ignored."
-        )
-    );
     assert_eq!(
         resolved_config.worker_executable_path,
         PathBuf::from("/fallback/worker")

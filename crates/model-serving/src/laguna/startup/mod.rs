@@ -6,9 +6,7 @@ pub(in crate::laguna) mod weight_loader;
 use std::path::{Path, PathBuf};
 
 use astronomical_config::PromptCacheConfig;
-use astronomical_ipc_protocol::{
-    ExpertMemoryMode, WorkerChunkingConfiguration, WorkerPromptProcessingChunkSizingPolicy,
-};
+use astronomical_ipc_protocol::WorkerChunkingConfiguration;
 
 use crate::PersistentPromptCacheDiskStoreConfig;
 use crate::laguna::artifacts::{
@@ -18,7 +16,7 @@ use crate::laguna::engine::execution::LagunaPendingStartup;
 use crate::laguna::engine::{LagunaEngine, LagunaInferenceExecution};
 use crate::laguna::{
     LagunaArtifactValidator, LagunaExpertPagingPlan, LagunaGenerationProcessor,
-    LagunaPromptProcessingChunkSizer, LagunaPromptProcessingExecutionProfile, LagunaTensorContract,
+    LagunaPromptProcessingChunkSizer, LagunaTensorContract,
 };
 use crate::{
     MlxInferenceEngine, MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution,
@@ -30,7 +28,6 @@ pub use error::LagunaStartupError;
 /// Optional serving policy supplied by the worker factory.
 pub struct LagunaServingSettings {
     pub chunking: Option<WorkerChunkingConfiguration>,
-    pub optimizer_state_directory: Option<PathBuf>,
     pub persistent_prompt_cache_enabled: bool,
     pub prompt_cache_config: Option<PromptCacheConfig>,
     pub performance_attribution_log_path: Option<PathBuf>,
@@ -42,7 +39,6 @@ impl LagunaServingSettings {
     pub fn default_fixed() -> Self {
         Self {
             chunking: None,
-            optimizer_state_directory: None,
             persistent_prompt_cache_enabled: false,
             prompt_cache_config: None,
             performance_attribution_log_path: None,
@@ -247,22 +243,8 @@ fn prepare_laguna_startup(
                 complete_expert_payload_bytes,
                 0,
             ) && remaining_after_complete_residency_bytes >= first_request_slack_bytes));
-    let expert_memory_mode = if load_routed_experts {
-        ExpertMemoryMode::Resident
-    } else {
-        ExpertMemoryMode::Paged
-    };
-    let prompt_processing_execution_profile =
-        LagunaPromptProcessingExecutionProfile::from_canonical_descriptors(
-            validated_artifact.target_contract(),
-            validated_artifact.storage_fingerprint(),
-            expert_memory_mode,
-            serving_settings.persistent_prompt_cache_enabled,
-        );
     let prompt_processing_chunk_sizer = build_prompt_processing_chunk_sizer(
         &serving_settings,
-        &model_id,
-        &model_revision,
         validated_artifact
             .target_contract()
             .model()
@@ -321,7 +303,6 @@ fn prepare_laguna_startup(
         effective_mlx_memory_ceiling_bytes,
         allocator_cache_memory_limit_bytes,
         prompt_processing_chunk_sizer,
-        prompt_processing_execution_profile,
         minimum_mlx_memory_ceiling_bytes,
         prompt_cache_disk_store_config,
         prompt_cache_model_id: model_id.clone(),
@@ -340,56 +321,15 @@ fn prepare_laguna_startup(
 
 fn build_prompt_processing_chunk_sizer(
     serving_settings: &LagunaServingSettings,
-    model_id: &str,
-    model_revision: &str,
     maximum_position_count: u32,
 ) -> Result<LagunaPromptProcessingChunkSizer, LagunaStartupError> {
-    match serving_settings.chunking.as_ref().map(|chunking| {
-        (
-            &chunking.prompt_processing_chunk_sizing_policy,
-            chunking
-                .prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context,
-            chunking.prompt_processing_chunk_size_optimizer_position_range_size_tokens,
-        )
-    }) {
-        Some((
-            WorkerPromptProcessingChunkSizingPolicy::Optimized {
-                prompt_processing_chunk_size_optimizer_candidate_token_counts,
-            },
-            maximum_retained_measurements,
-            position_range_size_tokens,
-        )) => {
-            if let Some(optimizer_state_directory) =
-                serving_settings.optimizer_state_directory.clone()
-            {
-                LagunaPromptProcessingChunkSizer::for_optimized_production_with_persisted_state(
-                    maximum_position_count,
-                    prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
-                    optimizer_state_directory,
-                    model_id.to_owned(),
-                    model_revision.to_owned(),
-                    maximum_retained_measurements,
-                    position_range_size_tokens,
-                )
-            } else {
-                LagunaPromptProcessingChunkSizer::for_optimized_with_behavior(
-                    maximum_position_count,
-                    prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
-                    maximum_retained_measurements,
-                    position_range_size_tokens,
-                )
-            }
+    match serving_settings.chunking.as_ref() {
+        Some(chunking) => {
+            LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+                chunking.fixed_prompt_processing_chunk_size_tokens,
+                chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+            )
         }
-        Some((
-            WorkerPromptProcessingChunkSizingPolicy::Fixed {
-                fixed_prompt_processing_chunk_size_tokens,
-                ..
-            },
-            _,
-            _,
-        )) => LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            *fixed_prompt_processing_chunk_size_tokens,
-        ),
         None => LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             maximum_position_count.max(1),
         ),

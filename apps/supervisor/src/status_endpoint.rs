@@ -1,9 +1,4 @@
-use std::sync::Arc;
-
-use crate::{
-    ActiveRequestProgress, ApplicationBuildIdentity, application::ApplicationState,
-    prompt_processing_chunk_optimizer_status::prompt_processing_chunk_optimizer_status_document,
-};
+use crate::{ActiveRequestProgress, ApplicationBuildIdentity, application::ApplicationState};
 use axum::{
     Json,
     extract::State,
@@ -60,16 +55,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                 .map(|configuration| configuration.mtp_enabled)
         })
         .unwrap_or(false);
-    // When reload support is enabled, read the live config_warning from the
-    // reloadable snapshot so /v1/status reflects the latest reload.
-    let live_config_warning = match application_state.reloadable_config.as_ref() {
-        Some(reloadable_config) => reloadable_config
-            .read()
-            .ok()
-            .and_then(|resolved_config| resolved_config.config_warning.clone())
-            .map(Arc::<str>::from),
-        None => application_state.config_warning.clone(),
-    };
     let configured_speculative_prefill_enabled = application_state
         .reloadable_config
         .as_ref()
@@ -122,7 +107,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         },
         "status": worker_health_snapshot.status.as_str(),
         "activity": worker_health_snapshot.activity.as_str(),
-        "config_warning": live_config_warning.as_deref(),
         "mtp_enabled": mtp_enabled,
         "mtp_configured_draft_depth": reloadable_mtp_configuration
             .and_then(|(_mtp_enabled, mtp_draft_depth)| mtp_draft_depth)
@@ -231,21 +215,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "average_prefill_tok_per_second": worker_health_snapshot.serving_session.average_prefill_tok_per_second,
         "average_generation_tok_per_second": worker_health_snapshot.serving_session.average_generation_tok_per_second,
     });
-    let live_prompt_processing_chunk_sizing_policy = application_state
-        .reloadable_config
-        .as_ref()
-        .and_then(|reloadable_config| reloadable_config.read().ok())
-        .map(|resolved_config| {
-            resolved_config
-                .chunking
-                .prompt_processing_chunk_sizing_policy()
-                .clone()
-        });
-    status_json["prompt_processing_chunk_size_optimizer"] =
-        prompt_processing_chunk_optimizer_status_document(
-            live_prompt_processing_chunk_sizing_policy.as_ref(),
-            &worker_health_snapshot.recent_prompt_processing_chunk_optimization_outcomes,
-        );
     let persistent_prompt_cache_summary = crate::PersistentPromptCacheSummary::from_worker_event(
         worker_health_snapshot
             .persistent_prompt_cache_stats

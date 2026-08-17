@@ -39,10 +39,6 @@ fn should_keep_stable_and_development_state_and_endpoints_separate() {
         development_paths.prompt_cache_directory()
     );
     assert_ne!(
-        stable_paths.optimizer_directory(),
-        development_paths.optimizer_directory()
-    );
-    assert_ne!(
         stable_paths.logging_directory(),
         development_paths.logging_directory()
     );
@@ -68,7 +64,6 @@ fn should_keep_every_writable_path_beneath_an_explicit_test_state_directory() {
     for writable_path in [
         instance_paths.config_file_path(),
         instance_paths.prompt_cache_directory(),
-        instance_paths.optimizer_directory(),
         instance_paths.logging_directory(),
         instance_paths.daemon_ownership_file_path(),
         instance_paths.instance_lock_file_path(),
@@ -122,18 +117,12 @@ fn should_generate_fixed_prompt_processing_defaults_for_both_runtime_channels() 
 
         assert_eq!(
             generated_config
-                .prompt_processing_chunk_sizing_policy()
-                .expect("first-run chunk sizing policy should resolve"),
-            PromptProcessingChunkSizingPolicy::Fixed {
-                fixed_prompt_processing_chunk_size_tokens: 2_048,
-                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
-            },
+                .chunking()
+                .expect("first-run chunking should resolve")
+                .fixed_prompt_processing_chunk_size_tokens(),
+            2_048,
             "{} should default to qualified fixed prompt processing",
             runtime_instance.display_name()
-        );
-        assert_eq!(
-            generated_config_json["chunking"]["prompt_processing_chunk_size_optimizer_enabled"],
-            false
         );
         assert_eq!(
             generated_config_json["chunking"]["fixed_prompt_processing_chunk_size_tokens"],

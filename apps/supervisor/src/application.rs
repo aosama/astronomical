@@ -37,9 +37,6 @@ pub(crate) struct ApplicationState {
     pub(crate) next_chat_request_id: Arc<AtomicU64>,
     pub(crate) generation_executor: Arc<dyn ChatGenerationExecutor>,
     pub(crate) worker_control: Option<WorkerHandle>,
-    /// Static config warning surfaced once at daemon startup so the menu bar app
-    /// can flash a callout for an ignored fixed prompt-processing chunk size.
-    pub(crate) config_warning: Option<Arc<str>>,
     /// Executable models discovered from configured directories at startup.
     pub(crate) discovered_models: Vec<DiscoveredModel>,
     /// Reloadable runtime config shared by the config-reload endpoint and the
@@ -61,7 +58,6 @@ impl Clone for ApplicationState {
             next_chat_request_id: Arc::clone(&self.next_chat_request_id),
             generation_executor: Arc::clone(&self.generation_executor),
             worker_control: self.worker_control.clone(),
-            config_warning: self.config_warning.clone(),
             discovered_models: self.discovered_models.clone(),
             reloadable_config: self.reloadable_config.clone(),
             runtime_config_resolver: self.runtime_config_resolver.clone(),
@@ -122,33 +118,14 @@ impl ApplicationState {
     }
 }
 
-/// Builds the bounded HTTP API using the supplied generation executor and no
-/// startup config warning.
+/// Builds the bounded HTTP API using the supplied generation executor.
 pub fn build_application(generation_executor: impl ChatGenerationExecutor) -> Router {
-    build_application_with_config_warning_and_discovered_models(
-        generation_executor,
-        None,
-        Vec::new(),
-    )
+    build_application_with_discovered_models(generation_executor, Vec::new())
 }
 
-/// Builds the bounded HTTP API and surfaces one static config warning through
-/// `/v1/status` so the menu bar app can flash a callout to the user.
-pub fn build_application_with_config_warning(
+/// Builds the bounded HTTP API with a discovered-model listing.
+pub fn build_application_with_discovered_models(
     generation_executor: impl ChatGenerationExecutor,
-    config_warning: Option<String>,
-) -> Router {
-    build_application_with_config_warning_and_discovered_models(
-        generation_executor,
-        config_warning,
-        Vec::new(),
-    )
-}
-
-/// Builds the bounded HTTP API with config warning and discovered model listing.
-pub fn build_application_with_config_warning_and_discovered_models(
-    generation_executor: impl ChatGenerationExecutor,
-    config_warning: Option<String>,
     discovered_models: Vec<DiscoveredModel>,
 ) -> Router {
     let application_state = ApplicationState {
@@ -156,7 +133,6 @@ pub fn build_application_with_config_warning_and_discovered_models(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
-        config_warning: config_warning.map(Arc::<str>::from),
         discovered_models,
         reloadable_config: None,
         runtime_config_resolver: None,
@@ -179,7 +155,6 @@ pub fn build_application_with_shutdown(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
-        config_warning: None,
         discovered_models: Vec::new(),
         reloadable_config: None,
         runtime_config_resolver: None,
@@ -207,10 +182,6 @@ pub fn build_development_application_with_reload(
         development_home_directory,
         fallback_worker_executable_path,
     );
-    let initial_warning = reloadable_config
-        .read()
-        .ok()
-        .and_then(|resolved| resolved.config_warning.clone());
     let initial_models = reloadable_config
         .read()
         .ok()
@@ -221,7 +192,6 @@ pub fn build_development_application_with_reload(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
-        config_warning: initial_warning.map(Arc::<str>::from),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         runtime_config_resolver: Some(runtime_config_resolver),
@@ -353,10 +323,6 @@ pub fn build_application_with_full_control(
     runtime_config_resolver: ResolvedRuntimeConfigResolver,
     shutdown_controller: crate::shutdown_control::ShutdownController,
 ) -> Router {
-    let initial_warning = reloadable_config
-        .read()
-        .ok()
-        .and_then(|resolved| resolved.config_warning.clone());
     let initial_models = reloadable_config
         .read()
         .ok()
@@ -367,7 +333,6 @@ pub fn build_application_with_full_control(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(worker_handle.clone()),
         worker_control: Some(worker_handle),
-        config_warning: initial_warning.map(Arc::<str>::from),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         runtime_config_resolver: Some(runtime_config_resolver),

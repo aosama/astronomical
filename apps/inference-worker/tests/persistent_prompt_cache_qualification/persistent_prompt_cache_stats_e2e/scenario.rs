@@ -110,9 +110,8 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let server = axum::serve(
         listener,
-        build_application_with_config_warning_and_discovered_models(
+        build_application_with_discovered_models(
             worker_handle.clone(),
-            None,
             vec![discovered_model_artifact(
                 MODEL_ID,
                 &configured_model_directory,

@@ -145,8 +145,6 @@ impl LagunaInferenceExecution {
         self.model = Some(model);
         self.mlx_ram_budget = Some(pending_startup.mlx_ram_budget);
         self.prompt_processing_chunk_sizer = Some(pending_startup.prompt_processing_chunk_sizer);
-        self.prompt_processing_execution_profile =
-            Some(pending_startup.prompt_processing_execution_profile);
         self.attribution_model_id = Some(pending_startup.attribution_model_id.clone());
         self.attribution_model_revision = Some(pending_startup.attribution_model_revision.clone());
         let loaded_memory_snapshot = self

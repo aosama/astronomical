@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use astronomical_config::DiscoveredModel;
-use astronomical_supervisor::{
-    build_application, build_application_with_config_warning_and_discovered_models,
-};
+use astronomical_supervisor::{build_application, build_application_with_discovered_models};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
@@ -60,9 +58,8 @@ async fn should_list_complete_capabilities_for_a_ready_worker_model() {
 
 #[tokio::test]
 async fn should_get_a_discovered_model_by_provider_prefixed_id() {
-    let application = build_application_with_config_warning_and_discovered_models(
+    let application = build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
-        None,
         vec![discovered_model_with_vision_support(true)],
     );
     let model_response = application
@@ -101,9 +98,8 @@ async fn should_get_a_discovered_model_by_provider_prefixed_id() {
 
 #[tokio::test]
 async fn should_list_text_only_input_modality_for_a_discovered_model_without_vision_support() {
-    let application = build_application_with_config_warning_and_discovered_models(
+    let application = build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
-        None,
         vec![discovered_model_with_vision_support(false)],
     );
     let models_response = application
@@ -138,9 +134,8 @@ async fn should_project_family_derived_reasoning_and_tool_capabilities() {
     let mut discovered_model = discovered_model_with_vision_support(false);
     discovered_model.supports_reasoning = false;
     discovered_model.supports_tool_calls = false;
-    let application = build_application_with_config_warning_and_discovered_models(
+    let application = build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
-        None,
         vec![discovered_model],
     );
 
@@ -214,9 +209,8 @@ async fn should_fail_closed_when_discovered_model_capabilities_are_invalid() {
     let mut invalid_discovered_model = discovered_model_with_vision_support(true);
     invalid_discovered_model.max_input_tokens = invalid_discovered_model.context_window;
     invalid_discovered_model.max_output_tokens = 1;
-    let application = build_application_with_config_warning_and_discovered_models(
+    let application = build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
-        None,
         vec![invalid_discovered_model],
     );
     let models_response = application

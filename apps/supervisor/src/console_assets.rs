@@ -1,7 +1,6 @@
 //! Embedded single-page admin console served by the supervisor.
 //!
-//! The Observatory console is a fixed bundle of eight files (HTML, five JavaScript files,
-//! and two stylesheets)
+//! The Observatory console is embedded directly in the supervisor binary.
 //! included directly into the `astronomicald` binary through `include_str!`
 //! so the supervisor has no filesystem dependency and no separate frontend
 //! build step. The assets live at `apps/supervisor/console/` and are reached
@@ -13,10 +12,8 @@ const INDEX_HTML: &str = include_str!("../console/index.html");
 const CONSOLE_JS: &str = include_str!("../console/console.js");
 const OVERVIEW_COMPACT_JS: &str = include_str!("../console/overview-compact.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../console/memory-control.js");
-const OPTIMIZER_JS: &str = include_str!("../console/optimizer.js");
 const PLAYGROUND_JS: &str = include_str!("../console/playground.js");
 const CONSOLE_CSS: &str = include_str!("../console/console.css");
-const OPTIMIZER_CSS: &str = include_str!("../console/optimizer.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
@@ -32,16 +29,13 @@ where
         .route("/", get(console_index))
         .route("/overview", get(console_index))
         .route("/chat", get(console_index))
-        .route("/optimizer", get(console_index))
         .route("/model", get(console_index))
         .route("/settings", get(console_index))
         .route("/console.js", get(console_script))
         .route("/overview-compact.js", get(overview_compact_script))
         .route("/memory-control.js", get(memory_control_script))
-        .route("/optimizer.js", get(optimizer_script))
         .route("/playground.js", get(playground_script))
         .route("/console.css", get(console_stylesheet))
-        .route("/optimizer.css", get(optimizer_stylesheet))
 }
 
 /// `GET /` — the Observatory single-page shell. References `/console.js` and
@@ -64,10 +58,6 @@ pub(crate) async fn memory_control_script() -> Response {
     embedded_text_response(MEMORY_CONTROL_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-pub(crate) async fn optimizer_script() -> Response {
-    embedded_text_response(OPTIMIZER_JS, JAVASCRIPT_CONTENT_TYPE)
-}
-
 pub(crate) async fn playground_script() -> Response {
     embedded_text_response(PLAYGROUND_JS, JAVASCRIPT_CONTENT_TYPE)
 }
@@ -75,12 +65,6 @@ pub(crate) async fn playground_script() -> Response {
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.
 pub(crate) async fn console_stylesheet() -> Response {
     embedded_text_response(CONSOLE_CSS, CSS_CONTENT_TYPE)
-}
-
-/// `GET /optimizer.css` — context-specific optimizer presentation kept
-/// separate from the shared Observatory shell styles.
-pub(crate) async fn optimizer_stylesheet() -> Response {
-    embedded_text_response(OPTIMIZER_CSS, CSS_CONTENT_TYPE)
 }
 
 fn embedded_text_response(body: &'static str, content_type: &'static str) -> Response {
