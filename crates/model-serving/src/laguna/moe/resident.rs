@@ -146,55 +146,58 @@ fn gathered_routed_swiglu(
         None => (&gather_states, selected_indices, false),
     };
 
-    let selected_outputs = performance_attribution.measure_operation(
-        PerformanceOperation::GatheredExpertExecution,
-        |_| {
-            let (gate, up) = if let Some(fused_gate_up) = weights.fused_routed_gate_up(layer_index)
-            {
-                let fused_output = fused_gate_up.project_gathered(
-                    runtime,
-                    expert_input_states,
-                    expert_indices,
-                    are_indices_sorted,
-                )?;
-                crate::laguna::model::LagunaBoundLinear::split_fused_gate_up(
-                    runtime,
-                    &fused_output,
-                )?
-            } else {
-                let gate = weights
-                    .linear(
-                        layer_index,
-                        LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Gate),
-                    )?
-                    .project_gathered(
-                        runtime,
-                        expert_input_states,
-                        expert_indices,
-                        are_indices_sorted,
-                    )?;
-                let up = weights
-                    .linear(
-                        layer_index,
-                        LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Up),
-                    )?
-                    .project_gathered(
-                        runtime,
-                        expert_input_states,
-                        expert_indices,
-                        are_indices_sorted,
-                    )?;
-                (gate, up)
-            };
-            let hidden_product = runtime.apply_compiled_swiglu(compiled_swiglu, &gate, &up)?;
-            weights
-                .linear(
-                    layer_index,
-                    LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Down),
-                )?
-                .project_gathered(runtime, &hidden_product, expert_indices, are_indices_sorted)
-        },
-    )?;
+    // Each project_gathered call attributes its own actual matrix operation.
+    // Do not wrap this whole SwiGLU block in the same attribution operation: that
+    // would double-count nested projection spans and obscure which graph was built.
+    let (gate, up) = if let Some(fused_gate_up) = weights.fused_routed_gate_up(layer_index) {
+        let fused_output = fused_gate_up.project_gathered(
+            runtime,
+            expert_input_states,
+            expert_indices,
+            are_indices_sorted,
+            performance_attribution,
+        )?;
+        crate::laguna::model::LagunaBoundLinear::split_fused_gate_up(runtime, &fused_output)?
+    } else {
+        let gate = weights
+            .linear(
+                layer_index,
+                LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Gate),
+            )?
+            .project_gathered(
+                runtime,
+                expert_input_states,
+                expert_indices,
+                are_indices_sorted,
+                performance_attribution,
+            )?;
+        let up = weights
+            .linear(
+                layer_index,
+                LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Up),
+            )?
+            .project_gathered(
+                runtime,
+                expert_input_states,
+                expert_indices,
+                are_indices_sorted,
+                performance_attribution,
+            )?;
+        (gate, up)
+    };
+    let hidden_product = runtime.apply_compiled_swiglu(compiled_swiglu, &gate, &up)?;
+    let selected_outputs = weights
+        .linear(
+            layer_index,
+            LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Down),
+        )?
+        .project_gathered(
+            runtime,
+            &hidden_product,
+            expert_indices,
+            are_indices_sorted,
+            performance_attribution,
+        )?;
 
     if let Some(sorted) = sorted_assignments {
         return Ok(sorted_expert_weighted_sum(

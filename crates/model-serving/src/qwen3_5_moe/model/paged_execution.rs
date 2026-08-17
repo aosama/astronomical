@@ -4,6 +4,9 @@ use astronomical_runtime_integration::MlxArray;
 
 use crate::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::sparse_experts::{
+    ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
+};
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
 use super::super::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
@@ -30,7 +33,7 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
-            |_performance_attribution| {
+            |performance_attribution| {
                 let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
                     &self.runtime,
                     selected_indices,
@@ -56,12 +59,14 @@ impl Qwen3_5Model {
                     &paged_expert_weights.up_projection,
                     &flattened_indices,
                     false,
+                    performance_attribution,
                 )?;
                 let selected_gate = self.streamed_expert_linear(
                     &expanded_states,
                     &paged_expert_weights.gate_projection,
                     &flattened_indices,
                     false,
+                    performance_attribution,
                 )?;
                 let activated = self.runtime.apply_compiled_swiglu(
                     &self.compiled_swiglu,
@@ -73,6 +78,7 @@ impl Qwen3_5Model {
                     &paged_expert_weights.down_projection,
                     &flattened_indices,
                     false,
+                    performance_attribution,
                 )?;
                 let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
                 let selected_outputs = self.runtime.reshape(
@@ -109,7 +115,7 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let paged_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
-            |_performance_attribution| {
+            |performance_attribution| {
                 let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
                     &self.runtime,
                     selected_indices,
@@ -121,6 +127,7 @@ impl Qwen3_5Model {
                     paged_expert_weights,
                     &page_slot_indices,
                     selected_scores,
+                    performance_attribution,
                 )?;
                 self.combine_paged_sparse_and_shared_outputs(
                     hidden_states,
@@ -155,7 +162,7 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let paged_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
-            |_performance_attribution| {
+            |performance_attribution| {
                 let split_page_route = Qwen3_5MoESplitPageRoute::build(
                     &self.runtime,
                     selected_indices,
@@ -169,12 +176,14 @@ impl Qwen3_5Model {
                     retained_expert_weights,
                     &split_page_route.retained_page_slot_indices,
                     &split_page_route.retained_scores,
+                    performance_attribution,
                 )?;
                 let missing_sparse_output = self.forward_moe_with_streamed_weights(
                     hidden_states,
                     missing_expert_weights,
                     &split_page_route.missing_page_slot_indices,
                     &split_page_route.missing_scores,
+                    performance_attribution,
                 )?;
                 let sparse_output = self
                     .runtime
@@ -201,6 +210,7 @@ impl Qwen3_5Model {
         paged_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
@@ -224,12 +234,14 @@ impl Qwen3_5Model {
             &paged_expert_weights.up_projection,
             expert_indices,
             indices_are_sorted,
+            performance_attribution,
         )?;
         let selected_gate = self.streamed_expert_linear(
             expert_inputs,
             &paged_expert_weights.gate_projection,
             expert_indices,
             indices_are_sorted,
+            performance_attribution,
         )?;
         let selected_activated = self.runtime.apply_compiled_swiglu(
             &self.compiled_swiglu,
@@ -241,6 +253,7 @@ impl Qwen3_5Model {
             &paged_expert_weights.down_projection,
             expert_indices,
             indices_are_sorted,
+            performance_attribution,
         )?;
         let sparse_output = match sorted_assignments.as_ref() {
             Some((_, _, inverse_order)) => qwen3_5_moe_sorted_expert_weighted_sum(
@@ -268,17 +281,31 @@ impl Qwen3_5Model {
         affine_weights: &crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+        // Streamed pages and resident layers intentionally converge here on the
+        // same canonical operation. Paging decides which arrays are alive; this
+        // adapter only describes their matrix layout and assignment ordering.
+        let assignment_order = if are_expert_indices_sorted {
+            ExpertAssignmentOrder::SortedByExpert
+        } else {
+            ExpertAssignmentOrder::Original
+        };
         match affine_weights {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
+                // The transpose is a lazy view from checkpoint linear layout to
+                // the `[expert, input, output]` layout expected by gather_mm.
                 let transposed_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
-                Ok(self.runtime.gather_dense_matmul(
+                Ok(gather_expert_projection(
+                    &self.runtime,
                     activations,
-                    &transposed_weights,
-                    None,
-                    Some(selected_expert_indices),
-                    are_expert_indices_sorted,
+                    StackedExpertProjection::Dense {
+                        transposed_weights: &transposed_weights,
+                    },
+                    selected_expert_indices,
+                    assignment_order,
+                    performance_attribution,
                 )?)
             }
             Qwen3_5AffineWeights::Quantized {
@@ -287,17 +314,22 @@ impl Qwen3_5Model {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => Ok(self.runtime.gather_quantized_matmul_affine(
+            } => Ok(gather_expert_projection(
+                &self.runtime,
                 activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                None,
-                Some(selected_expert_indices),
-                true,
-                *quantization_group_size,
-                *quantization_bits,
-                are_expert_indices_sorted,
+                // Pass the streamed packed page directly to gather_qmm. Taking
+                // selected matrices first would recreate the memory expansion
+                // that gathered execution exists to avoid.
+                StackedExpertProjection::Affine {
+                    packed_weights: packed_weight,
+                    scales: quantization_scales,
+                    biases: quantization_biases,
+                    group_size: *quantization_group_size,
+                    bits: *quantization_bits,
+                },
+                selected_expert_indices,
+                assignment_order,
+                performance_attribution,
             )?),
         }
     }

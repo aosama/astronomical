@@ -19,6 +19,12 @@ fn should_keep_existing_concrete_model_family_roots_isolated() {
             vec![source_directory.join("deepseek_v4")],
             ConcreteModelFamily::DeepSeekV4,
         ),
+        (
+            // Laguna now consumes the neutral sparse-expert projection API, but
+            // it must still never import Qwen implementation details.
+            vec![source_directory.join("laguna")],
+            ConcreteModelFamily::Laguna,
+        ),
     ] {
         for family_root in family_roots {
             assert!(family_root.is_dir(), "family source root must exist");
