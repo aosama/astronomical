@@ -91,6 +91,7 @@
 - Gate specialized attention by hardware, data type, mask, and measured shape. Retain the unfused graph for unsupported shapes.
 - Before adding a custom decode split, inspect Machine Learning framework for Apple silicon (MLX) fused scaled dot-product attention (SDPA): for one to eight query tokens and sufficiently long grouped-query key/value state, it already selects a two-pass partitioned Metal kernel. Measure the active dispatch before duplicating it with a paged-attention layer.
 - Preserve MLX automatic key/value partitioning for long grouped-query decode. A one-partition control removes useful graphics-processor parallelism, so a custom paged-attention layer must prove an additional end-to-end benefit rather than replicate MLX splitting.
+- Keep a full rotating key/value cache in physical ring order during one-token decode. Unmasked attention is invariant when keys and their matching values share the same permutation, so rebuilding chronological order adds slice and concatenation work without changing output. Reconstruct chronological order only for multi-token causal attention, where key position controls visibility.
 - Quantized matrix multiplication split-K dispatch can change bfloat16 reduction order when output row count changes. Once row work already exposes enough threadgroups, cap the row-count contribution to split-K selection so equivalent prompt partitions retain one reduction topology and exact recurrent state.
 
 ## Compiled graph composites

@@ -154,12 +154,13 @@ impl RotatingKeyValueState {
         };
         let next_keys = write_token_slot(runtime, stored_keys, new_keys, write_index)?;
         let next_values = write_token_slot(runtime, stored_values, new_values, write_index)?;
+        let next_ring_write_index = write_index + 1;
         Ok((
             next_keys.retain()?,
             next_values.retain()?,
             next_keys,
             next_values,
-            write_index + 1,
+            next_ring_write_index,
         ))
     }
 
@@ -275,15 +276,24 @@ impl RotatingKeyValueState {
         let key_shape = restored_keys.shape();
         if key_shape.len() != 4
             || key_shape != restored_values.shape()
+            || restored_keys.dtype() != restored_values.dtype()
             || key_shape[TOKEN_AXIS] <= 0
         {
             return Err(rotating_error(
-                "restored rotating slabs must have identical rank-four nonempty shapes",
+                "restored rotating slabs must have identical rank-four nonempty shapes and dtypes",
             ));
         }
-        if absolute_position < 0 || ring_write_index < 0 || ring_write_index > self.window_size {
+        let restored_token_count = key_shape[TOKEN_AXIS];
+        let has_valid_committed_geometry = restored_token_count <= self.window_size
+            && absolute_position >= restored_token_count
+            && restored_token_count == absolute_position.min(self.window_size);
+        let has_valid_ring_position = ring_write_index >= 0
+            && ring_write_index <= self.window_size
+            && (restored_token_count == self.window_size
+                || ring_write_index == restored_token_count);
+        if !has_valid_committed_geometry || !has_valid_ring_position {
             return Err(rotating_error(
-                "restored rotating counters must fit the committed window",
+                "restored rotating counters must match the committed window",
             ));
         }
         self.keys = Some(restored_keys);
@@ -299,17 +309,20 @@ fn validate_rotating_update(
     new_values: &MlxArray,
 ) -> Result<i32, MlxRuntimeError> {
     let key_shape = new_keys.shape();
-    if key_shape != new_values.shape() || key_shape.len() != 4 {
+    if key_shape != new_values.shape()
+        || new_keys.dtype() != new_values.dtype()
+        || key_shape.len() != 4
+    {
         return Err(rotating_error(
-            "rotating keys and values must have identical rank-four shapes",
+            "rotating keys and values must have identical rank-four shapes and dtypes",
+        ));
+    }
+    if key_shape.iter().any(|dimension| *dimension <= 0) {
+        return Err(rotating_error(
+            "rotating key/value dimensions must be positive",
         ));
     }
     let new_token_count = key_shape[TOKEN_AXIS];
-    if new_token_count <= 0 {
-        return Err(rotating_error(
-            "rotating update token count must be positive",
-        ));
-    }
     Ok(new_token_count)
 }
 
