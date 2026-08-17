@@ -11,6 +11,9 @@ use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::expert_residency::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
+use crate::sparse_experts::{
+    ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
+};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
@@ -36,7 +39,7 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         performance_attribution.measure_operation(
             PerformanceOperation::ResidentMoeGraphConstruction,
-            |_performance_attribution| {
+            |performance_attribution| {
                 if execution_mode == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow {
                     self.forward_moe_resident_target_verification(
                         hidden_states,
@@ -45,6 +48,7 @@ impl Qwen3_5Model {
                         selected_indices,
                         selected_scores,
                         execution_mode,
+                        performance_attribution,
                     )
                 } else {
                     self.forward_moe_resident(
@@ -55,6 +59,7 @@ impl Qwen3_5Model {
                         selected_scores,
                         should_use_compiled_elementwise_graphs,
                         execution_mode,
+                        performance_attribution,
                     )
                 }
             },
@@ -71,6 +76,7 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         // Add projection and expert-selection axes expected by MLX gather_mm.
         // Sorting larger assignment sets groups reads by the leading expert axis
@@ -99,12 +105,14 @@ impl Qwen3_5Model {
             &resident_expert_layer_weights.gate_up_weights,
             expert_indices,
             are_expert_indices_sorted,
+            performance_attribution,
         )?;
         let selected_outputs = self.resident_expert_linear(
             &selected_activated,
             &resident_expert_layer_weights.down_projection,
             expert_indices,
             are_expert_indices_sorted,
+            performance_attribution,
         )?;
         let sparse_expert_output = match sorted_expert_assignments.as_ref() {
             Some((_sorted_states, _sorted_indices, inverse_order)) => {
@@ -143,6 +151,7 @@ impl Qwen3_5Model {
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
         execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let hidden_state_shape = hidden_states.shape();
         let batch_size = hidden_state_shape[0];
@@ -165,12 +174,14 @@ impl Qwen3_5Model {
             &resident_expert_layer_weights.gate_up_weights,
             &flattened_expert_indices,
             false,
+            performance_attribution,
         )?;
         let selected_outputs = self.resident_expert_linear(
             &selected_activated,
             &resident_expert_layer_weights.down_projection,
             &flattened_expert_indices,
             false,
+            performance_attribution,
         )?;
         let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
         let selected_outputs = self.runtime.reshape(
@@ -202,6 +213,7 @@ impl Qwen3_5Model {
         gate_up_weights: &Qwen3_5ResidentGateUpWeights,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let (selected_gate, selected_up) = match gate_up_weights {
             Qwen3_5ResidentGateUpWeights::Fused { projection, .. } => {
@@ -210,6 +222,7 @@ impl Qwen3_5Model {
                     projection,
                     selected_expert_indices,
                     are_expert_indices_sorted,
+                    performance_attribution,
                 )?;
                 self.split_resident_gate_up_output(&selected_gate_up)?
             }
@@ -225,12 +238,14 @@ impl Qwen3_5Model {
                     up_projection,
                     selected_expert_indices,
                     are_expert_indices_sorted,
+                    performance_attribution,
                 )?;
                 let selected_gate = self.resident_expert_linear(
                     activations,
                     gate_projection,
                     selected_expert_indices,
                     are_expert_indices_sorted,
+                    performance_attribution,
                 )?;
                 (selected_gate, selected_up)
             }
@@ -280,18 +295,33 @@ impl Qwen3_5Model {
         affine_weights: &Qwen3_5AffineWeights,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         // Both variants select directly from complete arrays with original
         // expert IDs. Quantized companions retain their independent source dtype.
+        // This method is only a Qwen-to-neutral adapter: Qwen still owns weight
+        // storage and sort policy, while sparse_experts owns the shared matmul.
+        // The order enum is a promise about work already done by the caller; it
+        // never asks the neutral operation to sort IDs behind Qwen's back.
+        let assignment_order = if are_expert_indices_sorted {
+            ExpertAssignmentOrder::SortedByExpert
+        } else {
+            ExpertAssignmentOrder::Original
+        };
         match affine_weights {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
+                // Qwen stores native rows as `[expert, output, input]`; expose the
+                // lazy `[expert, input, output]` view required by gather_mm.
                 let transposed_expert_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
-                Ok(self.runtime.gather_dense_matmul(
+                Ok(gather_expert_projection(
+                    &self.runtime,
                     activations,
-                    &transposed_expert_weights,
-                    None,
-                    Some(selected_expert_indices),
-                    are_expert_indices_sorted,
+                    StackedExpertProjection::Dense {
+                        transposed_weights: &transposed_expert_weights,
+                    },
+                    selected_expert_indices,
+                    assignment_order,
+                    performance_attribution,
                 )?)
             }
             Qwen3_5AffineWeights::Quantized {
@@ -300,17 +330,21 @@ impl Qwen3_5Model {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => Ok(self.runtime.gather_quantized_matmul_affine(
+            } => Ok(gather_expert_projection(
+                &self.runtime,
                 activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                None,
-                Some(selected_expert_indices),
-                true,
-                *quantization_group_size,
-                *quantization_bits,
-                are_expert_indices_sorted,
+                // Keep packed weights, scales, and biases borrowed and separate.
+                // The neutral operation forwards them directly to gather_qmm.
+                StackedExpertProjection::Affine {
+                    packed_weights: packed_weight,
+                    scales: quantization_scales,
+                    biases: quantization_biases,
+                    group_size: *quantization_group_size,
+                    bits: *quantization_bits,
+                },
+                selected_expert_indices,
+                assignment_order,
+                performance_attribution,
             )?),
         }
     }
