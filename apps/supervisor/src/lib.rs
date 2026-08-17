@@ -21,7 +21,6 @@ mod openai_responses_assembly;
 mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
-mod prompt_processing_chunk_optimizer_status;
 mod serving_session_snapshot;
 mod shutdown_control;
 mod status_endpoint;
@@ -43,8 +42,7 @@ mod worker_process;
 mod worker_stderr_tail;
 
 pub use application::{
-    build_application, build_application_with_config_warning,
-    build_application_with_config_warning_and_discovered_models,
+    build_application, build_application_with_discovered_models,
     build_application_with_full_control, build_application_with_shutdown,
     build_development_application_with_reload,
 };

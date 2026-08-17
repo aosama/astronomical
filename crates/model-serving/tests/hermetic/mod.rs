@@ -17,12 +17,12 @@ mod paged_route_materialization;
 mod performance_attribution;
 mod persistent_cache_structure;
 mod phase_aware_expert_residency;
-mod prompt_processing_chunk_size_optimizer;
-mod prompt_processing_chunk_size_optimizer_persistence;
 mod quantized_expert_page_manifest;
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_execution_error;
 mod qwen_package_structure;
+#[cfg(feature = "direct-mlx")]
+mod qwen_prompt_processing_chunk_sizer;
 mod raw_safetensors_inventory;
 mod required_files;
 mod retained_expert_layer_cache;

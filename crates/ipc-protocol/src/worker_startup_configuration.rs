@@ -65,7 +65,6 @@ pub struct WorkerStartupConfiguration {
     pub global_prompt_cache_maximum_size_bytes: u64,
     pub persistent_prompt_cache_enabled: bool,
     pub chunking: WorkerChunkingConfiguration,
-    pub optimizer_state_directory: Option<PathBuf>,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub mtp_enabled: bool,
     pub mtp_draft_depth: Option<u8>,

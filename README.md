@@ -6,7 +6,7 @@ Astronomical is a performance-first local model runner for Mac users who want se
 
 Read the product story and public engineering reports at [aosama.github.io/astronomical](https://aosama.github.io/astronomical/).
 
-![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](.github/assets/astronomical-ram-ssd-streaming.jpeg)
+![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.jpeg)
 
 *A captured development run of Qwen3.6-35B-A3B-oQ4e-mtp: 21.61 GB on disk, an 11 GB model-memory ceiling, automatic RAM plus SSD expert streaming, and live prompt-processing telemetry. This demonstrates the operating mode, not a universal throughput guarantee; results vary by model, context, storage, and Mac.*
 
@@ -32,7 +32,7 @@ Astronomical is not a generic server wrapped around an off-the-shelf model loop.
 | --- | --- |
 | Automatic sparse-expert residency and paging | Keeps the complete sparse model resident when safe and uses SSD capacity when memory is needed elsewhere. |
 | Adaptive memory admission | Projects context growth and observed transient work before allocation, then reclaims only the expert memory required for the next operation. |
-| Online prefill chunk optimization | Learns useful prompt-processing chunk sizes by context bucket instead of hardwiring one value for every model and Mac. |
+| Deterministic prompt chunking | Uses a qualified fixed size, exact terminal remainders, and bounded memory-capacity reduction without spending user latency on online exploration. |
 | Persistent prompt reuse | Restores validated prompt state, recurrent snapshots, and projected image embeddings from a bounded SSD store so repeated prefixes need less work. |
 | GPU-native sampling and decode | Keeps sampling on the graphics processor and submits one token ahead to reduce avoidable host synchronization. |
 | Sorted mixture-of-experts execution | Groups larger routing batches by expert and reuses one ordering across projections to reduce scattered quantized matrix work. |
@@ -68,7 +68,7 @@ Astronomical is experimental and deliberately focused:
 
 - Apple Silicon M5 and later.
 - macOS 26 and later.
-- Validated Qwen3.5 and Qwen3.6 dense or mixture-of-experts text and vision artifacts supported by the repository.
+- Validated Qwen3.5/Qwen3.6 and Laguna artifacts supported by the repository.
 - One local user and one active generation at a time.
 - OpenAI-compatible chat completions, responses, model discovery, and server-sent event streaming over loopback only.
 
@@ -83,9 +83,9 @@ Astronomical keeps the trusted daily driver separate from repository development
 | Stable | `~/.astronomical` | `127.0.0.1:6732` | `~/Applications/Astronomical.app` |
 | Development | `~/.astronomical-dev` | `127.0.0.1:6733` | `target/astronomical-macos-development.noindex/Astronomical Development.app` |
 
-Config, logs, prompt caches, optimizer evidence, daemon ownership, process locks, and loopback endpoints are isolated. A standard instance rejects a configured endpoint belonging to the other channel. Both configs may reference the same read-only model directories. Real-model development still shares the Mac's GPU, wired memory, and storage bandwidth with Stable.
+Config, logs, prompt caches, daemon ownership, process locks, and loopback endpoints are isolated. A standard instance rejects a configured endpoint belonging to the other channel. Both configs may reference the same read-only model directories. Real-model development still shares the Mac's GPU, wired memory, and storage bandwidth with Stable.
 
-Serving and qualification tests read user-selected model locations and policy from Development only. Their mutable config, cache, optimizer, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
+Serving and qualification tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
 
 On first launch each instance creates its own `config.json`. Add one or more absolute directories to scan recursively:
 
@@ -94,13 +94,12 @@ On first launch each instance creates its own `config.json`. Add one or more abs
       "maximum_mlx_memory_gb": 16,
       "persistent_prompt_cache_enabled": true,
       "chunking": {
-        "prompt_processing_chunk_size_optimizer_enabled": false,
         "fixed_prompt_processing_chunk_size_tokens": 2048
       },
       "prompt_cache_max_size_gb": 50
     }
 
-The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse. Both channels default to qualified fixed prompt-processing chunks of 2,048 tokens. Adaptive prompt-processing chunk sizing remains available as an explicit opt-in by setting `prompt_processing_chunk_size_optimizer_enabled` to `true`.
+The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse. Both channels default to qualified fixed prompt-processing chunks of 2,048 tokens. Override the fixed chunk size with fixed_prompt_processing_chunk_size_tokens; a smaller fixed_ssd_streaming_prompt_processing_chunk_size_tokens can accelerate paged-expert prefill.
 
 ## Build the app
 

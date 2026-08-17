@@ -152,11 +152,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         model_directories: Arc::new(std::collections::HashMap::new()),
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
-        config_warning: None,
         chunking: astronomical_config::ChunkingConfig::default(),
-        optimizer_state_directory: config_home_directory
-            .join(".astronomical-dev")
-            .join("optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,
@@ -197,19 +193,18 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
 }
 
 #[tokio::test]
-async fn should_apply_only_in_place_reload_fields_when_a_rest_api_restart_is_required() {
+async fn should_keep_worker_and_listener_fields_unchanged_when_rest_api_restart_is_required() {
     let config_home_directory = tempfile::tempdir()
         .expect("a config home should be created")
         .keep();
     write_config_file(
         &config_home_directory,
         r#"{
-            "chunking": { "prompt_processing_chunk_size_optimizer_enabled": true },
+            "chunking": { "fixed_prompt_processing_chunk_size_tokens": 4096 },
             "supervisor": { "bind_address": "127.0.0.1:6734" }
         }"#,
     );
     let mut initial_resolved_config = sample_resolved_config();
-    initial_resolved_config.config_warning = Some("old startup warning".to_owned());
     initial_resolved_config.logging_config = astronomical_config::LoggingConfig::new(
         config_home_directory.join(".astronomical-dev").join("logs"),
         astronomical_config::LogLevel::Warn,
@@ -230,10 +225,7 @@ async fn should_apply_only_in_place_reload_fields_when_a_rest_api_restart_is_req
     let reload_document: serde_json::Value =
         serde_json::from_slice(&reload_body).expect("the reload response should contain JSON");
     assert_eq!(reload_document["status"], "restart_required");
-    assert_eq!(
-        reload_document["reloaded_fields"],
-        serde_json::json!(["config_warning"])
-    );
+    assert_eq!(reload_document["reloaded_fields"], serde_json::json!([]));
     assert_eq!(
         reload_document["restart_required_fields"],
         serde_json::json!(["supervisor.bind_address"])
@@ -242,75 +234,13 @@ async fn should_apply_only_in_place_reload_fields_when_a_rest_api_restart_is_req
     let live_config = reloadable_config
         .read()
         .expect("the reloadable config should remain readable");
-    assert_eq!(live_config.config_warning, None);
+    assert_eq!(
+        live_config
+            .chunking
+            .fixed_prompt_processing_chunk_size_tokens(),
+        2_048
+    );
     assert_eq!(live_config.bind_address, "127.0.0.1:6733");
-}
-
-#[tokio::test]
-async fn should_update_status_config_warning_after_successful_reload() {
-    let config_home_directory = tempfile::tempdir()
-        .expect("a config home should be created")
-        .keep();
-    write_config_file(
-        &config_home_directory,
-        r#"{
-            "chunking": { "prompt_processing_chunk_size_optimizer_enabled": true }
-        }"#,
-    );
-    let reloadable_config = Arc::new(RwLock::new(ResolvedRuntimeConfig {
-        worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),
-        discovered_models: Vec::new(),
-        configured_model_directories: Vec::new(),
-        model_directories: Arc::new(std::collections::HashMap::new()),
-        max_output_tokens: 20_480,
-        maximum_mlx_memory_bytes: None,
-        config_warning: Some("ignored fixed prefill setting".to_owned()),
-        chunking: astronomical_config::ChunkingConfig::default(),
-        optimizer_state_directory: config_home_directory
-            .join(".astronomical-dev")
-            .join("optimizer"),
-        persistent_prompt_cache_enabled: true,
-        performance_attribution_enabled: false,
-        mtp_enabled: true,
-        mtp_draft_depth: None,
-        speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
-        speculative_prefill_draft_model_directory: None,
-        prompt_cache_config: astronomical_config::PromptCacheConfig::new(
-            config_home_directory
-                .join(".astronomical-dev")
-                .join("cache"),
-            50_000_000_000,
-        ),
-        bind_address: "127.0.0.1:6733".to_owned(),
-        logging_config: astronomical_config::LoggingConfig::new(
-            config_home_directory.join(".astronomical-dev").join("logs"),
-            astronomical_config::LogLevel::Warn,
-            7,
-        ),
-    }));
-    let application = build_development_application_with_reload(
-        ScriptedExecutor::ready(Vec::new()),
-        reloadable_config,
-        config_home_directory,
-    );
-
-    let reload_response = post_config_reload(&application).await;
-    assert_eq!(reload_response.status(), StatusCode::OK);
-    let status_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return status");
-    let status_body = to_bytes(status_response.into_body(), 4 * 1024)
-        .await
-        .expect("the status response should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&status_body).expect("the status response should contain JSON");
-    assert_eq!(status_document["config_warning"], serde_json::Value::Null);
 }
 
 #[tokio::test]

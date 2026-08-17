@@ -19,19 +19,6 @@ pub(super) fn write_config_file(home_directory: &std::path::Path, config_body: &
     let config_file = home_directory.join(".astronomical-dev").join("config.json");
     std::fs::create_dir_all(config_file.parent().expect("config file has a parent"))
         .expect("the config directory should be created");
-    let config_body = match serde_json::from_str::<serde_json::Value>(config_body) {
-        Ok(mut parsed_config_body) => match parsed_config_body.as_object_mut() {
-            Some(config_object) if !config_object.contains_key("chunking") => {
-                config_object.insert(
-                    "chunking".to_owned(),
-                    serde_json::json!({ "prompt_processing_chunk_size_optimizer_enabled": true }),
-                );
-                parsed_config_body.to_string()
-            }
-            _ => config_body.to_owned(),
-        },
-        Err(_) => config_body.to_owned(),
-    };
     std::fs::write(&config_file, config_body).expect("the config file should be written");
 }
 
@@ -44,9 +31,7 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         model_directories: Arc::new(HashMap::new()),
         max_output_tokens: 20_480,
         maximum_mlx_memory_bytes: None,
-        config_warning: None,
         chunking: astronomical_config::ChunkingConfig::default(),
-        optimizer_state_directory: PathBuf::from("/tmp/astronomical-optimizer"),
         persistent_prompt_cache_enabled: true,
         performance_attribution_enabled: false,
         mtp_enabled: false,

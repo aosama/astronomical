@@ -21,8 +21,6 @@ pub use chunking_config::{
     DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
-    DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_MAXIMUM_RETAINED_MEASUREMENTS_PER_CANDIDATE_AND_CONTEXT,
-    DEFAULT_PROMPT_PROCESSING_CHUNK_SIZE_OPTIMIZER_POSITION_RANGE_SIZE_TOKENS,
     DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
 };
 pub use config_error::AstronomicalConfigError;
@@ -45,8 +43,6 @@ use config_file::{UserConfigFile, read_user_config_file};
 use speculative_prefill_config::resolve_speculative_prefill_config;
 
 pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
-pub const DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES: [u32; 4] =
-    [1_024, 2_048, 4_096, 8_192];
 const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_000_000_000;
 const DEFAULT_RETAINED_LOG_FILES: usize = 7;
 
@@ -134,31 +130,6 @@ impl AstronomicalConfig {
             .map(|discovered_model| discovered_model.model_directory))
     }
 
-    /// Resolves whether Qwen3.5-MoE uses adaptive or fixed prompt-processing chunks.
-    pub fn prompt_processing_chunk_sizing_policy(
-        &self,
-    ) -> Result<PromptProcessingChunkSizingPolicy, AstronomicalConfigError> {
-        Ok(self
-            .chunking()?
-            .prompt_processing_chunk_sizing_policy()
-            .clone())
-    }
-
-    /// Returns the `chunking.fixed_prompt_processing_chunk_size_tokens` value the daemon ignored because
-    /// `chunking.prompt_processing_chunk_size_optimizer_enabled` was `true`. The menu bar app flashes a
-    /// callout when this is `Some` so the user knows the fixed value has no effect.
-    #[must_use]
-    pub fn ignored_fixed_prompt_processing_chunk_size_tokens(&self) -> Option<u32> {
-        resolve_ignored_fixed_prompt_processing_chunk_size_tokens(
-            self.user_config_file
-                .chunking
-                .prompt_processing_chunk_size_optimizer_enabled,
-            self.user_config_file
-                .chunking
-                .fixed_prompt_processing_chunk_size_tokens,
-        )
-    }
-
     /// Returns every resolved model-serving work partition from the nested chunking policy.
     pub fn chunking(&self) -> Result<ChunkingConfig, AstronomicalConfigError> {
         ChunkingConfig::resolve(&self.user_config_file.chunking)
@@ -216,15 +187,6 @@ impl AstronomicalConfig {
         Ok(self.instance_paths.prompt_cache_directory())
     }
 
-    /// Resolves the optimizer state directory for persisting prefill chunk-size
-    /// optimizer observations across restarts.
-    ///
-    /// Defaults to `~/.astronomical/optimizer/`. Always enabled; there is no
-    /// config toggle to disable optimizer persistence.
-    pub fn optimizer_directory(&self) -> Result<PathBuf, AstronomicalConfigError> {
-        Ok(self.instance_paths.optimizer_directory())
-    }
-
     /// Returns the per-request output-token ceiling.
     ///
     /// Defaults to 20,480 when not explicitly configured.
@@ -271,99 +233,6 @@ impl AstronomicalConfig {
             .maximum_mlx_memory_gb
             .map(maximum_mlx_memory_gb_to_bytes)
             .transpose()
-    }
-}
-
-/// Resolved Qwen3.5-MoE prompt-processing chunk selection at worker startup.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PromptProcessingChunkSizingPolicy {
-    /// Select chunk sizes online from measured context-specific observations.
-    Optimized {
-        /// Strictly increasing token counts the optimizer may request.
-        prompt_processing_chunk_size_optimizer_candidate_token_counts: Vec<u32>,
-    },
-    /// Process each normal full chunk with one configured token count.
-    Fixed {
-        /// Required positive token count for each fixed complete-resident prompt-processing chunk.
-        fixed_prompt_processing_chunk_size_tokens: u32,
-        /// Optional smaller fixed size used only while sparse experts stream from storage.
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
-    },
-}
-
-fn resolve_prompt_processing_chunk_sizing_policy(
-    configured_prompt_processing_chunk_size_optimizer_enabled: Option<bool>,
-    configured_fixed_prompt_processing_chunk_size_tokens: Option<u32>,
-    configured_fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
-    configured_prompt_processing_chunk_size_optimizer_candidate_token_counts: Option<&[u32]>,
-) -> Result<PromptProcessingChunkSizingPolicy, AstronomicalConfigError> {
-    let fixed_prompt_processing_chunk_size_tokens =
-        match configured_prompt_processing_chunk_size_optimizer_enabled {
-            Some(true) => {
-                // Any configured fixed size is intentionally ignored in explicit
-                // optimized mode. The menu bar surfaces that override separately.
-                return Ok(PromptProcessingChunkSizingPolicy::Optimized {
-                    prompt_processing_chunk_size_optimizer_candidate_token_counts:
-                        resolve_prompt_processing_chunk_size_optimizer_candidate_token_counts(
-                            configured_prompt_processing_chunk_size_optimizer_candidate_token_counts,
-                        )?,
-                });
-            }
-            Some(false) | None => configured_fixed_prompt_processing_chunk_size_tokens
-                .unwrap_or(DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS),
-        };
-    if fixed_prompt_processing_chunk_size_tokens == 0 {
-        return Err(AstronomicalConfigError::InvalidFixedPromptProcessingChunkSizeTokens);
-    }
-    let fixed_ssd_streaming_prompt_processing_chunk_size_tokens =
-        match configured_fixed_ssd_streaming_prompt_processing_chunk_size_tokens {
-            Some(0) => {
-                return Err(AstronomicalConfigError::InvalidFixedSsdStreamingPromptProcessingChunkSizeTokens);
-            }
-            Some(fixed_ssd_streaming_prompt_processing_chunk_size_tokens) => {
-                Some(fixed_ssd_streaming_prompt_processing_chunk_size_tokens)
-            }
-            None => None,
-        };
-    Ok(PromptProcessingChunkSizingPolicy::Fixed {
-        fixed_prompt_processing_chunk_size_tokens,
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-    })
-}
-
-fn resolve_prompt_processing_chunk_size_optimizer_candidate_token_counts(
-    configured_prompt_processing_chunk_size_optimizer_candidate_token_counts: Option<&[u32]>,
-) -> Result<Vec<u32>, AstronomicalConfigError> {
-    let prompt_processing_chunk_size_optimizer_candidate_token_counts =
-        configured_prompt_processing_chunk_size_optimizer_candidate_token_counts.map_or_else(
-            || DEFAULT_OPTIMIZER_PREFILL_CHUNCK_TOKEN_CANDIDATES.to_vec(),
-            <[u32]>::to_vec,
-        );
-    if prompt_processing_chunk_size_optimizer_candidate_token_counts.is_empty() {
-        return Err(AstronomicalConfigError::OptimizerCandidateTokenCountsMustNotBeEmpty);
-    }
-    if prompt_processing_chunk_size_optimizer_candidate_token_counts.contains(&0) {
-        return Err(AstronomicalConfigError::OptimizerCandidateTokenCountsMustBePositive);
-    }
-    if prompt_processing_chunk_size_optimizer_candidate_token_counts
-        .windows(2)
-        .any(|adjacent_candidates| adjacent_candidates[0] >= adjacent_candidates[1])
-    {
-        return Err(AstronomicalConfigError::OptimizerCandidateTokenCountsMustBeStrictlyIncreasing);
-    }
-    Ok(prompt_processing_chunk_size_optimizer_candidate_token_counts)
-}
-
-/// Returns the fixed prompt-processing chunk size the daemon ignores because the
-/// optimizer is enabled, so the menu bar app can flash a callout warning the user.
-fn resolve_ignored_fixed_prompt_processing_chunk_size_tokens(
-    configured_prompt_processing_chunk_size_optimizer_enabled: Option<bool>,
-    configured_fixed_prompt_processing_chunk_size_tokens: Option<u32>,
-) -> Option<u32> {
-    if configured_prompt_processing_chunk_size_optimizer_enabled == Some(true) {
-        configured_fixed_prompt_processing_chunk_size_tokens
-    } else {
-        None
     }
 }
 

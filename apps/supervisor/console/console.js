@@ -13,7 +13,6 @@ const SPARKLINE_BUFFER_SIZE = 60;
 const OBSERVATORY_PATH_MAP = {
     overview: "/overview",
     chat: "/chat",
-    optimizer: "/optimizer",
     model: "/model",
     settings: "/settings"
 };
@@ -107,10 +106,6 @@ async function pollStatus() {
         renderMemoryLimitControl(data);
         renderSession(data);
         renderAboutEnhanced(data);
-        renderPromptProcessingOptimizer(
-            data.prompt_processing_chunk_size_optimizer,
-            selectedModelMaximumInputTokens
-        );
     } catch (fetchError) {
         setStatusUnavailable();
     }
@@ -154,7 +149,6 @@ function setStatusUnavailable() {
     header.className = "status-header unavailable";
     document.getElementById("status-word").textContent = "Unavailable";
     document.getElementById("status-model-id").textContent = "No model loaded";
-    document.getElementById("optimizer-configuration-note").hidden = true;
     resetNowStrip();
 }
 
@@ -162,7 +156,6 @@ function renderStatusHeader(data) {
     const header = document.getElementById("status-header");
     const statusWord = document.getElementById("status-word");
     const modelIdLabel = document.getElementById("status-model-id");
-    const optimizerConfigurationNote = document.getElementById("optimizer-configuration-note");
     const status = data.status || "unavailable";
     const activity = data.activity || "idle";
     const isActive = activity === "prompt_processing" || activity === "generating";
@@ -182,12 +175,6 @@ function renderStatusHeader(data) {
         selectedModelId = readyModelId;
     } else if (status !== "ready") {
         modelIdLabel.textContent = "No model loaded";
-    }
-    if (data.config_warning) {
-        optimizerConfigurationNote.textContent = data.config_warning;
-        optimizerConfigurationNote.hidden = false;
-    } else {
-        optimizerConfigurationNote.hidden = true;
     }
 }
 
