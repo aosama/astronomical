@@ -6,16 +6,22 @@
 //! in descriptor order, residual placement, cache ownership, or output binding
 //! cannot make the production path and its oracle fail in the same way.
 
+mod binding;
 mod fixture;
+mod moe_operations;
 mod operations;
+mod rows;
+mod tensor_fixture;
+mod tensor_identity;
 
 use astronomical_model_serving::{
     LagunaDecoderState, PerformanceAttribution, PerformanceOperation,
 };
 use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
 
-use self::fixture::{ReferenceRow, build_fixture, generic_rows, named_rows};
+use self::fixture::build_fixture;
 use self::operations::{ReferenceDecoderState, reference_forward};
+use self::rows::{ReferenceRow, generic_moe_rows, generic_rows, named_rows};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -39,13 +45,22 @@ async fn should_match_complete_model_reference_for_named_xs_and_s_rows() {
 }
 
 #[tokio::test]
+async fn should_match_complete_model_reference_for_resident_moe_rows() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    for row in generic_moe_rows() {
+        assert_row_matches_reference(&runtime, &row);
+    }
+}
+
+#[tokio::test]
 async fn should_avoid_optional_model_diagnostics_when_attribution_is_disabled() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    let row = generic_rows()
+    let row = generic_moe_rows()
         .into_iter()
-        .find(|row| row.row_name == "generic_mixed")
-        .expect("the mixed attribution row should exist");
+        .find(|row| row.row_name == "native_mixed_shared")
+        .expect("the resident-MoE attribution row should exist");
     let fixture = build_fixture(&runtime, &row);
     let mut decoder_state = LagunaDecoderState::empty(fixture.model.contract())
         .expect("the disabled-attribution cache should construct");
@@ -77,6 +92,16 @@ async fn should_avoid_optional_model_diagnostics_when_attribution_is_disabled() 
 
 fn assert_row_matches_reference(runtime: &MlxRuntime, row: &ReferenceRow) {
     let fixture = build_fixture(runtime, row);
+    assert_eq!(
+        fixture
+            .observed_affine_profiles
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        row.expected_affine_profiles,
+        "{} executed affine bit/group profiles",
+        row.row_name
+    );
     let mut production_state = LagunaDecoderState::empty(fixture.model.contract())
         .unwrap_or_else(|error| panic!("{} production cache failed: {error:?}", row.row_name));
     let mut reference_state = ReferenceDecoderState::new(fixture.model.contract());
@@ -152,15 +177,48 @@ fn assert_row_matches_reference(runtime: &MlxRuntime, row: &ReferenceRow) {
         {
             continue;
         }
+        if is_moe_operation(operation) && !row.has_sparse_feed_forward {
+            continue;
+        }
+        if operation == PerformanceOperation::SharedExpertExecution && !row.has_shared_expert {
+            continue;
+        }
+        if operation == PerformanceOperation::ExpertAssignmentPreparation
+            && !row.expects_assignment_sort
+        {
+            assert!(
+                attribution.operation_measurement(operation).is_none(),
+                "{} unexpectedly attributed assignment sorting",
+                row.row_name
+            );
+            continue;
+        }
         assert!(
             attribution.operation_measurement(operation).is_some(),
             "{} did not attribute {operation:?}",
             row.row_name
         );
     }
+    if row.has_sparse_feed_forward {
+        assert_eq!(
+            fixture.model.expert_memory_mode(),
+            astronomical_model_serving::ExpertMemoryMode::Resident,
+            "{} resident mode",
+            row.row_name
+        );
+        assert_eq!(
+            fixture
+                .model
+                .expert_weight_memory_cache_statistics()
+                .disk_page_load_count,
+            0,
+            "{} resident execution must not read expert pages",
+            row.row_name
+        );
+    }
 }
 
-fn attributed_operations() -> [PerformanceOperation; 6] {
+fn attributed_operations() -> [PerformanceOperation; 12] {
     [
         PerformanceOperation::AttentionForwardSpan,
         PerformanceOperation::RotaryEmbeddingApplication,
@@ -168,7 +226,25 @@ fn attributed_operations() -> [PerformanceOperation; 6] {
         PerformanceOperation::SoftplusAttentionGateApplication,
         PerformanceOperation::MlpForwardSpan,
         PerformanceOperation::FinalLogitsGraphConstruction,
+        PerformanceOperation::RouterScoreSelection,
+        PerformanceOperation::ExpertAssignmentPreparation,
+        PerformanceOperation::GatheredExpertExecution,
+        PerformanceOperation::ExpertWeightedReduction,
+        PerformanceOperation::SharedExpertExecution,
+        PerformanceOperation::ResidentMoeGraphConstruction,
     ]
+}
+
+fn is_moe_operation(operation: PerformanceOperation) -> bool {
+    matches!(
+        operation,
+        PerformanceOperation::RouterScoreSelection
+            | PerformanceOperation::ExpertAssignmentPreparation
+            | PerformanceOperation::GatheredExpertExecution
+            | PerformanceOperation::ExpertWeightedReduction
+            | PerformanceOperation::SharedExpertExecution
+            | PerformanceOperation::ResidentMoeGraphConstruction
+    )
 }
 
 fn assert_arrays_close(
@@ -207,7 +283,7 @@ fn assert_arrays_close(
     }
 }
 
-fn test_runtime() -> MlxRuntime {
+pub(super) fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,

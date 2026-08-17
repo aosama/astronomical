@@ -16,6 +16,7 @@ use super::bound_linear::{
     LagunaBoundLinear, is_floating_weight, require_supported_affine_profile,
 };
 use super::error::LagunaExecutionError;
+use super::router_correction_bias::bind_optional_router_correction_bias;
 
 /// Resident weight map bound from canonical tensor IDs.
 pub struct LagunaNativeWeights {
@@ -147,15 +148,12 @@ impl LagunaNativeWeights {
                         layer_id(layer_index, LagunaLayerTensorRole::Router),
                         "router weight is required",
                     )?;
-                    if let Some(correction_bias) = tensors.remove(&layer_id(
+                    bind_optional_router_correction_bias(
+                        &mut tensors,
+                        &mut vectors,
                         layer_index,
-                        LagunaLayerTensorRole::RouterCorrectionBias,
-                    )) {
-                        vectors.insert(
-                            layer_id(layer_index, LagunaLayerTensorRole::RouterCorrectionBias),
-                            correction_bias,
-                        );
-                    }
+                        moe_descriptor.expert_count(),
+                    )?;
                     let routed_projections = [
                         LagunaExpertProjection::Gate,
                         LagunaExpertProjection::Up,
