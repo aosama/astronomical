@@ -16,7 +16,8 @@ use astronomical_model_serving::ModelLoadingPerformanceAttributionMetadata;
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
-    effective_mlx_memory_ceiling_bytes: usize,
+    active_memory_limit_bytes: usize,
+    allocator_cache_memory_limit_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
     max_output_tokens: u32,
     mtp_enabled: bool,
@@ -106,10 +107,6 @@ pub(crate) fn initialize_qwen3_5_model(
     let think_end_token_id = generation_processor.think_end_token_id();
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
-        crate::worker_startup::derive_mlx_memory_limits_from_gpu_wired_limit(
-            effective_mlx_memory_ceiling_bytes,
-        );
     // Derive the model-specific path only when the user enabled persistent
     // caching. This keeps disabled operation from touching model/revision cache
     // identity, opening directories, scanning files, or reserving publication

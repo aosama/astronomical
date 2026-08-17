@@ -87,11 +87,11 @@ async fn should_return_an_error_when_the_unit_model_factory_is_called() {
 #[tokio::test]
 async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
-    let mlx_memory_ceiling_bytes = Arc::new(AtomicU64::new(0));
     let engine_worker = EngineBackedWorker::idle_with_model_factory(
         LazyScriptedModelFactory {
             model_factory_call_count: Arc::clone(&model_factory_call_count),
-            mlx_memory_ceiling_bytes,
+            mlx_memory_limits: (0, 0),
+            model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
         },
         0,
@@ -138,16 +138,18 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
 }
 
 #[tokio::test]
-async fn should_update_the_model_factory_memory_ceiling_after_a_loaded_engine_changes() {
+async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
-    let mlx_memory_ceiling_bytes = Arc::new(AtomicU64::new(40_000_000_000));
-    let engine_worker = EngineBackedWorker::idle_with_model_factory(
+    let model_creation_memory_limits = Arc::new(Mutex::new(Vec::new()));
+    let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
         LazyScriptedModelFactory {
             model_factory_call_count,
-            mlx_memory_ceiling_bytes: Arc::clone(&mlx_memory_ceiling_bytes),
+            mlx_memory_limits: (38_000_000_000, 38_000_000_000),
+            model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Paged),
         },
         40_000_000_000,
+        38_000_000_000,
     );
     let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
     let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
@@ -171,21 +173,37 @@ async fn should_update_the_model_factory_memory_ceiling_after_a_loaded_engine_ch
 
     supervisor_writer
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
-            effective_mlx_memory_ceiling_bytes: 8_000_000_000,
+            effective_mlx_memory_ceiling_bytes: 40_000_000_000,
         })
         .await
         .expect("the live memory limit should reach the worker");
     assert!(matches!(
         next_event(&mut supervisor_reader).await,
         WorkerEvent::MlxMemoryLimitChanged {
-            effective_mlx_memory_ceiling_bytes: 8_000_000_000,
+            effective_mlx_memory_ceiling_bytes: 40_000_000_000,
             ..
         }
     ));
 
+    supervisor_writer
+        .send_command(&WorkerCommand::SwapModel {
+            model_directory: "/models/second-model".to_owned(),
+            max_output_tokens: 20_480,
+        })
+        .await
+        .expect("the replacement model should receive the updated MLX limit pair");
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::ModelSwapped { .. }
+    ));
     assert_eq!(
-        mlx_memory_ceiling_bytes.load(Ordering::SeqCst),
-        8_000_000_000
+        *model_creation_memory_limits
+            .lock()
+            .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner()),
+        vec![
+            (38_000_000_000, 38_000_000_000),
+            (40_000_000_000, 38_000_000_000),
+        ]
     );
     close_worker_transport(supervisor_writer, worker_task).await;
 }

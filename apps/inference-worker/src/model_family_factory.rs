@@ -15,6 +15,7 @@ use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
 /// Creates the concrete family processor and engine for a selected model directory.
 pub(crate) struct ModelFamilyFactory {
     pub(crate) effective_mlx_memory_ceiling_bytes: usize,
+    pub(crate) allocator_cache_memory_limit_bytes: usize,
     pub(crate) prompt_cache_config: PromptCacheConfig,
     pub(crate) performance_attribution_enabled: bool,
     pub(crate) performance_attribution_log_path: PathBuf,
@@ -35,6 +36,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
     ) -> Result<(ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine), String> {
         let model_directory_path = PathBuf::from(model_directory);
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
+        let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
         let prompt_cache_config = self.prompt_cache_config.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
@@ -52,6 +54,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                     let (generation_processor, qwen3_5_engine) = initialize_qwen3_5_model(
                         model_directory_path,
                         effective_mlx_memory_ceiling_bytes,
+                        allocator_cache_memory_limit_bytes,
                         prompt_cache_config,
                         max_output_tokens,
                         mtp_enabled,
@@ -69,14 +72,10 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                     ))
                 }
                 Some(ModelFamily::Laguna) => {
-                    let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
-                        crate::worker_startup::derive_mlx_memory_limits_from_gpu_wired_limit(
-                            effective_mlx_memory_ceiling_bytes,
-                        );
                     let (generation_processor, laguna_engine) =
                         initialize_laguna_model_with_serving_settings(
                             &model_directory_path,
-                            active_memory_limit_bytes,
+                            effective_mlx_memory_ceiling_bytes,
                             allocator_cache_memory_limit_bytes,
                             performance_attribution_enabled,
                             LagunaServingSettings {
@@ -105,9 +104,15 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         .map_err(|_| "model-family initialization task failed".to_owned())?
     }
 
-    fn update_mlx_memory_ceiling_bytes(&mut self, effective_mlx_memory_ceiling_bytes: u64) {
+    fn update_mlx_memory_limits(
+        &mut self,
+        effective_mlx_memory_ceiling_bytes: u64,
+        allocator_cache_memory_limit_bytes: u64,
+    ) {
         self.effective_mlx_memory_ceiling_bytes =
             usize::try_from(effective_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
+        self.allocator_cache_memory_limit_bytes =
+            usize::try_from(allocator_cache_memory_limit_bytes).unwrap_or(usize::MAX);
     }
 
     fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
