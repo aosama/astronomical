@@ -90,7 +90,7 @@ jobs:
     runs-on: macos-26
     env:
       RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "on"
+      SCCACHE_GHA_ENABLED: "true"
       SCCACHE_GHA_VERSION: astronomical-ci-v1
     # Keep the required status-check name stable; extra job time covers cache restore and save.
     timeout-minutes: 15
@@ -100,12 +100,10 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Configure sccache GitHub Actions backend
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+      - name: Install and configure sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
         with:
-          script: |
-            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          version: v0.17.0
       - name: Restore Cargo downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -127,7 +125,7 @@ jobs:
           case "$(brew tap)" in
             *aws/tap*) brew untap aws/tap ;;
           esac
-          brew install cargo-about sccache
+          brew install cargo-about
       - name: Verify Rust dependency notices
         run: scripts/generate-rust-dependency-notices.sh --check
         timeout-minutes: 2
