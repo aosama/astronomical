@@ -30,22 +30,24 @@ pub(in crate::laguna) fn forward_resident_mixture_of_experts(
     compiled_swiglu: &MlxCompiledSwiGlu,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
-    performance_attribution.measure_operation(
-        PerformanceOperation::ResidentMoeGraphConstruction,
-        |performance_attribution| {
-            forward_resident_mixture_of_experts_inner(
-                runtime,
-                hidden_states,
-                weights,
-                moe_descriptor,
-                layer_index,
-                router_logit_softcap,
-                sorted_expert_reduction_kernel,
-                compiled_swiglu,
-                performance_attribution,
-            )
-        },
-    )
+    performance_attribution.measure_operation(PerformanceOperation::MlpForwardSpan, |attribution| {
+        attribution.measure_operation(
+            PerformanceOperation::ResidentMoeGraphConstruction,
+            |attribution| {
+                forward_resident_mixture_of_experts_inner(
+                    runtime,
+                    hidden_states,
+                    weights,
+                    moe_descriptor,
+                    layer_index,
+                    router_logit_softcap,
+                    sorted_expert_reduction_kernel,
+                    compiled_swiglu,
+                    attribution,
+                )
+            },
+        )
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -211,7 +213,12 @@ fn gathered_routed_swiglu(
     }
     let selected_outputs = runtime.squeeze_axis(&selected_outputs, -2)?;
     if applies_router_weight_on_input {
-        return Ok(runtime.sum_axis(&selected_outputs, -2, false)?);
+        // Input-side scores still culminate in an expert-combination reduction.
+        // Attribute that boundary even though no second score multiply is needed.
+        return Ok(performance_attribution
+            .measure_operation(PerformanceOperation::ExpertWeightedReduction, |_| {
+                runtime.sum_axis(&selected_outputs, -2, false)
+            })?);
     }
     Ok(unsorted_expert_weighted_sum(
         runtime,

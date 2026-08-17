@@ -10,7 +10,9 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition,
     RequestId,
 };
-use astronomical_model_serving::{LagunaArtifactValidator, LagunaGenerationProcessor};
+use astronomical_model_serving::{
+    LagunaArtifactValidator, LagunaGenerationProcessor, LagunaTensorStorageEncoding,
+};
 
 const QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
 const QUALIFICATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -36,6 +38,7 @@ pub(super) struct PinnedLagunaArtifact {
     expected_preserves_prior_reasoning: bool,
     expected_top_k: Option<u16>,
     expected_repetition_penalty_thousandths: u16,
+    expected_affine_profiles: &'static [(u32, u32)],
 }
 
 impl PinnedLagunaArtifact {
@@ -57,6 +60,7 @@ pub(super) const LAGUNA_XS: PinnedLagunaArtifact = PinnedLagunaArtifact {
     expected_preserves_prior_reasoning: false,
     expected_top_k: None,
     expected_repetition_penalty_thousandths: 1_000,
+    expected_affine_profiles: &[(2, 64), (3, 64), (4, 64), (8, 64), (8, 128)],
 };
 
 pub(super) const LAGUNA_S: PinnedLagunaArtifact = PinnedLagunaArtifact {
@@ -72,6 +76,7 @@ pub(super) const LAGUNA_S: PinnedLagunaArtifact = PinnedLagunaArtifact {
     expected_preserves_prior_reasoning: false,
     expected_top_k: Some(20),
     expected_repetition_penalty_thousandths: 1_050,
+    expected_affine_profiles: &[(2, 128), (3, 64), (4, 64), (6, 64), (8, 64), (8, 128)],
 };
 
 #[test]
@@ -214,6 +219,25 @@ fn qualify_pinned_artifact(pinned_artifact: PinnedLagunaArtifact) {
                 && descriptor.sources().iter().all(|source| {
                     source.data_start_offset_bytes() < source.data_end_offset_bytes()
                 }))
+    );
+    let observed_affine_profiles = validated_artifact
+        .tensor_contract()
+        .descriptors()
+        .values()
+        .filter_map(|descriptor| match descriptor.storage_encoding() {
+            LagunaTensorStorageEncoding::DirectAffine { profile } => {
+                Some((profile.bits(), profile.group_size()))
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        observed_affine_profiles,
+        pinned_artifact
+            .expected_affine_profiles
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
     );
 
     let text_artifact = validated_artifact.text_artifact();
