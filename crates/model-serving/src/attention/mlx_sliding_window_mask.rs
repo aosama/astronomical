@@ -37,6 +37,11 @@ fn build_causal_sliding_window_mask_inner(
     key_token_count: i32,
     window_size: i32,
 ) -> Result<MlxArray, MlxRuntimeError> {
+    if first_query_absolute_position < 0 || first_key_absolute_position < 0 {
+        return Err(mask_error(
+            "absolute attention positions must be nonnegative",
+        ));
+    }
     if window_size <= 0 || query_token_count <= 0 || key_token_count <= 0 {
         return Err(mask_error("window size and token counts must be positive"));
     }
@@ -46,6 +51,12 @@ fn build_causal_sliding_window_mask_inner(
     let last_key_exclusive = first_key_absolute_position
         .checked_add(key_token_count)
         .ok_or_else(|| mask_error("key absolute range overflowed"))?;
+    // The MLX graph computes `key_position + window_size` elementwise. Prove
+    // that operation cannot wrap before constructing the lazy array.
+    last_key_exclusive
+        .checked_sub(1)
+        .and_then(|last_key_position| last_key_position.checked_add(window_size))
+        .ok_or_else(|| mask_error("key window boundary overflowed"))?;
     let query_absolute_positions =
         runtime.arange_i32(first_query_absolute_position, last_query_exclusive)?;
     let key_absolute_positions =

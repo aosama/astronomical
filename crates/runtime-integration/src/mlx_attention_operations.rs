@@ -125,6 +125,18 @@ fn validate_attention_arguments(
             "attention query, key, and value tensors must have rank four",
         ));
     }
+    // Validate positive geometry before divisibility. In particular, modulo by
+    // a zero key/value head count would panic in Rust instead of returning the
+    // typed runtime error required at this native boundary.
+    if query_shape.iter().any(|dimension| *dimension <= 0)
+        || key_shape.iter().any(|dimension| *dimension <= 0)
+        || value_shape.iter().any(|dimension| *dimension <= 0)
+    {
+        return Err(runtime_operation_error(
+            OPERATION,
+            "attention dimensions must be positive",
+        ));
+    }
     if key_shape != value_shape {
         return Err(runtime_operation_error(
             OPERATION,
