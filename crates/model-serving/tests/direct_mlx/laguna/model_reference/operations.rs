@@ -8,12 +8,15 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{
-    LagunaAttentionProjection, LagunaCacheDescriptor, LagunaExpertProjection, LagunaGatingKind,
-    LagunaGlobalTensorRole, LagunaLayerTensorRole, LagunaRopeDescriptor, LagunaTargetContract,
-    LagunaTensorComponent, LagunaTensorId, PerformanceAttribution,
-    build_causal_sliding_window_mask, compute_yarn_rope_frequency_denominators,
+    LagunaAttentionProjection, LagunaCacheDescriptor, LagunaExpertProjection,
+    LagunaFeedForwardDescriptor, LagunaGatingKind, LagunaGlobalTensorRole, LagunaLayerTensorRole,
+    LagunaRopeDescriptor, LagunaTargetContract, LagunaTensorComponent, LagunaTensorId,
+    PerformanceAttribution, build_causal_sliding_window_mask,
+    compute_yarn_rope_frequency_denominators,
 };
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+
+use super::moe_operations::reference_moe;
 
 pub(super) struct ReferenceDecoderState {
     layers: Vec<ReferenceLayerState>,
@@ -102,34 +105,22 @@ pub(super) fn reference_forward(
             ),
             epsilon,
         )?;
-        let gate = linear(
-            runtime,
-            tensors,
-            layer_id(
+        let feed_forward = match layer.feed_forward() {
+            LagunaFeedForwardDescriptor::Dense(_) => reference_dense_feed_forward(
+                runtime,
+                tensors,
                 layer_index,
-                LagunaLayerTensorRole::DenseFeedForward(LagunaExpertProjection::Gate),
-            ),
-            &normalized_after_attention,
-        )?;
-        let up = linear(
-            runtime,
-            tensors,
-            layer_id(
+                &normalized_after_attention,
+            )?,
+            LagunaFeedForwardDescriptor::Moe(descriptor) => reference_moe(
+                runtime,
+                tensors,
                 layer_index,
-                LagunaLayerTensorRole::DenseFeedForward(LagunaExpertProjection::Up),
-            ),
-            &normalized_after_attention,
-        )?;
-        let activated = runtime.multiply(&runtime.silu(&gate)?, &up)?;
-        let feed_forward = linear(
-            runtime,
-            tensors,
-            layer_id(
-                layer_index,
-                LagunaLayerTensorRole::DenseFeedForward(LagunaExpertProjection::Down),
-            ),
-            &activated,
-        )?;
+                descriptor,
+                &normalized_after_attention,
+                contract.model().router_logit_softcap(),
+            )?,
+        };
         hidden = runtime.add(&after_attention, &feed_forward)?;
     }
     let normalized = runtime.rms_norm(
@@ -158,6 +149,37 @@ pub(super) fn reference_forward(
             &terminal,
         )
     }
+}
+
+fn reference_dense_feed_forward(
+    runtime: &MlxRuntime,
+    tensors: &HashMap<LagunaTensorId, MlxArray>,
+    layer_index: usize,
+    hidden_states: &MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let project = |projection| {
+        linear(
+            runtime,
+            tensors,
+            layer_id(
+                layer_index,
+                LagunaLayerTensorRole::DenseFeedForward(projection),
+            ),
+            hidden_states,
+        )
+    };
+    let gate = project(LagunaExpertProjection::Gate)?;
+    let up = project(LagunaExpertProjection::Up)?;
+    let activated = runtime.multiply(&runtime.silu(&gate)?, &up)?;
+    linear(
+        runtime,
+        tensors,
+        layer_id(
+            layer_index,
+            LagunaLayerTensorRole::DenseFeedForward(LagunaExpertProjection::Down),
+        ),
+        &activated,
+    )
 }
 
 fn reference_attention(

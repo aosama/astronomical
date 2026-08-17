@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use astronomical_model_serving::{
-    GeneratedToken, MlxInferenceExecution, initialize_laguna_execution,
+    ExpertMemoryMode, GeneratedToken, MlxInferenceExecution, initialize_laguna_execution,
 };
 use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 
@@ -132,6 +132,13 @@ fn generate_from_pinned_artifact(pinned_artifact: PinnedLagunaArtifact) {
         load_started_at.elapsed().as_secs(),
         load_result.expert_memory_mode()
     );
+    if pinned_artifact.model_id == LAGUNA_XS.model_id {
+        assert_eq!(
+            load_result.expert_memory_mode(),
+            Some(ExpertMemoryMode::Resident),
+            "the pinned XS resident qualification must not silently page experts"
+        );
+    }
 
     let source_excerpt = if pinned_artifact.model_id == LAGUNA_S.model_id {
         compact_romeo_and_juliet_source()
