@@ -68,6 +68,8 @@ Write Rust that a Java-background maintainer can navigate confidently: explicit 
 - Prefer one stable target directory per repo and profile. Use a disposable CARGO_TARGET_DIR=/tmp/... only for an intentional cold-build probe, and label it as such.
 - Avoid many --test targets and many [[test]] entries; each produces another compiled and linked binary.
 
+- When an execution-boundary test subtree grows substantially or one test binary appears to dominate verification time, capture `cargo --timings` evidence for cold and warm builds before changing the test layout. Split the subtree only when the evidence shows that a small number of medium-sized binaries improves verification time without excessive duplicate compilation or linking; the goal is neither many tiny binaries nor one oversized monolith.
+
 - Add --timings to slow Rust build/check/lint commands and inspect the generated report before changing profiles, features, dependencies, or test layout for speed.
 
 - Broad cargo test --tests or workspace tests are final confirmation tools, not the default feedback loop.
