@@ -85,6 +85,15 @@ debug = false
 inherits = "dev"
 debug = true
 
+# Hosted CI needs compiler diagnostics and test assertion locations, not runtime
+# variable inspection or symbolic backtraces. A distinct output graph keeps that
+# tradeoff out of local development while avoiding macOS dSYM generation.
+[profile.ci]
+inherits = "test"
+debug = "none"
+split-debuginfo = "off"
+incremental = false
+
 [profile.release]
 lto = "thin"
 strip = "symbols"
