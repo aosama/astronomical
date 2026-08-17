@@ -1,4 +1,9 @@
 //! Descriptor-driven Laguna attention using the family-neutral primitives.
+//!
+//! Laguna owns projection binding, per-layer geometry, rotary policy, cache
+//! selection, and optional output gating here. The underlying attention masks
+//! and cache mechanisms remain neutral so another model family does not have to
+//! import Laguna policy to reuse identical mathematics.
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
@@ -219,6 +224,7 @@ fn forward_attention_inner(
         layer_index,
         query_head_count,
         head_dimension,
+        performance_attribution,
     )?;
     weights
         .linear(
@@ -403,44 +409,51 @@ fn apply_output_gate(
     layer_index: usize,
     query_head_count: i32,
     head_dimension: i32,
+    performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
     match attention.gating_kind() {
         LagunaGatingKind::None => Ok(attention_output.retain()?),
-        gating_kind => {
-            let gate_logits = weights
-                .linear(
-                    layer_index,
-                    LagunaLayerTensorRole::Attention(LagunaAttentionProjection::Gate),
-                )?
-                .project(runtime, hidden_states)?;
-            let hidden_shape = hidden_states.shape();
-            let shaped_gate = match gating_kind {
-                LagunaGatingKind::PerHead => runtime.reshape(
-                    &gate_logits,
-                    &[hidden_shape[0], hidden_shape[1], query_head_count, 1],
-                )?,
-                LagunaGatingKind::PerElement => runtime.reshape(
-                    &gate_logits,
+        // The projection exists only to apply the optional gate, so keep its
+        // cost inside the same boundary. Timing only softplus would understate
+        // the user-visible cost of selecting a gated descriptor.
+        gating_kind => performance_attribution.measure_operation(
+            PerformanceOperation::SoftplusAttentionGateApplication,
+            |_| {
+                let gate_logits = weights
+                    .linear(
+                        layer_index,
+                        LagunaLayerTensorRole::Attention(LagunaAttentionProjection::Gate),
+                    )?
+                    .project(runtime, hidden_states)?;
+                let hidden_shape = hidden_states.shape();
+                let shaped_gate = match gating_kind {
+                    LagunaGatingKind::PerHead => runtime.reshape(
+                        &gate_logits,
+                        &[hidden_shape[0], hidden_shape[1], query_head_count, 1],
+                    )?,
+                    LagunaGatingKind::PerElement => runtime.reshape(
+                        &gate_logits,
+                        &[
+                            hidden_shape[0],
+                            hidden_shape[1],
+                            query_head_count,
+                            head_dimension,
+                        ],
+                    )?,
+                    LagunaGatingKind::None => gate_logits,
+                };
+                let shaped_output = runtime.reshape(
+                    attention_output,
                     &[
                         hidden_shape[0],
                         hidden_shape[1],
                         query_head_count,
                         head_dimension,
                     ],
-                )?,
-                LagunaGatingKind::None => gate_logits,
-            };
-            let shaped_output = runtime.reshape(
-                attention_output,
-                &[
-                    hidden_shape[0],
-                    hidden_shape[1],
-                    query_head_count,
-                    head_dimension,
-                ],
-            )?;
-            let gated = runtime.apply_softplus_attention_gate(&shaped_output, &shaped_gate)?;
-            Ok(runtime.reshape(&gated, &attention_output.shape())?)
-        }
+                )?;
+                let gated = runtime.apply_softplus_attention_gate(&shaped_output, &shaped_gate)?;
+                Ok(runtime.reshape(&gated, &attention_output.shape())?)
+            },
+        ),
     }
 }
