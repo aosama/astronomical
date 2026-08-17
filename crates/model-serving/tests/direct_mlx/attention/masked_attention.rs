@@ -34,10 +34,13 @@ async fn should_match_fused_causal_attention_with_an_array_causal_mask() {
         fused.to_vec_f32().expect("fused output should evaluate"),
         masked.to_vec_f32().expect("masked output should evaluate")
     );
+    let mask_measurement = attribution
+        .operation_measurement(PerformanceOperation::SlidingWindowMaskConstruction)
+        .expect("enabled attribution should retain the mask operation boundaries");
+    assert_eq!(mask_measurement.occurrence_count(), 1);
     assert!(
-        attribution
-            .operation_measurement(PerformanceOperation::SlidingWindowMaskConstruction)
-            .is_some()
+        mask_measurement.last_ended_offset_nanoseconds()
+            >= mask_measurement.first_started_offset_nanoseconds()
     );
 }
 
@@ -65,6 +68,48 @@ async fn should_match_the_cpu_visibility_table_for_a_prefix_plus_chunk() {
             .operation_measurement(PerformanceOperation::SlidingWindowMaskConstruction)
             .is_none()
     );
+}
+
+#[tokio::test]
+async fn should_reject_negative_or_overflowing_absolute_mask_geometry() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    for (first_query_position, query_tokens, first_key_position, key_tokens, window_size) in [
+        (-1, 1, 0, 1, 4),
+        (0, 1, -1, 1, 4),
+        (i32::MAX, 1, 0, 1, 4),
+        (0, 1, i32::MAX - 1, 1, 4),
+    ] {
+        build_causal_sliding_window_mask(
+            &runtime,
+            first_query_position,
+            query_tokens,
+            first_key_position,
+            key_tokens,
+            window_size,
+            &mut PerformanceAttribution::disabled(),
+        )
+        .expect_err("invalid absolute mask geometry must fail before MLX execution");
+    }
+}
+
+#[tokio::test]
+async fn should_reject_zero_head_attention_without_panicking() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let queries = runtime
+        .array_from_f32(&[], &[1, 0, 1, 4])
+        .expect("zero-head queries should be representable");
+    let keys = runtime
+        .array_from_f32(&[], &[1, 0, 1, 4])
+        .expect("zero-head keys should be representable");
+    let values = runtime
+        .array_from_f32(&[], &[1, 0, 1, 4])
+        .expect("zero-head values should be representable");
+
+    runtime
+        .scaled_dot_product_attention(&queries, &keys, &values, 0.5)
+        .expect_err("zero attention heads must return a typed error before modulo validation");
 }
 
 fn test_runtime() -> MlxRuntime {
