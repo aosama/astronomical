@@ -10,7 +10,7 @@ fn should_resolve_every_user_configured_chunking_boundary() {
             "fixed_prompt_processing_chunk_size_tokens": 1024,
             "full_attention_key_value_growth_tokens": 192,
             "speculative_prefill_draft_forward_tokens": 1536,
-            "experimental_ssd_paging_prefill_graph_submission_layer_interval": 0,
+            "prefill_graph_submission_layer_interval": 2,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
             "prompt_cache_block_tokens": 1024,
             "prompt_cache_common_prefix_stride_blocks": 6
@@ -27,10 +27,7 @@ fn should_resolve_every_user_configured_chunking_boundary() {
 
     assert_eq!(chunking.full_attention_key_value_growth_tokens(), 192);
     assert_eq!(chunking.speculative_prefill_draft_forward_tokens(), 1_536);
-    assert_eq!(
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
-        0
-    );
+    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 2);
     assert_eq!(
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         0
@@ -41,7 +38,7 @@ fn should_resolve_every_user_configured_chunking_boundary() {
 }
 
 #[test]
-fn should_default_omitted_experimental_ssd_paging_intervals() {
+fn should_default_omitted_graph_submission_intervals() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -57,10 +54,7 @@ fn should_default_omitted_experimental_ssd_paging_intervals() {
         .chunking()
         .expect("chunking configuration should resolve");
 
-    assert_eq!(
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
-        0
-    );
+    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 1);
     assert_eq!(
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         3
@@ -139,7 +133,7 @@ fn should_reject_full_attention_growth_that_cannot_cross_the_mlx_dimension_bound
 #[test]
 fn should_reject_retired_graph_submission_layer_interval_fields() {
     for retired_field_name in [
-        "prefill_graph_submission_layer_interval",
+        "experimental_ssd_paging_prefill_graph_submission_layer_interval",
         "generation_graph_submission_layer_interval",
     ] {
         let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");

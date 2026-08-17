@@ -83,8 +83,7 @@ impl Qwen3_5EngineState {
                 .map_err(qwen3_5_runtime_error)?;
             let model_chunking = Qwen3_5ModelChunkingConfiguration::new(
                 self.chunking.full_attention_key_value_growth_tokens,
-                self.chunking
-                    .experimental_ssd_paging_prefill_graph_submission_layer_interval,
+                self.chunking.prefill_graph_submission_layer_interval,
                 self.chunking
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
                 self.chunking.speculative_prefill_draft_forward_tokens,

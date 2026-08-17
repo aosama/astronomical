@@ -5,7 +5,7 @@ pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 pub const DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS: u32 = 2_048;
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
-pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
+pub const DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
 pub const DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
 
 /// Resolved user-visible boundaries that partition model-serving work.
@@ -19,7 +19,7 @@ pub struct ChunkingConfig {
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
     full_attention_key_value_growth_tokens: u32,
     speculative_prefill_draft_forward_tokens: u32,
-    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+    prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     prompt_cache_block_tokens: Option<u32>,
     prompt_cache_common_prefix_stride_blocks: u32,
@@ -45,9 +45,9 @@ impl ChunkingConfig {
             speculative_prefill_draft_forward_tokens: configured
                 .speculative_prefill_draft_forward_tokens
                 .unwrap_or(DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS),
-            experimental_ssd_paging_prefill_graph_submission_layer_interval: configured
-                .experimental_ssd_paging_prefill_graph_submission_layer_interval
-                .unwrap_or(DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
+            prefill_graph_submission_layer_interval: configured
+                .prefill_graph_submission_layer_interval
+                .unwrap_or(DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
             experimental_ssd_paging_generation_graph_submission_layer_interval: configured
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .unwrap_or(
@@ -143,8 +143,8 @@ impl ChunkingConfig {
     }
 
     #[must_use]
-    pub const fn experimental_ssd_paging_prefill_graph_submission_layer_interval(&self) -> u32 {
-        self.experimental_ssd_paging_prefill_graph_submission_layer_interval
+    pub const fn prefill_graph_submission_layer_interval(&self) -> u32 {
+        self.prefill_graph_submission_layer_interval
     }
 
     #[must_use]
@@ -172,8 +172,8 @@ impl Default for ChunkingConfig {
             full_attention_key_value_growth_tokens: DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
             speculative_prefill_draft_forward_tokens:
                 DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
-            experimental_ssd_paging_prefill_graph_submission_layer_interval:
-                DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            prefill_graph_submission_layer_interval:
+                DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
             experimental_ssd_paging_generation_graph_submission_layer_interval:
                 DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
             prompt_cache_block_tokens: None,

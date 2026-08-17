@@ -9,8 +9,8 @@ use super::Qwen3_5ExecutionError;
 pub struct Qwen3_5ModelChunkingConfiguration {
     /// Append-only attention capacity growth passed to MLX tensor shapes.
     pub(crate) full_attention_key_value_growth_tokens: i32,
-    /// Experimental multi-token layer interval used only during solid-state-drive paging.
-    pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+    /// Decoder-layer interval between multi-token prefill command-buffer submissions.
+    pub(crate) prefill_graph_submission_layer_interval: u32,
     /// Experimental one-token layer interval used only during solid-state-drive paging.
     pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     /// Maximum prompt rows supplied to one drafter forward.
@@ -20,7 +20,7 @@ pub struct Qwen3_5ModelChunkingConfiguration {
 impl Qwen3_5ModelChunkingConfiguration {
     pub fn new(
         full_attention_key_value_growth_tokens: u32,
-        experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+        prefill_graph_submission_layer_interval: u32,
         experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
         speculative_prefill_draft_forward_tokens: u32,
     ) -> Result<Self, Qwen3_5ExecutionError> {
@@ -41,7 +41,7 @@ impl Qwen3_5ModelChunkingConfiguration {
             .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
                 description: "full-attention key/value growth tokens exceed the Int32 range",
             })?,
-            experimental_ssd_paging_prefill_graph_submission_layer_interval,
+            prefill_graph_submission_layer_interval,
             experimental_ssd_paging_generation_graph_submission_layer_interval,
             speculative_prefill_draft_forward_tokens: usize::try_from(
                 speculative_prefill_draft_forward_tokens,

@@ -132,10 +132,10 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
         2_048
     );
     assert_eq!(
-        generated_config_json.get("chunking").and_then(|chunking| {
-            chunking.get("experimental_ssd_paging_prefill_graph_submission_layer_interval")
-        }),
-        Some(&serde_json::json!(0))
+        generated_config_json
+            .get("chunking")
+            .and_then(|chunking| { chunking.get("prefill_graph_submission_layer_interval") }),
+        Some(&serde_json::json!(1))
     );
     assert_eq!(
         generated_config_json.get("chunking").and_then(|chunking| {
@@ -146,7 +146,9 @@ fn should_create_a_first_run_config_template_with_an_empty_model_directory_list(
     assert!(
         generated_config_json
             .get("chunking")
-            .and_then(|chunking| chunking.get("prefill_graph_submission_layer_interval"))
+            .and_then(|chunking| {
+                chunking.get("experimental_ssd_paging_prefill_graph_submission_layer_interval")
+            })
             .is_none()
     );
     assert!(
