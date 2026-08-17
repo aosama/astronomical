@@ -38,26 +38,6 @@ pub enum AstronomicalConfigError {
         field_name: String,
         configured_path: PathBuf,
     },
-    #[error(
-        "chunking.fixed_prompt_processing_chunk_size_tokens is required when chunking.prompt_processing_chunk_size_optimizer_enabled is false"
-    )]
-    FixedPromptProcessingChunkSizeTokensRequiredWhenOptimizerDisabled,
-    #[error("chunking.fixed_prompt_processing_chunk_size_tokens must be positive")]
-    InvalidFixedPromptProcessingChunkSizeTokens,
-    #[error("chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens must be positive")]
-    InvalidFixedSsdStreamingPromptProcessingChunkSizeTokens,
-    #[error(
-        "chunking.prompt_processing_chunk_size_optimizer_candidate_token_counts must not be empty"
-    )]
-    OptimizerCandidateTokenCountsMustNotBeEmpty,
-    #[error(
-        "chunking.prompt_processing_chunk_size_optimizer_candidate_token_counts must contain only positive values"
-    )]
-    OptimizerCandidateTokenCountsMustBePositive,
-    #[error(
-        "chunking.prompt_processing_chunk_size_optimizer_candidate_token_counts must be strictly increasing"
-    )]
-    OptimizerCandidateTokenCountsMustBeStrictlyIncreasing,
     #[error("failed to parse supervisor bind address '{raw_bind_address}'")]
     ParseBindAddress {
         raw_bind_address: String,

@@ -16,7 +16,6 @@ use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
 pub(crate) struct ModelFamilyFactory {
     pub(crate) effective_mlx_memory_ceiling_bytes: usize,
     pub(crate) prompt_cache_config: PromptCacheConfig,
-    pub(crate) optimizer_state_directory: Option<PathBuf>,
     pub(crate) performance_attribution_enabled: bool,
     pub(crate) performance_attribution_log_path: PathBuf,
     pub(crate) mtp_enabled: bool,
@@ -37,7 +36,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let model_directory_path = PathBuf::from(model_directory);
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let prompt_cache_config = self.prompt_cache_config.clone();
-        let optimizer_state_directory = self.optimizer_state_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let mtp_enabled = self.mtp_enabled;
@@ -55,7 +53,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         model_directory_path,
                         effective_mlx_memory_ceiling_bytes,
                         prompt_cache_config,
-                        optimizer_state_directory,
                         max_output_tokens,
                         mtp_enabled,
                         mtp_draft_depth,
@@ -84,7 +81,6 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                             performance_attribution_enabled,
                             LagunaServingSettings {
                                 chunking: Some(chunking),
-                                optimizer_state_directory,
                                 persistent_prompt_cache_enabled,
                                 prompt_cache_config: persistent_prompt_cache_enabled
                                     .then_some(prompt_cache_config),

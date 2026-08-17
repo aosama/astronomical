@@ -13,8 +13,6 @@ mod model_family_runtime;
 mod model_generation_processor;
 mod performance_attribution;
 mod persistent_cache;
-#[path = "prompt_processing_chunk_size_optimizer/mod.rs"]
-mod prompt_processing_chunk_size_optimizer;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod safetensors;
@@ -80,8 +78,6 @@ pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError, MlxInferenceEngine,
     MlxInferenceExecution, PreparedInferenceRequest,
-    PromptProcessingChunkCandidateMeasurementSummary, PromptProcessingChunkOptimizationContext,
-    PromptProcessingChunkOptimizationOutcome,
 };
 pub use laguna::{
     LagunaAffineProfile, LagunaArtifactValidationError, LagunaArtifactValidator,
@@ -102,21 +98,20 @@ pub use laguna::{
     LagunaNvfp4InputActivationDescriptor, LagunaNvfp4Profile, LagunaOutputEvent,
     LagunaOutputParser, LagunaOutputParserError, LagunaPagingError, LagunaPreparationError,
     LagunaPreparedGeneration, LagunaPromptProcessingChunkSizer,
-    LagunaPromptProcessingChunkSizerError, LagunaPromptProcessingExecutionProfile,
-    LagunaPromptRenderer, LagunaPromptRendererError, LagunaRawTensorNameRecord,
-    LagunaRequestMemoryRequirements, LagunaRequestOutput, LagunaRequestOutputError,
-    LagunaRetainedArtifactFiles, LagunaRopeDescriptor, LagunaRouterKind, LagunaRouterSelection,
-    LagunaSamplerConfig, LagunaSamplingStrategy, LagunaShardIndex, LagunaShardIndexError,
-    LagunaSparseLayerPagingPlan, LagunaStorageDescriptor, LagunaSymmetricPackedAffineProfile,
-    LagunaTargetContract, LagunaTargetNormalizer, LagunaTensorAssembly, LagunaTensorComponent,
-    LagunaTensorContract, LagunaTensorId, LagunaTensorNameContract,
-    LagunaTensorNameNormalizationError, LagunaTensorNameNormalizer, LagunaTensorSource,
-    LagunaTensorSourceDescriptor, LagunaTensorSourceRole, LagunaTensorStorageEncoding,
-    LagunaTextArtifactDescriptor, LagunaTextArtifactError, LagunaTextArtifactNormalizer,
-    LagunaTextArtifactSources, LagunaTokenDecoder, LagunaTokenizer, LagunaTokenizerError,
-    LagunaYarnRopeDescriptor, ValidatedLagunaArtifact, apply_router_logit_softcap,
-    laguna_decoder_cache_layout, laguna_sliding_prefill_transient_token_count,
-    select_laguna_router_experts,
+    LagunaPromptProcessingChunkSizerError, LagunaPromptRenderer, LagunaPromptRendererError,
+    LagunaRawTensorNameRecord, LagunaRequestMemoryRequirements, LagunaRequestOutput,
+    LagunaRequestOutputError, LagunaRetainedArtifactFiles, LagunaRopeDescriptor, LagunaRouterKind,
+    LagunaRouterSelection, LagunaSamplerConfig, LagunaSamplingStrategy, LagunaShardIndex,
+    LagunaShardIndexError, LagunaSparseLayerPagingPlan, LagunaStorageDescriptor,
+    LagunaSymmetricPackedAffineProfile, LagunaTargetContract, LagunaTargetNormalizer,
+    LagunaTensorAssembly, LagunaTensorComponent, LagunaTensorContract, LagunaTensorId,
+    LagunaTensorNameContract, LagunaTensorNameNormalizationError, LagunaTensorNameNormalizer,
+    LagunaTensorSource, LagunaTensorSourceDescriptor, LagunaTensorSourceRole,
+    LagunaTensorStorageEncoding, LagunaTextArtifactDescriptor, LagunaTextArtifactError,
+    LagunaTextArtifactNormalizer, LagunaTextArtifactSources, LagunaTokenDecoder, LagunaTokenizer,
+    LagunaTokenizerError, LagunaYarnRopeDescriptor, ValidatedLagunaArtifact,
+    apply_router_logit_softcap, laguna_decoder_cache_layout,
+    laguna_sliding_prefill_transient_token_count, select_laguna_router_experts,
 };
 #[cfg(feature = "direct-mlx")]
 pub use laguna::{
@@ -187,12 +182,6 @@ pub use persistent_cache::{
     PersistentPromptCacheStartupCleanupEvidence, PersistentSpeculativePrefillPolicyPurgeOutcome,
     RestoredSpeculativePrefillTargetState, build_persistent_prompt_cache_stats_event,
     clear_persistent_prompt_cache_directory,
-};
-pub use prompt_processing_chunk_size_optimizer::{
-    CandidateChunkMeasurementSummary, CandidateMeasurementSource, CandidateMeasurementSummaries,
-    PromptProcessingChunkMeasurement, PromptProcessingChunkSizeOptimizer,
-    PromptProcessingChunkSizeOptimizerError, PromptProcessingChunkSizeSelection,
-    PromptProcessingChunkSizeSelectionReason, PromptProcessingMeasurementContext,
 };
 pub use qwen3_5::{
     MAXIMUM_MTPLX_RUNTIME_BYTES, ModelWeightStorage, MtpDepthDowngradeReason, MtpDraftDepth,

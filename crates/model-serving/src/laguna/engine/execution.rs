@@ -8,8 +8,7 @@ use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 use crate::artifact_validation::ValidatedWeightsFile;
 use crate::laguna::{
     LagunaDecoderState, LagunaExpertPagingPlan, LagunaInferenceRequest, LagunaModel,
-    LagunaPromptProcessingChunkSizer, LagunaPromptProcessingExecutionProfile, LagunaTargetContract,
-    LagunaTensorContract,
+    LagunaPromptProcessingChunkSizer, LagunaTargetContract, LagunaTensorContract,
 };
 use crate::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
@@ -33,8 +32,6 @@ pub(in crate::laguna) struct LagunaPendingStartup {
     pub(in crate::laguna) effective_mlx_memory_ceiling_bytes: usize,
     pub(in crate::laguna) allocator_cache_memory_limit_bytes: usize,
     pub(in crate::laguna) prompt_processing_chunk_sizer: LagunaPromptProcessingChunkSizer,
-    pub(in crate::laguna) prompt_processing_execution_profile:
-        LagunaPromptProcessingExecutionProfile,
     pub(in crate::laguna) minimum_mlx_memory_ceiling_bytes: u64,
     pub(in crate::laguna) prompt_cache_disk_store_config:
         Option<PersistentPromptCacheDiskStoreConfig>,
@@ -60,10 +57,8 @@ pub struct LagunaInferenceExecution {
     pub(super) model: Option<LagunaModel>,
     /// Request state returned to the protocol loop after every bounded advance.
     pub(super) active_request: Option<LagunaActiveGeneration>,
-    /// Adaptive or fixed selector that bounds one prompt advance.
+    /// Deterministic fixed-size planner that bounds one prompt advance.
     pub(super) prompt_processing_chunk_sizer: Option<LagunaPromptProcessingChunkSizer>,
-    /// Descriptor-derived identity used to isolate optimizer measurements.
-    pub(super) prompt_processing_execution_profile: Option<LagunaPromptProcessingExecutionProfile>,
     /// Optional model-and-revision SSD cache shared by sequential requests.
     pub(super) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
     /// Resolved global quota retained for process-scoped cache statistics.
@@ -91,7 +86,6 @@ impl LagunaInferenceExecution {
             model: None,
             active_request: None,
             prompt_processing_chunk_sizer: None,
-            prompt_processing_execution_profile: None,
             persistent_prompt_cache: None,
             persistent_prompt_cache_disk_store_config: None,
             persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
@@ -168,12 +162,6 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             }
         })?;
         let mut performance_attribution = inference_request.into_performance_attribution();
-        let prompt_processing_chunk_sizer =
-            self.prompt_processing_chunk_sizer
-                .as_mut()
-                .ok_or(InferenceEngineError::Fatal {
-                    reason: "Laguna prompt-processing chunk sizer is missing".to_owned(),
-                })?;
         let persistent_prompt_cache = self.persistent_prompt_cache.clone();
         let (last_published_block_key, restored_prompt_prefix_token_count) =
             if let Some(persistent_prompt_cache) = persistent_prompt_cache.as_deref() {
@@ -195,8 +183,6 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                     .record_cache_hit(restored_prompt_prefix_token_count as usize);
             }
         }
-        prompt_processing_chunk_sizer
-            .start_prompt_processing_request(restored_prompt_prefix_token_count as usize);
         let prompt_token_count = u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX);
         let expert_memory_mode = model.expert_memory_mode();
         self.active_request = Some(LagunaActiveGeneration {
@@ -298,23 +284,24 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 .map_err(|_| InferenceEngineError::Fatal {
                     reason: "Laguna decode tokens could not be placed on the runtime".to_owned(),
                 })?;
-        let decode_logits = model
-            .forward(
-                runtime,
-                &decode_token_array,
-                &mut active_request.decoder_state,
-                &mut active_request.performance_attribution,
-            )
-            .map_err(|decode_error| {
-                tracing::error!(?decode_error, "Laguna decode forward failed");
-                InferenceEngineError::Fatal {
-                    reason: "Laguna token generation failed".to_owned(),
-                }
-            })?;
-        let next_token_id = Self::sample_next_token_id(
-            runtime,
-            &decode_logits,
-            &mut active_request.performance_attribution,
+        let next_token_id = active_request.performance_attribution.measure_operation(
+            crate::PerformanceOperation::DecodeAdvanceSpan,
+            |performance_attribution| {
+                let decode_logits = model
+                    .forward(
+                        runtime,
+                        &decode_token_array,
+                        &mut active_request.decoder_state,
+                        performance_attribution,
+                    )
+                    .map_err(|decode_error| {
+                        tracing::error!(?decode_error, "Laguna decode forward failed");
+                        InferenceEngineError::Fatal {
+                            reason: "Laguna token generation failed".to_owned(),
+                        }
+                    })?;
+                Self::sample_next_token_id(runtime, &decode_logits, performance_attribution)
+            },
         )?;
         active_request.next_input_token_ids = vec![next_token_id];
         active_request.remaining_output_tokens =
@@ -403,12 +390,17 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             });
         }
         let configured_maximum_output_tokens = active_request.configured_maximum_output_tokens;
-        let performance_attribution = std::mem::replace(
+        let mut performance_attribution = std::mem::replace(
             &mut active_request.performance_attribution,
             PerformanceAttribution::disabled(),
         );
-        // Release request-owned context before measuring and publishing stable model state.
-        drop(active_request);
+        performance_attribution.measure_operation(
+            crate::PerformanceOperation::GenerationFinalization,
+            |_performance_attribution| {
+                // Request arrays must be released before the stable model-memory snapshot.
+                drop(active_request);
+            },
+        );
         self.record_generation_performance_attribution(
             performance_attribution,
             request_id,

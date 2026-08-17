@@ -134,11 +134,7 @@ impl Qwen3_5EngineState {
                 );
             let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
                 feedback_prefix_token_ids.len(),
-                self.prompt_processing_chunk_sizer
-                    .exact_measurement_context_identifier(
-                        active_request.next_position_tokens as usize,
-                        injected_prefill_execution_context,
-                    ),
+                injected_prefill_execution_context.context_identifier_flags(),
                 false,
                 active_request.has_optional_prediction_session(),
                 model.sparse_experts_are_paged(),

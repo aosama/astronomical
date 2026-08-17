@@ -68,6 +68,23 @@ impl Qwen3_5ExecutionError {
     /// ordinary model execution or Rust bounded expert loading.
     #[must_use]
     pub fn active_memory_limit_exceeded_evidence(&self) -> Option<(usize, usize, usize)> {
+        if let Self::ExpertPaging(
+            crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
+                crate::MlxAllocationBudgetError::Rejected {
+                    active_memory_bytes,
+                    pending_allocation_bytes,
+                    active_memory_ceiling_bytes,
+                    ..
+                },
+            ),
+        ) = self
+        {
+            return Some((
+                usize::try_from(*active_memory_bytes).unwrap_or(usize::MAX),
+                usize::try_from(*pending_allocation_bytes).unwrap_or(usize::MAX),
+                usize::try_from(*active_memory_ceiling_bytes).unwrap_or(usize::MAX),
+            ));
+        }
         match self.underlying_mlx_runtime_error()? {
             MlxRuntimeError::ActiveMemoryLimitExceeded {
                 active_memory_bytes,

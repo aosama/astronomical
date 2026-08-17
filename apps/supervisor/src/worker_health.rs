@@ -2,8 +2,7 @@ use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState,
     SpeculativePrefillRuntimeState, WorkerEvent, WorkerMlxMemorySnapshot,
-    WorkerPromptProcessingChunkOptimizationOutcome, WorkerPromptProcessingPhase,
-    WorkerRuntimeFeatureConfiguration,
+    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -222,9 +221,6 @@ pub struct WorkerHealthSnapshot {
     pub persistent_prompt_cache_stats: Option<WorkerEvent>,
     /// Latest worker-owned MLX allocator observation, regardless of request lifecycle phase.
     pub latest_mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
-    /// Bounded recent prompt-processing chunk optimization outcomes for the Observatory.
-    pub recent_prompt_processing_chunk_optimization_outcomes:
-        Vec<WorkerPromptProcessingChunkOptimizationOutcome>,
     /// Immutable maximum reported by the worker's macOS/MLX startup probe.
     pub machine_mlx_memory_ceiling_bytes: u64,
     /// Safe idle lower bound reported by the loaded model or idle worker.
@@ -266,7 +262,6 @@ impl WorkerHealthSnapshot {
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
-            recent_prompt_processing_chunk_optimization_outcomes: Vec::new(),
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
@@ -340,7 +335,6 @@ impl WorkerHealthSnapshot {
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
-            recent_prompt_processing_chunk_optimization_outcomes: Vec::new(),
             machine_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
             pending_mlx_memory_ceiling_bytes: None,
@@ -372,7 +366,6 @@ impl WorkerHealthSnapshot {
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
-            recent_prompt_processing_chunk_optimization_outcomes: Vec::new(),
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,

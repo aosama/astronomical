@@ -2,11 +2,10 @@ const VISUAL_PREFILL_CONTEXT_FLAG: u64 = 1 << 34;
 const ADDITIONAL_CONTEXT_STATE_PREFILL_CONTEXT_FLAG: u64 = 1 << 35;
 const PAGED_EXPERTS_CONTEXT_FLAG: u64 = 1 << 36;
 const PROMPT_CACHE_CAPTURE_ELIGIBLE_CONTEXT_FLAG: u64 = 1 << 37;
-pub(super) const CAPACITY_REDUCED_CONTEXT_FLAG: u64 = 1 << 38;
 pub(super) const SPECULATIVE_PREFILL_TARGET_ONLY_PREFIX_CONTEXT_FLAG: u64 = 1 << 39;
 pub(super) const SPECULATIVE_PREFILL_SPARSE_TARGET_CONTEXT_FLAG: u64 = 1 << 40;
 
-/// Known execution modes that materially change prompt-processing latency.
+/// Execution modes that partition adaptive memory-growth observations.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Qwen3_5PrefillExecutionContext {
     has_visual_embeddings: bool,
@@ -69,30 +68,5 @@ impl Qwen3_5PrefillExecutionContext {
             context_identifier_flags |= SPECULATIVE_PREFILL_SPARSE_TARGET_CONTEXT_FLAG;
         }
         context_identifier_flags
-    }
-
-    #[must_use]
-    pub const fn has_visual_embeddings(self) -> bool {
-        self.has_visual_embeddings
-    }
-
-    #[must_use]
-    pub const fn has_optional_prediction_session(self) -> bool {
-        self.has_optional_prediction_session
-    }
-
-    #[must_use]
-    pub const fn are_sparse_experts_paged(self) -> bool {
-        self.are_sparse_experts_paged
-    }
-
-    #[must_use]
-    pub const fn is_prompt_cache_capture_eligible(self) -> bool {
-        self.is_prompt_cache_capture_eligible
-    }
-
-    #[must_use]
-    pub(super) const fn is_speculative_prefill_sparse_target(self) -> bool {
-        self.is_speculative_prefill_sparse_target
     }
 }

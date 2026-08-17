@@ -39,10 +39,6 @@ fn should_keep_stable_and_development_state_and_endpoints_separate() {
         development_paths.prompt_cache_directory()
     );
     assert_ne!(
-        stable_paths.optimizer_directory(),
-        development_paths.optimizer_directory()
-    );
-    assert_ne!(
         stable_paths.logging_directory(),
         development_paths.logging_directory()
     );
@@ -68,7 +64,6 @@ fn should_keep_every_writable_path_beneath_an_explicit_test_state_directory() {
     for writable_path in [
         instance_paths.config_file_path(),
         instance_paths.prompt_cache_directory(),
-        instance_paths.optimizer_directory(),
         instance_paths.logging_directory(),
         instance_paths.daemon_ownership_file_path(),
         instance_paths.instance_lock_file_path(),
@@ -97,6 +92,43 @@ fn should_generate_the_development_first_run_config_with_the_development_port() 
         "127.0.0.1:6733"
     );
     assert!(development_paths.config_file_path().is_file());
+}
+
+#[test]
+fn should_generate_fixed_prompt_processing_defaults_for_both_runtime_channels() {
+    for runtime_instance in [
+        AstronomicalRuntimeInstance::Stable,
+        AstronomicalRuntimeInstance::Development,
+    ] {
+        let fictional_home_directory =
+            tempfile::tempdir().expect("fictional home should be created");
+        let instance_paths = AstronomicalInstancePaths::for_home_directory(
+            fictional_home_directory.path(),
+            runtime_instance,
+        );
+
+        let generated_config = AstronomicalConfig::load_from_instance_paths(instance_paths.clone())
+            .expect("first-run config should be created");
+        let generated_config_json: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(instance_paths.config_file_path())
+                .expect("first-run config should remain readable"),
+        )
+        .expect("first-run config should contain JSON");
+
+        assert_eq!(
+            generated_config
+                .chunking()
+                .expect("first-run chunking should resolve")
+                .fixed_prompt_processing_chunk_size_tokens(),
+            2_048,
+            "{} should default to qualified fixed prompt processing",
+            runtime_instance.display_name()
+        );
+        assert_eq!(
+            generated_config_json["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
+            2_048
+        );
+    }
 }
 
 #[test]
