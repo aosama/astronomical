@@ -86,7 +86,10 @@ pub use mlx_runtime::{
 };
 #[cfg(feature = "mlx")]
 pub use mlx_runtime_device_info::maximum_recommended_gpu_working_set_size_bytes;
-pub use mlx_runtime_types::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError};
+pub use mlx_runtime_types::{
+    ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError,
+    allocator_cache_exceeds_reclaim_threshold,
+};
 #[cfg(feature = "mlx")]
 pub use mlx_safetensors::{BoundedReadInterval, MlxSafetensors, SafetensorsLoadResult};
 #[cfg(feature = "mlx")]

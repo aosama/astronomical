@@ -133,7 +133,9 @@ fn run_prefill_pass(
             });
         qwen3_5_model
             .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(
+                astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
+            )
             .unwrap_or_else(|error| {
                 panic!(
                     "{pass_label} allocator cleanup failed after token {next_prefix_token_count}: {error}"

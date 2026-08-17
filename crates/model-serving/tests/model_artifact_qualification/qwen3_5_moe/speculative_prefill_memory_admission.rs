@@ -324,7 +324,7 @@ async fn run_configured_cold_cache_summary_journey(
 
 fn configured_prefill_chunck_sizer(
     astronomical_config: &AstronomicalConfig,
-    target_maximum_position_count: u32,
+    _target_maximum_position_count: u32,
     _target_model_id: &str,
     _target_model_revision: &str,
 ) -> Qwen3_5PromptProcessingChunkSizer {

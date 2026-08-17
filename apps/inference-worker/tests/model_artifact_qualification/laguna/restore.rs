@@ -103,7 +103,7 @@ fn restore_from_pinned_artifact() {
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
             full_attention_key_value_growth_tokens: 256,
             speculative_prefill_draft_forward_tokens: 2_048,
-            experimental_ssd_paging_prefill_graph_submission_layer_interval: 0,
+            prefill_graph_submission_layer_interval: 1,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
             prompt_cache_block_tokens: Some(PROMPT_CACHE_BLOCK_TOKEN_COUNT),
             prompt_cache_common_prefix_stride_blocks: 1,

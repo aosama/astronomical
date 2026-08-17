@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::experimental_ssd_paging_graph_submission_layer_interval;
+use astronomical_ipc_protocol::graph_submission_layer_interval;
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
@@ -304,19 +304,17 @@ impl Qwen3_5Model {
             }
         })?;
         let decoder_layer_count = self.config.layer_count() as usize;
-        // Experimental solid-state-drive paging may submit completed layer
-        // groups so streamed pages can detach. Fully resident experts always
-        // receive interval 0 and keep one lazy decoder tape.
-        let graph_submission_layer_interval =
-            usize::try_from(experimental_ssd_paging_graph_submission_layer_interval(
-                token_count,
-                self.sparse_experts_are_paged(),
-                self.chunking
-                    .experimental_ssd_paging_prefill_graph_submission_layer_interval,
-                self.chunking
-                    .experimental_ssd_paging_generation_graph_submission_layer_interval,
-            ))
-            .unwrap_or(0);
+        // Multi-token prefill may submit completed layer groups so macOS can
+        // schedule other graphics work between command buffers. Paged experts
+        // additionally benefit because completed streamed pages can detach.
+        let graph_submission_layer_interval = usize::try_from(graph_submission_layer_interval(
+            token_count,
+            self.sparse_experts_are_paged(),
+            self.chunking.prefill_graph_submission_layer_interval,
+            self.chunking
+                .experimental_ssd_paging_generation_graph_submission_layer_interval,
+        ))
+        .unwrap_or(0);
         for layer_index in 0..decoder_layer_count {
             let decoder_layer_weights = self
                 .weights
@@ -352,12 +350,10 @@ impl Qwen3_5Model {
                 && (layer_index + 1).is_multiple_of(graph_submission_layer_interval)
                 && layer_index + 1 < decoder_layer_count
             {
-                // Intermediate mlx_async_eval commits a completed paging layer
-                // group so streamed pages can detach before later layers are
-                // built. This branch cannot run for fully resident experts
-                // because the interval is forced to 0. Do not submit after the
-                // final decoder layer: final normalization and logits extend
-                // that same graph and the caller owns the terminal evaluation.
+                // Intermediate mlx_async_eval commits the completed layer group.
+                // Do not submit after the final decoder layer: final
+                // normalization and logits extend that same graph and the
+                // caller owns the terminal evaluation.
                 performance_attribution.measure_operation(
                     PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
                     |_performance_attribution| self.runtime.async_eval_arrays(&[&hidden_states]),

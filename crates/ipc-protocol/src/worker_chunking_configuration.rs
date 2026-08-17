@@ -17,11 +17,11 @@ pub struct WorkerChunkingConfiguration {
     pub full_attention_key_value_growth_tokens: u32,
     /// Maximum token rows evaluated by one speculative-prefill drafter forward.
     pub speculative_prefill_draft_forward_tokens: u32,
-    /// Experimental decoder-layer interval for multi-token solid-state-drive paging.
+    /// Decoder-layer interval between multi-token prefill command buffers.
     ///
     /// Zero keeps one complete prefill chunk as one lazy MLX graph. A positive
-    /// value is ignored while experts are fully memory resident.
-    pub experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+    /// value gives macOS a scheduling boundary without splitting layer kernels.
+    pub prefill_graph_submission_layer_interval: u32,
     /// Experimental decoder-layer interval for one-token solid-state-drive paging.
     ///
     /// Zero disables intermediate generation submission. A positive value is
@@ -33,39 +33,41 @@ pub struct WorkerChunkingConfiguration {
     pub prompt_cache_common_prefix_stride_blocks: u32,
 }
 
-/// Returns the experimental solid-state-drive paging layer interval for one forward.
+/// Returns the command-buffer submission interval for one forward.
 ///
-/// Fully resident experts always return 0 so the decoder stays one lazy tape.
-/// A positive configured interval applies only while sparse experts stream from disk.
+/// Multi-token prefill uses its configured interval regardless of expert storage.
+/// One-token generation keeps intermediate submission specific to SSD paging,
+/// where detaching streamed expert pages justifies the extra launch boundaries.
 #[must_use]
-pub const fn experimental_ssd_paging_graph_submission_layer_interval(
+pub const fn graph_submission_layer_interval(
     token_count: i32,
     sparse_experts_are_paged: bool,
-    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
+    prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 ) -> u32 {
-    if !sparse_experts_are_paged {
-        return 0;
-    }
     if token_count == 1 {
-        experimental_ssd_paging_generation_graph_submission_layer_interval
+        if sparse_experts_are_paged {
+            experimental_ssd_paging_generation_graph_submission_layer_interval
+        } else {
+            0
+        }
     } else {
-        experimental_ssd_paging_prefill_graph_submission_layer_interval
+        prefill_graph_submission_layer_interval
     }
 }
 
 impl WorkerChunkingConfiguration {
-    /// Returns the experimental solid-state-drive paging interval for one forward.
+    /// Returns the command-buffer submission interval for one forward.
     #[must_use]
-    pub const fn experimental_ssd_paging_graph_submission_layer_interval(
+    pub const fn graph_submission_layer_interval(
         &self,
         token_count: i32,
         sparse_experts_are_paged: bool,
     ) -> u32 {
-        experimental_ssd_paging_graph_submission_layer_interval(
+        graph_submission_layer_interval(
             token_count,
             sparse_experts_are_paged,
-            self.experimental_ssd_paging_prefill_graph_submission_layer_interval,
+            self.prefill_graph_submission_layer_interval,
             self.experimental_ssd_paging_generation_graph_submission_layer_interval,
         )
     }

@@ -1,6 +1,9 @@
 use std::sync::Mutex;
 
-use crate::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError, raw};
+use crate::{
+    MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
+    allocator_cache_exceeds_reclaim_threshold, raw,
+};
 
 use super::{check_status, error_handling::lock_unpoisoned};
 
@@ -89,6 +92,25 @@ impl MlxRuntime {
     pub fn synchronize_gpu_stream_and_clear_allocator_cache(&self) -> Result<(), MlxRuntimeError> {
         self.synchronize_gpu_stream()?;
         self.clear_allocator_cache()
+    }
+
+    /// Drains the GPU stream, then clears the allocator cache only when it is large.
+    ///
+    /// Prefill must still retire the chunk tape. It should not talk to IOGPU
+    /// for a few leftover megabytes after every chunk.
+    pub fn synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(
+        &self,
+        reclaim_threshold_bytes: usize,
+    ) -> Result<(), MlxRuntimeError> {
+        self.synchronize_gpu_stream()?;
+        let memory_snapshot = self.memory_snapshot()?;
+        if allocator_cache_exceeds_reclaim_threshold(
+            memory_snapshot.allocator_cache_memory_bytes(),
+            reclaim_threshold_bytes,
+        ) {
+            self.clear_allocator_cache()?;
+        }
+        Ok(())
     }
 }
 
