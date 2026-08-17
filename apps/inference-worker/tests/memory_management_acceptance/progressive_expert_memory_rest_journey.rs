@@ -386,7 +386,7 @@ fn write_qualification_config(isolated_worker_home: &Path, model_directory: &Pat
         "chunking": {
 
             "fixed_prompt_processing_chunk_size_tokens": 2_048,
-            "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
+            "prefill_graph_submission_layer_interval": 1,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 1,
         },
     });

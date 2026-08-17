@@ -35,7 +35,7 @@ pub use protocol_message::{
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
 pub use worker_chunking_configuration::{
-    WorkerChunkingConfiguration, experimental_ssd_paging_graph_submission_layer_interval,
+    WorkerChunkingConfiguration, graph_submission_layer_interval,
 };
 pub use worker_startup_configuration::{
     WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,

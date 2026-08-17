@@ -10,9 +10,9 @@ use super::logging_config::LogLevel;
 use super::{
     AstronomicalConfigError,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
-    DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
+    DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS, DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB,
     DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS, maximum_mlx_memory_gb_to_bytes,
     parse_loopback_bind_address, prompt_cache_size_gb_to_bytes,
@@ -67,8 +67,8 @@ pub(crate) struct ChunkingConfigFile {
     pub(crate) full_attention_key_value_growth_tokens: Option<u32>,
     /// Maximum prompt rows evaluated by one speculative drafter forward.
     pub(crate) speculative_prefill_draft_forward_tokens: Option<u32>,
-    /// Experimental multi-token layer interval used only while experts stream from disk.
-    pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: Option<u32>,
+    /// Decoder-layer interval between multi-token prefill command-buffer submissions.
+    pub(crate) prefill_graph_submission_layer_interval: Option<u32>,
     /// Experimental one-token layer interval used only while experts stream from disk.
     pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: Option<u32>,
     /// Exact persistent-cache block length, or null for model-derived sizing.
@@ -129,7 +129,7 @@ pub(crate) fn read_user_config_file(
                     "fixed_prompt_processing_chunk_size_tokens": DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
                     "full_attention_key_value_growth_tokens": DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
                     "speculative_prefill_draft_forward_tokens": DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
-                    "experimental_ssd_paging_prefill_graph_submission_layer_interval": DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                    "prefill_graph_submission_layer_interval": DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
                     "experimental_ssd_paging_generation_graph_submission_layer_interval": DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
                     "prompt_cache_block_tokens": null,
                     "prompt_cache_common_prefix_stride_blocks": DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS

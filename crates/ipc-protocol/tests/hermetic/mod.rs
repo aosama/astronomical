@@ -2,7 +2,7 @@ mod cancellation_command;
 mod chat_generation;
 mod chat_generation_validation;
 mod chat_generation_validation_limits;
-mod experimental_ssd_paging_graph_submission;
+mod graph_submission_layer_interval;
 mod minimal_protocol;
 mod persistent_prompt_cache_diagnostics;
 mod prompt_cache_clear_protocol;

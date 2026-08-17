@@ -8,7 +8,7 @@
 //! 4. On a typed capacity failure, restore the request checkpoint before cleanup.
 //! 5. Reclaim exact elastic expert bytes and retry the same chunk at most once.
 //! 6. Publish required prompt-cache state before advancing the in-memory cursor.
-//! 7. Synchronize and clear operation-local allocator storage.
+//! 7. Synchronize the chunk tape and reclaim allocator cache only above threshold.
 //! 8. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
 //! 9. Emit progress only after all required state transitions succeeded.
 //!
@@ -18,6 +18,7 @@
 use std::time::Instant;
 
 use astronomical_ipc_protocol::RequestId;
+use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use crate::{
     ExpertResidencyPhase, GeneratedToken, InferenceEngineError, PerformanceCounter,
@@ -335,9 +336,8 @@ impl Qwen3_5EngineState {
         // their previous parent, allowing restart to reproduce valid state.
         active_request.advance_position(prefill_token_count)?;
         active_request.prefill_cursor = prefill_end;
-        // Keep the established end-of-chunk cleanup as well. A chunk without a cache boundary,
-        // or the work created while serializing a boundary, must not retain temporary MLX
-        // allocations until the next prompt chunk or request finalization.
+        // Retire the chunk tape. Reclaim the allocator cache only when it is
+        // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunck_cleanup =
             model.runtime().memory_snapshot().ok();
         let end_of_prefill_chunck_cleanup_started_at = Instant::now();
@@ -348,7 +348,9 @@ impl Qwen3_5EngineState {
                 |_performance_attribution| {
                     model
                         .runtime()
-                        .synchronize_gpu_stream_and_clear_allocator_cache()
+                        .synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(
+                            ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
+                        )
                 },
             )
             .map_err(qwen3_5_runtime_error)?;

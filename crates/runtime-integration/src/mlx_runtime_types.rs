@@ -75,6 +75,22 @@ pub struct MlxMemorySnapshot {
     pub(crate) peak_memory_bytes: usize,
 }
 
+/// Reclaimable allocator-cache bytes that justify an IOGPU-visible clear.
+///
+/// Clearing after every prefill chunk can stall WindowServer. Leaving the
+/// cache unbounded reproduced a 20 GB throughput cliff. This threshold is a
+/// portable byte floor, not a machine-specific RAM fraction.
+pub const ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES: usize = 256_000_000;
+
+/// Returns whether a synchronized allocator cache is large enough to reclaim.
+#[must_use]
+pub const fn allocator_cache_exceeds_reclaim_threshold(
+    allocator_cache_memory_bytes: usize,
+    reclaim_threshold_bytes: usize,
+) -> bool {
+    allocator_cache_memory_bytes >= reclaim_threshold_bytes
+}
+
 impl MlxMemorySnapshot {
     /// Returns bytes held by live MLX arrays and graphs.
     #[must_use]

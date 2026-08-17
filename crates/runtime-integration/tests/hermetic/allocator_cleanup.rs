@@ -85,8 +85,13 @@ fn should_synchronize_completed_prefill_work_before_clearing_allocator_memory() 
 
     assert!(
         completed_prefill_cleanup_source
-            .contains("synchronize_gpu_stream_and_clear_allocator_cache"),
-        "per-prefill cleanup must synchronize submitted GPU and Metal I/O work before releasing allocator memory"
+            .contains("synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold"),
+        "per-prefill cleanup must synchronize submitted GPU work before a thresholded allocator reclaim"
+    );
+    assert!(
+        !completed_prefill_cleanup_source
+            .contains("synchronize_gpu_stream_and_clear_allocator_cache("),
+        "per-prefill cleanup must not clear the allocator cache after every chunk"
     );
 }
 
