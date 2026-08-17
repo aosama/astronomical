@@ -24,12 +24,10 @@ pub(super) fn to_worker_prompt_processing_chunk_optimization_outcome(
         )?,
         forward_elapsed_millis: optimization_outcome.forward_elapsed_millis,
         was_reduced_by_memory_capacity: optimization_outcome.was_reduced_by_memory_capacity,
+        was_accepted_for_learning: optimization_outcome.was_accepted_for_learning,
         selection_reason: match optimization_outcome.selection_reason {
             PromptProcessingChunkSizeSelectionReason::ExploreUnmeasuredCandidate => {
                 WorkerPromptProcessingChunkSelectionReason::ExploreUnmeasuredCandidate
-            }
-            PromptProcessingChunkSizeSelectionReason::RefreshStaleCandidateMeasurement => {
-                WorkerPromptProcessingChunkSelectionReason::RefreshStaleCandidateMeasurement
             }
             PromptProcessingChunkSizeSelectionReason::MinimizeProjectedRemainingPromptLatency => {
                 WorkerPromptProcessingChunkSelectionReason::MinimizeProjectedRemainingPromptLatency
@@ -37,19 +35,22 @@ pub(super) fn to_worker_prompt_processing_chunk_optimization_outcome(
             PromptProcessingChunkSizeSelectionReason::RemainingTokensBelowSmallestCandidate => {
                 WorkerPromptProcessingChunkSelectionReason::RemainingTokensBelowSmallestCandidate
             }
-            PromptProcessingChunkSizeSelectionReason::SmallestCandidateContainingFinalPromptSegment => {
-                WorkerPromptProcessingChunkSelectionReason::SmallestCandidateContainingFinalPromptSegment
-            }
         },
         measurement_context: WorkerPromptProcessingChunkOptimizationContext {
             chunk_start_token_position: bounded_token_count(
-                optimization_outcome.measurement_context.chunk_start_token_position,
+                optimization_outcome
+                    .measurement_context
+                    .chunk_start_token_position,
             )?,
             position_range_start_token_position: bounded_token_count(
-                optimization_outcome.measurement_context.position_range_start_token_position,
+                optimization_outcome
+                    .measurement_context
+                    .position_range_start_token_position,
             )?,
             position_range_end_token_position_exclusive: bounded_token_count(
-                optimization_outcome.measurement_context.position_range_end_token_position_exclusive,
+                optimization_outcome
+                    .measurement_context
+                    .position_range_end_token_position_exclusive,
             )?,
             has_restored_prefix: optimization_outcome.measurement_context.has_restored_prefix,
             is_first_chunk_after_restore: optimization_outcome
@@ -69,8 +70,8 @@ pub(super) fn to_worker_prompt_processing_chunk_optimization_outcome(
                 .measurement_context
                 .has_prior_capacity_reduction,
         },
-        all_candidates_have_measurements: optimization_outcome
-            .all_candidates_have_measurements,
+        all_candidates_have_measurements: optimization_outcome.all_candidates_have_measurements,
+        is_execution_profile_converged: optimization_outcome.is_execution_profile_converged,
         candidate_measurement_summaries: optimization_outcome
             .candidate_measurement_summaries
             .into_iter()
@@ -80,11 +81,8 @@ pub(super) fn to_worker_prompt_processing_chunk_optimization_outcome(
                         candidate_summary.candidate_chunk_size_tokens,
                     )?,
                     measurement_source: match candidate_summary.measurement_source {
-                        CandidateMeasurementSource::CurrentPositionRange => {
-                            WorkerPromptProcessingChunkMeasurementSource::CurrentPositionRange
-                        }
-                        CandidateMeasurementSource::OtherPositionRangesWithSameExecutionProfile => {
-                            WorkerPromptProcessingChunkMeasurementSource::OtherPositionRangesWithSameExecutionProfile
+                        CandidateMeasurementSource::ExecutionProfile => {
+                            WorkerPromptProcessingChunkMeasurementSource::ExecutionProfile
                         }
                         CandidateMeasurementSource::NoMeasurementsAvailable => {
                             WorkerPromptProcessingChunkMeasurementSource::NoMeasurementsAvailable
@@ -95,9 +93,8 @@ pub(super) fn to_worker_prompt_processing_chunk_optimization_outcome(
                     average_processed_prompt_token_count: bounded_token_count(
                         candidate_summary.average_processed_prompt_token_count,
                     )?,
-                    average_forward_elapsed_millis: candidate_summary.average_forward_elapsed_millis,
-                    selections_since_last_measurement: candidate_summary
-                        .selections_since_last_measurement,
+                    average_forward_elapsed_millis: candidate_summary
+                        .average_forward_elapsed_millis,
                 })
             })
             .collect::<Result<Vec<_>, WorkerRuntimeError>>()?,

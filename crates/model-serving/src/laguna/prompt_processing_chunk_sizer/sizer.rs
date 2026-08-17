@@ -238,11 +238,8 @@ impl LagunaPromptProcessingChunkSizer {
             next_chunk_start_token_position,
             next_execution_profile,
         );
-        let chunk_measurement = PromptProcessingChunkMeasurement::transition(
-            processed_prompt_token_count,
-            forward_elapsed_millis,
-            next_measurement_context,
-        );
+        let was_accepted_for_learning = processed_prompt_token_count
+            == pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens;
         let PromptProcessingChunkSizingMode::Optimized {
             prompt_processing_chunk_size_optimizer,
             optimizer_state_persistence,
@@ -251,32 +248,56 @@ impl LagunaPromptProcessingChunkSizer {
         else {
             return;
         };
-        if prompt_processing_chunk_size_optimizer
-            .record_measurement(
+        let measurement_was_accepted = if was_accepted_for_learning {
+            let chunk_measurement = PromptProcessingChunkMeasurement::transition(
+                processed_prompt_token_count,
+                forward_elapsed_millis,
+                next_measurement_context,
+            );
+            match prompt_processing_chunk_size_optimizer.record_measurement(
                 pending_prompt_processing_chunk_selection.measurement_context,
                 pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens,
                 chunk_measurement,
-            )
-            .is_ok()
+            ) {
+                Ok(()) => true,
+                Err(chunk_optimizer_error) => {
+                    tracing::warn!(
+                        error = %chunk_optimizer_error,
+                        "Laguna prompt-processing chunk size optimizer rejected a measurement"
+                    );
+                    false
+                }
+            }
+        } else {
+            false
+        };
+        self.latest_prompt_processing_chunk_optimization_outcome =
+            Some(prompt_processing_chunk_optimization_outcome(
+                prompt_processing_chunk_size_optimizer,
+                pending_prompt_processing_chunk_selection.measurement_context,
+                pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens,
+                processed_prompt_token_count,
+                forward_elapsed_millis,
+                pending_prompt_processing_chunk_selection.selection_reason,
+                was_reduced_by_memory_capacity,
+                measurement_was_accepted,
+                pending_prompt_processing_chunk_selection.optimization_context,
+            ));
+        if measurement_was_accepted
+            && let Some(optimizer_state_persistence) = optimizer_state_persistence
         {
-            self.latest_prompt_processing_chunk_optimization_outcome =
-                Some(prompt_processing_chunk_optimization_outcome(
-                    prompt_processing_chunk_size_optimizer,
-                    pending_prompt_processing_chunk_selection.measurement_context,
-                    pending_prompt_processing_chunk_selection.selected_candidate_chunk_size_tokens,
-                    processed_prompt_token_count,
-                    forward_elapsed_millis,
-                    pending_prompt_processing_chunk_selection.selection_reason,
-                    was_reduced_by_memory_capacity,
-                    pending_prompt_processing_chunk_selection.optimization_context,
-                ));
-        }
-        if let Some(optimizer_state_persistence) = optimizer_state_persistence {
-            let _save_outcome = prompt_processing_chunk_size_optimizer.save_to_directory(
-                &optimizer_state_persistence.optimizer_state_directory,
-                &optimizer_state_persistence.model_id,
-                &optimizer_state_persistence.model_revision,
-            );
+            if let Err(persistence_error) = prompt_processing_chunk_size_optimizer
+                .save_to_directory(
+                    &optimizer_state_persistence.optimizer_state_directory,
+                    &optimizer_state_persistence.model_id,
+                    &optimizer_state_persistence.model_revision,
+                )
+            {
+                tracing::warn!(
+                    error = %persistence_error,
+                    "Failed to persist Laguna optimizer state; will retry on next learning sample"
+                );
+            }
         }
     }
 

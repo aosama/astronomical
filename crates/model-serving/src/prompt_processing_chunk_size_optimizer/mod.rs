@@ -1,7 +1,7 @@
 //! Model-independent online selection of prompt-processing chunk capacities.
 //!
 //! The optimizer owns measurement retention, context matching, exploration,
-//! stale refresh, cumulative-latency planning, and persisted evidence. Model
+//! cumulative-latency planning, and persisted evidence. Model
 //! adapters construct opaque contexts and execute selections; engine, IPC, and
 //! presentation layers consume outcomes without adding optimizer policy here.
 

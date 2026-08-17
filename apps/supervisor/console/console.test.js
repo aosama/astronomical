@@ -138,7 +138,7 @@ test("activates a directly requested Observatory path without replacing it", () 
     assert.deepEqual(replacedPaths, []);
 });
 
-test("scopes complete candidate measurement coverage to one context range", () => {
+test("reports convergence across position ranges in one execution profile", () => {
     const scriptContext = createConsoleContext();
     scriptContext.optimizerDocument = {
         mode: "adaptive",
@@ -150,6 +150,7 @@ test("scopes complete candidate measurement coverage to one context range", () =
             processed_prompt_token_count: 4096,
             was_reduced_by_memory_capacity: false,
             all_candidates_have_measurements: true,
+            is_execution_profile_converged: true,
             measurement_context: {
                 chunk_start_token_position: 49152,
                 position_range_start_token_position: 32768,
@@ -167,8 +168,8 @@ test("scopes complete candidate measurement coverage to one context range", () =
         scriptContext
     );
 
-    assert.equal(assessment.title, "Profile ready for tokens 32,768–65,535");
-    assert.match(assessment.detail, /only applies to this token range/i);
+    assert.equal(assessment.title, "Execution profile converged");
+    assert.match(assessment.detail, /position ranges remain observation telemetry/i);
     assert.equal(assessment.tone, "ready");
 });
 
@@ -206,19 +207,15 @@ test("maps every optimizer selection reason without a catch-all substitute", () 
     const scriptContext = createConsoleContext();
     const mappedReasons = vm.runInContext(`[
         optimizerSelectionReasonTitle("explore_unmeasured_candidate"),
-        optimizerSelectionReasonTitle("refresh_stale_candidate_measurement"),
         optimizerSelectionReasonTitle("minimize_projected_remaining_prompt_latency"),
         optimizerSelectionReasonTitle("remaining_tokens_below_smallest_candidate"),
-        optimizerSelectionReasonTitle("smallest_candidate_containing_final_prompt_segment"),
         optimizerSelectionReasonTitle("future_reason")
     ]`, scriptContext);
 
     assert.deepEqual(JSON.parse(JSON.stringify(mappedReasons)), [
         "Explore unmeasured candidate",
-        "Refresh stale candidate measurement",
         "Minimize projected remaining prompt latency",
         "Remaining tokens below smallest candidate",
-        "Smallest candidate containing final prompt segment",
         "Unknown selection reason"
     ]);
 });
@@ -226,14 +223,12 @@ test("maps every optimizer selection reason without a catch-all substitute", () 
 test("maps optimizer measurement provenance to user-facing sources", () => {
     const scriptContext = createConsoleContext();
     const mappedSources = vm.runInContext(`[
-        optimizerMeasurementSourceTitle("current_position_range"),
-        optimizerMeasurementSourceTitle("other_position_ranges_with_same_execution_profile"),
+        optimizerMeasurementSourceTitle("execution_profile"),
         optimizerMeasurementSourceTitle("no_measurements_available")
     ]`, scriptContext);
 
     assert.deepEqual(JSON.parse(JSON.stringify(mappedSources)), [
-        "Measured in this token range",
-        "Evidence from a matching execution context",
+        "Evidence for this execution profile",
         "No evidence for this context yet"
     ]);
 });

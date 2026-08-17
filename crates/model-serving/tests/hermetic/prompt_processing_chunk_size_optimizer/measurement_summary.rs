@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn should_prefer_current_position_measurements_and_reuse_the_same_execution_profile() {
+fn should_pool_measurements_across_positions_in_the_same_execution_profile() {
     let mut chunk_size_optimizer = PromptProcessingChunkSizeOptimizer::new(vec![256, 512], 5)
         .expect("candidate set should be valid");
     let first_position_context =
@@ -18,9 +18,17 @@ fn should_prefer_current_position_measurements_and_reuse_the_same_execution_prof
     );
     record_chunk_measurement(
         &mut chunk_size_optimizer,
+        first_position_context,
+        512,
+        512,
+        200,
+        second_position_context,
+    );
+    record_chunk_measurement(
+        &mut chunk_size_optimizer,
         second_position_context,
         256,
-        128,
+        256,
         150,
         second_position_context,
     );
@@ -47,11 +55,11 @@ fn should_prefer_current_position_measurements_and_reuse_the_same_execution_prof
     );
     assert_eq!(
         measurement_summaries.candidate_measurement_summaries[0].measurement_source,
-        CandidateMeasurementSource::CurrentPositionRange
+        CandidateMeasurementSource::ExecutionProfile
     );
     assert_eq!(
         measurement_summaries.candidate_measurement_summaries[0].measurement_count,
-        1
+        2
     );
     assert_eq!(
         measurement_summaries.candidate_measurement_summaries[0]
@@ -60,15 +68,15 @@ fn should_prefer_current_position_measurements_and_reuse_the_same_execution_prof
     );
     assert_eq!(
         measurement_summaries.candidate_measurement_summaries[0].average_forward_elapsed_millis,
-        100
+        125
     );
     assert_eq!(
         measurement_summaries.candidate_measurement_summaries[1].measurement_source,
-        CandidateMeasurementSource::OtherPositionRangesWithSameExecutionProfile
+        CandidateMeasurementSource::ExecutionProfile
     );
     assert_eq!(
         measurement_summaries.candidate_measurement_summaries[1].measurement_count,
-        1
+        2
     );
     assert_eq!(
         measurement_summaries.candidate_measurement_summaries[1]

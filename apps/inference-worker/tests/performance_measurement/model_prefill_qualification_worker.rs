@@ -112,6 +112,7 @@ pub(super) fn prepare_prefill_qualification_worker(
         .expect("the isolated benchmark configuration directory should be created");
     let mut configuration_document = json!({
         "model_directories": [model_directory],
+        "persistent_prompt_cache_enabled": false,
         "chunking": {},
     });
     match fixed_prefill_chunck_tokens {

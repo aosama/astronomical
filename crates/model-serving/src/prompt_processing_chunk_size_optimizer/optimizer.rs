@@ -1,8 +1,8 @@
 //! Online candidate selection over bounded, context-specific measurements.
 //!
-//! Selection deliberately prioritizes missing evidence, then stale evidence,
-//! before exploiting cumulative-latency estimates. This ordering prevents a
-//! fast early sample from permanently excluding another feasible capacity.
+//! Selection explores missing evidence before exploiting cumulative-latency
+//! estimates. Once a material execution profile is measured, it remains
+//! converged until its admissible candidate set changes.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -18,21 +18,17 @@ use super::{
 };
 
 const MINIMUM_MAXIMUM_RETAINED_MEASUREMENTS: usize = 1;
-const STALE_MEASUREMENT_WINDOW_MULTIPLIER: u64 = 5;
+pub(crate) const MINIMUM_EXPLORATION_MEASUREMENTS_PER_CANDIDATE: usize = 2;
 
 /// Why the optimizer selected a particular candidate chunk size.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PromptProcessingChunkSizeSelectionReason {
     /// Sampling the largest feasible candidate that has no measurements yet.
     ExploreUnmeasuredCandidate,
-    /// Refreshing the least recently measured feasible candidate.
-    RefreshStaleCandidateMeasurement,
     /// Minimizing predicted remaining prompt-processing latency.
     MinimizeProjectedRemainingPromptLatency,
     /// Remaining prompt tokens are fewer than the smallest registered candidate.
     RemainingTokensBelowSmallestCandidate,
-    /// The smallest candidate that contains the final prompt segment.
-    SmallestCandidateContainingFinalPromptSegment,
 }
 
 /// The candidate the optimizer selected and why.
@@ -47,7 +43,6 @@ pub struct PromptProcessingChunkSizeSelection {
 pub struct PromptProcessingChunkSizeOptimizer {
     candidate_chunk_size_tokens: Vec<usize>,
     maximum_retained_measurements_per_candidate_and_context: usize,
-    selection_sequence: u64,
     measurement_sequence: u64,
     context_statistics: BTreeMap<PromptProcessingMeasurementContext, ContextCandidateStatistics>,
 }
@@ -73,7 +68,6 @@ impl PromptProcessingChunkSizeOptimizer {
             maximum_retained_measurements_per_candidate_and_context:
                 maximum_retained_measurements_per_candidate_and_context
                     .max(MINIMUM_MAXIMUM_RETAINED_MEASUREMENTS),
-            selection_sequence: 0,
             measurement_sequence: 0,
             context_statistics: BTreeMap::new(),
         })
@@ -103,7 +97,7 @@ impl PromptProcessingChunkSizeOptimizer {
         measurement_context: PromptProcessingMeasurementContext,
         maximum_candidate_chunk_size_tokens: usize,
     ) -> PromptProcessingChunkSizeSelection {
-        self.selection_sequence = self.selection_sequence.saturating_add(1);
+        let execution_profile = measurement_context.execution_profile();
         let eligible_candidate_count =
             self.candidate_chunk_size_tokens
                 .partition_point(|candidate_chunk_size_tokens| {
@@ -117,86 +111,45 @@ impl PromptProcessingChunkSizeOptimizer {
             };
         }
 
-        if let Some(candidate_index) = (0..eligible_candidate_count).rev().find(|candidate_index| {
-            !self.has_measurements_in_same_execution_profile(measurement_context, *candidate_index)
-        }) {
+        let minimum_candidate_measurement_count = (0..eligible_candidate_count)
+            .map(|candidate_index| self.measurement_count(execution_profile, candidate_index))
+            .min()
+            .unwrap_or(0);
+        if minimum_candidate_measurement_count < MINIMUM_EXPLORATION_MEASUREMENTS_PER_CANDIDATE {
+            let candidate_index = if minimum_candidate_measurement_count.is_multiple_of(2) {
+                (0..eligible_candidate_count).rev().find(|candidate_index| {
+                    self.measurement_count(execution_profile, *candidate_index)
+                        == minimum_candidate_measurement_count
+                })
+            } else {
+                (0..eligible_candidate_count).find(|candidate_index| {
+                    self.measurement_count(execution_profile, *candidate_index)
+                        == minimum_candidate_measurement_count
+                })
+            }
+            .unwrap_or(0);
             return self.selection(
                 candidate_index,
                 PromptProcessingChunkSizeSelectionReason::ExploreUnmeasuredCandidate,
             );
         }
 
-        let stale_after_selections =
-            STALE_MEASUREMENT_WINDOW_MULTIPLIER.saturating_mul(eligible_candidate_count as u64);
-        let stale_candidate_index = (0..eligible_candidate_count)
-            .filter_map(|candidate_index| {
-                self.last_measured_selection_sequence_in_same_execution_profile(
-                    measurement_context,
-                    candidate_index,
-                )
-                .map(|last_measured_selection_sequence| {
-                    (candidate_index, last_measured_selection_sequence)
-                })
-            })
-            .filter(|(_, last_measured_selection_sequence)| {
-                self.selection_sequence
-                    .saturating_sub(*last_measured_selection_sequence)
-                    >= stale_after_selections
-            })
-            .min_by_key(|(candidate_index, last_measured_selection_sequence)| {
-                (*last_measured_selection_sequence, *candidate_index)
-            })
-            .map(|(candidate_index, _)| candidate_index);
-        if let Some(candidate_index) = stale_candidate_index {
-            return self.selection(
-                candidate_index,
-                PromptProcessingChunkSizeSelectionReason::RefreshStaleCandidateMeasurement,
-            );
-        }
-
         let unknown_elapsed_millis_per_token = self
-            .maximum_measured_elapsed_millis_per_token(measurement_context)
+            .maximum_measured_elapsed_millis_per_token(execution_profile)
             .max(1);
         let selected_candidate_index = lowest_cumulative_latency_candidate_index(
             &self.candidate_chunk_size_tokens,
             maximum_candidate_chunk_size_tokens,
-            measurement_context,
+            execution_profile,
             unknown_elapsed_millis_per_token,
             &|future_measurement_context, candidate_index| {
-                self.measurements_for_context_or_execution_profile(
-                    future_measurement_context,
-                    candidate_index,
-                )
+                self.measurements(future_measurement_context, candidate_index)
             },
         );
         self.selection(
             selected_candidate_index,
             PromptProcessingChunkSizeSelectionReason::MinimizeProjectedRemainingPromptLatency,
         )
-    }
-
-    /// Selects the smallest configured candidate that contains one terminal remainder.
-    ///
-    /// The returned candidate remains the selected capacity for optimizer measurements,
-    /// while execution clamps the forward to the exact remaining token count.
-    #[must_use]
-    pub fn select_candidate_for_terminal_remainder(
-        &mut self,
-        terminal_remainder_tokens: usize,
-        configured_maximum_candidate_chunk_size_tokens: usize,
-    ) -> Option<PromptProcessingChunkSizeSelection> {
-        let terminal_ceiling_candidate = self.candidate_chunk_size_tokens.iter().copied().find(
-            |candidate_chunk_size_tokens| {
-                *candidate_chunk_size_tokens >= terminal_remainder_tokens
-                    && *candidate_chunk_size_tokens
-                        <= configured_maximum_candidate_chunk_size_tokens
-            },
-        )?;
-        self.selection_sequence = self.selection_sequence.saturating_add(1);
-        Some(PromptProcessingChunkSizeSelection {
-            selected_candidate_chunk_size_tokens: terminal_ceiling_candidate,
-            reason: PromptProcessingChunkSizeSelectionReason::SmallestCandidateContainingFinalPromptSegment,
-        })
     }
 
     /// Records one completed prompt-processing chunk measurement.
@@ -217,15 +170,27 @@ impl PromptProcessingChunkSizeOptimizer {
                 PromptProcessingChunkSizeOptimizerError::MeasurementForwardElapsedMillisMustBePositive,
             );
         }
+        if chunk_measurement.processed_prompt_token_count() != selected_candidate_chunk_size_tokens
+        {
+            return Err(
+                PromptProcessingChunkSizeOptimizerError::MeasurementMustCompleteSelectedCandidateCapacity {
+                    selected_candidate_chunk_size_tokens,
+                    processed_prompt_token_count: chunk_measurement
+                        .processed_prompt_token_count(),
+                },
+            );
+        }
         self.measurement_sequence = self.measurement_sequence.saturating_add(1);
         let candidate_measurement = CandidateChunkMeasurement {
             processed_prompt_token_count: chunk_measurement.processed_prompt_token_count(),
             forward_elapsed_millis: chunk_measurement.forward_elapsed_millis(),
-            next_measurement_context: chunk_measurement.next_measurement_context(),
+            next_measurement_context: chunk_measurement
+                .next_measurement_context()
+                .execution_profile(),
             measurement_sequence: self.measurement_sequence,
         };
         self.context_statistics
-            .entry(measurement_context)
+            .entry(measurement_context.execution_profile())
             .or_insert_with(|| {
                 ContextCandidateStatistics::new(self.candidate_chunk_size_tokens.len())
             })
@@ -233,7 +198,6 @@ impl PromptProcessingChunkSizeOptimizer {
             .record_measurement(
                 candidate_measurement,
                 self.maximum_retained_measurements_per_candidate_and_context,
-                self.selection_sequence,
             );
         Ok(())
     }
@@ -248,7 +212,7 @@ impl PromptProcessingChunkSizeOptimizer {
         self.maximum_retained_measurements_per_candidate_and_context
     }
 
-    /// Summarizes the exact-or-execution-profile measurements used for selections in one context.
+    /// Summarizes measurements used for selections in one material execution profile.
     #[must_use]
     pub fn candidate_measurement_summaries(
         &self,
@@ -256,15 +220,9 @@ impl PromptProcessingChunkSizeOptimizer {
     ) -> CandidateMeasurementSummaries {
         build_candidate_measurement_summaries(
             &self.candidate_chunk_size_tokens,
-            self.maximum_retained_measurements_per_candidate_and_context,
-            self.selection_sequence,
             &self.context_statistics,
-            measurement_context,
+            measurement_context.execution_profile(),
         )
-    }
-
-    pub(crate) fn selection_sequence(&self) -> u64 {
-        self.selection_sequence
     }
 
     pub(crate) fn measurement_sequence(&self) -> u64 {
@@ -280,7 +238,6 @@ impl PromptProcessingChunkSizeOptimizer {
     pub(crate) fn new_from_persisted_state(
         candidate_chunk_size_tokens: Vec<usize>,
         maximum_retained_measurements_per_candidate_and_context: usize,
-        selection_sequence: u64,
         measurement_sequence: u64,
         context_statistics: BTreeMap<
             PromptProcessingMeasurementContext,
@@ -290,7 +247,6 @@ impl PromptProcessingChunkSizeOptimizer {
         Self {
             candidate_chunk_size_tokens,
             maximum_retained_measurements_per_candidate_and_context,
-            selection_sequence,
             measurement_sequence,
             context_statistics,
         }
@@ -361,69 +317,27 @@ impl PromptProcessingChunkSizeOptimizer {
             })
     }
 
-    /// Returns true when any context sharing the same execution profile has measurements
-    /// for the given candidate index.
-    fn has_measurements_in_same_execution_profile(
+    fn measurement_count(
         &self,
-        measurement_context: PromptProcessingMeasurementContext,
+        execution_profile: PromptProcessingMeasurementContext,
         candidate_index: usize,
-    ) -> bool {
+    ) -> usize {
         self.context_statistics
-            .iter()
-            .any(|(stored_context, statistics)| {
-                stored_context.position_independent_execution_profile_identifier()
-                    == measurement_context.position_independent_execution_profile_identifier()
-                    && !statistics.candidate_statistics[candidate_index]
-                        .measurements
-                        .is_empty()
+            .get(&execution_profile)
+            .map_or(0, |statistics| {
+                statistics.candidate_statistics[candidate_index]
+                    .measurements
+                    .len()
             })
     }
 
-    /// Returns the most recent selection sequence number when any context sharing the same
-    /// execution profile has a measurement for the given candidate index.
-    fn last_measured_selection_sequence_in_same_execution_profile(
+    fn measurements(
         &self,
-        measurement_context: PromptProcessingMeasurementContext,
-        candidate_index: usize,
-    ) -> Option<u64> {
-        self.context_statistics
-            .iter()
-            .filter(|(stored_context, _)| {
-                stored_context.position_independent_execution_profile_identifier()
-                    == measurement_context.position_independent_execution_profile_identifier()
-            })
-            .filter_map(|(_, statistics)| {
-                statistics.candidate_statistics[candidate_index].last_measured_selection_sequence
-            })
-            .max()
-    }
-
-    /// Returns measurements from the exact context for the given candidate, or
-    /// falls back to measurements from all contexts sharing the same execution profile.
-    fn measurements_for_context_or_execution_profile(
-        &self,
-        measurement_context: PromptProcessingMeasurementContext,
+        execution_profile: PromptProcessingMeasurementContext,
         candidate_index: usize,
     ) -> Vec<CandidateChunkMeasurement> {
-        let exact_measurements = self.exact_measurements(measurement_context, candidate_index);
-        if !exact_measurements.is_empty() {
-            return exact_measurements;
-        }
-        self.execution_profile_measurements(measurement_context, candidate_index)
-    }
-
-    /// Returns measurements from the exact measurement context for the given candidate.
-    fn exact_measurements(
-        &self,
-        measurement_context: PromptProcessingMeasurementContext,
-        candidate_index: usize,
-    ) -> Vec<CandidateChunkMeasurement> {
-        if let Some(exact_statistics) = self.context_statistics.get(&measurement_context)
-            && !exact_statistics.candidate_statistics[candidate_index]
-                .measurements
-                .is_empty()
-        {
-            return exact_statistics.candidate_statistics[candidate_index]
+        if let Some(profile_statistics) = self.context_statistics.get(&execution_profile) {
+            return profile_statistics.candidate_statistics[candidate_index]
                 .measurements
                 .iter()
                 .copied()
@@ -432,46 +346,12 @@ impl PromptProcessingChunkSizeOptimizer {
         Vec::new()
     }
 
-    /// Returns measurements from all contexts sharing the same execution profile,
-    /// sorted by measurement sequence and trimmed to the retained window.
-    fn execution_profile_measurements(
-        &self,
-        measurement_context: PromptProcessingMeasurementContext,
-        candidate_index: usize,
-    ) -> Vec<CandidateChunkMeasurement> {
-        let mut profile_measurements: Vec<CandidateChunkMeasurement> = self
-            .context_statistics
-            .iter()
-            .filter(|(stored_context, _)| {
-                stored_context.position_independent_execution_profile_identifier()
-                    == measurement_context.position_independent_execution_profile_identifier()
-            })
-            .flat_map(|(_, statistics)| {
-                statistics.candidate_statistics[candidate_index]
-                    .measurements
-                    .iter()
-                    .copied()
-            })
-            .collect();
-        profile_measurements.sort_unstable_by_key(|measurement| measurement.measurement_sequence);
-        let retained_start = profile_measurements
-            .len()
-            .saturating_sub(self.maximum_retained_measurements_per_candidate_and_context);
-        profile_measurements.drain(0..retained_start);
-        profile_measurements
-    }
-
     fn maximum_measured_elapsed_millis_per_token(
         &self,
         measurement_context: PromptProcessingMeasurementContext,
     ) -> u128 {
         (0..self.candidate_chunk_size_tokens.len())
-            .flat_map(|candidate_index| {
-                self.measurements_for_context_or_execution_profile(
-                    measurement_context,
-                    candidate_index,
-                )
-            })
+            .flat_map(|candidate_index| self.measurements(measurement_context, candidate_index))
             .map(|measurement| {
                 u128::from(measurement.forward_elapsed_millis)
                     .div_ceil(measurement.processed_prompt_token_count as u128)

@@ -26,12 +26,12 @@ test("locates one optimizer evidence range within the full model context window"
         candidate_measurement_summaries: [
             {
                 candidate_chunk_size_tokens: 1024,
-                measurement_source: "current_position_range",
+                measurement_source: "execution_profile",
                 measurement_count: 2
             },
             {
                 candidate_chunk_size_tokens: 2048,
-                measurement_source: "other_position_ranges_with_same_execution_profile",
+                measurement_source: "execution_profile",
                 measurement_count: 1
             },
             {
@@ -56,8 +56,7 @@ test("locates one optimizer evidence range within the full model context window"
         rangeWidthPercentage: 25,
         chunkPositionPercentage: 37.5,
         candidateCount: 3,
-        directlyMeasuredCandidateCount: 1,
-        equivalentContextCandidateCount: 1,
+        measuredProfileCandidateCount: 2,
         unmeasuredCandidateCount: 1
     });
 });
@@ -82,25 +81,4 @@ test("never lets an observed range exceed the available context track", () => {
     assert.ok(Math.abs(contextScope.rangeStartPercentage - 66.6667) < 0.001);
     assert.ok(Math.abs(contextScope.rangeWidthPercentage - 33.3333) < 0.001);
     assert.ok(Math.abs(contextScope.chunkPositionPercentage - 71.2077) < 0.001);
-});
-
-test("explains a final prompt segment as a local one-pass decision", () => {
-    const optimizerContext = createOptimizerContext();
-    optimizerContext.latestChunkOutcome = {
-        selection: {
-            reason: "smallest_candidate_containing_final_prompt_segment",
-            selected_candidate_chunk_size_tokens: 3072
-        },
-        processed_prompt_token_count: 2766,
-        forward_elapsed_millis: 1778,
-        was_reduced_by_memory_capacity: false
-    };
-
-    const decisionPresentation = vm.runInContext(
-        "optimizerDecisionPresentation(latestChunkOutcome)",
-        optimizerContext
-    );
-
-    assert.match(decisionPresentation.headline, /2,766.*1\.78 seconds/);
-    assert.match(decisionPresentation.explanation, /smallest configured capacity.*one pass/i);
 });

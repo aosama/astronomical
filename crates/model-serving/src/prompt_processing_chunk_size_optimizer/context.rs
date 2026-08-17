@@ -1,10 +1,10 @@
 //! Opaque context identities supplied by model-specific chunk-sizing adapters.
 
-/// Stable identifiers for one prompt-processing measurement context.
+/// Stable identifiers supplied by a model adapter for one execution profile.
 ///
-/// Exact identifiers isolate position-sensitive costs. The second identifier
-/// removes only position information, allowing evidence reuse when every other
-/// execution condition remains equivalent.
+/// The exact identifier remains available while adapters migrate position data
+/// to observation telemetry. Optimizer learning always uses the material,
+/// position-independent execution profile.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PromptProcessingMeasurementContext {
     exact_measurement_context_identifier: u64,
@@ -43,5 +43,11 @@ impl PromptProcessingMeasurementContext {
     #[must_use]
     pub const fn position_independent_execution_profile_identifier(self) -> u64 {
         self.position_independent_execution_profile_identifier
+    }
+
+    /// Returns the canonical identity used for optimizer learning and planning.
+    #[must_use]
+    pub(crate) const fn execution_profile(self) -> Self {
+        Self::isolated(self.position_independent_execution_profile_identifier)
     }
 }

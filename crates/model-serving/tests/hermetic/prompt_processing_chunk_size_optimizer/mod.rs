@@ -4,10 +4,10 @@ use astronomical_model_serving::{
     PromptProcessingMeasurementContext,
 };
 
+mod convergence;
 mod episode_latency;
 mod exploitation;
 mod exploration;
-mod measurement_refresh;
 mod measurement_summary;
 mod partial_measurement;
 mod support;

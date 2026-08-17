@@ -93,6 +93,17 @@ fn should_isolate_restored_prefix_and_capacity_reduction_contexts() {
     let chunk_end = chunk_sizer.next_prompt_processing_chunk_end(2_048, 3_072, execution_profile);
     assert_eq!(chunk_end, 3_072);
     chunk_sizer.record_prompt_processing_chunk_transition(1_024, 12, true, execution_profile);
+    let reduced_outcome = chunk_sizer
+        .take_latest_prompt_processing_chunk_optimization_outcome()
+        .expect("a reduced chunk should remain observable");
+    assert!(
+        reduced_outcome.was_accepted_for_learning,
+        "full-capacity work must retain the cost of changing memory topology"
+    );
+    assert_eq!(
+        reduced_outcome.candidate_measurement_summaries[0].measurement_count,
+        1
+    );
     let reduced_context =
         chunk_sizer.exact_measurement_context_identifier(3_072, execution_profile);
     assert_ne!(restored_context, reduced_context);
@@ -125,11 +136,40 @@ fn should_record_a_measurement_only_after_the_selected_chunk_completes() {
         .expect("a completed chunk should publish an optimizer outcome");
     assert_eq!(outcome.processed_prompt_token_count, chunk_end);
     assert_eq!(outcome.forward_elapsed_millis, 15);
+    assert!(outcome.was_accepted_for_learning);
     assert!(
         chunk_sizer
             .latest_prompt_processing_chunk_optimization_outcome()
             .is_none(),
         "one optimizer measurement should be emitted only once"
+    );
+}
+
+#[test]
+fn should_observe_a_terminal_tail_without_learning_from_it() {
+    let execution_profile = execution_profile(2, [8; 32], ExpertMemoryMode::Resident);
+    let mut chunk_sizer = LagunaPromptProcessingChunkSizer::for_optimized_with_behavior(
+        2_048,
+        vec![1_024, 2_048],
+        3,
+        16_384,
+    )
+    .expect("an optimized Laguna sizer should construct");
+    chunk_sizer.start_prompt_processing_request(0);
+    let chunk_end = chunk_sizer.next_prompt_processing_chunk_end(0, 500, execution_profile);
+    assert_eq!(chunk_end, 500);
+
+    chunk_sizer.record_prompt_processing_chunk_transition(500, 8, false, execution_profile);
+
+    let tail_outcome = chunk_sizer
+        .take_latest_prompt_processing_chunk_optimization_outcome()
+        .expect("a terminal tail should remain observable");
+    assert!(!tail_outcome.was_accepted_for_learning);
+    assert!(
+        tail_outcome
+            .candidate_measurement_summaries
+            .iter()
+            .all(|candidate_summary| candidate_summary.measurement_count == 0)
     );
 }
 
