@@ -119,7 +119,6 @@ where
                     elapsed_millis: 0,
                     forward_prefill_chunk_elapsed_millis: None,
                     completed_prefill_chunk_tokens: None,
-                    prompt_processing_chunk_optimization_outcome: None,
                     mlx_memory_snapshot: None,
                     expert_residency: None,
                     speculative_prefill_draft_memory_snapshot: None,

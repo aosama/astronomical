@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerChunkingConfiguration, WorkerPromptProcessingChunkSizingPolicy,
+    WorkerChunkingConfiguration,
 };
 use astronomical_model_serving::{
     GeneratedToken, LagunaServingSettings, MlxInferenceExecution,
@@ -99,20 +99,15 @@ fn restore_from_pinned_artifact() {
         tempfile::tempdir().expect("a temporary prompt-cache root should exist");
     let serving_settings = LagunaServingSettings {
         chunking: Some(WorkerChunkingConfiguration {
-            prompt_processing_chunk_sizing_policy: WorkerPromptProcessingChunkSizingPolicy::Fixed {
-                fixed_prompt_processing_chunk_size_tokens: 8_192,
-                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
-            },
+            fixed_prompt_processing_chunk_size_tokens: 8_192,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
             full_attention_key_value_growth_tokens: 256,
             speculative_prefill_draft_forward_tokens: 2_048,
             experimental_ssd_paging_prefill_graph_submission_layer_interval: 0,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-            prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context: 5,
-            prompt_processing_chunk_size_optimizer_position_range_size_tokens: 32_768,
             prompt_cache_block_tokens: Some(PROMPT_CACHE_BLOCK_TOKEN_COUNT),
             prompt_cache_common_prefix_stride_blocks: 1,
         }),
-        optimizer_state_directory: None,
         persistent_prompt_cache_enabled: true,
         prompt_cache_config: Some(PromptCacheConfig::new(
             prompt_cache_home.path().to_path_buf(),

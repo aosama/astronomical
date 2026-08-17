@@ -11,12 +11,11 @@ use std::sync::Arc;
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
     AstronomicalRuntimeInstance, ChunkingConfig, DiscoveredModel, DiscoveredModelError, LogLevel,
-    LoggingConfig, PromptCacheConfig, PromptProcessingChunkSizingPolicy, SpeculativePrefillConfig,
-    discover_models,
+    LoggingConfig, PromptCacheConfig, SpeculativePrefillConfig, discover_models,
 };
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerLogLevel, WorkerPromptProcessingChunkSizingPolicy,
-    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
+    WorkerChunkingConfiguration, WorkerLogLevel, WorkerSpeculativePrefillConfiguration,
+    WorkerStartupConfiguration,
 };
 use thiserror::Error;
 
@@ -37,12 +36,8 @@ pub struct ResolvedRuntimeConfig {
     pub max_output_tokens: u32,
     /// Optional user-configured MLX memory ceiling in exact decimal SI bytes.
     pub maximum_mlx_memory_bytes: Option<u64>,
-    /// Startup config warning text surfaced through `/v1/status`.
-    pub config_warning: Option<String>,
     /// Every resolved work-partition boundary applied when the worker loads a model.
     pub chunking: ChunkingConfig,
-    /// Persistent prefill optimizer state resolved from the daemon config location.
-    pub optimizer_state_directory: PathBuf,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
     /// Whether the worker may read and write the persistent prompt cache.
@@ -160,15 +155,7 @@ impl ResolvedRuntimeConfigResolver {
             model_directories,
             max_output_tokens,
             maximum_mlx_memory_bytes: user_config.maximum_mlx_memory_bytes()?,
-            config_warning: user_config
-                .ignored_fixed_prompt_processing_chunk_size_tokens()
-                .map(|ignored_fixed_prompt_processing_chunk_size_tokens| {
-                    format!(
-                        "Adaptive prompt-processing chunk-size selection is active. The configured fixed prompt-processing chunk size of {ignored_fixed_prompt_processing_chunk_size_tokens} tokens is ignored."
-                    )
-                }),
             chunking,
-            optimizer_state_directory: user_config.optimizer_directory()?,
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
             mtp_enabled: user_config.mtp_enabled(),
@@ -196,25 +183,12 @@ impl ResolvedRuntimeConfig {
                 .global_prompt_cache_maximum_size_bytes(),
             persistent_prompt_cache_enabled: self.persistent_prompt_cache_enabled,
             chunking: WorkerChunkingConfiguration {
-                // Convert the complete nested policy in one place. No later
-                // worker or model layer is allowed to re-read user config or
-                // invent a default for one of these coupled boundaries.
-                prompt_processing_chunk_sizing_policy: match self.chunking.prompt_processing_chunk_sizing_policy() {
-                    PromptProcessingChunkSizingPolicy::Optimized {
-                        prompt_processing_chunk_size_optimizer_candidate_token_counts,
-                    } => WorkerPromptProcessingChunkSizingPolicy::Optimized {
-                        prompt_processing_chunk_size_optimizer_candidate_token_counts:
-                            prompt_processing_chunk_size_optimizer_candidate_token_counts.clone(),
-                    },
-                    PromptProcessingChunkSizingPolicy::Fixed {
-                        fixed_prompt_processing_chunk_size_tokens,
-                        fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-                    } => WorkerPromptProcessingChunkSizingPolicy::Fixed {
-                        fixed_prompt_processing_chunk_size_tokens: *fixed_prompt_processing_chunk_size_tokens,
-                        fixed_ssd_streaming_prompt_processing_chunk_size_tokens:
-                            *fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-                    },
-                },
+                fixed_prompt_processing_chunk_size_tokens: self
+                    .chunking
+                    .fixed_prompt_processing_chunk_size_tokens(),
+                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: self
+                    .chunking
+                    .fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
                 full_attention_key_value_growth_tokens: self
                     .chunking
                     .full_attention_key_value_growth_tokens(),
@@ -227,18 +201,11 @@ impl ResolvedRuntimeConfig {
                 experimental_ssd_paging_generation_graph_submission_layer_interval: self
                     .chunking
                     .experimental_ssd_paging_generation_graph_submission_layer_interval(),
-                prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context: self
-                    .chunking
-                    .prompt_processing_chunk_size_optimizer_maximum_retained_measurements_per_candidate_and_context(),
-                prompt_processing_chunk_size_optimizer_position_range_size_tokens: self
-                    .chunking
-                    .prompt_processing_chunk_size_optimizer_position_range_size_tokens(),
                 prompt_cache_block_tokens: self.chunking.prompt_cache_block_tokens(),
                 prompt_cache_common_prefix_stride_blocks: self
                     .chunking
                     .prompt_cache_common_prefix_stride_blocks(),
             },
-            optimizer_state_directory: Some(self.optimizer_state_directory.clone()),
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             mtp_enabled: self.mtp_enabled,
             mtp_draft_depth: self.mtp_draft_depth,
@@ -353,9 +320,6 @@ impl ConfigReloadDiff {
         let mut restart_required_fields = Vec::new();
         let mut worker_restart_required = false;
 
-        if current.config_warning != candidate.config_warning {
-            in_place_reloaded_fields.push("config_warning".to_owned());
-        }
         if current.configured_model_directories != candidate.configured_model_directories
             || current.model_directories != candidate.model_directories
         {
@@ -371,10 +335,6 @@ impl ConfigReloadDiff {
         }
         if current.chunking != candidate.chunking {
             worker_restart_reloaded_fields.push("chunking".to_owned());
-            worker_restart_required = true;
-        }
-        if current.optimizer_state_directory != candidate.optimizer_state_directory {
-            worker_restart_reloaded_fields.push("optimizer_state_directory".to_owned());
             worker_restart_required = true;
         }
         if current.performance_attribution_enabled != candidate.performance_attribution_enabled {

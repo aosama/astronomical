@@ -110,7 +110,7 @@ fn write_configuration(home_directory: &Path, model_directory: &Path, attributio
             "performance_attribution_enabled": attribution_enabled,
             "mtp_enabled": false,
             "chunking": {
-                "prompt_processing_chunk_size_optimizer_enabled": false,
+
                 "fixed_prompt_processing_chunk_size_tokens": 2048
             }
         }))

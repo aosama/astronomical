@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatGenerationOutput, ChatModelCapabilities, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPromptProcessingChunkOptimizationOutcome, WorkerRuntimeFeatureConfiguration,
-    WorkerStartupConfiguration,
+    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -288,9 +287,6 @@ pub enum WorkerEvent {
         forward_prefill_chunk_elapsed_millis: Option<u64>,
         /// Present only after the engine completes and measures a prefill chunk.
         completed_prefill_chunk_tokens: Option<u32>,
-        /// Present after an optimized chunk; absent for initial and fixed-size progress.
-        prompt_processing_chunk_optimization_outcome:
-            Option<WorkerPromptProcessingChunkOptimizationOutcome>,
         /// Present with completed chunks; worker-owned MLX allocator observation.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
         /// Current complete/partial ownership after this prompt-processing boundary.

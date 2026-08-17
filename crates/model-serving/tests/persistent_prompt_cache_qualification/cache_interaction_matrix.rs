@@ -13,12 +13,6 @@ const CACHE_INTERACTION_QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(11
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 4_096;
 
 #[derive(Clone, Copy)]
-enum PrefillSizingMode {
-    Fixed,
-    Optimized,
-}
-
-#[derive(Clone, Copy)]
 enum StorageTransition {
     LiveReuse,
     WorkerRestart,
@@ -28,39 +22,20 @@ enum StorageTransition {
 #[derive(Clone, Copy)]
 struct CacheInteractionQualificationCell {
     environment_label: &'static str,
-    prefill_sizing_mode: PrefillSizingMode,
     storage_transition: StorageTransition,
 }
 
-const CACHE_INTERACTION_QUALIFICATION_CELLS: [CacheInteractionQualificationCell; 6] = [
+const CACHE_INTERACTION_QUALIFICATION_CELLS: [CacheInteractionQualificationCell; 3] = [
     CacheInteractionQualificationCell {
         environment_label: "fixed-live-reuse",
-        prefill_sizing_mode: PrefillSizingMode::Fixed,
-        storage_transition: StorageTransition::LiveReuse,
-    },
-    CacheInteractionQualificationCell {
-        environment_label: "optimized-live-reuse",
-        prefill_sizing_mode: PrefillSizingMode::Optimized,
         storage_transition: StorageTransition::LiveReuse,
     },
     CacheInteractionQualificationCell {
         environment_label: "fixed-worker-restart",
-        prefill_sizing_mode: PrefillSizingMode::Fixed,
-        storage_transition: StorageTransition::WorkerRestart,
-    },
-    CacheInteractionQualificationCell {
-        environment_label: "optimized-worker-restart",
-        prefill_sizing_mode: PrefillSizingMode::Optimized,
         storage_transition: StorageTransition::WorkerRestart,
     },
     CacheInteractionQualificationCell {
         environment_label: "fixed-deleted-while-live",
-        prefill_sizing_mode: PrefillSizingMode::Fixed,
-        storage_transition: StorageTransition::DeletedWhileLive,
-    },
-    CacheInteractionQualificationCell {
-        environment_label: "optimized-deleted-while-live",
-        prefill_sizing_mode: PrefillSizingMode::Optimized,
         storage_transition: StorageTransition::DeletedWhileLive,
     },
 ];
@@ -112,15 +87,11 @@ async fn run_qualification_cell(qualification_cell: CacheInteractionQualificatio
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let persistent_prompt_cache_directory =
         tempfile::tempdir().expect("the qualification should create an isolated cache directory");
-    let fixed_prefill_chunck_tokens = match qualification_cell.prefill_sizing_mode {
-        PrefillSizingMode::Fixed => Some(FIXED_PREFILL_CHUNCK_TOKENS),
-        PrefillSizingMode::Optimized => None,
-    };
     let (mut qwen3_5_engine, _, _, prompt_cache_block_token_count) =
         load_persistent_prompt_cache_qualification_engine(
             &model_directory,
             persistent_prompt_cache_directory.path(),
-            fixed_prefill_chunck_tokens,
+            FIXED_PREFILL_CHUNCK_TOKENS,
         )
         .await;
     let prompt_token_ids =
@@ -145,7 +116,7 @@ async fn run_qualification_cell(qualification_cell: CacheInteractionQualificatio
             (qwen3_5_engine, _, _, _) = load_persistent_prompt_cache_qualification_engine(
                 &model_directory,
                 persistent_prompt_cache_directory.path(),
-                fixed_prefill_chunck_tokens,
+                FIXED_PREFILL_CHUNCK_TOKENS,
             )
             .await;
         }

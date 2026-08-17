@@ -152,7 +152,7 @@ fn write_enabled_speculative_prefill_config(
         "prompt_cache_max_size_gb": 50,
         "performance_attribution_enabled": true,
         "chunking": {
-            "prompt_processing_chunk_size_optimizer_enabled": false,
+
             "fixed_prompt_processing_chunk_size_tokens": 32,
         },
         "speculative_prefill": {

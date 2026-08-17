@@ -31,7 +31,6 @@ pub(super) struct PromptPrefillChunckOutcome {
     pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     pub(super) exact_temporary_workspace_bytes: usize,
     pub(super) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
-    pub(super) speculative_prefill_chunck_mode: Qwen3_5SpeculativePrefillChunckMode,
 }
 impl Qwen3_5EngineState {
     pub(super) fn execute_prompt_prefill_chunck(
@@ -193,23 +192,20 @@ impl Qwen3_5EngineState {
         };
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
             speculative_prefill_target_token_count,
-            self.prompt_processing_chunk_sizer
-                .exact_measurement_context_identifier(
-                    prefill_start,
-                    Qwen3_5PrefillExecutionContext::new(
-                        active_request.visual_embeddings.is_some(),
-                        active_request.has_optional_prediction_session(),
-                        model.sparse_experts_are_paged(),
-                        self.persistent_prompt_cache.is_some()
-                            && active_request.can_use_persistent_prompt_cache
-                            && !active_request.has_optional_prediction_session(),
-                    )
-                    .with_target_only_prefix(matches!(
-                        speculative_prefill_chunck_mode,
-                        Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix
-                    ))
-                    .with_speculative_prefill_sparse_target(speculative_prefill_target_is_active),
-                ),
+            Qwen3_5PrefillExecutionContext::new(
+                active_request.visual_embeddings.is_some(),
+                active_request.has_optional_prediction_session(),
+                model.sparse_experts_are_paged(),
+                self.persistent_prompt_cache.is_some()
+                    && active_request.can_use_persistent_prompt_cache
+                    && !active_request.has_optional_prediction_session(),
+            )
+            .with_target_only_prefix(matches!(
+                speculative_prefill_chunck_mode,
+                Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix
+            ))
+            .with_speculative_prefill_sparse_target(speculative_prefill_target_is_active)
+            .context_identifier_flags(),
             active_request.visual_embeddings.is_some(),
             active_request.has_optional_prediction_session(),
             model.sparse_experts_are_paged(),
@@ -514,7 +510,6 @@ impl Qwen3_5EngineState {
                 .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
             exact_temporary_workspace_bytes,
             boundary_checkpoints,
-            speculative_prefill_chunck_mode,
         })
     }
 }
