@@ -36,7 +36,7 @@ main() {
             exit 2
         }
     done
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-dmg-validator-test.XXXXXX")"
     fake_bin="${SANDBOX_DIRECTORY}/fake-bin"
     fixture_dmg="${SANDBOX_DIRECTORY}/Astronomical.dmg"
@@ -71,7 +71,7 @@ HDIUTIL
     printf '%s\n' '[dmg-validator-test] case=complete-installation-journey status=start'
     FAKE_DMG_VALIDATION_LOG="$validation_log" PATH="${fake_bin}:${PATH}" \
         timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-dmg.sh" --dmg "$fixture_dmg"
+        "${repository_root}/scripts/release/validate-dmg.sh" --dmg "$fixture_dmg"
     [ "$(grep -c '^codesign ' "$validation_log")" = "2" ] || {
         print_error "validator did not verify both mounted and installed app copies"
         exit 1
@@ -86,7 +86,7 @@ HDIUTIL
     : > "$validation_log"
     if FAKE_STAPLE_REJECTED=true FAKE_DMG_VALIDATION_LOG="$validation_log" \
         PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-dmg.sh" --dmg "$fixture_dmg" >/dev/null 2>&1; then
+        "${repository_root}/scripts/release/validate-dmg.sh" --dmg "$fixture_dmg" >/dev/null 2>&1; then
         print_error "validator accepted a rejected stapling ticket"
         exit 1
     fi

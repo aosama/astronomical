@@ -18,7 +18,7 @@ print_error() {
 }
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/validate-astronomical-app.sh [--app-bundle PATH] [--bundle-only] [--real-model]"
+    printf '%s\n' "Usage: scripts/internal/validate-macos-app.sh [--app-bundle PATH] [--bundle-only] [--real-model]"
     printf '%s\n' ""
     printf '%s\n' "Default validation is isolated and does not load a model."
     printf '%s\n' "--real-model additionally runs a bounded Romeo and Juliet chat journey."
@@ -144,7 +144,7 @@ validate_real_model() {
 }
 
 main() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     # The generated Development app remains directly runnable even though its
     # parent .noindex directory keeps it out of Spotlight search results.
     APP_BUNDLE_PATH="${repository_root}/target/astronomical-macos-development.noindex/Astronomical Development.app"

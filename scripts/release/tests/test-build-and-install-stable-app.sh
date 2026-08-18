@@ -38,19 +38,19 @@ main() {
         }
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-stable-workflow.XXXXXX")"
-    sandbox_scripts_directory="${SANDBOX_DIRECTORY}/scripts"
+    sandbox_scripts_directory="${SANDBOX_DIRECTORY}/scripts/release"
     mkdir -p "$sandbox_scripts_directory"
-    cp "${repository_root}/scripts/make-install-astronomical-stable-app.sh" \
-        "${sandbox_scripts_directory}/make-install-astronomical-stable-app.sh"
+    cp "${repository_root}/scripts/release/build-and-install-stable-app.sh" \
+        "${sandbox_scripts_directory}/build-and-install-stable-app.sh"
 
-    cat > "${sandbox_scripts_directory}/make-astronomical-app.sh" <<'BUILDER'
+    cat > "${sandbox_scripts_directory}/build-stable-app.sh" <<'BUILDER'
 #!/usr/bin/env sh
 printf 'build %s\n' "$*" >> "${CALL_LOG:?CALL_LOG is required}"
 exit "${FAKE_BUILD_EXIT_CODE:-0}"
 BUILDER
-    cat > "${sandbox_scripts_directory}/install-astronomical-stable-app.sh" <<'INSTALLER'
+    cat > "${sandbox_scripts_directory}/install-stable-app.sh" <<'INSTALLER'
 #!/usr/bin/env sh
 printf 'install %s\n' "$*" >> "${CALL_LOG:?CALL_LOG is required}"
 INSTALLER
@@ -62,7 +62,7 @@ INSTALLER
     printf '%s\n' '[stable-workflow-test] case=build-failure-blocks-install status=start'
     : > "$call_log"
     if CALL_LOG="$call_log" FAKE_BUILD_EXIT_CODE=17 timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${sandbox_scripts_directory}/make-install-astronomical-stable-app.sh" \
+        "${sandbox_scripts_directory}/build-and-install-stable-app.sh" \
         > "${SANDBOX_DIRECTORY}/failure-output.log" 2>&1; then
         print_error "workflow unexpectedly succeeded after the Stable build failed"
         exit 1
@@ -73,25 +73,25 @@ INSTALLER
         print_error "workflow returned ${workflow_exit_code}, expected the build failure code 17"
         exit 1
     }
-    printf '%s\n' 'build --channel stable' > "$expected_call_log"
+    printf '%s\n' 'build ' > "$expected_call_log"
     assert_call_log "$expected_call_log" "$call_log"
     printf '%s\n' '[stable-workflow-test] case=build-failure-blocks-install status=success'
 
     printf '%s\n' '[stable-workflow-test] case=successful-build-installs status=start'
     : > "$call_log"
     CALL_LOG="$call_log" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${sandbox_scripts_directory}/make-install-astronomical-stable-app.sh" \
+        "${sandbox_scripts_directory}/build-and-install-stable-app.sh" \
         > "${SANDBOX_DIRECTORY}/success-output.log" 2>&1
-    printf '%s\n' 'build --channel stable' 'install ' > "$expected_call_log"
+    printf '%s\n' 'build ' 'install ' > "$expected_call_log"
     assert_call_log "$expected_call_log" "$call_log"
     printf '%s\n' '[stable-workflow-test] case=successful-build-installs status=success'
 
     printf '%s\n' '[stable-workflow-test] case=dry-run-previews-install status=start'
     : > "$call_log"
     CALL_LOG="$call_log" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${sandbox_scripts_directory}/make-install-astronomical-stable-app.sh" --dry-run \
+        "${sandbox_scripts_directory}/build-and-install-stable-app.sh" --dry-run \
         > "${SANDBOX_DIRECTORY}/dry-run-output.log" 2>&1
-    printf '%s\n' 'build --channel stable' 'install --dry-run' > "$expected_call_log"
+    printf '%s\n' 'build ' 'install --dry-run' > "$expected_call_log"
     assert_call_log "$expected_call_log" "$call_log"
     printf '%s\n' '[stable-workflow-test] case=dry-run-previews-install status=success'
 }
