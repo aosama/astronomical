@@ -116,10 +116,21 @@ assert_workflow_contract() {
         steps = verification_job.fetch("steps")
         cache_step = steps.find { |step| step["id"] == "build-state-cache" }
         raise "build cache step has no observable identifier" unless cache_step
-        raise "identified cache step does not use actions/cache" unless cache_step.fetch("uses").start_with?("actions/cache@")
+        unless cache_step.fetch("uses").start_with?("actions/cache/restore@")
+          raise "cache restoration does not expose primary and matched keys"
+        end
         cache_key = cache_step.fetch("with").fetch("key")
         unless cache_key.include?("needs.detect-changes.outputs.native_build_cache_fingerprint")
           raise "exact build cache key omits the native fingerprint"
+        end
+
+        save_step = steps.find { |step| step["name"] == "Save Rust and native build state" }
+        raise "successful cache production is not published" unless save_step
+        unless save_step.fetch("uses").start_with?("actions/cache/save@")
+          raise "cache publication does not use the dedicated save action"
+        end
+        unless save_step.fetch("with").fetch("key").include?("steps.build-state-cache.outputs.cache-primary-key")
+          raise "cache publication does not use the attempted primary key"
         end
 
         report_step = steps.find { |step| step["name"] == "Report build cache restoration" }
