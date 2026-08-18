@@ -33,6 +33,8 @@ mod mlx_descriptor_file_reader;
 #[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
 #[cfg(feature = "mlx")]
+mod mlx_nvfp4_operations;
+#[cfg(feature = "mlx")]
 mod mlx_operations;
 #[cfg(feature = "mlx")]
 mod mlx_quantization_construction;
