@@ -69,6 +69,9 @@ struct OrbitalTelemetryPopover: View {
   let openObservatory: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
+  let checkForUpdates: () -> Void
+  @Binding var automaticallyChecksForUpdates: Bool
+  @Binding var selectedUpdateChannel: ApplicationUpdateChannel
   let revealConfiguration: () -> Void
   let quitApplication: () -> Void
 
@@ -183,6 +186,14 @@ struct OrbitalTelemetryPopover: View {
         Button("Restart server", action: restartServer)
         Spacer()
         Menu {
+          Button("Check for Updates…", action: checkForUpdates)
+          Toggle("Check automatically", isOn: $automaticallyChecksForUpdates)
+          Picker("Update channel", selection: $selectedUpdateChannel) {
+            ForEach(ApplicationUpdateChannel.allCases) { updateChannel in
+              Text(updateChannel.displayName).tag(updateChannel)
+            }
+          }
+          Divider()
           Button("Reveal config", action: revealConfiguration)
           Button("Quit Astronomical", action: quitApplication)
         } label: {

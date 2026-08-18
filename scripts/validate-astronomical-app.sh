@@ -184,10 +184,12 @@ main() {
     daemon_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomicald"
     menu_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomical-menu"
     worker_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomical-inference-worker"
+    sparkle_framework="${APP_BUNDLE_PATH}/Contents/Frameworks/Sparkle.framework"
     for bundled_executable in "$daemon_executable" "$menu_executable" "$worker_executable"; do
         [ -x "$bundled_executable" ] || { print_error "bundled executable is unavailable: ${bundled_executable}"; exit 1; }
     done
-    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES Astronomical.icns; do
+    [ -d "$sparkle_framework" ] || { print_error "bundled Sparkle framework is unavailable: ${sparkle_framework}"; exit 1; }
+    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES SPARKLE_LICENSE Astronomical.icns; do
         [ -s "${APP_BUNDLE_PATH}/Contents/Resources/${packaged_resource}" ] || {
             print_error "required bundled resource is unavailable: ${packaged_resource}"
             exit 1
@@ -231,6 +233,7 @@ main() {
     [ "$state_directory_name" = "$expected_state_directory_name" ] || { print_error "bundle channel and state directory disagree"; exit 1; }
     [ "$bundle_identifier" = "$expected_bundle_identifier" ] || { print_error "bundle channel and identifier disagree"; exit 1; }
     codesign --verify --deep --strict "$APP_BUNDLE_PATH"
+    codesign --verify --deep --strict "$sparkle_framework"
     daemon_version_output="$("$daemon_executable" --version)"
     case "$daemon_version_output" in
         *"${application_version}"*"${application_commit}"*) ;;
