@@ -1,79 +1,5 @@
-From 84d84368cf69e310fd611dcab70162bbf6f84647 Mon Sep 17 00:00:00 2001
-From: Yanzhao Wang <yzwang1996@gmail.com>
-Date: Mon, 13 Jul 2026 12:52:53 -0700
-Subject: [PATCH 1/2] Add a fused full-attention path for head_dim 256 on NAX
- devices
-
-use_fallback currently allows the fused full-attention path only for
-head_dim in {64, 80, 128}. Models with head_dim 256 (e.g. the Qwen3.5/3.6
-family's full-attention layers) fall back to the unfused graph, which
-materializes the [n_heads, qL, kL] score tensor and computes the full
-rectangle before masking.
-
-A naive bd=256 instantiation of steel_attention_nax runs at half the
-efficiency of the bd=128 kernel on every shape (22 vs 48 TF on M5 Max):
-the per-simdgroup accumulator working set doubles (16 + 4 f32 output and
-score fragments), and accumulator bytes are the resource that gates
-tensor-unit throughput at this width (a probe with fp16 accumulators
-recovers +51%; static register pressure, scheduling fences, accumulation
-chain order, instruction footprint and Q reload traffic were each ruled
-out by measurement).
-
-This adds a head-dim-split configuration instead (bq=64, bk=32, wm=4,
-wn=2): the second warp dimension splits D, so each simdgroup computes
-Q@K.T partials over one half of D (exchanged pair-by-pair through a 16KB
-threadgroup buffer in per-lane-linear layout, which needs no coordinate
-math because both halves share the fragment-to-lane map), runs softmax
-redundantly on the full score tile, and accumulates P@V for its half of
-Dv. That puts the accumulator set (2 S + 8 O fragments, 320B/lane) at
-exact bd=128 parity, and throughput follows: 42.8 TF at 8192^2 causal,
-90% of the bd=128 kernel. Q fragments stay register-resident across the
-KV loop, and mma chains keep a single accumulator (alternating
-accumulators measures -25%).
-
-Routing and raggedness (all numbers M5 Max, 16 Q / 2 KV heads, bf16,
-causal):
-
-- The fused path is taken for causal shapes with qL >= 1024 and no array
-  mask, where it beats the unfused graph everywhere measured, offset
-  rectangles included: 2048x8192 5.77 vs 8.92 ms, 4096^2 3.45 vs
-  8.87 ms, 1024x8192 3.58 vs 4.65 ms, 2048^2 1.19 vs 2.39 ms. Below
-  ~1k queries against a long cache there are too few query blocks to
-  fill the machine (512x8192 measured 1.08x on an earlier variant), so
-  those keep the fallback.
-- Ragged lengths are padded up to the tile sizes at dispatch and the
-  padded query rows sliced off on the way out: the unaligned
-  (align_Q/align_K = false) pipelines slow every block down ~3x at this
-  width, and real decoder prefills are essentially never tile-aligned.
-  With qL_off computed from the true lengths the causal bound
-  c <= r + qL_off never reaches a padded key column; pads are
-  zero-filled so padded value rows cannot poison P @ V; cost is ~0.6 ms
-  against a ~49 ms cliff.
-- float32 with tf32 disabled keeps the fallback, since only the NAX
-  kernel is instantiated at this width.
-
-Transient memory at 4096^2 drops 663 MB -> 75 MB (no score
-materialization), and the fused output is closer to an f32 reference
-than the unfused bf16 graph (relative L2 1.6e-3 vs 2.3e-3).
-
-End to end (Qwen3.6-35B-A3B 4-bit, 8k ragged prompt):
-  default 2048-token chunked prefill: 4039 -> 4193 tok/s (+3.8%)
-  single-chunk prefill:               4209 -> 4822 tok/s (+14.6%)
-
-Tests: fallback shapes and fused shapes (aligned and ragged squares, a
-boundary rectangle and a ragged rectangle) against the primitives
-reference in float32 and bfloat16, plus a subprocess case with
-MLX_ENABLE_TF32=0 covering the float32 fallback predicate (a mismatch
-there fails as a kernel-load error).
----
- .../steel/attn/kernels/steel_attention_nax.h  | 345 +++++++++++++++++-
- .../attn/kernels/steel_attention_nax.metal    |   1 +
- .../metal/scaled_dot_product_attention.cpp    | 116 +++++-
- python/tests/test_fast_sdpa.py                |  74 ++++
- 4 files changed, 521 insertions(+), 15 deletions(-)
-
 diff --git a/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.h b/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.h
-index adc9a42798..287ee7a8fa 100644
+index b48a9a942..f3c8c144b 100644
 --- a/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.h
 +++ b/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.h
 @@ -127,7 +127,10 @@ template <
@@ -436,7 +362,7 @@ index adc9a42798..287ee7a8fa 100644
    otile_t Otile;
  
 diff --git a/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.metal b/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.metal
-index d40df50a45..e0d219a48b 100644
+index c2b60b9cf..85bef8116 100644
 --- a/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.metal
 +++ b/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.metal
 @@ -12,6 +12,7 @@
@@ -445,10 +371,10 @@ index d40df50a45..e0d219a48b 100644
  #define instantiate_attn_shapes_helper(iname, itype, mname, mtype)  \
 +    instantiate_attn(iname, itype, 64, 32, 256, 4, 2, mname, mtype) \
      instantiate_attn(iname, itype, 64, 32, 128, 4, 1, mname, mtype) \
+     instantiate_attn(iname, itype, 64, 32,  96, 4, 1, mname, mtype) \
      instantiate_attn(iname, itype, 64, 32,  64, 4, 1, mname, mtype) \
-     instantiate_attn(iname, itype, 64, 64, 128, 4, 1, mname, mtype) \
 diff --git a/mlx/backend/metal/scaled_dot_product_attention.cpp b/mlx/backend/metal/scaled_dot_product_attention.cpp
-index d6f74bc2a9..f297317a00 100644
+index bb8ad808b..c660e2dd0 100644
 --- a/mlx/backend/metal/scaled_dot_product_attention.cpp
 +++ b/mlx/backend/metal/scaled_dot_product_attention.cpp
 @@ -18,30 +18,92 @@ namespace {
@@ -581,38 +507,32 @@ index d6f74bc2a9..f297317a00 100644
  }
  
  void sdpa_full_self_attention_metal(
-@@ -623,8 +694,25 @@ bool ScaledDotProductAttention::use_fallback(
+@@ -628,9 +699,19 @@ bool ScaledDotProductAttention::use_fallback(
         (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
          query_head_dim == 256)) ||
        (query_head_dim == 192 && value_head_dim == 128);
 +  // head_dim 256 is only instantiated for the NAX kernel, so it must match
 +  // the exact condition under which sdpa_full_self_attention_metal routes
-+  // to it. It is further gated to the shapes where the fused kernel beats
-+  // the unfused graph (measured on M5 Max): large, nearly-square causal
-+  // blocks. On offset rectangles (kL >> qL, i.e. chunked prefill against a
-+  // long cache) the causal block-skip amortizes away and the unfused
-+  // graph's GEMMs win; below ~2k queries there are too few query blocks to
-+  // fill the machine.
-+  const bool takes_nax_full_path = metal::is_nax_available() &&
-+      (env::enable_tf32() || q.dtype() != float32);
-+  // The head-dim-split kernel beats the unfused graph on every measured
-+  // causal shape with qL >= 1024, rectangles included (M5 Max); below that
-+  // there are too few query blocks to fill the machine against a long
-+  // cache (512x8192 measures 1.08x of unfused).
++  // to it. The head-dim-split kernel beats the unfused graph on every
++  // measured causal shape with qL >= 1024, rectangles included (M5 Max);
++  // below that there are too few query blocks to fill the machine.
++  const bool takes_nax_full_path =
++      metal::is_nax_available() && (env::enable_tf32() || q.dtype() != float32);
 +  const bool sdpa_full_supported_256 = takes_nax_full_path && do_causal &&
 +      !has_arr_mask && query_sequence_length >= 1024;
    const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
--      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
-+      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128 ||
+       (query_head_dim == 64 || query_head_dim == 72 || query_head_dim == 80 ||
+-       query_head_dim == 96 || query_head_dim == 128);
++       query_head_dim == 96 || query_head_dim == 128 ||
 +       (query_head_dim == 256 && sdpa_full_supported_256));
  
    const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
        (query_sequence_length <= key_sequence_length && do_causal);
 diff --git a/python/tests/test_fast_sdpa.py b/python/tests/test_fast_sdpa.py
-index 7bd867084e..3782591498 100644
+index a5fdb0fbb..ceecb12e0 100644
 --- a/python/tests/test_fast_sdpa.py
 +++ b/python/tests/test_fast_sdpa.py
-@@ -117,6 +117,80 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
+@@ -117,6 +117,69 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
  
  
  class TestFastSDPA(mlx_tests.MLXTestCase):
@@ -625,8 +545,6 @@ index 7bd867084e..3782591498 100644
 +        import subprocess
 +        import sys
 +
-+        # qL >= 2048 so that, predicate mismatch aside, the shape would
-+        # otherwise be routed to the fused path.
 +        script = (
 +            "import mlx.core as mx\n"
 +            "q = mx.random.normal(shape=(1, 4, 2048, 256))\n"
@@ -648,22 +566,15 @@ index 7bd867084e..3782591498 100644
 +        self.assertIn("ok", result.stdout)
 +
 +    def test_sdpa_full_head_dim_256(self):
-+        # On NAX devices, large nearly-square causal blocks take the fused
-+        # path, with ragged lengths padded up to the tile size inside the
-+        # dispatch; everything else takes the unfused fallback. All of it
-+        # must be correct.
 +        D = 256
 +        Nq, Nkv = 8, 2
 +        scale = D**-0.5
 +        mx.random.seed(0)
 +        cases = [
-+            # (qL, kL, mask): unfused fallback shapes
 +            (17, 17, None),
 +            (17, 17, "causal"),
 +            (128, 128, "causal"),
 +            (512, 512, "causal"),
-+            # fused on NAX: aligned square, ragged square (padded), aligned
-+            # rectangle at the routing boundary, ragged rectangle (padded)
 +            (2048, 2048, "causal"),
 +            (2049, 2049, "causal"),
 +            (2048, 2560, "causal"),
@@ -683,38 +594,11 @@ index 7bd867084e..3782591498 100644
 +                    )
 +                    self.assertEqual(out.shape, ref.shape)
 +                    if dtype == mx.float32:
-+                        # The fused shapes run through tf32 tensor ops when
-+                        # MLX_ENABLE_TF32 is on (the default).
 +                        tol = 1e-3 if qL >= 2048 else 1e-4
 +                    else:
 +                        tol = 5e-3
 +                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 +
-     def test_sdpa_vector_kv_transposed_head_seq(self):
-         D = 64
-         Nq = 4
-
-From 1aee415d61379735ee637494f07f2e4158fde612 Mon Sep 17 00:00:00 2001
-From: Yanzhao Wang <yzwang1996@gmail.com>
-Date: Mon, 13 Jul 2026 13:41:20 -0700
-Subject: [PATCH 2/2] Format NAX attention routing predicate
-
----
- mlx/backend/metal/scaled_dot_product_attention.cpp | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
-
-diff --git a/mlx/backend/metal/scaled_dot_product_attention.cpp b/mlx/backend/metal/scaled_dot_product_attention.cpp
-index f297317a00..4e3e12aa2a 100644
---- a/mlx/backend/metal/scaled_dot_product_attention.cpp
-+++ b/mlx/backend/metal/scaled_dot_product_attention.cpp
-@@ -702,8 +702,8 @@ bool ScaledDotProductAttention::use_fallback(
-   // long cache) the causal block-skip amortizes away and the unfused
-   // graph's GEMMs win; below ~2k queries there are too few query blocks to
-   // fill the machine.
--  const bool takes_nax_full_path = metal::is_nax_available() &&
--      (env::enable_tf32() || q.dtype() != float32);
-+  const bool takes_nax_full_path =
-+      metal::is_nax_available() && (env::enable_tf32() || q.dtype() != float32);
-   // The head-dim-split kernel beats the unfused graph on every measured
-   // causal shape with qL >= 1024, rectangles included (M5 Max); below that
-   // there are too few query blocks to fill the machine against a long
+     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+     def test_sdpa_head_dim_72(self):
+         B, D, qH, kH = (1, 72, 8, 2)

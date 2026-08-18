@@ -89,7 +89,9 @@ fn should_match_the_upstream_seeded_categorical_key_sequence() {
         );
         random_state = next_random_state;
     }
-    assert_eq!(sampled_token_ids, vec![2, 2, 2, 2, 1, 2]);
+    // MLX v0.32.1 intentionally uses inverse cumulative-distribution sampling
+    // for this singleton-batch shape, so its fixed-key oracle differs from v0.32.0.
+    assert_eq!(sampled_token_ids, vec![2, 2, 0, 2, 2, 2]);
 }
 
 #[test]

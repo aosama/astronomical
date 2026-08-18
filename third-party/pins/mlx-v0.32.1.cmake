@@ -1,17 +1,17 @@
-# Immutable native dependency pin for the first Astronomical local-LLM slice.
+# Immutable native dependency pin for Astronomical's MLX runtime.
 # The CMake build consumes caller-provisioned archives with pinned SHA-256 values
 # instead of fetching source during configure, so native builds remain auditable.
 
 set(ASTRONOMICAL_MLX_PROJECT_NAME "mlx")
-set(ASTRONOMICAL_MLX_VERSION "0.32.0")
+set(ASTRONOMICAL_MLX_VERSION "0.32.1")
 set(ASTRONOMICAL_MLX_GIT_REPOSITORY "https://github.com/ml-explore/mlx.git")
-set(ASTRONOMICAL_MLX_GIT_COMMIT "7a1d4f5c12ac82f4b4d0a6e71538d89ca0605247")
+set(ASTRONOMICAL_MLX_GIT_COMMIT "3a6219917e4535575ce5bce2fc2ba27a483a709b")
 set(ASTRONOMICAL_MLX_MACOS_DEPLOYMENT_TARGET "26.2")
-set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_URL "https://github.com/ml-explore/mlx/archive/7a1d4f5c12ac82f4b4d0a6e71538d89ca0605247.tar.gz")
-set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_SHA256 "e71bd2b5b74c71b345659de4657ea45c65372970025f66501ac44f14a79181b2")
-set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_FILE_NAME "mlx-0.32.0-7a1d4f5c12ac82f4b4d0a6e71538d89ca0605247.tar.gz")
+set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_URL "https://github.com/ml-explore/mlx/archive/3a6219917e4535575ce5bce2fc2ba27a483a709b.tar.gz")
+set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_SHA256 "31014524e37bf790891511114ccc0866c2338d3717d4db30f37ce7a48bb11616")
+set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_FILE_NAME "mlx-0.32.1-3a6219917e4535575ce5bce2fc2ba27a483a709b.tar.gz")
 
-# MLX v0.32.0 declares these transitive source dependencies in its root CMake
+# MLX v0.32.1 declares these transitive source dependencies in its root CMake
 # project. Astronomical requires their archives to be provisioned explicitly and
 # verifies each digest before MLX configuration, preventing nested live fetches.
 set(ASTRONOMICAL_METAL_CPP_VERSION "26")

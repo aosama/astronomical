@@ -1,10 +1,19 @@
 diff --git a/mlx/io/load.cpp b/mlx/io/load.cpp
-index b6c4918..3919a6e 100644
+index a9379c307..ebbb2a85d 100644
 --- a/mlx/io/load.cpp
 +++ b/mlx/io/load.cpp
-@@ -6,0 +7 @@
+@@ -4,6 +4,7 @@
+ #include <fstream>
+ #include <limits>
+ #include <sstream>
 +#include <thread>
-@@ -336,0 +338,11 @@ namespace io {
+
+ // Used by pread implementation.
+ #ifdef _WIN32
+@@ -334,9 +335,20 @@ array load(std::string file, StreamOrDevice s) {
+
+ namespace io {
+
 +size_t io_thread_count() {
 +  constexpr size_t minimum_io_thread_count = 4;
 +  constexpr size_t maximum_io_thread_count = 8;
@@ -16,6 +25,9 @@ index b6c4918..3919a6e 100644
 +      maximum_io_thread_count);
 +}
 +
-@@ -339 +350 @@ ThreadPool& thread_pool() {
+ ThreadPool& thread_pool() {
+   // Leak - see Scheduler singleton comment in scheduler.cpp.
 -  static ThreadPool* pool_ = new ThreadPool{4};
 +  static ThreadPool* pool_ = new ThreadPool{io_thread_count()};
+   return *pool_;
+ }
