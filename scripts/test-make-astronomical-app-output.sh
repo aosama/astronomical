@@ -32,6 +32,7 @@ COMMAND
 
 assert_bundle_exists() {
     expected_app_bundle="$1"
+    bundle_information_plist="${expected_app_bundle}/Contents/Info.plist"
     [ -x "${expected_app_bundle}/Contents/MacOS/astronomical-menu" ] || {
         print_error "menu executable is unavailable in ${expected_app_bundle}"
         exit 1
@@ -48,14 +49,58 @@ assert_bundle_exists() {
         print_error "packaged macOS icon is unavailable in ${expected_app_bundle}"
         exit 1
     }
+    [ -s "${expected_app_bundle}/Contents/Resources/SPARKLE_LICENSE" ] || {
+        print_error "Sparkle license is unavailable in ${expected_app_bundle}"
+        exit 1
+    }
+    [ -d "${expected_app_bundle}/Contents/Frameworks/Sparkle.framework" ] || {
+        print_error "packaged Sparkle framework is unavailable in ${expected_app_bundle}"
+        exit 1
+    }
     grep -F '<key>CFBundleIconFile</key><string>Astronomical.icns</string>' \
-        "${expected_app_bundle}/Contents/Info.plist" >/dev/null || {
+        "$bundle_information_plist" >/dev/null || {
             print_error "bundle metadata does not select Astronomical.icns"
             exit 1
         }
     grep -F '<key>AstronomicalBuildDate</key><string>' \
-        "${expected_app_bundle}/Contents/Info.plist" >/dev/null || {
+        "$bundle_information_plist" >/dev/null || {
             print_error "bundle metadata does not include the icon build date"
+            exit 1
+        }
+    grep -F '<key>SUFeedURL</key><string>https://example.github.io/astronomical/appcast.xml</string>' \
+        "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not select the GitHub Pages update feed"
+            exit 1
+        }
+    grep -F '<key>SUPublicEDKey</key><string>g0URwy+j86uDYcmOu0k/IUVWwCOSrGOPSoFnVoYQ9AQ=</string>' \
+        "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not embed the Sparkle public key"
+            exit 1
+        }
+    grep -F '<key>SUVerifyUpdateBeforeExtraction</key><true/>' \
+        "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not require update verification before extraction"
+            exit 1
+        }
+    grep -F '<key>SURequireSignedFeed</key><true/>' "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not require a signed update feed"
+            exit 1
+        }
+    grep -F '<key>SUEnableAutomaticChecks</key><true/>' "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not enable automatic update checks by default"
+            exit 1
+        }
+    grep -F '<key>SUScheduledCheckInterval</key><integer>86400</integer>' \
+        "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not bound automatic checks to once per day"
+            exit 1
+        }
+    grep -F '<key>SUAutomaticallyUpdate</key><false/>' "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata unexpectedly enables automatic update installation"
+            exit 1
+        }
+    grep -F '<key>SUEnableSystemProfiling</key><false/>' "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not disable Sparkle system profiling"
             exit 1
         }
 }
@@ -74,18 +119,21 @@ main() {
     sandbox_scripts_directory="${sandbox_repository}/scripts"
     fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
     mkdir -p "$sandbox_scripts_directory" "$fake_command_directory" \
-        "${sandbox_repository}/apps/astronomical-menu" "${sandbox_repository}/third-party"
+        "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework" \
+        "${sandbox_repository}/apps/astronomical-menu/.build/checkouts/Sparkle" \
+        "${sandbox_repository}/third-party"
     cp "${repository_root}/scripts/make-astronomical-app.sh" \
         "${sandbox_scripts_directory}/make-astronomical-app.sh"
     chmod +x "${sandbox_scripts_directory}/make-astronomical-app.sh"
     printf '%s\n' fixture > "${sandbox_repository}/LICENSE"
     printf '%s\n' fixture > "${sandbox_repository}/third-party/THIRD_PARTY_NOTICES"
     printf '%s\n' fixture > "${sandbox_repository}/third-party/RUST_DEPENDENCY_NOTICES"
+    printf '%s\n' fixture > "${sandbox_repository}/apps/astronomical-menu/.build/checkouts/Sparkle/LICENSE"
 
     cat > "${fake_command_directory}/cargo" <<'CARGO'
 #!/usr/bin/env sh
 if [ "${1:-}" = "metadata" ]; then
-    printf '%s\n' '{"packages":[{"name":"astronomical-supervisor","version":"0.2.0"}]}'
+    printf '%s\n' '{"packages":[{"name":"astronomical-supervisor","version":"0.2.0","repository":"https://github.com/example/astronomical"}]}'
     exit 0
 fi
 mkdir -p target/release
@@ -152,10 +200,14 @@ printf '%s\n' 4
 SYSCTL
     cat > "${fake_command_directory}/jq" <<'JQ'
 #!/usr/bin/env sh
-printf '%s\n' 0.2.0
+case "$*" in
+    *'.version'*) printf '%s\n' '0.2.0' ;;
+    *'.repository'*) printf '%s\n' 'https://github.com/example/astronomical' ;;
+    *) exit 1 ;;
+esac
 JQ
     chmod +x "${fake_command_directory}"/*
-    for command_name in cmake xcrun codesign plutil; do
+    for command_name in cmake xcrun codesign install_name_tool plutil; do
         write_successful_command "${fake_command_directory}/${command_name}"
     done
     write_successful_command "${sandbox_scripts_directory}/bootstrap-native-dependencies.sh"
