@@ -6,7 +6,7 @@ Agent orientation map for non-obvious repository facts; this is not user-facing 
 
 Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old.
 
-Last verified: 2026-08-18 (spot-checked: MLX v0.32.1 pin, Ornith model-swap qualification, release-only script isolation, Development build entry point, chunk-bounded context admission, layer-at-a-time cache restore)
+Last verified: 2026-08-18 (spot-checked: MLX v0.32.1 pin, native-build cache coordination, Ornith model-swap qualification, release-only script isolation, Development build entry point, chunk-bounded context admission, layer-at-a-time cache restore)
 
 ## Project overview
 
@@ -90,6 +90,7 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 - Native archive bootstrap still SHA-256-verifies downloaded MLX source archives; that is separate from model-payload startup validation.
 - Native patches pass through `crates/runtime-integration/native/apply_patch_if_needed.cmake`, which records a content-hash marker after clean application and rejects partial/conflicting state. When migrating an older generated tree without markers or changing a patch in place, remove only its generated `mlx-c-runtime-build` directory and rebuild from the verified archive. Only MLX source archives are SHA-256-verified (MLX paged-buffer-store, MLX-C paged-buffer-store, indirect-resource, and paged-buffer-short-read patches were removed in the centralized memory refactor). Do not suppress patch failures.
 - Cargo development and test profiles deliberately use packed line-table diagnostics with incremental compilation disabled. Dev and test share `target/debug`; macOS otherwise defaults debug builds to unpacked diagnostics, and Astronomical's many qualification feature combinations can retain hundreds of thousands of hard-linked object files plus unbounded incremental state. Verification and app-build scripts use `sccache` for reusable compiler output. Do not restore development incremental compilation without measuring both rebuild latency and sustained target-directory growth.
+- GitHub macOS verification coordinates jobs by a content fingerprint of the pinned native runtime inputs. A waiting job must not cancel the build that will publish its reusable MLX/MLX-C state. Cache restoration is classified as primary, fallback, or miss before compilation; interpret a long runtime-integration build-script result together with that classification rather than as Rust compile time.
 
 ## Conventions
 

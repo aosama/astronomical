@@ -15,7 +15,7 @@ print_error() {
 print_usage() {
     printf '%s\n' "Usage: scripts/verify-before-commit.sh [--hermetic-only]"
     printf '%s\n' ""
-    printf '%s\n' "Without arguments, verifies formatting, dependency notices, hermetic tests, and REST API tests."
+    printf '%s\n' "Without arguments, verifies formatting, dependency notices, CI contracts, hermetic tests, and REST API tests."
     printf '%s\n' "--hermetic-only  Compile and run hermetic Rust tests within the bounded macOS CI budget."
 }
 
@@ -70,7 +70,7 @@ printf '%s\n' "[commit-verification] compiler_cache=${RUSTC_WRAPPER} build_jobs=
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
     printf '%s\n' "[commit-verification] included_tests=hermetic excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
 else
-    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,commit_release_isolation excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,ci_native_cache_coordination,commit_release_isolation excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
 fi
 printf '%s\n' "[commit-verification] sccache stats before verification:"
 sccache --show-stats
@@ -84,6 +84,11 @@ if [ "$RUN_HERMITIC_CI_ONLY" != "true" ]; then
     release_isolation_started_at_seconds="$(date +%s)"
     "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-commit-release-isolation.sh
     printf '%s\n' "[commit-verification] PASSED step=commit-release-isolation elapsed_seconds=$(( $(date +%s) - release_isolation_started_at_seconds ))"
+
+    printf '\n%s\n' "[commit-verification] step=ci-native-cache-coordination timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+    ci_native_cache_started_at_seconds="$(date +%s)"
+    "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-ci-native-cache-coordination.sh
+    printf '%s\n' "[commit-verification] PASSED step=ci-native-cache-coordination elapsed_seconds=$(( $(date +%s) - ci_native_cache_started_at_seconds ))"
 fi
 
 run_cargo_step() {
