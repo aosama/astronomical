@@ -1,0 +1,26 @@
+diff --git a/mlx/c/compile.cpp b/mlx/c/compile.cpp
+index bc7b864..4fa5270 100644
+--- a/mlx/c/compile.cpp
++++ b/mlx/c/compile.cpp
+@@ -42,7 +42,9 @@ extern "C" int mlx_detail_compile(
+ }
+ extern "C" int mlx_detail_compile_clear_cache(void) {
+   try {
+-    mlx::core::detail::compile_clear_cache();
++    const auto current_thread_compile_cache =
++        mlx::core::detail::compile_cache();
++    mlx::core::detail::compile_clear_cache(current_thread_compile_cache);
+   } catch (std::exception& e) {
+     mlx_error(e.what());
+     return 1;
+@@ -51,7 +53,9 @@ extern "C" int mlx_detail_compile_clear_cache(void) {
+ }
+ extern "C" int mlx_detail_compile_erase(uintptr_t fun_id) {
+   try {
+-    mlx::core::detail::compile_erase(fun_id);
++    const auto current_thread_compile_cache =
++        mlx::core::detail::compile_cache();
++    mlx::core::detail::compile_erase(current_thread_compile_cache, fun_id);
+   } catch (std::exception& e) {
+     mlx_error(e.what());
+     return 1;

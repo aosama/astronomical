@@ -1,9 +1,8 @@
 diff --git a/mlx/backend/metal/quantized.cpp b/mlx/backend/metal/quantized.cpp
-index 9f24f083..599212c2 100644
+index 5db389322..3633d0a51 100644
 --- a/mlx/backend/metal/quantized.cpp
 +++ b/mlx/backend/metal/quantized.cpp
-@@ -880,8 +880,15 @@ void qmm_splitk(
-   // Choose split_k to target ~512 threadgroups
+@@ -1134,7 +1134,14 @@ void qmm_splitk(
    int bm = 32, bn = 32;
    int n_tiles = (N + bn - 1) / bn;
    int m_tiles = (M + bm - 1) / bm;
@@ -18,4 +17,4 @@ index 9f24f083..599212c2 100644
 +  int current_tgs = n_tiles * split_k_selection_m_tiles;
    int split_k = std::max(1, 512 / current_tgs);
  
-   // Cap split_k by the number of quantization groups
+   // Each K partition must be a whole number of BK-wide (32) K-tiles as well as
