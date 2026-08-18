@@ -29,8 +29,8 @@ main() {
         }
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-    icon_renderer="${repository_root}/scripts/render-astronomical-app-icon.swift"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
+    icon_renderer="${repository_root}/scripts/internal/render-macos-app-icon.swift"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-app-icon.XXXXXX")"
     stable_iconset_a="${SANDBOX_DIRECTORY}/Stable-A.iconset"
     stable_iconset_b="${SANDBOX_DIRECTORY}/Stable-B.iconset"

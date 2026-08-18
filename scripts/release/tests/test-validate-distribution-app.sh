@@ -28,7 +28,7 @@ create_fixture_app() {
 }
 
 main() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-distribution-validator.XXXXXX")"
     fake_bin="${SANDBOX_DIRECTORY}/fake-bin"
     fixture_app="${SANDBOX_DIRECTORY}/Astronomical.app"
@@ -50,13 +50,13 @@ CODESIGN
 
     printf '%s\n' '[distribution-validator-test] case=valid-developer-id-bundle status=start'
     PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-distribution-app.sh" \
+        "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$fixture_app" --team-id ABCDE12345
     printf '%s\n' '[distribution-validator-test] case=valid-developer-id-bundle status=success'
 
     printf '%s\n' '[distribution-validator-test] case=wrong-team-is-rejected status=start'
     if FAKE_TEAM_ID=WRONGTEAM PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-distribution-app.sh" \
+        "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$fixture_app" --team-id ABCDE12345 >/dev/null 2>&1; then
         printf '%s\n' 'Error: validator accepted the wrong Team ID' >&2
         exit 1
@@ -65,7 +65,7 @@ CODESIGN
 
     printf '%s\n' '[distribution-validator-test] case=missing-runtime-is-rejected status=start'
     if FAKE_RUNTIME_MARKER='' PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-distribution-app.sh" \
+        "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$fixture_app" --team-id ABCDE12345 >/dev/null 2>&1; then
         printf '%s\n' 'Error: validator accepted a bundle without Hardened Runtime' >&2
         exit 1
@@ -74,7 +74,7 @@ CODESIGN
 
     printf '%s\n' '[distribution-validator-test] case=missing-timestamp-is-rejected status=start'
     if FAKE_TIMESTAMP_MISSING=true PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-distribution-app.sh" \
+        "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$fixture_app" --team-id ABCDE12345 >/dev/null 2>&1; then
         printf '%s\n' 'Error: validator accepted a signature without a secure timestamp' >&2
         exit 1
@@ -83,7 +83,7 @@ CODESIGN
 
     printf '%s\n' '[distribution-validator-test] case=broken-deep-seal-is-rejected status=start'
     if FAKE_DEEP_REJECTED=true PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-distribution-app.sh" \
+        "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$fixture_app" --team-id ABCDE12345 >/dev/null 2>&1; then
         printf '%s\n' 'Error: validator accepted a broken application seal' >&2
         exit 1
@@ -95,7 +95,7 @@ CODESIGN
     printf '%s\n' fixture > "$unexpected_code_object"
     chmod +x "$unexpected_code_object"
     if FAKE_REJECT_OBJECT=unexpected-helper PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-        "${repository_root}/scripts/validate-astronomical-distribution-app.sh" \
+        "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$fixture_app" --team-id ABCDE12345 >/dev/null 2>&1; then
         printf '%s\n' 'Error: validator ignored an unexpected executable code object' >&2
         exit 1

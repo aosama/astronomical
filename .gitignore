@@ -40,8 +40,8 @@ __pycache__/
 
 # Rust / Cargo
 target/
-debug/
-release/
+/debug/
+/release/
 *.rs.bk
 *.profraw
 *.profdata
