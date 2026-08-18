@@ -1,0 +1,31 @@
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Astronomical</title>
+        <item>
+            <title>0.2.2</title>
+            <pubDate>Tue, 18 Aug 2026 10:50:12 -0400</pubDate>
+            <sparkle:version>185</sparkle:version>
+            <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[## Highlights
+
+- Adds a native Apple Silicon model-serving application with OpenAI-compatible Chat Completions and Responses APIs, menu-bar controls, and the Astronomical Observatory.
+- Adds adaptive MLX memory admission, model loading, persistent prompt reuse, sparse expert residency, and bounded SSD expert paging for responsive local inference across different memory capacities.
+- Adds Qwen3.5 and Laguna-family execution, multimodal prompt processing, tool use, reasoning output, MTP, and speculative prefill support with explicit artifact qualification.
+- Adds signed Sparkle updates with user-controlled Stable, Release Candidate, and Development channels. Daily checks default on, while downloads and installation remain user-driven.
+- Adds release, packaging, diagnostics, and performance-attribution tooling for auditable local operation.
+
+## Compatibility
+
+Astronomical 0.2.2 supports Apple Silicon Macs running macOS 26 or later. The update archive and feed are protected by Sparkle Ed25519 signatures. This build is not Apple-notarized.
+]]></description>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.2/Astronomical-0.2.2-macOS-arm64.dmg" length="13532607" type="application/octet-stream" sparkle:edSignature="QydGDa80cxq8mBXUnJ9NE2Xu4a8zBmRe8cXp8qdR2aO8fgEwITnQjIKXAUZ8IjgZ3aMD4PSgocmVvvT+9WOYCA=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: EJ0iv+v376oh54IQlkaFunZowwX388wrNiKdsfGR02pAQloVgVmrvrca+46RSY1/CZIIg2XmBRNTdu6FwxW8Bw==
+length: 2274
+-->
