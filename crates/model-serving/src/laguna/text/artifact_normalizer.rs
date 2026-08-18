@@ -24,6 +24,7 @@ pub struct LagunaTextArtifactSources<'a> {
     pub tokenizer_bytes: &'a [u8],
     pub tokenizer_config_bytes: &'a [u8],
     pub generation_config_bytes: Option<&'a [u8]>,
+    pub root_chat_template_source: &'a str,
     pub included_template_bytes_by_name: &'a BTreeMap<String, Vec<u8>>,
 }
 
@@ -95,7 +96,7 @@ impl LagunaTextArtifactNormalizer {
         )?;
 
         let resolved_template_sources = resolve_template_sources(
-            tokenizer_config_fields,
+            sources.root_chat_template_source,
             sources.included_template_bytes_by_name,
         )?;
         let bos_token_content = configured_tokens

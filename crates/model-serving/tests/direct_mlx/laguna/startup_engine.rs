@@ -2,7 +2,8 @@ use std::fs;
 
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode,
+    RequestId,
 };
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngineError, LagunaServingSettings, MlxInferenceExecution,
@@ -206,9 +207,12 @@ async fn should_publish_then_restore_an_admitted_romeo_and_juliet_prompt_prefix(
         .start_generation(second_prepared_generation.into_inference_request())
         .expect("the warm Romeo and Juliet cache request should restore");
     assert!(warm_start.restored_prompt_prefix_token_count() >= 256);
-    engine
-        .cancel_generation(second_request_id)
-        .expect("the restored Laguna request should cancel cleanly");
+    assert_eq!(
+        warm_start.expert_memory_mode(),
+        Some(ExpertMemoryMode::Resident),
+        "bounded cache restoration must preserve complete expert residency"
+    );
+    complete_generation(&mut engine, second_request_id);
 }
 
 fn romeo_and_juliet_cache_command(

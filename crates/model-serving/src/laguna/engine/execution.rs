@@ -40,6 +40,8 @@ pub(in crate::laguna) struct LagunaPendingStartup {
     pub(in crate::laguna) prompt_cache_model_revision: String,
     pub(in crate::laguna) configured_prompt_cache_block_token_count: Option<usize>,
     pub(in crate::laguna) prompt_cache_common_prefix_stride_blocks: u32,
+    pub(in crate::laguna) prefill_graph_submission_layer_interval: u32,
+    pub(in crate::laguna) experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     pub(in crate::laguna) model_loading_performance_attribution: PerformanceAttribution,
     pub(in crate::laguna) performance_attribution_log: PerformanceAttributionLog,
     pub(in crate::laguna) attribution_model_id: String,
@@ -152,6 +154,16 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             });
         }
         let mut performance_attribution = inference_request.into_performance_attribution();
+        // Prefill never owns a full-prompt rotating workspace. Admission must
+        // reserve only the largest configured chunk or a later long prompt will
+        // demote a fitting resident model.
+        let maximum_forward_token_count = self
+            .prompt_processing_chunk_sizer
+            .as_ref()
+            .ok_or(InferenceEngineError::Fatal {
+                reason: "the Laguna prompt-processing chunk sizer is not loaded".to_owned(),
+            })?
+            .maximum_prompt_processing_chunk_size_tokens();
         let persistent_prompt_cache = self.persistent_prompt_cache.clone();
         let prompt_cache_lookup = persistent_prompt_cache.as_deref().map(|store| {
             super::prompt_cache::lookup_prompt_prefix(
@@ -165,7 +177,9 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             .map_or(0, |lookup_result| lookup_result.restored_token_count());
         self.admit_generation_context(
             prompt_token_ids.len(),
-            true,
+            maximum_forward_token_count,
+            // Boundary snapshot bytes exist only when this request may publish cache.
+            persistent_prompt_cache.is_some(),
             restored_prompt_prefix_token_count,
             &mut performance_attribution,
         )?;
@@ -209,6 +223,7 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 prompt_token_ids
                     .len()
                     .saturating_sub(restored_prompt_prefix_token_count as usize),
+                maximum_forward_token_count,
                 false,
                 0,
                 &mut performance_attribution,

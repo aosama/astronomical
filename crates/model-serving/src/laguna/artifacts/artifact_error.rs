@@ -1,4 +1,5 @@
 use ::safetensors::Dtype;
+use astronomical_config::LagunaRootChatTemplateSelectionError;
 use thiserror::Error;
 
 use super::tensor_id::LagunaTensorId;
@@ -50,6 +51,8 @@ pub enum LagunaArtifactValidationError {
     Configuration(#[from] LagunaNormalizationError),
     #[error("Laguna text artifact normalization failed")]
     TextArtifact(#[from] LagunaTextArtifactError),
+    #[error("Laguna root chat-template selection failed")]
+    TemplateSource(#[from] LagunaRootChatTemplateSelectionError),
     #[error("Laguna shard-index validation failed")]
     ShardIndex(#[from] LagunaShardIndexError),
     #[error("Laguna tensor-name normalization failed")]

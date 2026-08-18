@@ -188,7 +188,7 @@ pub(super) fn restore_prompt_prefix(
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "Laguna prompt-cache restore lost the snapshot key".to_owned(),
             })?;
-    let boundary_snapshot = if persistent_prompt_cache
+    let mut boundary_snapshot = if persistent_prompt_cache
         .model_contract
         .decoder_cache_layout()
         .has_boundary_state()
@@ -222,8 +222,8 @@ pub(super) fn restore_prompt_prefix(
             |_performance_attribution| {
                 decoder_state.restore_from_cache_blocks(
                     runtime,
-                    &sequence_blocks,
-                    &boundary_snapshot,
+                    &mut sequence_blocks,
+                    &mut boundary_snapshot,
                 )
             },
         )
