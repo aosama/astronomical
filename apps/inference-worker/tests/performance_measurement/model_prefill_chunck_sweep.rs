@@ -111,6 +111,7 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
         crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
     protocol_writer
         .send_command(&WorkerCommand::SwapModel {
+            model_id: MODEL_ID.to_owned(),
             model_directory: configured_model_directory.to_string_lossy().into_owned(),
             max_output_tokens: u32::from(MAXIMUM_SUMMARY_TOKENS),
         })

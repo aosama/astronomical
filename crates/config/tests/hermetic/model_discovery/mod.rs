@@ -6,6 +6,7 @@ mod family_classification;
 mod laguna;
 mod package_structure;
 mod qwen3_5;
+mod qwen3_5_mtp;
 mod traversal;
 
 /// Writes the smallest config document needed to exercise family discovery.

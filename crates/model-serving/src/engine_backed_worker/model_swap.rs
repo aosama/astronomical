@@ -17,6 +17,7 @@ where
 {
     pub(super) async fn swap_model<WriteTransport>(
         &mut self,
+        model_id: &str,
         model_directory: &str,
         max_output_tokens: u32,
         event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -30,9 +31,14 @@ where
                 model_load_failure_reason: "model swapping is unavailable".to_owned(),
             });
         };
-        tracing::info!(model_directory, max_output_tokens, "starting model swap");
+        tracing::info!(
+            model_id,
+            model_directory,
+            max_output_tokens,
+            "starting model swap"
+        );
         let (new_processor, new_engine) = model_factory
-            .create(model_directory, max_output_tokens)
+            .create(model_id, model_directory, max_output_tokens)
             .await
             .map_err(|model_load_failure_reason| {
                 tracing::error!(

@@ -9,10 +9,14 @@
 #[repr(usize)]
 pub enum PerformanceOperation {
     ArtifactValidation,
+    StandaloneMtpArtifactValidation,
+    MtpPairingCompatibilityValidation,
     TokenizerInitialization,
     MlxRuntimeInitialization,
     ModelSafetensorsMapping,
     ModelTensorBinding,
+    StandaloneMtpTensorBinding,
+    StandaloneMtpMaterializationSynchronizationWait,
     ExpertPagerPlanConstruction,
     ResidentWeightMaterializationSynchronizationWait,
     PersistentPromptCacheOpenAndScan,
@@ -73,6 +77,7 @@ pub enum PerformanceOperation {
     MtpTargetRepair,
     MtpPredictorCommitReplay,
     MtpQueuedFrontierRestoration,
+    MtpRequestStateCleanup,
     PrefillStateAsyncEvaluationSubmission,
     PrefillStateGraphicsProcessorCompletionWait,
     ExpertPagingDiagnosticLogging,
@@ -101,10 +106,14 @@ impl PerformanceOperation {
     pub(super) const COUNT: usize = Self::FinalizedMlxMemorySnapshot as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
+        Self::StandaloneMtpArtifactValidation,
+        Self::MtpPairingCompatibilityValidation,
         Self::TokenizerInitialization,
         Self::MlxRuntimeInitialization,
         Self::ModelSafetensorsMapping,
         Self::ModelTensorBinding,
+        Self::StandaloneMtpTensorBinding,
+        Self::StandaloneMtpMaterializationSynchronizationWait,
         Self::ExpertPagerPlanConstruction,
         Self::ResidentWeightMaterializationSynchronizationWait,
         Self::PersistentPromptCacheOpenAndScan,
@@ -165,6 +174,7 @@ impl PerformanceOperation {
         Self::MtpTargetRepair,
         Self::MtpPredictorCommitReplay,
         Self::MtpQueuedFrontierRestoration,
+        Self::MtpRequestStateCleanup,
         Self::PrefillStateAsyncEvaluationSubmission,
         Self::PrefillStateGraphicsProcessorCompletionWait,
         Self::ExpertPagingDiagnosticLogging,
@@ -192,10 +202,16 @@ impl PerformanceOperation {
     pub(super) const fn identifier(self) -> &'static str {
         match self {
             Self::ArtifactValidation => "artifact_validation",
+            Self::StandaloneMtpArtifactValidation => "standalone_mtp_artifact_validation",
+            Self::MtpPairingCompatibilityValidation => "mtp_pairing_compatibility_validation",
             Self::TokenizerInitialization => "tokenizer_initialization",
             Self::MlxRuntimeInitialization => "mlx_runtime_initialization",
             Self::ModelSafetensorsMapping => "model_safetensors_mapping",
             Self::ModelTensorBinding => "model_tensor_binding",
+            Self::StandaloneMtpTensorBinding => "standalone_mtp_tensor_binding",
+            Self::StandaloneMtpMaterializationSynchronizationWait => {
+                "standalone_mtp_materialization_synchronization_wait"
+            }
             Self::ExpertPagerPlanConstruction => "expert_pager_plan_construction",
             Self::ResidentWeightMaterializationSynchronizationWait => {
                 "resident_weight_materialization_synchronization_wait"
@@ -308,6 +324,7 @@ impl PerformanceOperation {
             Self::MtpTargetRepair => "mtp_target_repair",
             Self::MtpPredictorCommitReplay => "mtp_predictor_commit_replay",
             Self::MtpQueuedFrontierRestoration => "mtp_queued_frontier_restoration",
+            Self::MtpRequestStateCleanup => "mtp_request_state_cleanup",
             Self::PrefillStateAsyncEvaluationSubmission => {
                 "prefill_state_async_evaluation_submission"
             }

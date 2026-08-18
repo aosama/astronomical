@@ -160,6 +160,60 @@ async fn should_use_token_local_mlx_for_each_unsupported_dispatch_geometry() {
     }
 }
 
+#[tokio::test]
+async fn should_compare_mlx_wide_qmv_with_token_local_target_arithmetic() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    for projection_geometry in [
+        ProjectionGeometry {
+            token_count: 2,
+            input_dimension: 2_048,
+            output_dimension: 2_048,
+            activation_dtype: MlxDtype::BFloat16,
+            quantization_bits: 4,
+            quantization_group_size: 64,
+        },
+        ProjectionGeometry {
+            token_count: 3,
+            input_dimension: 2_048,
+            output_dimension: 2_048,
+            activation_dtype: MlxDtype::BFloat16,
+            quantization_bits: 4,
+            quantization_group_size: 64,
+        },
+        ProjectionGeometry {
+            token_count: 3,
+            input_dimension: 2_048,
+            output_dimension: 2_048,
+            activation_dtype: MlxDtype::BFloat16,
+            quantization_bits: 5,
+            quantization_group_size: 64,
+        },
+    ] {
+        let projection_inputs = projection_inputs(&runtime, projection_geometry);
+        let wide_projection = runtime
+            .quantized_matmul_affine(
+                &projection_inputs.activations,
+                &projection_inputs.packed_weight,
+                &projection_inputs.quantization_scales,
+                &projection_inputs.quantization_biases,
+                true,
+                projection_geometry.quantization_group_size,
+                projection_geometry.quantization_bits,
+            )
+            .expect("MLX wide QMV should project a verification window");
+        let token_local_projection =
+            repeated_one_token_projection(&runtime, &projection_inputs, projection_geometry);
+
+        assert_eq!(
+            float32_values(&runtime, &wide_projection, "MLX wide QMV projection"),
+            float32_values(&runtime, &token_local_projection, "token-local projection"),
+            "MLX wide QMV must preserve target decode arithmetic for {} rows",
+            projection_geometry.token_count,
+        );
+    }
+}
+
 struct ProjectionInputs {
     activations: MlxArray,
     packed_weight: MlxArray,

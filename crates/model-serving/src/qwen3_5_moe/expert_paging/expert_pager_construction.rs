@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
+use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertPagerGeometry};
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
 use crate::MlxAllocationBudget;
 use crate::expert_paging::safetensors_header::SafetensorsHeader;
@@ -100,6 +100,112 @@ impl Qwen3_5ExpertPager {
             layer_plans,
             memory_budget,
             resident_expert_source_files,
+        })
+    }
+
+    /// Adds the independently packaged sparse MTP layer without changing target source ownership.
+    ///
+    /// Every fallible plan, descriptor, and byte-accounting operation finishes before the pager
+    /// is mutated so optional-drafter failure cannot damage the requestable target model.
+    pub(crate) fn append_standalone_mtp_layer(
+        &mut self,
+        model_directory: PathBuf,
+        tensor_name_to_shard_file_name: &HashMap<String, String>,
+        stored_tensor_name_by_canonical_name: &HashMap<String, String>,
+        config: &Qwen3_5Config,
+        experts_per_token: usize,
+    ) -> Result<Qwen3_5ExpertPagerGeometry, ExpertPagingError> {
+        let quantization_mode = match config.model_weight_storage() {
+            ModelWeightStorage::NativeBfloat16 => QuantizationMode::NativeBfloat16,
+            ModelWeightStorage::AffineQuantized => QuantizationMode::Affine,
+        };
+        let mut safetensors_header_by_source_file = HashMap::new();
+        let standalone_layer_plan =
+            build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+                &model_directory,
+                tensor_name_to_shard_file_name,
+                stored_tensor_name_by_canonical_name,
+                "language_model.mtp.layers.0.mlp",
+                config,
+                quantization_mode,
+                &mut safetensors_header_by_source_file,
+            )?;
+        let standalone_complete_payload_bytes =
+            standalone_layer_plan.complete_expert_payload_byte_count()?;
+        let complete_expert_payload_bytes = self
+            .complete_expert_payload_byte_count()?
+            .checked_add(standalone_complete_payload_bytes)
+            .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+                description: "complete standalone MTP expert payload byte count overflowed"
+                    .to_owned(),
+            })?;
+        let routed_expert_count = experts_per_token.min(standalone_layer_plan.expert_capacity);
+        let standalone_routed_payload_bytes = u64::try_from(
+            u128::from(standalone_complete_payload_bytes)
+                .saturating_mul(routed_expert_count as u128)
+                / (standalone_layer_plan.expert_capacity.max(1) as u128),
+        )
+        .unwrap_or(u64::MAX);
+        let largest_routed_expert_page_bytes = self
+            .maximum_routed_expert_page_bytes(experts_per_token)?
+            .max(standalone_routed_payload_bytes);
+        let largest_complete_expert_layer_bytes = self
+            .maximum_expert_page_bytes()
+            .max(standalone_complete_payload_bytes);
+        let standalone_source_files =
+            retain_resident_expert_source_files(std::slice::from_ref(&standalone_layer_plan))?;
+        let active_memory_ceiling_bytes = self.memory_budget.active_memory_ceiling_bytes();
+        let observed_transient_high_water_bytes =
+            self.memory_budget.observed_transient_high_water_bytes();
+        let replacement_memory_budget = MlxAllocationBudget::new(
+            largest_complete_expert_layer_bytes,
+            active_memory_ceiling_bytes,
+        );
+
+        self.layer_plans.push(standalone_layer_plan);
+        self.resident_expert_source_files
+            .extend(standalone_source_files);
+        self.memory_budget = replacement_memory_budget;
+        self.memory_budget
+            .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
+        Ok(Qwen3_5ExpertPagerGeometry {
+            complete_expert_payload_bytes,
+            largest_complete_expert_layer_bytes,
+            largest_routed_expert_page_bytes,
+        })
+    }
+
+    /// Removes the optional trailing MTP layer while preserving every target decoder plan.
+    pub(crate) fn remove_optional_mtp_layer(
+        &mut self,
+        target_decoder_layer_count: usize,
+        experts_per_token: usize,
+    ) -> Result<Qwen3_5ExpertPagerGeometry, ExpertPagingError> {
+        if self.layer_plans.len() > target_decoder_layer_count {
+            self.layer_plans.truncate(target_decoder_layer_count);
+        }
+        let complete_expert_payload_bytes = self.complete_expert_payload_byte_count()?;
+        let largest_complete_expert_layer_bytes = self.layer_plans.iter().try_fold(
+            0_u64,
+            |largest_payload_bytes, layer_plan| -> Result<_, ExpertPagingError> {
+                Ok(largest_payload_bytes.max(layer_plan.complete_expert_payload_byte_count()?))
+            },
+        )?;
+        let largest_routed_expert_page_bytes =
+            self.maximum_routed_expert_page_bytes(experts_per_token)?;
+        let active_memory_ceiling_bytes = self.memory_budget.active_memory_ceiling_bytes();
+        let observed_transient_high_water_bytes =
+            self.memory_budget.observed_transient_high_water_bytes();
+        self.memory_budget = MlxAllocationBudget::new(
+            largest_complete_expert_layer_bytes,
+            active_memory_ceiling_bytes,
+        );
+        self.memory_budget
+            .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
+        Ok(Qwen3_5ExpertPagerGeometry {
+            complete_expert_payload_bytes,
+            largest_complete_expert_layer_bytes,
+            largest_routed_expert_page_bytes,
         })
     }
 }

@@ -42,11 +42,13 @@ pub fn qwen3_5_mtp_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<Tensor
             vec![hidden_size],
         ));
     }
-    mtp_tensor_profiles.push(qwen3_5_tensor_profile(
-        format!("{mtp_prefix}.fc.weight"),
-        TensorDtype::ModelFloat,
-        vec![hidden_size, hidden_size * 2],
-    ));
+    append_qwen3_5_mtp_affine_tensor_profiles(
+        &mut mtp_tensor_profiles,
+        &format!("{mtp_prefix}.fc"),
+        &[hidden_size],
+        hidden_size * 2,
+        qwen3_5_config,
+    );
 
     let mtp_layer_prefix = format!("{mtp_prefix}.layers.0");
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(

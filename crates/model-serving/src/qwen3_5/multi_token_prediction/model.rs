@@ -93,6 +93,59 @@ impl Qwen3_5MtpWeights {
             validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
             bound_mtp_tensors.insert(tensor_profile.name.clone(), bound_tensor);
         }
+        Self::finish_binding(
+            qwen3_5_config,
+            bound_mtp_tensors,
+            auxiliary_mtp_sources,
+            resident_mtp_tensor_profiles.len(),
+        )
+    }
+
+    pub(crate) fn bind_standalone(
+        qwen3_5_config: &Qwen3_5Config,
+        tensor_inventory: &TensorInventory,
+        standalone_sources: HashMap<TensorSourceId, MlxSafetensors>,
+    ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
+        let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(qwen3_5_config);
+        let resident_mtp_tensor_profiles = match qwen3_5_config.feed_forward_architecture() {
+            Qwen3_5FeedForwardArchitecture::Dense => mtp_tensor_profiles,
+            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => mtp_tensor_profiles
+                .into_iter()
+                .filter(|profile| !is_sparse_selected_expert_tensor_name(&profile.name))
+                .collect(),
+        };
+        let mut bound_mtp_tensors = HashMap::with_capacity(resident_mtp_tensor_profiles.len());
+        for tensor_profile in &resident_mtp_tensor_profiles {
+            let location = tensor_inventory
+                .location(&tensor_profile.name)
+                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                    tensor_name: tensor_profile.name.clone(),
+                })?;
+            let source = standalone_sources
+                .get(&location.source_id())
+                .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+                    tensor_name: tensor_profile.name.clone(),
+                    description: "standalone MTP tensor source is unavailable",
+                })?;
+            let bound_tensor = source.tensor(location.stored_name())?;
+            validate_bound_tensor(tensor_profile, &bound_tensor)?;
+            validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
+            bound_mtp_tensors.insert(tensor_profile.name.clone(), bound_tensor);
+        }
+        Self::finish_binding(
+            qwen3_5_config,
+            bound_mtp_tensors,
+            standalone_sources,
+            resident_mtp_tensor_profiles.len(),
+        )
+    }
+
+    fn finish_binding(
+        qwen3_5_config: &Qwen3_5Config,
+        mut bound_mtp_tensors: HashMap<String, MlxArray>,
+        auxiliary_mtp_sources: HashMap<TensorSourceId, MlxSafetensors>,
+        tensor_count: usize,
+    ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
         let mtp_layer_prefix = "language_model.mtp.layers.0";
         let pre_fc_normalization_embedding_weight = take_tensor(
             &mut bound_mtp_tensors,
@@ -102,12 +155,11 @@ impl Qwen3_5MtpWeights {
             &mut bound_mtp_tensors,
             "language_model.mtp.pre_fc_norm_hidden.weight".to_owned(),
         )?;
-        let fusion_projection = Qwen3_5AffineWeights::NativeBfloat16 {
-            weight: take_tensor(
-                &mut bound_mtp_tensors,
-                "language_model.mtp.fc.weight".to_owned(),
-            )?,
-        };
+        let fusion_projection = crate::qwen3_5::model::weights::take_quantized_affine_weights(
+            &mut bound_mtp_tensors,
+            qwen3_5_config,
+            "language_model.mtp.fc",
+        )?;
         let decoder_layer_weights = Qwen3_5DecoderLayerWeights {
             input_normalization_weight: take_tensor(
                 &mut bound_mtp_tensors,
@@ -157,7 +209,7 @@ impl Qwen3_5MtpWeights {
             decoder_layer_weights,
             final_normalization_weight,
             auxiliary_mtp_sources,
-            tensor_count: resident_mtp_tensor_profiles.len(),
+            tensor_count,
         }))
     }
 
@@ -321,8 +373,10 @@ fn repair_normalization_weight_if_raw(
         return Ok(false);
     }
     let one_float32 = runtime.array_from_f32(&[1.0], &[])?;
-    let one_bfloat16 = runtime.astype(&one_float32, MlxDtype::BFloat16)?;
-    *mtp_normalization_weight = runtime.add(mtp_normalization_weight, &one_bfloat16)?;
+    // Standalone publishers may retain F16, BF16, or F32 normalization storage;
+    // matching the source avoids an implicit precision change during one-time repair.
+    let one_source_dtype = runtime.astype(&one_float32, mtp_normalization_weight.dtype())?;
+    *mtp_normalization_weight = runtime.add(mtp_normalization_weight, &one_source_dtype)?;
     Ok(true)
 }
 

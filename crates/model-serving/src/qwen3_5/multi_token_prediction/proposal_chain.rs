@@ -3,16 +3,17 @@ use astronomical_runtime_integration::MlxArray;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::{MtpDraftDepth, Qwen3_5MtpRequestState};
+use super::{MtpDraftDepth, Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint};
 
 /// Evaluated bounded proposal IDs produced by one lazy autoregressive MTP chain.
 pub(crate) struct MtpProposalChain {
     draft_token_ids: Vec<u32>,
+    predictor_base_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
 }
 
 impl MtpProposalChain {
-    pub(crate) fn draft_token_ids(&self) -> &[u32] {
-        &self.draft_token_ids
+    pub(crate) fn into_parts(self) -> (Vec<u32>, Qwen3_5MtpRequestStateAllocationCheckpoint) {
+        (self.draft_token_ids, self.predictor_base_checkpoint)
     }
 }
 
@@ -29,6 +30,7 @@ impl Qwen3_5Model {
         let mut draft_token_arrays = Vec::with_capacity(usize::from(effective_depth.get()));
         let mut post_normalization_hidden_rows =
             Vec::with_capacity(usize::from(effective_depth.get()));
+        let mut predictor_base_checkpoint = None;
         performance_attribution.measure_operation(
             PerformanceOperation::MtpHeadForwardGraphConstruction,
             |performance_attribution| {
@@ -62,6 +64,10 @@ impl Qwen3_5Model {
                     let (_, post_normalization_hidden_states) = forward_output.into_arrays();
                     draft_token_arrays.push(draft_token_indices);
                     post_normalization_hidden_rows.push(post_normalization_hidden_states);
+                    if draft_position == 0 {
+                        predictor_base_checkpoint =
+                            Some(mtp_request_state.allocation_checkpoint()?);
+                    }
                 }
                 Ok::<(), Qwen3_5ExecutionError>(())
             },
@@ -80,6 +86,14 @@ impl Qwen3_5Model {
             performance_attribution,
         )?;
         let draft_token_ids = draft_token_vector.to_vec_u32()?;
-        Ok(MtpProposalChain { draft_token_ids })
+        let predictor_base_checkpoint = predictor_base_checkpoint.ok_or(
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "MTP proposal chain did not produce its target-authoritative base checkpoint",
+            },
+        )?;
+        Ok(MtpProposalChain {
+            draft_token_ids,
+            predictor_base_checkpoint,
+        })
     }
 }

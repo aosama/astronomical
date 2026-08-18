@@ -4,6 +4,7 @@ mod chat_generation_validation;
 mod chat_generation_validation_limits;
 mod graph_submission_layer_interval;
 mod minimal_protocol;
+mod model_swap;
 mod persistent_prompt_cache_diagnostics;
 mod prompt_cache_clear_protocol;
 mod prompt_processing_progress_protocol;

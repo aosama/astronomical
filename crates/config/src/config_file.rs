@@ -47,6 +47,10 @@ pub(crate) struct UserConfigFile {
     /// Optional draft-assisted sparse prompt-prefill policy.
     #[serde(default)]
     pub(crate) speculative_prefill: SpeculativePrefillConfigFile,
+    /// Optional explicit target-to-standalone-MTP-drafter pairing list.
+    /// Omission is valid and produces an empty resolved list.
+    #[serde(default)]
+    pub(crate) mtp_pairings: Vec<MtpPairingConfigFile>,
     pub(crate) supervisor: Option<SupervisorConfigFile>,
     pub(crate) prompt_cache_max_size_gb: Option<u64>,
     pub(crate) logging: Option<LoggingConfigFile>,
@@ -90,6 +94,17 @@ pub(crate) struct SpeculativePrefillConfigFile {
     pub(crate) mandatory_trailing_token_count: Option<u32>,
     pub(crate) lookahead_token_count: Option<u32>,
     pub(crate) importance_pooling_kernel_token_count: Option<u32>,
+}
+
+/// One explicit target-to-standalone-MTP-drafter pairing declaration.
+///
+/// The final schema may evolve, but the shape carries two non-empty trimmed
+/// identifiers that are resolved through configured model roots.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MtpPairingConfigFile {
+    pub(crate) target_model_id: String,
+    pub(crate) drafter_model_id: String,
 }
 
 fn deserialize_present_boolean<'de, Deserializer>(
@@ -178,6 +193,7 @@ pub(crate) fn validate_user_config_file(
     super::speculative_prefill_config::resolve_speculative_prefill_config(
         &user_config_file.speculative_prefill,
     )?;
+    super::mtp_pairing_config::resolve_mtp_pairings(&user_config_file.mtp_pairings)?;
     if let Some(maximum_mlx_memory_gb) = user_config_file.maximum_mlx_memory_gb {
         maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
     }

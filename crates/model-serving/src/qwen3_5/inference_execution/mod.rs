@@ -13,6 +13,8 @@ mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
 mod mtp_decode_attempt;
+mod mtp_request_eligibility_observation;
+mod mtp_runtime_logging;
 mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
 mod prefill_advance;
@@ -25,6 +27,7 @@ mod prompt_processing_chunk_sizer;
 mod request_memory_release;
 mod resident_memory_pressure;
 mod speculative_prefill;
+mod standalone_mtp_loading;
 mod start_generation;
 mod test_controls;
 
@@ -59,7 +62,7 @@ pub use self::speculative_prefill::{
     qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 use super::model::Qwen3_5Model;
-use super::{MtpDraftDepth, ValidatedQwen3_5Artifact};
+use super::{MtpDraftDepth, Qwen3_5MtpSourceSelection, ValidatedQwen3_5Artifact};
 
 pub use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRuntimeState;
 pub use crate::qwen3_5::multi_token_prediction::{
@@ -145,6 +148,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             adaptive_ram_growth_guard_enabled,
             mtp_enabled,
             None,
+            Qwen3_5MtpSourceSelection::TargetLocal,
             speculative_prefill,
             model_loading_performance_attribution,
             performance_attribution_log,
@@ -165,6 +169,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         adaptive_ram_growth_guard_enabled: bool,
         mtp_enabled: bool,
         mtp_draft_depth: Option<u8>,
+        mtp_source_selection: Qwen3_5MtpSourceSelection,
         speculative_prefill: WorkerSpeculativePrefillConfiguration,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
@@ -235,6 +240,10 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             prompt_processing_chunk_sizer,
             chunking,
             validated_artifact: Some(validated_artifact),
+            mtp_source_selection: Some(mtp_source_selection),
+            mtp_drafter_model_id: None,
+            mtp_drafter_model_revision: None,
+            mtp_drafter_storage_fingerprint: None,
             vocabulary_size,
             mtp_enabled,
             configured_mtp_draft_depth,
@@ -284,6 +293,10 @@ pub struct Qwen3_5InferenceExecution {
     performance_attribution_log: PerformanceAttributionLog,
     maximum_position_count: usize,
     pub(super) model: Option<Qwen3_5Model>,
+    pub(super) mtp_source_selection: Option<Qwen3_5MtpSourceSelection>,
+    pub(super) mtp_drafter_model_id: Option<String>,
+    pub(super) mtp_drafter_model_revision: Option<String>,
+    pub(super) mtp_drafter_storage_fingerprint: Option<String>,
     /// Request-scoped draft model, present only while scoring an eligible prompt.
     pub(super) speculative_prefill_draft_model: Option<Qwen3_5Model>,
     /// Bounded worker-local selection store keyed by the exact draft-scored prompt.

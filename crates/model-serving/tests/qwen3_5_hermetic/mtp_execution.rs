@@ -1,9 +1,74 @@
 use astronomical_model_serving::{
     MtpDepthDowngradeReason, MtpDraftDepth, MtpMemoryCandidate, MtpMemoryProjection,
+    Qwen3_5MtpRequestEligibility, Qwen3_5MtpRequestEligibilityInputs,
+    predictor_history_requires_verified_hidden_replay,
     qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
-    qwen3_5_mtp_memory_admission, qwen3_5_mtp_verification_decision,
-    qwen3_5_mtp_verification_transient_array_bytes,
+    qwen3_5_mtp_memory_admission, qwen3_5_mtp_request_eligibility,
+    qwen3_5_mtp_verification_decision, qwen3_5_mtp_verification_transient_array_bytes,
 };
+
+#[test]
+fn should_explain_each_user_visible_target_only_request_class() {
+    let eligible_inputs = Qwen3_5MtpRequestEligibilityInputs {
+        mtp_enabled: true,
+        mtp_runtime_is_active: true,
+        model_has_mtp_weights: true,
+        sampling_is_greedy: true,
+        has_precomputed_visual_embeddings: false,
+        has_processed_visual_images: false,
+        persistent_prompt_cache_is_available: false,
+        prompt_token_count: 3,
+        restored_prompt_token_count: 0,
+    };
+    assert_eq!(
+        qwen3_5_mtp_request_eligibility(eligible_inputs),
+        Qwen3_5MtpRequestEligibility::Eligible
+    );
+
+    let ineligible_cases = [
+        (
+            Qwen3_5MtpRequestEligibilityInputs {
+                sampling_is_greedy: false,
+                ..eligible_inputs
+            },
+            Qwen3_5MtpRequestEligibility::SampledDecoding,
+        ),
+        (
+            Qwen3_5MtpRequestEligibilityInputs {
+                has_processed_visual_images: true,
+                ..eligible_inputs
+            },
+            Qwen3_5MtpRequestEligibility::ProcessedVisionInput,
+        ),
+        (
+            Qwen3_5MtpRequestEligibilityInputs {
+                persistent_prompt_cache_is_available: true,
+                ..eligible_inputs
+            },
+            Qwen3_5MtpRequestEligibility::PersistentPromptCacheAvailable,
+        ),
+        (
+            Qwen3_5MtpRequestEligibilityInputs {
+                restored_prompt_token_count: 2,
+                ..eligible_inputs
+            },
+            Qwen3_5MtpRequestEligibility::InsufficientUncachedPromptHistory,
+        ),
+    ];
+    for (inputs, expected_reason) in ineligible_cases {
+        let eligibility = qwen3_5_mtp_request_eligibility(inputs);
+        assert_eq!(eligibility, expected_reason);
+        assert!(!eligibility.identifier().is_empty());
+    }
+}
+
+#[test]
+fn should_replay_only_accepted_drafts_with_verified_hidden_rows() {
+    assert!(!predictor_history_requires_verified_hidden_replay(0));
+    assert!(predictor_history_requires_verified_hidden_replay(1));
+    assert!(predictor_history_requires_verified_hidden_replay(2));
+    assert!(predictor_history_requires_verified_hidden_replay(3));
+}
 
 #[test]
 fn should_accept_every_longest_prefix_at_depths_one_through_three() {

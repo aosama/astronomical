@@ -8,6 +8,7 @@ mod mtp_contract;
 mod mtp_execution;
 mod mtp_release_gate;
 mod mtp_sidecar;
+mod mtp_standalone_artifact;
 mod output_parser;
 mod persistent_prompt_cache_block_format;
 mod persistent_prompt_cache_block_key;

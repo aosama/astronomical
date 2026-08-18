@@ -160,6 +160,7 @@ pub(crate) async fn run_worker(
                                 );
                                 if let Err(swap_error) = worker_process
                                     .swap_model(
+                                        requested_model.to_owned(),
                                         model_directory.to_string_lossy().into_owned(),
                                         max_output_tokens,
                                     )

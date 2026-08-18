@@ -16,11 +16,15 @@ mod vision;
 pub use artifacts::{
     MAXIMUM_MTPLX_RUNTIME_BYTES, Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError,
     Qwen3_5ArtifactValidator, Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract,
-    Qwen3_5MtpContractError, Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
+    Qwen3_5MtpContractError, Qwen3_5MtpPairingCompatibility, Qwen3_5MtpPairingCompatibilityError,
+    Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
     Qwen3_5MtpSidecarValidationOutcome, Qwen3_5MtpTargetOnlyReason, Qwen3_5ShardIndex,
-    ValidatedQwen3_5Artifact, qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names,
-    qwen3_5_mtp_tensor_profiles, qwen3_5_resident_language_tensor_profiles,
-    validate_qwen3_5_mtp_sidecar_for_tests,
+    Qwen3_5StandaloneMtpArtifactValidationError, Qwen3_5StandaloneMtpArtifactValidator,
+    Qwen3_5StandaloneMtpConfig, Qwen3_5StandaloneMtpConfigError, StandaloneMtpNamespaceError,
+    ValidatedQwen3_5Artifact, ValidatedQwen3_5StandaloneMtpArtifact,
+    compare_qwen3_5_mtp_pairing_contracts, normalize_qwen3_5_standalone_mtp_tensor_name,
+    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
+    qwen3_5_resident_language_tensor_profiles, validate_qwen3_5_mtp_sidecar_for_tests,
 };
 pub use configuration::{
     ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
@@ -59,8 +63,11 @@ pub use model::{
 pub use multi_token_prediction::{
     MtpDepthDowngradeReason, MtpDraftDepth, MtpDraftDepthError, MtpMemoryAdmission,
     MtpMemoryCandidate, MtpMemoryProjection, MtpMemoryProjectionError, MtpVerificationDecision,
-    MtpVerificationDecisionError, qwen3_5_mtp_effective_depth_and_reason_for_windows,
-    qwen3_5_mtp_effective_depth_for_windows, qwen3_5_mtp_memory_admission,
+    MtpVerificationDecisionError, Qwen3_5MtpRequestEligibility, Qwen3_5MtpRequestEligibilityInputs,
+    Qwen3_5MtpSourceSelection, Qwen3_5MtpSourceUnavailableReason,
+    predictor_history_requires_verified_hidden_replay,
+    qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
+    qwen3_5_mtp_memory_admission, qwen3_5_mtp_request_eligibility,
     qwen3_5_mtp_verification_decision, qwen3_5_mtp_verification_transient_array_bytes,
 };
 #[cfg(feature = "direct-mlx")]

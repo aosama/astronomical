@@ -64,6 +64,9 @@ impl Qwen3_5EngineState {
                 outcome,
                 model_id,
                 model_revision,
+                drafter_model_id: self.mtp_drafter_model_id.clone(),
+                drafter_model_revision: self.mtp_drafter_model_revision.clone(),
+                drafter_storage_fingerprint: self.mtp_drafter_storage_fingerprint.clone(),
                 prefill_transient_observation_completed: self
                     .adaptive_ram_growth_guard
                     .has_completed_growth_observation(crate::AdaptiveRamGrowthPhase::Prefill),

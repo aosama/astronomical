@@ -1,5 +1,3 @@
-use astronomical_runtime_integration::MlxArray;
-
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5::inference_execution::{fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::model::Qwen3_5Model;
@@ -8,6 +6,7 @@ use crate::{InferenceEngineError, PerformanceOperation};
 use super::MtpVerificationDecision;
 use super::request_state::Qwen3_5MtpRequestStateAllocationCheckpoint;
 use super::target_verification::TargetVerificationOutput;
+use super::verification_decision::predictor_history_requires_verified_hidden_replay;
 use super::verified_emission_queue::{VerifiedEmissionQueue, VerifiedTargetFrontier};
 
 #[allow(clippy::too_many_arguments)]
@@ -15,9 +14,7 @@ pub(crate) fn commit_accepted_mtp_prefix(
     model: &Qwen3_5Model,
     active_request: &mut Qwen3_5EngineRequest,
     target_verify_start_position_tokens: u32,
-    current_generated_token: &MlxArray,
-    target_hidden_seed: &MlxArray,
-    predictor_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
+    predictor_base_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
     draft_token_ids: &[u32],
     decision: &MtpVerificationDecision,
     mut verification_output: TargetVerificationOutput,
@@ -109,13 +106,12 @@ pub(crate) fn commit_accepted_mtp_prefix(
         active_request.clear_pending_generated_token();
     }
 
-    rebuild_confirmed_predictor_history(
+    commit_confirmed_predictor_history(
         model,
         active_request,
-        current_generated_token,
-        target_hidden_seed,
-        predictor_checkpoint,
-        &draft_token_ids[..accepted_count],
+        predictor_base_checkpoint,
+        draft_token_ids,
+        decision,
         &verification_output,
     )?;
     let retained_hidden_row_index = i32::try_from(accepted_count)
@@ -131,13 +127,12 @@ pub(crate) fn commit_accepted_mtp_prefix(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rebuild_confirmed_predictor_history(
+fn commit_confirmed_predictor_history(
     model: &Qwen3_5Model,
     active_request: &mut Qwen3_5EngineRequest,
-    current_generated_token: &MlxArray,
-    target_hidden_seed: &MlxArray,
-    predictor_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
-    accepted_draft_token_ids: &[u32],
+    predictor_base_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
+    draft_token_ids: &[u32],
+    decision: &MtpVerificationDecision,
     verification_output: &TargetVerificationOutput,
 ) -> Result<(), InferenceEngineError> {
     active_request.measure_operation_with_request(
@@ -147,24 +142,19 @@ fn rebuild_confirmed_predictor_history(
                 .with_optional_prediction_session_and_performance_attribution(
                     |prediction_request, performance_attribution| {
                         prediction_request
-                            .restore_allocation_checkpoint(predictor_checkpoint)
+                            .restore_allocation_checkpoint(predictor_base_checkpoint)
                             .map_err(qwen3_5_runtime_error)?;
-                        let mut replay_hidden_rows =
-                            Vec::with_capacity(accepted_draft_token_ids.len() + 1);
-                        let mut replay_token_arrays =
-                            Vec::with_capacity(accepted_draft_token_ids.len());
-                        let current_output = model
-                            .build_mtp_draft_graph(
-                                target_hidden_seed,
-                                current_generated_token,
-                                prediction_request.request_state_mut(),
-                                performance_attribution,
-                            )
-                            .map_err(InferenceEngineError::from)?;
-                        let (_, current_post_normalized_hidden) = current_output.into_arrays();
-                        replay_hidden_rows.push(current_post_normalized_hidden);
+                        if !predictor_history_requires_verified_hidden_replay(
+                            decision.accepted_count(),
+                        ) {
+                            return Ok::<(), InferenceEngineError>(());
+                        }
+
+                        let accepted_count = usize::from(decision.accepted_count());
+                        let mut replay_hidden_rows = Vec::with_capacity(accepted_count);
+                        let mut replay_token_arrays = Vec::with_capacity(accepted_count);
                         for (accepted_position, accepted_token_id) in
-                            accepted_draft_token_ids.iter().enumerate()
+                            draft_token_ids[..accepted_count].iter().enumerate()
                         {
                             let token_array = model
                                 .runtime()
@@ -201,7 +191,7 @@ fn rebuild_confirmed_predictor_history(
                             .map_err(InferenceEngineError::from)?;
                         performance_attribution.record_counter(
                             crate::PerformanceCounter::MtpPredictorReplayTokenCount,
-                            u64::try_from(accepted_draft_token_ids.len() + 1).unwrap_or(u64::MAX),
+                            u64::try_from(accepted_count).unwrap_or(u64::MAX),
                         );
                         Ok::<(), InferenceEngineError>(())
                     },

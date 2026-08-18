@@ -33,11 +33,32 @@ pub struct WorkerChunkingConfiguration {
     pub prompt_cache_common_prefix_stride_blocks: u32,
 }
 
+/// Returns the command-buffer submission interval for decode-time forwards.
+///
+/// Resident decode, including 2-4 token multi-token-prediction verification,
+/// keeps one lazy tape. Intermediate submission exists only so paged decode can
+/// detach streamed expert pages.
+#[must_use]
+pub const fn decode_graph_submission_layer_interval(
+    sparse_experts_are_paged: bool,
+    experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
+) -> u32 {
+    if sparse_experts_are_paged {
+        experimental_ssd_paging_generation_graph_submission_layer_interval
+    } else {
+        0
+    }
+}
+
+/// Longest decode-shaped forward, including a depth-three MTP verify window.
+const DECODE_SHAPED_FORWARD_TOKEN_LIMIT: i32 = 4;
+
 /// Returns the command-buffer submission interval for one forward.
 ///
-/// Multi-token prefill uses its configured interval regardless of expert storage.
-/// One-token generation keeps intermediate submission specific to SSD paging,
-/// where detaching streamed expert pages justifies the extra launch boundaries.
+/// Multi-thousand-token prefill uses its configured interval so macOS can
+/// schedule between layer groups. Decode-shaped forwards of one through four
+/// tokens, including MTP verification, keep intermediate submission specific
+/// to SSD paging.
 #[must_use]
 pub const fn graph_submission_layer_interval(
     token_count: i32,
@@ -45,12 +66,11 @@ pub const fn graph_submission_layer_interval(
     prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 ) -> u32 {
-    if token_count == 1 {
-        if sparse_experts_are_paged {
-            experimental_ssd_paging_generation_graph_submission_layer_interval
-        } else {
-            0
-        }
+    if token_count <= DECODE_SHAPED_FORWARD_TOKEN_LIMIT {
+        decode_graph_submission_layer_interval(
+            sparse_experts_are_paged,
+            experimental_ssd_paging_generation_graph_submission_layer_interval,
+        )
     } else {
         prefill_graph_submission_layer_interval
     }
@@ -68,6 +88,18 @@ impl WorkerChunkingConfiguration {
             token_count,
             sparse_experts_are_paged,
             self.prefill_graph_submission_layer_interval,
+            self.experimental_ssd_paging_generation_graph_submission_layer_interval,
+        )
+    }
+
+    /// Returns the command-buffer interval for decode-time forwards.
+    #[must_use]
+    pub const fn decode_graph_submission_layer_interval(
+        &self,
+        sparse_experts_are_paged: bool,
+    ) -> u32 {
+        decode_graph_submission_layer_interval(
+            sparse_experts_are_paged,
             self.experimental_ssd_paging_generation_graph_submission_layer_interval,
         )
     }

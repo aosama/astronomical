@@ -1,8 +1,26 @@
 use astronomical_model_serving::{
     MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5MtpRuntimeState,
-    qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_runtime_configuration_after_load,
-    qwen3_5_mtp_runtime_state_after_load, qwen3_5_mtp_verification_may_cross_thinking_budget,
+    Qwen3_5MtpTargetOnlyReason, qwen3_5_depth_one_mtp_window_fits,
+    qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
+    qwen3_5_mtp_verification_may_cross_thinking_budget,
 };
+
+#[test]
+fn should_keep_target_serving_with_an_actionable_invalid_standalone_drafter_reason() {
+    let capability = Qwen3_5MtpArtifactCapability::target_only(
+        Qwen3_5MtpTargetOnlyReason::StandaloneDrafterInvalid,
+    );
+
+    let (runtime_state, reason, depth_status) =
+        qwen3_5_mtp_runtime_configuration_after_load(true, None, &capability, false);
+
+    assert_eq!(runtime_state, Qwen3_5MtpRuntimeState::TargetOnly);
+    assert_eq!(
+        reason.as_deref(),
+        Some("standalone MTP drafter artifact validation failed")
+    );
+    assert_eq!(depth_status.effective_execution_draft_depth, None);
+}
 
 #[test]
 fn should_report_bounded_unavailability_after_optional_mtp_initialization_fails() {

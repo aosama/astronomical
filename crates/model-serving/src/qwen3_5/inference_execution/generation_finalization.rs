@@ -91,6 +91,13 @@ impl Qwen3_5EngineState {
             &mut active_request.performance_attribution,
             PerformanceAttribution::disabled(),
         );
+        if let Some(optional_prediction_session) = active_request.take_optional_prediction_session()
+        {
+            performance_attribution.measure_operation(
+                PerformanceOperation::MtpRequestStateCleanup,
+                |_performance_attribution| drop(optional_prediction_session),
+            );
+        }
         // Drop pending tokens, decoder state, and all
         // request-local snapshot references before lifting the pressure ceiling.
         // Otherwise newly admitted pages could compete with memory that is only
@@ -214,6 +221,9 @@ impl Qwen3_5EngineState {
                 outcome,
                 model_id,
                 model_revision,
+                drafter_model_id: self.mtp_drafter_model_id.clone(),
+                drafter_model_revision: self.mtp_drafter_model_revision.clone(),
+                drafter_storage_fingerprint: self.mtp_drafter_storage_fingerprint.clone(),
                 prefill_transient_observation_completed: self
                     .adaptive_ram_growth_guard
                     .has_completed_growth_observation(crate::AdaptiveRamGrowthPhase::Prefill),

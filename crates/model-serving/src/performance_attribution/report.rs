@@ -21,6 +21,9 @@ pub struct ModelLoadingPerformanceAttributionMetadata {
     pub outcome: PerformanceAttributionOutcome,
     pub model_id: Option<String>,
     pub model_revision: Option<String>,
+    pub drafter_model_id: Option<String>,
+    pub drafter_model_revision: Option<String>,
+    pub drafter_storage_fingerprint: Option<String>,
     pub prefill_transient_observation_completed: bool,
     pub prefill_observed_transient_high_water_bytes: u64,
     pub total_artifact_payload_bytes: Option<u64>,
@@ -38,6 +41,9 @@ pub struct GenerationPerformanceAttributionMetadata {
     pub outcome: PerformanceAttributionOutcome,
     pub model_id: String,
     pub model_revision: String,
+    pub drafter_model_id: Option<String>,
+    pub drafter_model_revision: Option<String>,
+    pub drafter_storage_fingerprint: Option<String>,
     pub prefill_transient_observation_completed: bool,
     pub prefill_observed_transient_high_water_bytes: u64,
     pub request_id: u64,
@@ -62,6 +68,12 @@ pub struct ModelLoadingPerformanceAttributionReport {
     common: CommonPerformanceAttributionReport,
     model_id: Option<String>,
     model_revision: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    drafter_model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    drafter_model_revision: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    drafter_storage_fingerprint: Option<String>,
     prefill_transient_observation_completed: bool,
     prefill_observed_transient_high_water_bytes: u64,
     total_artifact_payload_bytes: Option<u64>,
@@ -79,6 +91,12 @@ pub struct GenerationPerformanceAttributionReport {
     common: CommonPerformanceAttributionReport,
     model_id: String,
     model_revision: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    drafter_model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    drafter_model_revision: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    drafter_storage_fingerprint: Option<String>,
     prefill_transient_observation_completed: bool,
     prefill_observed_transient_high_water_bytes: u64,
     request_id: u64,
@@ -144,6 +162,9 @@ impl PerformanceAttribution {
                 common: enabled_attribution.finish_common_report(model_loading_metadata.outcome),
                 model_id: model_loading_metadata.model_id,
                 model_revision: model_loading_metadata.model_revision,
+                drafter_model_id: model_loading_metadata.drafter_model_id,
+                drafter_model_revision: model_loading_metadata.drafter_model_revision,
+                drafter_storage_fingerprint: model_loading_metadata.drafter_storage_fingerprint,
                 prefill_transient_observation_completed: model_loading_metadata
                     .prefill_transient_observation_completed,
                 prefill_observed_transient_high_water_bytes: model_loading_metadata
@@ -171,6 +192,9 @@ impl PerformanceAttribution {
                 common: enabled_attribution.finish_common_report(generation_metadata.outcome),
                 model_id: generation_metadata.model_id,
                 model_revision: generation_metadata.model_revision,
+                drafter_model_id: generation_metadata.drafter_model_id,
+                drafter_model_revision: generation_metadata.drafter_model_revision,
+                drafter_storage_fingerprint: generation_metadata.drafter_storage_fingerprint,
                 prefill_transient_observation_completed: generation_metadata
                     .prefill_transient_observation_completed,
                 prefill_observed_transient_high_water_bytes: generation_metadata

@@ -1,6 +1,56 @@
 use super::*;
 
 #[tokio::test]
+async fn should_report_configured_mtp_pairing_identity_without_exposing_its_directory() {
+    let config_home_directory = tempfile::tempdir()
+        .expect("a config home should be created")
+        .keep();
+    let mut resolved_config = sample_resolved_config();
+    resolved_config.mtp_enabled = true;
+    resolved_config.mtp_pairings = vec![astronomical_ipc_protocol::WorkerMtpPairingConfiguration {
+        target_model_id: crate::common::MODEL_ID.to_owned(),
+        drafter_model_id: "publisher/standalone-mtp".to_owned(),
+        drafter_model_directory: Some(config_home_directory.join("private-model-root")),
+        discovered_drafter_revision: Some("revision-one".to_owned()),
+    }];
+    let application = build_development_application_with_reload(
+        ScriptedExecutor::ready(Vec::new()),
+        Arc::new(RwLock::new(resolved_config)),
+        config_home_directory.clone(),
+    );
+
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return status");
+    let status_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&status_body).expect("status should contain JSON");
+
+    assert_eq!(
+        status_document["mtp_pairing_target_model_id"],
+        crate::common::MODEL_ID
+    );
+    assert_eq!(
+        status_document["mtp_pairing_drafter_model_id"],
+        "publisher/standalone-mtp"
+    );
+    assert_eq!(
+        status_document["mtp_pairing_drafter_revision"],
+        "revision-one"
+    );
+    assert_eq!(status_document["mtp_pairing_drafter_discovered"], true);
+    assert!(!String::from_utf8_lossy(&status_body).contains("private-model-root"));
+}
+
+#[tokio::test]
 async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
     let worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
@@ -157,6 +207,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         performance_attribution_enabled: false,
         mtp_enabled: false,
         mtp_draft_depth: None,
+        mtp_pairings: Vec::new(),
         speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(

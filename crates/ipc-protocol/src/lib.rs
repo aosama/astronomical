@@ -35,9 +35,10 @@ pub use protocol_message::{
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
 pub use worker_chunking_configuration::{
-    WorkerChunkingConfiguration, graph_submission_layer_interval,
+    WorkerChunkingConfiguration, decode_graph_submission_layer_interval,
+    graph_submission_layer_interval,
 };
 pub use worker_startup_configuration::{
-    WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,
-    WorkerStartupConfiguration,
+    WorkerLogLevel, WorkerMtpPairingConfiguration, WorkerRuntimeFeatureConfiguration,
+    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
 };

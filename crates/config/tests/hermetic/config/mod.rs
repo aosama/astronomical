@@ -10,6 +10,7 @@ use super::write_config;
 mod chunking;
 mod logging;
 mod maximum_mlx_memory;
+mod mtp_pairings;
 mod prompt_cache;
 mod prompt_processing_chunk_sizing;
 mod runtime;

@@ -55,6 +55,30 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                 .map(|configuration| configuration.mtp_enabled)
         })
         .unwrap_or(false);
+    let configured_mtp_pairing =
+        worker_health_snapshot
+            .ready_model_id
+            .as_deref()
+            .and_then(|ready_model_id| {
+                application_state
+                    .reloadable_config
+                    .as_ref()
+                    .and_then(|reloadable_config| reloadable_config.read().ok())
+                    .and_then(|resolved_config| {
+                        resolved_config
+                            .mtp_pairings
+                            .iter()
+                            .find(|pairing| pairing.applies_to_loaded_model(ready_model_id))
+                            .map(|pairing| {
+                                (
+                                    pairing.target_model_id.clone(),
+                                    pairing.drafter_model_id.clone(),
+                                    pairing.discovered_drafter_revision.clone(),
+                                    pairing.drafter_model_directory.is_some(),
+                                )
+                            })
+                    })
+            });
     let configured_speculative_prefill_enabled = application_state
         .reloadable_config
         .as_ref()
@@ -121,6 +145,18 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "mtp_runtime_state": serde_json::to_value(worker_health_snapshot.mtp_runtime_state())
             .unwrap_or_else(|_| serde_json::json!("disabled")),
         "mtp_unavailable_reason": worker_health_snapshot.mtp_unavailable_reason(),
+        "mtp_pairing_target_model_id": configured_mtp_pairing
+            .as_ref()
+            .map(|(target_model_id, _, _, _)| target_model_id),
+        "mtp_pairing_drafter_model_id": configured_mtp_pairing
+            .as_ref()
+            .map(|(_, drafter_model_id, _, _)| drafter_model_id),
+        "mtp_pairing_drafter_revision": configured_mtp_pairing
+            .as_ref()
+            .and_then(|(_, _, drafter_revision, _)| drafter_revision.as_deref()),
+        "mtp_pairing_drafter_discovered": configured_mtp_pairing
+            .as_ref()
+            .map(|(_, _, _, drafter_discovered)| drafter_discovered),
         "speculative_prefill_enabled": speculative_prefill_enabled,
         "configured_speculative_prefill_enabled": configured_speculative_prefill_enabled,
         "worker_runtime_feature_configuration_applied": worker_health_snapshot.worker_runtime_feature_configuration.is_some(),

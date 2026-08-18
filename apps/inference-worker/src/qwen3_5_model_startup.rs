@@ -2,12 +2,15 @@ use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration,
+    WorkerChunkingConfiguration, WorkerMtpPairingConfiguration,
+    WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
     PerformanceOperation, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5MtpSourceSelection,
+    Qwen3_5MtpSourceUnavailableReason, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5StandaloneMtpArtifactValidator, compare_qwen3_5_mtp_pairing_contracts,
 };
 
 use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
@@ -15,6 +18,7 @@ use astronomical_model_serving::ModelLoadingPerformanceAttributionMetadata;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn initialize_qwen3_5_model(
+    requested_model_id: String,
     model_directory_path: PathBuf,
     active_memory_limit_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
@@ -22,6 +26,7 @@ pub(crate) fn initialize_qwen3_5_model(
     max_output_tokens: u32,
     mtp_enabled: bool,
     mtp_draft_depth: Option<u8>,
+    selected_mtp_pairing: Option<WorkerMtpPairingConfiguration>,
     speculative_prefill: WorkerSpeculativePrefillConfiguration,
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
@@ -71,6 +76,19 @@ pub(crate) fn initialize_qwen3_5_model(
             });
         }
     };
+    if validated_artifact.model_id() != requested_model_id {
+        return Err(Qwen3_5ModelStartupError::RequestedModelIdentityMismatch {
+            requested_model_id,
+            validated_model_id: validated_artifact.model_id().to_owned(),
+        });
+    }
+    let mtp_source_selection = select_mtp_source(
+        &validated_artifact,
+        mtp_enabled,
+        mtp_draft_depth,
+        selected_mtp_pairing,
+        &mut model_loading_performance_attribution,
+    );
     let artifact_model_id = validated_artifact.model_id().to_owned();
     let loaded_model_speculative_prefill_configuration =
         speculative_prefill.for_loaded_model(&artifact_model_id);
@@ -158,6 +176,7 @@ pub(crate) fn initialize_qwen3_5_model(
         true,
         mtp_enabled,
         mtp_draft_depth,
+        mtp_source_selection,
         loaded_model_speculative_prefill_configuration,
         model_loading_performance_attribution,
         performance_attribution_log,
@@ -167,6 +186,91 @@ pub(crate) fn initialize_qwen3_5_model(
         source,
     })?;
     Ok((generation_processor, qwen3_5_engine))
+}
+
+fn select_mtp_source(
+    validated_target: &astronomical_model_serving::ValidatedQwen3_5Artifact,
+    mtp_enabled: bool,
+    mtp_draft_depth: Option<u8>,
+    selected_pairing: Option<WorkerMtpPairingConfiguration>,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Qwen3_5MtpSourceSelection {
+    if !mtp_enabled {
+        return Qwen3_5MtpSourceSelection::TargetLocal;
+    }
+    let Some(selected_pairing) = selected_pairing else {
+        return Qwen3_5MtpSourceSelection::TargetLocal;
+    };
+    let drafter_model_id = selected_pairing.drafter_model_id;
+    let drafter_model_revision = selected_pairing.discovered_drafter_revision;
+    let (Some(drafter_directory), Some(drafter_revision)) = (
+        selected_pairing.drafter_model_directory,
+        drafter_model_revision.clone(),
+    ) else {
+        return Qwen3_5MtpSourceSelection::TargetOnly {
+            reason: Qwen3_5MtpSourceUnavailableReason::ConfiguredDrafterNotDiscovered,
+            drafter_model_id,
+            drafter_model_revision,
+            drafter_storage_fingerprint: None,
+        };
+    };
+    let standalone_artifact = match performance_attribution.measure_operation(
+        PerformanceOperation::StandaloneMtpArtifactValidation,
+        |_performance_attribution| {
+            Qwen3_5StandaloneMtpArtifactValidator::new(
+                validated_target.config(),
+                drafter_model_id.clone(),
+                drafter_revision,
+            )
+            .validate(drafter_directory)
+        },
+    ) {
+        Ok(standalone_artifact) => standalone_artifact,
+        Err(_) => {
+            return Qwen3_5MtpSourceSelection::TargetOnly {
+                reason: Qwen3_5MtpSourceUnavailableReason::StandaloneArtifactInvalid,
+                drafter_model_id,
+                drafter_model_revision,
+                drafter_storage_fingerprint: None,
+            };
+        }
+    };
+    let Some(target_tokenizer_bytes) = validated_target.tokenizer_bytes() else {
+        return Qwen3_5MtpSourceSelection::TargetOnly {
+            reason: Qwen3_5MtpSourceUnavailableReason::PairingIncompatible,
+            drafter_model_id,
+            drafter_model_revision,
+            drafter_storage_fingerprint: Some(standalone_artifact.storage_fingerprint().to_owned()),
+        };
+    };
+    let compatibility = match performance_attribution.measure_operation(
+        PerformanceOperation::MtpPairingCompatibilityValidation,
+        |_performance_attribution| {
+            compare_qwen3_5_mtp_pairing_contracts(
+                validated_target.config(),
+                target_tokenizer_bytes,
+                standalone_artifact.config(),
+                standalone_artifact.tokenizer_bytes(),
+                mtp_draft_depth,
+            )
+        },
+    ) {
+        Ok(compatibility) => compatibility,
+        Err(_) => {
+            return Qwen3_5MtpSourceSelection::TargetOnly {
+                reason: Qwen3_5MtpSourceUnavailableReason::PairingIncompatible,
+                drafter_model_id,
+                drafter_model_revision,
+                drafter_storage_fingerprint: Some(
+                    standalone_artifact.storage_fingerprint().to_owned(),
+                ),
+            };
+        }
+    };
+    Qwen3_5MtpSourceSelection::Standalone {
+        artifact: standalone_artifact,
+        compatibility,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -184,6 +288,9 @@ fn record_failed_model_loading_performance_attribution(
             outcome: PerformanceAttributionOutcome::Failed,
             model_id,
             model_revision,
+            drafter_model_id: None,
+            drafter_model_revision: None,
+            drafter_storage_fingerprint: None,
             prefill_transient_observation_completed: false,
             prefill_observed_transient_high_water_bytes: 0,
             total_artifact_payload_bytes,

@@ -3,6 +3,10 @@ use astronomical_runtime_integration::MlxRuntimeError;
 
 use super::MtpDraftDepth;
 use super::verified_emission_queue::{VerifiedEmissionQueue, VerifiedTargetFrontier};
+use super::{
+    Qwen3_5MtpRequestEligibility, Qwen3_5MtpRequestEligibilityInputs,
+    qwen3_5_mtp_request_eligibility,
+};
 use crate::decoder_cache::{
     FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,
 };
@@ -35,18 +39,19 @@ impl Qwen3_5MultiTokenPredictionRequest {
         full_attention_kv_state_growth_tokens: i32,
         requested_depth: Option<MtpDraftDepth>,
     ) -> Result<Option<Self>, MlxRuntimeError> {
-        let is_eligible = mtp_enabled
-            && mtp_runtime_is_active
-            && model_has_mtp_weights
-            && sampling_is_greedy
-            && !has_precomputed_visual_embeddings
-            && !has_processed_visual_images
-            && !persistent_prompt_cache_is_available
-            && usize::try_from(restored_prompt_token_count).is_ok_and(|restored_token_count| {
-                restored_token_count < prompt_token_count.saturating_sub(1)
-            })
-            && prompt_token_count > 1;
-        if !is_eligible {
+        let request_eligibility =
+            qwen3_5_mtp_request_eligibility(Qwen3_5MtpRequestEligibilityInputs {
+                mtp_enabled,
+                mtp_runtime_is_active,
+                model_has_mtp_weights,
+                sampling_is_greedy,
+                has_precomputed_visual_embeddings,
+                has_processed_visual_images,
+                persistent_prompt_cache_is_available,
+                prompt_token_count,
+                restored_prompt_token_count,
+            });
+        if !request_eligibility.is_eligible() {
             return Ok(None);
         }
         let requested_depth = requested_depth.ok_or_else(|| MlxRuntimeError::RuntimeOperation {
@@ -173,6 +178,11 @@ impl Qwen3_5MultiTokenPredictionRequest {
     }
 }
 
+pub(crate) struct Qwen3_5OptionalPredictionSession {
+    pub(crate) request: Option<Qwen3_5MultiTokenPredictionRequest>,
+    pub(crate) eligibility: Qwen3_5MtpRequestEligibility,
+}
+
 pub(crate) fn create_optional_prediction_session(
     user_enabled_optional_prediction: bool,
     optional_prediction_runtime_is_active: bool,
@@ -185,8 +195,21 @@ pub(crate) fn create_optional_prediction_session(
     restored_prompt_token_count: u32,
     full_attention_kv_state_growth_tokens: i32,
     requested_depth: Option<MtpDraftDepth>,
-) -> Result<Option<Qwen3_5MultiTokenPredictionRequest>, MlxRuntimeError> {
-    Qwen3_5MultiTokenPredictionRequest::new_if_eligible(
+) -> Result<Qwen3_5OptionalPredictionSession, MlxRuntimeError> {
+    let eligibility = qwen3_5_mtp_request_eligibility(Qwen3_5MtpRequestEligibilityInputs {
+        mtp_enabled: user_enabled_optional_prediction,
+        mtp_runtime_is_active: optional_prediction_runtime_is_active,
+        model_has_mtp_weights: model_has_optional_prediction_weights,
+        sampling_is_greedy: Qwen3_5MultiTokenPredictionRequest::is_greedy_sampling_strategy(
+            sampling_strategy,
+        ),
+        has_precomputed_visual_embeddings,
+        has_processed_visual_images,
+        persistent_prompt_cache_is_available,
+        prompt_token_count,
+        restored_prompt_token_count,
+    });
+    let request = Qwen3_5MultiTokenPredictionRequest::new_if_eligible(
         user_enabled_optional_prediction,
         optional_prediction_runtime_is_active,
         model_has_optional_prediction_weights,
@@ -198,7 +221,11 @@ pub(crate) fn create_optional_prediction_session(
         restored_prompt_token_count,
         full_attention_kv_state_growth_tokens,
         requested_depth,
-    )
+    )?;
+    Ok(Qwen3_5OptionalPredictionSession {
+        request,
+        eligibility,
+    })
 }
 
 /// Request-local state for Qwen's one-layer multi-token prediction head.

@@ -405,6 +405,13 @@ impl Qwen3_5EngineState {
                     .map_err(|_| fatal_engine_error("loaded MTP depth is outside 1 through 3"))?,
             )
             .map_err(qwen3_5_runtime_error)?;
+            super::mtp_request_eligibility_observation::record_mtp_request_eligibility(
+                &inference_request.request_id(),
+                self.mtp_enabled,
+                optional_prediction_session.eligibility,
+                &mut performance_attribution,
+            );
+            let optional_prediction_session = optional_prediction_session.request;
             performance_attribution.record_counter(
                 PerformanceCounter::PromptTokenCount,
                 u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),

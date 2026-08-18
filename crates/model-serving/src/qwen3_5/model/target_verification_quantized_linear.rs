@@ -1,6 +1,5 @@
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntime, MlxRuntimeError,
+    MlxArray, MlxDtype, MlxMetalKernel, MlxRuntime, MlxRuntimeError,
 };
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
@@ -231,7 +230,7 @@ pub fn target_verification_quantized_linear_kernel() -> Result<MlxMetalKernel, M
 #[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_target_verification_quantized_linear(
     runtime: &MlxRuntime,
-    target_verification_kernel: &MlxMetalKernel,
+    _target_verification_kernel: &MlxMetalKernel,
     activations: &MlxArray,
     packed_weight: &MlxArray,
     quantization_scales: &MlxArray,
@@ -261,52 +260,20 @@ pub fn qwen3_5_target_verification_quantized_linear(
         input_dimension,
         output_dimension,
     ) {
-        let mut kernel_outputs = runtime.apply_metal_kernel(
-            target_verification_kernel,
-            &[
-                activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-            ],
-            &[MlxMetalKernelOutput::new(
-                vec![activation_shape[0], activation_shape[1], output_dimension],
-                activations.dtype(),
-            )],
-            [32, 2 * (output_dimension / 8), activation_shape[0]],
-            [32, 2, 1],
-            &[
-                MlxMetalKernelTemplateArgument::Dtype {
-                    name: "T",
-                    dtype: activations.dtype(),
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "BITS",
-                    integer_template_argument: quantization_bits,
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "GS",
-                    integer_template_argument: quantization_group_size,
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "VERIFY_T",
-                    integer_template_argument: activation_shape[1],
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "K_SIZE",
-                    integer_template_argument: input_dimension,
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "N_SIZE",
-                    integer_template_argument: output_dimension,
-                },
-            ],
+        // MLX 0.32 routes two through twelve rows through qmv_wide on capable
+        // Apple GPUs, reusing each quantized weight group across verification
+        // positions. Direct-MLX qualification proves this route remains bit
+        // exact to repeated one-token target decode for retained 4- and 5-bit
+        // geometries, so the older custom QMV no longer justifies bypassing it.
+        let projected_activations = runtime.quantized_matmul_affine(
+            activations,
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            true,
+            quantization_group_size,
+            quantization_bits,
         )?;
-        let projected_activations = kernel_outputs.pop().ok_or_else(|| {
-            target_verification_projection_error(
-                "target-verification Metal kernel returned no projected activations",
-            )
-        })?;
         return Ok(Qwen3_5TargetVerificationProjection {
             projected_activations,
             dispatch: Qwen3_5TargetVerificationProjectionDispatch::OptimizedMetal,

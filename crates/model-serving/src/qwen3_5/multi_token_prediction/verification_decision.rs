@@ -178,3 +178,9 @@ pub fn qwen3_5_mtp_effective_depth_and_reason_for_windows(
     };
     (effective_depth, downgrade_reason)
 }
+
+/// Accepted drafts must be replayed with target-authoritative hidden rows.
+#[must_use]
+pub const fn predictor_history_requires_verified_hidden_replay(accepted_draft_count: u8) -> bool {
+    accepted_draft_count > 0
+}
