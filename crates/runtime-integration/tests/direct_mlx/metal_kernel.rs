@@ -1,3 +1,5 @@
+//! Direct GPU contracts for Astronomical's owned MLX custom Metal-kernel boundary.
+
 use astronomical_runtime_integration::{MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
 
 use crate::common::runtime_test_support::{assert_f32_close, runtime};
@@ -121,5 +123,79 @@ fn should_apply_a_custom_metal_kernel_with_a_small_uint32_output() {
             .to_vec_u32()
             .expect("the uint32 custom Metal output should evaluate"),
         vec![u32::MAX, 0, 0]
+    );
+}
+
+#[test]
+fn should_execute_same_name_different_source_kernels_in_one_evaluation_group() {
+    let runtime = runtime();
+    let source_values = runtime
+        .array_from_f32(&[0.0, 1.0, 2.0, 3.0], &[4])
+        .expect("the shared source values should be valid");
+    // Real owners use unique names today, but MLX identifies compiled libraries
+    // below this boundary. Keeping the collision in one evaluation group guards
+    // against a dependency regression silently substituting another owner's code.
+    let doubled_kernel = MlxMetalKernel::new(
+        "astronomical_same_name_different_source_test",
+        &["source_values"],
+        &["transformed_values"],
+        r#"
+            uint element_index = thread_position_in_grid.x;
+            transformed_values[element_index] = source_values[element_index] * 2.0f;
+        "#,
+    )
+    .expect("the doubling custom Metal kernel should be constructed");
+    let shifted_kernel = MlxMetalKernel::new(
+        "astronomical_same_name_different_source_test",
+        &["source_values"],
+        &["transformed_values"],
+        r#"
+            uint element_index = thread_position_in_grid.x;
+            transformed_values[element_index] = source_values[element_index] + 100.0f;
+        "#,
+    )
+    .expect("the shifting custom Metal kernel should be constructed");
+
+    let mut doubled_outputs = runtime
+        .apply_metal_kernel(
+            &doubled_kernel,
+            &[&source_values],
+            &[MlxMetalKernelOutput::new(vec![4], MlxDtype::Float32)],
+            [4, 1, 1],
+            [4, 1, 1],
+            &[],
+        )
+        .expect("the doubling kernel should build a valid graph");
+    let doubled_values = doubled_outputs
+        .pop()
+        .expect("the doubling kernel should return one output");
+    let mut shifted_outputs = runtime
+        .apply_metal_kernel(
+            &shifted_kernel,
+            &[&source_values],
+            &[MlxMetalKernelOutput::new(vec![4], MlxDtype::Float32)],
+            [4, 1, 1],
+            [4, 1, 1],
+            &[],
+        )
+        .expect("the shifting kernel should build a valid graph");
+    let shifted_values = shifted_outputs
+        .pop()
+        .expect("the shifting kernel should return one output");
+
+    runtime
+        .evaluate_arrays(&[&doubled_values, &shifted_values])
+        .expect("both same-name kernels should evaluate in one group");
+    assert_f32_close(
+        &doubled_values
+            .to_vec_f32()
+            .expect("the doubled values should be readable"),
+        &[0.0, 2.0, 4.0, 6.0],
+    );
+    assert_f32_close(
+        &shifted_values
+            .to_vec_f32()
+            .expect("the shifted values should be readable"),
+        &[100.0, 101.0, 102.0, 103.0],
     );
 }
