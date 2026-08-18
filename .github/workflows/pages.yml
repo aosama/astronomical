@@ -22,7 +22,7 @@ jobs:
   deploy:
     name: Publish GitHub Pages site
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
