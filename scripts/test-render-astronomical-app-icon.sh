@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Exercises the end-user icon journey from version/date inputs to a valid macOS icon family.
+# Proves Stable has a clean deterministic icon while Development remains visibly distinct.
 
 set -eu
 
@@ -32,14 +32,21 @@ main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
     icon_renderer="${repository_root}/scripts/render-astronomical-app-icon.swift"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-app-icon.XXXXXX")"
-    iconset_directory="${SANDBOX_DIRECTORY}/Astronomical.iconset"
+    stable_iconset_a="${SANDBOX_DIRECTORY}/Stable-A.iconset"
+    stable_iconset_b="${SANDBOX_DIRECTORY}/Stable-B.iconset"
+    development_iconset_a="${SANDBOX_DIRECTORY}/Development-A.iconset"
+    development_iconset_b="${SANDBOX_DIRECTORY}/Development-B.iconset"
     icns_path="${SANDBOX_DIRECTORY}/Astronomical.icns"
 
-    printf '%s\n' '[app-icon-test] case=version-and-date-produce-complete-icon-family status=start'
+    printf '%s\n' '[app-icon-test] case=stable-icon-is-clean-and-deterministic status=start'
     timeout "$RENDER_TIMEOUT_SECONDS" swift "$icon_renderer" \
-        --output-directory "$iconset_directory" \
-        --version "0.2.0" \
-        --build-date "20260814"
+        --output-directory "$stable_iconset_a" --channel stable
+    timeout "$RENDER_TIMEOUT_SECONDS" swift "$icon_renderer" \
+        --output-directory "$stable_iconset_b" --channel stable
+    timeout "$RENDER_TIMEOUT_SECONDS" swift "$icon_renderer" \
+        --output-directory "$development_iconset_a" --channel development
+    timeout "$RENDER_TIMEOUT_SECONDS" swift "$icon_renderer" \
+        --output-directory "$development_iconset_b" --channel development
     for required_icon_name in \
         icon_16x16.png icon_16x16@2x.png \
         icon_32x32.png icon_32x32@2x.png \
@@ -47,29 +54,53 @@ main() {
         icon_256x256.png icon_256x256@2x.png \
         icon_512x512.png icon_512x512@2x.png
     do
-        [ -s "${iconset_directory}/${required_icon_name}" ] || {
+        [ -s "${stable_iconset_a}/${required_icon_name}" ] || {
             print_error "rendered icon family is missing ${required_icon_name}"
             exit 1
         }
+        cmp "${stable_iconset_a}/${required_icon_name}" \
+            "${stable_iconset_b}/${required_icon_name}" >/dev/null || {
+            print_error "Stable icon is not deterministic: ${required_icon_name}"
+            exit 1
+        }
+        cmp "${development_iconset_a}/${required_icon_name}" \
+            "${development_iconset_b}/${required_icon_name}" >/dev/null || {
+            print_error "Development icon is not deterministic: ${required_icon_name}"
+            exit 1
+        }
+        if cmp "${stable_iconset_a}/${required_icon_name}" \
+            "${development_iconset_a}/${required_icon_name}" >/dev/null; then
+            print_error "Development identity is absent from ${required_icon_name}"
+            exit 1
+        fi
     done
     timeout "$RENDER_TIMEOUT_SECONDS" iconutil --convert icns \
-        --output "$icns_path" "$iconset_directory"
+        --output "$icns_path" "$stable_iconset_a"
     [ -s "$icns_path" ] || {
         print_error "iconutil did not produce Astronomical.icns"
         exit 1
     }
-    printf '%s\n' '[app-icon-test] case=version-and-date-produce-complete-icon-family status=success'
+    printf '%s\n' '[app-icon-test] case=stable-icon-is-clean-and-deterministic status=success'
 
-    printf '%s\n' '[app-icon-test] case=malformed-build-date-is-rejected status=start'
+    printf '%s\n' '[app-icon-test] case=invalid-channel-is-rejected status=start'
     if timeout "$RENDER_TIMEOUT_SECONDS" swift "$icon_renderer" \
         --output-directory "${SANDBOX_DIRECTORY}/invalid.iconset" \
-        --version "0.2.0" \
-        --build-date "2026-08-14" >/dev/null 2>&1
+        --channel "nightly" >/dev/null 2>&1
     then
-        print_error "icon renderer unexpectedly accepted a non-YYYYMMDD build date"
+        print_error "icon renderer unexpectedly accepted an unsupported channel"
         exit 1
     fi
-    printf '%s\n' '[app-icon-test] case=malformed-build-date-is-rejected status=success'
+    printf '%s\n' '[app-icon-test] case=invalid-channel-is-rejected status=success'
+
+    printf '%s\n' '[app-icon-test] case=duplicate-options-are-rejected status=start'
+    if timeout "$RENDER_TIMEOUT_SECONDS" swift "$icon_renderer" \
+        --output-directory "${SANDBOX_DIRECTORY}/duplicate.iconset" \
+        --channel stable --channel development >/dev/null 2>&1
+    then
+        print_error "icon renderer unexpectedly accepted a duplicate channel"
+        exit 1
+    fi
+    printf '%s\n' '[app-icon-test] case=duplicate-options-are-rejected status=success'
 }
 
 main "$@"

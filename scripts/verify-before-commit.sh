@@ -79,6 +79,11 @@ if [ "$RUN_HERMITIC_CI_ONLY" != "true" ]; then
     printf '\n%s\n' "[commit-verification] step=rust-dependency-notices timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
     "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/generate-rust-dependency-notices.sh --check
     printf '%s\n' "[commit-verification] PASSED step=rust-dependency-notices"
+
+    printf '\n%s\n' "[commit-verification] step=macos-distribution-contracts timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+    distribution_contracts_started_at_seconds="$(date +%s)"
+    "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-macos-distribution-contracts.sh
+    printf '%s\n' "[commit-verification] PASSED step=macos-distribution-contracts elapsed_seconds=$(( $(date +%s) - distribution_contracts_started_at_seconds ))"
 fi
 
 run_cargo_step() {
