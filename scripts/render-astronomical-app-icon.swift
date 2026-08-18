@@ -1,15 +1,18 @@
 #!/usr/bin/env swift
 
-// Renders Astronomical's orbital identity with build-derived version and date
-// badges into every PNG required by a macOS .iconset directory.
+// Renders the clean Stable identity and a restrained channel-marked Development variant.
 
 import AppKit
 import Foundation
 
 private struct IconRenderArguments {
   let outputDirectory: URL
-  let applicationVersion: String
-  let buildDate: String
+  let applicationChannel: ApplicationChannel
+}
+
+private enum ApplicationChannel: String {
+  case stable
+  case development
 }
 
 private struct IconVariant {
@@ -19,9 +22,9 @@ private struct IconVariant {
 
 private enum IconRenderError: LocalizedError {
   case missingArgument(String)
+  case duplicateArgument(String)
   case unrecognizedArgument(String)
-  case invalidVersion(String)
-  case invalidBuildDate(String)
+  case invalidChannel(String)
   case bitmapCreationFailed(Int)
   case graphicsContextCreationFailed(Int)
   case pngEncodingFailed(Int)
@@ -30,12 +33,12 @@ private enum IconRenderError: LocalizedError {
     switch self {
     case .missingArgument(let argumentName):
       return "missing required argument: \(argumentName)"
+    case .duplicateArgument(let argumentName):
+      return "argument may be provided only once: \(argumentName)"
     case .unrecognizedArgument(let argument):
       return "unrecognized argument: \(argument)"
-    case .invalidVersion(let version):
-      return "version must be a semantic version, received: \(version)"
-    case .invalidBuildDate(let buildDate):
-      return "build date must be a real UTC calendar date in YYYYMMDD form, received: \(buildDate)"
+    case .invalidChannel(let channel):
+      return "channel must be stable or development, received: \(channel)"
     case .bitmapCreationFailed(let pixelSize):
       return "could not allocate the \(pixelSize)-pixel icon bitmap"
     case .graphicsContextCreationFailed(let pixelSize):
@@ -62,8 +65,7 @@ private let iconVariants = [
 private func parseArguments() throws -> IconRenderArguments {
   let commandArguments = Array(CommandLine.arguments.dropFirst())
   var outputDirectoryPath: String?
-  var applicationVersion: String?
-  var buildDate: String?
+  var applicationChannel: ApplicationChannel?
   var argumentIndex = 0
 
   while argumentIndex < commandArguments.count {
@@ -74,11 +76,18 @@ private func parseArguments() throws -> IconRenderArguments {
     let argumentValue = commandArguments[argumentIndex + 1]
     switch argumentName {
     case "--output-directory":
+      guard outputDirectoryPath == nil else {
+        throw IconRenderError.duplicateArgument(argumentName)
+      }
       outputDirectoryPath = argumentValue
-    case "--version":
-      applicationVersion = argumentValue
-    case "--build-date":
-      buildDate = argumentValue
+    case "--channel":
+      guard applicationChannel == nil else {
+        throw IconRenderError.duplicateArgument(argumentName)
+      }
+      guard let parsedChannel = ApplicationChannel(rawValue: argumentValue) else {
+        throw IconRenderError.invalidChannel(argumentValue)
+      }
+      applicationChannel = parsedChannel
     default:
       throw IconRenderError.unrecognizedArgument(argumentName)
     }
@@ -88,52 +97,19 @@ private func parseArguments() throws -> IconRenderArguments {
   guard let outputDirectoryPath else {
     throw IconRenderError.missingArgument("--output-directory")
   }
-  guard let applicationVersion else {
-    throw IconRenderError.missingArgument("--version")
+  guard let applicationChannel else {
+    throw IconRenderError.missingArgument("--channel")
   }
-  guard let buildDate else {
-    throw IconRenderError.missingArgument("--build-date")
-  }
-  try validateApplicationVersion(applicationVersion)
-  try validateBuildDate(buildDate)
 
   return IconRenderArguments(
     outputDirectory: URL(fileURLWithPath: outputDirectoryPath, isDirectory: true),
-    applicationVersion: applicationVersion,
-    buildDate: buildDate
+    applicationChannel: applicationChannel
   )
-}
-
-private func validateApplicationVersion(_ applicationVersion: String) throws {
-  // Keep the rendered value aligned with Cargo semantic versions, including
-  // optional pre-release and build metadata suffixes.
-  let semanticVersionPattern = #"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"#
-  let versionRange = NSRange(applicationVersion.startIndex..., in: applicationVersion)
-  let semanticVersionExpression = try NSRegularExpression(pattern: semanticVersionPattern)
-  guard semanticVersionExpression.firstMatch(in: applicationVersion, range: versionRange) != nil else {
-    throw IconRenderError.invalidVersion(applicationVersion)
-  }
-}
-
-private func validateBuildDate(_ buildDate: String) throws {
-  guard buildDate.range(of: #"^[0-9]{8}$"#, options: .regularExpression) != nil else {
-    throw IconRenderError.invalidBuildDate(buildDate)
-  }
-  let dateFormatter = DateFormatter()
-  dateFormatter.calendar = Calendar(identifier: .gregorian)
-  dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-  dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
-  dateFormatter.dateFormat = "yyyyMMdd"
-  dateFormatter.isLenient = false
-  guard let parsedDate = dateFormatter.date(from: buildDate), dateFormatter.string(from: parsedDate) == buildDate else {
-    throw IconRenderError.invalidBuildDate(buildDate)
-  }
 }
 
 private func renderIcon(
   pixelSize: Int,
-  applicationVersion: String,
-  buildDate: String
+  applicationChannel: ApplicationChannel
 ) throws -> Data {
   guard let bitmap = NSBitmapImageRep(
     bitmapDataPlanes: nil,
@@ -256,11 +232,9 @@ private func renderIcon(
     )
   ).fill()
 
-  drawIdentityBadge(
-    canvasSize: canvasSize,
-    applicationVersion: applicationVersion,
-    buildDate: buildDate
-  )
+  if applicationChannel == .development {
+    drawDevelopmentBadge(canvasSize: canvasSize)
+  }
   NSGraphicsContext.restoreGraphicsState()
 
   guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
@@ -269,11 +243,7 @@ private func renderIcon(
   return pngData
 }
 
-private func drawIdentityBadge(
-  canvasSize: CGFloat,
-  applicationVersion: String,
-  buildDate: String
-) {
+private func drawDevelopmentBadge(canvasSize: CGFloat) {
   let badgeRectangle = NSRect(
     x: canvasSize * 0.14,
     y: canvasSize * 0.105,
@@ -288,41 +258,24 @@ private func drawIdentityBadge(
   NSColor(calibratedRed: 0.957, green: 0.941, blue: 0.902, alpha: 0.97).setFill()
   badgePath.fill()
 
-  // At 16 physical pixels, preserving the badge silhouette is clearer than
-  // rasterizing illegible glyphs. Retina Finder variants use 64+ pixels and
-  // therefore include both the exact version and the UTC build date.
+  // Small variants keep the badge silhouette because channel text would not be legible.
   guard canvasSize >= 32 else { return }
 
   let centeredParagraph = NSMutableParagraphStyle()
   centeredParagraph.alignment = .center
-  let versionFontSize = max(5, canvasSize * 0.105)
-  let versionAttributes: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: versionFontSize, weight: .heavy),
+  let channelFontSize = max(5, canvasSize * 0.105)
+  let channelAttributes: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: channelFontSize, weight: .heavy),
     .foregroundColor: NSColor(calibratedRed: 0.063, green: 0.071, blue: 0.059, alpha: 1),
     .paragraphStyle: centeredParagraph,
   ]
-  let versionRectangle = NSRect(
+  let channelRectangle = NSRect(
     x: badgeRectangle.minX,
-    y: badgeRectangle.minY + badgeRectangle.height * 0.39,
+    y: badgeRectangle.minY + badgeRectangle.height * 0.20,
     width: badgeRectangle.width,
-    height: badgeRectangle.height * 0.50
+    height: badgeRectangle.height * 0.62
   )
-  (applicationVersion as NSString).draw(in: versionRectangle, withAttributes: versionAttributes)
-
-  let dateFontSize = max(4, canvasSize * 0.052)
-  let dateAttributes: [NSAttributedString.Key: Any] = [
-    .font: NSFont.monospacedDigitSystemFont(ofSize: dateFontSize, weight: .semibold),
-    .foregroundColor: NSColor(calibratedRed: 0.78, green: 0.25, blue: 0.10, alpha: 1),
-    .paragraphStyle: centeredParagraph,
-    .kern: canvasSize * 0.004,
-  ]
-  let dateRectangle = NSRect(
-    x: badgeRectangle.minX,
-    y: badgeRectangle.minY + badgeRectangle.height * 0.08,
-    width: badgeRectangle.width,
-    height: badgeRectangle.height * 0.34
-  )
-  (buildDate as NSString).draw(in: dateRectangle, withAttributes: dateAttributes)
+  ("DEV" as NSString).draw(in: channelRectangle, withAttributes: channelAttributes)
 }
 
 private func renderIconFamily(arguments: IconRenderArguments) throws {
@@ -333,8 +286,7 @@ private func renderIconFamily(arguments: IconRenderArguments) throws {
   for iconVariant in iconVariants {
     let pngData = try renderIcon(
       pixelSize: iconVariant.pixelSize,
-      applicationVersion: arguments.applicationVersion,
-      buildDate: arguments.buildDate
+      applicationChannel: arguments.applicationChannel
     )
     let outputFile = arguments.outputDirectory.appendingPathComponent(iconVariant.fileName)
     try pngData.write(to: outputFile, options: .atomic)

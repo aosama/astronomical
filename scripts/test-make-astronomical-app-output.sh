@@ -119,7 +119,9 @@ main() {
     sandbox_scripts_directory="${sandbox_repository}/scripts"
     fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
     mkdir -p "$sandbox_scripts_directory" "$fake_command_directory" \
-        "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework" \
+        "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/Updater.app" \
+        "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
+        "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" \
         "${sandbox_repository}/apps/astronomical-menu/.build/checkouts/Sparkle" \
         "${sandbox_repository}/third-party"
     cp "${repository_root}/scripts/make-astronomical-app.sh" \
@@ -129,6 +131,7 @@ main() {
     printf '%s\n' fixture > "${sandbox_repository}/third-party/THIRD_PARTY_NOTICES"
     printf '%s\n' fixture > "${sandbox_repository}/third-party/RUST_DEPENDENCY_NOTICES"
     printf '%s\n' fixture > "${sandbox_repository}/apps/astronomical-menu/.build/checkouts/Sparkle/LICENSE"
+    printf '%s\n' fixture > "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/Autoupdate"
 
     cat > "${fake_command_directory}/cargo" <<'CARGO'
 #!/usr/bin/env sh
@@ -144,14 +147,23 @@ CARGO
     cat > "${fake_command_directory}/swift" <<'SWIFT'
 #!/usr/bin/env sh
 if [ "${1:-}" != "build" ]; then
+    icon_channel=""
     while [ "$#" -gt 0 ]; do
         if [ "$1" = "--output-directory" ]; then
             iconset_directory="$2"
-            break
+            shift 2
+            continue
+        fi
+        if [ "$1" = "--channel" ]; then
+            icon_channel="$2"
+            shift 2
+            continue
         fi
         shift
     done
     mkdir -p "${iconset_directory:?iconset directory is required}"
+    case "$icon_channel" in stable|development) ;; *) exit 1 ;; esac
+    printf '%s\n' "$icon_channel" > "${iconset_directory}/.channel"
     for icon_name in \
         icon_16x16.png icon_16x16@2x.png \
         icon_32x32.png icon_32x32@2x.png \
@@ -183,7 +195,8 @@ while [ "$#" -gt 0 ]; do
     fi
     shift
 done
-printf '%s\n' fixture > "${output_path:?icon output path is required}"
+for command_argument in "$@"; do iconset_directory="$command_argument"; done
+cp "${iconset_directory}/.channel" "${output_path:?icon output path is required}"
 ICONUTIL
     cat > "${fake_command_directory}/git" <<'GIT'
 #!/usr/bin/env sh
@@ -207,30 +220,56 @@ case "$*" in
 esac
 JQ
     chmod +x "${fake_command_directory}"/*
-    for command_name in cmake xcrun codesign install_name_tool plutil; do
+    for command_name in cmake xcrun install_name_tool plutil; do
         write_successful_command "${fake_command_directory}/${command_name}"
     done
+    cat > "${fake_command_directory}/codesign" <<'CODESIGN'
+#!/usr/bin/env sh
+printf '%s\n' "$*" >> "${FAKE_CODESIGN_LOG:?}"
+exit 0
+CODESIGN
+    chmod +x "${fake_command_directory}/codesign"
     write_successful_command "${sandbox_scripts_directory}/bootstrap-native-dependencies.sh"
     write_successful_command "${sandbox_scripts_directory}/validate-astronomical-app.sh"
 
     printf '%s\n' '[app-builder-test] case=development-output-is-noindex status=start'
     (CDPATH='' cd -- "$sandbox_repository" && \
-        PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
+        FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/development-codesign.log" \
+            PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
             "${sandbox_scripts_directory}/make-astronomical-app.sh" --channel development)
     development_app_bundle="${sandbox_repository}/target/astronomical-macos-development.noindex/Astronomical Development.app"
     assert_bundle_exists "$development_app_bundle"
+    [ "$(cat "${development_app_bundle}/Contents/Resources/Astronomical.icns")" = "development" ] || {
+        print_error "Development bundle did not request the Development icon identity"
+        exit 1
+    }
     printf '%s\n' '[app-builder-test] case=development-output-is-noindex status=success'
 
     printf '%s\n' '[app-builder-test] case=stable-output-is-noindex status=start'
     (CDPATH='' cd -- "$sandbox_repository" && \
-        PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            "${sandbox_scripts_directory}/make-astronomical-app.sh" --channel stable)
+        FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/stable-codesign.log" \
+            PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
+            "${sandbox_scripts_directory}/make-astronomical-app.sh" --channel stable \
+                --signing-identity "Developer ID Application: Example (ABCDE12345)")
     stable_app_bundle="${sandbox_repository}/target/astronomical-macos-stable.noindex/Astronomical.app"
     assert_bundle_exists "$stable_app_bundle"
+    [ "$(cat "${stable_app_bundle}/Contents/Resources/Astronomical.icns")" = "stable" ] || {
+        print_error "Stable bundle did not request the clean Stable icon identity"
+        exit 1
+    }
     [ -d "$development_app_bundle" ] || {
         print_error "building Stable unexpectedly removed the Development build artifact"
         exit 1
     }
+    grep -F -- '--sign Developer ID Application: Example (ABCDE12345) --options runtime --timestamp' \
+        "${SANDBOX_DIRECTORY}/stable-codesign.log" >/dev/null || {
+        print_error "Stable bundle was not signed with Developer ID, Hardened Runtime, and timestamping"
+        exit 1
+    }
+    if grep -F -- '--options runtime' "${SANDBOX_DIRECTORY}/development-codesign.log" >/dev/null; then
+        print_error "Development bundle unexpectedly requested distribution signing"
+        exit 1
+    fi
     printf '%s\n' '[app-builder-test] case=stable-output-is-noindex status=success'
 }
 
