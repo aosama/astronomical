@@ -11,7 +11,7 @@ print_error() {
 }
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/make-install-astronomical-stable-app.sh [--dry-run]"
+    printf '%s\n' "Usage: scripts/release/build-and-install-stable-app.sh [--dry-run]"
     printf '%s\n' "Builds and validates Stable, then installs it into ~/Applications."
     printf '%s\n' "--dry-run builds Stable and previews the installation without promoting it."
 }
@@ -57,11 +57,11 @@ main() {
         esac
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-    stable_builder="${repository_root}/scripts/make-astronomical-app.sh"
-    stable_installer="${repository_root}/scripts/install-astronomical-stable-app.sh"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
+    stable_builder="${repository_root}/scripts/release/build-stable-app.sh"
+    stable_installer="${repository_root}/scripts/release/install-stable-app.sh"
 
-    run_step "build-and-validate-stable" "$stable_builder" --channel stable
+    run_step "build-and-validate-stable" "$stable_builder"
     if [ "$DRY_RUN" = "true" ]; then
         run_step "preview-stable-installation" "$stable_installer" --dry-run
     else

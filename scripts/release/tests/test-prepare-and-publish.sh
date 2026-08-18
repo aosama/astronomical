@@ -115,33 +115,33 @@ write_fixture_repository() {
     sandbox_repository="$1"
     repository_root="$2"
     mkdir -p \
-        "${sandbox_repository}/scripts" \
+        "${sandbox_repository}/scripts/release" \
         "${sandbox_repository}/site" \
         "${sandbox_repository}/target" \
         "${sandbox_repository}/apps/astronomical-menu/.build/artifacts/sparkle/Sparkle/bin"
-    cp "${repository_root}/scripts/publish-astronomical-release.sh" \
-        "${sandbox_repository}/scripts/publish-astronomical-release.sh"
-    chmod +x "${sandbox_repository}/scripts/publish-astronomical-release.sh"
+    cp "${repository_root}/scripts/release/prepare-and-publish.sh" \
+        "${sandbox_repository}/scripts/release/prepare-and-publish.sh"
+    chmod +x "${sandbox_repository}/scripts/release/prepare-and-publish.sh"
     printf '%s\n' '# Release notes' 'Safe signed update fixture.' > "${sandbox_repository}/release-notes.md"
 
-    cat > "${sandbox_repository}/scripts/make-astronomical-app.sh" <<'BUILDER'
+    cat > "${sandbox_repository}/scripts/release/build-stable-app.sh" <<'BUILDER'
 #!/usr/bin/env sh
 set -eu
 [ "${ASTRONOMICAL_UPDATE_FEED_URL:-}" = 'https://example.github.io/astronomical/appcast.xml' ]
 case "$*" in *'--signing-identity Developer ID Application: Example (ABCDE12345)'*) ;; *) exit 1 ;; esac
-repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
 app_bundle="${repository_root}/target/astronomical-macos-stable.noindex/Astronomical.app"
 mkdir -p "${app_bundle}/Contents"
 printf '%s\n' '<plist><dict></dict></plist>' > "${app_bundle}/Contents/Info.plist"
 BUILDER
-    chmod +x "${sandbox_repository}/scripts/make-astronomical-app.sh"
+    chmod +x "${sandbox_repository}/scripts/release/build-stable-app.sh"
 
-    cat > "${sandbox_repository}/scripts/validate-astronomical-distribution-app.sh" <<'VALIDATE_APP'
+    cat > "${sandbox_repository}/scripts/release/validate-distribution-app.sh" <<'VALIDATE_APP'
 #!/usr/bin/env sh
 set -eu
 case "$*" in *'--team-id ABCDE12345'*) ;; *) exit 1 ;; esac
 VALIDATE_APP
-    cat > "${sandbox_repository}/scripts/make-astronomical-dmg.sh" <<'MAKE_DMG'
+    cat > "${sandbox_repository}/scripts/release/create-dmg.sh" <<'MAKE_DMG'
 #!/usr/bin/env sh
 set -eu
 while [ "$#" -gt 0 ]; do
@@ -150,21 +150,21 @@ while [ "$#" -gt 0 ]; do
 done
 printf '%s\n' 'fixture notarized dmg' > "${output_path:?}"
 MAKE_DMG
-    cat > "${sandbox_repository}/scripts/notarize-astronomical-dmg.sh" <<'NOTARIZE'
+    cat > "${sandbox_repository}/scripts/release/notarize-dmg.sh" <<'NOTARIZE'
 #!/usr/bin/env sh
 set -eu
 case "$*" in *'--notary-profile Fixture Notarization'*) ;; *) exit 1 ;; esac
 [ "${FAKE_NOTARIZATION_REJECTED:-false}" != "true" ]
 NOTARIZE
-    cat > "${sandbox_repository}/scripts/validate-astronomical-dmg.sh" <<'VALIDATE_DMG'
+    cat > "${sandbox_repository}/scripts/release/validate-dmg.sh" <<'VALIDATE_DMG'
 #!/usr/bin/env sh
 exit 0
 VALIDATE_DMG
     chmod +x \
-        "${sandbox_repository}/scripts/validate-astronomical-distribution-app.sh" \
-        "${sandbox_repository}/scripts/make-astronomical-dmg.sh" \
-        "${sandbox_repository}/scripts/notarize-astronomical-dmg.sh" \
-        "${sandbox_repository}/scripts/validate-astronomical-dmg.sh"
+        "${sandbox_repository}/scripts/release/validate-distribution-app.sh" \
+        "${sandbox_repository}/scripts/release/create-dmg.sh" \
+        "${sandbox_repository}/scripts/release/notarize-dmg.sh" \
+        "${sandbox_repository}/scripts/release/validate-dmg.sh"
 
     cat > "${sandbox_repository}/apps/astronomical-menu/.build/artifacts/sparkle/Sparkle/bin/generate_appcast" <<'APPCAST'
 #!/usr/bin/env sh
@@ -205,7 +205,7 @@ run_prepare_case() {
         CDPATH='' cd -- "$sandbox_repository"
         PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            scripts/publish-astronomical-release.sh \
+            scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 \
             --notes-file "${sandbox_repository}/release-notes.md" \
             --output-directory "${sandbox_repository}/prepared-release" \
@@ -230,7 +230,7 @@ run_publish_case() {
     (
         CDPATH='' cd -- "$sandbox_repository"
         PATH="${case_directory}/fake-bin:${PATH}" \
-            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/publish-astronomical-release.sh \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --notes-file "${sandbox_repository}/release-notes.md" \
             --output-directory "${sandbox_repository}/published-release" \
             --signing-identity "Developer ID Application: Example (ABCDE12345)" \
@@ -242,7 +242,7 @@ run_publish_case() {
         FAKE_GH_STATE="${case_directory}/gh.state" \
         PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            scripts/publish-astronomical-release.sh \
+            scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 \
             --output-directory "${sandbox_repository}/published-release" \
             --publish
@@ -261,7 +261,7 @@ run_publish_case() {
         FAKE_GH_STATE="${case_directory}/gh.state" \
         PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            scripts/publish-astronomical-release.sh \
+            scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 \
             --output-directory "${sandbox_repository}/published-release" \
             --publish
@@ -287,7 +287,7 @@ run_prepared_artifact_tamper_case() {
     (
         CDPATH='' cd -- "$sandbox_repository"
         PATH="${case_directory}/fake-bin:${PATH}" \
-            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/publish-astronomical-release.sh \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --notes-file "${sandbox_repository}/release-notes.md" \
             --output-directory "${sandbox_repository}/tampered-release" \
             --signing-identity "Developer ID Application: Example (ABCDE12345)" \
@@ -298,7 +298,7 @@ run_prepared_artifact_tamper_case() {
         CDPATH='' cd -- "$sandbox_repository"
         FAKE_GH_LOG="${case_directory}/gh.log" FAKE_GH_STATE="${case_directory}/gh.state" \
             PATH="${case_directory}/fake-bin:${PATH}" \
-            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/publish-astronomical-release.sh \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --output-directory "${sandbox_repository}/tampered-release" --publish
     ); then
         print_error "publisher unexpectedly accepted tampered ${artifact_relative_path}"
@@ -318,7 +318,7 @@ run_interrupted_draft_recovery_case() {
     (
         CDPATH='' cd -- "$sandbox_repository"
         PATH="${case_directory}/fake-bin:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            scripts/publish-astronomical-release.sh \
+            scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --notes-file "${sandbox_repository}/release-notes.md" \
             --output-directory "$prepared_directory" \
             --signing-identity "Developer ID Application: Example (ABCDE12345)" \
@@ -330,7 +330,7 @@ run_interrupted_draft_recovery_case() {
         CDPATH='' cd -- "$sandbox_repository"
         FAKE_GH_LOG="${case_directory}/gh.log" FAKE_GH_STATE="${case_directory}/gh.state" \
             PATH="${case_directory}/fake-bin:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            scripts/publish-astronomical-release.sh \
+            scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --output-directory "$prepared_directory" --publish
     )
     grep -F 'release upload v0.2.1' "${case_directory}/gh.log" >/dev/null || {
@@ -348,7 +348,7 @@ run_interrupted_draft_recovery_case() {
         CDPATH='' cd -- "$sandbox_repository"
         FAKE_GH_LOG="${case_directory}/gh.log" FAKE_GH_STATE="${case_directory}/gh.state" \
             PATH="${case_directory}/fake-bin:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            scripts/publish-astronomical-release.sh \
+            scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --output-directory "$prepared_directory" --publish
     ); then
         print_error "Stable publisher accepted a prerelease"
@@ -362,7 +362,7 @@ run_interrupted_draft_recovery_case() {
         CDPATH='' cd -- "$sandbox_repository"
         FAKE_REMOTE_COMMIT=ffffffffffffffff FAKE_GH_LOG="${case_directory}/gh.log" \
             FAKE_GH_STATE="${case_directory}/gh.state" PATH="${case_directory}/fake-bin:${PATH}" \
-            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/publish-astronomical-release.sh \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --output-directory "$prepared_directory" --publish
     ); then
         print_error "publisher accepted a remote tag for another commit"
@@ -380,7 +380,7 @@ run_failed_publish_case() {
     (
         CDPATH='' cd -- "$sandbox_repository"
         PATH="${case_directory}/fake-bin:${PATH}" \
-            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/publish-astronomical-release.sh \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --notes-file "${sandbox_repository}/release-notes.md" \
             --output-directory "${sandbox_repository}/failed-release" \
             --signing-identity "Developer ID Application: Example (ABCDE12345)" \
@@ -393,7 +393,7 @@ run_failed_publish_case() {
         FAKE_GH_STATE="${case_directory}/gh.state" \
         PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            scripts/publish-astronomical-release.sh \
+            scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 \
             --output-directory "${sandbox_repository}/failed-release" \
             --publish
@@ -413,7 +413,7 @@ run_digest_mismatch_recovery_case() {
     (
         CDPATH='' cd -- "$sandbox_repository"
         PATH="${case_directory}/fake-bin:${PATH}" \
-            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/publish-astronomical-release.sh \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --notes-file "${sandbox_repository}/release-notes.md" \
             --output-directory "${sandbox_repository}/digest-release" \
             --signing-identity "Developer ID Application: Example (ABCDE12345)" \
@@ -423,7 +423,7 @@ run_digest_mismatch_recovery_case() {
         CDPATH='' cd -- "$sandbox_repository"
         FAKE_GH_BAD_DIGEST=true FAKE_GH_LOG="${case_directory}/gh.log" \
             FAKE_GH_STATE="${case_directory}/gh.state" PATH="${case_directory}/fake-bin:${PATH}" \
-            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/publish-astronomical-release.sh \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 \
             --output-directory "${sandbox_repository}/digest-release" --publish
     )
@@ -439,7 +439,7 @@ main() {
     for required_command in grep mktemp timeout; do
         command -v "$required_command" >/dev/null 2>&1 || { print_error "required command is unavailable: $required_command"; exit 2; }
     done
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-release-publisher.XXXXXX")"
     run_prepare_case "$repository_root"
     run_publish_case "$repository_root"

@@ -17,9 +17,9 @@ CURRENT_STEP=""
 CURRENT_STEP_STARTED_AT=0
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/publish-astronomical-release.sh --tag vX.Y.Z --notes-file PATH [--output-directory PATH]"
+    printf '%s\n' "Usage: scripts/release/prepare-and-publish.sh --tag vX.Y.Z --notes-file PATH [--output-directory PATH]"
     printf '%s\n' "       --signing-identity NAME --team-id ID --notary-profile NAME"
-    printf '%s\n' "       scripts/publish-astronomical-release.sh --tag vX.Y.Z"
+    printf '%s\n' "       scripts/release/prepare-and-publish.sh --tag vX.Y.Z"
     printf '%s\n' "       --output-directory PATH --publish"
     printf '%s\n' ""
     printf '%s\n' "Without --publish, prepares and signs the DMG and appcast locally."
@@ -187,13 +187,13 @@ validate_distribution_credentials() {
     esac
     xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null
     for helper_script in \
-        make-astronomical-dmg.sh \
-        notarize-astronomical-dmg.sh \
-        validate-astronomical-distribution-app.sh \
-        validate-astronomical-dmg.sh
+        create-dmg.sh \
+        notarize-dmg.sh \
+        validate-distribution-app.sh \
+        validate-dmg.sh
     do
-        [ -x "${repository_root}/scripts/${helper_script}" ] || {
-            print_error "release helper is unavailable: scripts/${helper_script}"
+        [ -x "${repository_root}/scripts/release/${helper_script}" ] || {
+            print_error "release helper is unavailable: scripts/release/${helper_script}"
             exit 1
         }
     done
@@ -222,7 +222,7 @@ prepare_release() {
 
     start_step "build-stable-app"
     ASTRONOMICAL_UPDATE_FEED_URL="$update_feed_url" \
-        "${repository_root}/scripts/make-astronomical-app.sh" --channel stable \
+        "${repository_root}/scripts/release/build-stable-app.sh" \
             --signing-identity "$SIGNING_IDENTITY"
     finish_step
 
@@ -234,25 +234,25 @@ prepare_release() {
     [ "$bundled_feed_url" = "$update_feed_url" ] || { print_error "built app update feed does not match this repository"; exit 1; }
 
     start_step "validate-developer-id-app"
-    "${repository_root}/scripts/validate-astronomical-distribution-app.sh" \
+    "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$stable_app_bundle" --team-id "$EXPECTED_TEAM_ID"
     finish_step
 
     release_asset_name="Astronomical-${release_version}-macOS-arm64.dmg"
     release_dmg="${STAGING_DIRECTORY}/${release_asset_name}"
     start_step "create-drag-to-applications-dmg"
-    "${repository_root}/scripts/make-astronomical-dmg.sh" \
+    "${repository_root}/scripts/release/create-dmg.sh" \
         --app-bundle "$stable_app_bundle" --output "$release_dmg"
     finish_step
 
     start_step "notarize-and-staple-dmg"
-    "${repository_root}/scripts/notarize-astronomical-dmg.sh" \
+    "${repository_root}/scripts/release/notarize-dmg.sh" \
         --dmg "$release_dmg" --signing-identity "$SIGNING_IDENTITY" \
         --notary-profile "$NOTARY_PROFILE"
     finish_step
 
     start_step "validate-notarized-dmg"
-    "${repository_root}/scripts/validate-astronomical-dmg.sh" --dmg "$release_dmg"
+    "${repository_root}/scripts/release/validate-dmg.sh" --dmg "$release_dmg"
     finish_step
 
     release_notes_copy="${STAGING_DIRECTORY}/Astronomical-${release_version}-macOS-arm64.md"
@@ -466,7 +466,7 @@ main() {
     parse_arguments "$@"
     for command_name in cargo cat git grep install jq mktemp plutil shasum stat xmllint; do require_command "$command_name"; done
     if [ "$SHOULD_PUBLISH" = "true" ]; then require_command gh; fi
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
 
     start_step "validate-release-identity"
     validate_release_identity "$repository_root"

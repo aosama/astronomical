@@ -33,7 +33,7 @@ main() {
             exit 2
         }
     done
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-dmg-test.XXXXXX")"
     fixture_app="${SANDBOX_DIRECTORY}/Astronomical.app"
     output_dmg="${SANDBOX_DIRECTORY}/Astronomical.dmg"
@@ -45,7 +45,7 @@ main() {
     chmod +x "${fixture_app}/Contents/MacOS/fixture"
 
     printf '%s\n' '[dmg-test] case=drag-to-applications-journey status=start'
-    timeout "$SUBJECT_TIMEOUT_SECONDS" "${repository_root}/scripts/make-astronomical-dmg.sh" \
+    timeout "$SUBJECT_TIMEOUT_SECONDS" "${repository_root}/scripts/release/create-dmg.sh" \
         --app-bundle "$fixture_app" --output "$output_dmg"
     hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$MOUNT_POINT" "$output_dmg" >/dev/null
     IS_MOUNTED="true"
