@@ -152,7 +152,7 @@ build_sparkle_cli() {
 }
 
 run_inner_qualification() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     QUALIFICATION_ROOT="${repository_root}/target/sparkle-update-qualification.noindex"
     [ ! -e "$QUALIFICATION_ROOT" ] || rm -rf "$QUALIFICATION_ROOT"
     mkdir -p "$QUALIFICATION_ROOT" "${QUALIFICATION_ROOT}/served" "${QUALIFICATION_ROOT}/state"
@@ -174,7 +174,7 @@ run_inner_qualification() {
 
     start_step "start-loopback-update-server"
     port_file="${QUALIFICATION_ROOT}/server.port"
-    python3 "${repository_root}/scripts/fixtures/sparkle_update_loopback_server.py" \
+    python3 "${repository_root}/scripts/release/fixtures/sparkle_update_loopback_server.py" \
         --directory "${QUALIFICATION_ROOT}/served" \
         --port-file "$port_file" &
     SERVER_PROCESS_IDENTIFIER="$!"
@@ -186,7 +186,7 @@ run_inner_qualification() {
     start_step "assemble-old-and-new-apps"
     qualification_executable="${QUALIFICATION_ROOT}/qualification-app"
     clang -fobjc-arc -Wall -Werror -framework AppKit \
-        "${repository_root}/scripts/fixtures/sparkle-update-qualification-app.m" \
+        "${repository_root}/scripts/release/fixtures/sparkle-update-qualification-app.m" \
         -o "$qualification_executable"
     old_app="${QUALIFICATION_ROOT}/old/Astronomical Update Qualification.app"
     new_app="${QUALIFICATION_ROOT}/new/Astronomical Update Qualification.app"

@@ -70,14 +70,14 @@ main() {
         }
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-stable-installer.XXXXXX")"
     sandbox_repository="${SANDBOX_DIRECTORY}/repository"
-    mkdir -p "${sandbox_repository}/scripts"
-    cp "${repository_root}/scripts/install-astronomical-stable-app.sh" \
-        "${sandbox_repository}/scripts/install-astronomical-stable-app.sh"
-    chmod +x "${sandbox_repository}/scripts/install-astronomical-stable-app.sh"
-    installer_script="${sandbox_repository}/scripts/install-astronomical-stable-app.sh"
+    mkdir -p "${sandbox_repository}/scripts/release"
+    cp "${repository_root}/scripts/release/install-stable-app.sh" \
+        "${sandbox_repository}/scripts/release/install-stable-app.sh"
+    chmod +x "${sandbox_repository}/scripts/release/install-stable-app.sh"
+    installer_script="${sandbox_repository}/scripts/release/install-stable-app.sh"
     test_home_directory="${SANDBOX_DIRECTORY}/home"
     applications_directory="${test_home_directory}/Applications"
     source_app_bundle="${SANDBOX_DIRECTORY}/candidate/Astronomical.app"

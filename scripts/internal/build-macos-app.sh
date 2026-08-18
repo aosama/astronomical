@@ -23,7 +23,7 @@ script_start_seconds=0
 current_phase=0
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/make-astronomical-app.sh [--channel development|stable] [--signing-identity NAME]"
+    printf '%s\n' "Usage: scripts/internal/build-macos-app.sh --channel development|stable [--signing-identity NAME]"
     printf '%s\n' ""
     printf '%s\n' "Builds release binaries, assembles Astronomical.app, and runs"
     printf '%s\n' "post-build validation. Generated apps use .noindex output directories"
@@ -174,7 +174,7 @@ main() {
     require_command jq
     finish_phase "success"
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     case "$APPLICATION_CHANNEL" in
         development)
             # The .noindex suffix keeps this generated app out of Spotlight
@@ -325,7 +325,7 @@ main() {
     # Stable keeps one timeless product identity; Development remains visibly distinct.
     iconset_directory="${app_bundle_path}/Contents/Resources/Astronomical.iconset"
     icon_resource="${app_bundle_path}/Contents/Resources/Astronomical.icns"
-    swift "${repository_root}/scripts/render-astronomical-app-icon.swift" \
+    swift "${repository_root}/scripts/internal/render-macos-app-icon.swift" \
         --output-directory "$iconset_directory" \
         --channel "$APPLICATION_CHANNEL"
     iconutil --convert icns --output "$icon_resource" "$iconset_directory"
@@ -369,7 +369,7 @@ main() {
     # ── Phase 5: Post-build validation ───────────────────────────────────
 
     start_phase 5 "post-build validation for isolated ${APPLICATION_CHANNEL} instance"
-    validate_script="${repository_root}/scripts/validate-astronomical-app.sh"
+    validate_script="${repository_root}/scripts/internal/validate-macos-app.sh"
     if [ -x "$validate_script" ]; then
         validation_exit_code=0
         if [ "$APPLICATION_CHANNEL" = "stable" ]; then

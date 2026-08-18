@@ -70,7 +70,7 @@ printf '%s\n' "[commit-verification] compiler_cache=${RUSTC_WRAPPER} build_jobs=
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
     printf '%s\n' "[commit-verification] included_tests=hermetic excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
 else
-    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api excluded_tests=direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,commit_release_isolation excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
 fi
 printf '%s\n' "[commit-verification] sccache stats before verification:"
 sccache --show-stats
@@ -80,10 +80,10 @@ if [ "$RUN_HERMITIC_CI_ONLY" != "true" ]; then
     "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/generate-rust-dependency-notices.sh --check
     printf '%s\n' "[commit-verification] PASSED step=rust-dependency-notices"
 
-    printf '\n%s\n' "[commit-verification] step=macos-distribution-contracts timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
-    distribution_contracts_started_at_seconds="$(date +%s)"
-    "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-macos-distribution-contracts.sh
-    printf '%s\n' "[commit-verification] PASSED step=macos-distribution-contracts elapsed_seconds=$(( $(date +%s) - distribution_contracts_started_at_seconds ))"
+    printf '\n%s\n' "[commit-verification] step=commit-release-isolation timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+    release_isolation_started_at_seconds="$(date +%s)"
+    "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-commit-release-isolation.sh
+    printf '%s\n' "[commit-verification] PASSED step=commit-release-isolation elapsed_seconds=$(( $(date +%s) - release_isolation_started_at_seconds ))"
 fi
 
 run_cargo_step() {

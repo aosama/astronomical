@@ -16,7 +16,7 @@ print_error() {
 }
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/install-astronomical-stable-app.sh [--app-bundle PATH] [--dry-run]"
+    printf '%s\n' "Usage: scripts/release/install-stable-app.sh [--app-bundle PATH] [--dry-run]"
     printf '%s\n' "Installs a clean Stable bundle as ~/Applications/Astronomical.app."
 }
 
@@ -53,7 +53,7 @@ validate_home_directory() {
 trap cleanup 0
 
 main() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     # Generated bundles live below a .noindex directory so Spotlight exposes
     # only the explicitly promoted copy in ~/Applications.
     SOURCE_APP_BUNDLE="${repository_root}/target/astronomical-macos-stable.noindex/Astronomical.app"

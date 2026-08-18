@@ -113,20 +113,21 @@ main() {
         }
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-app-builder.XXXXXX")"
     sandbox_repository="${SANDBOX_DIRECTORY}/repository"
     sandbox_scripts_directory="${sandbox_repository}/scripts"
+    sandbox_internal_scripts_directory="${sandbox_scripts_directory}/internal"
     fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
-    mkdir -p "$sandbox_scripts_directory" "$fake_command_directory" \
+    mkdir -p "$sandbox_internal_scripts_directory" "$fake_command_directory" \
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/Updater.app" \
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" \
         "${sandbox_repository}/apps/astronomical-menu/.build/checkouts/Sparkle" \
         "${sandbox_repository}/third-party"
-    cp "${repository_root}/scripts/make-astronomical-app.sh" \
-        "${sandbox_scripts_directory}/make-astronomical-app.sh"
-    chmod +x "${sandbox_scripts_directory}/make-astronomical-app.sh"
+    cp "${repository_root}/scripts/internal/build-macos-app.sh" \
+        "${sandbox_internal_scripts_directory}/build-macos-app.sh"
+    chmod +x "${sandbox_internal_scripts_directory}/build-macos-app.sh"
     printf '%s\n' fixture > "${sandbox_repository}/LICENSE"
     printf '%s\n' fixture > "${sandbox_repository}/third-party/THIRD_PARTY_NOTICES"
     printf '%s\n' fixture > "${sandbox_repository}/third-party/RUST_DEPENDENCY_NOTICES"
@@ -230,13 +231,13 @@ exit 0
 CODESIGN
     chmod +x "${fake_command_directory}/codesign"
     write_successful_command "${sandbox_scripts_directory}/bootstrap-native-dependencies.sh"
-    write_successful_command "${sandbox_scripts_directory}/validate-astronomical-app.sh"
+    write_successful_command "${sandbox_internal_scripts_directory}/validate-macos-app.sh"
 
     printf '%s\n' '[app-builder-test] case=development-output-is-noindex status=start'
     (CDPATH='' cd -- "$sandbox_repository" && \
         FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/development-codesign.log" \
             PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            "${sandbox_scripts_directory}/make-astronomical-app.sh" --channel development)
+            "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel development)
     development_app_bundle="${sandbox_repository}/target/astronomical-macos-development.noindex/Astronomical Development.app"
     assert_bundle_exists "$development_app_bundle"
     [ "$(cat "${development_app_bundle}/Contents/Resources/Astronomical.icns")" = "development" ] || {
@@ -249,7 +250,7 @@ CODESIGN
     (CDPATH='' cd -- "$sandbox_repository" && \
         FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/stable-codesign.log" \
             PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
-            "${sandbox_scripts_directory}/make-astronomical-app.sh" --channel stable \
+            "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel stable \
                 --signing-identity "Developer ID Application: Example (ABCDE12345)")
     stable_app_bundle="${sandbox_repository}/target/astronomical-macos-stable.noindex/Astronomical.app"
     assert_bundle_exists "$stable_app_bundle"

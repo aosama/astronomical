@@ -110,7 +110,7 @@ main() {
     ditto "$APP_BUNDLE" "${volume_root}/Astronomical.app"
     ln -s /Applications "${volume_root}/Applications"
     mkdir -p "${volume_root}/.background"
-    swift "$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)/render-astronomical-dmg-background.swift" \
+    swift "$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)/render-dmg-background.swift" \
         "${volume_root}/.background/background.png"
     touch "${volume_root}/.metadata_never_index"
     chflags hidden "${volume_root}/.background" "${volume_root}/.metadata_never_index"
