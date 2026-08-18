@@ -6,6 +6,8 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
   private let applicationIdentity = ApplicationIdentity.current()
   private lazy var supervisorClient = LocalSupervisorClient(applicationIdentity: applicationIdentity)
   private lazy var telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+  private lazy var applicationUpdateController = ApplicationUpdateController(
+    applicationChannel: applicationIdentity.channel)
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     supervisorClient: supervisorClient, applicationIdentity: applicationIdentity)
   private var statusItem: NSStatusItem?
@@ -39,11 +41,26 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
         openObservatory: { [weak self] in self?.openObservatory() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
+        checkForUpdates: { [weak self] in self?.checkForUpdates() },
+        automaticallyChecksForUpdates: Binding(
+          get: { [weak self] in self?.applicationUpdateController.automaticallyChecksForUpdates ?? true },
+          set: { [weak self] shouldCheckAutomatically in
+            guard let updateController = self?.applicationUpdateController else { return }
+            setAutomaticApplicationUpdateChecks(shouldCheckAutomatically, using: updateController)
+          }
+        ),
+        selectedUpdateChannel: Binding(
+          get: { [weak self] in self?.applicationUpdateController.selectedChannel ?? .stable },
+          set: { [weak self] updateChannel in
+            self?.applicationUpdateController.selectUpdateChannel(updateChannel)
+          }
+        ),
         revealConfiguration: revealConfiguration,
         quitApplication: { NSApp.terminate(nil) }
       )
     )
     telemetryPopover = popover
+    applicationUpdateController.start()
     telemetryStore.onMenuBarTitleChanged = { [weak self] menuBarTitle in
       guard let self else { return }
       let channelAwareMenuBarTitle =
@@ -122,6 +139,10 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
   private func revealConfiguration() {
     let configurationURL = applicationIdentity.configFileURL()
     NSWorkspace.shared.activateFileViewerSelecting([configurationURL])
+  }
+
+  private func checkForUpdates() {
+    requestManualApplicationUpdateCheck(using: applicationUpdateController)
   }
 }
 
