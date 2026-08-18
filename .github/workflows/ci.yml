@@ -116,7 +116,7 @@ jobs:
           printf '%s\n' 'RUSTC_WRAPPER=sccache' >> "$GITHUB_ENV"
       - name: Restore Rust and native build state
         id: build-state-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -154,6 +154,17 @@ jobs:
       - name: Run hermetic tests
         run: cargo test --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
         timeout-minutes: 2
+      - name: Save Rust and native build state
+        if: success() && steps.build-state-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            ~/Library/Caches/Astronomical/sccache
+            ~/Library/Caches/Astronomical/native-dependencies
+          key: ${{ steps.build-state-cache.outputs.cache-primary-key }}
       - name: Upload Cargo timing report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
