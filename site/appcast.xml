@@ -4,29 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.3</title>
-            <pubDate>Tue, 18 Aug 2026 13:43:22 -0400</pubDate>
-            <sparkle:version>193</sparkle:version>
-            <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+            <title>0.2.4</title>
+            <pubDate>Tue, 18 Aug 2026 18:03:09 -0400</pubDate>
+            <sparkle:version>202</sparkle:version>
+            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Adds an Apple-notarized Stable distribution signed with Developer ID Application, Hardened Runtime, and secure timestamps.
-- Adds a polished drag-to-Applications DMG with a compact Finder layout, clear installation guidance, and a clean Stable application icon.
-- Preserves signed Sparkle updates as an independent trust layer for user-approved future updates.
-- Adds fail-closed release preparation and publication with immutable artifact manifests, remote digest verification, and resumable draft uploads.
+- Updates the bundled MLX runtime to 0.32.1 with the retained Astronomical patches rebased onto the new native interfaces.
+- Improves compatibility across MLX-C compilation caching, fast Fourier transforms, and just-in-time quantized matrix-vector execution.
+- Strengthens direct numerical coverage for the BFloat16 quantized slow path and qualifies allocator cleanup across an Ornith six-bit-to-four-bit model swap.
+- Isolates Stable installation, signing, notarization, disk-image creation, and publication from ordinary Development builds and commit verification.
 
 ## Compatibility
 
-Astronomical 0.2.3 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.4 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing Astronomical configuration, model directories, caches, and logs remain in place when updating from 0.2.2.
+Existing Astronomical configuration, model directories, caches, and logs remain in place when updating from 0.2.3.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.3/Astronomical-0.2.3-macOS-arm64.dmg" length="12022401" type="application/octet-stream" sparkle:edSignature="EtTkLEZUHW9WkykzBHoKAKU5ZwLxraG2lxM3a8wNbRapYA6Xm0RPNvXPwv4pOLyKuJZgfDiHbm7kcqU19fMZAg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.4/Astronomical-0.2.4-macOS-arm64.dmg" length="12204455" type="application/octet-stream" sparkle:edSignature="LUZHN6z4C8CgltDZr2WenJYlVuV1KWmm3UOB1A224urlC3YsRdJJRm4+H8drk/XnoemwkwIwoR+9mhsbkcM9DQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 8wf3cU/bGn/Zp9N0j18BNchWEla/AEEUa48kHRPT/SS9ncMs/iTC2DpaLbfBEpxmp93OcjEmnP+QO25yh4DoBw==
-length: 2110
+edSignature: faG/gGwq6/S4cIWSLtSTlsJenvsYRHylA7trzooJLxev25d3qwRR5lxma3Llu+RXvyRE6QiIQ/BhLWpyAeExCA==
+length: 2167
 -->
