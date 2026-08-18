@@ -245,7 +245,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/pins/mlx-v0.32.0.cmake")
+            .join("../../third-party/pins/mlx-v0.32.1.cmake")
             .display()
     );
     println!(
@@ -257,31 +257,37 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-nax-head-dim-256-attention.patch")
+            .join("../../third-party/patches/mlx-0.32.1-nax-head-dim-256-attention.patch")
             .display()
     );
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-stable-prefill-split-k.patch")
+            .join("../../third-party/patches/mlx-0.32.1-stable-prefill-split-k.patch")
             .display()
     );
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-astronomical-active-memory-ceiling.patch")
+            .join("../../third-party/patches/mlx-0.32.1-jit-qmv-template-arity.patch")
             .display()
     );
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-adaptive-io-thread-pool.patch")
+            .join("../../third-party/patches/mlx-0.32.1-astronomical-active-memory-ceiling.patch")
             .display()
     );
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/patches/mlx-0.32.0-streaming-safetensors-writer.patch")
+            .join("../../third-party/patches/mlx-0.32.1-adaptive-io-thread-pool.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join("../../third-party/patches/mlx-0.32.1-streaming-safetensors-writer.patch")
             .display()
     );
     println!(
@@ -293,7 +299,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "cargo:rerun-if-changed={}",
         manifest_directory
-            .join("../../third-party/patches/mlx-c-0.6.0-mlx-0.32.0-fft-compatibility.patch")
+            .join("../../third-party/patches/mlx-c-0.6.0-mlx-0.32.1-fft-compatibility.patch")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_directory
+            .join(
+                "../../third-party/patches/mlx-c-0.6.0-mlx-0.32.1-compile-cache-compatibility.patch",
+            )
             .display()
     );
 
