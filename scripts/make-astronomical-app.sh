@@ -13,6 +13,7 @@ set -eu
 # ── Constants ──────────────────────────────────────────────────────────
 
 readonly TOTAL_PHASES=5
+readonly SPARKLE_PUBLIC_ED25519_KEY="g0URwy+j86uDYcmOu0k/IUVWwCOSrGOPSoFnVoYQ9AQ="
 APPLICATION_CHANNEL="development"
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -76,6 +77,26 @@ remove_previous_app_bundle() {
     esac
 }
 
+github_pages_feed_url() {
+    repository_url="$1"
+    case "$repository_url" in
+        https://github.com/*/*) ;;
+        *)
+            print_error "workspace repository must be an HTTPS GitHub URL to derive the update feed"
+            exit 1
+            ;;
+    esac
+    repository_slug="${repository_url#https://github.com/}"
+    repository_slug="${repository_slug%.git}"
+    repository_owner="${repository_slug%%/*}"
+    repository_name="${repository_slug#*/}"
+    [ -n "$repository_owner" ] && [ -n "$repository_name" ] && [ "$repository_name" != "$repository_slug" ] || {
+        print_error "workspace repository URL does not contain an owner and repository"
+        exit 1
+    }
+    printf 'https://%s.github.io/%s/appcast.xml\n' "$repository_owner" "$repository_name"
+}
+
 main() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -117,8 +138,10 @@ main() {
     require_command swift
     require_command sysctl
     require_command codesign
+    require_command ditto
     require_command plutil
     require_command iconutil
+    require_command install_name_tool
     require_command git
     require_command jq
     finish_phase "success"
@@ -149,7 +172,10 @@ main() {
             exit 2
             ;;
     esac
-    application_version="$(cargo metadata --no-deps --format-version 1 | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .version')"
+    cargo_workspace_metadata="$(cargo metadata --no-deps --format-version 1)"
+    application_version="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .version')"
+    application_repository_url="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .repository')"
+    sparkle_update_feed_url="${ASTRONOMICAL_UPDATE_FEED_URL:-$(github_pages_feed_url "$application_repository_url")}"
     build_commit="$(git rev-parse --short=12 HEAD)"
     build_number="$(git rev-list --count HEAD)"
     # The icon and bundle metadata use one UTC date so their visible and
@@ -197,6 +223,7 @@ main() {
     start_phase 4 "assemble and codesign app bundle"
     remove_previous_app_bundle "$app_bundle_path"
     mkdir -p "${app_bundle_path}/Contents/MacOS"
+    mkdir -p "${app_bundle_path}/Contents/Frameworks"
     mkdir -p "${app_bundle_path}/Contents/Resources"
 
     {
@@ -210,7 +237,17 @@ main() {
         printf '  <key>CFBundleIdentifier</key><string>%s</string>\n' "$bundle_identifier"
         printf '  <key>CFBundleVersion</key><string>%s</string>\n' "$build_number"
         printf '  <key>CFBundleShortVersionString</key><string>%s</string>\n' "$application_version"
+        printf '  <key>LSMinimumSystemVersion</key><string>26.0</string>\n'
         printf '%s\n' '  <key>CFBundleIconFile</key><string>Astronomical.icns</string>'
+        printf '  <key>SUFeedURL</key><string>%s</string>\n' "$sparkle_update_feed_url"
+        printf '  <key>SUPublicEDKey</key><string>%s</string>\n' "$SPARKLE_PUBLIC_ED25519_KEY"
+        printf '%s\n' '  <key>SUVerifyUpdateBeforeExtraction</key><true/>'
+        printf '%s\n' '  <key>SURequireSignedFeed</key><true/>'
+        printf '%s\n' '  <key>SUSignedFeedFailureExpirationInterval</key><integer>0</integer>'
+        printf '%s\n' '  <key>SUEnableAutomaticChecks</key><true/>'
+        printf '%s\n' '  <key>SUScheduledCheckInterval</key><integer>86400</integer>'
+        printf '%s\n' '  <key>SUAutomaticallyUpdate</key><false/>'
+        printf '%s\n' '  <key>SUEnableSystemProfiling</key><false/>'
         printf '  <key>AstronomicalChannel</key><string>%s</string>\n' "$APPLICATION_CHANNEL"
         printf '  <key>AstronomicalBuildDate</key><string>%s</string>\n' "$build_date_utc"
         printf '  <key>AstronomicalSupervisorPort</key><integer>%s</integer>\n' "$supervisor_port"
@@ -239,6 +276,19 @@ main() {
        "${app_bundle_path}/Contents/Resources/THIRD_PARTY_NOTICES"
     cp "${repository_root}/third-party/RUST_DEPENDENCY_NOTICES" \
        "${app_bundle_path}/Contents/Resources/RUST_DEPENDENCY_NOTICES"
+    sparkle_license_source="${repository_root}/apps/astronomical-menu/.build/checkouts/Sparkle/LICENSE"
+    [ -s "$sparkle_license_source" ] || {
+        print_error "Sparkle license is unavailable after the Swift package build: ${sparkle_license_source}"
+        exit 1
+    }
+    cp "$sparkle_license_source" "${app_bundle_path}/Contents/Resources/SPARKLE_LICENSE"
+    sparkle_framework_source="${repository_root}/apps/astronomical-menu/.build/release/Sparkle.framework"
+    sparkle_framework_destination="${app_bundle_path}/Contents/Frameworks/Sparkle.framework"
+    [ -d "$sparkle_framework_source" ] || {
+        print_error "Sparkle framework is unavailable after the Swift package build: ${sparkle_framework_source}"
+        exit 1
+    }
+    ditto "$sparkle_framework_source" "$sparkle_framework_destination"
 
     # Render the complete icon family from build identity rather than storing
     # release-specific artwork that can drift from the packaged version.
@@ -260,6 +310,11 @@ main() {
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-menu"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomicald"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-inference-worker"
+    # Swift Package Manager links Sparkle through @loader_path. The packaged
+    # application keeps frameworks in Contents/Frameworks, so add the standard
+    # bundle rpath before signing the executable and enclosing bundle.
+    install_name_tool -add_rpath "@executable_path/../Frameworks" \
+        "${app_bundle_path}/Contents/MacOS/astronomical-menu"
 
     printf '  signing embedded executables...\n'
     # The macOS runtime signature monitor can reject linker-signed nested
@@ -268,6 +323,8 @@ main() {
     for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
         codesign --force --sign - "${app_bundle_path}/Contents/MacOS/${bundled_executable_name}"
     done
+    printf '  signing embedded Sparkle framework...\n'
+    codesign --force --sign - --deep "$sparkle_framework_destination"
 
     printf '  signing app bundle...\n'
     plutil -lint "${app_bundle_path}/Contents/Info.plist"
