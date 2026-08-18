@@ -119,7 +119,7 @@ Build and validate the Development app without replacing or stopping Stable:
 
     scripts/make-astronomical-app.sh
 
-The signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Each build generates a macOS icon whose badge shows the semantic version and UTC build date in `YYYYMMDD` form. Default validation does not load a second model. Use the explicit `--real-model` validation option only when shared GPU pressure is acceptable.
+The signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Stable uses the clean product icon, while Development uses a restrained channel badge. Default validation does not load a second model. Use the explicit `--real-model` validation option only when shared GPU pressure is acceptable.
 
 Build a clean Stable candidate and explicitly promote it outside the repository build tree with one command:
 

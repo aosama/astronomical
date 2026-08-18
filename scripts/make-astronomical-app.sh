@@ -15,6 +15,7 @@ set -eu
 readonly TOTAL_PHASES=5
 readonly SPARKLE_PUBLIC_ED25519_KEY="g0URwy+j86uDYcmOu0k/IUVWwCOSrGOPSoFnVoYQ9AQ="
 APPLICATION_CHANNEL="development"
+SIGNING_IDENTITY=""
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ script_start_seconds=0
 current_phase=0
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/make-astronomical-app.sh [--channel development|stable]"
+    printf '%s\n' "Usage: scripts/make-astronomical-app.sh [--channel development|stable] [--signing-identity NAME]"
     printf '%s\n' ""
     printf '%s\n' "Builds release binaries, assembles Astronomical.app, and runs"
     printf '%s\n' "post-build validation. Generated apps use .noindex output directories"
@@ -97,6 +98,27 @@ github_pages_feed_url() {
     printf 'https://%s.github.io/%s/appcast.xml\n' "$repository_owner" "$repository_name"
 }
 
+sign_code_object() {
+    code_object_path="$1"
+    [ -e "$code_object_path" ] || {
+        print_error "required code object is unavailable: ${code_object_path}"
+        exit 1
+    }
+    code_object_name="$(basename -- "$code_object_path")"
+    signing_started_at="$(date +%s)"
+    printf '%s operation=code-sign object="%s" status=start\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$code_object_name"
+    if [ -n "$SIGNING_IDENTITY" ]; then
+        codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
+            --preserve-metadata=entitlements "$code_object_path"
+    else
+        codesign --force --sign - --preserve-metadata=entitlements "$code_object_path"
+    fi
+    printf '%s operation=code-sign object="%s" status=success elapsed_seconds=%s\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$code_object_name" \
+        "$(( $(date +%s) - signing_started_at ))"
+}
+
 main() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -106,6 +128,12 @@ main() {
                     exit 2
                 fi
                 APPLICATION_CHANNEL="$2"
+                shift 2
+                continue
+                ;;
+            --signing-identity)
+                [ "$#" -ge 2 ] || { print_error "--signing-identity requires a value"; exit 2; }
+                SIGNING_IDENTITY="$2"
                 shift 2
                 continue
                 ;;
@@ -172,6 +200,10 @@ main() {
             exit 2
             ;;
     esac
+    if [ -n "$SIGNING_IDENTITY" ] && [ "$APPLICATION_CHANNEL" != "stable" ]; then
+        print_error "Developer ID signing is reserved for Stable release bundles"
+        exit 2
+    fi
     cargo_workspace_metadata="$(cargo metadata --no-deps --format-version 1)"
     application_version="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .version')"
     application_repository_url="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .repository')"
@@ -290,14 +322,12 @@ main() {
     }
     ditto "$sparkle_framework_source" "$sparkle_framework_destination"
 
-    # Render the complete icon family from build identity rather than storing
-    # release-specific artwork that can drift from the packaged version.
+    # Stable keeps one timeless product identity; Development remains visibly distinct.
     iconset_directory="${app_bundle_path}/Contents/Resources/Astronomical.iconset"
     icon_resource="${app_bundle_path}/Contents/Resources/Astronomical.icns"
     swift "${repository_root}/scripts/render-astronomical-app-icon.swift" \
         --output-directory "$iconset_directory" \
-        --version "$application_version" \
-        --build-date "$build_date_utc"
+        --channel "$APPLICATION_CHANNEL"
     iconutil --convert icns --output "$icon_resource" "$iconset_directory"
     case "$iconset_directory" in
         "${app_bundle_path}/Contents/Resources/Astronomical.iconset") rm -rf "$iconset_directory" ;;
@@ -316,19 +346,23 @@ main() {
     install_name_tool -add_rpath "@executable_path/../Frameworks" \
         "${app_bundle_path}/Contents/MacOS/astronomical-menu"
 
-    printf '  signing embedded executables...\n'
-    # The macOS runtime signature monitor can reject linker-signed nested
-    # executables even when static bundle verification succeeds. Sign each
-    # executable before sealing the enclosing bundle.
+    printf '  signing embedded Sparkle code inside-out...\n'
+    sparkle_version_directory="${sparkle_framework_destination}/Versions/B"
+    sign_code_object "${sparkle_version_directory}/Autoupdate"
+    sign_code_object "${sparkle_version_directory}/Updater.app"
+    sign_code_object "${sparkle_version_directory}/XPCServices/Downloader.xpc"
+    sign_code_object "${sparkle_version_directory}/XPCServices/Installer.xpc"
+    sign_code_object "$sparkle_framework_destination"
+
+    printf '  signing Astronomical executables...\n'
+    # Leaf-first signing keeps every executable attributable before the app seal is created.
     for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
-        codesign --force --sign - "${app_bundle_path}/Contents/MacOS/${bundled_executable_name}"
+        sign_code_object "${app_bundle_path}/Contents/MacOS/${bundled_executable_name}"
     done
-    printf '  signing embedded Sparkle framework...\n'
-    codesign --force --sign - --deep "$sparkle_framework_destination"
 
     printf '  signing app bundle...\n'
     plutil -lint "${app_bundle_path}/Contents/Info.plist"
-    codesign --force --sign - "$app_bundle_path"
+    sign_code_object "$app_bundle_path"
     codesign --verify --deep --strict "$app_bundle_path"
     finish_phase "success"
 
