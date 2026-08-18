@@ -7,6 +7,10 @@ use std::path::{Component, Path};
 use serde::Deserialize;
 
 use super::classified_artifacts::immutable_model_revision;
+use crate::{
+    LagunaRootChatTemplateSource, LagunaStandaloneChatTemplateState,
+    select_laguna_root_chat_template, validate_laguna_standalone_chat_template_role,
+};
 
 const MAXIMUM_INDEX_BYTES: u64 = 32 * 1024 * 1024;
 const MAXIMUM_TEXT_DOCUMENT_BYTES: u64 = 32 * 1024 * 1024;
@@ -14,6 +18,7 @@ const MAXIMUM_TEMPLATE_BYTES: u64 = 512 * 1024;
 const MAXIMUM_TEMPLATE_SOURCE_COUNT: usize = 16;
 const MAXIMUM_TEMPLATE_INCLUDE_DEPTH: usize = 8;
 const SUPPORTED_PARSER_ID: &str = "poolside_v1";
+const STANDALONE_CHAT_TEMPLATE_FILE_NAME: &str = "chat_template.jinja";
 
 /// Family-derived metadata returned to neutral discovery orchestration.
 pub(super) struct LagunaDiscoveredModelMetadata {
@@ -66,7 +71,37 @@ pub(super) fn discover_model_metadata(
         model_directory.join("generation_config.json"),
         MAXIMUM_TEXT_DOCUMENT_BYTES,
     )?;
-    validate_template_sources(model_directory, &tokenizer_config_bytes)?;
+    let standalone_template_state = standalone_template_state(model_directory)?;
+    let selected_root_template =
+        select_laguna_root_chat_template(&tokenizer_config_bytes, standalone_template_state)
+            .ok()?;
+    let root_template_source = match &selected_root_template {
+        LagunaRootChatTemplateSource::Embedded {
+            template_source, ..
+        } => template_source.clone(),
+        LagunaRootChatTemplateSource::Standalone => {
+            let standalone_template_bytes = read_bounded_file(
+                model_directory.join(STANDALONE_CHAT_TEMPLATE_FILE_NAME),
+                MAXIMUM_TEMPLATE_BYTES,
+            )?;
+            String::from_utf8(standalone_template_bytes).ok()?
+        }
+    };
+    let standalone_root_file_name = matches!(
+        &selected_root_template,
+        LagunaRootChatTemplateSource::Standalone
+    )
+    .then_some(STANDALONE_CHAT_TEMPLATE_FILE_NAME);
+    let selected_template_include_names = validate_template_sources(
+        model_directory,
+        &root_template_source,
+        standalone_root_file_name,
+    )?;
+    validate_laguna_standalone_chat_template_role(
+        &selected_root_template,
+        selected_template_include_names.contains(STANDALONE_CHAT_TEMPLATE_FILE_NAME),
+    )
+    .ok()?;
     let generation_config: LagunaGenerationConfigDocument =
         serde_json::from_slice(&generation_config_bytes).ok()?;
     let supports_reasoning = generation_config.reasoning_parser == SUPPORTED_PARSER_ID;
@@ -139,20 +174,29 @@ fn is_safe_safetensors_file_name(shard_file_name: &str) -> bool {
             .all(|component| matches!(component, Component::Normal(_)))
 }
 
-fn validate_template_sources(model_directory: &Path, tokenizer_config_bytes: &[u8]) -> Option<()> {
-    let tokenizer_config: LagunaTokenizerConfigDocument =
-        serde_json::from_slice(tokenizer_config_bytes).ok()?;
-    if tokenizer_config.chat_template.is_empty()
-        || tokenizer_config.chat_template.len() as u64 > MAXIMUM_TEMPLATE_BYTES
+fn validate_template_sources(
+    model_directory: &Path,
+    root_template_source: &str,
+    standalone_root_file_name: Option<&str>,
+) -> Option<BTreeSet<String>> {
+    if root_template_source.is_empty() || root_template_source.len() as u64 > MAXIMUM_TEMPLATE_BYTES
     {
         return None;
     }
-    let mut pending_includes = template_include_names(&tokenizer_config.chat_template)?
+    let mut pending_includes = template_include_names(root_template_source)?
         .into_iter()
-        .map(|include_name| (include_name, 1_usize, Vec::<String>::new()))
+        .map(|include_name| {
+            (
+                include_name,
+                1_usize,
+                standalone_root_file_name
+                    .map(|file_name| vec![file_name.to_owned()])
+                    .unwrap_or_default(),
+            )
+        })
         .collect::<Vec<_>>();
     let mut included_names = BTreeSet::new();
-    let mut total_template_bytes = tokenizer_config.chat_template.len() as u64;
+    let mut total_template_bytes = root_template_source.len() as u64;
     while let Some((include_name, depth, ancestors)) = pending_includes.pop() {
         if depth > MAXIMUM_TEMPLATE_INCLUDE_DEPTH
             || ancestors.contains(&include_name)
@@ -179,7 +223,23 @@ fn validate_template_sources(model_directory: &Path, tokenizer_config_bytes: &[u
             pending_includes.push((child_include_name, depth + 1, child_ancestors.clone()));
         }
     }
-    Some(())
+    Some(included_names)
+}
+
+fn standalone_template_state(model_directory: &Path) -> Option<LagunaStandaloneChatTemplateState> {
+    match fs::metadata(model_directory.join(STANDALONE_CHAT_TEMPLATE_FILE_NAME)) {
+        Ok(template_metadata) if template_metadata.is_file() && template_metadata.len() == 0 => {
+            Some(LagunaStandaloneChatTemplateState::Empty)
+        }
+        Ok(template_metadata) if template_metadata.is_file() => {
+            Some(LagunaStandaloneChatTemplateState::NonEmpty)
+        }
+        Ok(_) => None,
+        Err(metadata_error) if metadata_error.kind() == std::io::ErrorKind::NotFound => {
+            Some(LagunaStandaloneChatTemplateState::Missing)
+        }
+        Err(_) => None,
+    }
 }
 
 /// Finds the static single-quoted include syntax accepted by Laguna startup.
@@ -246,11 +306,6 @@ struct LagunaConfigDocument {
 struct LagunaLanguageFields {
     #[serde(default)]
     max_position_embeddings: Option<u32>,
-}
-
-#[derive(Deserialize)]
-struct LagunaTokenizerConfigDocument {
-    chat_template: String,
 }
 
 #[derive(Deserialize)]

@@ -28,6 +28,7 @@ pub struct ValidatedLagunaArtifact {
     pub(super) tokenizer_file: ValidatedRequiredFile,
     pub(super) tokenizer_config_file: ValidatedRequiredFile,
     pub(super) generation_config_file: ValidatedRequiredFile,
+    pub(super) standalone_chat_template_file: Option<ValidatedRequiredFile>,
     pub(super) included_template_files: BTreeMap<String, ValidatedRequiredFile>,
     pub(super) shard_files: BTreeMap<String, ValidatedWeightsFile>,
     pub(super) total_shard_file_bytes: u64,
@@ -100,6 +101,10 @@ impl ValidatedLagunaArtifact {
             tokenizer_file: retained_file(self.tokenizer_file)?,
             tokenizer_config_file: retained_file(self.tokenizer_config_file)?,
             generation_config_file: retained_file(self.generation_config_file)?,
+            standalone_chat_template_file: self
+                .standalone_chat_template_file
+                .map(retained_file)
+                .transpose()?,
             included_template_files,
             shard_files: self.shard_files,
         })
@@ -115,6 +120,7 @@ pub struct LagunaRetainedArtifactFiles {
     tokenizer_file: File,
     tokenizer_config_file: File,
     generation_config_file: File,
+    standalone_chat_template_file: Option<File>,
     included_template_files: BTreeMap<String, File>,
     shard_files: BTreeMap<String, ValidatedWeightsFile>,
 }
@@ -148,6 +154,11 @@ impl LagunaRetainedArtifactFiles {
     #[must_use]
     pub const fn generation_config_file(&self) -> &File {
         &self.generation_config_file
+    }
+
+    #[must_use]
+    pub const fn standalone_chat_template_file(&self) -> Option<&File> {
+        self.standalone_chat_template_file.as_ref()
     }
 
     #[must_use]

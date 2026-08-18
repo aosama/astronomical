@@ -79,18 +79,20 @@ impl LagunaDeclaredTool {
     ) -> Result<Map<String, Value>, LagunaOutputParserError> {
         let mut parsed_arguments = Map::new();
         for (argument_name, raw_argument_value) in raw_arguments {
-            let Some(parameter_type) = self.parameter_types.get(&argument_name) else {
-                return Err(LagunaOutputParserError::UndeclaredToolArgument {
-                    function_name: bounded_text(function_name),
-                    argument_name: bounded_text(&argument_name),
-                });
-            };
             if parsed_arguments.contains_key(&argument_name) {
                 return Err(LagunaOutputParserError::DuplicateToolArgument {
                     argument_name: bounded_text(&argument_name),
                 });
             }
-            let parsed_argument = parse_scalar_argument(&raw_argument_value, *parameter_type)?;
+            // The tool client owns complete JSON Schema validation; retaining bounded extra
+            // metadata avoids aborting useful calls while preventing undeclared fields from
+            // gaining any server-side behavior.
+            let parameter_type = self
+                .parameter_types
+                .get(&argument_name)
+                .copied()
+                .unwrap_or(LagunaScalarType::Untyped);
+            let parsed_argument = parse_scalar_argument(&raw_argument_value, parameter_type)?;
             parsed_arguments.insert(argument_name, parsed_argument);
         }
         for required_parameter in &self.required_parameters {

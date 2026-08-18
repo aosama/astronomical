@@ -76,72 +76,63 @@ impl LagunaDecoderState {
     pub fn restore_from_cache_blocks(
         &mut self,
         runtime: &MlxRuntime,
-        sequence_blocks: &[HashMap<String, MlxArray>],
-        boundary_snapshot: &HashMap<String, MlxArray>,
+        sequence_blocks: &mut [HashMap<String, MlxArray>],
+        boundary_snapshot: &mut HashMap<String, MlxArray>,
     ) -> Result<(), LagunaExecutionError> {
-        let mut restored_tensors = Vec::new();
         for (layer_index, layer_state) in self.layers.iter_mut().enumerate() {
             match layer_state {
                 LagunaLayerCacheState::AppendOnly(attention) => {
-                    let restored_keys = concatenate_named_blocks(
+                    let restored_keys = concatenate_taken_blocks(
                         runtime,
                         sequence_blocks,
                         &format!("layer_{layer_index}_attention.keys"),
                     )?;
-                    let restored_values = concatenate_named_blocks(
+                    let restored_values = concatenate_taken_blocks(
                         runtime,
                         sequence_blocks,
                         &format!("layer_{layer_index}_attention.values"),
                     )?;
                     attention.restore_from_blocks(restored_keys, restored_values)?;
-                    if let Some(keys) = attention.keys_state() {
-                        restored_tensors.push(keys.retain()?);
-                    }
-                    if let Some(values) = attention.values_state() {
-                        restored_tensors.push(values.retain()?);
-                    }
+                    evaluate_restored_pair(
+                        runtime,
+                        attention.keys_state(),
+                        attention.values_state(),
+                    )?;
                 }
                 LagunaLayerCacheState::Rotating(attention) => {
                     let persisted_keys = boundary_snapshot
-                        .get(&format!("layer_{layer_index}_attention.keys"))
+                        .remove(&format!("layer_{layer_index}_attention.keys"))
                         .ok_or_else(|| {
                             LagunaExecutionError::invalid_geometry(
                                 "rotating restore is missing keys",
                             )
                         })?;
                     let persisted_values = boundary_snapshot
-                        .get(&format!("layer_{layer_index}_attention.values"))
+                        .remove(&format!("layer_{layer_index}_attention.values"))
                         .ok_or_else(|| {
                             LagunaExecutionError::invalid_geometry(
                                 "rotating restore is missing values",
                             )
                         })?;
-                    let absolute_position = scalar_counter(
+                    let absolute_position = take_scalar_counter(
                         boundary_snapshot,
                         &format!("layer_{layer_index}_attention.absolute_position"),
                     )?;
-                    let ring_write_index = scalar_counter(
+                    let ring_write_index = take_scalar_counter(
                         boundary_snapshot,
                         &format!("layer_{layer_index}_attention.ring_write_index"),
                     )?;
                     let live_token_count = absolute_position.min(attention.window_size());
                     attention.restore_from_blocks(
-                        slice_leading_tokens(runtime, persisted_keys, live_token_count)?,
-                        slice_leading_tokens(runtime, persisted_values, live_token_count)?,
+                        slice_leading_tokens(runtime, &persisted_keys, live_token_count)?,
+                        slice_leading_tokens(runtime, &persisted_values, live_token_count)?,
                         absolute_position,
                         ring_write_index,
                     )?;
-                    if let Some(keys) = attention.keys() {
-                        restored_tensors.push(keys.retain()?);
-                    }
-                    if let Some(values) = attention.values() {
-                        restored_tensors.push(values.retain()?);
-                    }
+                    evaluate_restored_pair(runtime, attention.keys(), attention.values())?;
                 }
             }
         }
-        let restored_tensor_refs = restored_tensors.iter().collect::<Vec<_>>();
-        runtime.evaluate_arrays(&restored_tensor_refs)?;
         Ok(())
     }
 }
@@ -221,29 +212,32 @@ fn slice_leading_tokens(
     )?)
 }
 
-fn concatenate_named_blocks(
+fn concatenate_taken_blocks(
     runtime: &MlxRuntime,
-    sequence_blocks: &[HashMap<String, MlxArray>],
+    sequence_blocks: &mut [HashMap<String, MlxArray>],
     tensor_name: &str,
 ) -> Result<MlxArray, LagunaExecutionError> {
     let mut block_tensors = Vec::new();
     for sequence_block in sequence_blocks {
-        let block_tensor = sequence_block.get(tensor_name).ok_or_else(|| {
+        let block_tensor = sequence_block.remove(tensor_name).ok_or_else(|| {
             LagunaExecutionError::invalid_geometry("a sequence cache block is missing a tensor")
         })?;
         block_tensors.push(block_tensor);
     }
     if block_tensors.len() == 1 {
-        return Ok(block_tensors[0].retain()?);
+        return block_tensors.pop().ok_or_else(|| {
+            LagunaExecutionError::invalid_geometry("a sequence cache block is missing a tensor")
+        });
     }
-    Ok(runtime.concatenate_axis(&block_tensors, 2)?)
+    let block_tensor_refs = block_tensors.iter().collect::<Vec<_>>();
+    Ok(runtime.concatenate_axis(&block_tensor_refs, 2)?)
 }
 
-fn scalar_counter(
-    boundary_snapshot: &HashMap<String, MlxArray>,
+fn take_scalar_counter(
+    boundary_snapshot: &mut HashMap<String, MlxArray>,
     tensor_name: &str,
 ) -> Result<i32, LagunaExecutionError> {
-    let counter = boundary_snapshot.get(tensor_name).ok_or_else(|| {
+    let counter = boundary_snapshot.remove(tensor_name).ok_or_else(|| {
         LagunaExecutionError::invalid_geometry("a rotating counter tensor is missing")
     })?;
     if counter.dtype() != MlxDtype::Float32 {
@@ -253,4 +247,18 @@ fn scalar_counter(
     }
     let host_values = counter.to_vec_f32()?;
     Ok(host_values.first().copied().unwrap_or(0.0) as i32)
+}
+
+fn evaluate_restored_pair(
+    runtime: &MlxRuntime,
+    restored_keys: Option<&MlxArray>,
+    restored_values: Option<&MlxArray>,
+) -> Result<(), LagunaExecutionError> {
+    let restored_keys = restored_keys
+        .ok_or_else(|| LagunaExecutionError::invalid_geometry("restored cache is missing keys"))?;
+    let restored_values = restored_values.ok_or_else(|| {
+        LagunaExecutionError::invalid_geometry("restored cache is missing values")
+    })?;
+    runtime.evaluate_arrays(&[restored_keys, restored_values])?;
+    Ok(())
 }
