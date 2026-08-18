@@ -1,5 +1,5 @@
 diff --git a/mlx/io/safetensors.cpp b/mlx/io/safetensors.cpp
-index 9c2835f..ff87ed4 100644
+index 75c8a6ddc..e86523168 100644
 --- a/mlx/io/safetensors.cpp
 +++ b/mlx/io/safetensors.cpp
 @@ -1,5 +1,6 @@
@@ -9,7 +9,8 @@ index 9c2835f..ff87ed4 100644
  #include <json.hpp>
  #include <memory>
  #include <sstream>
-@@ -239,37 +240,47 @@ void save_safetensors(
+@@ -238,18 +239,26 @@ void save_safetensors(
+   }
    parent["__metadata__"] = _metadata;
 
 -  {
@@ -20,7 +21,6 @@ index 9c2835f..ff87ed4 100644
 -      to_eval.push_back(p.second);
 -    }
 -    eval(std::move(to_eval));
--  }
 +  // Fix payload order before evaluation. Writing the largest tensors first lets
 +  // the allocator reuse one released contiguous materialization for subsequent
 +  // smaller tensors while the name tie-breaker keeps the file deterministic.
@@ -28,7 +28,7 @@ index 9c2835f..ff87ed4 100644
 +  ordered_arrays.reserve(a.size());
 +  for (const auto& [key, arr] : a) {
 +    ordered_arrays.emplace_back(key, arr);
-+  }
+   }
 +  std::sort(
 +      ordered_arrays.begin(),
 +      ordered_arrays.end(),
@@ -42,28 +42,23 @@ index 9c2835f..ff87ed4 100644
    size_t offset = 0;
 -  for (auto& [key, arr] : a) {
 +  for (const auto& [key, arr] : ordered_arrays) {
-     if (arr.nbytes() == 0) {
-       std::ostringstream msg;
-       msg << "[save_safetensors] Cannot serialize an empty array ('" << key
-           << "')";
-       throw std::invalid_argument(msg.str());
-     }
-
      json child;
      child["dtype"] = dtype_to_safetensor_str(arr.dtype());
      child["shape"] = arr.shape();
-     child["data_offsets"] = std::vector<size_t>{offset, offset + arr.nbytes()};
-     parent[key] = child;
-     offset += arr.nbytes();
-   }
-
-   auto header = parent.dump();
+@@ -262,12 +271,16 @@ void save_safetensors(
    uint64_t header_len = header.length();
    out_stream->write(reinterpret_cast<char*>(&header_len), 8);
    out_stream->write(header.c_str(), header_len);
 -  for (auto& [key, arr] : a) {
--    out_stream->write(arr.data<char>(), arr.nbytes());
-+  for (const auto& [key, arr] : ordered_arrays) {
++  for (const auto& named_array : ordered_arrays) {
++    const auto& arr = named_array.second;
+     // An empty tensor contributes a zero length span and has no data pointer
+     // worth asking for.
+-    if (arr.nbytes() > 0) {
+-      out_stream->write(arr.data<char>(), arr.nbytes());
++    if (arr.nbytes() == 0) {
++      continue;
+     }
 +    auto contiguous_array = contiguous(arr);
 +    eval(contiguous_array);
 +    out_stream->write(contiguous_array.data<char>(), contiguous_array.nbytes());
