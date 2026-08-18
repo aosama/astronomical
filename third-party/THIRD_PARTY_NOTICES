@@ -8,7 +8,7 @@ Used as the bundled macOS software-update framework. Its complete license, inclu
 
 MLX
 Source: https://github.com/ml-explore/mlx
-Used as a linked native runtime dependency. Astronomical’s MLX patches include the evaluation-recovery change from https://github.com/ml-explore/mlx/commit/fe92a0565d91a250512e5d4bda948066c383713f.
+Used as a linked native runtime dependency. The pinned MLX release includes the evaluation-recovery change from https://github.com/ml-explore/mlx/commit/fe92a0565d91a250512e5d4bda948066c383713f.
 
 MIT License
 
