@@ -83,6 +83,7 @@ pub(super) struct SyntheticLagunaTextArtifact {
     pub(super) tokenizer: Value,
     pub(super) tokenizer_config: Value,
     pub(super) generation_config: Option<Value>,
+    pub(super) root_chat_template_source: String,
     pub(super) included_templates: BTreeMap<String, Vec<u8>>,
 }
 
@@ -94,6 +95,7 @@ impl SyntheticLagunaTextArtifact {
             tokenizer: tokenizer_value(),
             tokenizer_config: tokenizer_config_value(POOLSIDE_TEMPLATE),
             generation_config: Some(generation_config_value(false)),
+            root_chat_template_source: POOLSIDE_TEMPLATE.to_owned(),
             included_templates: BTreeMap::new(),
         }
     }
@@ -101,13 +103,19 @@ impl SyntheticLagunaTextArtifact {
     /// Builds the S-like artifact whose tokenizer selects one artifact-local included template.
     pub(super) fn small_included() -> Self {
         let mut artifact = Self::extra_small_inline();
-        artifact.tokenizer_config["chat_template"] = json!("{% include 'chat_template.jinja' %}");
+        artifact.set_embedded_chat_template("{% include 'chat_template.jinja' %}");
         artifact.included_templates.insert(
             "chat_template.jinja".to_owned(),
             template_with_defaults(true, true).into_bytes(),
         );
         artifact.generation_config = Some(generation_config_value(true));
         artifact
+    }
+
+    pub(super) fn set_embedded_chat_template(&mut self, template_source: impl Into<String>) {
+        let template_source = template_source.into();
+        self.tokenizer_config["chat_template"] = json!(template_source.clone());
+        self.root_chat_template_source = template_source;
     }
 
     /// Normalizes bytes only through the proposed Laguna owner after canonical model validation.
@@ -139,6 +147,7 @@ impl SyntheticLagunaTextArtifact {
                 tokenizer_bytes: &tokenizer_bytes,
                 tokenizer_config_bytes: &tokenizer_config_bytes,
                 generation_config_bytes: generation_config_bytes.as_deref(),
+                root_chat_template_source: &self.root_chat_template_source,
                 included_template_bytes_by_name: &self.included_templates,
             },
         )

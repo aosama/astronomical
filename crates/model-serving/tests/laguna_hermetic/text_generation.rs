@@ -1,5 +1,6 @@
 use astronomical_ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatImageInput, ChatMessage, ChatToolChoice,
+    ChatToolDefinition,
 };
 use astronomical_model_serving::{
     LagunaGenerationProcessor, LagunaOutputEvent, LagunaOutputParserError, LagunaPreparationError,
@@ -79,6 +80,44 @@ fn should_prepare_and_parse_the_complete_romeo_and_juliet_chat_journey() {
 }
 
 #[test]
+fn should_complete_an_opencode_bash_journey_with_model_generated_metadata() {
+    let processor = processor(SyntheticLagunaTextArtifact::extra_small_inline());
+    let mut chat_command = romeo_and_juliet_command(9_823, Some(0));
+    chat_command.tools = vec![ChatToolDefinition {
+        name: "bash".to_owned(),
+        description: Some("Run a shell command".to_owned()),
+        parameters_json:
+            r#"{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}"#
+                .to_owned(),
+    }];
+
+    let prepared_generation = processor
+        .prepare_chat(&chat_command)
+        .expect("the OpenCode request should render and tokenize");
+    let mut output_parser = prepared_generation
+        .new_output_parser()
+        .expect("the OpenCode tool catalog should construct its request parser");
+    let output_events = output_parser
+        .push_fragment(
+            "<tool_call>bash\
+             <arg_key>command</arg_key><arg_value>ls -la</arg_value>\
+             <arg_key>description</arg_key><arg_value>List repository files</arg_value>\
+             </tool_call>",
+        )
+        .expect("model-generated metadata should not abort the OpenCode tool journey");
+
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "bash".to_owned(),
+            arguments_json: r#"{"command":"ls -la","description":"List repository files"}"#
+                .to_owned(),
+        }]
+    );
+}
+
+#[test]
 fn should_render_then_tokenize_with_laguna_owned_public_components() {
     let text_descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
     let chat_command = romeo_and_juliet_command(9_802, Some(0));
@@ -118,8 +157,7 @@ fn should_apply_thinking_precedence_as_request_then_generation_config_then_templ
     );
 
     let mut generation_false_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
-    generation_false_artifact.tokenizer_config["chat_template"] =
-        json!(template_with_defaults(true, false));
+    generation_false_artifact.set_embedded_chat_template(template_with_defaults(true, false));
     generation_false_artifact
         .generation_config
         .as_mut()
@@ -143,8 +181,7 @@ fn should_apply_thinking_precedence_as_request_then_generation_config_then_templ
     assert_eq!(request_override.thinking_budget(), Some(256));
 
     let mut template_default_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
-    template_default_artifact.tokenizer_config["chat_template"] =
-        json!(template_with_defaults(true, false));
+    template_default_artifact.set_embedded_chat_template(template_with_defaults(true, false));
     template_default_artifact
         .generation_config
         .as_mut()

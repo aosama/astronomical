@@ -197,6 +197,25 @@ async fn should_grow_full_state_and_bound_sliding_state_through_prefill_and_deco
         prefill_memory_projection.sliding_temporary_workspace_bytes(),
         288
     );
+    let chunk_bounded_admission_projection = decoder_state
+        .projected_context_admission_memory(model.contract(), 6, 2)
+        .expect("context admission should separate persistent growth from one executable chunk");
+    let executable_chunk_projection = decoder_state
+        .projected_forward_memory(model.contract(), 2)
+        .expect("the executable chunk workspace should be exact");
+    assert_eq!(
+        chunk_bounded_admission_projection.persistent_growth_bytes(),
+        prefill_memory_projection.persistent_growth_bytes()
+    );
+    assert_eq!(
+        chunk_bounded_admission_projection.sliding_temporary_workspace_bytes(),
+        executable_chunk_projection.sliding_temporary_workspace_bytes()
+    );
+    assert!(
+        chunk_bounded_admission_projection.sliding_temporary_workspace_bytes()
+            < prefill_memory_projection.sliding_temporary_workspace_bytes(),
+        "a long prompt must not reserve a full-prompt rotating workspace when execution is chunked"
+    );
     let mut performance_attribution = PerformanceAttribution::enabled();
     let prompt_tokens = runtime
         .array_from_u32(&[1, 2, 3, 4, 5, 6], &[6])
@@ -243,6 +262,83 @@ async fn should_grow_full_state_and_bound_sliding_state_through_prefill_and_deco
         performance_attribution
             .operation_measurement(PerformanceOperation::AttentionForwardSpan)
             .is_some()
+    );
+}
+
+#[tokio::test]
+async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_one_graph() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let contract = tiny_mixed_contract();
+    let weights = bind_tiny_weights(&runtime, &contract);
+    let model = LagunaModel::new(contract, weights).expect("the mixed model should construct");
+    let mut decoder_state =
+        LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
+    let mut performance_attribution = PerformanceAttribution::enabled();
+    let prompt_tokens = runtime
+        .array_from_u32(&[1, 2, 3, 4, 5, 6], &[6])
+        .expect("prompt token ids should be valid");
+
+    model
+        .forward(
+            &runtime,
+            &prompt_tokens,
+            &mut decoder_state,
+            &mut performance_attribution,
+        )
+        .expect("mixed prefill should execute");
+
+    // Two layers at interval one commit after the first layer only. The caller
+    // owns the terminal evaluation after final norm and logits.
+    assert_eq!(
+        performance_attribution
+            .operation_measurement(PerformanceOperation::PrefillStateAsyncEvaluationSubmission)
+            .map(|measurement| measurement.occurrence_count())
+            .unwrap_or(0),
+        1
+    );
+
+    let decode_tokens = runtime
+        .array_from_u32(&[7], &[1])
+        .expect("decode token ids should be valid");
+    model
+        .forward(
+            &runtime,
+            &decode_tokens,
+            &mut decoder_state,
+            &mut performance_attribution,
+        )
+        .expect("mixed decode should execute");
+    assert_eq!(
+        performance_attribution
+            .operation_measurement(PerformanceOperation::PrefillStateAsyncEvaluationSubmission)
+            .map(|measurement| measurement.occurrence_count())
+            .unwrap_or(0),
+        1
+    );
+
+    let lazy_tape_contract = tiny_mixed_contract();
+    let lazy_tape_model = LagunaModel::new(
+        lazy_tape_contract.clone(),
+        bind_tiny_weights(&runtime, &lazy_tape_contract),
+    )
+    .expect("the comparison model should construct")
+    .with_graph_submission_layer_intervals(0, 0);
+    let mut lazy_tape_decoder_state = LagunaDecoderState::empty(lazy_tape_model.contract())
+        .expect("the comparison decoder state should allocate");
+    let mut lazy_tape_attribution = PerformanceAttribution::enabled();
+    lazy_tape_model
+        .forward(
+            &runtime,
+            &prompt_tokens,
+            &mut lazy_tape_decoder_state,
+            &mut lazy_tape_attribution,
+        )
+        .expect("a zero-interval prefill should still execute");
+    assert!(
+        lazy_tape_attribution
+            .operation_measurement(PerformanceOperation::PrefillStateAsyncEvaluationSubmission)
+            .is_none()
     );
 }
 

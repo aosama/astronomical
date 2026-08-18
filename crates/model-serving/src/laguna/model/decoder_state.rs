@@ -268,6 +268,28 @@ impl LagunaDecoderState {
         )
     }
 
+    /// Persistent growth uses the complete context; temporary rotating workspace
+    /// uses only the largest forward that can execute at once. Charging the full
+    /// prompt as temporary workspace demotes a fitting resident model.
+    pub fn projected_context_admission_memory(
+        &self,
+        contract: &LagunaTargetContract,
+        context_growth_token_count: usize,
+        maximum_forward_token_count: usize,
+    ) -> Result<LagunaDecoderForwardMemoryProjection, LagunaExecutionError> {
+        let context_growth_projection =
+            self.projected_forward_memory(contract, context_growth_token_count)?;
+        let executable_forward_projection = self.projected_forward_memory(
+            contract,
+            maximum_forward_token_count.min(context_growth_token_count),
+        )?;
+        Ok(LagunaDecoderForwardMemoryProjection {
+            persistent_growth_bytes: context_growth_projection.persistent_growth_bytes,
+            sliding_temporary_workspace_bytes: executable_forward_projection
+                .sliding_temporary_workspace_bytes,
+        })
+    }
+
     /// Returns the committed token count stored by one layer.
     #[must_use]
     pub fn committed_token_count(&self, layer_index: usize) -> Option<i32> {

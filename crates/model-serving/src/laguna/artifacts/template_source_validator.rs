@@ -8,7 +8,7 @@ use crate::artifact_validation::{
 use crate::laguna::LagunaTextArtifactError;
 use crate::laguna::text::{
     MAXIMUM_TEMPLATE_BYTES, MAXIMUM_TEMPLATE_INCLUDE_DEPTH, MAXIMUM_TEMPLATE_SOURCE_COUNT,
-    discover_root_template_includes, discover_template_includes,
+    discover_template_includes,
 };
 
 use super::LagunaArtifactValidationError;
@@ -31,20 +31,36 @@ impl<'a> LagunaTemplateSourceValidator<'a> {
 
     pub(super) fn validate(
         self,
-        tokenizer_config_bytes: &[u8],
+        root_template_source: &str,
+        standalone_root_file_name: Option<&str>,
+        prevalidated_template_file: Option<(String, ValidatedRequiredFile)>,
     ) -> Result<ValidatedLagunaTemplateSources, LagunaArtifactValidationError> {
-        let root_include_names = discover_root_template_includes(tokenizer_config_bytes)?;
+        if root_template_source.len() > MAXIMUM_TEMPLATE_BYTES {
+            return Err(LagunaTextArtifactError::DocumentTooLarge {
+                document_name: "chat template",
+                actual_bytes: root_template_source.len(),
+                maximum_bytes: MAXIMUM_TEMPLATE_BYTES,
+            }
+            .into());
+        }
+        let root_include_names = discover_template_includes(root_template_source)?;
+        let root_ancestors = standalone_root_file_name
+            .map(|file_name| vec![file_name.to_owned()])
+            .unwrap_or_default();
         let mut files_by_name = BTreeMap::new();
         let mut bytes_by_name = BTreeMap::new();
+        let mut prevalidated_files_by_name = prevalidated_template_file
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
         let mut pending_includes = root_include_names
             .into_iter()
             .map(|include_name| PendingTemplateInclude {
                 include_name,
                 depth: 1,
-                ancestors: Vec::new(),
+                ancestors: root_ancestors.clone(),
             })
             .collect::<Vec<_>>();
-        let mut total_included_bytes = 0usize;
+        let mut total_template_bytes = root_template_source.len();
         let mut maximum_expanded_depth_by_name = BTreeMap::new();
 
         while let Some(pending_include) = pending_includes.pop() {
@@ -72,18 +88,22 @@ impl<'a> LagunaTemplateSourceValidator<'a> {
                     }
                     .into());
                 }
-                let template_file = self.validate_include_file(&pending_include.include_name)?;
+                let template_file =
+                    match prevalidated_files_by_name.remove(&pending_include.include_name) {
+                        Some(prevalidated_file) => prevalidated_file,
+                        None => self.validate_include_file(&pending_include.include_name)?,
+                    };
                 let template_bytes = read_bounded_required_file_bytes(
                     &template_file,
                     MAXIMUM_TEMPLATE_BYTES as u64,
                 )?;
-                total_included_bytes = total_included_bytes
+                total_template_bytes = total_template_bytes
                     .checked_add(template_bytes.len())
                     .unwrap_or(usize::MAX);
-                if total_included_bytes > MAXIMUM_TEMPLATE_BYTES {
+                if total_template_bytes > MAXIMUM_TEMPLATE_BYTES {
                     return Err(LagunaTextArtifactError::DocumentTooLarge {
-                        document_name: "included templates",
-                        actual_bytes: total_included_bytes,
+                        document_name: "chat template sources",
+                        actual_bytes: total_template_bytes,
                         maximum_bytes: MAXIMUM_TEMPLATE_BYTES,
                     }
                     .into());
