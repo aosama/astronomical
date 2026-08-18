@@ -246,10 +246,12 @@ impl WorkerProcess {
     /// model and load a new one from the given directory.
     pub async fn swap_model(
         &mut self,
+        model_id: String,
         model_directory: String,
         max_output_tokens: u32,
     ) -> Result<(), WorkerControlError> {
         self.send_command_with_timeout(&WorkerCommand::SwapModel {
+            model_id,
             model_directory,
             max_output_tokens,
         })

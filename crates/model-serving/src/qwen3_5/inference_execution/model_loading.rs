@@ -7,14 +7,12 @@ use crate::{
     PersistentVisualEmbeddingModelContract,
 };
 
-use super::{
-    Qwen3_5EngineState, Qwen3_5MtpRuntimeState, fatal_engine_error, qwen3_5_runtime_error,
-};
+use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::model::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5::multi_token_prediction::{
-    materialize_optional_weights, qwen3_5_mtp_runtime_configuration_after_load,
+use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_runtime_configuration_after_load;
+use crate::qwen3_5::{
+    Qwen3_5ImageProcessor, Qwen3_5Model, Qwen3_5MtpArtifactCapability, Qwen3_5MtpSourceSelection,
 };
-use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model, Qwen3_5MtpArtifactCapability};
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
 
@@ -22,6 +20,10 @@ use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_
 use super::speculative_prefill::configured_speculative_prefill_activation_failure;
 use super::speculative_prefill::{
     load_speculative_prefill_draft_model, token_identifier_mapping_digest,
+};
+use super::standalone_mtp_loading::{
+    attach_prepared_standalone_mtp, materialize_prepared_mtp, mtp_drafter_attribution,
+    prepare_mtp_source,
 };
 
 impl Qwen3_5EngineState {
@@ -45,6 +47,14 @@ impl Qwen3_5EngineState {
         let mut total_artifact_payload_bytes = None;
         let mut model_shard_count = None;
         let mut target_token_identifier_mapping_digest = None;
+        let mtp_source_selection = self
+            .mtp_source_selection
+            .take()
+            .unwrap_or(Qwen3_5MtpSourceSelection::TargetLocal);
+        let drafter_attribution = mtp_drafter_attribution(&mtp_source_selection);
+        self.mtp_drafter_model_id = drafter_attribution.model_id;
+        self.mtp_drafter_model_revision = drafter_attribution.model_revision;
+        self.mtp_drafter_storage_fingerprint = drafter_attribution.storage_fingerprint;
         let mut qwen3_5_mtp_artifact_capability = Qwen3_5MtpArtifactCapability::target_only(
             crate::qwen3_5::multi_token_prediction::Qwen3_5MtpTargetOnlyReason::NoTensorInventory,
         );
@@ -58,8 +68,14 @@ impl Qwen3_5EngineState {
                 Some(resolved_target_token_identifier_mapping_digest);
             let target_max_output_tokens = validated_artifact.max_output_tokens();
             let qwen3_5_vision_config = validated_artifact.vision_config().cloned();
-            qwen3_5_mtp_artifact_capability = validated_artifact.mtp_artifact_capability().clone();
+            let prepared_mtp_source = prepare_mtp_source(
+                mtp_source_selection,
+                validated_artifact.mtp_artifact_capability().clone(),
+            )?;
+            qwen3_5_mtp_artifact_capability = prepared_mtp_source.artifact_capability;
+            let standalone_binding_parts = prepared_mtp_source.standalone_binding_parts;
             let should_bind_mtp_weights = self.mtp_enabled
+                && prepared_mtp_source.should_bind_target_local
                 && qwen3_5_mtp_artifact_capability
                     .supports_configured_depth(self.configured_mtp_draft_depth);
             model_id = Some(validated_artifact.model_id().to_owned());
@@ -109,28 +125,21 @@ impl Qwen3_5EngineState {
                     |_performance_attribution| model.materialize_target_weights(),
                 )
                 .map_err(qwen3_5_runtime_error)?;
-            if should_bind_mtp_weights
-                && model.mtp_weights()
-                && let Err(mtp_materialization_error) = model_loading_performance_attribution
-                    .measure_operation(
-                        PerformanceOperation::ResidentWeightMaterializationSynchronizationWait,
-                        |_performance_attribution| materialize_optional_weights(&mut model),
-                    )
-            {
-                tracing::warn!(
-                    error = %mtp_materialization_error,
-                    "optional MTP weight materialization failed; serving target-only"
-                );
-                if let Err(mlx_allocator_cleanup_error) = model
-                    .runtime()
-                    .synchronize_gpu_stream_and_clear_allocator_cache()
-                {
-                    tracing::warn!(
-                        error = %mlx_allocator_cleanup_error,
-                        "failed to reclaim allocator memory after optional MTP initialization failure"
-                    );
-                }
-            }
+            let standalone_mtp_was_attached = attach_prepared_standalone_mtp(
+                &mut model,
+                standalone_binding_parts,
+                &mut qwen3_5_mtp_artifact_capability,
+                &mut model_loading_performance_attribution,
+            );
+            let mut should_materialize_mtp_weights = should_bind_mtp_weights;
+            should_materialize_mtp_weights |= standalone_mtp_was_attached;
+            materialize_prepared_mtp(
+                &mut model,
+                should_materialize_mtp_weights,
+                standalone_mtp_was_attached,
+                &mut qwen3_5_mtp_artifact_capability,
+                &mut model_loading_performance_attribution,
+            );
             let (speculative_prefill_draft_model, speculative_prefill_unavailable_reason) =
                 load_speculative_prefill_draft_model(
                     &model,
@@ -428,28 +437,11 @@ impl Qwen3_5EngineState {
                 self.mtp_runtime_state = mtp_runtime_state;
                 self.mtp_unavailable_reason = mtp_unavailable_reason;
                 self.mtp_depth_status = mtp_depth_status;
-                match self.mtp_runtime_state {
-                    Qwen3_5MtpRuntimeState::Disabled => {}
-                    Qwen3_5MtpRuntimeState::TargetOnly => tracing::info!(
-                        model_id = self.model_id.as_deref().unwrap_or("unknown"),
-                        "MTP is enabled but the selected model has no MTP inventory; serving target-only"
-                    ),
-                    Qwen3_5MtpRuntimeState::Active => tracing::info!(
-                        model_id = self.model_id.as_deref().unwrap_or("unknown"),
-                        "native MTP is active for this model"
-                    ),
-                    Qwen3_5MtpRuntimeState::Unavailable => {
-                        let mtp_unavailable_reason = self
-                            .mtp_unavailable_reason
-                            .as_deref()
-                            .unwrap_or("unknown MTP initialization failure");
-                        tracing::warn!(
-                            model_id = self.model_id.as_deref().unwrap_or("unknown"),
-                            mtp_unavailable_reason,
-                            "MTP is enabled but unavailable; serving target-only"
-                        );
-                    }
-                }
+                super::mtp_runtime_logging::log_mtp_runtime_state(
+                    self.model_id.as_deref(),
+                    self.mtp_runtime_state,
+                    self.mtp_unavailable_reason.as_deref(),
+                );
                 if let Err(performance_attribution_error) = self
                     .record_model_loading_performance_attribution(
                         model_loading_performance_attribution,

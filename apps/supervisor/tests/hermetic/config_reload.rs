@@ -12,6 +12,7 @@ use std::time::Duration;
 use astronomical_config::{
     ChunkingConfig, LogLevel, LoggingConfig, PromptCacheConfig, SpeculativePrefillConfig,
 };
+use astronomical_ipc_protocol::WorkerMtpPairingConfiguration;
 use astronomical_supervisor::{
     ChatGenerationExecutor, ConfigReloadDecision, ConfigReloadDiff, GenerationPerformanceLog,
     ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
@@ -149,6 +150,26 @@ fn should_classify_mtp_draft_depth_change_as_worker_restart() {
 }
 
 #[test]
+fn should_classify_resolved_mtp_pairing_change_as_worker_restart() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.mtp_pairings = vec![WorkerMtpPairingConfiguration {
+        target_model_id: "target-model".to_owned(),
+        drafter_model_id: "target-model-mtp".to_owned(),
+        drafter_model_directory: Some(PathBuf::from("/tmp/fictional-drafter")),
+        discovered_drafter_revision: Some("0123456789ab".to_owned()),
+    }];
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(
+        matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields == &["mtp_pairings".to_owned()]),
+        "a resolved MTP pairing change must replace the worker, got {decision:?}"
+    );
+}
+
+#[test]
 fn should_classify_performance_attribution_change_as_worker_restart() {
     let mut current = sample_resolved_config();
     current.performance_attribution_enabled = false;
@@ -259,6 +280,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         performance_attribution_enabled: false,
         mtp_enabled: false,
         mtp_draft_depth: None,
+        mtp_pairings: Vec::new(),
         speculative_prefill: SpeculativePrefillConfig::disabled(),
         speculative_prefill_draft_model_directory: None,
         prompt_cache_config: PromptCacheConfig::new(
@@ -410,82 +432,4 @@ fn should_resolve_reload_config_from_the_config_file() {
             .global_prompt_cache_root_directory(),
         &config_home_directory.join(".astronomical-dev/cache")
     );
-}
-
-#[test]
-fn should_not_resolve_a_draft_model_when_speculative_prefill_is_disabled() {
-    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
-    let config_file_path = config_home_directory
-        .path()
-        .join(".astronomical-dev")
-        .join("config.json");
-    std::fs::create_dir_all(
-        config_file_path
-            .parent()
-            .expect("the config path should have a parent"),
-    )
-    .expect("the config directory should be created");
-    std::fs::write(
-        &config_file_path,
-        r#"{
-            "speculative_prefill": {
-                "enabled": false,
-                "draft_model_id": "astronomical/unused-draft"
-            }
-        }"#,
-    )
-    .expect("the config file should be written");
-    let resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        config_home_directory.path().to_path_buf(),
-        PathBuf::from("/fallback/worker"),
-    );
-
-    let resolved_runtime_config = resolver
-        .load()
-        .expect("a disabled speculative-prefill draft must not require discovery");
-
-    assert!(!resolved_runtime_config.speculative_prefill.is_enabled());
-    assert!(
-        resolved_runtime_config
-            .speculative_prefill_draft_model_directory
-            .is_none()
-    );
-}
-
-#[test]
-fn should_reject_enabled_speculative_prefill_when_target_model_is_not_discovered() {
-    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
-    let config_file_path = config_home_directory
-        .path()
-        .join(".astronomical-dev")
-        .join("config.json");
-    std::fs::create_dir_all(
-        config_file_path
-            .parent()
-            .expect("the config path should have a parent"),
-    )
-    .expect("the config directory should be created");
-    std::fs::write(
-        &config_file_path,
-        r#"{
-            "speculative_prefill": {
-                "enabled": true,
-                "target_model_id": "target-model",
-                "draft_model_id": "draft-model",
-                "keep_percentage": 20
-            }
-        }"#,
-    )
-    .expect("the config file should be written");
-    let resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        config_home_directory.path().to_path_buf(),
-        PathBuf::from("/fallback/worker"),
-    );
-
-    assert!(matches!(
-        resolver.load(),
-        Err(astronomical_supervisor::ResolvedRuntimeConfigError::
-            SpeculativePrefillTargetModelNotDiscovered { target_model_id })
-            if target_model_id == "target-model"
-    ));
 }

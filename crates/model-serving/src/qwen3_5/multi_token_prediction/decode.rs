@@ -155,12 +155,8 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
     let target_hidden_seed = prediction_request
         .take_target_hidden_states()
         .ok_or_else(|| fatal_engine_error("MTP proposal lost its target hidden seed"))?;
-    // Two retains of the pre-proposal predictor: commit replay restores this
-    // frontier then rebuilds only the accepted prefix, while rollback restores
-    // the same frontier when verification or commit fails.
-    let predictor_commit_checkpoint = prediction_request
-        .allocation_checkpoint()
-        .map_err(qwen3_5_runtime_error)?;
+    // Operational rollback retains the pre-proposal frontier. Successful
+    // commits reuse the exact target-authoritative base produced by the proposal itself.
     let predictor_rollback_checkpoint = prediction_request
         .allocation_checkpoint()
         .map_err(qwen3_5_runtime_error)?;
@@ -192,7 +188,7 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
             ));
         }
     };
-    let draft_token_ids = proposal.draft_token_ids().to_vec();
+    let (draft_token_ids, predictor_base_checkpoint) = proposal.into_parts();
     active_request.performance_attribution_mut().record_counter(
         PerformanceCounter::MtpProposedDraftCount,
         u64::try_from(draft_token_ids.len()).unwrap_or(u64::MAX),
@@ -263,9 +259,7 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
         model,
         active_request,
         target_verify_start_position_tokens,
-        current_generated_token,
-        &target_hidden_seed,
-        predictor_commit_checkpoint,
+        predictor_base_checkpoint,
         &draft_token_ids,
         &decision,
         verification_output,
@@ -286,6 +280,7 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
             effective_depth,
         ));
     }
+    drop(target_state_checkpoint);
     record_mtp_outcome(active_request, &decision);
     Ok(decision)
 }
@@ -380,6 +375,38 @@ fn record_mtp_outcome(
         PerformanceCounter::MtpRejectedDraftCount,
         proposed_count.saturating_sub(accepted_count),
     );
+    let proposed_position_counters = [
+        PerformanceCounter::MtpProposedDraftPositionOneCount,
+        PerformanceCounter::MtpProposedDraftPositionTwoCount,
+        PerformanceCounter::MtpProposedDraftPositionThreeCount,
+    ];
+    let accepted_position_counters = [
+        PerformanceCounter::MtpAcceptedDraftPositionOneCount,
+        PerformanceCounter::MtpAcceptedDraftPositionTwoCount,
+        PerformanceCounter::MtpAcceptedDraftPositionThreeCount,
+    ];
+    let rejected_position_counters = [
+        PerformanceCounter::MtpRejectedDraftPositionOneCount,
+        PerformanceCounter::MtpRejectedDraftPositionTwoCount,
+        PerformanceCounter::MtpRejectedDraftPositionThreeCount,
+    ];
+    for (draft_position, proposed_position_counter) in proposed_position_counters
+        .into_iter()
+        .enumerate()
+        .take(usize::from(decision.proposed_count()))
+    {
+        active_request
+            .performance_attribution_mut()
+            .record_counter(proposed_position_counter, 1);
+        let outcome_counter = if draft_position < usize::from(decision.accepted_count()) {
+            accepted_position_counters[draft_position]
+        } else {
+            rejected_position_counters[draft_position]
+        };
+        active_request
+            .performance_attribution_mut()
+            .record_counter(outcome_counter, 1);
+    }
 }
 
 fn restore_complete_attempt_state(

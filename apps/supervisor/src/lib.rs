@@ -12,6 +12,7 @@ mod generation_output_ceiling;
 mod generation_performance_log;
 mod instance_lock;
 mod maximum_mlx_memory_endpoint;
+mod mtp_pairing_resolution;
 mod openai_chat_completion;
 mod openai_chat_endpoint;
 mod openai_chat_stream;

@@ -1,4 +1,25 @@
+use super::support::generation_metadata;
 use super::*;
+
+#[test]
+fn should_serialize_standalone_drafter_provenance_without_a_local_path() {
+    let mut generation_metadata = generation_metadata(PerformanceAttributionOutcome::Success);
+    generation_metadata.drafter_model_id = Some("publisher/standalone-mtp".to_owned());
+    generation_metadata.drafter_model_revision = Some("revision-one".to_owned());
+    generation_metadata.drafter_storage_fingerprint = Some("storage-fingerprint".to_owned());
+    let report = PerformanceAttribution::enabled()
+        .finish_generation(generation_metadata)
+        .expect("enabled attribution should produce a generation report");
+    let report_json = serde_json::to_value(report).expect("report should serialize");
+
+    assert_eq!(report_json["drafter_model_id"], "publisher/standalone-mtp");
+    assert_eq!(report_json["drafter_model_revision"], "revision-one");
+    assert_eq!(
+        report_json["drafter_storage_fingerprint"],
+        "storage-fingerprint"
+    );
+    assert!(report_json.get("drafter_model_directory").is_none());
+}
 
 #[test]
 fn should_serialize_rejected_generation_outcome_and_failure_description() {

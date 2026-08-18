@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use astronomical_config::{ModelFamily, PromptCacheConfig, classify_model_directory};
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration,
+    WorkerChunkingConfiguration, WorkerMtpPairingConfiguration,
+    WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
     LagunaServingSettings, ModelFactory, ModelFamilyGenerationProcessor,
@@ -21,6 +22,7 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) performance_attribution_log_path: PathBuf,
     pub(crate) mtp_enabled: bool,
     pub(crate) mtp_draft_depth: Option<u8>,
+    pub(crate) mtp_pairings: Vec<WorkerMtpPairingConfiguration>,
     pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub(crate) persistent_prompt_cache_enabled: bool,
     pub(crate) chunking: WorkerChunkingConfiguration,
@@ -31,6 +33,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
 {
     async fn create(
         &self,
+        model_id: &str,
         model_directory: &str,
         max_output_tokens: u32,
     ) -> Result<(ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine), String> {
@@ -42,6 +45,12 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let mtp_enabled = self.mtp_enabled;
         let mtp_draft_depth = self.mtp_draft_depth;
+        let selected_mtp_pairing = self
+            .mtp_pairings
+            .iter()
+            .find(|mtp_pairing| mtp_pairing.applies_to_loaded_model(model_id))
+            .cloned();
+        let requested_model_id = model_id.to_owned();
         let speculative_prefill = self.speculative_prefill.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
         let chunking = self.chunking.clone();
@@ -52,6 +61,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
             match model_family {
                 Some(ModelFamily::Qwen3_5) => {
                     let (generation_processor, qwen3_5_engine) = initialize_qwen3_5_model(
+                        requested_model_id,
                         model_directory_path,
                         effective_mlx_memory_ceiling_bytes,
                         allocator_cache_memory_limit_bytes,
@@ -59,6 +69,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         max_output_tokens,
                         mtp_enabled,
                         mtp_draft_depth,
+                        selected_mtp_pairing,
                         speculative_prefill,
                         persistent_prompt_cache_enabled,
                         performance_attribution_enabled,

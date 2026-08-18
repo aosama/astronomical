@@ -8,6 +8,14 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "artifact_validation",
         ),
         (
+            PerformanceOperation::StandaloneMtpArtifactValidation,
+            "standalone_mtp_artifact_validation",
+        ),
+        (
+            PerformanceOperation::MtpPairingCompatibilityValidation,
+            "mtp_pairing_compatibility_validation",
+        ),
+        (
             PerformanceOperation::TokenizerInitialization,
             "tokenizer_initialization",
         ),
@@ -22,6 +30,14 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceOperation::ModelTensorBinding,
             "model_tensor_binding",
+        ),
+        (
+            PerformanceOperation::StandaloneMtpTensorBinding,
+            "standalone_mtp_tensor_binding",
+        ),
+        (
+            PerformanceOperation::StandaloneMtpMaterializationSynchronizationWait,
+            "standalone_mtp_materialization_synchronization_wait",
         ),
         (
             PerformanceOperation::ExpertPagerPlanConstruction,
@@ -180,6 +196,10 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceOperation::MtpQueuedFrontierRestoration,
             "mtp_queued_frontier_restoration",
+        ),
+        (
+            PerformanceOperation::MtpRequestStateCleanup,
+            "mtp_request_state_cleanup",
         ),
         (
             PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
@@ -354,6 +374,42 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
             "mtp_proposed_draft_count",
         ),
         (
+            PerformanceCounter::MtpProposedDraftPositionOneCount,
+            "mtp_proposed_draft_position_one_count",
+        ),
+        (
+            PerformanceCounter::MtpProposedDraftPositionTwoCount,
+            "mtp_proposed_draft_position_two_count",
+        ),
+        (
+            PerformanceCounter::MtpProposedDraftPositionThreeCount,
+            "mtp_proposed_draft_position_three_count",
+        ),
+        (
+            PerformanceCounter::MtpAcceptedDraftPositionOneCount,
+            "mtp_accepted_draft_position_one_count",
+        ),
+        (
+            PerformanceCounter::MtpAcceptedDraftPositionTwoCount,
+            "mtp_accepted_draft_position_two_count",
+        ),
+        (
+            PerformanceCounter::MtpAcceptedDraftPositionThreeCount,
+            "mtp_accepted_draft_position_three_count",
+        ),
+        (
+            PerformanceCounter::MtpRejectedDraftPositionOneCount,
+            "mtp_rejected_draft_position_one_count",
+        ),
+        (
+            PerformanceCounter::MtpRejectedDraftPositionTwoCount,
+            "mtp_rejected_draft_position_two_count",
+        ),
+        (
+            PerformanceCounter::MtpRejectedDraftPositionThreeCount,
+            "mtp_rejected_draft_position_three_count",
+        ),
+        (
             PerformanceCounter::MtpEosTruncatedPrefixCount,
             "mtp_eos_truncated_prefix_count",
         ),
@@ -400,6 +456,10 @@ fn should_serialize_every_operation_and_counter_identifier_in_catalog_order() {
         (
             PerformanceCounter::MtpCancellationWithQueuedStateCount,
             "mtp_cancellation_with_queued_state_count",
+        ),
+        (
+            PerformanceCounter::MtpRequestTargetOnlyFallbackCount,
+            "mtp_request_target_only_fallback_count",
         ),
         (
             PerformanceCounter::MtpOperationalFallbackCount,

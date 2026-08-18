@@ -218,6 +218,7 @@ async fn load_engine(
             true,
             mtp_enabled,
             draft_depth,
+            astronomical_model_serving::Qwen3_5MtpSourceSelection::TargetLocal,
             crate::common::disabled_worker_speculative_prefill_configuration(),
             PerformanceAttribution::disabled(),
             performance_attribution_log,

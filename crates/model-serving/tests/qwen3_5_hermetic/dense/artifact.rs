@@ -11,8 +11,10 @@ fn should_classify_the_dense_qwen3_6_mtp_inventory_as_mtp_capable() {
     let certified_dense_qwen3_6_config = certified_dense_qwen3_6_config();
     let language_tensor_profiles =
         qwen3_5_language_tensor_profiles(&certified_dense_qwen3_6_config);
+    let mtp_tensor_names = qwen3_5_mtp_tensor_names(&certified_dense_qwen3_6_config);
+    let expected_mtp_tensor_count = mtp_tensor_names.len();
     let index_bytes = certified_test_index_bytes_with_mtp_tensor_names(
-        qwen3_5_mtp_tensor_names(&certified_dense_qwen3_6_config),
+        mtp_tensor_names,
         &language_tensor_profiles,
     );
     let shard_index = Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)
@@ -29,7 +31,7 @@ fn should_classify_the_dense_qwen3_6_mtp_inventory_as_mtp_capable() {
             stored_mtp_layer_count: 1,
             artifact_maximum_draft_depth: MtpDraftDepth::DEPTH_ONE,
             artifact_default_draft_depth: None,
-            mtp_tensor_count: 29,
+            mtp_tensor_count: expected_mtp_tensor_count,
         }
     );
 }

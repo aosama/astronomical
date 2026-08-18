@@ -1,4 +1,6 @@
-use astronomical_ipc_protocol::graph_submission_layer_interval;
+use astronomical_ipc_protocol::{
+    decode_graph_submission_layer_interval, graph_submission_layer_interval,
+};
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
@@ -307,13 +309,28 @@ impl Qwen3_5Model {
         // Multi-token prefill may submit completed layer groups so macOS can
         // schedule other graphics work between command buffers. Paged experts
         // additionally benefit because completed streamed pages can detach.
-        let graph_submission_layer_interval = usize::try_from(graph_submission_layer_interval(
-            token_count,
-            self.sparse_experts_are_paged(),
-            self.chunking.prefill_graph_submission_layer_interval,
-            self.chunking
-                .experimental_ssd_paging_generation_graph_submission_layer_interval,
-        ))
+        // Verification windows are decode-time 2-4 token forwards. Reusing the
+        // prefill interval would traverse the lazy graph after every layer and
+        // erase the speculative-decode gain.
+        let graph_submission_layer_interval = usize::try_from(
+            if paged_prefill_execution_mode
+                == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
+            {
+                decode_graph_submission_layer_interval(
+                    self.sparse_experts_are_paged(),
+                    self.chunking
+                        .experimental_ssd_paging_generation_graph_submission_layer_interval,
+                )
+            } else {
+                graph_submission_layer_interval(
+                    token_count,
+                    self.sparse_experts_are_paged(),
+                    self.chunking.prefill_graph_submission_layer_interval,
+                    self.chunking
+                        .experimental_ssd_paging_generation_graph_submission_layer_interval,
+                )
+            },
+        )
         .unwrap_or(0);
         for layer_index in 0..decoder_layer_count {
             let decoder_layer_weights = self

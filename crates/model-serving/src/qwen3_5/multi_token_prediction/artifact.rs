@@ -15,6 +15,11 @@ pub enum Qwen3_5MtpTargetOnlyReason {
     SidecarUnavailable,
     CanonicalTensorCollision,
     TensorValidationFailed,
+    StandaloneDrafterNotDiscovered,
+    StandaloneDrafterInvalid,
+    StandalonePairingIncompatible,
+    StandaloneBindingFailed,
+    OptionalWeightMaterializationFailed,
     ContractMalformed,
     ContractRuntimeDocumentTooLarge,
     ContractFieldDisagreement,
@@ -43,6 +48,21 @@ impl fmt::Display for Qwen3_5MtpTargetOnlyReason {
                 formatter.write_str("MTP tensors have conflicting canonical ownership")
             }
             Self::TensorValidationFailed => formatter.write_str("MTP tensor validation failed"),
+            Self::StandaloneDrafterNotDiscovered => {
+                formatter.write_str("configured standalone MTP drafter was not discovered")
+            }
+            Self::StandaloneDrafterInvalid => {
+                formatter.write_str("standalone MTP drafter artifact validation failed")
+            }
+            Self::StandalonePairingIncompatible => {
+                formatter.write_str("standalone MTP drafter is incompatible with the target")
+            }
+            Self::StandaloneBindingFailed => {
+                formatter.write_str("standalone MTP drafter tensor binding failed")
+            }
+            Self::OptionalWeightMaterializationFailed => {
+                formatter.write_str("optional MTP weight materialization failed")
+            }
             Self::ContractMalformed => formatter.write_str("optional MTP contract is malformed"),
             Self::ContractRuntimeDocumentTooLarge => {
                 formatter.write_str("optional MTP runtime metadata exceeds 64 KB")
@@ -86,6 +106,19 @@ impl Qwen3_5MtpArtifactCapability {
     #[must_use]
     pub const fn target_only(reason: Qwen3_5MtpTargetOnlyReason) -> Self {
         Self::TargetOnly { reason }
+    }
+
+    #[must_use]
+    pub fn from_standalone(
+        maximum_draft_depth: u8,
+        mtp_tensor_count: usize,
+    ) -> Result<Self, super::MtpDraftDepthError> {
+        Ok(Self::MtpCapable {
+            stored_mtp_layer_count: Self::SUPPORTED_STORED_MTP_LAYER_COUNT,
+            artifact_maximum_draft_depth: MtpDraftDepth::new(maximum_draft_depth)?,
+            artifact_default_draft_depth: None,
+            mtp_tensor_count,
+        })
     }
 
     /// Classifies MTP capability from shard-index tensor inventory only.

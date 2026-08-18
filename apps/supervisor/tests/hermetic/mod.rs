@@ -1,5 +1,6 @@
 mod chat_generation_executor;
 mod config_reload;
+mod config_reload_resolution;
 mod generation_performance_log;
 mod logging;
 mod model_load_timeout;

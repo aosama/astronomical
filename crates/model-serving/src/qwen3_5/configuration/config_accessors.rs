@@ -86,6 +86,19 @@ impl Qwen3_5Config {
         }
     }
 
+    /// Applies independently validated MTP storage geometry to a cloned config.
+    ///
+    /// Standalone drafters may use a different representation from the target,
+    /// so callers must never inherit the target's default quantization profile.
+    pub(crate) fn set_mtp_module_quantization_profile(
+        &mut self,
+        module_name: String,
+        quantization_profile: OptiQQuantizationProfile,
+    ) {
+        self.mtp_quantized_module_profiles
+            .insert(module_name, quantization_profile);
+    }
+
     /// Returns the default quantization group size for modules not in the override map.
     #[must_use]
     pub const fn default_quantization_group_size(&self) -> u32 {
@@ -114,6 +127,12 @@ impl Qwen3_5Config {
     #[must_use]
     pub const fn layer_count(&self) -> u32 {
         self.text_config.num_hidden_layers
+    }
+
+    /// Returns the ordered decoder-layer architecture used as pairing evidence.
+    #[must_use]
+    pub fn layer_types(&self) -> &[String] {
+        &self.text_config.layer_types
     }
 
     /// Returns the declared tokenizer vocabulary size.

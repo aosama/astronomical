@@ -19,6 +19,7 @@ pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
     /// bounded and must not expose local filesystem paths or native errors.
     fn create(
         &self,
+        model_id: &str,
         model_directory: &str,
         max_output_tokens: u32,
     ) -> impl std::future::Future<Output = Result<(Processor, Engine), String>> + Send;
@@ -49,6 +50,7 @@ pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
 impl<Processor, Engine> ModelFactory<Processor, Engine> for () {
     async fn create(
         &self,
+        _model_id: &str,
         _model_directory: &str,
         _max_output_tokens: u32,
     ) -> Result<(Processor, Engine), String> {

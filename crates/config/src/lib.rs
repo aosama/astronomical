@@ -12,6 +12,7 @@ mod maximum_mlx_memory;
 mod model_discovery;
 mod model_discovery_huggingface_cache;
 mod model_identity;
+mod mtp_pairing_config;
 mod prompt_cache_config;
 mod speculative_prefill_config;
 
@@ -35,13 +36,15 @@ pub use maximum_mlx_memory::{
     maximum_mlx_memory_gb_to_bytes, restore_config_file, write_maximum_mlx_memory_gb,
 };
 pub use model_discovery::{
-    ClassifiedModelArtifact, DiscoveredModel, DiscoveredModelError, ModelDiscoveryDirectoryScan,
-    ModelFamily, ModelFamilyClassificationError, classify_model_directory,
-    discover_classified_model_artifacts, discover_models, requestable_model_id,
+    ClassifiedModelArtifact, DiscoveredModel, DiscoveredModelError, DiscoveredQwen3_5MtpDrafter,
+    ModelDiscoveryDirectoryScan, ModelFamily, ModelFamilyClassificationError,
+    classify_model_directory, discover_classified_model_artifacts, discover_models,
+    discover_qwen3_5_mtp_drafters, requestable_model_id,
 };
 pub use model_identity::{
     decode_huggingface_cache_directory_name, leaf_model_id, resolve_model_id,
 };
+pub use mtp_pairing_config::MtpPairingConfig;
 pub use prompt_cache_config::PromptCacheConfig;
 pub use speculative_prefill_config::SpeculativePrefillConfig;
 
@@ -224,6 +227,15 @@ impl AstronomicalConfig {
     #[must_use]
     pub fn mtp_draft_depth(&self) -> Option<u8> {
         self.user_config_file.mtp_draft_depth
+    }
+
+    /// Returns the validated explicit target-to-standalone-MTP-drafter pairings.
+    ///
+    /// Resolved on demand so a config reload can produce a fresh validated
+    /// list without a separate validation pass. An empty configuration
+    /// produces an empty vec.
+    pub fn mtp_pairings(&self) -> Result<Vec<MtpPairingConfig>, AstronomicalConfigError> {
+        mtp_pairing_config::resolve_mtp_pairings(&self.user_config_file.mtp_pairings)
     }
 
     /// Resolves the optional draft-assisted speculative-prefill policy.

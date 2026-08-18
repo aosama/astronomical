@@ -305,6 +305,21 @@ function renderAboutFromStatus(data) {
     } else if (!data.ready_model_id) {
         mtpElement.textContent = "Not loaded";
     }
+    document.getElementById("about-mtp-reason").textContent =
+        data.mtp_unavailable_reason || "—";
+    const mtpPairingElement = document.getElementById("about-mtp-pairing");
+    if (data.mtp_pairing_drafter_model_id) {
+        const drafterRevision = data.mtp_pairing_drafter_revision
+            ? " @ " + data.mtp_pairing_drafter_revision
+            : "";
+        const discoveryState = data.mtp_pairing_drafter_discovered
+            ? "discovered"
+            : "not discovered";
+        mtpPairingElement.textContent = data.mtp_pairing_drafter_model_id
+            + drafterRevision + " (" + discoveryState + ")";
+    } else {
+        mtpPairingElement.textContent = "Not configured";
+    }
 }
 
 function renderAboutFromModels(model) {

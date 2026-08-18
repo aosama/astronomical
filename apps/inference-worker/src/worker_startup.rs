@@ -76,6 +76,7 @@ where
         .join(PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME);
     let mtp_enabled = worker_startup_configuration.mtp_enabled;
     let mtp_draft_depth = worker_startup_configuration.mtp_draft_depth;
+    let mtp_pairings = worker_startup_configuration.mtp_pairings.clone();
     let persistent_prompt_cache_enabled =
         worker_startup_configuration.persistent_prompt_cache_enabled;
     let worker_runtime_feature_configuration = WorkerRuntimeFeatureConfiguration {
@@ -102,6 +103,7 @@ where
         effective_mlx_memory_ceiling_bytes,
         mtp_enabled,
         mtp_draft_depth,
+        mtp_pairing_count = mtp_pairings.len(),
         speculative_prefill = ?worker_startup_configuration.speculative_prefill,
         persistent_prompt_cache_enabled,
         chunking = ?chunking,
@@ -117,6 +119,7 @@ where
         performance_attribution_log_path,
         mtp_enabled,
         mtp_draft_depth,
+        mtp_pairings,
         speculative_prefill: worker_startup_configuration.speculative_prefill.clone(),
         persistent_prompt_cache_enabled,
         chunking,

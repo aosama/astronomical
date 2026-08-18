@@ -16,7 +16,6 @@ use astronomical_ipc_protocol::{
 const DELAYED_COMPLETION_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
     "astronomical/generation-event-before-swap-model";
-const REQUESTED_MODEL_ID: &str = "astronomical/requested-model";
 const TELEMETRY_BEFORE_SWAP_MODEL_ID: &str = "astronomical/telemetry-before-swap-model";
 
 #[tokio::main]
@@ -60,7 +59,9 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     .await?;
             }
             WorkerCommand::SwapModel {
-                model_directory, ..
+                model_id,
+                model_directory,
+                ..
             } => {
                 if model_directory.ends_with("hanging-model") {
                     continue;
@@ -72,7 +73,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         })
                         .await?;
                 } else {
-                    let replacement_model_id = model_id_for_directory(&model_directory);
+                    let replacement_model_id = model_id;
                     // These two branches deliberately violate the old assumption
                     // that ModelSwapped is always the next frame after SwapModel.
                     if replacement_model_id == TELEMETRY_BEFORE_SWAP_MODEL_ID {
@@ -103,7 +104,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             speculative_prefill_unavailable_reason: None,
                             speculative_prefill_draft_model_id: None,
                             speculative_prefill_draft_model_revision: None,
-                            model_id: replacement_model_id.to_owned(),
+                            model_id: replacement_model_id.clone(),
                             capabilities: ChatModelCapabilities {
                                 supports_reasoning: true,
                                 supports_tool_calls: true,
@@ -185,18 +186,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
     Ok(())
-}
-
-fn model_id_for_directory(model_directory: &str) -> &'static str {
-    if model_directory.ends_with("delayed-completion-model") {
-        DELAYED_COMPLETION_MODEL_ID
-    } else if model_directory.ends_with("telemetry-before-swap-model") {
-        TELEMETRY_BEFORE_SWAP_MODEL_ID
-    } else if model_directory.ends_with("generation-event-before-swap-model") {
-        GENERATION_EVENT_BEFORE_SWAP_MODEL_ID
-    } else {
-        REQUESTED_MODEL_ID
-    }
 }
 
 async fn emit_memory_snapshot<WriteTransport>(

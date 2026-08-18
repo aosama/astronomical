@@ -169,6 +169,8 @@ pub enum WorkerCommand {
     /// The worker unloads the current model, validates and loads the new one,
     /// then emits a ModelSwapped event with the new model_id and capabilities.
     SwapModel {
+        /// Exact public identity selected from the same discovery snapshot as the directory.
+        model_id: String,
         /// Absolute path to the new model directory.
         model_directory: String,
         /// Per-request output-token ceiling for the new model.

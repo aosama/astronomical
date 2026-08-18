@@ -22,10 +22,12 @@ mod moe_tensor_spec;
 mod prefill;
 #[cfg(feature = "direct-mlx")]
 mod proposal_chain;
+mod request_eligibility;
 #[cfg(feature = "direct-mlx")]
 mod request_state;
 #[cfg(feature = "direct-mlx")]
 mod runtime;
+mod source_selection;
 #[cfg(feature = "direct-mlx")]
 mod target_verification;
 mod tensor_namespace;
@@ -68,6 +70,10 @@ pub(in crate::qwen3_5) use prefill::{
     execute_terminal_optional_history_capture_with_performance_attribution,
     record_prompt_history_initialization_fallback, record_terminal_history_token_count,
 };
+pub use request_eligibility::{
+    Qwen3_5MtpRequestEligibility, Qwen3_5MtpRequestEligibilityInputs,
+    qwen3_5_mtp_request_eligibility,
+};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use request_state::{
     MultiTokenPredictionRequestAllocationCheckpoint, Qwen3_5MultiTokenPredictionRequest,
@@ -82,9 +88,11 @@ pub use runtime::{
     Qwen3_5MtpRuntimeState, qwen3_5_mtp_runtime_configuration_after_load,
     qwen3_5_mtp_runtime_state_after_load,
 };
+pub use source_selection::{Qwen3_5MtpSourceSelection, Qwen3_5MtpSourceUnavailableReason};
 pub use tensor_namespace::{qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles};
 pub use verification_decision::{
     MtpVerificationDecision, MtpVerificationDecisionError,
+    predictor_history_requires_verified_hidden_replay,
     qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
     qwen3_5_mtp_verification_decision,
 };

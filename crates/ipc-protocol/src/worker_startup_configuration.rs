@@ -4,6 +4,27 @@ use serde::{Deserialize, Serialize};
 
 use crate::WorkerChunkingConfiguration;
 
+/// One supervisor-resolved target-to-standalone-MTP-drafter pairing.
+///
+/// The optional path and revision preserve a configured but currently missing
+/// drafter as an explicit target-only state rather than removing its target.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerMtpPairingConfiguration {
+    pub target_model_id: String,
+    pub drafter_model_id: String,
+    pub drafter_model_directory: Option<PathBuf>,
+    pub discovered_drafter_revision: Option<String>,
+}
+
+impl WorkerMtpPairingConfiguration {
+    /// Returns the unique pairing applicable to one loaded public target.
+    #[must_use]
+    pub fn applies_to_loaded_model(&self, loaded_model_id: &str) -> bool {
+        self.target_model_id == loaded_model_id
+    }
+}
+
 /// Logging verbosity supplied by the supervisor when starting a worker.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -68,6 +89,7 @@ pub struct WorkerStartupConfiguration {
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub mtp_enabled: bool,
     pub mtp_draft_depth: Option<u8>,
+    pub mtp_pairings: Vec<WorkerMtpPairingConfiguration>,
     pub speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub performance_attribution_enabled: bool,
     pub logging_directory: PathBuf,

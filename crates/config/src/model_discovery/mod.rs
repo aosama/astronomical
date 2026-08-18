@@ -11,11 +11,13 @@ mod deepseek_v4;
 mod laguna;
 mod model_family;
 mod qwen3_5;
+mod qwen3_5_mtp;
 
 pub use classified_artifacts::{
     ClassifiedModelArtifact, discover_classified_model_artifacts, requestable_model_id,
 };
 pub use model_family::{ModelFamily, ModelFamilyClassificationError, classify_model_directory};
+pub use qwen3_5_mtp::{DiscoveredQwen3_5MtpDrafter, discover_qwen3_5_mtp_drafters};
 
 /// One executable model discovered by recursive directory scanning.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +64,8 @@ pub enum DiscoveredModelError {
         model_id: String,
         model_directories: Vec<PathBuf>,
     },
+    #[error("duplicate standalone MTP drafter ID {model_id:?} was discovered")]
+    DuplicateAuxiliaryMtpModelId { model_id: String },
 }
 
 /// One configured scan directory with its resolved path.

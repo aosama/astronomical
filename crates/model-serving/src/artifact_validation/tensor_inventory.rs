@@ -27,6 +27,7 @@ pub enum TensorSemanticRole {
 pub enum TensorDeclarationOrigin {
     MainIndex,
     ArchitectureSidecar,
+    StandaloneAuxiliary,
 }
 
 /// Optional feature that atomically owns a set of tensor locations.

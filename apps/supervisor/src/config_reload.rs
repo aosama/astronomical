@@ -12,12 +12,15 @@ use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
     AstronomicalRuntimeInstance, ChunkingConfig, DiscoveredModel, DiscoveredModelError, LogLevel,
     LoggingConfig, PromptCacheConfig, SpeculativePrefillConfig, discover_models,
+    discover_qwen3_5_mtp_drafters,
 };
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerLogLevel, WorkerSpeculativePrefillConfiguration,
-    WorkerStartupConfiguration,
+    WorkerChunkingConfiguration, WorkerLogLevel, WorkerMtpPairingConfiguration,
+    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
 };
 use thiserror::Error;
+
+use crate::mtp_pairing_resolution::resolve_mtp_pairings;
 
 /// Immutable snapshot of every resolved runtime value the supervisor needs
 /// to decide whether a config reload requires a worker restart, a full REST
@@ -46,6 +49,8 @@ pub struct ResolvedRuntimeConfig {
     pub mtp_enabled: bool,
     /// Explicit fixed MTP depth, or automatic artifact selection when absent.
     pub mtp_draft_depth: Option<u8>,
+    /// Supervisor-resolved target-to-standalone-drafter pairings.
+    pub mtp_pairings: Vec<WorkerMtpPairingConfiguration>,
     /// Optional draft-assisted sparse prompt-prefill policy.
     pub speculative_prefill: SpeculativePrefillConfig,
     /// Discovered draft artifact directory resolved from speculative_prefill.draft_model_id.
@@ -136,6 +141,20 @@ impl ResolvedRuntimeConfigResolver {
         );
         let prompt_cache_config = user_config.prompt_cache()?;
         let logging_config = user_config.logging()?;
+        let mtp_enabled = user_config.mtp_enabled();
+        let configured_mtp_pairings = user_config.mtp_pairings()?;
+        // Disabled MTP retains configured identities without traversing an
+        // auxiliary payload until a worker replacement enables the feature.
+        let discovered_mtp_drafters = if mtp_enabled {
+            discover_qwen3_5_mtp_drafters(&configured_model_directories)?
+        } else {
+            Vec::new()
+        };
+        let mtp_pairings = resolve_mtp_pairings(
+            &configured_mtp_pairings,
+            &discovered_models,
+            &discovered_mtp_drafters,
+        )?;
         let speculative_prefill = user_config.speculative_prefill()?;
         validate_speculative_prefill_target_model_is_discovered(
             &speculative_prefill,
@@ -158,8 +177,9 @@ impl ResolvedRuntimeConfigResolver {
             chunking,
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
-            mtp_enabled: user_config.mtp_enabled(),
+            mtp_enabled,
             mtp_draft_depth: user_config.mtp_draft_depth(),
+            mtp_pairings,
             speculative_prefill,
             speculative_prefill_draft_model_directory,
             prompt_cache_config,
@@ -209,6 +229,7 @@ impl ResolvedRuntimeConfig {
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             mtp_enabled: self.mtp_enabled,
             mtp_draft_depth: self.mtp_draft_depth,
+            mtp_pairings: self.mtp_pairings.clone(),
             speculative_prefill: worker_speculative_prefill_configuration(
                 &self.speculative_prefill,
                 self.speculative_prefill_draft_model_directory.clone(),
@@ -242,6 +263,10 @@ pub enum ResolvedRuntimeConfigError {
         "speculative prefill target model '{target_model_id}' was not found in configured model directories"
     )]
     SpeculativePrefillTargetModelNotDiscovered { target_model_id: String },
+    #[error(
+        "MTP pairing target model '{target_model_id}' was not found in configured model directories"
+    )]
+    MtpPairingTargetModelNotDiscovered { target_model_id: String },
 }
 
 /// Result of comparing the current resolved config with a candidate.
@@ -351,6 +376,10 @@ impl ConfigReloadDiff {
         }
         if current.mtp_draft_depth != candidate.mtp_draft_depth {
             worker_restart_reloaded_fields.push("mtp_draft_depth".to_owned());
+            worker_restart_required = true;
+        }
+        if current.mtp_pairings != candidate.mtp_pairings {
+            worker_restart_reloaded_fields.push("mtp_pairings".to_owned());
             worker_restart_required = true;
         }
         if current.speculative_prefill != candidate.speculative_prefill {

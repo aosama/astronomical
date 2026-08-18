@@ -18,6 +18,13 @@ pub enum Qwen3_5ModelStartupError {
         #[source]
         source: Qwen3_5ArtifactValidationError,
     },
+    #[error(
+        "requested Qwen model '{requested_model_id}' does not match validated model '{validated_model_id}'"
+    )]
+    RequestedModelIdentityMismatch {
+        requested_model_id: String,
+        validated_model_id: String,
+    },
     #[error("failed to initialize Qwen3.5 processor at {model_directory:?}")]
     ProcessorInitialization {
         model_directory: PathBuf,
@@ -58,6 +65,12 @@ impl Qwen3_5ModelStartupError {
                 ..
             } => format!("Qwen3.5 shard-index validation failed: {shard_index_error}"),
             Self::ArtifactValidation { .. } => "Qwen3.5 artifact validation failed".to_owned(),
+            Self::RequestedModelIdentityMismatch {
+                requested_model_id,
+                validated_model_id,
+            } => format!(
+                "requested model '{requested_model_id}' does not match validated model '{validated_model_id}'"
+            ),
             Self::ProcessorInitialization { .. } => {
                 "Qwen3.5 processor initialization failed".to_owned()
             }

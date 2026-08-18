@@ -73,6 +73,7 @@ async fn should_return_an_error_when_the_unit_model_factory_is_called() {
     let model_creation_outcome =
         <() as ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>>::create(
             &(),
+            "unused-model",
             "/unused/model",
             1,
         )
@@ -87,9 +88,11 @@ async fn should_return_an_error_when_the_unit_model_factory_is_called() {
 #[tokio::test]
 async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
+    let requested_model_ids = Arc::new(Mutex::new(Vec::new()));
     let engine_worker = EngineBackedWorker::idle_with_model_factory(
         LazyScriptedModelFactory {
             model_factory_call_count: Arc::clone(&model_factory_call_count),
+            requested_model_ids: Arc::clone(&requested_model_ids),
             mlx_memory_limits: (0, 0),
             model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
@@ -119,6 +122,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
 
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
+            model_id: "requested-model".to_owned(),
             model_directory: "/models/requested-model".to_owned(),
             max_output_tokens: 20_480,
         })
@@ -133,6 +137,12 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
         }
     ));
     assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *requested_model_ids
+            .lock()
+            .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner()),
+        vec!["requested-model".to_owned()]
+    );
 
     close_worker_transport(supervisor_writer, worker_task).await;
 }
@@ -140,10 +150,12 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
 #[tokio::test]
 async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
+    let requested_model_ids = Arc::new(Mutex::new(Vec::new()));
     let model_creation_memory_limits = Arc::new(Mutex::new(Vec::new()));
     let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
         LazyScriptedModelFactory {
             model_factory_call_count,
+            requested_model_ids,
             mlx_memory_limits: (38_000_000_000, 38_000_000_000),
             model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Paged),
@@ -164,6 +176,7 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
     let _idle_event = next_event(&mut supervisor_reader).await;
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
+            model_id: "first-model".to_owned(),
             model_directory: "/models/first-model".to_owned(),
             max_output_tokens: 20_480,
         })
@@ -187,6 +200,7 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
 
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
+            model_id: "second-model".to_owned(),
             model_directory: "/models/second-model".to_owned(),
             max_output_tokens: 20_480,
         })
@@ -238,6 +252,7 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
     );
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
+            model_id: "invalid-model".to_owned(),
             model_directory: "/models/invalid-model".to_owned(),
             max_output_tokens: 20_480,
         })
@@ -259,6 +274,7 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
 
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
+            model_id: "valid-model".to_owned(),
             model_directory: "/models/valid-model".to_owned(),
             max_output_tokens: 20_480,
         })

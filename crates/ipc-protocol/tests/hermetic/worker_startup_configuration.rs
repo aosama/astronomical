@@ -4,7 +4,8 @@ use std::path::PathBuf;
 
 use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerChunkingConfiguration, WorkerCommand, WorkerLogLevel,
-    WorkerSpeculativePrefillConfiguration, WorkerStartupConfiguration,
+    WorkerMtpPairingConfiguration, WorkerSpeculativePrefillConfiguration,
+    WorkerStartupConfiguration,
 };
 use tokio::io::duplex;
 
@@ -31,6 +32,12 @@ async fn should_round_trip_worker_startup_configuration() {
         configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
         mtp_enabled: true,
         mtp_draft_depth: Some(3),
+        mtp_pairings: vec![WorkerMtpPairingConfiguration {
+            target_model_id: "target-model".to_owned(),
+            drafter_model_id: "target-model-mtp".to_owned(),
+            drafter_model_directory: Some(PathBuf::from("/tmp/fictional-mtp-drafter")),
+            discovered_drafter_revision: Some("0123456789ab".to_owned()),
+        }],
         speculative_prefill: WorkerSpeculativePrefillConfiguration {
             enabled: true,
             target_model_id: Some("astronomical/target-model".to_owned()),

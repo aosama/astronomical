@@ -59,6 +59,13 @@ pub struct Qwen3_5ExpertPager {
     pub(super) resident_expert_source_files: Vec<(PathBuf, File)>,
 }
 
+/// Updated sparse geometry returned after one transactional layer attachment.
+pub(crate) struct Qwen3_5ExpertPagerGeometry {
+    pub(crate) complete_expert_payload_bytes: u64,
+    pub(crate) largest_complete_expert_layer_bytes: u64,
+    pub(crate) largest_routed_expert_page_bytes: u64,
+}
+
 /// Exact compact or complete expert arrays loaded by Rust for one layer use.
 #[derive(Debug)]
 pub struct Qwen3_5PagedExpertWeights {

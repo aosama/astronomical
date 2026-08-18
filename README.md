@@ -93,13 +93,20 @@ On first launch each instance creates its own `config.json`. Add one or more abs
       "model_directories": ["/path/to/models"],
       "maximum_mlx_memory_gb": 16,
       "persistent_prompt_cache_enabled": true,
+      "mtp_enabled": true,
+      "mtp_pairings": [
+        {
+          "target_model_id": "publisher/target-model",
+          "drafter_model_id": "publisher/standalone-mtp"
+        }
+      ],
       "chunking": {
         "fixed_prompt_processing_chunk_size_tokens": 2048
       },
       "prompt_cache_max_size_gb": 50
     }
 
-The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse. Both channels default to qualified fixed prompt-processing chunks of 2,048 tokens. Override the fixed chunk size with fixed_prompt_processing_chunk_size_tokens; a smaller fixed_ssd_streaming_prompt_processing_chunk_size_tokens can accelerate paged-expert prefill.
+The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse. `mtp_pairings` optionally associates a discovered Qwen target identifier with a separately discovered `qwen3_5_mtp` auxiliary; the auxiliary remains absent from `/v1/models`, and invalid or missing auxiliary evidence leaves the target available without MTP. Both channels default to qualified fixed prompt-processing chunks of 2,048 tokens. Override the fixed chunk size with fixed_prompt_processing_chunk_size_tokens; a smaller fixed_ssd_streaming_prompt_processing_chunk_size_tokens can accelerate paged-expert prefill.
 
 ## Build the app
 

@@ -108,6 +108,18 @@ impl ValidatedSafetensorsSource {
         self.tensor_metadata_by_stored_name.keys()
     }
 
+    pub(crate) fn physical_tensor_metadata(&self) -> impl Iterator<Item = (&str, &str, &[usize])> {
+        self.tensor_metadata_by_stored_name
+            .iter()
+            .map(|(stored_name, metadata)| {
+                (
+                    stored_name.as_str(),
+                    metadata.dtype.as_str(),
+                    metadata.shape.as_slice(),
+                )
+            })
+    }
+
     /// Validates canonical profiles against physical names without reparsing the header.
     pub(crate) fn validate_inventory_profiles(
         &self,

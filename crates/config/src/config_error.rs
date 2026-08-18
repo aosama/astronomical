@@ -97,4 +97,22 @@ pub enum AstronomicalConfigError {
     SpeculativePrefillLookaheadTokenCountMustBePositive,
     #[error("speculative_prefill.importance_pooling_kernel_token_count must be positive")]
     SpeculativePrefillImportancePoolingKernelTokenCountMustBePositive,
+    #[error("mtp_pairings.target_model_id must not be empty")]
+    MtpPairingTargetModelIdMustNotBeEmpty,
+    #[error("mtp_pairings.drafter_model_id must not be empty")]
+    MtpPairingDrafterModelIdMustNotBeEmpty,
+    #[error("mtp_pairings: target '{target_model_id}' is mapped to itself")]
+    MtpPairingSelfReference { target_model_id: String },
+    #[error("mtp_pairings: target '{target_model_id}' is declared in more than one pairing")]
+    MtpPairingDuplicateTarget { target_model_id: String },
+    #[error(
+        "mtp_pairings: target '{target_model_id}' is mapped to different drafters: '{drafter_model_id_a}' and '{drafter_model_id_b}'"
+    )]
+    MtpPairingConflictingTargetMapping {
+        target_model_id: String,
+        drafter_model_id_a: String,
+        drafter_model_id_b: String,
+    },
+    #[error("mtp_pairings contains a cycle involving model '{model_id}'")]
+    MtpPairingCycle { model_id: String },
 }
