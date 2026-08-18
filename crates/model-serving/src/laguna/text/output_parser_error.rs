@@ -32,11 +32,6 @@ pub enum LagunaOutputParserError {
     InvalidRequiredToolArguments { function_name: String },
     #[error("Laguna output selected undeclared function '{function_name}'")]
     UndeclaredFunction { function_name: String },
-    #[error("Laguna function '{function_name}' supplied undeclared argument '{argument_name}'")]
-    UndeclaredToolArgument {
-        function_name: String,
-        argument_name: String,
-    },
     #[error("Laguna tool call repeated argument '{argument_name}'")]
     DuplicateToolArgument { argument_name: String },
     #[error("Laguna function '{function_name}' omitted required argument '{argument_name}'")]
@@ -85,7 +80,6 @@ impl LagunaOutputParserError {
             }
             Self::InvalidRequiredToolArguments { .. } => "invalid_required_tool_arguments",
             Self::UndeclaredFunction { .. } => "undeclared_function",
-            Self::UndeclaredToolArgument { .. } => "undeclared_tool_argument",
             Self::DuplicateToolArgument { .. } => "duplicate_tool_argument",
             Self::MissingRequiredToolArgument { .. } => "missing_required_tool_argument",
             Self::IncompleteToolCall => "incomplete_tool_call",

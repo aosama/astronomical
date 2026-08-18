@@ -1,6 +1,8 @@
 use std::fs::{self, File};
 use std::os::unix::fs::FileExt;
+use std::os::unix::fs::symlink;
 
+use astronomical_config::LagunaRootChatTemplateSelectionError;
 use astronomical_model_serving::{
     ArtifactValidationError, LagunaArtifactValidationError, LagunaArtifactValidator,
     LagunaGenerationProcessor,
@@ -58,6 +60,138 @@ fn should_validate_one_complete_weight_and_text_artifact_contract() {
             .repetition_penalty_thousandths(),
         1_000
     );
+}
+
+#[test]
+fn should_validate_and_prepare_romeo_and_juliet_from_a_standalone_root_template() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    let mut fixture = SyntheticLagunaArtifact::dense("");
+    fixture.config["max_position_embeddings"] = json!(LARGE_MODEL_CONTEXT_TOKEN_COUNT);
+    fixture.write(model_directory.path());
+    select_standalone_root_template(model_directory.path(), None);
+
+    let validated_artifact = LagunaArtifactValidator::new()
+        .validate(model_directory.path())
+        .expect("the standalone-root artifact should validate");
+    let processor = LagunaGenerationProcessor::new(
+        SYNTHETIC_LAGUNA_MODEL_ID,
+        validated_artifact.text_artifact().clone(),
+    )
+    .expect("the standalone-root text descriptor should construct the processor");
+    let prepared_generation = processor
+        .prepare_chat(&romeo_and_juliet_command(9_899, None))
+        .expect("the standalone-root Romeo and Juliet request should prepare");
+    assert!(
+        prepared_generation
+            .rendered_prompt()
+            .contains(ROMEO_AND_JULIET_SOURCE)
+    );
+
+    let retained_files = validated_artifact
+        .into_retained_files()
+        .expect("the standalone root descriptor should transfer");
+    fs::remove_dir_all(model_directory.path()).expect("the fixture paths should be removable");
+    let standalone_template_file = retained_files
+        .standalone_chat_template_file()
+        .expect("the selected standalone root descriptor should remain retained");
+    assert_eq!(
+        read_retained_file(standalone_template_file),
+        POOLSIDE_TEMPLATE.as_bytes()
+    );
+    assert!(
+        retained_files
+            .included_template_files()
+            .get(INCLUDED_TEMPLATE_FILE_NAME)
+            .is_none()
+    );
+}
+
+#[test]
+fn should_accept_a_null_embedded_field_with_a_standalone_root_template() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    SyntheticLagunaArtifact::dense("").write(model_directory.path());
+    select_standalone_root_template(model_directory.path(), Some(Value::Null));
+
+    LagunaArtifactValidator::new()
+        .validate(model_directory.path())
+        .expect("a null embedded field should defer to the standalone root");
+}
+
+#[test]
+fn should_reject_conflicting_embedded_and_unselected_standalone_root_templates() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    SyntheticLagunaArtifact::dense("").write(model_directory.path());
+    fs::write(
+        model_directory.path().join(INCLUDED_TEMPLATE_FILE_NAME),
+        POOLSIDE_TEMPLATE,
+    )
+    .expect("the conflicting standalone root should be written");
+
+    let validation_error = LagunaArtifactValidator::new()
+        .validate(model_directory.path())
+        .expect_err("two unconnected root authorities must be rejected");
+
+    assert!(matches!(
+        validation_error,
+        LagunaArtifactValidationError::TemplateSource(
+            LagunaRootChatTemplateSelectionError::ConflictingRootChatTemplates
+        )
+    ));
+}
+
+#[test]
+fn should_reject_a_symlinked_standalone_root_template() {
+    let fixture_home = tempfile::tempdir().expect("the test should create a fixture home");
+    let model_directory = fixture_home.path().join("model");
+    fs::create_dir(&model_directory).expect("the model directory should be created");
+    SyntheticLagunaArtifact::dense("").write(&model_directory);
+    select_standalone_root_template(&model_directory, None);
+    fs::remove_file(model_directory.join(INCLUDED_TEMPLATE_FILE_NAME))
+        .expect("the regular standalone root should be removed");
+    let external_template_path = fixture_home.path().join("external-template.jinja");
+    fs::write(&external_template_path, POOLSIDE_TEMPLATE)
+        .expect("the external template should be written");
+    symlink(
+        &external_template_path,
+        model_directory.join(INCLUDED_TEMPLATE_FILE_NAME),
+    )
+    .expect("the standalone template symlink should be created");
+
+    let validation_error = LagunaArtifactValidator::new()
+        .validate(&model_directory)
+        .expect_err("ordinary standalone template symlinks must be rejected");
+
+    assert!(matches!(
+        validation_error,
+        LagunaArtifactValidationError::Artifact(
+            ArtifactValidationError::RequiredFileIsSymlink { file_name }
+        ) if file_name == INCLUDED_TEMPLATE_FILE_NAME
+    ));
+}
+
+#[test]
+fn should_reject_a_standalone_root_that_includes_itself() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    SyntheticLagunaArtifact::dense("").write(model_directory.path());
+    select_standalone_root_template(model_directory.path(), None);
+    fs::write(
+        model_directory.path().join(INCLUDED_TEMPLATE_FILE_NAME),
+        "{% include 'chat_template.jinja' %}",
+    )
+    .expect("the self-including standalone root should be written");
+
+    let validation_error = LagunaArtifactValidator::new()
+        .validate(model_directory.path())
+        .expect_err("the standalone root must not reopen itself as an include");
+
+    assert!(matches!(
+        validation_error,
+        LagunaArtifactValidationError::TextArtifact(
+            astronomical_model_serving::LagunaTextArtifactError::TemplateIncludeCycle {
+                include_name
+            }
+        ) if include_name == INCLUDED_TEMPLATE_FILE_NAME
+    ));
 }
 
 #[test]
@@ -131,6 +265,7 @@ fn should_keep_text_descriptors_and_sidecars_usable_after_artifact_paths_disappe
     assert!(!read_retained_file(retained_files.tokenizer_file()).is_empty());
     assert!(!read_retained_file(retained_files.tokenizer_config_file()).is_empty());
     assert!(!read_retained_file(retained_files.generation_config_file()).is_empty());
+    assert!(retained_files.standalone_chat_template_file().is_none());
 }
 
 #[test]
@@ -231,6 +366,39 @@ fn select_included_template(model_directory: &std::path::Path) {
         POOLSIDE_TEMPLATE,
     )
     .expect("the included template should be written");
+}
+
+fn select_standalone_root_template(
+    model_directory: &std::path::Path,
+    embedded_template: Option<Value>,
+) {
+    let tokenizer_config_path = model_directory.join("tokenizer_config.json");
+    let mut tokenizer_config: Value = serde_json::from_slice(
+        &fs::read(&tokenizer_config_path).expect("the tokenizer config should be readable"),
+    )
+    .expect("the tokenizer config should be valid JSON");
+    let tokenizer_config_fields = tokenizer_config
+        .as_object_mut()
+        .expect("the synthetic tokenizer config should be an object");
+    match embedded_template {
+        Some(embedded_template) => {
+            tokenizer_config_fields.insert("chat_template".to_owned(), embedded_template);
+        }
+        None => {
+            tokenizer_config_fields.remove("chat_template");
+        }
+    }
+    fs::write(
+        tokenizer_config_path,
+        serde_json::to_vec(&tokenizer_config)
+            .expect("the standalone-root tokenizer config should serialize"),
+    )
+    .expect("the standalone-root tokenizer config should be written");
+    fs::write(
+        model_directory.join(INCLUDED_TEMPLATE_FILE_NAME),
+        POOLSIDE_TEMPLATE,
+    )
+    .expect("the standalone root template should be written");
 }
 
 fn read_retained_file(retained_file: &File) -> Vec<u8> {

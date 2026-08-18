@@ -4,7 +4,7 @@ use std::path::{Component, Path};
 use serde_json::{Map, Value};
 
 use super::LagunaTextArtifactError;
-use super::artifact_documents::{bounded_artifact_text, object_fields, parse_json_document};
+use super::artifact_documents::bounded_artifact_text;
 
 pub(crate) const MAXIMUM_TEMPLATE_BYTES: usize = 512 * 1024;
 pub(crate) const MAXIMUM_TEMPLATE_SOURCE_COUNT: usize = 16;
@@ -21,10 +21,21 @@ pub(super) struct LagunaResolvedTemplateSources {
 
 /// Selects the complete static include graph and rejects supplied but unused sources.
 pub(super) fn resolve_template_sources(
-    tokenizer_config_fields: &Map<String, Value>,
+    root_source: &str,
     supplied_included_templates: &BTreeMap<String, Vec<u8>>,
 ) -> Result<LagunaResolvedTemplateSources, LagunaTextArtifactError> {
-    let root_source = root_template(tokenizer_config_fields)?;
+    if root_source.is_empty() {
+        return Err(LagunaTextArtifactError::InvalidField {
+            field_name: "chat_template".to_owned(),
+        });
+    }
+    if root_source.len() > MAXIMUM_TEMPLATE_BYTES {
+        return Err(LagunaTextArtifactError::DocumentTooLarge {
+            document_name: "chat template",
+            actual_bytes: root_source.len(),
+            maximum_bytes: MAXIMUM_TEMPLATE_BYTES,
+        });
+    }
     let mut selected_include_names = BTreeSet::new();
     let mut active_include_names = Vec::new();
     let mut maximum_expanded_depth_by_name = BTreeMap::new();
@@ -79,15 +90,6 @@ pub(super) fn resolve_template_sources(
     })
 }
 
-/// Discovers every root include through the duplicate-aware tokenizer boundary.
-pub(crate) fn discover_root_template_includes(
-    tokenizer_config_bytes: &[u8],
-) -> Result<Vec<String>, LagunaTextArtifactError> {
-    let tokenizer_config = parse_json_document("tokenizer config", tokenizer_config_bytes)?;
-    let tokenizer_config_fields = object_fields(&tokenizer_config, "tokenizer config")?;
-    discover_template_includes(root_template(tokenizer_config_fields)?)
-}
-
 /// Discovers only static single-quoted include names from one Jinja source.
 pub(crate) fn discover_template_includes(
     template_source: &str,
@@ -110,25 +112,6 @@ pub(crate) fn discover_template_includes(
         remaining_source = &remaining_source[directive_end + 2..];
     }
     Ok(include_names)
-}
-
-fn root_template(
-    tokenizer_config_fields: &Map<String, Value>,
-) -> Result<&str, LagunaTextArtifactError> {
-    let root_source = tokenizer_config_fields
-        .get("chat_template")
-        .and_then(Value::as_str)
-        .ok_or_else(|| LagunaTextArtifactError::InvalidField {
-            field_name: "chat_template".to_owned(),
-        })?;
-    if root_source.len() > MAXIMUM_TEMPLATE_BYTES {
-        return Err(LagunaTextArtifactError::DocumentTooLarge {
-            document_name: "chat template",
-            actual_bytes: root_source.len(),
-            maximum_bytes: MAXIMUM_TEMPLATE_BYTES,
-        });
-    }
-    Ok(root_source)
 }
 
 fn select_includes(

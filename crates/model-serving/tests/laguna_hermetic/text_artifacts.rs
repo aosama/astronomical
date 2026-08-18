@@ -33,7 +33,7 @@ fn should_normalize_complete_end_token_membership_without_a_family_constant() {
 fn should_normalize_inline_and_nested_included_poolside_templates_equivalently() {
     let inline_descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
     let mut included_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
-    included_artifact.tokenizer_config["chat_template"] = json!("{% include 'wrapper.jinja' %}");
+    included_artifact.set_embedded_chat_template("{% include 'wrapper.jinja' %}");
     included_artifact.included_templates.insert(
         "wrapper.jinja".to_owned(),
         b"{% include 'canonical_poolside.jinja' %}".to_vec(),
@@ -93,7 +93,7 @@ fn should_render_the_semantically_valid_artifact_provided_system_message() {
         POOLSIDE_TEMPLATE.replace(DEFAULT_SYSTEM_MESSAGE, FICTIONAL_ARTIFACT_SYSTEM_MESSAGE);
     // The old sentence is absent, so normalization cannot pass through allowlisting or a comment.
     assert!(!artifact_template.contains(DEFAULT_SYSTEM_MESSAGE));
-    text_artifact.tokenizer_config["chat_template"] = json!(artifact_template);
+    text_artifact.set_embedded_chat_template(artifact_template);
     let text_descriptor = text_artifact.normalize();
     let mut chat_command = romeo_and_juliet_command(9_819, Some(0));
     chat_command.tools.clear();
@@ -111,7 +111,7 @@ fn should_render_the_semantically_valid_artifact_provided_system_message() {
 #[test]
 fn should_reject_a_missing_artifact_local_template_include() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
-    text_artifact.tokenizer_config["chat_template"] = json!("{% include 'chat_template.jinja' %}");
+    text_artifact.set_embedded_chat_template("{% include 'chat_template.jinja' %}");
 
     let normalization_error = text_artifact
         .try_normalize()
@@ -127,7 +127,7 @@ fn should_reject_a_missing_artifact_local_template_include() {
 #[test]
 fn should_reject_an_artifact_local_template_include_cycle() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
-    text_artifact.tokenizer_config["chat_template"] = json!("{% include 'chat_template.jinja' %}");
+    text_artifact.set_embedded_chat_template("{% include 'chat_template.jinja' %}");
     text_artifact.included_templates.insert(
         "chat_template.jinja".to_owned(),
         b"{% include 'cycle.jinja' %}".to_vec(),
@@ -150,7 +150,7 @@ fn should_reject_an_artifact_local_template_include_cycle() {
 #[test]
 fn should_reject_an_include_chain_beyond_the_bounded_public_depth() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
-    text_artifact.tokenizer_config["chat_template"] = json!("{% include 'depth_0.jinja' %}");
+    text_artifact.set_embedded_chat_template("{% include 'depth_0.jinja' %}");
     for include_depth in 0..EXCESSIVE_TEMPLATE_INCLUDE_DEPTH {
         let include_name = format!("depth_{include_depth}.jinja");
         let include_contents = if include_depth + 1 == EXCESSIVE_TEMPLATE_INCLUDE_DEPTH {
@@ -176,8 +176,7 @@ fn should_reject_an_include_chain_beyond_the_bounded_public_depth() {
 #[test]
 fn should_reject_template_include_path_traversal() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
-    text_artifact.tokenizer_config["chat_template"] =
-        json!("{% include '../chat_template.jinja' %}");
+    text_artifact.set_embedded_chat_template("{% include '../chat_template.jinja' %}");
 
     let normalization_error = text_artifact
         .try_normalize()

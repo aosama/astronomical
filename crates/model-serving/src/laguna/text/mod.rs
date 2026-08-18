@@ -28,7 +28,7 @@ pub use artifact_error::LagunaTextArtifactError;
 pub use artifact_normalizer::{LagunaTextArtifactNormalizer, LagunaTextArtifactSources};
 pub(crate) use artifact_template::{
     MAXIMUM_TEMPLATE_BYTES, MAXIMUM_TEMPLATE_INCLUDE_DEPTH, MAXIMUM_TEMPLATE_SOURCE_COUNT,
-    discover_root_template_includes, discover_template_includes,
+    discover_template_includes,
 };
 pub use inference_request::{LagunaInferenceRequest, LagunaSamplingStrategy};
 pub use output_parser::{LagunaOutputEvent, LagunaOutputParser};

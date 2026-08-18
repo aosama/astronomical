@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use astronomical_config::ModelFamily;
+use serde_json::{Value, json};
 
 use super::discover_configured_models;
 
@@ -29,6 +30,152 @@ fn should_advertise_one_complete_executable_laguna_artifact() {
     assert!(discovered_model.supports_reasoning);
     assert!(discovered_model.supports_tool_calls);
     assert_eq!(discovered_model.model_size_bytes, 96);
+}
+
+#[test]
+fn should_advertise_standalone_laguna_templates_when_the_embedded_source_is_absent_or_null() {
+    for embedded_template in [None, Some(Value::Null)] {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let model_directory = temporary_directory.path().join("Laguna-Standalone");
+        write_executable_laguna_artifact(&model_directory);
+        select_standalone_template(&model_directory, embedded_template);
+
+        let discovered_models = discover_configured_models(&temporary_directory)[0]
+            .discovered_models
+            .clone();
+
+        assert_eq!(discovered_models.len(), 1);
+        assert_eq!(discovered_models[0].model_family, ModelFamily::Laguna);
+        assert_eq!(discovered_models[0].revision, IMMUTABLE_REVISION);
+    }
+}
+
+#[test]
+fn should_reject_conflicting_embedded_and_standalone_laguna_templates() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory
+        .path()
+        .join("Laguna-Conflicting-Templates");
+    write_executable_laguna_artifact(&model_directory);
+    fs::write(
+        model_directory.join("chat_template.jinja"),
+        "{{ messages }}",
+    )
+    .expect("the conflicting standalone template should be written");
+
+    assert!(
+        discover_configured_models(&temporary_directory)[0]
+            .discovered_models
+            .is_empty()
+    );
+}
+
+#[test]
+fn should_reject_missing_empty_or_malformed_laguna_template_authority() {
+    for (tokenizer_config, standalone_template) in [
+        (json!({}), None),
+        (json!({"chat_template": null}), Some(Vec::new())),
+        (
+            json!({"chat_template": ""}),
+            Some(b"{{ messages }}".to_vec()),
+        ),
+        (
+            json!({"chat_template": true}),
+            Some(b"{{ messages }}".to_vec()),
+        ),
+    ] {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let model_directory = temporary_directory.path().join("Laguna-Invalid-Template");
+        write_executable_laguna_artifact(&model_directory);
+        write_tokenizer_config(&model_directory, &tokenizer_config);
+        if let Some(standalone_template) = standalone_template {
+            fs::write(
+                model_directory.join("chat_template.jinja"),
+                standalone_template,
+            )
+            .expect("the selected standalone template should be written");
+        }
+
+        assert!(
+            discover_configured_models(&temporary_directory)[0]
+                .discovered_models
+                .is_empty(),
+            "Laguna discovery must reject tokenizer config {tokenizer_config}"
+        );
+    }
+}
+
+#[test]
+fn should_reject_duplicate_non_utf8_and_oversized_standalone_laguna_templates() {
+    let duplicate_field_home = tempfile::tempdir().expect("temporary directory should be created");
+    let duplicate_field_directory = duplicate_field_home
+        .path()
+        .join("Laguna-Duplicate-Template");
+    write_executable_laguna_artifact(&duplicate_field_directory);
+    fs::write(
+        duplicate_field_directory.join("tokenizer_config.json"),
+        r#"{"chat_template":null,"chat_template":"{{ messages }}"}"#,
+    )
+    .expect("the duplicate template field should be written");
+    assert!(
+        discover_configured_models(&duplicate_field_home)[0]
+            .discovered_models
+            .is_empty()
+    );
+
+    for (directory_name, standalone_template) in [
+        ("Laguna-Non-Utf8-Template", vec![0xff, 0xfe]),
+        ("Laguna-Oversized-Template", vec![b'x'; 512 * 1024 + 1]),
+    ] {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let model_directory = temporary_directory.path().join(directory_name);
+        write_executable_laguna_artifact(&model_directory);
+        select_standalone_template(&model_directory, None);
+        fs::write(
+            model_directory.join("chat_template.jinja"),
+            standalone_template,
+        )
+        .expect("the invalid standalone template should be written");
+
+        assert!(
+            discover_configured_models(&temporary_directory)[0]
+                .discovered_models
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn should_validate_includes_from_the_selected_standalone_laguna_template() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("Laguna-Standalone-Include");
+    write_executable_laguna_artifact(&model_directory);
+    select_standalone_template(&model_directory, None);
+    fs::write(
+        model_directory.join("chat_template.jinja"),
+        "{% include 'prompt.jinja' %}",
+    )
+    .expect("the standalone root template should be written");
+    fs::write(model_directory.join("prompt.jinja"), "{{ messages }}")
+        .expect("the standalone include should be written");
+
+    assert_eq!(
+        discover_configured_models(&temporary_directory)[0]
+            .discovered_models
+            .len(),
+        1
+    );
+
+    fs::remove_file(model_directory.join("prompt.jinja"))
+        .expect("the standalone include should be removable");
+    assert!(
+        discover_configured_models(&temporary_directory)[0]
+            .discovered_models
+            .is_empty()
+    );
 }
 
 #[test]
@@ -185,4 +332,25 @@ fn write_executable_laguna_artifact(model_directory: &Path) {
         format!("{IMMUTABLE_REVISION}\n"),
     )
     .expect("Laguna immutable revision should be written");
+}
+
+fn select_standalone_template(model_directory: &Path, embedded_template: Option<Value>) {
+    let tokenizer_config = embedded_template.map_or_else(
+        || json!({}),
+        |chat_template| json!({"chat_template": chat_template}),
+    );
+    write_tokenizer_config(model_directory, &tokenizer_config);
+    fs::write(
+        model_directory.join("chat_template.jinja"),
+        "{{ messages }}",
+    )
+    .expect("the standalone template should be written");
+}
+
+fn write_tokenizer_config(model_directory: &Path, tokenizer_config: &Value) {
+    fs::write(
+        model_directory.join("tokenizer_config.json"),
+        serde_json::to_vec(tokenizer_config).expect("the tokenizer config should serialize"),
+    )
+    .expect("the tokenizer config should be written");
 }

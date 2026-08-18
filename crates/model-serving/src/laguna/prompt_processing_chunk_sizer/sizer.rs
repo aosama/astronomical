@@ -76,4 +76,10 @@ impl LagunaPromptProcessingChunkSizer {
         }
         Some(attempted_chunk_size_tokens / 2)
     }
+
+    /// Resident admission must use this bound, not remaining prompt length.
+    #[must_use]
+    pub const fn maximum_prompt_processing_chunk_size_tokens(&self) -> usize {
+        self.fixed_prompt_processing_chunk_size_tokens
+    }
 }

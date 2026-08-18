@@ -285,6 +285,16 @@ fn prepare_laguna_startup(
         .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks)
         .unwrap_or(1)
         .max(1);
+    let prefill_graph_submission_layer_interval = serving_settings
+        .chunking
+        .as_ref()
+        .map(|chunking| chunking.prefill_graph_submission_layer_interval)
+        .unwrap_or(1);
+    let experimental_ssd_paging_generation_graph_submission_layer_interval = serving_settings
+        .chunking
+        .as_ref()
+        .map(|chunking| chunking.experimental_ssd_paging_generation_graph_submission_layer_interval)
+        .unwrap_or(3);
     let performance_attribution_log =
         match serving_settings.performance_attribution_log_path.as_deref() {
             Some(log_path) => {
@@ -314,6 +324,8 @@ fn prepare_laguna_startup(
         prompt_cache_model_revision,
         configured_prompt_cache_block_token_count,
         prompt_cache_common_prefix_stride_blocks,
+        prefill_graph_submission_layer_interval,
+        experimental_ssd_paging_generation_graph_submission_layer_interval,
         model_loading_performance_attribution: performance_attribution,
         performance_attribution_log,
         attribution_model_id: model_id.clone(),

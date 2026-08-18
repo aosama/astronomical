@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use astronomical_config::{
+    LagunaRootChatTemplateSource, LagunaStandaloneChatTemplateState,
+    select_laguna_root_chat_template, validate_laguna_standalone_chat_template_role,
+};
+
 use crate::artifact_validation::{
     ArtifactValidationError, RequiredFileProfile, ValidatedRequiredFile, ValidatedWeightsFile,
     read_bounded_required_file_bytes, validate_required_file, validate_required_files,
@@ -28,6 +33,7 @@ const INDEX_FILE_NAME: &str = "model.safetensors.index.json";
 const TOKENIZER_FILE_NAME: &str = "tokenizer.json";
 const TOKENIZER_CONFIG_FILE_NAME: &str = "tokenizer_config.json";
 const GENERATION_CONFIG_FILE_NAME: &str = "generation_config.json";
+const STANDALONE_CHAT_TEMPLATE_FILE_NAME: &str = "chat_template.jinja";
 const MAXIMUM_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_INDEX_BYTES: u64 = 32 * 1024 * 1024;
 const MAXIMUM_TEXT_DOCUMENT_BYTES: u64 = 32 * 1024 * 1024;
@@ -185,6 +191,7 @@ impl LagunaArtifactValidator {
             tokenizer_file: validated_text_sidecars.tokenizer_file,
             tokenizer_config_file: validated_text_sidecars.tokenizer_config_file,
             generation_config_file: validated_text_sidecars.generation_config_file,
+            standalone_chat_template_file: validated_text_sidecars.standalone_chat_template_file,
             included_template_files: validated_text_sidecars.included_template_files,
             shard_files,
             total_shard_file_bytes: shard_inventory_byte_totals.shard_file_bytes,
@@ -201,6 +208,7 @@ struct ValidatedLagunaTextSidecars {
     tokenizer_file: ValidatedRequiredFile,
     tokenizer_config_file: ValidatedRequiredFile,
     generation_config_file: ValidatedRequiredFile,
+    standalone_chat_template_file: Option<ValidatedRequiredFile>,
     included_template_files: BTreeMap<String, ValidatedRequiredFile>,
 }
 
@@ -226,10 +234,62 @@ fn validate_text_sidecars(
         read_bounded_required_file_bytes(&tokenizer_config_file, MAXIMUM_TEXT_DOCUMENT_BYTES)?;
     let generation_config_bytes =
         read_bounded_required_file_bytes(&generation_config_file, MAXIMUM_TEXT_DOCUMENT_BYTES)?;
+    let mut standalone_template_file = validate_optional_standalone_template(model_directory)?;
+    let standalone_template_state = standalone_template_file.as_ref().map_or(
+        LagunaStandaloneChatTemplateState::Missing,
+        |template_file| {
+            if template_file.size_bytes() == 0 {
+                LagunaStandaloneChatTemplateState::Empty
+            } else {
+                LagunaStandaloneChatTemplateState::NonEmpty
+            }
+        },
+    );
+    let selected_root_template =
+        select_laguna_root_chat_template(&tokenizer_config_bytes, standalone_template_state)?;
+
+    let standalone_template_bytes;
+    let (root_template_source, standalone_root_file_name, prevalidated_template_file) =
+        match &selected_root_template {
+            LagunaRootChatTemplateSource::Embedded {
+                template_source, ..
+            } => (
+                template_source.as_str(),
+                None,
+                standalone_template_file.take().map(|template_file| {
+                    (STANDALONE_CHAT_TEMPLATE_FILE_NAME.to_owned(), template_file)
+                }),
+            ),
+            LagunaRootChatTemplateSource::Standalone => {
+                let selected_standalone_template_file = standalone_template_file.as_ref().ok_or(
+                    astronomical_config::LagunaRootChatTemplateSelectionError::MissingRootChatTemplate,
+                )?;
+                standalone_template_bytes = read_bounded_required_file_bytes(
+                    selected_standalone_template_file,
+                    crate::laguna::text::MAXIMUM_TEMPLATE_BYTES as u64,
+                )?;
+                let standalone_template_source = std::str::from_utf8(&standalone_template_bytes)
+                    .map_err(crate::laguna::LagunaTextArtifactError::TemplateNotUtf8)?;
+                (
+                    standalone_template_source,
+                    Some(STANDALONE_CHAT_TEMPLATE_FILE_NAME),
+                    None,
+                )
+            }
+        };
 
     // The graph owner recursively selects and bounded-reads every descriptor once.
-    let included_templates =
-        LagunaTemplateSourceValidator::new(model_directory).validate(&tokenizer_config_bytes)?;
+    let included_templates = LagunaTemplateSourceValidator::new(model_directory).validate(
+        root_template_source,
+        standalone_root_file_name,
+        prevalidated_template_file,
+    )?;
+    validate_laguna_standalone_chat_template_role(
+        &selected_root_template,
+        included_templates
+            .files_by_name
+            .contains_key(STANDALONE_CHAT_TEMPLATE_FILE_NAME),
+    )?;
 
     let text_artifact = LagunaTextArtifactNormalizer::normalize(
         target_contract,
@@ -238,6 +298,7 @@ fn validate_text_sidecars(
             tokenizer_bytes,
             tokenizer_config_bytes: &tokenizer_config_bytes,
             generation_config_bytes: Some(&generation_config_bytes),
+            root_chat_template_source: root_template_source,
             included_template_bytes_by_name: &included_templates.bytes_by_name,
         },
     )?;
@@ -246,8 +307,31 @@ fn validate_text_sidecars(
         tokenizer_file,
         tokenizer_config_file,
         generation_config_file,
+        standalone_chat_template_file: matches!(
+            selected_root_template,
+            LagunaRootChatTemplateSource::Standalone
+        )
+        .then_some(standalone_template_file)
+        .flatten(),
         included_template_files: included_templates.files_by_name,
     })
+}
+
+fn validate_optional_standalone_template(
+    model_directory: &Path,
+) -> Result<Option<ValidatedRequiredFile>, LagunaArtifactValidationError> {
+    match validate_required_file(
+        model_directory,
+        &required_file_profile(STANDALONE_CHAT_TEMPLATE_FILE_NAME),
+    ) {
+        Ok(template_file) => Ok(Some(template_file)),
+        Err(ArtifactValidationError::InspectRequiredFile { source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
+            Ok(None)
+        }
+        Err(validation_error) => Err(validation_error.into()),
+    }
 }
 
 fn validate_shard_descriptors(

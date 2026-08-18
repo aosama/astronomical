@@ -6,6 +6,7 @@ mod astronomical_runtime_instance;
 mod chunking_config;
 mod config_error;
 mod config_file;
+mod laguna_template_source;
 mod logging_config;
 mod maximum_mlx_memory;
 mod model_discovery;
@@ -24,6 +25,11 @@ pub use chunking_config::{
     DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
 };
 pub use config_error::AstronomicalConfigError;
+pub use laguna_template_source::{
+    LagunaRootChatTemplateSelectionError, LagunaRootChatTemplateSource,
+    LagunaStandaloneChatTemplateState, select_laguna_root_chat_template,
+    validate_laguna_standalone_chat_template_role,
+};
 pub use logging_config::{LogLevel, LoggingConfig};
 pub use maximum_mlx_memory::{
     maximum_mlx_memory_gb_to_bytes, restore_config_file, write_maximum_mlx_memory_gb,

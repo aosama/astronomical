@@ -184,21 +184,46 @@ fn should_reject_an_undeclared_poolside_function() {
 }
 
 #[test]
-fn should_reject_an_undeclared_poolside_tool_argument() {
+fn should_preserve_a_bounded_undeclared_poolside_tool_argument_for_client_validation() {
+    let mut output_parser = output_parser(false);
+
+    let output_events = output_parser
+        .push_fragment(
+            "<tool_call>find_character\
+             <arg_key>name</arg_key><arg_value>Romeo</arg_value>\
+             <arg_key>description</arg_key><arg_value>Locate the character</arg_value>\
+             </tool_call>",
+        )
+        .expect("bounded model-generated metadata should pass through to the tool client");
+
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: r#"{"description":"Locate the character","name":"Romeo"}"#.to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn should_still_require_declared_arguments_when_extra_metadata_is_present() {
     let mut output_parser = output_parser(false);
 
     let parser_error = output_parser
         .push_fragment(
-            "<tool_call>find_character<arg_key>chapter</arg_key><arg_value>one</arg_value></tool_call>",
+            "<tool_call>find_character\
+             <arg_key>description</arg_key><arg_value>Locate the character</arg_value>\
+             </tool_call>",
         )
-        .expect_err("generated argument names must belong to the declared function schema");
+        .expect_err("extra metadata must not satisfy a missing required argument");
 
     assert!(matches!(
         &parser_error,
-        LagunaOutputParserError::UndeclaredToolArgument {
+        LagunaOutputParserError::MissingRequiredToolArgument {
             function_name,
             argument_name,
-        } if function_name == "find_character" && argument_name == "chapter"
+        } if function_name == "find_character" && argument_name == "name"
     ));
     assert_bounded_error(&parser_error);
 }
