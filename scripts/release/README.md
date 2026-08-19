@@ -9,3 +9,5 @@ Everything in this directory is release-only. Ordinary development builds, commi
 - Prepare or publish a signed release only through `scripts/release/prepare-and-publish.sh`.
 
 Release scripts may open Finder, mount disk images, access signing identities, submit notarization requests, or mutate GitHub release state. Review their arguments and prerequisites before execution.
+
+Release preparation automatically keeps macOS `caffeinate` active for the preparation process so an idle screen lock cannot make a valid Data Protection Keychain notarization profile appear missing. A deliberate manual lock can still deny profile access; unlock the Mac and retry if the script reports that the profile is inaccessible.
