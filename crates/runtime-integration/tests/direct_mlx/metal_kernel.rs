@@ -199,3 +199,59 @@ fn should_execute_same_name_different_source_kernels_in_one_evaluation_group() {
         &[100.0, 101.0, 102.0, 103.0],
     );
 }
+
+#[test]
+fn should_preserve_evaluated_state_after_a_custom_metal_kernel_failure() {
+    let runtime = runtime();
+    let source_values = runtime
+        .array_from_f32(&vec![3.0; 1_024], &[1_024])
+        .expect("the source values should be valid");
+    let bystander_values = runtime
+        .multiply_scalar(&source_values, 2.0)
+        .expect("the bystander computation should build a valid graph");
+    let invalid_kernel = MlxMetalKernel::new(
+        "astronomical_eval_exception_invalid_kernel_test",
+        &["bystander_values"],
+        &["unused_values"],
+        "this is not Metal code {",
+    )
+    .expect("the invalid source should remain lazy until evaluation");
+    let mut invalid_outputs = runtime
+        .apply_metal_kernel(
+            &invalid_kernel,
+            &[&bystander_values],
+            &[MlxMetalKernelOutput::new(vec![1_024], MlxDtype::Float32)],
+            [1, 1, 1],
+            [1, 1, 1],
+            &[],
+        )
+        .expect("the invalid custom kernel should build a lazy graph");
+    let invalid_output = invalid_outputs
+        .pop()
+        .expect("the invalid custom kernel should return one lazy output");
+
+    // MLX marks earlier tape entries evaluated before later primitives run, so
+    // failure cleanup must commit their pending command buffers before returning.
+    runtime
+        .evaluate_arrays(&[&invalid_output])
+        .expect_err("invalid Metal source should fail during evaluation");
+    assert_f32_close(
+        &bystander_values
+            .to_vec_f32()
+            .expect("the bystander values should remain readable"),
+        &vec![6.0; 1_024],
+    );
+
+    let fresh_source_values = runtime
+        .array_from_f32(&vec![2.0; 512], &[512])
+        .expect("the fresh source values should be valid");
+    let fresh_computed_values = runtime
+        .multiply_scalar(&fresh_source_values, 3.0)
+        .expect("fresh computation should build after the failure");
+    assert_f32_close(
+        &fresh_computed_values
+            .to_vec_f32()
+            .expect("fresh computation should evaluate after the failure"),
+        &vec![6.0; 512],
+    );
+}
