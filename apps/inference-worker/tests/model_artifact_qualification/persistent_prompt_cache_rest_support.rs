@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::model_artifact_rest_qualification::get_endpoint;
 
-pub(super) const PINNED_MODEL_ID: &str = "Ornith-1.0-35B-MLX-2bit";
+pub(super) const CACHE_PRESSURE_MODEL_ID: &str = "Ornith-1.0-35B-MLX-2bit";
 pub(super) const MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 2_048;
 pub(super) const THINKING_BUDGET_TOKEN_COUNT: u16 = 256;
 pub(super) const PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
@@ -50,9 +50,9 @@ fn prepare_romeo_and_juliet_prompt_with_instruction(
 ) -> PreparedRomeoAndJulietPrompt {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, u32::from(MAXIMUM_OUTPUT_TOKEN_COUNT))
-        .expect("the pinned cache-pressure artifact should validate");
+        .expect("the cache-pressure artifact should validate");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-        .expect("the pinned cache-pressure tokenizer should load");
+        .expect("the cache-pressure tokenizer should load");
     let model_sampler_configuration = tokenizer.model_sampler_config();
     let source_repeat_count = maximum_prompt_token_count
         .saturating_add(2_999)
@@ -119,7 +119,7 @@ pub(super) async fn send_streaming_chat_request(
     thinking_budget_token_count: u16,
 ) -> StreamedAssistantResponse {
     let request_document = json!({
-        "model": PINNED_MODEL_ID,
+        "model": CACHE_PRESSURE_MODEL_ID,
         "messages": messages,
         "stream": true,
         "stream_options": { "include_usage": true },

@@ -174,7 +174,7 @@ async fn run_mtp_lifecycle_qualification() {
         configured_mtp_artifact_test_inputs
             .end_of_sequence_token_ids
             .contains(&final_eos_token_id),
-        "the request should terminate on a certified Qwen EOS token"
+        "the request should terminate on a Qwen EOS token"
     );
     assert!(eos_terminal.generation_finalization.has_reportable_state());
 

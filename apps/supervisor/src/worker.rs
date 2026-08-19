@@ -1,19 +1,26 @@
+//! The main worker event loop: receives commands and events, coordinates
+//! generation lifecycle, model swaps, memory limits, and idle telemetry.
+//!
+//! The loop owns one `WorkerProcess` and one optional `ActiveGeneration`.
+//! Commands arrive through `WorkerLoopCommand`; events arrive through the
+//! worker's IPC stream. Generation-scoped events must match the active
+//! request or are treated as protocol violations.
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::ProtocolError;
 use tokio::sync::{Semaphore, mpsc};
-use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
+use tokio::time::{Instant, MissedTickBehavior, interval};
 
 use crate::worker_cache_clear::{
     apply_pending_prompt_cache_clear_if_idle, handle_prompt_cache_clear_command,
 };
+use crate::worker_generate::handle_generate_command;
 use crate::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, apply_mlx_memory_limit, contain_mlx_memory_limit_failure,
 };
-use crate::worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap};
 use crate::{
     ChatGenerationStreamErrorCode, GenerationPerformanceLog, GenerationStartError, WorkerActivity,
     WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
@@ -122,179 +129,32 @@ pub(crate) async fn run_worker(
                             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
                             continue;
                         }
-                        // WorkerHandle reserves the active permit before it sends
-                        // this command, so permit availability cannot determine
-                        // whether this loop already owns a request. The explicit
-                        // active-generation state is authoritative at admission.
-                        if active_generation.is_some() {
-                            let _send_outcome = start_sender.send(Err(GenerationStartError::CapacityUnavailable));
-                            tracing::error!("received a Generate command while a generation is active; this indicates a queue bug");
-                            continue;
-                        }
-                        // Load a mapped model before forwarding generation. REST canonicalizes
-                        // and validates model IDs; the explicit empty-worker guard also protects
-                        // direct WorkerHandle users from sending Generate before any model exists.
-                        let loaded_model_id = health_snapshot
-                            .read()
-                            .ok()
-                            .and_then(|snapshot| snapshot.ready_model_id.clone());
-                        let requested_model = &generation_command.model;
-                        if loaded_model_id.as_deref() != Some(requested_model) {
-                            let requested_model_directory = model_directories.get(requested_model);
-                            if requested_model_directory.is_none() && loaded_model_id.is_none() {
-                                tracing::warn!(
-                                    requested_model = %requested_model,
-                                    loaded_model = ?loaded_model_id,
-                                    "rejected generation for an unmapped model"
-                                );
-                                let _send_outcome = start_sender
-                                    .send(Err(GenerationStartError::WorkerUnavailable));
-                                continue;
-                            }
-                            if let Some(model_directory) = requested_model_directory {
-                                tracing::info!(
-                                    requested_model = %requested_model,
-                                    loaded_model = ?loaded_model_id,
-                                    model_directory = %model_directory.display(),
-                                    "loading model to match request"
-                                );
-                                if let Err(swap_error) = worker_process
-                                    .swap_model(
-                                        model_directory.to_string_lossy().into_owned(),
-                                        max_output_tokens,
-                                    )
-                                    .await
-                                {
-                                    tracing::error!(error = %swap_error, "SwapModel command failed");
-                                    contain_worker_failure(
-                                        &mut worker_process,
-                                        &health_snapshot,
-                                        &mut active_generation,
-                                        swap_error,
-                                    ).await;
-                                    is_ready = false;
-                                    let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-                                    continue;
-                                }
-                                // Drain events until we receive ModelSwapped or an error.
-                                let model_swap_outcome = timeout(
-                                    model_load_timeout,
-                                    wait_for_model_swap(
-                                        &mut worker_process,
-                                        &health_snapshot,
-                                        &mut is_ready,
-                                        &mut model_load_deadline,
-                                        &mut active_generation,
-                                        &mut performance_log,
-                                    ),
-                                )
-                                .await
-                                .map_err(|_| WorkerControlError::ModelLoadTimeout {
-                                    model_load_timeout_millis: model_load_timeout.as_millis(),
-                                })
-                                .and_then(|model_swap_outcome| model_swap_outcome);
-                                match model_swap_outcome {
-                                    Ok(ModelSwapWaitOutcome::Loaded) => {}
-                                    Ok(ModelSwapWaitOutcome::Rejected {
-                                        model_load_failure_reason,
-                                    }) => {
-                                        let _send_outcome = start_sender
-                                            .send(Err(GenerationStartError::ModelLoadFailed {
-                                                model_load_failure_reason,
-                                            }));
-                                        continue;
-                                    }
-                                    Err(swap_error) => {
-                                        tracing::error!(error = %swap_error, "model swap failed during wait for ModelSwapped");
-                                        contain_worker_failure(
-                                            &mut worker_process,
-                                            &health_snapshot,
-                                            &mut active_generation,
-                                            swap_error,
-                                        ).await;
-                                        is_ready = false;
-                                        let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-                                        continue;
-                                    }
-                                }
-                                tracing::info!(
-                                    requested_model = %requested_model,
-                                    "model swap completed successfully"
-                                );
-                            }
-                        }
-                        let request_id = generation_command.request_id;
-                        let max_output_tokens = generation_command.settings.max_output_tokens;
-                        tracing::info!(request_id = request_id.value(), max_output_tokens,
-                            "starting worker generation");
-                        match worker_process.start_generation(generation_command).await {
-                            Ok(()) => {}
-                            Err(WorkerControlError::Protocol(
-                                ProtocolError::OutgoingMessageTooLarge {
-                                    actual_message_bytes: actual_ipc_message_bytes,
-                                    maximum_message_bytes: maximum_ipc_message_bytes,
-                                },
-                            )) => {
-                                tracing::warn!(
-                                    request_id = request_id.value(),
-                                    actual_ipc_message_bytes,
-                                    maximum_ipc_message_bytes,
-                                    "rejected generation command that exceeds the IPC frame limit"
-                                );
-                                let _send_outcome = start_sender.send(Err(
-                                    GenerationStartError::RequestTooLarge {
-                                        actual_ipc_message_bytes,
-                                        maximum_ipc_message_bytes,
-                                    },
-                                ));
-                                continue;
-                            }
-                            Err(start_error) => {
-                                let _send_outcome = start_sender
-                                    .send(Err(GenerationStartError::WorkerUnavailable));
-                                contain_worker_failure(
-                                    &mut worker_process,
-                                    &health_snapshot,
-                                    &mut active_generation,
-                                    start_error,
-                                )
-                                .await;
-                                is_ready = false;
-                                continue;
-                            }
-                        }
-                        active_generation = Some(ActiveGeneration {
-                            _active_generation_permit: active_generation_permit,
-                            generated_token_count: 0,
-                            generation_started_at: None,
-                            generation_preparation_started_at: None,
-                            generation_preparation_elapsed_millis: None,
-                            first_decode_forward_elapsed_millis: None,
-                            time_to_first_output_millis: None,
-                            final_complete_expert_layer_count: None,
-                            final_complete_expert_payload_bytes: None,
-                            final_partial_expert_layer_count: None,
-                            final_partial_expert_payload_bytes: None,
-                            latest_generation_progress_token_count: 0,
-                            max_output_tokens,
-                            next_sequence_number: 0,
-                            next_tool_call_index: 0,
-                            request_started_at: Instant::now(),
-                            prefill_elapsed_millis: 0,
-                            maximum_mlx_peak_memory_bytes: None,
-                            last_mlx_active_memory_bytes: None,
-                            request_id,
+                        if let Err(control_error) = handle_generate_command(
+                            &mut worker_process,
+                            active_generation_permit,
+                            generation_command,
+                            start_sender,
                             stream_event_sender,
-                        });
-                        clear_active_request_progress(&health_snapshot);
-                        publish_activity(&health_snapshot, WorkerActivity::PromptProcessing);
-                        if start_sender.send(Ok(())).is_err() {
-                            cancel_active_generation(
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                            &model_directories,
+                            max_output_tokens,
+                            model_load_timeout,
+                            cancellation_acknowledgement_timeout,
+                        )
+                        .await
+                        {
+                            contain_worker_failure(
                                 &mut worker_process,
                                 &health_snapshot,
                                 &mut active_generation,
-                                cancellation_acknowledgement_timeout,
-                            ).await;
+                                control_error,
+                            )
+                            .await;
+                            is_ready = false;
                         }
                     }
                     WorkerLoopCommand::Shutdown { shutdown_sender } => {
