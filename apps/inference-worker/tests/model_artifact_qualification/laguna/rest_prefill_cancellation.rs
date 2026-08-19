@@ -1,4 +1,4 @@
-//! Public cancellation during Laguna prefill leaves the worker reusable.
+//! Public cancellation during Laguna XS prefill leaves the worker reusable.
 
 use std::time::{Duration, Instant};
 
@@ -6,8 +6,8 @@ use serde_json::json;
 use tokio::time::{sleep, timeout};
 
 use super::artifact::{
-    LAGUNA_S, compact_romeo_and_juliet_source, full_romeo_and_juliet_source,
-    resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, compact_romeo_and_juliet_source, full_romeo_and_juliet_source,
+    resolve_reference_model_directory,
 };
 use super::http::opencode_shaped_chat_request_body;
 use crate::model_artifact_qualification::model_artifact_rest_qualification::{
@@ -20,16 +20,16 @@ const JOURNEY_TIMEOUT: Duration = Duration::from_secs(119);
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "cancels pinned Laguna S during public prefill and reuses the worker"]
-async fn should_acknowledge_laguna_s_rest_prefill_cancellation_and_reuse_worker() {
+#[ignore = "cancels reference Laguna XS during public prefill and reuses the worker"]
+async fn should_acknowledge_laguna_xs_rest_prefill_cancellation_and_reuse_worker() {
     timeout(JOURNEY_TIMEOUT, run_cancellation_journey())
         .await
-        .expect("the Laguna S cancellation journey must finish within 119 seconds");
+        .expect("the Laguna XS cancellation journey must finish within 119 seconds");
 }
 
 async fn run_cancellation_journey() {
-    let model_directory = resolve_pinned_artifact_directory(LAGUNA_S);
-    let public_model_id = LAGUNA_S.public_model_id();
+    let model_directory = resolve_reference_model_directory();
+    let public_model_id = LAGUNA_XS_PUBLIC_MODEL_ID;
     let isolated_home = crate::common::isolated_development_home_from_user_config();
     let rest_server = launch_model_artifact_rest_server_for_model(
         public_model_id,
