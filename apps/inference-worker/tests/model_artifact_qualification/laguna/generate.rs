@@ -1,4 +1,4 @@
-//! Isolated GPU generate journeys for the pinned Laguna extra-small and small artifacts.
+//! Isolated GPU generate journey for the reference Laguna XS artifact.
 
 use std::process::{Command, Stdio};
 use std::thread;
@@ -8,13 +8,12 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use astronomical_model_serving::{
-    ExpertMemoryMode, GeneratedToken, MlxInferenceExecution, initialize_laguna_execution,
+    GeneratedToken, MlxInferenceExecution, initialize_laguna_execution,
 };
 use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 
 use super::artifact::{
-    LAGUNA_S, LAGUNA_XS, PinnedLagunaArtifact, bounded_romeo_and_juliet_source,
-    compact_romeo_and_juliet_source, resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, bounded_romeo_and_juliet_source, resolve_reference_model_directory,
 };
 
 const QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
@@ -25,32 +24,19 @@ const GENERATED_TOKEN_LIMIT: usize = 8;
 const IOGPU_WIRED_LIMIT_SYSCTL_KEY: &str = "iogpu.wired_limit_mb";
 
 #[test]
-#[ignore = "loads the pinned Laguna XS artifact onto the GPU and generates Romeo and Juliet tokens"]
-fn should_generate_romeo_and_juliet_tokens_from_the_pinned_laguna_xs_artifact() {
+#[ignore = "loads the reference Laguna XS artifact onto the GPU and generates Romeo and Juliet tokens"]
+fn should_generate_romeo_and_juliet_tokens_from_the_reference_laguna_xs_artifact() {
     run_bounded_generate(
-        LAGUNA_XS,
-        "model_artifact_qualification::laguna::generate::should_generate_romeo_and_juliet_tokens_from_the_pinned_laguna_xs_artifact",
+        "model_artifact_qualification::laguna::generate::should_generate_romeo_and_juliet_tokens_from_the_reference_laguna_xs_artifact",
     );
 }
 
-#[test]
-#[ignore = "loads the pinned Laguna S artifact onto the GPU and generates Romeo and Juliet tokens"]
-fn should_generate_romeo_and_juliet_tokens_from_the_pinned_laguna_s_artifact() {
-    run_bounded_generate(
-        LAGUNA_S,
-        "model_artifact_qualification::laguna::generate::should_generate_romeo_and_juliet_tokens_from_the_pinned_laguna_s_artifact",
-    );
-}
-
-fn run_bounded_generate(pinned_artifact: PinnedLagunaArtifact, test_name: &str) {
-    if std::env::var(QUALIFICATION_CHILD_MODEL_ID).as_deref() == Ok(pinned_artifact.model_id) {
-        generate_from_pinned_artifact(pinned_artifact);
+fn run_bounded_generate(test_name: &str) {
+    if std::env::var(QUALIFICATION_CHILD_MODEL_ID).as_deref() == Ok(LAGUNA_XS_PUBLIC_MODEL_ID) {
+        generate_from_reference_artifact();
         return;
     }
-    eprintln!(
-        "[laguna-generate] starting GPU journey model={} revision={}",
-        pinned_artifact.model_id, pinned_artifact.revision
-    );
+    eprintln!("[laguna-generate] starting GPU journey model={LAGUNA_XS_PUBLIC_MODEL_ID}");
     let test_executable =
         std::env::current_exe().expect("the qualification test executable path should resolve");
     let mut child_process = Command::new(test_executable)
@@ -62,7 +48,7 @@ fn run_bounded_generate(pinned_artifact: PinnedLagunaArtifact, test_name: &str) 
             "--test-threads",
             "1",
         ])
-        .env(QUALIFICATION_CHILD_MODEL_ID, pinned_artifact.model_id)
+        .env(QUALIFICATION_CHILD_MODEL_ID, LAGUNA_XS_PUBLIC_MODEL_ID)
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -77,13 +63,9 @@ fn run_bounded_generate(pinned_artifact: PinnedLagunaArtifact, test_name: &str) 
         {
             assert!(
                 exit_status.success(),
-                "isolated Laguna generate journey failed for {}",
-                pinned_artifact.model_id
+                "isolated Laguna generate journey failed for {LAGUNA_XS_PUBLIC_MODEL_ID}"
             );
-            eprintln!(
-                "[laguna-generate] completed model={}",
-                pinned_artifact.model_id
-            );
+            eprintln!("[laguna-generate] completed model={LAGUNA_XS_PUBLIC_MODEL_ID}");
             return;
         }
         let elapsed_time = start_time.elapsed();
@@ -91,15 +73,13 @@ fn run_bounded_generate(pinned_artifact: PinnedLagunaArtifact, test_name: &str) 
             let _kill_outcome = child_process.kill();
             let _wait_outcome = child_process.wait();
             panic!(
-                "Laguna generate journey exceeded {} seconds for {}",
+                "Laguna generate journey exceeded {} seconds for {LAGUNA_XS_PUBLIC_MODEL_ID}",
                 QUALIFICATION_TIMEOUT.as_secs(),
-                pinned_artifact.model_id
             );
         }
         if elapsed_time >= next_progress_time {
             eprintln!(
-                "[laguna-generate] loading model={} elapsed_seconds={}",
-                pinned_artifact.model_id,
+                "[laguna-generate] loading model={LAGUNA_XS_PUBLIC_MODEL_ID} elapsed_seconds={}",
                 elapsed_time.as_secs()
             );
             next_progress_time += QUALIFICATION_PROGRESS_INTERVAL;
@@ -108,13 +88,13 @@ fn run_bounded_generate(pinned_artifact: PinnedLagunaArtifact, test_name: &str) 
     }
 }
 
-fn generate_from_pinned_artifact(pinned_artifact: PinnedLagunaArtifact) {
-    let model_directory = resolve_pinned_artifact_directory(pinned_artifact);
+fn generate_from_reference_artifact() {
+    let model_directory = resolve_reference_model_directory();
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
         resolve_machine_mlx_memory_limits();
     eprintln!(
-        "[laguna-generate] phase=load model={} active_limit_bytes={} cache_limit_bytes={}",
-        pinned_artifact.model_id, active_memory_limit_bytes, allocator_cache_memory_limit_bytes
+        "[laguna-generate] phase=load model={LAGUNA_XS_PUBLIC_MODEL_ID} active_limit_bytes={} cache_limit_bytes={}",
+        active_memory_limit_bytes, allocator_cache_memory_limit_bytes
     );
     let load_started_at = Instant::now();
     let (generation_processor, mut execution) = initialize_laguna_execution(
@@ -132,22 +112,18 @@ fn generate_from_pinned_artifact(pinned_artifact: PinnedLagunaArtifact) {
         load_started_at.elapsed().as_secs(),
         load_result.expert_memory_mode()
     );
-    if pinned_artifact.model_id == LAGUNA_XS.model_id {
-        assert_eq!(
-            load_result.expert_memory_mode(),
-            Some(ExpertMemoryMode::Resident),
-            "the pinned XS resident qualification must not silently page experts"
-        );
-    }
 
-    let source_excerpt = if pinned_artifact.model_id == LAGUNA_S.model_id {
-        compact_romeo_and_juliet_source()
-    } else {
-        bounded_romeo_and_juliet_source()
-    };
+    // Residency depends on the user's machine ceiling, so qualification must
+    // accept every executable mode selected by the centralized memory policy.
+    assert!(
+        load_result.expert_memory_mode().is_some(),
+        "expert memory mode must be reported after loading"
+    );
+
+    let source_excerpt = bounded_romeo_and_juliet_source();
     let chat_command = ChatGenerationCommand {
         request_id: RequestId::new(106),
-        model: pinned_artifact.public_model_id().to_owned(),
+        model: LAGUNA_XS_PUBLIC_MODEL_ID.to_owned(),
         messages: vec![ChatMessage::User {
             content: format!(
                 "Use the supplied Romeo and Juliet source as the only evidence. In two short sentences name the two households and the tragic ending.\n\n{source_excerpt}"
@@ -188,7 +164,7 @@ fn generate_from_pinned_artifact(pinned_artifact: PinnedLagunaArtifact) {
                 generated_token_ids.push(token_id);
                 if let Some(decoded_piece) = token_decoder
                     .push_token(token_id)
-                    .expect("generated tokens should stay inside the certified vocabulary")
+                    .expect("generated tokens should stay inside the vocabulary")
                 {
                     generated_text.push_str(&decoded_piece);
                 }

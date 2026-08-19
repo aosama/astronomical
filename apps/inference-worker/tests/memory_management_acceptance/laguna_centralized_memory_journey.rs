@@ -18,7 +18,7 @@ const CONSTRAINED_STARTUP_CHILD_KEY: &str =
     "ASTRONOMICAL_LAGUNA_CONSTRAINED_STARTUP_ACCEPTANCE_CHILD";
 const LIVE_TRANSITION_TEST_NAME: &str = "memory_management_acceptance::laguna_centralized_memory_journey::should_preserve_output_across_resident_to_paged_live_ceiling_transition";
 const CONSTRAINED_STARTUP_TEST_NAME: &str = "memory_management_acceptance::laguna_centralized_memory_journey::should_generate_when_the_startup_ceiling_is_below_weight_files_on_disk";
-const LAGUNA_XS_PUBLIC_MODEL_ID: &str = "Laguna-XS-2.1-oQ2";
+const LAGUNA_XS_PUBLIC_MODEL_ID: &str = "Laguna-XS-2.1-oQ8e";
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
