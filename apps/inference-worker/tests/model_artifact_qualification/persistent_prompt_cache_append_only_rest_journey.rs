@@ -7,16 +7,17 @@ use super::model_artifact_rest_qualification::{
     stop_model_artifact_rest_server,
 };
 use super::persistent_prompt_cache_rest_support::{
-    MAXIMUM_OUTPUT_TOKEN_COUNT, PINNED_MODEL_ID, THINKING_BUDGET_TOKEN_COUNT, assistant_message,
-    get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt, read_performance_records,
-    required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
+    CACHE_PRESSURE_MODEL_ID, MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT,
+    assistant_message, get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt,
+    read_performance_records, required_u64, send_streaming_chat_request, user_message,
+    write_cache_pressure_worker_config,
 };
 
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 11_000_000_000;
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 40_001;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and pinned model for an append-only 40K Romeo and Juliet cache journey"]
+#[ignore = "launches the production REST server and reference model for an append-only 40K Romeo and Juliet cache journey"]
 async fn should_restore_every_completed_cold_block_for_an_appended_chat_at_eleven_gb_through_rest()
 {
     timeout(E2E_TIMEOUT, run_append_only_rest_journey())
@@ -26,7 +27,8 @@ async fn should_restore_every_completed_cold_block_for_an_appended_chat_at_eleve
 
 async fn run_append_only_rest_journey() {
     let qualification_log_prefix = "[persistent-prompt-cache-append-only-rest:11gb]";
-    let model_directory = crate::common::configured_model_artifact_directory_by_id(PINNED_MODEL_ID);
+    let model_directory =
+        crate::common::configured_model_artifact_directory_by_id(CACHE_PRESSURE_MODEL_ID);
     let configured_worker_home = tempfile::tempdir()
         .expect("the append-only REST journey should create an isolated worker home");
     let performance_log_directory = tempfile::tempdir()
@@ -39,7 +41,7 @@ async fn run_append_only_rest_journey() {
     let prepared_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, CACHEABLE_PROMPT_TOKEN_COUNT);
     let model_artifact_rest_server = launch_model_artifact_rest_server_for_model_with_memory_limit(
-        PINNED_MODEL_ID,
+        CACHE_PRESSURE_MODEL_ID,
         model_directory,
         Some(configured_worker_home.path()),
         Some(performance_log_directory.path()),

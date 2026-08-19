@@ -218,9 +218,9 @@ pub(crate) fn prepare_reproduced_prompt_token_ids() -> Vec<u32> {
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the pinned Ornith artifact should validate before tokenizer loading");
+        .expect("the Ornith artifact should validate before tokenizer loading");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-        .expect("the pinned Ornith tokenizer should load from validated model metadata");
+        .expect("the Ornith tokenizer should load from validated model metadata");
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(9_001),
         model: "Ornith-1.0-35B-OptiQ-4bit".to_owned(),
@@ -262,7 +262,7 @@ pub(crate) async fn run_prefill_snapshot(
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the pinned Ornith artifact should validate before native loading");
+        .expect("the Ornith artifact should validate before native loading");
     let config = validated_artifact.config().clone();
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;

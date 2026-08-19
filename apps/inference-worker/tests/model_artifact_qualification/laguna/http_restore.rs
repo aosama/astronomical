@@ -7,7 +7,7 @@ use serde_json::json;
 use tokio::time::timeout;
 
 use super::artifact::{
-    LAGUNA_XS, bounded_romeo_and_juliet_source, resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, bounded_romeo_and_juliet_source, resolve_reference_model_directory,
 };
 use super::http::assert_laguna_is_advertised;
 use crate::model_artifact_qualification::model_artifact_rest_qualification::{
@@ -20,7 +20,7 @@ const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const PROMPT_CACHE_BLOCK_TOKEN_COUNT: u32 = 256;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "serves pinned Laguna XS twice and proves public SSD restore"]
+#[ignore = "serves reference Laguna XS twice and proves public SSD restore"]
 async fn should_restore_a_repeated_romeo_request_through_http_and_remain_ready() {
     timeout(JOURNEY_TIMEOUT, run_repeated_http_restore())
         .await
@@ -28,8 +28,8 @@ async fn should_restore_a_repeated_romeo_request_through_http_and_remain_ready()
 }
 
 async fn run_repeated_http_restore() {
-    let model_directory = resolve_pinned_artifact_directory(LAGUNA_XS);
-    let public_model_id = LAGUNA_XS.public_model_id();
+    let model_directory = resolve_reference_model_directory();
+    let public_model_id = LAGUNA_XS_PUBLIC_MODEL_ID;
     let isolated_development_home =
         tempfile::tempdir().expect("an isolated Laguna cache home should be created");
     write_cache_enabled_config(isolated_development_home.path(), &model_directory);

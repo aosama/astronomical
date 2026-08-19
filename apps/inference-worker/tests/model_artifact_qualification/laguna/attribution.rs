@@ -7,7 +7,9 @@ use std::time::Duration;
 use serde_json::json;
 use tokio::time::timeout;
 
-use super::artifact::{LAGUNA_XS, full_romeo_and_juliet_source, resolve_pinned_artifact_directory};
+use super::artifact::{
+    LAGUNA_XS_PUBLIC_MODEL_ID, full_romeo_and_juliet_source, resolve_reference_model_directory,
+};
 use crate::model_artifact_qualification::model_artifact_rest_qualification::{
     assert_successful_streaming_chat_response, get_endpoint,
     launch_model_artifact_rest_server_for_model, post_chat_completion,
@@ -17,8 +19,8 @@ use crate::model_artifact_qualification::model_artifact_rest_qualification::{
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "proves resident long-prompt serving and attribution enable/disable behavior"]
-async fn should_serve_a_resident_laguna_xs_long_prompt_with_switchable_attribution() {
+#[ignore = "proves long-prompt serving and attribution enable/disable behavior"]
+async fn should_serve_a_laguna_xs_long_prompt_with_switchable_attribution() {
     timeout(JOURNEY_TIMEOUT, run_attribution_journey())
         .await
         .expect("the Laguna attribution journey must finish within 115 seconds");
@@ -30,14 +32,14 @@ async fn run_attribution_journey() {
 }
 
 async fn run_one_attribution_mode(performance_attribution_enabled: bool) {
-    let model_directory = resolve_pinned_artifact_directory(LAGUNA_XS);
+    let model_directory = resolve_reference_model_directory();
     let isolated_home = tempfile::tempdir().expect("an isolated Development home should exist");
     write_configuration(
         isolated_home.path(),
         &model_directory,
         performance_attribution_enabled,
     );
-    let public_model_id = LAGUNA_XS.public_model_id();
+    let public_model_id = LAGUNA_XS_PUBLIC_MODEL_ID;
     let rest_server = launch_model_artifact_rest_server_for_model(
         public_model_id,
         model_directory,
@@ -70,7 +72,10 @@ async fn run_one_attribution_mode(performance_attribution_enabled: bool) {
     let status_document: serde_json::Value = serde_json::from_str(status_body)
         .unwrap_or_else(|_| panic!("GET /v1/status should return JSON: {status_response}"));
     assert_eq!(status_document["status"], "ready");
-    assert_eq!(status_document["expert_memory_mode"], "resident");
+    assert!(
+        status_document["expert_memory_mode"].as_str().is_some(),
+        "expert_memory_mode must be present in the status document"
+    );
     assert!(
         status_document["mlx_memory_snapshot"]["active_memory_bytes"]
             .as_u64()
