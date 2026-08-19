@@ -4,29 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.4</title>
-            <pubDate>Tue, 18 Aug 2026 18:03:09 -0400</pubDate>
-            <sparkle:version>202</sparkle:version>
-            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
+            <title>0.2.5</title>
+            <pubDate>Wed, 19 Aug 2026 07:37:23 -0400</pubDate>
+            <sparkle:version>228</sparkle:version>
+            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Updates the bundled MLX runtime to 0.32.1 with the retained Astronomical patches rebased onto the new native interfaces.
-- Improves compatibility across MLX-C compilation caching, fast Fourier transforms, and just-in-time quantized matrix-vector execution.
-- Strengthens direct numerical coverage for the BFloat16 quantized slow path and qualifies allocator cleanup across an Ornith six-bit-to-four-bit model swap.
-- Isolates Stable installation, signing, notarization, disk-image creation, and publication from ordinary Development builds and commit verification.
+- Strengthens MLX 0.32.1 execution coverage for dynamic compiled graph shapes, evaluation failures, quantized expert gathering, and NVFP4 split-K operations.
+- Improves release confidence across Qwen/Ornith and Laguna packages with configuration-derived structural validation that remains valid across supported packaging variants.
+- Clarifies supervisor generation ownership while preserving request queuing, model swapping, cancellation, streaming output, and worker recovery behavior.
+- Coordinates native build-cache producers in continuous integration to improve reliable reuse of verified MLX build artifacts.
 
 ## Compatibility
 
-Astronomical 0.2.4 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.5 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing Astronomical configuration, model directories, caches, and logs remain in place when updating from 0.2.3.
+Existing Astronomical configuration, model directories, caches, and logs remain in place when updating from 0.2.4.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.4/Astronomical-0.2.4-macOS-arm64.dmg" length="12204455" type="application/octet-stream" sparkle:edSignature="LUZHN6z4C8CgltDZr2WenJYlVuV1KWmm3UOB1A224urlC3YsRdJJRm4+H8drk/XnoemwkwIwoR+9mhsbkcM9DQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.5/Astronomical-0.2.5-macOS-arm64.dmg" length="12204387" type="application/octet-stream" sparkle:edSignature="2ak6w01Hk42pi2HVFVR5nTvg18GsFzlmimZZL9CCLFvMnr3RrmCVvVrGsPM2GGP6f4wNdSl500ZLCUZtCkhKCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: faG/gGwq6/S4cIWSLtSTlsJenvsYRHylA7trzooJLxev25d3qwRR5lxma3Llu+RXvyRE6QiIQ/BhLWpyAeExCA==
-length: 2167
+edSignature: 9sQ0UvtNb40hvq3Ef9yBPxNmByZ8y+wFGtDXzqWJeuFgG5kN6JVw6j7AfpYkaRGUtZIOyHD3r9CowgiMXJYnDw==
+length: 2216
 -->
