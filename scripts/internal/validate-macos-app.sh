@@ -8,6 +8,7 @@ readonly WAIT_TIMEOUT_SECONDS=120
 readonly CLEANUP_TIMEOUT_SECONDS=10
 APP_BUNDLE_PATH=""
 RUN_REAL_MODEL_JOURNEY="false"
+QUALIFICATION_MODEL_IDENTIFIER=""
 BUNDLE_ONLY="false"
 LAUNCHED_DAEMON_PID=""
 LAUNCHED_MENU_PID=""
@@ -17,11 +18,18 @@ print_error() {
     printf '%s\n' "Error: $1" >&2
 }
 
+print_daemon_diagnostics() {
+    daemon_log_file="${VALIDATION_TEMP_DIRECTORY}/daemon.log"
+    if [ -f "$daemon_log_file" ]; then
+        perl -ne 'print if $. <= 200' "$daemon_log_file" >&2
+    fi
+}
+
 print_usage() {
-    printf '%s\n' "Usage: scripts/internal/validate-macos-app.sh [--app-bundle PATH] [--bundle-only] [--real-model]"
+    printf '%s\n' "Usage: scripts/internal/validate-macos-app.sh [--app-bundle PATH] [--bundle-only] [--real-model MODEL_ID]"
     printf '%s\n' ""
     printf '%s\n' "Default validation is isolated and does not load a model."
-    printf '%s\n' "--real-model additionally runs a bounded Romeo and Juliet chat journey."
+    printf '%s\n' "--real-model additionally runs a bounded Romeo and Juliet chat journey with the exact advertised model."
 }
 
 cleanup() {
@@ -105,9 +113,7 @@ wait_for_url() {
         fi
         if [ -n "${LAUNCHED_DAEMON_PID:-}" ] && ! kill -0 "$LAUNCHED_DAEMON_PID" 2>/dev/null; then
             print_error "daemon exited while waiting for ${expected_description}"
-            if [ -f "${VALIDATION_TEMP_DIRECTORY}/daemon.log" ]; then
-                perl -ne 'print if $. <= 200' "${VALIDATION_TEMP_DIRECTORY}/daemon.log" >&2
-            fi
+            print_daemon_diagnostics
             return 1
         fi
         sleep 1
@@ -126,20 +132,31 @@ read_plist_value() {
 validate_real_model() {
     start_step "real-model-romeo-and-juliet"
     printf '%s\n' "  Shared GPU and wired memory are not isolated; this explicit journey may affect Stable latency."
-    model_identifier="$(curl --silent --fail --max-time 10 "${supervisor_base_url}/v1/models" | jq --raw-output '.data[0].id // empty')"
-    if [ -z "$model_identifier" ]; then
-        print_error "Development config has no discovered model for real-model validation"
+    if ! jq --exit-status --arg model "$QUALIFICATION_MODEL_IDENTIFIER" \
+        'any(.data[]; .id == $model)' "$models_file" >/dev/null; then
+        print_error "qualification model is not advertised: ${QUALIFICATION_MODEL_IDENTIFIER}"
         exit 1
     fi
+    model_identifier="$QUALIFICATION_MODEL_IDENTIFIER"
+    printf '%s model=%s status=selected\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$model_identifier"
     romeo_fixture="${repository_root}/apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
     request_file="${VALIDATION_TEMP_DIRECTORY}/chat-request.json"
     jq --null-input --arg model "$model_identifier" --rawfile prompt "$romeo_fixture" \
         '{model:$model,messages:[{role:"user",content:$prompt}],max_tokens:16,stream:false}' > "$request_file"
-    curl --silent --show-error --fail --max-time 120 \
+    if ! curl --silent --show-error --fail --max-time 120 \
         --header 'Content-Type: application/json' --data-binary "@${request_file}" \
-        "${supervisor_base_url}/v1/chat/completions" > "${VALIDATION_TEMP_DIRECTORY}/chat-response.json"
-    jq --exit-status '.choices[0].message.content | type == "string" and length > 0' \
-        "${VALIDATION_TEMP_DIRECTORY}/chat-response.json" >/dev/null
+        "${supervisor_base_url}/v1/chat/completions" > "${VALIDATION_TEMP_DIRECTORY}/chat-response.json"; then
+        print_error "qualification request failed for model: ${model_identifier}"
+        print_daemon_diagnostics
+        exit 1
+    fi
+    if ! jq --exit-status \
+        '.choices[0].message | [.content, .reasoning_content] | any(type == "string" and length > 0)' \
+        "${VALIDATION_TEMP_DIRECTORY}/chat-response.json" >/dev/null; then
+        print_error "qualification model returned no assistant text or reasoning output: ${model_identifier}"
+        exit 1
+    fi
     finish_step
 }
 
@@ -156,8 +173,13 @@ main() {
                 shift 2
                 ;;
             --real-model)
+                [ "$#" -ge 2 ] || { print_error "--real-model requires a model identifier"; exit 2; }
+                case "$2" in
+                    ''|-*) print_error "--real-model requires a model identifier"; exit 2 ;;
+                esac
                 RUN_REAL_MODEL_JOURNEY="true"
-                shift
+                QUALIFICATION_MODEL_IDENTIFIER="$2"
+                shift 2
                 ;;
             --bundle-only)
                 BUNDLE_ONLY="true"
