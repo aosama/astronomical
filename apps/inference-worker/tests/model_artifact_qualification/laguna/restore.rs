@@ -1,8 +1,8 @@
-//! Same-process SSD restore journey for the pinned Laguna extra-small artifact.
+//! Same-process SSD restore journey for the reference Laguna extra-small artifact.
 
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{
@@ -15,28 +15,23 @@ use astronomical_model_serving::{
 };
 
 use super::artifact::{
-    LAGUNA_XS, bounded_romeo_and_juliet_source, resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, QUALIFICATION_POLL_INTERVAL, QUALIFICATION_PROGRESS_INTERVAL,
+    QUALIFICATION_TIMEOUT, bounded_romeo_and_juliet_source, resolve_reference_model_directory,
 };
 use super::generate::resolve_machine_mlx_memory_limits;
 
-const QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
-const QUALIFICATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
-const QUALIFICATION_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 const QUALIFICATION_CHILD_MODEL_ID: &str = "ASTRONOMICAL_LAGUNA_RESTORE_CHILD_MODEL_ID";
 const GENERATED_TOKEN_LIMIT: usize = 8;
 const PROMPT_CACHE_BLOCK_TOKEN_COUNT: u32 = 256;
 
 #[test]
-#[ignore = "loads the pinned Laguna XS artifact and proves same-process SSD prompt-cache restore"]
+#[ignore = "loads the reference Laguna XS artifact and proves same-process SSD prompt-cache restore"]
 fn should_restore_romeo_and_juliet_prompt_prefix_from_the_ssd_cache() {
-    if std::env::var(QUALIFICATION_CHILD_MODEL_ID).as_deref() == Ok(LAGUNA_XS.model_id) {
-        restore_from_pinned_artifact();
+    if std::env::var(QUALIFICATION_CHILD_MODEL_ID).as_deref() == Ok(LAGUNA_XS_PUBLIC_MODEL_ID) {
+        restore_from_reference_artifact();
         return;
     }
-    eprintln!(
-        "[laguna-restore] starting GPU restore journey model={} revision={}",
-        LAGUNA_XS.model_id, LAGUNA_XS.revision
-    );
+    eprintln!("[laguna-restore] starting GPU restore journey model={LAGUNA_XS_PUBLIC_MODEL_ID}");
     let test_executable =
         std::env::current_exe().expect("the qualification test executable path should resolve");
     let mut child_process = Command::new(test_executable)
@@ -48,7 +43,7 @@ fn should_restore_romeo_and_juliet_prompt_prefix_from_the_ssd_cache() {
             "--test-threads",
             "1",
         ])
-        .env(QUALIFICATION_CHILD_MODEL_ID, LAGUNA_XS.model_id)
+        .env(QUALIFICATION_CHILD_MODEL_ID, LAGUNA_XS_PUBLIC_MODEL_ID)
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -63,10 +58,9 @@ fn should_restore_romeo_and_juliet_prompt_prefix_from_the_ssd_cache() {
         {
             assert!(
                 exit_status.success(),
-                "isolated Laguna restore journey failed for {}",
-                LAGUNA_XS.model_id
+                "isolated Laguna restore journey failed for {LAGUNA_XS_PUBLIC_MODEL_ID}"
             );
-            eprintln!("[laguna-restore] completed model={}", LAGUNA_XS.model_id);
+            eprintln!("[laguna-restore] completed model={LAGUNA_XS_PUBLIC_MODEL_ID}");
             return;
         }
         let elapsed_time = start_time.elapsed();
@@ -74,15 +68,13 @@ fn should_restore_romeo_and_juliet_prompt_prefix_from_the_ssd_cache() {
             let _kill_outcome = child_process.kill();
             let _wait_outcome = child_process.wait();
             panic!(
-                "Laguna restore journey exceeded {} seconds for {}",
+                "Laguna restore journey exceeded {} seconds for {LAGUNA_XS_PUBLIC_MODEL_ID}",
                 QUALIFICATION_TIMEOUT.as_secs(),
-                LAGUNA_XS.model_id
             );
         }
         if elapsed_time >= next_progress_time {
             eprintln!(
-                "[laguna-restore] loading model={} elapsed_seconds={}",
-                LAGUNA_XS.model_id,
+                "[laguna-restore] loading model={LAGUNA_XS_PUBLIC_MODEL_ID} elapsed_seconds={}",
                 elapsed_time.as_secs()
             );
             next_progress_time += QUALIFICATION_PROGRESS_INTERVAL;
@@ -91,8 +83,8 @@ fn should_restore_romeo_and_juliet_prompt_prefix_from_the_ssd_cache() {
     }
 }
 
-fn restore_from_pinned_artifact() {
-    let model_directory = resolve_pinned_artifact_directory(LAGUNA_XS);
+fn restore_from_reference_artifact() {
+    let model_directory = resolve_reference_model_directory();
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
         resolve_machine_mlx_memory_limits();
     let prompt_cache_home =
@@ -116,8 +108,7 @@ fn restore_from_pinned_artifact() {
         performance_attribution_log_path: None,
     };
     eprintln!(
-        "[laguna-restore] phase=load model={} cache_root={}",
-        LAGUNA_XS.model_id,
+        "[laguna-restore] phase=load model={LAGUNA_XS_PUBLIC_MODEL_ID} cache_root={}",
         prompt_cache_home.path().display()
     );
     let load_started_at = Instant::now();
@@ -185,7 +176,7 @@ fn generate_once(
     let source_excerpt = bounded_romeo_and_juliet_source();
     let chat_command = ChatGenerationCommand {
         request_id,
-        model: LAGUNA_XS.public_model_id().to_owned(),
+        model: LAGUNA_XS_PUBLIC_MODEL_ID.to_owned(),
         messages: vec![ChatMessage::User {
             content: format!(
                 "Use the supplied Romeo and Juliet source as the only evidence. In two short sentences name the two households and the tragic ending.\n\n{source_excerpt}"
