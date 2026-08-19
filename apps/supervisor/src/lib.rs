@@ -31,6 +31,8 @@ mod worker_completion_event;
 mod worker_containment;
 mod worker_control_error;
 mod worker_event_handler;
+mod worker_generate;
+mod worker_generation_output;
 mod worker_generation_preparation;
 mod worker_handle;
 mod worker_health;
