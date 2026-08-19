@@ -111,6 +111,16 @@ parse_arguments() {
     done
 }
 
+start_idle_lock_prevention() {
+    [ "$SHOULD_PUBLISH" = "false" ] || return 0
+    require_command caffeinate
+    # The default notarytool profile lives in the Data Protection Keychain, so
+    # tie the assertion to this process instead of trusting a bypassable marker.
+    caffeinate -dimsu -w "$$" &
+    printf '%s step=prevent-idle-lock status=enabled target_pid=%s\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$$"
+}
+
 validate_release_identity() {
     repository_root="$1"
     [ -n "$RELEASE_TAG" ] || { print_error "--tag is required"; exit 2; }
@@ -185,7 +195,7 @@ validate_distribution_credentials() {
         "Developer ID Application:"*) ;;
         *) print_error "configured identity must be a Developer ID Application identity"; exit 1 ;;
     esac
-    xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null
+    validate_notary_profile_access
     for helper_script in \
         create-dmg.sh \
         notarize-dmg.sh \
@@ -197,6 +207,14 @@ validate_distribution_credentials() {
             exit 1
         }
     done
+}
+
+validate_notary_profile_access() {
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+        return 0
+    fi
+    print_error "notarization profile is inaccessible. Unlock this Mac and retry; if access still fails, verify the configured notarytool profile."
+    exit 1
 }
 
 locate_sparkle_appcast_tool() {
@@ -243,6 +261,10 @@ prepare_release() {
     start_step "create-drag-to-applications-dmg"
     "${repository_root}/scripts/release/create-dmg.sh" \
         --app-bundle "$stable_app_bundle" --output "$release_dmg"
+    finish_step
+
+    start_step "verify-notary-profile-access"
+    validate_notary_profile_access
     finish_step
 
     start_step "notarize-and-staple-dmg"
@@ -464,6 +486,7 @@ publish_release() {
 
 main() {
     parse_arguments "$@"
+    start_idle_lock_prevention
     for command_name in cargo cat git grep install jq mktemp plutil shasum stat xmllint; do require_command "$command_name"; done
     if [ "$SHOULD_PUBLISH" = "true" ]; then require_command gh; fi
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
