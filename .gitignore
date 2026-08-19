@@ -12,7 +12,8 @@
 *~
 
 # Agent harness local state
-.opencode/
+.opencode/*
+!.opencode/command/
 AGENTS.override.md
 
 # Local UI screenshot captures
