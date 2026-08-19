@@ -68,9 +68,9 @@ export RUSTC_WRAPPER=sccache
 
 printf '%s\n' "[commit-verification] compiler_cache=${RUSTC_WRAPPER} build_jobs=${CARGO_BUILD_JOBS} test_threads=${logical_cpu_count}"
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
-    printf '%s\n' "[commit-verification] included_tests=hermetic excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,channel_isolation_contract,macos_app_validation_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
 else
-    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,ci_native_cache_coordination,commit_release_isolation excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
 fi
 printf '%s\n' "[commit-verification] sccache stats before verification:"
 sccache --show-stats
@@ -113,6 +113,11 @@ printf '\n%s\n' "[commit-verification] step=test-channel-isolation-checker timeo
 channel_isolation_checker_started_at_seconds="$(date +%s)"
 "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-channel-isolation-checker-contract.sh
 printf '%s\n' "[commit-verification] PASSED step=test-channel-isolation-checker elapsed_seconds=$(( $(date +%s) - channel_isolation_checker_started_at_seconds ))"
+
+printf '\n%s\n' "[commit-verification] step=test-macos-app-validation-contract timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+macos_app_validation_contract_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-validate-macos-app-contract.sh
+printf '%s\n' "[commit-verification] PASSED step=test-macos-app-validation-contract elapsed_seconds=$(( $(date +%s) - macos_app_validation_contract_started_at_seconds ))"
 
 printf '\n%s\n' "[commit-verification] step=test-channel-isolation timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
 channel_isolation_started_at_seconds="$(date +%s)"
