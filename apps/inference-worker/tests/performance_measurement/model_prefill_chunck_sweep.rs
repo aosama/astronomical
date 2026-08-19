@@ -116,13 +116,21 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
         })
         .await
         .expect("the benchmark should select its configured model");
-    let model_loaded_event = protocol_reader
-        .next_event()
-        .await
-        .expect("the worker event stream should remain readable")
-        .expect("the worker should report model loading before closing");
-    let WorkerEvent::ModelSwapped { model_id, .. } = model_loaded_event else {
-        panic!("the worker should load the benchmark model, got {model_loaded_event:?}");
+    // Idle startup can leave its process-scoped configuration event queued;
+    // model-swap acknowledgement remains the boundary that permits generation.
+    let model_id = loop {
+        let model_loaded_event = protocol_reader
+            .next_event()
+            .await
+            .expect("the worker event stream should remain readable")
+            .expect("the worker should report model loading before closing");
+        match model_loaded_event {
+            WorkerEvent::ModelSwapped { model_id, .. } => break model_id,
+            WorkerEvent::RuntimeFeatureConfigurationApplied { .. } => {}
+            unexpected_event => {
+                panic!("the worker should load the benchmark model, got {unexpected_event:?}");
+            }
+        }
     };
     eprintln!("[prefill-chunck-sweep-{prefill_chunck_tokens}] worker ready: {model_id}");
 

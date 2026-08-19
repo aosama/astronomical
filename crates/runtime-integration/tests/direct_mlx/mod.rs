@@ -2,6 +2,7 @@ mod activation_operations;
 mod array_operations;
 mod attention_benchmark;
 mod compiled_elementwise_graphs;
+mod compiled_elementwise_shape_polymorphism;
 mod compiled_swiglu;
 mod metal_kernel;
 mod mlx_runtime;
