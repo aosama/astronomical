@@ -54,6 +54,14 @@ SECURITY
 #!/usr/bin/env sh
 [ "${1:-} ${2:-}" = "notarytool history" ]
 XCRUN
+    cat > "${fake_command_directory}/caffeinate" <<'CAFFEINATE'
+#!/usr/bin/env sh
+[ "${1:-}" = "-dimsu" ] && [ "${2:-}" = "-w" ] && [ -n "${3:-}" ] || exit 1
+kill -0 "$3" 2>/dev/null || exit 1
+if [ -n "${FAKE_CAFFEINATE_LOG:-}" ]; then
+    printf '%s\n' "$*" >> "$FAKE_CAFFEINATE_LOG"
+fi
+CAFFEINATE
     cat > "${fake_command_directory}/xmllint" <<'XMLLINT'
 #!/usr/bin/env sh
 exit 0
@@ -203,7 +211,8 @@ run_prepare_case() {
     printf '%s\n' '[release-publisher-test] case=prepare-without-github-mutation status=start'
     (
         CDPATH='' cd -- "$sandbox_repository"
-        PATH="${case_directory}/fake-bin:${PATH}" \
+        FAKE_CAFFEINATE_LOG="${case_directory}/caffeinate.log" \
+            PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" \
             scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 \
@@ -217,9 +226,52 @@ run_prepare_case() {
     [ -s "${sandbox_repository}/prepared-release/appcast.xml" ]
     [ -s "${sandbox_repository}/prepared-release/release-manifest.json" ]
     [ -s "${sandbox_repository}/prepared-release/Astronomical-0.2.1-macOS-arm64.md" ]
+    [ "$(wc -l < "${case_directory}/caffeinate.log" | tr -d '[:space:]')" = "1" ] || {
+        print_error "release preparation was not protected by exactly one caffeinate process"
+        exit 1
+    }
+    grep -E '^-dimsu -w [1-9][0-9]*$' "${case_directory}/caffeinate.log" >/dev/null || {
+        print_error "release preparation did not bind caffeinate to its process lifetime"
+        exit 1
+    }
     [ ! -e "${sandbox_repository}/site/appcast.xml" ]
     [ ! -e "${case_directory}/gh.log" ]
     printf '%s\n' '[release-publisher-test] case=prepare-without-github-mutation status=success'
+}
+
+run_locked_keychain_diagnostic_case() {
+    repository_root="$1"
+    case_directory="$(create_case_sandbox "$repository_root" locked-keychain)"
+    sandbox_repository="${case_directory}/repository"
+    cat > "${case_directory}/fake-bin/xcrun" <<'XCRUN'
+#!/usr/bin/env sh
+printf '%s\n' 'Error: No Keychain password item found for profile' >&2
+exit 1
+XCRUN
+    chmod +x "${case_directory}/fake-bin/xcrun"
+
+    printf '%s\n' '[release-publisher-test] case=locked-keychain-is-actionable status=start'
+    if (
+        CDPATH='' cd -- "$sandbox_repository"
+        FAKE_CAFFEINATE_LOG="${case_directory}/caffeinate.log" \
+            PATH="${case_directory}/fake-bin:${PATH}" \
+            timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
+            --tag v0.2.1 --notes-file "${sandbox_repository}/release-notes.md" \
+            --output-directory "${sandbox_repository}/locked-keychain-release" \
+            --signing-identity "Developer ID Application: Example (ABCDE12345)" \
+            --team-id ABCDE12345 --notary-profile "Fixture Notarization" \
+            2> "${case_directory}/error.log"
+    ); then
+        print_error "release preparation accepted an inaccessible notary profile"
+        exit 1
+    fi
+    grep -F 'Unlock this Mac and retry' "${case_directory}/error.log" >/dev/null || {
+        print_error "locked Keychain failure did not provide an actionable diagnostic"
+        exit 1
+    }
+    [ ! -e "${sandbox_repository}/locked-keychain-release" ]
+    [ ! -e "${case_directory}/gh.log" ]
+    printf '%s\n' '[release-publisher-test] case=locked-keychain-is-actionable status=success'
 }
 
 run_publish_case() {
@@ -229,7 +281,8 @@ run_publish_case() {
     printf '%s\n' '[release-publisher-test] case=publish-asset-before-staging-feed status=start'
     (
         CDPATH='' cd -- "$sandbox_repository"
-        PATH="${case_directory}/fake-bin:${PATH}" \
+        FAKE_CAFFEINATE_LOG="${case_directory}/caffeinate.log" \
+            PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" scripts/release/prepare-and-publish.sh \
             --tag v0.2.1 --notes-file "${sandbox_repository}/release-notes.md" \
             --output-directory "${sandbox_repository}/published-release" \
@@ -240,6 +293,7 @@ run_publish_case() {
         CDPATH='' cd -- "$sandbox_repository"
         FAKE_GH_LOG="${case_directory}/gh.log" \
         FAKE_GH_STATE="${case_directory}/gh.state" \
+        FAKE_CAFFEINATE_LOG="${case_directory}/caffeinate.log" \
         PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" \
             scripts/release/prepare-and-publish.sh \
@@ -259,6 +313,7 @@ run_publish_case() {
         CDPATH='' cd -- "$sandbox_repository"
         FAKE_GH_LOG="${case_directory}/gh.log" \
         FAKE_GH_STATE="${case_directory}/gh.state" \
+        FAKE_CAFFEINATE_LOG="${case_directory}/caffeinate.log" \
         PATH="${case_directory}/fake-bin:${PATH}" \
             timeout "$SUBJECT_TIMEOUT_SECONDS" \
             scripts/release/prepare-and-publish.sh \
@@ -272,6 +327,10 @@ run_publish_case() {
     }
     [ "$(grep -c -F 'release edit v0.2.1' "${case_directory}/gh.log")" = "1" ] || {
         print_error "resume unexpectedly republished the GitHub Release"
+        exit 1
+    }
+    [ "$(wc -l < "${case_directory}/caffeinate.log" | tr -d '[:space:]')" = "1" ] || {
+        print_error "publication unexpectedly started caffeinate"
         exit 1
     }
     printf '%s\n' '[release-publisher-test] case=publish-asset-before-staging-feed status=success'
@@ -442,6 +501,7 @@ main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-release-publisher.XXXXXX")"
     run_prepare_case "$repository_root"
+    run_locked_keychain_diagnostic_case "$repository_root"
     run_publish_case "$repository_root"
     run_interrupted_draft_recovery_case "$repository_root"
     run_prepared_artifact_tamper_case "$repository_root" appcast.xml tampered-appcast-is-rejected
