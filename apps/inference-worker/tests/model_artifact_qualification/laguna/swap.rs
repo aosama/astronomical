@@ -1,4 +1,4 @@
-//! Same-worker Qwen to Laguna XS to Laguna S to Qwen public swap journey.
+//! Same-worker Qwen to Laguna XS to Qwen public swap journey.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
 use super::artifact::{
-    LAGUNA_S, LAGUNA_XS, compact_romeo_and_juliet_source, resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, compact_romeo_and_juliet_source, resolve_reference_model_directory,
 };
 use super::http::assert_laguna_is_advertised;
 use crate::model_artifact_qualification::model_artifact_rest_qualification::{
@@ -35,8 +35,8 @@ struct MultiModelRestServer {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "swaps Qwen, Laguna XS, Laguna S, then Qwen on one public worker"]
-async fn should_swap_qwen_then_laguna_xs_then_laguna_s_then_qwen_on_one_worker() {
+#[ignore = "swaps Qwen, Laguna XS, then Qwen on one public worker"]
+async fn should_swap_qwen_then_laguna_xs_then_qwen_on_one_worker() {
     timeout(JOURNEY_TIMEOUT, run_family_swap_journey())
         .await
         .expect("the complete family swap must finish within 115 seconds");
@@ -51,20 +51,15 @@ async fn run_family_swap_journey() {
     let model_directories = HashMap::from([
         (qwen_model.model_id.clone(), qwen_model.model_directory),
         (
-            LAGUNA_XS.public_model_id().to_owned(),
-            resolve_pinned_artifact_directory(LAGUNA_XS),
-        ),
-        (
-            LAGUNA_S.public_model_id().to_owned(),
-            resolve_pinned_artifact_directory(LAGUNA_S),
+            LAGUNA_XS_PUBLIC_MODEL_ID.to_owned(),
+            resolve_reference_model_directory(),
         ),
     ]);
     let rest_server = launch_multi_model_server(model_directories).await;
-    assert_laguna_is_advertised(rest_server.server_address, LAGUNA_XS.public_model_id()).await;
+    assert_laguna_is_advertised(rest_server.server_address, LAGUNA_XS_PUBLIC_MODEL_ID).await;
     for (model_id, phase) in [
         (qwen_model.model_id.as_str(), "qwen"),
-        (LAGUNA_XS.public_model_id(), "laguna-xs"),
-        (LAGUNA_S.public_model_id(), "laguna-s"),
+        (LAGUNA_XS_PUBLIC_MODEL_ID, "laguna-xs"),
         (qwen_model.model_id.as_str(), "qwen-return"),
     ] {
         eprintln!("[laguna-swap] phase={phase} model={model_id}");

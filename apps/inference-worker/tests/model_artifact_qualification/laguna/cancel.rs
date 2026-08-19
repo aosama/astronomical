@@ -8,14 +8,14 @@ use astronomical_model_serving::{
 };
 
 use super::artifact::{
-    LAGUNA_XS, compact_romeo_and_juliet_source, resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, compact_romeo_and_juliet_source, resolve_reference_model_directory,
 };
 use super::generate::resolve_machine_mlx_memory_limits;
 
 #[test]
-#[ignore = "loads pinned Laguna XS and proves cancel leaves the engine reusable"]
+#[ignore = "loads reference Laguna XS and proves cancel leaves the engine reusable"]
 fn should_cancel_a_laguna_generate_and_remain_reusable() {
-    let model_directory = resolve_pinned_artifact_directory(LAGUNA_XS);
+    let model_directory = resolve_reference_model_directory();
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
         resolve_machine_mlx_memory_limits();
     let (generation_processor, mut execution) = initialize_laguna_execution(
@@ -28,7 +28,7 @@ fn should_cancel_a_laguna_generate_and_remain_reusable() {
     execution.load().expect("Laguna XS weights should load");
     let chat_command = ChatGenerationCommand {
         request_id: RequestId::new(106),
-        model: LAGUNA_XS.public_model_id().to_owned(),
+        model: LAGUNA_XS_PUBLIC_MODEL_ID.to_owned(),
         messages: vec![ChatMessage::User {
             content: format!(
                 "Use the supplied Romeo and Juliet source. Name the households.\n\n{}",

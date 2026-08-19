@@ -67,3 +67,5 @@
 ## Test Fixtures and Their Reuse for Performance And Correctness Tests
 
 - The fixture of Romeo and Juliet MUST be used and the source test input for LLMs, there should not be radnom text or tokens used for testing.
+
+- Assert model normalization and execution with structural validity checks derived from config (layer count matches, hidden size matches, shard count is positive, total bytes equals sum of shard sizes, affine profiles contain valid bits and group sizes, end tokens are present). Do not assert golden-master constants like exact byte counts, exact shard counts, or exact affine profile sets that couple tests to one specific quantization artifact — those change with every packaging variant and should not block swapping the reference model.

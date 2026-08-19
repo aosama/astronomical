@@ -14,7 +14,7 @@ use tokio::sync::oneshot;
 use tokio::time::{sleep, timeout};
 
 use super::artifact::{
-    LAGUNA_XS, compact_romeo_and_juliet_source, resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, compact_romeo_and_juliet_source, resolve_reference_model_directory,
 };
 use crate::model_artifact_qualification::model_artifact_rest_qualification::{
     assert_successful_streaming_chat_response, get_endpoint, post_chat_completion,
@@ -32,7 +32,7 @@ async fn should_return_model_load_failed_and_reuse_the_healthy_laguna_model() {
 }
 
 async fn run_malformed_swap_journey() {
-    let healthy_directory = resolve_pinned_artifact_directory(LAGUNA_XS);
+    let healthy_directory = resolve_reference_model_directory();
     let malformed_home = tempfile::tempdir().expect("a malformed fixture home should be created");
     let malformed_directory = malformed_home.path().join(MALFORMED_MODEL_ID);
     create_shallow_valid_deep_invalid_artifact(&healthy_directory, &malformed_directory);
@@ -102,7 +102,7 @@ async fn run_malformed_swap_journey() {
         sleep(Duration::from_secs(1)).await;
     }
 
-    let healthy_request = request_body(LAGUNA_XS.public_model_id());
+    let healthy_request = request_body(LAGUNA_XS_PUBLIC_MODEL_ID);
     let healthy_response = post_chat_completion(server_address, healthy_request.clone()).await;
     assert_successful_streaming_chat_response(&healthy_response);
     let malformed_response =
@@ -175,11 +175,11 @@ fn create_shallow_valid_deep_invalid_artifact(
         serde_json::to_vec(&config_document).expect("the malformed config should serialize"),
     )
     .expect("the malformed config should be written");
-    std::fs::write(
+    std::fs::copy(
+        healthy_directory.join(".cache/huggingface/download/config.json.metadata"),
         malformed_directory.join(".cache/huggingface/download/config.json.metadata"),
-        format!("{}\n", LAGUNA_XS.revision),
     )
-    .expect("the immutable revision metadata should be written");
+    .expect("the malformed fixture should retain the reference artifact revision");
 }
 
 fn write_two_model_config(home_directory: &Path, healthy: &Path, malformed: &Path) {
