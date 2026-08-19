@@ -1,14 +1,14 @@
-//! Public HTTP Chat and Responses acceptance journeys for pinned Laguna artifacts.
+//! Public HTTP Chat and Responses acceptance journeys for reference Laguna artifacts.
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use serde_json::json;
 use tokio::time::timeout;
 
 use super::artifact::{
-    LAGUNA_S, LAGUNA_XS, PinnedLagunaArtifact, compact_romeo_and_juliet_source,
-    resolve_pinned_artifact_directory,
+    LAGUNA_XS_PUBLIC_MODEL_ID, compact_romeo_and_juliet_source, resolve_reference_model_directory,
 };
 use crate::model_artifact_qualification::model_artifact_rest_qualification::{
     assert_successful_streaming_chat_response, assert_successful_streaming_responses_response,
@@ -19,42 +19,38 @@ use crate::model_artifact_qualification::model_artifact_rest_qualification::{
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "serves pinned Laguna XS through public Chat and Responses"]
+#[ignore = "serves reference Laguna XS through public Chat and Responses"]
 async fn should_stream_romeo_and_juliet_from_laguna_xs_chat_and_responses() {
-    timeout(JOURNEY_TIMEOUT, run_public_generation_journey(LAGUNA_XS))
-        .await
-        .expect("the Laguna XS public journey must finish within 115 seconds");
+    timeout(
+        JOURNEY_TIMEOUT,
+        run_public_generation_journey(
+            LAGUNA_XS_PUBLIC_MODEL_ID,
+            resolve_reference_model_directory(),
+        ),
+    )
+    .await
+    .expect("the Laguna XS public journey must finish within 115 seconds");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "serves pinned Laguna S through public Chat and Responses"]
-async fn should_stream_romeo_and_juliet_from_laguna_s_chat_and_responses() {
-    timeout(JOURNEY_TIMEOUT, run_public_generation_journey(LAGUNA_S))
-        .await
-        .expect("the Laguna S public journey must finish within 115 seconds");
-}
-
-async fn run_public_generation_journey(artifact: PinnedLagunaArtifact) {
-    let model_directory = resolve_pinned_artifact_directory(artifact);
-    let public_model_id = artifact.public_model_id();
+async fn run_public_generation_journey(model_id: &str, model_directory: PathBuf) {
     let isolated_development_home = crate::common::isolated_development_home_from_user_config();
-    eprintln!("[laguna-http] phase=launch model={public_model_id}");
+    eprintln!("[laguna-http] phase=launch model={model_id}");
     let rest_server = launch_model_artifact_rest_server_for_model(
-        public_model_id,
+        model_id,
         model_directory,
         Some(isolated_development_home.path()),
         None,
     )
     .await;
     let server_address = rest_server.server_address;
-    assert_laguna_is_advertised(server_address, public_model_id).await;
+    assert_laguna_is_advertised(server_address, model_id).await;
     let source_excerpt = compact_romeo_and_juliet_source();
 
-    eprintln!("[laguna-http] phase=chat model={public_model_id}");
+    eprintln!("[laguna-http] phase=chat model={model_id}");
     let chat_response = post_chat_completion(
         server_address,
         json!({
-            "model": public_model_id,
+            "model": model_id,
             "messages": [{
                 "role": "user",
                 "content": format!("Use the supplied Romeo and Juliet source. Name the two households.\n\n{source_excerpt}"),
@@ -68,11 +64,11 @@ async fn run_public_generation_journey(artifact: PinnedLagunaArtifact) {
     .await;
     assert_successful_streaming_chat_response(&chat_response);
 
-    eprintln!("[laguna-http] phase=responses model={public_model_id}");
+    eprintln!("[laguna-http] phase=responses model={model_id}");
     let responses_response = post_responses_completion(
         server_address,
         json!({
-            "model": public_model_id,
+            "model": model_id,
             "input": format!("Use the supplied Romeo and Juliet source. Name the two households.\n\n{source_excerpt}"),
             "stream": true,
             "max_output_tokens": 4,
@@ -81,9 +77,9 @@ async fn run_public_generation_journey(artifact: PinnedLagunaArtifact) {
     )
     .await;
     assert_successful_streaming_responses_response(&responses_response);
-    assert_laguna_is_advertised(server_address, public_model_id).await;
+    assert_laguna_is_advertised(server_address, model_id).await;
     stop_model_artifact_rest_server(rest_server).await;
-    eprintln!("[laguna-http] phase=done model={public_model_id}");
+    eprintln!("[laguna-http] phase=done model={model_id}");
 }
 
 pub(super) fn opencode_shaped_chat_request_body(

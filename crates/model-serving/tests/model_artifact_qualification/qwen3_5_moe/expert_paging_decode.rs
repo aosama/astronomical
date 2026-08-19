@@ -145,7 +145,7 @@ pub(crate) async fn load_paged_qwen3_5_model_for_decode_probe(
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the pinned Ornith artifact should validate before 30-token paged decode");
+        .expect("the Ornith artifact should validate before 30-token paged decode");
     let config = validated_artifact.config().clone();
     eprintln!(
         "{log_prefix} status=progress phase=artifact_validated shards={} payload_bytes={}",

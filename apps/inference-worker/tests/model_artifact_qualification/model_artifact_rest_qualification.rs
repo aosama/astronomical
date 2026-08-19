@@ -50,7 +50,7 @@ async fn should_keep_the_deployed_rest_surface_healthy_across_model_artifact_pro
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the complete local 22 GB model through MLX"]
+#[ignore = "loads the complete local Ornith model through MLX"]
 async fn should_stream_model_artifact_output_through_the_openai_endpoint() {
     timeout(
         E2E_TIMEOUT,
@@ -61,7 +61,7 @@ async fn should_stream_model_artifact_output_through_the_openai_endpoint() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the complete local 22 GB model and runs one image prompt through MLX"]
+#[ignore = "loads the complete local Ornith model and runs one image prompt through MLX"]
 async fn should_stream_model_artifact_image_output_through_the_openai_endpoint() {
     timeout(
         E2E_TIMEOUT,
@@ -79,7 +79,7 @@ async fn run_model_artifact_request_e2e(request_kind: &str, request_body: String
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the complete local 22 GB model and checks semantic image recognition"]
+#[ignore = "loads the complete local Ornith model and checks semantic image recognition"]
 async fn should_semantically_identify_the_synthetic_red_fixture_through_the_openai_endpoint() {
     let chat_response = timeout(
         E2E_TIMEOUT,

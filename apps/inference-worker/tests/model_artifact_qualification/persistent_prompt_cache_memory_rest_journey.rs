@@ -7,9 +7,9 @@ use super::model_artifact_rest_qualification::{
     stop_model_artifact_rest_server,
 };
 use super::persistent_prompt_cache_rest_support::{
-    MAXIMUM_OUTPUT_TOKEN_COUNT, PINNED_MODEL_ID, THINKING_BUDGET_TOKEN_COUNT, get_json_endpoint,
-    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
-    send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
+    CACHE_PRESSURE_MODEL_ID, MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT,
+    get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt, read_performance_records,
+    required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
 };
 
 // This suite is the user-facing acceptance boundary for cache-pressure behavior: a client sends
@@ -25,7 +25,7 @@ const RESIDENT_RESTORE_PRESSURE_THINKING_BUDGET_TOKEN_COUNT: u16 = 8;
 macro_rules! persistent_prompt_cache_memory_rest_qualification {
     ($test_name:ident, $maximum_mlx_memory_bytes:expr, $expected_expert_memory_mode:expr) => {
         #[tokio::test(flavor = "multi_thread")]
-        #[ignore = "launches the production REST server and pinned model for a cold-and-warm 10K Romeo and Juliet cache journey"]
+        #[ignore = "launches the production REST server and reference model for a cold-and-warm 10K Romeo and Juliet cache journey"]
         async fn $test_name() {
             // Every memory cell owns a real model process and GPU. Keep its deadline inside the
             // test so an interrupted external runner cannot leave unbounded qualification work.
@@ -47,37 +47,37 @@ macro_rules! persistent_prompt_cache_memory_rest_qualification {
 }
 
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_pinned_romeo_and_juliet_cache_at_eleven_gb_through_rest,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_eleven_gb_through_rest,
     11_000_000_000,
     Some("paged")
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_pinned_romeo_and_juliet_cache_at_eleven_point_five_gb_through_rest,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_eleven_point_five_gb_through_rest,
     11_500_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_pinned_romeo_and_juliet_cache_at_twelve_gb_through_rest,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_twelve_gb_through_rest,
     12_000_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_pinned_romeo_and_juliet_cache_at_twelve_point_five_gb_through_rest,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_twelve_point_five_gb_through_rest,
     12_500_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_pinned_romeo_and_juliet_cache_at_thirteen_gb_through_rest,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirteen_gb_through_rest,
     13_000_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_pinned_romeo_and_juliet_cache_at_thirteen_point_five_gb_through_rest,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirteen_point_five_gb_through_rest,
     13_500_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_pinned_romeo_and_juliet_cache_at_fourteen_gb_through_rest,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_fourteen_gb_through_rest,
     14_000_000_000,
     Some("resident")
 );
@@ -113,7 +113,8 @@ async fn run_persistent_prompt_cache_memory_rest_journey(
         "[persistent-prompt-cache-rest:{}gb]",
         maximum_mlx_memory_bytes as f64 / 1_000_000_000.0
     );
-    let model_directory = crate::common::configured_model_artifact_directory_by_id(PINNED_MODEL_ID);
+    let model_directory =
+        crate::common::configured_model_artifact_directory_by_id(CACHE_PRESSURE_MODEL_ID);
     let configured_worker_home = tempfile::tempdir()
         .expect("the cache-pressure REST journey should create an isolated home");
     let performance_log_directory = tempfile::tempdir()
@@ -129,7 +130,7 @@ async fn run_persistent_prompt_cache_memory_rest_journey(
     let prepared_romeo_and_juliet_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, cacheable_prompt_token_count);
     let model_artifact_rest_server = launch_model_artifact_rest_server_for_model_with_memory_limit(
-        PINNED_MODEL_ID,
+        CACHE_PRESSURE_MODEL_ID,
         model_directory,
         Some(configured_worker_home.path()),
         Some(performance_log_directory.path()),
