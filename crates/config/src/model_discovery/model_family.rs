@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::{deepseek_v4, laguna, qwen3_5};
+use super::{deepseek_v4, flux2_klein, laguna, qwen3_5};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
+const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
 
 /// Closed model-family classification used at discovery and worker startup.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,6 +15,7 @@ pub enum ModelFamily {
     Qwen3_5,
     Laguna,
     DeepSeekV4,
+    Flux2Klein,
 }
 
 impl ModelFamily {
@@ -54,12 +56,34 @@ pub enum ModelFamilyClassificationError {
         actual_bytes: u64,
         maximum_bytes: u64,
     },
+    #[error("failed to read model model_index.json: {source}")]
+    ReadPipelineIndex {
+        model_directory: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to parse model model_index.json: {source}")]
+    ParsePipelineIndex {
+        model_directory: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error(
+        "model model_index.json has {actual_bytes} bytes, exceeding the {maximum_bytes}-byte classification limit"
+    )]
+    PipelineIndexTooLarge {
+        actual_bytes: u64,
+        maximum_bytes: u64,
+    },
 }
 
 /// Reads only model_type from a selected artifact directory.
 pub fn classify_model_directory(
     model_directory: &Path,
 ) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
+    if model_directory.join("model_index.json").is_file() {
+        return classify_pipeline_directory(model_directory);
+    }
     let config_path = model_directory.join("config.json");
     let config_file = std::fs::File::open(&config_path).map_err(|source| {
         ModelFamilyClassificationError::ReadConfig {
@@ -102,6 +126,53 @@ pub fn classify_model_directory(
     Ok(ModelFamily::from_model_type(
         config_document.model_type.as_deref(),
     ))
+}
+
+fn classify_pipeline_directory(
+    model_directory: &Path,
+) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
+    let pipeline_index_path = model_directory.join("model_index.json");
+    let pipeline_index_file = std::fs::File::open(&pipeline_index_path).map_err(|source| {
+        ModelFamilyClassificationError::ReadPipelineIndex {
+            model_directory: model_directory.to_path_buf(),
+            source,
+        }
+    })?;
+    let pipeline_index_size_bytes = pipeline_index_file
+        .metadata()
+        .map_err(|source| ModelFamilyClassificationError::ReadPipelineIndex {
+            model_directory: model_directory.to_path_buf(),
+            source,
+        })?
+        .len();
+    if pipeline_index_size_bytes > MAXIMUM_PIPELINE_INDEX_BYTES {
+        return Err(ModelFamilyClassificationError::PipelineIndexTooLarge {
+            actual_bytes: pipeline_index_size_bytes,
+            maximum_bytes: MAXIMUM_PIPELINE_INDEX_BYTES,
+        });
+    }
+    let mut pipeline_index_bytes = Vec::new();
+    pipeline_index_file
+        .take(MAXIMUM_PIPELINE_INDEX_BYTES + 1)
+        .read_to_end(&mut pipeline_index_bytes)
+        .map_err(|source| ModelFamilyClassificationError::ReadPipelineIndex {
+            model_directory: model_directory.to_path_buf(),
+            source,
+        })?;
+    if pipeline_index_bytes.len() as u64 > MAXIMUM_PIPELINE_INDEX_BYTES {
+        return Err(ModelFamilyClassificationError::PipelineIndexTooLarge {
+            actual_bytes: pipeline_index_bytes.len() as u64,
+            maximum_bytes: MAXIMUM_PIPELINE_INDEX_BYTES,
+        });
+    }
+    let is_flux2_klein =
+        flux2_klein::classifies_pipeline_index(&pipeline_index_bytes).map_err(|source| {
+            ModelFamilyClassificationError::ParsePipelineIndex {
+                model_directory: model_directory.to_path_buf(),
+                source,
+            }
+        })?;
+    Ok(is_flux2_klein.then_some(ModelFamily::Flux2Klein))
 }
 
 /// Minimal duplicate-aware projection keeps family dispatch independent from full config shape.

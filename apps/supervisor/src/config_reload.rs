@@ -11,20 +11,13 @@ use std::sync::Arc;
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
     AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError, LogLevel, LoggingConfig,
-    PromptCacheConfig, ResolvedModelConfig, discover_models,
+    ModelCapabilities, PromptCacheConfig, ResolvedModelConfig, discover_models,
 };
-use astronomical_ipc_protocol::{
-    WorkerLogLevel, WorkerModelConfiguration, WorkerSpeculativePrefillConfiguration,
-    WorkerStartupConfiguration,
-};
+use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
 use thiserror::Error;
 
-use crate::runtime_model_policy::{
-    runtime_model_generation_defaults, worker_chunking_configuration,
-};
-use crate::{
-    ConfiguredSpeculativePrefillPolicy, RuntimeModelAccelerationAvailability, RuntimeModelPolicy,
-};
+use crate::RuntimeModelPolicy;
+use crate::resolved_model_policy_catalog::ResolvedModelPolicyCatalog;
 
 /// Immutable snapshot of every resolved runtime value the supervisor needs
 /// to decide whether a config reload requires a worker restart, a full REST
@@ -131,7 +124,12 @@ impl ResolvedRuntimeConfigResolver {
             .collect::<std::collections::HashSet<_>>();
         let artifact_context_windows = discovered_models
             .iter()
-            .map(|model| (model.model_id.clone(), model.context_window))
+            .filter_map(|model| match &model.capabilities {
+                ModelCapabilities::Chat(capabilities) => {
+                    Some((model.model_id.clone(), capabilities.context_window))
+                }
+                ModelCapabilities::ImageGeneration(_) => None,
+            })
             .collect::<HashMap<_, _>>();
         let unmatched_model_config_ids = user_config
             .configured_model_ids()
@@ -140,57 +138,19 @@ impl ResolvedRuntimeConfigResolver {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         for discovered_model in &mut discovered_models {
-            let resolved_model_config = user_config.resolved_model_config(
-                &discovered_model.model_id,
-                discovered_model.context_window,
-            )?;
-            apply_effective_model_limits(discovered_model, &resolved_model_config);
+            if let ModelCapabilities::Chat(capabilities) = &discovered_model.capabilities {
+                let resolved_model_config = user_config.resolved_model_config(
+                    &discovered_model.model_id,
+                    capabilities.context_window,
+                )?;
+                apply_effective_model_limits(discovered_model, &resolved_model_config);
+            }
         }
-        let discovered_model_directories = discovered_models
-            .iter()
-            .map(|discovered_model| {
-                (
-                    discovered_model.model_id.clone(),
-                    discovered_model.model_directory.clone(),
-                )
-            })
-            .collect::<HashMap<_, _>>();
-        let model_policy_catalog = Arc::new(
-            discovered_models
-                .iter()
-                .map(|discovered_model| {
-                    let resolved_model_config = user_config.resolved_model_config(
-                        &discovered_model.model_id,
-                        discovered_model.context_window,
-                    )?;
-                    let (worker_model_configuration, acceleration_availability) =
-                        worker_model_configuration(
-                            discovered_model,
-                            &resolved_model_config,
-                            &discovered_model_directories,
-                        );
-                    Ok((
-                        discovered_model.model_id.clone(),
-                        RuntimeModelPolicy {
-                            model_directory: discovered_model.model_directory.clone(),
-                            generation_defaults: runtime_model_generation_defaults(
-                                &resolved_model_config,
-                            ),
-                            configured_maximum_context_tokens: resolved_model_config
-                                .maximum_context_tokens(),
-                            default_maximum_context_tokens: artifact_context_windows
-                                .get(&discovered_model.model_id)
-                                .copied()
-                                .unwrap_or(discovered_model.context_window),
-                            configured_chunking_fields: resolved_model_config
-                                .configured_chunking_fields(),
-                            acceleration_availability,
-                            worker_model_configuration,
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<_, _>, AstronomicalConfigError>>()?,
-        );
+        let model_policy_catalog = ResolvedModelPolicyCatalog::resolve(
+            user_config,
+            &discovered_models,
+            &artifact_context_windows,
+        )?;
         let prompt_cache_config = user_config.prompt_cache()?;
         let logging_config = user_config.logging()?;
         let configuration_generation = crate::ResolvedConfigurationGeneration::derive(
@@ -407,102 +367,19 @@ impl ConfigReloadDiff {
     }
 }
 
-fn worker_speculative_prefill_configuration(
-    speculative_prefill_config: &astronomical_config::SpeculativePrefillConfig,
-    draft_model_directory: PathBuf,
-) -> WorkerSpeculativePrefillConfiguration {
-    WorkerSpeculativePrefillConfiguration {
-        enabled: speculative_prefill_config.is_enabled(),
-        target_model_id: speculative_prefill_config
-            .target_model_id()
-            .map(str::to_owned),
-        draft_model_id: speculative_prefill_config
-            .draft_model_id()
-            .map(str::to_owned),
-        draft_model_directory: Some(draft_model_directory),
-        minimum_prompt_tokens: speculative_prefill_config.minimum_prompt_tokens(),
-        keep_percentage: speculative_prefill_config.keep_percentage(),
-        selection_chunck_token_count: speculative_prefill_config.selection_chunck_token_count(),
-        mandatory_trailing_token_count: speculative_prefill_config.mandatory_trailing_token_count(),
-        lookahead_token_count: speculative_prefill_config.lookahead_token_count(),
-        importance_pooling_kernel_token_count: speculative_prefill_config
-            .importance_pooling_kernel_token_count(),
-    }
-}
-
 fn apply_effective_model_limits(
     discovered_model: &mut DiscoveredModel,
     resolved_model_config: &ResolvedModelConfig,
 ) {
+    let ModelCapabilities::Chat(capabilities) = &mut discovered_model.capabilities else {
+        return;
+    };
     let effective_maximum_context_tokens = resolved_model_config
         .maximum_context_tokens()
-        .unwrap_or(discovered_model.context_window);
-    discovered_model.context_window = effective_maximum_context_tokens;
+        .unwrap_or(capabilities.context_window);
+    capabilities.context_window = effective_maximum_context_tokens;
     // Input and output are independent maxima; request admission enforces their combined context.
-    discovered_model.max_input_tokens = effective_maximum_context_tokens.saturating_sub(1);
-    discovered_model.max_output_tokens =
+    capabilities.max_input_tokens = effective_maximum_context_tokens.saturating_sub(1);
+    capabilities.max_output_tokens =
         u32::from(u16::MAX).min(effective_maximum_context_tokens.saturating_sub(1));
-}
-
-fn worker_model_configuration(
-    discovered_model: &DiscoveredModel,
-    resolved_model_config: &ResolvedModelConfig,
-    discovered_model_directories: &HashMap<String, PathBuf>,
-) -> (
-    WorkerModelConfiguration,
-    RuntimeModelAccelerationAvailability,
-) {
-    let configured_speculative_prefill = resolved_model_config.speculative_prefill();
-    let speculative_prefill =
-        configured_speculative_prefill.and_then(|speculative_prefill_config| {
-            let draft_model_id = speculative_prefill_config
-                .draft_model_id()
-                .unwrap_or_default();
-            discovered_model_directories
-                .get(draft_model_id)
-                .cloned()
-                .map(|draft_model_directory| {
-                    worker_speculative_prefill_configuration(
-                        speculative_prefill_config,
-                        draft_model_directory,
-                    )
-                })
-        });
-    let configured_mtp_head_model_id = resolved_model_config
-        .mtp()
-        .head_model_id()
-        .map(str::to_owned);
-    let acceleration_availability = RuntimeModelAccelerationAvailability {
-        configured_speculative_prefill: configured_speculative_prefill.map(|configuration| {
-            ConfiguredSpeculativePrefillPolicy {
-                draft_model_id: configuration.draft_model_id().unwrap_or_default().to_owned(),
-                keep_percentage: configuration.keep_percentage(),
-                minimum_prompt_tokens: configuration.minimum_prompt_tokens(),
-            }
-        }),
-        speculative_prefill_unavailable_reason: configured_speculative_prefill
-            .filter(|_| speculative_prefill.is_none())
-            .map(|_| "configured speculative-prefill drafter is not currently discovered".to_owned()),
-        configured_mtp_head_model_id: configured_mtp_head_model_id.clone(),
-        // Issue #132 owns standalone-head normalization and compatibility. Until that
-        // execution contract exists, retaining intent as unavailable is safer than
-        // passing an unbound path to the worker or making the target model unloadable.
-        mtp_head_unavailable_reason: configured_mtp_head_model_id.as_ref().map(|_| {
-            "standalone MTP head execution is not available until compatibility validation is implemented"
-                .to_owned()
-        }),
-    };
-    (
-        WorkerModelConfiguration {
-            model_id: discovered_model.model_id.clone(),
-            maximum_context_tokens: discovered_model.context_window,
-            // The worker receives capability, never the request default.
-            maximum_output_tokens: discovered_model.max_output_tokens,
-            chunking: worker_chunking_configuration(resolved_model_config.chunking()),
-            mtp_draft_depth: resolved_model_config.mtp().draft_depth(),
-            mtp_head_model: None,
-            speculative_prefill,
-        },
-        acceleration_availability,
-    )
 }

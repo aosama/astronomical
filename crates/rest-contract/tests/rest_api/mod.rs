@@ -1,5 +1,6 @@
 mod openai_chat_completion_request;
 mod openai_chat_completion_response;
+mod openai_image_generation;
 mod openai_models_and_errors;
 mod openai_responses_request;
 mod openai_responses_response;

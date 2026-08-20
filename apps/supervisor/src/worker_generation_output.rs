@@ -21,7 +21,7 @@ use crate::{
 pub(super) fn handle_worker_output(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_request: &mut ActiveGeneration,
 ) -> Result<(), WorkerControlError> {
     let WorkerEvent::Output {
         request_id,
@@ -35,9 +35,6 @@ pub(super) fn handle_worker_output(
             "handle_worker_output received a non-Output event",
         ));
     };
-    let active_request = active_generation
-        .as_mut()
-        .ok_or_else(|| protocol_violation("output without an active request"))?;
     let latest_known_generated_token_count = active_request
         .generated_token_count
         .max(active_request.latest_generation_progress_token_count);
@@ -124,7 +121,7 @@ pub(super) fn handle_worker_output(
 pub(super) fn handle_worker_generation_progress(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_request: &mut ActiveGeneration,
 ) -> Result<(), WorkerControlError> {
     let WorkerEvent::GenerationProgress {
         request_id,
@@ -138,9 +135,6 @@ pub(super) fn handle_worker_generation_progress(
             "handle_worker_generation_progress received a non-GenerationProgress event",
         ));
     };
-    let active_request = active_generation
-        .as_mut()
-        .ok_or_else(|| protocol_violation("generation progress without an active request"))?;
     let latest_known_generated_token_count = active_request
         .generated_token_count
         .max(active_request.latest_generation_progress_token_count);
@@ -190,7 +184,7 @@ pub(super) fn handle_worker_generation_progress(
 
 pub(super) fn handle_worker_first_decode_completed(
     worker_event: WorkerEvent,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_request: &mut ActiveGeneration,
 ) -> Result<(), WorkerControlError> {
     let WorkerEvent::FirstDecodeCompleted {
         request_id,
@@ -201,9 +195,6 @@ pub(super) fn handle_worker_first_decode_completed(
             "handle_worker_first_decode_completed received a non-FirstDecodeCompleted event",
         ));
     };
-    let active_request = active_generation
-        .as_mut()
-        .ok_or_else(|| protocol_violation("first decode completion without an active request"))?;
     if request_id != active_request.request_id
         || active_request.first_decode_forward_elapsed_millis.is_some()
     {
@@ -230,7 +221,7 @@ pub(super) fn handle_worker_first_decode_completed(
 pub(super) fn handle_worker_prompt_work_reuse(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &Option<ActiveGeneration>,
+    active_request: &ActiveGeneration,
 ) -> Result<(), WorkerControlError> {
     let WorkerEvent::PromptWorkReuse {
         request_id,
@@ -241,9 +232,6 @@ pub(super) fn handle_worker_prompt_work_reuse(
             "handle_worker_prompt_work_reuse received a non-PromptWorkReuse event",
         ));
     };
-    let active_request = active_generation
-        .as_ref()
-        .ok_or_else(|| protocol_violation("prompt-work reuse without an active request"))?;
     if request_id != active_request.request_id {
         return Err(protocol_violation("prompt-work reuse request mismatch"));
     }

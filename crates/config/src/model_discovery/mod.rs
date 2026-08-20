@@ -6,8 +6,11 @@ use thiserror::Error;
 
 use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
 
+mod bounded_artifact_file;
 mod classified_artifacts;
 mod deepseek_v4;
+mod flux2_klein;
+mod flux2_klein_documents;
 mod laguna;
 mod model_family;
 mod qwen3_5;
@@ -15,7 +18,53 @@ mod qwen3_5;
 pub use classified_artifacts::{
     ClassifiedModelArtifact, discover_classified_model_artifacts, requestable_model_id,
 };
+pub use flux2_klein::{
+    Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError,
+    verify_model_directory as verify_flux2_klein_model_directory,
+};
 pub use model_family::{ModelFamily, ModelFamilyClassificationError, classify_model_directory};
+
+/// Capability contract for one discovered executable model.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ModelCapabilities {
+    Chat(ChatModelCapabilities),
+    ImageGeneration(ImageGenerationCapabilities),
+}
+
+/// Token-streaming capabilities advertised by a chat model.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChatModelCapabilities {
+    pub context_window: u32,
+    pub max_input_tokens: u32,
+    pub max_output_tokens: u32,
+    pub supports_vision: bool,
+    pub supports_reasoning: bool,
+    pub supports_tool_calls: bool,
+}
+
+/// Image operations advertised without inventing autoregressive token limits.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ImageGenerationCapabilities {
+    pub supports_text_to_image: bool,
+    pub supports_image_editing: bool,
+    pub supports_multiple_reference_images: bool,
+}
+
+/// SPDX model-license identities accepted by executable discovery.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModelLicense {
+    Apache20,
+}
+
+impl ModelLicense {
+    /// Returns the canonical SPDX license identifier exposed to API adapters.
+    #[must_use]
+    pub const fn spdx_identifier(self) -> &'static str {
+        match self {
+            Self::Apache20 => "Apache-2.0",
+        }
+    }
+}
 
 /// One executable model discovered by recursive directory scanning.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24,24 +73,18 @@ pub struct DiscoveredModel {
     /// For HuggingFace cache entries, this is derived from the decoded `org/repo` path
     /// with the org prefix stripped (e.g. "Ornith-1.0-35B-6bit" from "mlx-community/Ornith-1.0-35B-6bit").
     pub model_id: String,
-    /// The architecture family recognized from config.json.
+    /// Upstream provider identity retained as provenance, never as the local routing key.
+    pub provider_model_id: Option<String>,
+    /// The architecture family recognized from config.json or model_index.json.
     pub model_family: ModelFamily,
     /// Family-owned artifact revision used by public identity and serving state.
     pub revision: String,
     /// Absolute path to the validated family artifact directory.
     pub model_directory: PathBuf,
-    /// Total prompt + generation position capacity from config.json.
-    pub context_window: u32,
-    /// Maximum prompt tokens independently representable within the context window.
-    pub max_input_tokens: u32,
-    /// Maximum generated tokens independently supported by context and protocol.
-    pub max_output_tokens: u32,
-    /// Whether the checkpoint index declares physically present visual weights.
-    pub has_vision: bool,
-    /// Whether family-owned text metadata declares a supported reasoning contract.
-    pub supports_reasoning: bool,
-    /// Whether family-owned text metadata declares a supported tool-call contract.
-    pub supports_tool_calls: bool,
+    /// Domain-specific operations callers may request from this model.
+    pub capabilities: ModelCapabilities,
+    /// Validated SPDX license metadata when the family contract declares one.
+    pub license: Option<ModelLicense>,
     /// Unique safetensors shard payload bytes measured from the discovered files.
     pub model_size_bytes: u64,
 }
@@ -76,7 +119,7 @@ pub struct ModelDiscoveryDirectoryScan {
 /// Recursively scans configured directories for executable model families.
 ///
 /// For each directory, walks subdirectories one level deep looking for
-/// `config.json`. Family-specific shallow completeness rules decide whether a
+/// `config.json` or `model_index.json`. Family-specific shallow completeness rules decide whether a
 /// classified artifact can be returned as executable.
 ///
 /// Scan errors for individual directories are logged and skipped — the
@@ -100,7 +143,7 @@ pub fn discover_models(
 ///
 /// Walks up to 3 levels deep (supporting paths like
 /// `hub/models--org--model/snapshots/abc123/` and `models/Org-Model-OptiQ-4bit/`).
-/// Each subdirectory containing `config.json` is checked for Qwen3.5 compatibility.
+/// Each family root is classified before family-owned executable validation.
 fn scan_directory_for_executable_models(
     root_directory: &Path,
 ) -> Result<Vec<DiscoveredModel>, DiscoveredModelError> {
@@ -137,12 +180,17 @@ fn scan_directory_recursive(
         return Ok(());
     }
 
-    // If this directory looks like a model directory, try to discover it.
-    if current_directory.join("config.json").is_file()
+    let has_pipeline_index = current_directory.join("model_index.json").is_file();
+    if (current_directory.join("config.json").is_file() || has_pipeline_index)
         && let Some(discovered_model) = try_discover_model(current_directory)
     {
         discovered_models.push(discovered_model);
         // Don't recurse into a model directory — it won't contain nested models.
+        return Ok(());
+    }
+    // A Diffusers pipeline root is terminal even when unsupported or incomplete;
+    // nested component configs are not independently requestable artifacts.
+    if has_pipeline_index {
         return Ok(());
     }
 
@@ -183,7 +231,7 @@ fn scan_directory_recursive(
     Ok(())
 }
 
-/// Attempts to discover an executable model from a directory containing `config.json`.
+/// Attempts to discover an executable model from a classified family root.
 ///
 /// Uses the leaf directory name as `model_id`. For HuggingFace cache entries
 /// where the snapshot hash is not a meaningful model ID, use
@@ -204,52 +252,71 @@ fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
 /// where the model_id is derived from the decoded `models--org--repo` directory name
 /// rather than the snapshot hash.
 fn try_discover_model_with_id(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
-    // Read the one neutral family marker before dispatching artifact validation.
-    let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-    let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
     // The typed classifier rejects ambiguous duplicate family markers before
     // the looser metadata document can participate in executable discovery.
     let model_family = model_family::classify_model_directory(model_directory)
         .ok()
         .flatten()?;
-    let family_metadata = match model_family {
-        ModelFamily::Qwen3_5 => qwen3_5::discover_model_metadata(model_directory, &config_value)?,
-        ModelFamily::Laguna => {
-            let laguna_metadata = laguna::discover_model_metadata(model_directory, &config_bytes)?;
-            return Some(DiscoveredModel {
+    match model_family {
+        ModelFamily::Qwen3_5 => {
+            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
+            let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
+            let family_metadata = qwen3_5::discover_model_metadata(model_directory, &config_value)?;
+            Some(DiscoveredModel {
                 model_id: model_id.to_owned(),
+                provider_model_id: None,
+                model_family,
+                revision: derive_revision_from_config_bytes(&config_bytes),
+                model_directory: model_directory.to_path_buf(),
+                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
+                    context_window: family_metadata.context_window,
+                    max_input_tokens: family_metadata.max_input_tokens,
+                    max_output_tokens: family_metadata.max_output_tokens,
+                    supports_vision: family_metadata.has_vision,
+                    supports_reasoning: family_metadata.supports_reasoning,
+                    supports_tool_calls: family_metadata.supports_tool_calls,
+                }),
+                license: None,
+                model_size_bytes: family_metadata.model_size_bytes,
+            })
+        }
+        ModelFamily::Laguna => {
+            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
+            let laguna_metadata = laguna::discover_model_metadata(model_directory, &config_bytes)?;
+            Some(DiscoveredModel {
+                model_id: model_id.to_owned(),
+                provider_model_id: None,
                 model_family,
                 revision: laguna_metadata.revision,
                 model_directory: model_directory.to_path_buf(),
-                context_window: laguna_metadata.context_window,
-                max_input_tokens: laguna_metadata.max_input_tokens,
-                max_output_tokens: laguna_metadata.max_output_tokens,
-                has_vision: laguna_metadata.has_vision,
-                supports_reasoning: laguna_metadata.supports_reasoning,
-                supports_tool_calls: laguna_metadata.supports_tool_calls,
+                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
+                    context_window: laguna_metadata.context_window,
+                    max_input_tokens: laguna_metadata.max_input_tokens,
+                    max_output_tokens: laguna_metadata.max_output_tokens,
+                    supports_vision: laguna_metadata.has_vision,
+                    supports_reasoning: laguna_metadata.supports_reasoning,
+                    supports_tool_calls: laguna_metadata.supports_tool_calls,
+                }),
+                license: None,
                 model_size_bytes: laguna_metadata.model_size_bytes,
-            });
+            })
+        }
+        ModelFamily::Flux2Klein => {
+            let verified_evidence = flux2_klein::verify_model_directory(model_directory).ok()?;
+            Some(DiscoveredModel {
+                model_id: verified_evidence.canonical_model_id,
+                provider_model_id: Some(verified_evidence.provider_model_id),
+                model_family,
+                revision: verified_evidence.revision,
+                model_directory: model_directory.to_path_buf(),
+                capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
+                license: Some(verified_evidence.license),
+                model_size_bytes: verified_evidence.model_size_bytes,
+            })
         }
         // Classification is intentionally broader than executable discovery.
-        ModelFamily::DeepSeekV4 => return None,
-    };
-
-    // Derive revision from SHA-256 of config.json.
-    let revision = derive_revision_from_config_bytes(&config_bytes);
-
-    Some(DiscoveredModel {
-        model_id: model_id.to_owned(),
-        model_family,
-        revision,
-        model_directory: model_directory.to_path_buf(),
-        context_window: family_metadata.context_window,
-        max_input_tokens: family_metadata.max_input_tokens,
-        max_output_tokens: family_metadata.max_output_tokens,
-        has_vision: family_metadata.has_vision,
-        supports_reasoning: family_metadata.supports_reasoning,
-        supports_tool_calls: family_metadata.supports_tool_calls,
-        model_size_bytes: family_metadata.model_size_bytes,
-    })
+        ModelFamily::DeepSeekV4 => None,
+    }
 }
 
 /// Rejects ambiguous public identities before callers can build lookup maps.

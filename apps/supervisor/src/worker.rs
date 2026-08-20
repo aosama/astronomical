@@ -17,13 +17,15 @@ use crate::worker_cache_clear::{
     apply_pending_prompt_cache_clear_if_idle, handle_prompt_cache_clear_command,
 };
 use crate::worker_generate::handle_generate_command;
+use crate::worker_image_request::handle_generate_image_command;
 use crate::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, apply_mlx_memory_limit, contain_mlx_memory_limit_failure,
 };
 use crate::{
     ChatGenerationStreamErrorCode, GenerationPerformanceLog, GenerationStartError,
-    RuntimeModelPolicy, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
-    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
+    ImageGenerationExecutionError, ImageGenerationTimeouts, RuntimeModelPolicy, WorkerActivity,
+    WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
+    WorkerTerminationOutcome,
     chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect},
     worker_containment::{
         cancel_active_generation, close_worker_if_running, contain_worker_failure,
@@ -34,7 +36,7 @@ use crate::{
         clear_active_request_progress, publish_activity, publish_health,
         publish_pending_mlx_memory_ceiling,
     },
-    worker_loop_types::{ActiveGeneration, WorkerLoopCommand},
+    worker_loop_types::{ActiveWorkerRequest, WorkerLoopCommand},
     worker_replacement::WorkerReplacement,
 };
 
@@ -46,6 +48,7 @@ pub(crate) async fn run_worker(
     health_snapshot: Arc<RwLock<WorkerHealthSnapshot>>,
     model_load_timeout: Duration,
     cancellation_acknowledgement_timeout: Duration,
+    image_generation_timeouts: ImageGenerationTimeouts,
     mut performance_log: GenerationPerformanceLog,
     mut model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     active_generation_permits: Arc<Semaphore>,
@@ -55,7 +58,7 @@ pub(crate) async fn run_worker(
         &health_snapshot,
         WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Loading),
     );
-    let mut active_generation: Option<ActiveGeneration> = None;
+    let mut active_generation: Option<ActiveWorkerRequest> = None;
     let mut is_ready = false;
     let mut model_load_deadline = Some(Instant::now() + model_load_timeout);
     let mut idle_control_interval = interval(Duration::from_secs(1));
@@ -103,7 +106,17 @@ pub(crate) async fn run_worker(
         .await;
         let stream_event_sender = active_generation
             .as_ref()
+            .and_then(ActiveWorkerRequest::chat)
             .map(|generation| generation.stream_event_sender.clone());
+        let image_result_sender =
+            active_generation
+                .as_ref()
+                .and_then(|active_request| match active_request {
+                    ActiveWorkerRequest::Image(image_request) => {
+                        Some(image_request.image_result_sender.clone())
+                    }
+                    ActiveWorkerRequest::Chat(_) => None,
+                });
         let is_worker_running = worker_process.process_id().is_some();
         let has_loaded_model = health_snapshot
             .read()
@@ -151,6 +164,45 @@ pub(crate) async fn run_worker(
                                 control_error,
                             )
                             .await;
+                            is_ready = false;
+                        }
+                    }
+                    WorkerLoopCommand::GenerateImage {
+                        active_generation_permit,
+                        generation_command,
+                        start_sender,
+                        image_result_sender,
+                        admitted_at,
+                        queue_wait_elapsed,
+                    } => {
+                        if !is_ready || !is_worker_running {
+                            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
+                            continue;
+                        }
+                        if let Err(control_error) = handle_generate_image_command(
+                            &mut worker_process,
+                            active_generation_permit,
+                            generation_command,
+                            start_sender,
+                            image_result_sender,
+                            admitted_at,
+                            queue_wait_elapsed,
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                            &model_policy_catalog,
+                            model_load_timeout,
+                            cancellation_acknowledgement_timeout,
+                            image_generation_timeouts,
+                        ).await {
+                            contain_worker_failure(
+                                &mut worker_process,
+                                &health_snapshot,
+                                &mut active_generation,
+                                control_error,
+                            ).await;
                             is_ready = false;
                         }
                     }
@@ -283,6 +335,8 @@ pub(crate) async fn run_worker(
                                     &health_snapshot,
                                     &mut active_generation,
                                     cancellation_acknowledgement_timeout,
+                                    model_load_timeout,
+                                    &mut is_ready,
                                 ).await;
                             } else {
                                 contain_worker_failure(
@@ -334,6 +388,35 @@ pub(crate) async fn run_worker(
                     &health_snapshot,
                     &mut active_generation,
                     cancellation_acknowledgement_timeout,
+                    model_load_timeout,
+                    &mut is_ready,
+                ).await;
+            }
+            () = crate::image_generation_executor::wait_for_image_disconnect(image_result_sender),
+                if matches!(active_generation, Some(ActiveWorkerRequest::Image(_))) => {
+                cancel_active_generation(
+                    &mut worker_process,
+                    &health_snapshot,
+                    &mut active_generation,
+                    cancellation_acknowledgement_timeout,
+                    model_load_timeout,
+                    &mut is_ready,
+                ).await;
+            }
+            () = wait_for_image_execution_deadline(&active_generation),
+                if matches!(active_generation, Some(ActiveWorkerRequest::Image(_))) => {
+                if let Some(ActiveWorkerRequest::Image(active_image)) = active_generation.as_ref() {
+                    let _send_outcome = active_image.image_result_sender.try_send(
+                        Err(ImageGenerationExecutionError::DeadlineExceeded),
+                    );
+                }
+                cancel_active_generation(
+                    &mut worker_process,
+                    &health_snapshot,
+                    &mut active_generation,
+                    cancellation_acknowledgement_timeout,
+                    model_load_timeout,
+                    &mut is_ready,
                 ).await;
             }
             _ = idle_control_interval.tick(), if is_worker_running
@@ -348,4 +431,15 @@ pub(crate) async fn run_worker(
             }
         }
     }
+}
+
+async fn wait_for_image_execution_deadline(active_request: &Option<ActiveWorkerRequest>) {
+    let Some(ActiveWorkerRequest::Image(active_image)) = active_request else {
+        std::future::pending::<()>().await;
+        return;
+    };
+    let next_deadline = active_image
+        .execution_deadline
+        .min(active_image.progress_stall_deadline);
+    tokio::time::sleep_until(next_deadline).await;
 }

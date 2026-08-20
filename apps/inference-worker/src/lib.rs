@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
-mod model_family_factory;
+#[doc(hidden)]
+pub mod model_family_factory;
 mod qwen3_5_model_startup;
 #[doc(hidden)]
 pub mod qwen3_5_model_startup_error;

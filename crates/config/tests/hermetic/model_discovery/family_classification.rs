@@ -28,6 +28,56 @@ fn should_classify_supported_model_family_markers() {
 }
 
 #[test]
+fn should_classify_flux2_klein_from_the_pipeline_root() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("Flux-Pipeline-Fixture");
+    fs::create_dir_all(&model_directory).expect("pipeline root should be created");
+    fs::write(
+        model_directory.join("model_index.json"),
+        r#"{"_class_name":"Flux2KleinPipeline","is_distilled":true,"scheduler":["diffusers","FlowMatchEulerDiscreteScheduler"],"text_encoder":["transformers","Qwen3ForCausalLM"],"tokenizer":["transformers","Qwen2TokenizerFast"],"transformer":["diffusers","Flux2Transformer2DModel"],"vae":["diffusers","AutoencoderKLFlux2"]}"#,
+    )
+    .expect("pipeline index should be written");
+
+    assert_eq!(
+        classify_model_directory(&model_directory)
+            .expect("pipeline family classification should complete"),
+        Some(ModelFamily::Flux2Klein)
+    );
+}
+
+#[test]
+fn should_reject_malformed_duplicate_or_oversized_pipeline_family_markers() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("Invalid-Pipeline-Fixture");
+    fs::create_dir_all(&model_directory).expect("pipeline root should be created");
+
+    for invalid_pipeline_index in [
+        br#"{"_class_name":"Flux2KleinPipeline"# as &[u8],
+        br#"{"_class_name":"Flux2KleinPipeline","_class_name":"Flux2KleinPipeline"}"#,
+    ] {
+        fs::write(
+            model_directory.join("model_index.json"),
+            invalid_pipeline_index,
+        )
+        .expect("invalid pipeline index should be written");
+        assert!(matches!(
+            classify_model_directory(&model_directory),
+            Err(ModelFamilyClassificationError::ParsePipelineIndex { .. })
+        ));
+    }
+
+    fs::write(
+        model_directory.join("model_index.json"),
+        vec![b' '; 1024 * 1024 + 1],
+    )
+    .expect("oversized pipeline index should be written");
+    assert!(matches!(
+        classify_model_directory(&model_directory),
+        Err(ModelFamilyClassificationError::PipelineIndexTooLarge { .. })
+    ));
+}
+
+#[test]
 fn should_classify_laguna_without_discovering_it_as_executable() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let laguna_model_directory = temporary_directory.path().join("Laguna-XS-Fixture");

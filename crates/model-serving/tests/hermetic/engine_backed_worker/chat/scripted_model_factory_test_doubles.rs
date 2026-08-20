@@ -21,7 +21,7 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
         &self,
         _model_directory: &str,
         model_configuration: WorkerModelConfiguration,
-    ) -> Result<(ScriptedChatProcessor, ScriptedChatEngine), String> {
+    ) -> Result<ModelFactoryRuntime<ScriptedChatProcessor, ScriptedChatEngine>, String> {
         self.model_factory_call_count.fetch_add(1, Ordering::SeqCst);
         self.model_configurations
             .lock()
@@ -40,7 +40,10 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
                 active_memory_limit_bytes,
                 allocator_cache_memory_limit_bytes,
             ));
-        Ok((ScriptedChatProcessor::new(), scripted_engine))
+        Ok(ModelFactoryRuntime::autoregressive(
+            ScriptedChatProcessor::new(),
+            scripted_engine,
+        ))
     }
 
     fn update_mlx_memory_limits(
@@ -62,12 +65,15 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>
         &self,
         _model_directory: &str,
         _model_configuration: WorkerModelConfiguration,
-    ) -> Result<(ScriptedChatProcessor, ScriptedChatEngine), String> {
+    ) -> Result<ModelFactoryRuntime<ScriptedChatProcessor, ScriptedChatEngine>, String> {
         let model_factory_call_number =
             self.model_factory_call_count.fetch_add(1, Ordering::SeqCst);
         if model_factory_call_number == 0 {
             return Err("the scripted first model is invalid".to_owned());
         }
-        Ok((ScriptedChatProcessor::new(), ScriptedChatEngine::new()))
+        Ok(ModelFactoryRuntime::autoregressive(
+            ScriptedChatProcessor::new(),
+            ScriptedChatEngine::new(),
+        ))
     }
 }

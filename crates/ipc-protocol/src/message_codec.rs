@@ -19,7 +19,22 @@ pub fn encode_event(worker_event: &WorkerEvent) -> Result<Vec<u8>, ProtocolError
 
 /// Deserializes one bounded event received from the inference worker.
 pub fn decode_event(serialized_event: &[u8]) -> Result<WorkerEvent, ProtocolError> {
-    decode_message(serialized_event)
+    let worker_event = decode_message(serialized_event)?;
+    match &worker_event {
+        WorkerEvent::Ready { capabilities, .. }
+        | WorkerEvent::ModelSwapped { capabilities, .. } => capabilities
+            .validate()
+            .map_err(ProtocolError::InvalidWorkerModelCapabilities)?,
+        WorkerEvent::ImageGenerationCompleted {
+            generated_image,
+            result_metadata,
+            ..
+        } => generated_image
+            .validate_completion(result_metadata)
+            .map_err(ProtocolError::InvalidImageGenerationCompletion)?,
+        _ => {}
+    }
+    Ok(worker_event)
 }
 
 fn encode_message<Message>(message: &Message) -> Result<Vec<u8>, ProtocolError>

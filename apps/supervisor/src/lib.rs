@@ -11,6 +11,7 @@ mod config_reload_response;
 mod configuration_status;
 mod console_assets;
 mod generation_performance_log;
+mod image_generation_executor;
 mod instance_lock;
 mod maximum_mlx_memory_endpoint;
 mod maximum_mlx_memory_transaction;
@@ -18,6 +19,7 @@ mod openai_chat_completion;
 mod openai_chat_endpoint;
 mod openai_chat_stream;
 mod openai_chat_translation;
+mod openai_image_generation_endpoint;
 mod openai_models_endpoint;
 mod openai_responses_assembly;
 mod openai_responses_endpoint;
@@ -26,6 +28,7 @@ mod openai_responses_translation;
 mod queued_memory_reload;
 mod request_generation_defaults;
 mod resolved_configuration_generation;
+mod resolved_model_policy_catalog;
 mod runtime_model_policy;
 mod serving_session_snapshot;
 mod shutdown_control;
@@ -38,10 +41,15 @@ mod worker_containment;
 mod worker_control_error;
 mod worker_event_handler;
 mod worker_generate;
+mod worker_generation_admission;
 mod worker_generation_output;
 mod worker_generation_preparation;
 mod worker_handle;
+mod worker_handle_chat;
+mod worker_handle_image;
 mod worker_health;
+mod worker_image_event;
+mod worker_image_request;
 mod worker_loop_types;
 mod worker_memory_limit;
 mod worker_model_swap;
@@ -75,7 +83,13 @@ pub use config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,
     ResolvedRuntimeConfigResolver,
 };
-pub use generation_performance_log::{GenerationPerformanceLog, GenerationPerformanceRecord};
+pub use generation_performance_log::{
+    GenerationPerformanceLog, GenerationPerformanceRecord, ImageGenerationPerformanceRecord,
+};
+pub use image_generation_executor::{
+    ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,
+    ImageGenerationTimeouts,
+};
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use openai_chat_translation::{
     OpenAiChatTranslationError, translate_openai_chat_completion_request,

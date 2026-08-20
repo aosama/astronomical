@@ -268,15 +268,21 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         scripted_executor,
         vec![DiscoveredModel {
             model_id: MODEL_ID.to_owned(),
+            provider_model_id: None,
             model_family: astronomical_config::ModelFamily::Qwen3_5,
             revision: "test".to_owned(),
             model_directory: "/models/test".into(),
-            context_window: 262_144,
-            max_input_tokens: 241_664,
-            max_output_tokens: 20_480,
-            has_vision: true,
-            supports_reasoning: true,
-            supports_tool_calls: true,
+            capabilities: astronomical_config::ModelCapabilities::Chat(
+                astronomical_config::ChatModelCapabilities {
+                    context_window: 262_144,
+                    max_input_tokens: 241_664,
+                    max_output_tokens: 20_480,
+                    supports_vision: true,
+                    supports_reasoning: true,
+                    supports_tool_calls: true,
+                },
+            ),
+            license: None,
             model_size_bytes: 18_420_000_000,
         }],
     );

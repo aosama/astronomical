@@ -1,10 +1,11 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::application::ApplicationState;
-use astronomical_config::{DiscoveredModel, resolve_model_id};
-use astronomical_ipc_protocol::ChatModelCapabilities;
+use astronomical_config::{DiscoveredModel, ModelCapabilities, resolve_model_id};
+use astronomical_ipc_protocol::WorkerModelCapabilities;
 use astronomical_rest_contract::{
-    OpenAiErrorResponse, OpenAiModel, OpenAiModelList, OpenAiModelParts, OpenAiModelValidationError,
+    OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
+    OpenAiModelValidationError,
 };
 use axum::{
     Json,
@@ -17,11 +18,13 @@ const ASTRONOMICAL_MODEL_OWNER: &str = "astronomical";
 const TEXT_INPUT_MODALITY: &str = "text";
 const IMAGE_INPUT_MODALITY: &str = "image";
 const TEXT_OUTPUT_MODALITY: &str = "text";
+const IMAGE_OUTPUT_MODALITY: &str = "image";
 const OPENAI_CHAT_REASONING_FORMAT: &str =
     "openai_chat_reasoning_content_and_responses_reasoning_summary_text";
 const OPENAI_FUNCTION_CALL_FORMAT: &str = "openai_function_call";
 const CHAT_COMPLETIONS_ENDPOINT_PATH: &str = "/v1/chat/completions";
 const RESPONSES_ENDPOINT_PATH: &str = "/v1/responses";
+const IMAGE_GENERATIONS_ENDPOINT_PATH: &str = "/v1/images/generations";
 
 /// Lists every model the supervisor can currently advertise safely.
 pub(crate) async fn list_models(State(application_state): State<ApplicationState>) -> Response {
@@ -106,22 +109,38 @@ fn advertised_models_for_application_state(
 fn openai_model_from_ready_worker_capabilities(
     ready_model_id: String,
     model_advertisement_created_at_unix_seconds: u64,
-    ready_model_capabilities: ChatModelCapabilities,
+    ready_model_capabilities: WorkerModelCapabilities,
 ) -> Result<OpenAiModel, OpenAiModelValidationError> {
+    let WorkerModelCapabilities {
+        chat,
+        image_generation,
+    } = ready_model_capabilities;
+    let Some(chat_capabilities) = chat else {
+        return OpenAiModel::from_image_parts(OpenAiImageModelParts {
+            model_id: ready_model_id,
+            created: model_advertisement_created_at_unix_seconds,
+            owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+            input_modalities: vec![TEXT_INPUT_MODALITY.to_owned()],
+            output_modalities: vec![IMAGE_OUTPUT_MODALITY.to_owned()],
+            supported_endpoints: image_generation
+                .map(|_| vec![IMAGE_GENERATIONS_ENDPOINT_PATH.to_owned()])
+                .unwrap_or_default(),
+        });
+    };
     OpenAiModel::from_parts(OpenAiModelParts {
         model_id: ready_model_id,
         created: model_advertisement_created_at_unix_seconds,
         owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
-        context_window: ready_model_capabilities.context_window,
-        max_input_tokens: ready_model_capabilities.max_input_tokens,
-        max_output_tokens: ready_model_capabilities.max_output_tokens,
-        input_modalities: input_modalities_for_model(ready_model_capabilities.has_vision),
+        context_window: chat_capabilities.context_window,
+        max_input_tokens: chat_capabilities.max_input_tokens,
+        max_output_tokens: chat_capabilities.max_output_tokens,
+        input_modalities: input_modalities_for_model(chat_capabilities.has_vision),
         output_modalities: vec![TEXT_OUTPUT_MODALITY.to_owned()],
         supports_streaming: true,
-        supports_reasoning: ready_model_capabilities.supports_reasoning,
-        reasoning_format: reasoning_format_for_model(ready_model_capabilities.supports_reasoning),
-        supports_tool_calls: ready_model_capabilities.supports_tool_calls,
-        tool_call_format: tool_call_format_for_model(ready_model_capabilities.supports_tool_calls),
+        supports_reasoning: chat_capabilities.supports_reasoning,
+        reasoning_format: reasoning_format_for_model(chat_capabilities.supports_reasoning),
+        supports_tool_calls: chat_capabilities.supports_tool_calls,
+        tool_call_format: tool_call_format_for_model(chat_capabilities.supports_tool_calls),
         supported_endpoints: supported_generation_endpoint_paths(),
     })
 }
@@ -131,20 +150,47 @@ fn openai_model_from_discovered_model(
     model_advertisement_created_at_unix_seconds: u64,
 ) -> Result<OpenAiModel, OpenAiModelValidationError> {
     // Family discovery owns behavior; this layer owns only the common API shape.
+    match &discovered_model.capabilities {
+        ModelCapabilities::Chat(capabilities) => openai_model_from_discovered_chat_model(
+            discovered_model,
+            capabilities,
+            model_advertisement_created_at_unix_seconds,
+        ),
+        ModelCapabilities::ImageGeneration(capabilities) => {
+            OpenAiModel::from_image_parts(OpenAiImageModelParts {
+                model_id: discovered_model.model_id.clone(),
+                created: model_advertisement_created_at_unix_seconds,
+                owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+                input_modalities: vec![TEXT_INPUT_MODALITY.to_owned()],
+                output_modalities: vec![IMAGE_OUTPUT_MODALITY.to_owned()],
+                supported_endpoints: capabilities
+                    .supports_text_to_image
+                    .then(|| vec![IMAGE_GENERATIONS_ENDPOINT_PATH.to_owned()])
+                    .unwrap_or_default(),
+            })
+        }
+    }
+}
+
+fn openai_model_from_discovered_chat_model(
+    discovered_model: &DiscoveredModel,
+    capabilities: &astronomical_config::ChatModelCapabilities,
+    model_advertisement_created_at_unix_seconds: u64,
+) -> Result<OpenAiModel, OpenAiModelValidationError> {
     OpenAiModel::from_parts(OpenAiModelParts {
         model_id: discovered_model.model_id.clone(),
         created: model_advertisement_created_at_unix_seconds,
         owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
-        context_window: discovered_model.context_window,
-        max_input_tokens: discovered_model.max_input_tokens,
-        max_output_tokens: discovered_model.max_output_tokens,
-        input_modalities: input_modalities_for_model(discovered_model.has_vision),
+        context_window: capabilities.context_window,
+        max_input_tokens: capabilities.max_input_tokens,
+        max_output_tokens: capabilities.max_output_tokens,
+        input_modalities: input_modalities_for_model(capabilities.supports_vision),
         output_modalities: vec![TEXT_OUTPUT_MODALITY.to_owned()],
         supports_streaming: true,
-        supports_reasoning: discovered_model.supports_reasoning,
-        reasoning_format: reasoning_format_for_model(discovered_model.supports_reasoning),
-        supports_tool_calls: discovered_model.supports_tool_calls,
-        tool_call_format: tool_call_format_for_model(discovered_model.supports_tool_calls),
+        supports_reasoning: capabilities.supports_reasoning,
+        reasoning_format: reasoning_format_for_model(capabilities.supports_reasoning),
+        supports_tool_calls: capabilities.supports_tool_calls,
+        tool_call_format: tool_call_format_for_model(capabilities.supports_tool_calls),
         supported_endpoints: supported_generation_endpoint_paths(),
     })
 }

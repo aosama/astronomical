@@ -7,7 +7,7 @@ use tokio::time::{Instant, timeout};
 
 use crate::worker_containment::contain_worker_failure;
 use crate::worker_event_handler::handle_worker_event;
-use crate::worker_loop_types::ActiveGeneration;
+use crate::worker_loop_types::ActiveWorkerRequest;
 use crate::{
     GenerationPerformanceLog, GenerationQueueDepth, PendingPromptCacheClear, WorkerControlError,
     WorkerHealthSnapshot, WorkerProcess,
@@ -34,7 +34,7 @@ pub(super) async fn apply_prompt_cache_clear(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     is_ready: &mut bool,
     model_load_deadline: &mut Option<Instant>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_generation: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
 ) -> Result<PromptCacheClearOutcome, WorkerControlError> {
     let requested_model_id = model_id.clone();
@@ -113,7 +113,7 @@ pub(super) async fn apply_pending_prompt_cache_clear_if_idle(
     pending_prompt_cache_clear: &mut Option<PendingPromptCacheClear>,
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_generation: &mut Option<ActiveWorkerRequest>,
     is_ready: &mut bool,
     model_load_deadline: &mut Option<Instant>,
     performance_log: &mut GenerationPerformanceLog,
@@ -152,7 +152,7 @@ pub(super) async fn handle_prompt_cache_clear_command(
     pending_prompt_cache_clear: &mut Option<PendingPromptCacheClear>,
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_generation: &mut Option<ActiveWorkerRequest>,
     is_ready: &mut bool,
     model_load_deadline: &mut Option<Instant>,
     performance_log: &mut GenerationPerformanceLog,
@@ -187,7 +187,7 @@ pub(super) async fn handle_prompt_cache_clear_command(
 }
 
 pub(super) fn generation_control_is_idle(
-    active_generation: &Option<ActiveGeneration>,
+    active_generation: &Option<ActiveWorkerRequest>,
     active_generation_permits: &Semaphore,
     generation_queue_permits: &Semaphore,
 ) -> bool {

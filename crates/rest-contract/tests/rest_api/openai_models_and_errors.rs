@@ -1,4 +1,6 @@
-use astronomical_rest_contract::{OpenAiErrorResponse, OpenAiModelList, OpenAiModelParts};
+use astronomical_rest_contract::{
+    OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
+};
 
 #[test]
 fn should_serialize_complete_ready_model_capability_metadata_without_losing_openai_fields() {
@@ -89,6 +91,25 @@ fn should_reject_model_capabilities_when_input_and_output_budgets_exceed_context
             })
         ),
         "inconsistent token budgets must not reach the public model response"
+    );
+}
+
+#[test]
+fn should_advertise_an_image_output_model_without_fake_token_limits() {
+    let image_model = OpenAiModel::from_image_parts(OpenAiImageModelParts {
+        model_id: "black-forest-labs/FLUX.2-klein-4B".to_owned(),
+        created: 1_787_010_400,
+        owned_by: "astronomical".to_owned(),
+        input_modalities: vec!["text".to_owned()],
+        output_modalities: vec!["image".to_owned()],
+        supported_endpoints: vec!["/v1/images/generations".to_owned()],
+    })
+    .expect("image generation metadata should not require token limits");
+    let model_list = OpenAiModelList::from_models(vec![image_model]);
+
+    assert_eq!(
+        serde_json::to_string(&model_list).expect("the image model metadata should serialize"),
+        r#"{"object":"list","data":[{"id":"black-forest-labs/FLUX.2-klein-4B","object":"model","created":1787010400,"owned_by":"astronomical","input_modalities":["text"],"output_modalities":["image"],"supports_streaming":false,"supports_reasoning":false,"supports_tool_calls":false,"supported_endpoints":["/v1/images/generations"]}]}"#
     );
 }
 

@@ -421,6 +421,12 @@ impl MlxRuntime {
         contiguous_values.to_vec_u32()
     }
 
+    /// Materializes one uint8 array contiguously and copies it in one host transfer.
+    pub fn copy_u8_values(&self, input: &MlxArray) -> Result<Vec<u8>, MlxRuntimeError> {
+        let contiguous_values = self.build_contiguous_row_major_copy(input)?;
+        contiguous_values.to_vec_u8()
+    }
+
     /// Builds a lazy row-major contiguous copy without evaluating it.
     pub fn build_contiguous_row_major_copy(
         &self,

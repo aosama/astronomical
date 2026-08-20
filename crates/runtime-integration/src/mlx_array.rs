@@ -267,6 +267,44 @@ impl MlxArray {
         self.copy_evaluated_u32_values()
     }
 
+    /// Evaluates and copies a uint8 array into Rust-owned memory.
+    pub fn to_vec_u8(&self) -> Result<Vec<u8>, MlxRuntimeError> {
+        if self.dtype() != MlxDtype::UInt8 {
+            return Err(MlxRuntimeError::RuntimeOperation {
+                operation: "copy an MLX uint8 array",
+                description: "array dtype is not uint8".to_owned(),
+            });
+        }
+        self.evaluate()?;
+        self.copy_evaluated_u8_values()
+    }
+
+    /// Copies an already evaluated contiguous uint8 array in one host transfer.
+    pub fn copy_evaluated_u8_values(&self) -> Result<Vec<u8>, MlxRuntimeError> {
+        if self.dtype() != MlxDtype::UInt8 {
+            return Err(MlxRuntimeError::RuntimeOperation {
+                operation: "copy an evaluated MLX uint8 array",
+                description: "array dtype is not uint8".to_owned(),
+            });
+        }
+        let element_count = self.element_count();
+        if element_count == 0 {
+            return Ok(Vec::new());
+        }
+        // SAFETY: The caller evaluated contiguous storage that remains owned by
+        // this live array for at least `element_count` uint8 values.
+        let values_pointer = unsafe { raw::mlx_array_data_uint8(self.raw_array) };
+        if values_pointer.is_null() {
+            return Err(MlxRuntimeError::RuntimeOperation {
+                operation: "copy an evaluated MLX uint8 array",
+                description: "MLX returned a null data pointer for an evaluated array".to_owned(),
+            });
+        }
+        // SAFETY: The evaluated array establishes the pointer's exact element
+        // count and the values are copied before the array can be released.
+        Ok(unsafe { std::slice::from_raw_parts(values_pointer, element_count) }.to_vec())
+    }
+
     /// Copies an already evaluated uint32 array into Rust-owned memory.
     ///
     /// Callers must evaluate the array first. This split exists so performance

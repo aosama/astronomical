@@ -4,6 +4,8 @@ mod image_input;
 mod openai_chat_completion_request;
 mod openai_chat_completion_response;
 mod openai_chat_types;
+mod openai_image_generation_request;
+mod openai_image_generation_response;
 mod openai_models_and_errors;
 mod openai_responses_input;
 mod openai_responses_request;
@@ -30,9 +32,17 @@ pub use openai_chat_types::{
     OpenAiToolChoice, OpenAiToolChoiceMode, OpenAiToolDefinition, OpenAiToolDefinitionParts,
     OpenAiToolType,
 };
+pub use openai_image_generation_request::{
+    MAX_OPENAI_IMAGE_DIMENSION_PIXELS, MIN_OPENAI_IMAGE_DIMENSION_PIXELS,
+    OpenAiImageGenerationRequest, OpenAiImageGenerationRequestParts,
+    OpenAiImageGenerationResponseFormat, OpenAiImageGenerationValidationError,
+};
+pub use openai_image_generation_response::{
+    OpenAiGeneratedImageParts, OpenAiImageGenerationResponse,
+};
 pub use openai_models_and_errors::{
-    OpenAiError, OpenAiErrorResponse, OpenAiModel, OpenAiModelList, OpenAiModelParts,
-    OpenAiModelValidationError,
+    OpenAiError, OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList,
+    OpenAiModelParts, OpenAiModelValidationError,
 };
 pub use openai_responses_input::{
     OpenAiResponseInput, OpenAiResponseInputItem, OpenAiResponseInputItemParts,

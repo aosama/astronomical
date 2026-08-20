@@ -8,8 +8,8 @@ use std::{
 use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
 use astronomical_supervisor::{
     ApplicationBuildIdentity, AstronomicalInstanceLock, GenerationPerformanceLog,
-    ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver, ShutdownController,
-    WorkerControlError, WorkerHandle, build_application_with_full_control,
+    ImageGenerationTimeouts, ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver,
+    ShutdownController, WorkerControlError, WorkerHandle, build_application_with_full_control,
 };
 use thiserror::Error;
 use tokio::{net::TcpListener, signal};
@@ -152,21 +152,23 @@ async fn run_daemon(
     let logging_config = user_config.logging()?;
     let performance_log = GenerationPerformanceLog::open(logging_config.directory())
         .map_err(DaemonError::CreatePerformanceLog)?;
-    let worker_handle = match WorkerHandle::launch_with_startup_configuration(
-        &resolved_runtime_config.worker_executable_path,
-        WORKER_MODEL_LOAD_TIMEOUT,
-        performance_log,
-        Arc::clone(&resolved_runtime_config.model_policy_catalog),
-        resolved_runtime_config.worker_startup_configuration(),
-    )
-    .await
-    {
-        Ok(worker_handle) => worker_handle,
-        Err(worker_start_error) => {
-            eprintln!("astronomicald worker unavailable: {worker_start_error}");
-            WorkerHandle::unavailable()
-        }
-    };
+    let worker_handle =
+        match WorkerHandle::launch_with_startup_configuration_and_image_generation_timeouts(
+            &resolved_runtime_config.worker_executable_path,
+            WORKER_MODEL_LOAD_TIMEOUT,
+            ImageGenerationTimeouts::DEFAULT,
+            performance_log,
+            Arc::clone(&resolved_runtime_config.model_policy_catalog),
+            resolved_runtime_config.worker_startup_configuration(),
+        )
+        .await
+        {
+            Ok(worker_handle) => worker_handle,
+            Err(worker_start_error) => {
+                eprintln!("astronomicald worker unavailable: {worker_start_error}");
+                WorkerHandle::unavailable()
+            }
+        };
     let reloadable_config = Arc::new(RwLock::new(resolved_runtime_config));
     let shutdown_controller = ShutdownController::new();
     let internal_shutdown_receiver = shutdown_controller.subscribe();

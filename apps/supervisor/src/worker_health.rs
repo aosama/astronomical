@@ -1,8 +1,8 @@
 use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState,
-    SpeculativePrefillRuntimeState, WorkerEvent, WorkerMlxMemorySnapshot,
-    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
+    ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, SpeculativePrefillRuntimeState, WorkerEvent,
+    WorkerMlxMemorySnapshot, WorkerModelCapabilities, WorkerPromptProcessingPhase,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -58,6 +58,8 @@ pub enum WorkerActivity {
     GenerationPreparation,
     /// At least one generated output has reached the supervisor.
     Generating,
+    /// Native image conditioning, denoising, decoding, or encoding is active.
+    ImageGeneration,
 }
 
 impl WorkerActivity {
@@ -69,6 +71,7 @@ impl WorkerActivity {
             Self::PromptProcessing => "prompt_processing",
             Self::GenerationPreparation => "generation_preparation",
             Self::Generating => "generating",
+            Self::ImageGeneration => "image_generation",
         }
     }
 }
@@ -99,6 +102,13 @@ pub enum ActiveRequestProgress {
     Generation {
         generated_token_count: u32,
         maximum_output_tokens: u32,
+        elapsed_millis: u64,
+    },
+    /// Current phase and denoising progress for one image request.
+    ImageGeneration {
+        phase: astronomical_ipc_protocol::ImageGenerationPhase,
+        completed_steps: u16,
+        total_steps: u16,
         elapsed_millis: u64,
     },
 }
@@ -193,8 +203,8 @@ pub struct WorkerHealthSnapshot {
     pub activity: WorkerActivity,
     /// Exact worker-reported model identity when the worker is ready.
     pub ready_model_id: Option<String>,
-    /// Worker-reported structured-chat capabilities when the worker is ready.
-    pub ready_model_capabilities: Option<ChatModelCapabilities>,
+    /// Worker-reported typed model capabilities when the worker is ready.
+    pub ready_model_capabilities: Option<WorkerModelCapabilities>,
     /// Optional per-request progress for the currently active generation.
     pub active_request_progress: Option<ActiveRequestProgress>,
     /// Latest worker-reported sparse-expert residency.
@@ -242,7 +252,7 @@ impl WorkerHealthSnapshot {
     #[must_use]
     pub fn ready_with_model(
         model_id: String,
-        capabilities: ChatModelCapabilities,
+        capabilities: impl Into<WorkerModelCapabilities>,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
     ) -> Self {
@@ -250,7 +260,7 @@ impl WorkerHealthSnapshot {
             status: WorkerHealthStatus::Ready,
             activity: WorkerActivity::Idle,
             ready_model_id: Some(model_id),
-            ready_model_capabilities: Some(capabilities),
+            ready_model_capabilities: Some(capabilities.into()),
             active_request_progress: None,
             expert_memory_mode: None,
             expert_residency: None,
@@ -279,7 +289,7 @@ impl WorkerHealthSnapshot {
     #[must_use]
     pub fn ready_with_replacement_model(
         model_id: String,
-        capabilities: ChatModelCapabilities,
+        capabilities: impl Into<WorkerModelCapabilities>,
         minimum_mlx_memory_ceiling_bytes: u64,
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,

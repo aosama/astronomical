@@ -24,7 +24,8 @@ async fn main() {
                 max_input_tokens: 241_664,
                 max_output_tokens: 20_480,
                 context_window: 262_144,
-            },
+            }
+            .into(),
         })
         .await
         .is_err()
@@ -38,6 +39,7 @@ async fn main() {
                 generation_command.request_id,
                 ChatGenerationCompletionReason::EndOfSequence,
             ),
+            WorkerCommand::GenerateImage(_) => continue,
             WorkerCommand::Cancel { request_id } => {
                 (request_id, ChatGenerationCompletionReason::Cancelled)
             }

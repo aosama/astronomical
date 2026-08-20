@@ -41,6 +41,7 @@ fn should_keep_every_family_discovery_source_recursively_isolated() {
             ("Qwen", ["qwen3_5", "Qwen3_5"]),
             ("Laguna", ["laguna", "Laguna"]),
             ("DeepSeek", ["deepseek_v4", "DeepSeekV4"]),
+            ("Flux", ["flux2_klein", "Flux2Klein"]),
         ] {
             if owned_family == Some(family_name) {
                 continue;
@@ -78,6 +79,8 @@ fn family_owned_by_path(relative_source_file: &Path) -> Option<&'static str> {
         Some("Laguna")
     } else if first_component.starts_with("deepseek_v4") {
         Some("DeepSeek")
+    } else if first_component.starts_with("flux2_klein") {
+        Some("Flux")
     } else {
         None
     }

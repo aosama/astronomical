@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatModelCapabilities, MtpRuntimeState, ProtocolReader,
-    ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerEvent,
+    ChatGenerationCompletionReason, ChatModelCapabilities, ImageGenerationCapabilities,
+    MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId, SpeculativePrefillRuntimeState,
+    WorkerEvent, WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
+    WorkerLoadedModelRuntimeConfiguration, WorkerModelCapabilities,
     WorkerRuntimeFeatureConfiguration,
 };
 
@@ -12,6 +14,10 @@ const GENERATION_EVENT_GENERATION: &str =
     "3333333333333333333333333333333333333333333333333333333333333333";
 const INCONSISTENT_READY_GENERATION: &str =
     "5555555555555555555555555555555555555555555555555555555555555555";
+const MATCHING_FLUX_GENERATION: &str =
+    "6666666666666666666666666666666666666666666666666666666666666666";
+const FLUX_MODEL_ID: &str = "FLUX.2-klein-4B";
+const FLUX_REVISION: &str = "reviewed-revision";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -47,6 +53,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
     if startup_configuration.as_ref().is_some_and(|configuration| {
+        configuration.configuration_generation == MATCHING_FLUX_GENERATION
+    }) {
+        event_writer
+            .send_event(&WorkerEvent::Ready {
+                mtp_runtime_state: MtpRuntimeState::Disabled,
+                mtp_unavailable_reason: None,
+                mtp_depth_status: Default::default(),
+                speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+                speculative_prefill_unavailable_reason: None,
+                speculative_prefill_draft_model_id: None,
+                speculative_prefill_draft_model_revision: None,
+                model_id: FLUX_MODEL_ID.to_owned(),
+                capabilities: WorkerModelCapabilities::image_generation(
+                    ImageGenerationCapabilities {
+                        minimum_width_pixels: 64,
+                        maximum_width_pixels: 1_024,
+                        minimum_height_pixels: 64,
+                        maximum_height_pixels: 1_024,
+                        dimension_multiple_pixels: 16,
+                        maximum_steps: 50,
+                        maximum_guidance_thousandths: 10_000,
+                        output_mime_types: vec!["image/png".to_owned()],
+                    },
+                ),
+            })
+            .await?;
+    } else if startup_configuration.as_ref().is_some_and(|configuration| {
         configuration.configuration_generation == INCONSISTENT_READY_GENERATION
     }) {
         event_writer
@@ -66,7 +99,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     max_input_tokens: 1,
                     max_output_tokens: 1,
                     context_window: 2,
-                },
+                }
+                .into(),
             })
             .await?;
     } else {
@@ -89,6 +123,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     cached_token_count: 0,
                     persistent_prompt_cache_diagnostics: None,
                     reason: ChatGenerationCompletionReason::EndOfSequence,
+                })
+                .await?;
+        } else if startup_configuration.configuration_generation == MATCHING_FLUX_GENERATION {
+            event_writer
+                .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                    worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
+                        configuration_generation: MATCHING_FLUX_GENERATION.to_owned(),
+                        persistent_prompt_cache_enabled: startup_configuration
+                            .persistent_prompt_cache_enabled,
+                        prompt_cache_maximum_size_bytes: startup_configuration
+                            .global_prompt_cache_maximum_size_bytes,
+                        loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Flux2Klein(
+                            WorkerFlux2KleinModelConfiguration {
+                                model_id: FLUX_MODEL_ID.to_owned(),
+                                model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                                artifact_revision: FLUX_REVISION.to_owned(),
+                            },
+                        )),
+                    },
                 })
                 .await?;
         } else if startup_configuration.configuration_generation == INCONSISTENT_READY_GENERATION {

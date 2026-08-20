@@ -1,6 +1,7 @@
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, MtpDepthStatus, MtpRuntimeState, ProtocolReader, ProtocolWriter,
-    SpeculativePrefillRuntimeState, WorkerEvent, WorkerRuntimeFeatureConfiguration,
+    SpeculativePrefillRuntimeState, WorkerEvent, WorkerModelCapabilities,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::duplex;
 
@@ -37,8 +38,8 @@ async fn should_round_trip_worker_runtime_feature_configuration_acknowledgement(
 #[tokio::test]
 async fn should_preserve_generation_and_full_path_free_model_configuration_in_acknowledgement() {
     use astronomical_ipc_protocol::{
-        WorkerChunkingConfiguration, WorkerLoadedModelRuntimeConfiguration,
-        WorkerSpeculativePrefillRuntimeConfiguration,
+        WorkerChunkingConfiguration, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
+        WorkerLoadedModelRuntimeConfiguration, WorkerSpeculativePrefillRuntimeConfiguration,
     };
 
     let configuration_generation = "abcdef0123456789".repeat(4);
@@ -47,29 +48,31 @@ async fn should_preserve_generation_and_full_path_free_model_configuration_in_ac
             configuration_generation: configuration_generation.clone(),
             persistent_prompt_cache_enabled: true,
             prompt_cache_maximum_size_bytes: 12_000_000_000,
-            loaded_model: Some(WorkerLoadedModelRuntimeConfiguration {
-                model_id: "fictional/target".to_owned(),
-                maximum_context_tokens: 32_768,
-                maximum_output_tokens: 4_096,
-                chunking: WorkerChunkingConfiguration {
-                    fixed_prompt_processing_chunk_size_tokens: 2_048,
-                    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Some(256),
-                    full_attention_key_value_growth_tokens: 256,
-                    speculative_prefill_draft_forward_tokens: 1_024,
-                    prefill_graph_submission_layer_interval: 1,
-                    experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-                    prompt_cache_block_tokens: Some(128),
-                    prompt_cache_common_prefix_stride_blocks: 4,
+            loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Autoregressive(
+                WorkerLoadedAutoregressiveModelRuntimeConfiguration {
+                    model_id: "fictional/target".to_owned(),
+                    maximum_context_tokens: 32_768,
+                    maximum_output_tokens: 4_096,
+                    chunking: WorkerChunkingConfiguration {
+                        fixed_prompt_processing_chunk_size_tokens: 2_048,
+                        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Some(256),
+                        full_attention_key_value_growth_tokens: 256,
+                        speculative_prefill_draft_forward_tokens: 1_024,
+                        prefill_graph_submission_layer_interval: 1,
+                        experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
+                        prompt_cache_block_tokens: Some(128),
+                        prompt_cache_common_prefix_stride_blocks: 4,
+                    },
+                    mtp_draft_depth: Some(3),
+                    mtp_head_model_id: Some("fictional/mtp-head".to_owned()),
+                    speculative_prefill_enabled: true,
+                    speculative_prefill: Some(WorkerSpeculativePrefillRuntimeConfiguration {
+                        draft_model_id: "fictional/draft".to_owned(),
+                        minimum_prompt_tokens: 8_192,
+                        keep_percentage: 20,
+                    }),
                 },
-                mtp_draft_depth: Some(3),
-                mtp_head_model_id: Some("fictional/mtp-head".to_owned()),
-                speculative_prefill_enabled: true,
-                speculative_prefill: Some(WorkerSpeculativePrefillRuntimeConfiguration {
-                    draft_model_id: "fictional/draft".to_owned(),
-                    minimum_prompt_tokens: 8_192,
-                    keep_percentage: 20,
-                }),
-            }),
+            )),
         },
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
@@ -96,14 +99,14 @@ async fn should_preserve_generation_and_full_path_free_model_configuration_in_ac
 async fn should_round_trip_loaded_model_mtp_depth_acknowledgement() {
     let worker_event = WorkerEvent::Ready {
         model_id: "fictional/qwen-model".to_owned(),
-        capabilities: ChatModelCapabilities {
+        capabilities: WorkerModelCapabilities::from(ChatModelCapabilities {
             supports_reasoning: true,
             supports_tool_calls: true,
             has_vision: false,
             max_input_tokens: 8_000,
             max_output_tokens: 1_000,
             context_window: 9_000,
-        },
+        }),
         mtp_runtime_state: MtpRuntimeState::Active,
         mtp_unavailable_reason: None,
         mtp_depth_status: MtpDepthStatus {
