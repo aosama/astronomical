@@ -4,29 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.5</title>
-            <pubDate>Wed, 19 Aug 2026 07:37:23 -0400</pubDate>
-            <sparkle:version>228</sparkle:version>
-            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
+            <title>0.2.6</title>
+            <pubDate>Thu, 20 Aug 2026 09:08:49 -0400</pubDate>
+            <sparkle:version>242</sparkle:version>
+            <sparkle:shortVersionString>0.2.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Strengthens MLX 0.32.1 execution coverage for dynamic compiled graph shapes, evaluation failures, quantized expert gathering, and NVFP4 split-K operations.
-- Improves release confidence across Qwen/Ornith and Laguna packages with configuration-derived structural validation that remains valid across supported packaging variants.
-- Clarifies supervisor generation ownership while preserving request queuing, model swapping, cancellation, streaming output, and worker recovery behavior.
-- Coordinates native build-cache producers in continuous integration to improve reliable reuse of verified MLX build artifacts.
+- Introduces a strict, versioned runtime configuration with an offline JSON Schema, per-model generation and execution policy, and configured, resolved, and effective status reporting.
+- Applies configuration reloads transactionally across request admission, worker replacement, memory updates, and model policy changes.
+- Preserves existing unversioned configuration during the one-way schema version 1 migration. Astronomical stores the exact original bytes in a private `config.legacy-v0.json` backup before replacing a valid legacy document, while unsafe migrations leave the source unchanged.
+- Improves packaged application validation by requiring an explicitly selected model from the Development instance for optional real-model qualification.
 
 ## Compatibility
 
-Astronomical 0.2.5 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.6 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing Astronomical configuration, model directories, caches, and logs remain in place when updating from 0.2.4.
+Existing model directories, prompt caches, and logs remain in place when updating from 0.2.5. Existing unversioned Stable configuration is migrated on first launch only when its behavior can be represented exactly by schema version 1, with the original bytes retained in the adjacent legacy backup.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.5/Astronomical-0.2.5-macOS-arm64.dmg" length="12204387" type="application/octet-stream" sparkle:edSignature="2ak6w01Hk42pi2HVFVR5nTvg18GsFzlmimZZL9CCLFvMnr3RrmCVvVrGsPM2GGP6f4wNdSl500ZLCUZtCkhKCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.6/Astronomical-0.2.6-macOS-arm64.dmg" length="12447028" type="application/octet-stream" sparkle:edSignature="SxHqf0D/t06gvMyE5sPsULkzXB5v9x9fNal4tFG4F6p/buRFjJAmxHp18aywlOowYSJIfb2b4PF84maJ7wRlBA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 9sQ0UvtNb40hvq3Ef9yBPxNmByZ8y+wFGtDXzqWJeuFgG5kN6JVw6j7AfpYkaRGUtZIOyHD3r9CowgiMXJYnDw==
-length: 2216
+edSignature: krobAuMyVxI9yzNk3aOHexs7GNopaUOrYMp+zejayR/6As8f3t7eY9Aovf+l3xuaoYvNKoe+jxD8WK9SKzDMAg==
+length: 2536
 -->
