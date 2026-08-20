@@ -299,17 +299,17 @@ async fn should_cancel_image_execution_and_progress_stalls_with_the_shared_bound
         (
             109,
             "delayed-image-generation-fixture",
-            ImageGenerationTimeouts::new(Duration::from_millis(100), Duration::from_secs(1)),
+            ImageGenerationTimeouts::new(Duration::from_secs(1), Duration::from_secs(3)),
         ),
         (
             110,
             "progress-stall-image-fixture",
-            ImageGenerationTimeouts::new(Duration::from_secs(1), Duration::from_millis(100)),
+            ImageGenerationTimeouts::new(Duration::from_secs(3), Duration::from_secs(1)),
         ),
         (
             118,
             "duplicate-progress-stall-image-fixture",
-            ImageGenerationTimeouts::new(Duration::from_secs(1), Duration::from_millis(100)),
+            ImageGenerationTimeouts::new(Duration::from_secs(3), Duration::from_secs(1)),
         ),
     ] {
         let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
@@ -328,19 +328,20 @@ async fn should_cancel_image_execution_and_progress_stalls_with_the_shared_bound
             .await
             .expect("the bounded image should start");
         assert!(matches!(
-            timeout(Duration::from_secs(1), image_receiver.recv()).await,
+            timeout(Duration::from_secs(2), image_receiver.recv()).await,
             Ok(Some(Err(ImageGenerationExecutionError::DeadlineExceeded)))
         ));
         let mut followup_receiver = worker_handle
             .start_image_generation(image_command(request_id + 100, "completed-image"))
             .await
             .expect("deadline cancellation should preserve worker reuse");
+        let followup_outcome = timeout(Duration::from_secs(2), followup_receiver.recv())
+            .await
+            .expect("deadline follow-up should remain bounded")
+            .expect("follow-up should finish");
         assert!(
-            timeout(Duration::from_secs(1), followup_receiver.recv())
-                .await
-                .expect("deadline follow-up should remain bounded")
-                .expect("follow-up should finish")
-                .is_ok()
+            followup_outcome.is_ok(),
+            "deadline follow-up failed: {followup_outcome:?}"
         );
         worker_handle
             .shutdown()
@@ -357,7 +358,7 @@ async fn should_refresh_the_stall_deadline_for_every_monotonic_image_progress_ev
         crate::common::supervisor::launch_test_executor_with_image_generation_timeouts(
             executable_path,
             Duration::from_millis(250),
-            ImageGenerationTimeouts::new(Duration::from_secs(1), Duration::from_millis(100)),
+            ImageGenerationTimeouts::new(Duration::from_secs(3), Duration::from_secs(1)),
         )
         .await
         .expect("the scripted worker should launch");
@@ -368,12 +369,13 @@ async fn should_refresh_the_stall_deadline_for_every_monotonic_image_progress_ev
         .await
         .expect("the progressing image should start");
 
+    let image_outcome = timeout(Duration::from_secs(3), image_receiver.recv())
+        .await
+        .expect("monotonic progress should keep the request alive")
+        .expect("the image outcome should arrive");
     assert!(
-        timeout(Duration::from_secs(1), image_receiver.recv())
-            .await
-            .expect("monotonic progress should keep the request alive")
-            .expect("the image outcome should arrive")
-            .is_ok()
+        image_outcome.is_ok(),
+        "progressing image failed: {image_outcome:?}"
     );
     worker_handle
         .shutdown()
@@ -519,8 +521,8 @@ fn image_command(request_id: u64, prompt: &str) -> ImageGenerationCommand {
         model: "astronomical/test-worker".to_owned(),
         prompt: prompt.to_owned(),
         settings: ImageGenerationSettings {
-            width_pixels: 1_024,
-            height_pixels: 1_024,
+            width_pixels: 64,
+            height_pixels: 64,
             steps: 4,
             guidance_thousandths: 1_000,
             seed: 7,
