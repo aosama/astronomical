@@ -86,6 +86,15 @@ fn should_atomically_update_maximum_mlx_memory_without_losing_other_config_field
         config_update.prior_config_bytes,
         Some(original_config_bytes.to_vec())
     );
+    assert_eq!(
+        std::fs::read(
+            temporary_home_directory
+                .path()
+                .join(".astronomical/config.legacy-v0.json")
+        )
+        .expect("legacy backup should be readable"),
+        original_config_bytes
+    );
     let persisted_config_bytes = std::fs::read(
         temporary_home_directory
             .path()
@@ -135,6 +144,15 @@ fn should_remove_maximum_mlx_memory_override_when_reset_to_automatic() {
     assert_eq!(
         config_update.prior_config_bytes,
         Some(original_config_bytes.to_vec())
+    );
+    assert_eq!(
+        std::fs::read(
+            temporary_home_directory
+                .path()
+                .join(".astronomical/config.legacy-v0.json")
+        )
+        .expect("legacy backup should be readable"),
+        original_config_bytes
     );
     let persisted_config_bytes = std::fs::read(
         temporary_home_directory
