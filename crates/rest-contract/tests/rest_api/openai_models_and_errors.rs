@@ -61,14 +61,39 @@ fn should_omit_reasoning_and_tool_formats_when_model_does_not_support_them() {
 }
 
 #[test]
-fn should_reject_model_capabilities_when_input_and_output_budgets_exceed_context_window() {
+fn should_accept_independent_input_and_output_maxima_that_share_one_context_window() {
     let model_list_result = OpenAiModelList::single_model(OpenAiModelParts {
-        model_id: "astronomical/invalid-token-budget-model".to_owned(),
+        model_id: "astronomical/independent-token-limit-model".to_owned(),
         created: 1_784_231_803,
         owned_by: "astronomical".to_owned(),
         context_window: 10,
-        max_input_tokens: 8,
-        max_output_tokens: 3,
+        max_input_tokens: 9,
+        max_output_tokens: 9,
+        input_modalities: vec!["text".to_owned()],
+        output_modalities: vec!["text".to_owned()],
+        supports_streaming: true,
+        supports_reasoning: false,
+        reasoning_format: None,
+        supports_tool_calls: false,
+        tool_call_format: None,
+        supported_endpoints: vec!["/v1/chat/completions".to_owned()],
+    });
+
+    assert!(
+        model_list_result.is_ok(),
+        "independent maxima must remain valid because request admission enforces the shared context"
+    );
+}
+
+#[test]
+fn should_reject_an_independent_maximum_that_leaves_no_position_for_the_other_side() {
+    let model_list_result = OpenAiModelList::single_model(OpenAiModelParts {
+        model_id: "astronomical/exhausted-token-limit-model".to_owned(),
+        created: 1_784_231_803,
+        owned_by: "astronomical".to_owned(),
+        context_window: 10,
+        max_input_tokens: 10,
+        max_output_tokens: 1,
         input_modalities: vec!["text".to_owned()],
         output_modalities: vec!["text".to_owned()],
         supports_streaming: true,
@@ -82,13 +107,43 @@ fn should_reject_model_capabilities_when_input_and_output_budgets_exceed_context
     assert!(
         matches!(
             model_list_result,
-            Err(astronomical_rest_contract::OpenAiModelValidationError::CombinedTokenBudgetsExceedContextWindow {
-                max_input_tokens: 8,
-                max_output_tokens: 3,
+            Err(astronomical_rest_contract::OpenAiModelValidationError::InputTokenBudgetMustLeaveGenerationPosition {
+                max_input_tokens: 10,
                 context_window: 10,
             })
         ),
-        "inconsistent token budgets must not reach the public model response"
+        "each independent maximum must leave one context position for the other side"
+    );
+}
+
+#[test]
+fn should_reject_an_output_maximum_that_leaves_no_prompt_position() {
+    let model_list_result = OpenAiModelList::single_model(OpenAiModelParts {
+        model_id: "astronomical/exhausted-output-limit-model".to_owned(),
+        created: 1_784_231_803,
+        owned_by: "astronomical".to_owned(),
+        context_window: 10,
+        max_input_tokens: 1,
+        max_output_tokens: 10,
+        input_modalities: vec!["text".to_owned()],
+        output_modalities: vec!["text".to_owned()],
+        supports_streaming: true,
+        supports_reasoning: false,
+        reasoning_format: None,
+        supports_tool_calls: false,
+        tool_call_format: None,
+        supported_endpoints: vec!["/v1/chat/completions".to_owned()],
+    });
+
+    assert!(
+        matches!(
+            model_list_result,
+            Err(astronomical_rest_contract::OpenAiModelValidationError::OutputTokenBudgetMustLeavePromptPosition {
+                max_output_tokens: 10,
+                context_window: 10,
+            })
+        ),
+        "the output maximum must leave one context position for prompt input"
     );
 }
 

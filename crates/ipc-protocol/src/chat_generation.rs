@@ -171,13 +171,12 @@ pub struct ChatModelCapabilities {
     pub supports_tool_calls: bool,
     /// Whether the model supports image input (vision).
     pub has_vision: bool,
-    /// Maximum prompt tokens a client may send. Reported as the context window
-    /// minus the reserved output budget so clients size prompts to leave room
-    /// for generation. The engine enforces the real shared prompt+generation
-    /// bound at admission time.
+    /// Maximum prompt tokens a client may send when reserving one generation
+    /// position. The engine enforces the selected prompt plus generation budget
+    /// against the shared context window at admission time.
     pub max_input_tokens: u32,
-    /// Advertised per-request output-token ceiling. Well under the u16 protocol
-    /// request cap and the context window.
+    /// Independent per-request output-token ceiling. The prompt must leave enough
+    /// context positions for the selected output budget.
     pub max_output_tokens: u32,
     /// Total prompt plus generation position capacity of the loaded model
     /// (Qwen3.5-MoE `max_position_embeddings`).
