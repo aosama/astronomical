@@ -1,6 +1,6 @@
 ---
 description: Review and remediate the current code changes, then run proportionate tests.
-subtask: true
+subtask: false
 ---
 
 Review the current uncommitted changes as your own work:
