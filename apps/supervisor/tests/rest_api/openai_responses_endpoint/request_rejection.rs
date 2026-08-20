@@ -91,15 +91,21 @@ async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
         ScriptedResponsesExecutor::idle_with_expected_model("requested-model"),
         vec![DiscoveredModel {
             model_id: "requested-model".to_owned(),
+            provider_model_id: None,
             model_family: astronomical_config::ModelFamily::Qwen3_5,
             revision: "test-revision".to_owned(),
             model_directory: PathBuf::from("/models/requested-model"),
-            context_window: 2_048,
-            max_input_tokens: 1_024,
-            max_output_tokens: 128,
-            has_vision: false,
-            supports_reasoning: true,
-            supports_tool_calls: true,
+            capabilities: astronomical_config::ModelCapabilities::Chat(
+                astronomical_config::ChatModelCapabilities {
+                    context_window: 2_048,
+                    max_input_tokens: 1_024,
+                    max_output_tokens: 128,
+                    supports_vision: false,
+                    supports_reasoning: true,
+                    supports_tool_calls: true,
+                },
+            ),
+            license: None,
             model_size_bytes: 0,
         }],
     );

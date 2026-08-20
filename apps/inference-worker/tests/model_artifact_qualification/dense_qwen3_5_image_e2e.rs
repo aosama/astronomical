@@ -37,17 +37,22 @@ fn configured_dense_qwen3_5_vision_artifact() -> Option<(
 )> {
     let mut discovered_vision_models = crate::common::configured_discovered_models()
         .into_iter()
-        .filter(|discovered_model| discovered_model.has_vision)
+        .filter(|discovered_model| {
+            crate::common::chat_capabilities(discovered_model)
+                .is_some_and(|chat_capabilities| chat_capabilities.supports_vision)
+        })
         .collect::<Vec<_>>();
     discovered_vision_models.sort_by_key(|discovered_model| discovered_model.model_size_bytes);
 
     discovered_vision_models
         .into_iter()
         .find_map(|discovered_vision_model| {
+            let maximum_output_tokens =
+                crate::common::chat_capabilities(&discovered_vision_model)?.max_output_tokens;
             let validated_artifact = Qwen3_5ArtifactValidator::new()
                 .validate(
                     &discovered_vision_model.model_directory,
-                    discovered_vision_model.max_output_tokens,
+                    maximum_output_tokens,
                 )
                 .ok()?;
             (validated_artifact.config().feed_forward_architecture()

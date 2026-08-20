@@ -73,6 +73,8 @@ impl MlxRuntime {
         )
     }
 
+    // Keeping the complete native attention contract explicit makes mask-mode mistakes visible.
+    #[allow(clippy::too_many_arguments)]
     fn scaled_dot_product_attention_with_mode(
         &self,
         queries: &MlxArray,

@@ -15,7 +15,7 @@ use crate::{
     WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
     worker_containment::{cancel_active_generation, contain_worker_failure},
     worker_health::{clear_active_request_progress, publish_activity},
-    worker_loop_types::ActiveGeneration,
+    worker_loop_types::{ActiveGeneration, ActiveWorkerRequest},
     worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
 };
 
@@ -28,7 +28,7 @@ pub(super) async fn handle_generate_command(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     is_ready: &mut bool,
     model_load_deadline: &mut Option<Instant>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
     model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
     model_load_timeout: Duration,
@@ -36,7 +36,7 @@ pub(super) async fn handle_generate_command(
 ) -> Result<(), WorkerControlError> {
     // The handle reserves this request's permit before sending the command, so
     // permit availability cannot reveal whether the loop owns an earlier request.
-    if active_generation.is_some() {
+    if active_request.is_some() {
         let _send_outcome = start_sender.send(Err(GenerationStartError::CapacityUnavailable));
         tracing::error!(
             "received a Generate command while a generation is active; this indicates a queue bug"
@@ -62,6 +62,16 @@ pub(super) async fn handle_generate_command(
             return Ok(());
         }
         if let Some(model_policy) = requested_model_policy {
+            let expected_configuration_generation =
+                health_snapshot.read().ok().and_then(|snapshot| {
+                    snapshot
+                        .worker_runtime_feature_configuration
+                        .as_ref()
+                        .map(|configuration| configuration.configuration_generation.clone())
+                });
+            let expected_model_runtime_configuration = model_policy
+                .worker_model_configuration
+                .runtime_configuration();
             tracing::info!(
                 requested_model = %requested_model,
                 loaded_model = ?loaded_model_id,
@@ -76,13 +86,8 @@ pub(super) async fn handle_generate_command(
                 .await
             {
                 tracing::error!(error = %swap_error, "SwapModel command failed");
-                contain_worker_failure(
-                    worker_process,
-                    health_snapshot,
-                    active_generation,
-                    swap_error,
-                )
-                .await;
+                contain_worker_failure(worker_process, health_snapshot, active_request, swap_error)
+                    .await;
                 *is_ready = false;
                 let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
                 return Ok(());
@@ -94,8 +99,10 @@ pub(super) async fn handle_generate_command(
                     health_snapshot,
                     is_ready,
                     model_load_deadline,
-                    active_generation,
+                    active_request,
                     performance_log,
+                    expected_configuration_generation.as_deref(),
+                    &expected_model_runtime_configuration,
                 ),
             )
             .await
@@ -119,7 +126,7 @@ pub(super) async fn handle_generate_command(
                     contain_worker_failure(
                         worker_process,
                         health_snapshot,
-                        active_generation,
+                        active_request,
                         swap_error,
                     )
                     .await;
@@ -162,18 +169,13 @@ pub(super) async fn handle_generate_command(
         }
         Err(start_error) => {
             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-            contain_worker_failure(
-                worker_process,
-                health_snapshot,
-                active_generation,
-                start_error,
-            )
-            .await;
+            contain_worker_failure(worker_process, health_snapshot, active_request, start_error)
+                .await;
             *is_ready = false;
             return Ok(());
         }
     }
-    *active_generation = Some(ActiveGeneration {
+    *active_request = Some(ActiveWorkerRequest::Chat(ActiveGeneration {
         _active_generation_permit: active_generation_permit,
         generated_token_count: 0,
         generation_started_at: None,
@@ -195,15 +197,17 @@ pub(super) async fn handle_generate_command(
         last_mlx_active_memory_bytes: None,
         request_id,
         stream_event_sender,
-    });
+    }));
     clear_active_request_progress(health_snapshot);
     publish_activity(health_snapshot, WorkerActivity::PromptProcessing);
     if start_sender.send(Ok(())).is_err() {
         cancel_active_generation(
             worker_process,
             health_snapshot,
-            active_generation,
+            active_request,
             cancellation_acknowledgement_timeout,
+            model_load_timeout,
+            is_ready,
         )
         .await;
     }

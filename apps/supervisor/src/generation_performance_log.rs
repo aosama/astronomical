@@ -74,6 +74,28 @@ pub struct GenerationPerformanceRecord {
     pub persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
 }
 
+/// One finalized image request's end-to-end performance attribution.
+#[derive(Clone, Debug, Serialize)]
+pub struct ImageGenerationPerformanceRecord {
+    pub operation: &'static str,
+    pub timestamp_millis: u64,
+    pub request_id: u64,
+    pub model_id: String,
+    pub width_pixels: u32,
+    pub height_pixels: u32,
+    pub steps: u16,
+    pub completion_outcome: &'static str,
+    pub total_elapsed_millis: u64,
+    pub queue_wait_elapsed_millis: u64,
+    pub swap_load_elapsed_millis: u64,
+    pub execution_elapsed_millis: u64,
+    pub finalization_elapsed_millis: u64,
+    pub worker_reported_elapsed_millis: u64,
+    pub encoded_image_bytes: Option<u64>,
+    pub mlx_peak_memory_bytes: Option<u64>,
+    pub mlx_active_memory_bytes: Option<u64>,
+}
+
 impl GenerationPerformanceRecord {
     /// Computes the throughput fields from raw counters and elapsed times.
     ///
@@ -159,6 +181,33 @@ impl GenerationPerformanceLog {
             tracing::warn!(
                 error = %flush_error,
                 "failed to flush generation performance log"
+            );
+        }
+    }
+
+    /// Appends one finalized image-generation performance record.
+    pub fn record_image(&mut self, record: &ImageGenerationPerformanceRecord) {
+        let json_line = match serde_json::to_string(record) {
+            Ok(json) => json,
+            Err(serialization_error) => {
+                tracing::warn!(
+                    error = %serialization_error,
+                    "failed to serialize image generation performance record"
+                );
+                return;
+            }
+        };
+        if let Err(write_error) = writeln!(self.writer, "{json_line}") {
+            tracing::warn!(
+                error = %write_error,
+                "failed to write image generation performance record"
+            );
+            return;
+        }
+        if let Err(flush_error) = self.writer.flush() {
+            tracing::warn!(
+                error = %flush_error,
+                "failed to flush image generation performance log"
             );
         }
     }

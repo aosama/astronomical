@@ -8,8 +8,12 @@ use astronomical_ipc_protocol::{
 };
 
 mod scripted_worker_chat;
+mod scripted_worker_image;
 
 use scripted_worker_chat::{send_accepted_chat, send_activity_transition, send_simple_completion};
+use scripted_worker_image::{
+    ScriptedImageCommandOutcome, handle_image_command, image_capabilities, send_failed_image,
+};
 
 const READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
 const DEFAULT_READY_MODEL_ID: &str = "astronomical/test-worker";
@@ -53,20 +57,32 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
             speculative_prefill_draft_model_id: None,
             speculative_prefill_draft_model_revision: None,
             model_id: ready_model_id,
-            capabilities: ChatModelCapabilities {
-                supports_reasoning: true,
-                supports_tool_calls: true,
-                has_vision: true,
-                max_input_tokens: 241_664,
-                max_output_tokens: 20_480,
-                context_window: 262_144,
-            },
+            capabilities: astronomical_ipc_protocol::WorkerModelCapabilities::chat_and_image(
+                ChatModelCapabilities {
+                    supports_reasoning: true,
+                    supports_tool_calls: true,
+                    has_vision: true,
+                    max_input_tokens: 241_664,
+                    max_output_tokens: 20_480,
+                    context_window: 262_144,
+                },
+                image_capabilities(),
+            ),
         })
         .await?;
 
     while let Some(worker_command) = command_reader.next_command().await? {
         match worker_command {
             WorkerCommand::InitializeWorker(_) => {}
+            WorkerCommand::GenerateImage(generation_command) => {
+                let request_id = generation_command.request_id;
+                if let ScriptedImageCommandOutcome::CancellationPending { should_acknowledge } =
+                    handle_image_command(generation_command, &mut event_writer).await?
+                {
+                    active_request_id = Some(request_id);
+                    should_acknowledge_cancellation = should_acknowledge;
+                }
+            }
             WorkerCommand::Generate(generation_command) => {
                 let request_id = generation_command.request_id;
                 match generation_command.model.as_str() {
@@ -419,6 +435,10 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             })
                             .await?;
                     }
+                }
+                if should_acknowledge_cancellation && request_id.value() >= 100 {
+                    send_failed_image(request_id, &mut event_writer).await?;
+                    continue;
                 }
                 event_writer
                     .send_event(&WorkerEvent::Completed {

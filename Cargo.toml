@@ -33,6 +33,7 @@ async-openai = { version = "0.41.3", default-features = false, features = ["byot
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
 base64 = "0.23"
 bytes = "1"
+crc32fast = "1"
 futures-util = { version = "0.3", features = ["sink"] }
 fs4 = "1.1.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }

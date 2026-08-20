@@ -10,7 +10,7 @@ use tokio::time::{Instant, timeout};
 use crate::{
     GenerationPerformanceLog, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
     WorkerHealthStatus, WorkerProcess, worker_event_handler::handle_worker_event,
-    worker_health::publish_health, worker_loop_types::ActiveGeneration,
+    worker_health::publish_health, worker_loop_types::ActiveWorkerRequest,
 };
 
 const MAXIMUM_DEFERRED_CANDIDATE_PROCESS_EVENTS: usize = 64;
@@ -49,7 +49,7 @@ impl WorkerReplacement {
         health_snapshot: &Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
         is_ready: &mut bool,
         model_load_deadline: &mut Option<Instant>,
-        active_generation: &mut Option<ActiveGeneration>,
+        active_generation: &mut Option<ActiveWorkerRequest>,
         performance_log: &mut GenerationPerformanceLog,
     ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
         let replacement_started_at = Instant::now();
@@ -320,7 +320,7 @@ fn publish_candidate_acknowledgement(
     health_snapshot: &Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
     is_ready: &mut bool,
     model_load_deadline: &mut Option<Instant>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_generation: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
 ) -> Result<(), WorkerControlError> {
     handle_worker_event(

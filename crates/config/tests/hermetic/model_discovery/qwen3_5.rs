@@ -1,5 +1,7 @@
 use std::fs;
 
+use astronomical_config::ModelCapabilities;
+
 use super::{discover_configured_models, write_minimal_model_config, write_required_model_files};
 
 /// Writes the config and tokenizer for a dense Qwen vision fixture.
@@ -74,7 +76,10 @@ fn should_discover_supported_text_and_vision_qwen_models() {
         directory_scans[0]
             .discovered_models
             .iter()
-            .any(|discovered_model| discovered_model.has_vision)
+            .any(|discovered_model| matches!(
+                discovered_model.capabilities,
+                ModelCapabilities::Chat(ref capabilities) if capabilities.supports_vision
+            ))
     );
 }
 
@@ -110,8 +115,11 @@ fn should_discover_a_dense_qwen3_5_model_as_text_only_despite_vision_metadata() 
         .find(|discovered_model| discovered_model.model_id == "DenseQwen3_5-OptiQ-4bit")
         .expect("dense Qwen3.5 model should be discovered");
 
-    assert!(!discovered_model.has_vision);
-    assert_eq!(discovered_model.context_window, 131_072);
+    let ModelCapabilities::Chat(chat_capabilities) = &discovered_model.capabilities else {
+        panic!("Qwen discovery must expose chat capabilities");
+    };
+    assert!(!chat_capabilities.supports_vision);
+    assert_eq!(chat_capabilities.context_window, 131_072);
 }
 
 #[test]
@@ -153,7 +161,10 @@ fn should_discover_dense_qwen3_5_embedded_and_sidecar_vision_models() {
         directory_scans[0]
             .discovered_models
             .iter()
-            .all(|discovered_model| discovered_model.has_vision)
+            .all(|discovered_model| matches!(
+                discovered_model.capabilities,
+                ModelCapabilities::Chat(ref capabilities) if capabilities.supports_vision
+            ))
     );
 }
 

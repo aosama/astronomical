@@ -3,6 +3,10 @@ mod dense_qwen3_5_image_e2e;
 #[cfg(feature = "model-artifact-qualification")]
 mod deployment_litmus_model;
 #[cfg(feature = "model-artifact-qualification")]
+mod flux2_klein_rest_qualification;
+#[cfg(feature = "model-artifact-qualification")]
+mod flux2_klein_rest_support;
+#[cfg(feature = "model-artifact-qualification")]
 mod laguna;
 #[cfg(feature = "model-artifact-qualification")]
 mod model_artifact_rest_qualification;

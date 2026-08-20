@@ -44,6 +44,7 @@ pub use live_allocation_budget::{MlxAllocationBudget, MlxAllocationBudgetError};
 pub use mlx_memory_telemetry::{
     MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
 };
+#[cfg(feature = "direct-mlx")]
 pub(crate) use mlx_ram_budget::context_token_bucket;
 pub use mlx_ram_budget::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, MlxRamBudgetError,

@@ -6,6 +6,8 @@ mod decoder_cache;
 mod deepseek_v4;
 mod engine_backed_worker;
 mod expert_paging;
+mod flux2_klein;
+mod image_generation_engine;
 mod inference_engine;
 mod laguna;
 mod memory;
@@ -58,7 +60,9 @@ pub use deepseek_v4::{
     DeepSeekV4UnavailableInferenceRequest, DeepSeekV4UnavailableRequestOutput,
     deepseek_v4_unavailable_reason,
 };
-pub use engine_backed_worker::{EngineBackedWorker, ModelFactory, WorkerRuntimeError};
+pub use engine_backed_worker::{
+    EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
+};
 pub use expert_paging::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertManifestError, ExpertPageRoutePartition, ExpertResidencyPhase,
@@ -73,6 +77,37 @@ pub use expert_paging::{
     last_prefill_chunk_demand_weight, parse_safetensors_header, plan_phase_aware_expert_residency,
     validate_expert_ids, validate_quantization_contract, validate_source_intervals,
     validate_virtual_intervals,
+};
+pub use flux2_klein::{
+    FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION,
+    FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT, FLUX2_KLEIN_PROVIDER_MODEL_ID,
+    FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT, Flux2KleinArtifactError, Flux2KleinArtifactProvenance,
+    Flux2KleinArtifactValidator, Flux2KleinComponentLoad, Flux2KleinConfigError,
+    Flux2KleinDimensionError, Flux2KleinEngineComponents, Flux2KleinFlowSchedule,
+    Flux2KleinFlowScheduler, Flux2KleinFlowSchedulerError, Flux2KleinFlowStep,
+    Flux2KleinImageDimensions, Flux2KleinImageEncodingError, Flux2KleinImageEngine,
+    Flux2KleinLicense, Flux2KleinMemoryAdmission, Flux2KleinMemoryAdmissionError,
+    Flux2KleinMemoryGeometry, Flux2KleinOfficialProfile, Flux2KleinPackedLatentLayout,
+    Flux2KleinPipelineConfig, Flux2KleinPngEncoder, Flux2KleinResidencyMode,
+    Flux2KleinResidencyPlan, Flux2KleinRetainedArtifactFiles, Flux2KleinSchedulerConfig,
+    Flux2KleinTensorDescriptor, Flux2KleinTensorInventory, Flux2KleinTextEncoderConfig,
+    Flux2KleinTransformerConfig, Flux2KleinVaeConfig, Flux2KleinVaeError, Flux2KleinVaeTile,
+    Flux2KleinVaeTilePlan, Flux2KleinVaeTilingConfig, ValidatedFlux2KleinArtifact,
+    flux2_klein_inverse_batch_norm_reference, flux2_klein_reference_rgb_u8,
+};
+#[cfg(feature = "direct-mlx")]
+pub use flux2_klein::{
+    Flux2KleinBlockGroupEvent, Flux2KleinBlockKind, Flux2KleinComponentOracle,
+    Flux2KleinTransformer, Flux2KleinTransformerError, Flux2KleinTransformerGeometry,
+    Flux2KleinTransformerGeometryError, Flux2KleinTransformerInputs, Flux2KleinTransformerOutput,
+    Flux2KleinTransformerWeights, Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder,
+    apply_rope_for_component_oracle, flux2_klein_allocator_cache_limit_for_tests,
+    flux2_klein_euler_update_for_tests, flux2_klein_initial_latents_for_tests,
+    flux2_klein_keyed_noise_and_euler_for_tests,
+};
+pub use image_generation_engine::{
+    ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
+    ImageGenerationUnavailableEngine,
 };
 pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,

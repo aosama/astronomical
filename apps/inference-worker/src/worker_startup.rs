@@ -3,12 +3,9 @@ use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
 };
-use astronomical_model_serving::{
-    EngineBackedWorker, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
-};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::model_family_factory::ModelFamilyFactory;
+use crate::model_family_factory::{InferenceWorker, ModelFamilyFactory};
 
 const PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME: &str = "performance-attribution.jsonl";
 
@@ -102,32 +99,29 @@ where
     );
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
         derive_mlx_memory_limits_from_gpu_wired_limit(effective_mlx_memory_ceiling_bytes);
-    let model_factory = ModelFamilyFactory {
-        effective_mlx_memory_ceiling_bytes: active_memory_limit_bytes,
+    let model_factory = ModelFamilyFactory::new(
+        active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
         prompt_cache_config,
         performance_attribution_enabled,
         performance_attribution_log_path,
         persistent_prompt_cache_enabled,
-    };
-    let engine_worker: EngineBackedWorker<
-        ModelFamilyGenerationProcessor,
-        ModelFamilyInferenceEngine,
-        ModelFamilyFactory,
-    > = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
-        model_factory,
-        u64::try_from(machine_mlx_memory_ceiling_bytes).map_err(|_| {
-            WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
-                description: "machine MLX memory ceiling exceeds the u64 range",
-            })
-        })?,
-        u64::try_from(effective_mlx_memory_ceiling_bytes).map_err(|_| {
-            WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
-                description: "MLX memory ceiling exceeds the u64 range",
-            })
-        })?,
-    )
-    .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration);
+    );
+    let engine_worker: InferenceWorker =
+        InferenceWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+            model_factory,
+            u64::try_from(machine_mlx_memory_ceiling_bytes).map_err(|_| {
+                WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
+                    description: "machine MLX memory ceiling exceeds the u64 range",
+                })
+            })?,
+            u64::try_from(effective_mlx_memory_ceiling_bytes).map_err(|_| {
+                WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
+                    description: "MLX memory ceiling exceeds the u64 range",
+                })
+            })?,
+        )
+        .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration);
     engine_worker
         .run_with_protocol(command_reader, event_writer)
         .await

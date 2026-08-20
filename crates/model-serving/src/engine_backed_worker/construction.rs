@@ -1,6 +1,6 @@
 use super::support::ModelFactory;
-use super::{EngineBackedWorker, LoadedModel};
-use crate::{InferenceEngine, ModelGenerationProcessor};
+use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
+use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
 
 impl<Processor, Engine> EngineBackedWorker<Processor, Engine, ()>
 where
@@ -9,7 +9,10 @@ where
 {
     pub fn new(processor: Processor, engine: Engine) -> Self {
         Self {
-            loaded_model: Some(LoadedModel { processor, engine }),
+            loaded_runtime: Some(LoadedRuntime::Autoregressive(LoadedModel {
+                processor,
+                engine,
+            })),
             model_factory: None,
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
@@ -19,11 +22,13 @@ where
     }
 }
 
-impl<Processor, Engine, Factory> EngineBackedWorker<Processor, Engine, Factory>
+impl<Processor, Engine, Factory, ImageEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    ImageEngine: ImageGenerationEngine,
 {
     pub fn with_model_factory(
         processor: Processor,
@@ -31,7 +36,10 @@ where
         model_factory: Factory,
     ) -> Self {
         Self {
-            loaded_model: Some(LoadedModel { processor, engine }),
+            loaded_runtime: Some(LoadedRuntime::Autoregressive(LoadedModel {
+                processor,
+                engine,
+            })),
             model_factory: Some(model_factory),
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
@@ -54,7 +62,7 @@ where
         effective_mlx_memory_ceiling_bytes: u64,
     ) -> Self {
         Self {
-            loaded_model: None,
+            loaded_runtime: None,
             model_factory: Some(model_factory),
             machine_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes,

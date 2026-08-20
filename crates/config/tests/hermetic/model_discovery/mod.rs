@@ -3,6 +3,7 @@ use std::path::Path;
 
 mod classified_artifacts;
 mod family_classification;
+mod flux2_klein;
 mod laguna;
 mod package_structure;
 mod qwen3_5;

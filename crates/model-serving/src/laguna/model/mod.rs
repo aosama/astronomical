@@ -5,7 +5,9 @@
 
 mod cache_layout;
 mod error;
+#[cfg(feature = "direct-mlx")]
 mod expert_coverage;
+#[cfg(feature = "direct-mlx")]
 mod expert_release;
 
 #[cfg(feature = "direct-mlx")]
@@ -24,6 +26,7 @@ mod expert_residency;
 pub(in crate::laguna) use expert_residency::LagunaLastExpertForward;
 #[cfg(feature = "direct-mlx")]
 mod dense_feed_forward;
+#[cfg(feature = "direct-mlx")]
 mod memory_policy;
 #[cfg(feature = "direct-mlx")]
 mod model;

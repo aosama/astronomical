@@ -36,6 +36,23 @@ pub struct OpenAiModelParts {
     pub supported_endpoints: Vec<String>,
 }
 
+/// Capability metadata for an image-output model without autoregressive token limits.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpenAiImageModelParts {
+    /// Model identifier advertised by the local server.
+    pub model_id: String,
+    /// Unix timestamp associated with this server's model advertisement.
+    pub created: u64,
+    /// Local owner label for the advertised model.
+    pub owned_by: String,
+    /// Modalities accepted in request input.
+    pub input_modalities: Vec<String>,
+    /// Modalities emitted in response output.
+    pub output_modalities: Vec<String>,
+    /// Generation endpoints supported by this model.
+    pub supported_endpoints: Vec<String>,
+}
+
 impl OpenAiModelParts {
     /// Validates relationships that must hold between advertised model capabilities.
     pub fn validate(&self) -> Result<(), OpenAiModelValidationError> {
@@ -113,6 +130,9 @@ pub enum OpenAiModelValidationError {
     /// Output must always support text for the current API contract.
     #[error("output modalities must contain text")]
     OutputModalitiesMustContainText,
+    /// Image generation must advertise its image result modality.
+    #[error("image model output modalities must contain image")]
+    ImageOutputModalitiesMustContainImage,
     /// A reasoning format must be present exactly when reasoning is supported.
     #[error("reasoning format must be present exactly when reasoning is supported")]
     ReasoningFormatMustMatchSupport,
@@ -229,6 +249,47 @@ impl OpenAiModel {
             supports_tool_calls: Some(model_parts.supports_tool_calls),
             tool_call_format: model_parts.tool_call_format,
             supported_endpoints: Some(model_parts.supported_endpoints),
+        })
+    }
+
+    /// Builds one non-streaming image model without fabricating token-generation limits.
+    pub fn from_image_parts(
+        image_model_parts: OpenAiImageModelParts,
+    ) -> Result<Self, OpenAiModelValidationError> {
+        if !image_model_parts
+            .input_modalities
+            .iter()
+            .any(|modality| modality == "text")
+        {
+            return Err(OpenAiModelValidationError::InputModalitiesMustContainText);
+        }
+        if !image_model_parts
+            .output_modalities
+            .iter()
+            .any(|modality| modality == "image")
+        {
+            return Err(OpenAiModelValidationError::ImageOutputModalitiesMustContainImage);
+        }
+        if image_model_parts.supported_endpoints.is_empty() {
+            return Err(OpenAiModelValidationError::SupportedEndpointsMustNotBeEmpty);
+        }
+
+        Ok(Self {
+            id: image_model_parts.model_id,
+            object_kind: "model",
+            created: image_model_parts.created,
+            owned_by: image_model_parts.owned_by,
+            context_window: None,
+            max_input_tokens: None,
+            max_output_tokens: None,
+            input_modalities: Some(image_model_parts.input_modalities),
+            output_modalities: Some(image_model_parts.output_modalities),
+            supports_streaming: Some(false),
+            supports_reasoning: Some(false),
+            reasoning_format: None,
+            supports_tool_calls: Some(false),
+            tool_call_format: None,
+            supported_endpoints: Some(image_model_parts.supported_endpoints),
         })
     }
 }

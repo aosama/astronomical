@@ -173,7 +173,10 @@ fn ready_model_summary(
         resolved_config.and_then(|config| config.model_policy_catalog.get(ready_model_id));
     let configured_worker_model =
         configured_policy.map(|policy| &policy.worker_model_configuration);
-    let effective_model = effective_model.filter(|model| model.model_id == ready_model_id);
+    let effective_model = effective_model.filter(|model| model.model_id() == ready_model_id);
+    let effective_autoregressive_model = effective_model.and_then(|model| model.autoregressive());
+    let configured_autoregressive_model =
+        configured_worker_model.and_then(|model| model.autoregressive());
     let configured_speculative_prefill = configured_policy.and_then(|policy| {
         policy
             .acceleration_availability
@@ -181,14 +184,14 @@ fn ready_model_summary(
             .as_ref()
     });
     let effective_speculative_prefill =
-        effective_model.and_then(|model| model.speculative_prefill.as_ref());
+        effective_autoregressive_model.and_then(|model| model.speculative_prefill.as_ref());
     Some(ReadyModelConfigurationSummary {
         model_id: ready_model_id.to_owned(),
         maximum_context_tokens: ConfigurationValue {
             configured: configured_policy
                 .and_then(|policy| policy.configured_maximum_context_tokens),
             default: configured_policy.map(|policy| policy.default_maximum_context_tokens),
-            effective: effective_model.map(|model| model.maximum_context_tokens),
+            effective: effective_autoregressive_model.map(|model| model.maximum_context_tokens),
         },
         maximum_output_default_tokens: ConfigurationValue {
             configured: configured_policy.and_then(|policy| {
@@ -218,7 +221,7 @@ fn ready_model_summary(
         ),
         chunking: chunking_summary(configured_policy, effective_model),
         mtp_draft_depth: ConfigurationValue {
-            configured: configured_worker_model.and_then(|model| model.mtp_draft_depth),
+            configured: configured_autoregressive_model.and_then(|model| model.mtp_draft_depth),
             default: None,
             effective: effective_mtp_draft_depth,
         },
@@ -230,7 +233,8 @@ fn ready_model_summary(
                     .clone()
             }),
             default: None,
-            effective: effective_model.and_then(|model| model.mtp_head_model_id.clone()),
+            effective: effective_autoregressive_model
+                .and_then(|model| model.mtp_head_model_id.clone()),
         },
         mtp_head_unavailable_reason: configured_policy.and_then(|policy| {
             policy
@@ -258,9 +262,12 @@ fn chunking_summary(
     let configured_fields = configured_policy
         .map(|policy| policy.configured_chunking_fields)
         .unwrap_or_default();
-    let configured_chunking =
-        configured_policy.map(|policy| &policy.worker_model_configuration.chunking);
-    let effective_chunking = effective_model.map(|model| &model.chunking);
+    let configured_chunking = configured_policy
+        .and_then(|policy| policy.worker_model_configuration.autoregressive())
+        .map(|configuration| &configuration.chunking);
+    let effective_chunking = effective_model
+        .and_then(WorkerLoadedModelRuntimeConfiguration::autoregressive)
+        .map(|configuration| &configuration.chunking);
     ChunkingConfigurationSummary {
         fixed_prompt_processing_chunk_size_tokens: ConfigurationValue {
             configured: configured_fields

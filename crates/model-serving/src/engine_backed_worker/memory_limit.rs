@@ -5,15 +5,19 @@ use tokio::io::AsyncWrite;
 
 use super::output::worker_memory_snapshot;
 use super::support::{ModelFactory, WorkerRuntimeError, engine_generation_error};
-use crate::{InferenceEngine, InferenceEngineError, ModelGenerationProcessor};
+use crate::{
+    ImageGenerationEngine, InferenceEngine, InferenceEngineError, ModelGenerationProcessor,
+};
 
-use super::EngineBackedWorker;
+use super::{EngineBackedWorker, LoadedRuntime};
 
-impl<Processor, Engine, Factory> EngineBackedWorker<Processor, Engine, Factory>
+impl<Processor, Engine, Factory, ImageEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    ImageEngine: ImageGenerationEngine,
 {
     pub(crate) async fn update_mlx_memory_limit<WriteTransport>(
         &mut self,
@@ -34,7 +38,7 @@ where
                 )
                 .await;
         }
-        let Some(loaded_model) = self.loaded_model.as_mut() else {
+        let Some(loaded_runtime) = self.loaded_runtime.as_mut() else {
             let Some(model_factory) = self.model_factory.as_mut() else {
                 return self
                     .emit_mlx_memory_limit_rejection(
@@ -59,11 +63,34 @@ where
                 .await?;
             return Ok(());
         };
-        match loaded_model
-            .engine
-            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
-            .await
-        {
+        let memory_limit_adjustment = match loaded_runtime {
+            LoadedRuntime::Autoregressive(loaded_model) => {
+                loaded_model
+                    .engine
+                    .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+                    .await
+            }
+            LoadedRuntime::Image(image_engine) => image_engine
+                .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+                .map_err(|failure_reason| match failure_reason {
+                    astronomical_ipc_protocol::ImageGenerationFailureReason::EngineBusy => {
+                        InferenceEngineError::EngineBusy
+                    }
+                    astronomical_ipc_protocol::ImageGenerationFailureReason::InvalidRequest {
+                        reason,
+                    }
+                    | astronomical_ipc_protocol::ImageGenerationFailureReason::EncodingFailed {
+                        reason,
+                    }
+                    | astronomical_ipc_protocol::ImageGenerationFailureReason::FatalExecution {
+                        reason,
+                    } => InferenceEngineError::Fatal { reason },
+                    other => InferenceEngineError::Fatal {
+                        reason: format!("image memory-limit update failed: {other:?}"),
+                    },
+                }),
+        };
+        match memory_limit_adjustment {
             Ok(mlx_memory_limit_adjustment) => {
                 self.effective_mlx_memory_ceiling_bytes =
                     mlx_memory_limit_adjustment.effective_mlx_memory_ceiling_bytes();

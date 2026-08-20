@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::ModelFamily;
+use astronomical_config::{ModelCapabilities, ModelFamily};
 use serde_json::{Value, json};
 
 use super::discover_configured_models;
@@ -23,12 +23,15 @@ fn should_advertise_one_complete_executable_laguna_artifact() {
     assert_eq!(directory_scans[0].discovered_models.len(), 1);
     assert_eq!(discovered_model.model_family, ModelFamily::Laguna);
     assert_eq!(discovered_model.revision, IMMUTABLE_REVISION);
-    assert_eq!(discovered_model.context_window, 65_536);
-    assert_eq!(discovered_model.max_input_tokens, 65_535);
-    assert_eq!(discovered_model.max_output_tokens, 65_535);
-    assert!(!discovered_model.has_vision);
-    assert!(discovered_model.supports_reasoning);
-    assert!(discovered_model.supports_tool_calls);
+    let ModelCapabilities::Chat(chat_capabilities) = &discovered_model.capabilities else {
+        panic!("Laguna discovery must expose chat capabilities");
+    };
+    assert_eq!(chat_capabilities.context_window, 65_536);
+    assert_eq!(chat_capabilities.max_input_tokens, 65_535);
+    assert_eq!(chat_capabilities.max_output_tokens, 65_535);
+    assert!(!chat_capabilities.supports_vision);
+    assert!(chat_capabilities.supports_reasoning);
+    assert!(chat_capabilities.supports_tool_calls);
     assert_eq!(discovered_model.model_size_bytes, 96);
 }
 

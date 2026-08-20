@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState, WorkerPromptWorkReuse};
+use astronomical_ipc_protocol::{
+    ChatModelCapabilities, ImageGenerationCapabilities, MtpRuntimeState, WorkerModelCapabilities,
+    WorkerPromptWorkReuse,
+};
 use astronomical_supervisor::{
     ChatGenerationExecutor, PendingPromptCacheClear, ServingSessionSnapshot, WorkerHealthSnapshot,
     WorkerHealthStatus,
@@ -27,14 +30,26 @@ async fn should_publish_the_ready_model_identity_from_the_worker_readiness_event
             );
             assert_eq!(
                 worker_health_snapshot.ready_model_capabilities,
-                Some(ChatModelCapabilities {
-                    supports_reasoning: true,
-                    supports_tool_calls: true,
-                    has_vision: true,
-                    max_input_tokens: 241_664,
-                    max_output_tokens: 20_480,
-                    context_window: 262_144,
-                })
+                Some(WorkerModelCapabilities::chat_and_image(
+                    ChatModelCapabilities {
+                        supports_reasoning: true,
+                        supports_tool_calls: true,
+                        has_vision: true,
+                        max_input_tokens: 241_664,
+                        max_output_tokens: 20_480,
+                        context_window: 262_144,
+                    },
+                    ImageGenerationCapabilities {
+                        minimum_width_pixels: 64,
+                        maximum_width_pixels: 1_024,
+                        minimum_height_pixels: 64,
+                        maximum_height_pixels: 1_024,
+                        dimension_multiple_pixels: 16,
+                        maximum_steps: 4,
+                        maximum_guidance_thousandths: 1_000,
+                        output_mime_types: vec!["image/png".to_owned()],
+                    },
+                ))
             );
             break;
         }

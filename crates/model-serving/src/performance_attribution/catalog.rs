@@ -94,6 +94,34 @@ pub enum PerformanceOperation {
     MlpForwardSpan,
     GenerationFinalization,
     MlxAllocatorCacheCleanup,
+    ImageRuntimeSetup,
+    ImageTextComponentMapping,
+    ImageTextComponentLoading,
+    ImageQwenLayerGraphConstruction,
+    ImageQwenLayerSynchronizationWait,
+    SeededNoiseGraphConstruction,
+    SeededNoiseSynchronizationWait,
+    ImageScheduleConstruction,
+    ImagePositionGraphConstruction,
+    ImagePositionSynchronizationWait,
+    ImageTransformerComponentMapping,
+    ImageTransformerComponentLoading,
+    ImageDenoisingStepSpan,
+    ImageTransformerBlockGroupGraphConstruction,
+    ImageTransformerBlockGroupSynchronizationWait,
+    ImageSchedulerUpdateGraphConstruction,
+    ImageSchedulerUpdateSynchronizationWait,
+    ImageTransformerRelease,
+    ImageVaeComponentMapping,
+    ImageVaeComponentLoading,
+    ImageVaeCompleteDecodeGraphConstruction,
+    ImageVaeDecodeSynchronizationWait,
+    ImagePixelConversionGraphConstruction,
+    ImagePixelTransfer,
+    ImagePngEncoding,
+    ImageCancellationSynchronization,
+    ImageComponentRelease,
+    ImageFinalCleanup,
     FinalizedMlxMemorySnapshot,
 }
 
@@ -186,6 +214,34 @@ impl PerformanceOperation {
         Self::MlpForwardSpan,
         Self::GenerationFinalization,
         Self::MlxAllocatorCacheCleanup,
+        Self::ImageRuntimeSetup,
+        Self::ImageTextComponentMapping,
+        Self::ImageTextComponentLoading,
+        Self::ImageQwenLayerGraphConstruction,
+        Self::ImageQwenLayerSynchronizationWait,
+        Self::SeededNoiseGraphConstruction,
+        Self::SeededNoiseSynchronizationWait,
+        Self::ImageScheduleConstruction,
+        Self::ImagePositionGraphConstruction,
+        Self::ImagePositionSynchronizationWait,
+        Self::ImageTransformerComponentMapping,
+        Self::ImageTransformerComponentLoading,
+        Self::ImageDenoisingStepSpan,
+        Self::ImageTransformerBlockGroupGraphConstruction,
+        Self::ImageTransformerBlockGroupSynchronizationWait,
+        Self::ImageSchedulerUpdateGraphConstruction,
+        Self::ImageSchedulerUpdateSynchronizationWait,
+        Self::ImageTransformerRelease,
+        Self::ImageVaeComponentMapping,
+        Self::ImageVaeComponentLoading,
+        Self::ImageVaeCompleteDecodeGraphConstruction,
+        Self::ImageVaeDecodeSynchronizationWait,
+        Self::ImagePixelConversionGraphConstruction,
+        Self::ImagePixelTransfer,
+        Self::ImagePngEncoding,
+        Self::ImageCancellationSynchronization,
+        Self::ImageComponentRelease,
+        Self::ImageFinalCleanup,
         Self::FinalizedMlxMemorySnapshot,
     ];
 
@@ -335,6 +391,46 @@ impl PerformanceOperation {
             Self::MlpForwardSpan => "mlp_forward_span",
             Self::GenerationFinalization => "generation_finalization",
             Self::MlxAllocatorCacheCleanup => "mlx_allocator_cache_cleanup",
+            Self::ImageRuntimeSetup => "image_runtime_setup",
+            Self::ImageTextComponentMapping => "image_text_component_mapping",
+            Self::ImageTextComponentLoading => "image_text_component_loading",
+            Self::ImageQwenLayerGraphConstruction => "image_qwen_layer_graph_construction",
+            Self::ImageQwenLayerSynchronizationWait => "image_qwen_layer_synchronization_wait",
+            Self::SeededNoiseGraphConstruction => "seeded_noise_graph_construction",
+            Self::SeededNoiseSynchronizationWait => "seeded_noise_synchronization_wait",
+            Self::ImageScheduleConstruction => "image_schedule_construction",
+            Self::ImagePositionGraphConstruction => "image_position_graph_construction",
+            Self::ImagePositionSynchronizationWait => "image_position_synchronization_wait",
+            Self::ImageTransformerComponentMapping => "image_transformer_component_mapping",
+            Self::ImageTransformerComponentLoading => "image_transformer_component_loading",
+            Self::ImageDenoisingStepSpan => "image_denoising_step_span",
+            Self::ImageTransformerBlockGroupGraphConstruction => {
+                "image_transformer_block_group_graph_construction"
+            }
+            Self::ImageTransformerBlockGroupSynchronizationWait => {
+                "image_transformer_block_group_synchronization_wait"
+            }
+            Self::ImageSchedulerUpdateGraphConstruction => {
+                "image_scheduler_update_graph_construction"
+            }
+            Self::ImageSchedulerUpdateSynchronizationWait => {
+                "image_scheduler_update_synchronization_wait"
+            }
+            Self::ImageTransformerRelease => "image_transformer_release",
+            Self::ImageVaeComponentMapping => "image_vae_component_mapping",
+            Self::ImageVaeComponentLoading => "image_vae_component_loading",
+            Self::ImageVaeCompleteDecodeGraphConstruction => {
+                "image_vae_complete_decode_graph_construction"
+            }
+            Self::ImageVaeDecodeSynchronizationWait => "image_vae_decode_synchronization_wait",
+            Self::ImagePixelConversionGraphConstruction => {
+                "image_pixel_conversion_graph_construction"
+            }
+            Self::ImagePixelTransfer => "image_pixel_transfer",
+            Self::ImagePngEncoding => "image_png_encoding",
+            Self::ImageCancellationSynchronization => "image_cancellation_synchronization",
+            Self::ImageComponentRelease => "image_component_release",
+            Self::ImageFinalCleanup => "image_final_cleanup",
             Self::FinalizedMlxMemorySnapshot => "finalized_mlx_memory_snapshot",
         }
     }
@@ -353,6 +449,7 @@ impl PerformanceOperation {
                 | Self::AttentionForwardSpan
                 | Self::MlpForwardSpan
                 | Self::GenerationPreparation
+                | Self::ImageDenoisingStepSpan
         )
     }
 }

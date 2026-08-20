@@ -30,6 +30,8 @@ fn should_keep_neutral_worker_sources_free_of_concrete_family_ownership() {
             "Laguna",
             "deepseek_v4",
             "DeepSeekV4",
+            "flux2_klein",
+            "Flux2Klein",
         ] {
             if worker_source.contains(concrete_family_identifier) {
                 violations.push((
@@ -51,7 +53,14 @@ fn should_keep_qwen_startup_isolated_from_other_model_families() {
     for qwen_source_file_name in ["qwen3_5_model_startup.rs", "qwen3_5_model_startup_error.rs"] {
         let qwen_source = fs::read_to_string(worker_source_directory.join(qwen_source_file_name))
             .expect("Qwen startup source should be readable");
-        for foreign_family_identifier in ["laguna", "Laguna", "deepseek_v4", "DeepSeekV4"] {
+        for foreign_family_identifier in [
+            "laguna",
+            "Laguna",
+            "deepseek_v4",
+            "DeepSeekV4",
+            "flux2_klein",
+            "Flux2Klein",
+        ] {
             assert!(
                 !qwen_source.contains(foreign_family_identifier),
                 "Qwen startup must not own {foreign_family_identifier}: {qwen_source_file_name}"
@@ -92,6 +101,28 @@ fn should_route_classified_laguna_through_its_family_owned_runtime() {
     assert!(family_factory_source.contains("ModelFamilyGenerationProcessor::Laguna"));
     assert!(family_factory_source.contains("ModelFamilyInferenceEngine::Laguna"));
     assert!(!family_factory_source.contains("Laguna model family is not executable yet"));
+}
+
+#[test]
+fn should_bind_flux_to_the_real_image_runtime_without_an_autoregressive_processor() {
+    let worker_source_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let family_factory_source =
+        fs::read_to_string(worker_source_directory.join("model_family_factory.rs"))
+            .expect("model family factory source should be readable");
+    let worker_startup_source =
+        fs::read_to_string(worker_source_directory.join("worker_startup.rs"))
+            .expect("worker startup source should be readable");
+
+    assert!(family_factory_source.contains("Some(ModelFamily::Flux2Klein)"));
+    assert!(family_factory_source.contains("Flux2KleinImageEngine::from_model_family_factory"));
+    assert!(family_factory_source.contains("ModelFactoryRuntime::Image"));
+    assert!(family_factory_source.contains("Flux2KleinArtifactProvenance::new"));
+    assert!(family_factory_source.contains("verify_flux2_klein_model_directory"));
+    assert!(family_factory_source.contains("verified_evidence.license.spdx_identifier()"));
+    assert!(family_factory_source.contains("effective_mlx_memory_ceiling_bytes"));
+    assert!(family_factory_source.contains("allocator_cache_memory_limit_bytes"));
+    assert!(worker_startup_source.contains("InferenceWorker"));
+    assert!(!worker_startup_source.contains("Flux2KleinImageEngine"));
 }
 
 fn rust_source_files_recursively(source_directory: &Path) -> Vec<PathBuf> {

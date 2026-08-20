@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use astronomical_config::ModelCapabilities;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_rest_contract::{
     OpenAiErrorResponse, OpenAiResponseRequestConfiguration, OpenAiResponseStreamEvent,
@@ -63,6 +64,20 @@ pub(crate) async fn create_response(
             "model_not_found",
         );
     };
+    if application_state
+        .discovered_models_snapshot()
+        .iter()
+        .find(|discovered_model| discovered_model.model_id == resolved_model_id)
+        .is_some_and(|discovered_model| {
+            !matches!(discovered_model.capabilities, ModelCapabilities::Chat(_))
+        })
+    {
+        return invalid_request_response(
+            "the requested model does not support Responses generation",
+            Some("model"),
+            "model_capability_mismatch",
+        );
+    }
     let should_stream_response = request_parts.stream;
     let response_instructions = request_parts.instructions.clone();
     let response_request_configuration = request_parts.response_configuration();

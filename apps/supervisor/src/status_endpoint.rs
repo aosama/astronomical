@@ -70,6 +70,7 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
     let configured_speculative_prefill_enabled = configured_speculative_prefill_draft_model_id
         .is_some()
         || loaded_model_runtime_configuration
+            .and_then(|configuration| configuration.autoregressive())
             .is_some_and(|configuration| configuration.speculative_prefill_enabled);
     let configured_speculative_prefill_unavailable_reason = application_state
         .reloadable_config
@@ -114,6 +115,7 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "activity": worker_health_snapshot.activity.as_str(),
         "mtp_enabled": mtp_enabled,
         "mtp_configured_draft_depth": loaded_model_runtime_configuration
+            .and_then(|configuration| configuration.autoregressive())
             .and_then(|configuration| configuration.mtp_draft_depth)
             .or(worker_health_snapshot.mtp_depth_status.configured_draft_depth),
         "mtp_artifact_maximum_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_maximum_draft_depth,
@@ -295,6 +297,19 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                     "total_layer_count": total_layer_count,
                     "complete_layer_count": complete_layer_count,
                     "partial_layer_count": partial_layer_count,
+                });
+            }
+            ActiveRequestProgress::ImageGeneration {
+                phase,
+                completed_steps,
+                total_steps,
+                elapsed_millis,
+            } => {
+                status_json["progress"] = serde_json::json!({
+                    "phase": phase,
+                    "completed_steps": completed_steps,
+                    "total_steps": total_steps,
+                    "elapsed_ms": elapsed_millis,
                 });
             }
         }
