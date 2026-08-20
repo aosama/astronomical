@@ -28,7 +28,7 @@ final class SupervisorClientContractTests: XCTestCase {
     StubSupervisorURLProtocol.responseConfiguration = .init(
       statusCode: 202,
       responseBody: Data(
-        #"{"status":"reloaded","message":"Config reloaded and applied by the worker","worker_restart_completed":true,"worker_runtime_feature_configuration":{"persistent_prompt_cache_enabled":true,"mtp_enabled":true,"speculative_prefill_enabled":false}}"#.utf8)
+        #"{"status":"reloaded","message":"Config reloaded and applied by the worker","worker_restart_completed":true,"candidate_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","effective_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","worker_runtime_feature_configuration":{"configuration_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","persistent_prompt_cache_enabled":true,"prompt_cache_maximum_size_bytes":50000000000,"loaded_model":null}}"#.utf8)
     )
     defer { StubSupervisorURLProtocol.responseConfiguration = nil }
 
@@ -41,9 +41,21 @@ final class SupervisorClientContractTests: XCTestCase {
     XCTAssertEqual(configurationReloadResult.message, "Config reloaded and applied by the worker")
     XCTAssertTrue(configurationReloadResult.workerRestartCompleted)
     XCTAssertEqual(
-      configurationReloadResult.workerRuntimeFeatureConfiguration?.speculativePrefillEnabled,
-      false
+      configurationReloadResult.workerRuntimeFeatureConfiguration?.configurationGeneration,
+      configurationReloadResult.effectiveGeneration
     )
+  }
+
+  func test_should_decode_reload_generation_and_full_loaded_model_configuration() throws {
+    let responseBody = Data(#"{"message":"Config reloaded and applied by the worker","worker_restart_completed":true,"candidate_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","effective_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","worker_runtime_feature_configuration":{"configuration_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","persistent_prompt_cache_enabled":true,"prompt_cache_maximum_size_bytes":50000000000,"loaded_model":{"model_id":"fictional/target","maximum_context_tokens":32768,"maximum_output_tokens":4096,"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048,"fixed_ssd_streaming_prompt_processing_chunk_size_tokens":256,"full_attention_key_value_growth_tokens":256,"speculative_prefill_draft_forward_tokens":1024,"prefill_graph_submission_layer_interval":1,"experimental_ssd_paging_generation_graph_submission_layer_interval":0,"prompt_cache_block_tokens":128,"prompt_cache_common_prefix_stride_blocks":4},"mtp_draft_depth":3,"mtp_head_model_id":"fictional/mtp-head","speculative_prefill_enabled":true,"speculative_prefill":{"draft_model_id":"fictional/draft","minimum_prompt_tokens":8192,"keep_percentage":20}}}}"#.utf8)
+
+    let reloadResult = try JSONDecoder().decode(ConfigurationReloadResult.self, from: responseBody)
+
+    XCTAssertEqual(reloadResult.candidateGeneration, reloadResult.effectiveGeneration)
+    XCTAssertEqual(reloadResult.workerRuntimeFeatureConfiguration?.loadedModel?.mtpDraftDepth, 3)
+    XCTAssertEqual(
+      reloadResult.workerRuntimeFeatureConfiguration?.loadedModel?.speculativePrefill?.draftModelIdentifier,
+      "fictional/draft")
   }
 
   func test_should_reject_status_from_the_opposite_runtime_instance() async {
@@ -107,6 +119,36 @@ final class SupervisorClientContractTests: XCTestCase {
 
     XCTAssertTrue(endpointIsOccupied)
     XCTAssertEqual(StubSupervisorURLProtocol.receivedRequestPaths.last, "/health")
+  }
+
+  func test_should_require_ready_acknowledged_effective_configuration_for_startup_health() async {
+    StubSupervisorURLProtocol.responseConfiguration = .init(
+      statusCode: 200, responseBody: Data(#"{"status":"ok"}"#.utf8))
+    defer {
+      StubSupervisorURLProtocol.responseConfiguration = nil
+      StubSupervisorURLProtocol.statusResponseConfiguration = nil
+    }
+    let developmentClient = LocalSupervisorClient(
+      applicationIdentity: applicationIdentity(channel: .development),
+      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+    )
+    let applicationIdentityDocument = #""application":{"version":"0.2.0","build_number":100,"commit":"abcdef1","is_dirty":true,"channel":"development","channel_display_name":"Development","state_directory":"~/.astronomical-dev"}"#
+
+    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: Data(
+        "{\(applicationIdentityDocument),\"status\":\"loading\",\"activity\":\"idle\",\"worker_runtime_feature_configuration_applied\":false,\"configuration\":{\"configured_generation\":\"a\",\"resolved_generation\":\"a\",\"effective_generation\":null,\"is_effective\":false,\"restart_required\":false}}".utf8)
+    )
+    let loadingInstanceIsHealthy = await developmentClient.expectedInstanceIsHealthy()
+    XCTAssertFalse(loadingInstanceIsHealthy)
+
+    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: Data(
+        "{\(applicationIdentityDocument),\"status\":\"ready\",\"activity\":\"idle\",\"worker_runtime_feature_configuration_applied\":true,\"configuration\":{\"configured_generation\":\"a\",\"resolved_generation\":\"a\",\"effective_generation\":\"a\",\"is_effective\":true,\"restart_required\":false}}".utf8)
+    )
+    let readyInstanceIsHealthy = await developmentClient.expectedInstanceIsHealthy()
+    XCTAssertTrue(readyInstanceIsHealthy)
   }
 
   func test_should_refuse_to_control_the_opposite_runtime_instance() async {

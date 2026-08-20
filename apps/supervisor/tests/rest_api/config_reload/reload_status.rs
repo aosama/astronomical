@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
+async fn should_apply_prompt_cache_policy_after_config_file_reload() {
     let worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
@@ -12,10 +12,7 @@ async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
     write_config_file(
         &config_home_directory,
         r#"{
-            "speculative_prefill": {
-                "enabled": false,
-                "draft_model_id": "astronomical/disabled-draft"
-            }
+            "prompt_cache": { "enabled": true }
         }"#,
     );
     let performance_log_directory = config_home_directory.join("performance");
@@ -27,7 +24,6 @@ async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
         GenerationPerformanceLog::open(&performance_log_directory)
             .expect("the performance log should open"),
         Arc::new(std::collections::HashMap::new()),
-        20_480,
     )
     .await
     .expect("the idle worker should launch");
@@ -39,18 +35,8 @@ async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
     let mut initial_resolved_config = runtime_config_resolver
         .load()
         .expect("the initial configuration should resolve");
-    initial_resolved_config.speculative_prefill =
-        astronomical_config::SpeculativePrefillConfig::new(
-            true,
-            Some("astronomical/configured-target".to_owned()),
-            Some("astronomical/configured-draft".to_owned()),
-            8_192,
-            20,
-            32,
-            512,
-            8,
-            13,
-        );
+    initial_resolved_config.persistent_prompt_cache_enabled = false;
+    initial_resolved_config.configured_persistent_prompt_cache_enabled = Some(false);
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
     let application = build_application_with_full_control(
         worker_handle.clone(),
@@ -70,8 +56,16 @@ async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
     assert_eq!(reload_document["status"], "reloaded");
     assert_eq!(reload_document["worker_restart_completed"], true);
     assert_eq!(
-        reload_document["worker_runtime_feature_configuration"]["speculative_prefill_enabled"],
-        false
+        reload_document["candidate_generation"],
+        reload_document["effective_generation"]
+    );
+    assert_eq!(
+        reload_document["worker_runtime_feature_configuration"]["configuration_generation"],
+        reload_document["candidate_generation"]
+    );
+    assert_eq!(
+        reload_document["worker_runtime_feature_configuration"]["persistent_prompt_cache_enabled"],
+        true
     );
 
     let status_response = application
@@ -94,6 +88,10 @@ async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
     );
     assert_eq!(status_document["speculative_prefill_enabled"], false);
     assert_eq!(
+        status_document["configured_generation"],
+        status_document["effective_generation"]
+    );
+    assert_eq!(
         status_document["speculative_prefill_draft_model_id"],
         serde_json::Value::Null
     );
@@ -102,15 +100,14 @@ async fn should_apply_disabled_speculative_prefill_after_config_file_reload() {
         true
     );
     assert_eq!(
-        status_document["worker_runtime_feature_configuration"]["speculative_prefill_enabled"],
-        false
+        status_document["worker_runtime_feature_configuration"]["persistent_prompt_cache_enabled"],
+        true
     );
     assert!(
-        !reloadable_config
+        reloadable_config
             .read()
             .expect("the applied config should remain readable")
-            .speculative_prefill
-            .is_enabled()
+            .persistent_prompt_cache_enabled
     );
 
     worker_handle
@@ -141,24 +138,22 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
     write_config_file(
         &config_home_directory,
         r#"{
-            "supervisor": { "bind_address": "127.0.0.1:6734" },
-            "prompt_cache_max_size_gb": 50
+            "diagnostics": { "log_level": "info" }
         }"#,
     );
     let reloadable_config = Arc::new(RwLock::new(ResolvedRuntimeConfig {
+        configuration_generation:
+            "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),
         discovered_models: Vec::new(),
         configured_model_directories: Vec::new(),
-        model_directories: Arc::new(std::collections::HashMap::new()),
-        max_output_tokens: 20_480,
+        model_policy_catalog: Arc::new(std::collections::HashMap::new()),
+        unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        chunking: astronomical_config::ChunkingConfig::default(),
         persistent_prompt_cache_enabled: true,
+        configured_persistent_prompt_cache_enabled: None,
+        configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        mtp_enabled: false,
-        mtp_draft_depth: None,
-        speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
-        speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             config_home_directory
                 .join(".astronomical-dev")
@@ -193,7 +188,111 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
 }
 
 #[tokio::test]
-async fn should_keep_worker_and_listener_fields_unchanged_when_rest_api_restart_is_required() {
+async fn should_not_report_a_mixed_reload_effective_when_only_memory_applied() {
+    let worker_executable_path = PathBuf::from(
+        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+            .expect("Cargo should provide the idle worker fixture path"),
+    );
+    let config_home_directory = tempfile::tempdir()
+        .expect("a config home should be created")
+        .keep();
+    write_config_file(
+        &config_home_directory,
+        r#"{
+            "runtime": {
+                "model_directories": [],
+                "maximum_mlx_memory_gb": 32
+            },
+            "diagnostics": { "log_level": "info" }
+        }"#,
+    );
+    let performance_log_directory = config_home_directory.join("performance");
+    std::fs::create_dir_all(&performance_log_directory)
+        .expect("the performance log directory should be created");
+    let mut initial_resolved_config = sample_resolved_config();
+    initial_resolved_config.worker_executable_path = worker_executable_path.clone();
+    let worker_handle = WorkerHandle::launch_with_startup_configuration(
+        &worker_executable_path,
+        Duration::from_secs(2),
+        GenerationPerformanceLog::open(&performance_log_directory)
+            .expect("the performance log should open"),
+        Arc::clone(&initial_resolved_config.model_policy_catalog),
+        initial_resolved_config.worker_startup_configuration(),
+    )
+    .await
+    .expect("the idle worker should launch");
+    wait_for_worker_configuration(&worker_handle).await;
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        config_home_directory.clone(),
+        worker_executable_path,
+    );
+    let application = build_application_with_full_control(
+        worker_handle.clone(),
+        Arc::new(RwLock::new(initial_resolved_config)),
+        runtime_config_resolver,
+        ShutdownController::new(),
+    );
+
+    let reload_response = post_config_reload(&application).await;
+    assert_eq!(reload_response.status(), StatusCode::OK);
+    let status_response = application
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("status request should be valid"),
+        )
+        .await
+        .expect("status should be returned");
+    let status_body = to_bytes(status_response.into_body(), 8 * 1024)
+        .await
+        .expect("status should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&status_body).expect("status should contain JSON");
+
+    assert_eq!(status_document["configuration"]["is_effective"], false);
+    assert_eq!(status_document["configuration"]["restart_required"], true);
+    assert_ne!(
+        status_document["configuration"]["resolved_generation"],
+        status_document["configuration"]["configured_generation"]
+    );
+    assert_eq!(
+        status_document["configuration"]["effective_generation"],
+        status_document["configuration"]["resolved_generation"]
+    );
+    assert_ne!(
+        status_document["configuration"]["effective_generation"],
+        status_document["configuration"]["configured_generation"]
+    );
+
+    worker_handle
+        .shutdown()
+        .await
+        .expect("the worker should shut down");
+}
+
+async fn wait_for_worker_configuration(worker_handle: &WorkerHandle) {
+    let readiness_deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let health_snapshot = worker_handle.worker_health_snapshot();
+        if health_snapshot.status == WorkerHealthStatus::Ready
+            && health_snapshot
+                .worker_runtime_feature_configuration
+                .is_some()
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < readiness_deadline,
+            "the fixture worker should acknowledge startup configuration"
+        );
+        sleep(Duration::from_millis(10)).await;
+    }
+}
+
+#[tokio::test]
+async fn should_keep_worker_and_logging_fields_unchanged_when_application_restart_is_required() {
     let config_home_directory = tempfile::tempdir()
         .expect("a config home should be created")
         .keep();
@@ -201,7 +300,7 @@ async fn should_keep_worker_and_listener_fields_unchanged_when_rest_api_restart_
         &config_home_directory,
         r#"{
             "chunking": { "fixed_prompt_processing_chunk_size_tokens": 4096 },
-            "supervisor": { "bind_address": "127.0.0.1:6734" }
+            "diagnostics": { "log_level": "info" }
         }"#,
     );
     let mut initial_resolved_config = sample_resolved_config();
@@ -228,23 +327,21 @@ async fn should_keep_worker_and_listener_fields_unchanged_when_rest_api_restart_
     assert_eq!(reload_document["reloaded_fields"], serde_json::json!([]));
     assert_eq!(
         reload_document["restart_required_fields"],
-        serde_json::json!(["supervisor.bind_address"])
+        serde_json::json!(["logging"])
     );
 
     let live_config = reloadable_config
         .read()
         .expect("the reloadable config should remain readable");
-    assert_eq!(
-        live_config
-            .chunking
-            .fixed_prompt_processing_chunk_size_tokens(),
-        2_048
-    );
     assert_eq!(live_config.bind_address, "127.0.0.1:6733");
+    assert_eq!(
+        live_config.logging_config.level(),
+        astronomical_config::LogLevel::Warn
+    );
 }
 
 #[tokio::test]
-async fn should_keep_all_discovered_models_listed_and_routable_with_speculative_prefill() {
+async fn should_keep_all_discovered_models_listed_and_routable() {
     const CONFIGURED_TARGET_MODEL_ID: &str = "astronomical/application-test-model";
     const UNCONFIGURED_MODEL_ID: &str = "astronomical/another-test-model";
 
@@ -257,17 +354,6 @@ async fn should_keep_all_discovered_models_listed_and_routable_with_speculative_
         discovered_model_for(CONFIGURED_TARGET_MODEL_ID),
         discovered_model_for(UNCONFIGURED_MODEL_ID),
     ];
-    resolved_config.speculative_prefill = astronomical_config::SpeculativePrefillConfig::new(
-        true,
-        Some(CONFIGURED_TARGET_MODEL_ID.to_owned()),
-        Some("astronomical/draft-test-model".to_owned()),
-        8_192,
-        20,
-        32,
-        512,
-        8,
-        13,
-    );
     let reloadable_config = Arc::new(RwLock::new(resolved_config));
     let scripted_executor = ScriptedExecutor::ready(Vec::new());
     let received_generation_commands = scripted_executor.received_generation_commands();
@@ -415,14 +501,14 @@ fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel 
 }
 
 #[tokio::test]
-async fn should_reject_mtp_reload_when_worker_replacement_is_unavailable() {
+async fn should_reject_prompt_cache_reload_when_worker_replacement_is_unavailable() {
     let config_home_directory = tempfile::tempdir()
         .expect("a config home should be created")
         .keep();
     write_config_file(
         &config_home_directory,
         r#"{
-            "mtp_enabled": true
+            "prompt_cache": { "enabled": false }
         }"#,
     );
     let mut initial_resolved_config = sample_resolved_config();
@@ -457,7 +543,7 @@ async fn should_reject_mtp_reload_when_worker_replacement_is_unavailable() {
         )
         .await
         .expect("the application should return status");
-    let status_body = to_bytes(status_response.into_body(), 4 * 1024)
+    let status_body = to_bytes(status_response.into_body(), 16 * 1024)
         .await
         .expect("the status response should be readable");
     let status_document: serde_json::Value =

@@ -1,5 +1,114 @@
 use super::AstronomicalConfigError;
-use crate::config_file::ChunkingConfigFile;
+use serde::{Deserialize, Serialize};
+
+/// Optional persisted chunking values shared by global policy and model overrides.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ChunkingConfigFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) fixed_prompt_processing_chunk_size_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) full_attention_key_value_growth_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) speculative_prefill_draft_forward_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) prefill_graph_submission_layer_interval: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: Option<u32>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_nullable_u32",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) prompt_cache_block_tokens: Option<Option<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) prompt_cache_common_prefix_stride_blocks: Option<u32>,
+}
+
+/// Presence map for advanced chunking fields after global/model inheritance.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ConfiguredChunkingFields {
+    pub fixed_prompt_processing_chunk_size_tokens: bool,
+    pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: bool,
+    pub full_attention_key_value_growth_tokens: bool,
+    pub speculative_prefill_draft_forward_tokens: bool,
+    pub prefill_graph_submission_layer_interval: bool,
+    pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
+    pub prompt_cache_block_tokens: bool,
+    pub prompt_cache_common_prefix_stride_blocks: bool,
+}
+
+fn deserialize_present_nullable_u32<'de, Deserializer>(
+    deserializer: Deserializer,
+) -> Result<Option<Option<u32>>, Deserializer::Error>
+where
+    Deserializer: serde::Deserializer<'de>,
+{
+    Option::<u32>::deserialize(deserializer).map(Some)
+}
+
+impl ChunkingConfigFile {
+    pub(crate) fn configured_fields(&self) -> ConfiguredChunkingFields {
+        ConfiguredChunkingFields {
+            fixed_prompt_processing_chunk_size_tokens: self
+                .fixed_prompt_processing_chunk_size_tokens
+                .is_some(),
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: self
+                .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+                .is_some(),
+            full_attention_key_value_growth_tokens: self
+                .full_attention_key_value_growth_tokens
+                .is_some(),
+            speculative_prefill_draft_forward_tokens: self
+                .speculative_prefill_draft_forward_tokens
+                .is_some(),
+            prefill_graph_submission_layer_interval: self
+                .prefill_graph_submission_layer_interval
+                .is_some(),
+            experimental_ssd_paging_generation_graph_submission_layer_interval: self
+                .experimental_ssd_paging_generation_graph_submission_layer_interval
+                .is_some(),
+            prompt_cache_block_tokens: self.prompt_cache_block_tokens.is_some(),
+            prompt_cache_common_prefix_stride_blocks: self
+                .prompt_cache_common_prefix_stride_blocks
+                .is_some(),
+        }
+    }
+
+    pub(crate) fn merged(global: &Self, model: Option<&Self>) -> Self {
+        let Some(model) = model else {
+            return global.clone();
+        };
+        Self {
+            fixed_prompt_processing_chunk_size_tokens: model
+                .fixed_prompt_processing_chunk_size_tokens
+                .or(global.fixed_prompt_processing_chunk_size_tokens),
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: model
+                .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+                .or(global.fixed_ssd_streaming_prompt_processing_chunk_size_tokens),
+            full_attention_key_value_growth_tokens: model
+                .full_attention_key_value_growth_tokens
+                .or(global.full_attention_key_value_growth_tokens),
+            speculative_prefill_draft_forward_tokens: model
+                .speculative_prefill_draft_forward_tokens
+                .or(global.speculative_prefill_draft_forward_tokens),
+            prefill_graph_submission_layer_interval: model
+                .prefill_graph_submission_layer_interval
+                .or(global.prefill_graph_submission_layer_interval),
+            experimental_ssd_paging_generation_graph_submission_layer_interval: model
+                .experimental_ssd_paging_generation_graph_submission_layer_interval
+                .or(global.experimental_ssd_paging_generation_graph_submission_layer_interval),
+            prompt_cache_block_tokens: model
+                .prompt_cache_block_tokens
+                .or(global.prompt_cache_block_tokens),
+            prompt_cache_common_prefix_stride_blocks: model
+                .prompt_cache_common_prefix_stride_blocks
+                .or(global.prompt_cache_common_prefix_stride_blocks),
+        }
+    }
+}
 
 pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
@@ -53,7 +162,7 @@ impl ChunkingConfig {
                 .unwrap_or(
                     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
                 ),
-            prompt_cache_block_tokens: configured.prompt_cache_block_tokens,
+            prompt_cache_block_tokens: configured.prompt_cache_block_tokens.unwrap_or(None),
             prompt_cache_common_prefix_stride_blocks: configured
                 .prompt_cache_common_prefix_stride_blocks
                 .unwrap_or(DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),

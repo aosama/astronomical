@@ -7,11 +7,13 @@ mod chat_diagnostics;
 mod chat_generation_executor;
 mod config_reload;
 mod config_reload_endpoint;
+mod config_reload_response;
+mod configuration_status;
 mod console_assets;
-mod generation_output_ceiling;
 mod generation_performance_log;
 mod instance_lock;
 mod maximum_mlx_memory_endpoint;
+mod maximum_mlx_memory_transaction;
 mod openai_chat_completion;
 mod openai_chat_endpoint;
 mod openai_chat_stream;
@@ -21,6 +23,10 @@ mod openai_responses_assembly;
 mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
+mod queued_memory_reload;
+mod request_generation_defaults;
+mod resolved_configuration_generation;
+mod runtime_model_policy;
 mod serving_session_snapshot;
 mod shutdown_control;
 mod status_endpoint;
@@ -41,6 +47,7 @@ mod worker_memory_limit;
 mod worker_model_swap;
 mod worker_prefill_progress;
 mod worker_process;
+mod worker_replacement;
 mod worker_stderr_tail;
 
 pub use application::{
@@ -79,6 +86,11 @@ pub use openai_responses_stream::{
 };
 pub use openai_responses_translation::{
     OpenAiResponsesTranslationError, translate_openai_responses_request,
+};
+pub use resolved_configuration_generation::ResolvedConfigurationGeneration;
+pub use runtime_model_policy::{
+    ConfiguredSpeculativePrefillPolicy, RuntimeModelAccelerationAvailability,
+    RuntimeModelGenerationDefaults, RuntimeModelPolicy,
 };
 pub use serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;

@@ -145,6 +145,27 @@ test("selects the ready model metadata instead of the first advertised model", (
     assert.equal(selectedModel.id, "ready");
 });
 
+test("detects configured and effective generation mismatch", () => {
+    const scriptContext = createConsoleContext();
+
+    assert.equal(
+        scriptContext.configurationRequiresRestart({
+            configured_generation: "configured",
+            effective_generation: "effective",
+            restart_required: false
+        }),
+        true
+    );
+    assert.equal(
+        scriptContext.configurationRequiresRestart({
+            configured_generation: "same",
+            effective_generation: "same",
+            restart_required: false
+        }),
+        false
+    );
+});
+
 test("computes whole decimal gigabyte bounds from exact status bytes", () => {
     const scriptContext = createConsoleContext();
     const bounds = vm.runInContext(

@@ -7,6 +7,7 @@ pub(super) struct LazyScriptedModelFactory {
     pub(super) model_factory_call_count: Arc<AtomicUsize>,
     pub(super) mlx_memory_limits: (u64, u64),
     pub(super) model_creation_memory_limits: Arc<Mutex<Vec<(u64, u64)>>>,
+    pub(super) model_configurations: Arc<Mutex<Vec<WorkerModelConfiguration>>>,
     /// Lets lifecycle tests prove readiness propagation without model-serving.
     pub(super) expert_memory_mode: Option<ExpertMemoryMode>,
 }
@@ -19,9 +20,13 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
     async fn create(
         &self,
         _model_directory: &str,
-        _max_output_tokens: u32,
+        model_configuration: WorkerModelConfiguration,
     ) -> Result<(ScriptedChatProcessor, ScriptedChatEngine), String> {
         self.model_factory_call_count.fetch_add(1, Ordering::SeqCst);
+        self.model_configurations
+            .lock()
+            .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
+            .push(model_configuration);
         let mut scripted_engine = ScriptedChatEngine::new();
         scripted_engine.initial_expert_memory_mode = self.expert_memory_mode;
         let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
@@ -56,7 +61,7 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>
     async fn create(
         &self,
         _model_directory: &str,
-        _max_output_tokens: u32,
+        _model_configuration: WorkerModelConfiguration,
     ) -> Result<(ScriptedChatProcessor, ScriptedChatEngine), String> {
         let model_factory_call_number =
             self.model_factory_call_count.fetch_add(1, Ordering::SeqCst);

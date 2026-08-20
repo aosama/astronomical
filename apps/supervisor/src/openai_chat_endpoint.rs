@@ -15,7 +15,7 @@ use crate::{
     GenerationStartError, build_openai_chat_request_diagnostic_snapshot,
     build_openai_chat_request_info_diagnostic_snapshot,
     openai_chat_completion::create_non_streaming_chat_completion,
-    openai_chat_stream::OpenAiChatStreamEncoder, translate_openai_chat_completion_request,
+    openai_chat_stream::OpenAiChatStreamEncoder,
 };
 
 use crate::application::{ApplicationState, allocate_chat_request_id};
@@ -81,6 +81,9 @@ pub(crate) async fn create_chat_completion(
         )
             .into_response();
     }
+    // Policy resolution and queue admission must observe one side of a worker replacement.
+    let configuration_transition_guard =
+        application_state.configuration_transition_lock.lock().await;
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();
@@ -104,6 +107,25 @@ pub(crate) async fn create_chat_completion(
     };
     let should_stream_response = chat_completion_request.stream();
     let includes_usage = chat_completion_request.includes_usage_in_stream();
+    let request_parts = match chat_completion_request.into_parts() {
+        Ok(request_parts) => request_parts,
+        Err(validation_error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(OpenAiErrorResponse::invalid_request(
+                    validation_error.to_string(),
+                    None,
+                    Some("invalid_request"),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let settings_presence = crate::request_generation_defaults::RequestGenerationSettingsPresence {
+        maximum_output_tokens: request_parts.requested_maximum_output_tokens.is_some(),
+        temperature: request_parts.temperature.is_some(),
+        top_p: request_parts.top_p.is_some(),
+    };
     let request_id = match allocate_chat_request_id(&application_state.next_chat_request_id) {
         Some(request_id) => request_id,
         None => {
@@ -117,38 +139,40 @@ pub(crate) async fn create_chat_completion(
                 .into_response();
         }
     };
-    let mut chat_generation_command = match translate_openai_chat_completion_request(
-        RequestId::new(request_id),
-        chat_completion_request,
-    ) {
-        Ok(chat_generation_command) => chat_generation_command,
-        Err(translation_error) => {
-            tracing::warn!(
-                request_id,
-                error = %translation_error,
-                request_body_bytes = request_diagnostic_snapshot.request_body_bytes,
-                request_body_sha256 = %request_diagnostic_snapshot.request_body_sha256,
-                message_count = ?request_info_diagnostic_snapshot.message_count,
-                message_role_sequence_preview = ?request_info_diagnostic_snapshot.message_role_sequence_preview,
-                "rejected REST chat completion during IPC translation"
-            );
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(OpenAiErrorResponse::invalid_request(
-                    translation_error.to_string(),
-                    None,
-                    Some("invalid_request"),
-                )),
-            )
-                .into_response();
-        }
-    };
+    let mut chat_generation_command =
+        match crate::openai_chat_translation::translate_openai_chat_completion_request_parts(
+            RequestId::new(request_id),
+            request_parts,
+        ) {
+            Ok(chat_generation_command) => chat_generation_command,
+            Err(translation_error) => {
+                tracing::warn!(
+                    request_id,
+                    error = %translation_error,
+                    request_body_bytes = request_diagnostic_snapshot.request_body_bytes,
+                    request_body_sha256 = %request_diagnostic_snapshot.request_body_sha256,
+                    message_count = ?request_info_diagnostic_snapshot.message_count,
+                    message_role_sequence_preview = ?request_info_diagnostic_snapshot.message_role_sequence_preview,
+                    "rejected REST chat completion during IPC translation"
+                );
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(OpenAiErrorResponse::invalid_request(
+                        translation_error.to_string(),
+                        None,
+                        Some("invalid_request"),
+                    )),
+                )
+                    .into_response();
+            }
+        };
     chat_generation_command.model = resolved_model_id;
-    chat_generation_command.settings.max_output_tokens =
-        crate::generation_output_ceiling::cap_generation_output_tokens(
-            application_state.reloadable_config.as_ref(),
-            chat_generation_command.settings.max_output_tokens,
-        );
+    crate::request_generation_defaults::apply_generation_defaults(
+        application_state.reloadable_config.as_ref(),
+        &chat_generation_command.model,
+        settings_presence,
+        &mut chat_generation_command.settings,
+    );
     tracing::info!(
         request_id,
         model = %chat_generation_command.model,
@@ -158,11 +182,24 @@ pub(crate) async fn create_chat_completion(
         "accepted REST chat completion request"
     );
     let model_id = chat_generation_command.model.clone();
-    let chat_stream_event_receiver = match application_state
+    let (admission_sender, mut admission_receiver) = tokio::sync::oneshot::channel();
+    let mut generation_start_future = application_state
         .generation_executor
-        .start_chat_generation(chat_generation_command)
-        .await
-    {
+        .start_chat_generation_with_admission_signal(chat_generation_command, admission_sender);
+    let generation_start_result = tokio::select! {
+        admission_result = &mut admission_receiver => {
+            drop(configuration_transition_guard);
+            match admission_result {
+                Ok(()) => generation_start_future.await,
+                Err(_) => Err(GenerationStartError::WorkerUnavailable),
+            }
+        }
+        generation_start_result = &mut generation_start_future => {
+            drop(configuration_transition_guard);
+            generation_start_result
+        }
+    };
+    let chat_stream_event_receiver = match generation_start_result {
         Ok(chat_stream_event_receiver) => chat_stream_event_receiver,
         Err(GenerationStartError::CapacityUnavailable) => {
             return (

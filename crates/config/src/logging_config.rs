@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // tracing-appender otherwise retains as many as 128,000 heap-allocated lines.
 // A small lossy queue keeps diagnostics off the inference path without letting
@@ -8,7 +8,7 @@ use serde::Deserialize;
 const LOG_BUFFERED_LINE_LIMIT: usize = 1_024;
 
 /// Supported diagnostic verbosity, ordered from least to most verbose.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Error,

@@ -32,9 +32,9 @@ pub struct DiscoveredModel {
     pub model_directory: PathBuf,
     /// Total prompt + generation position capacity from config.json.
     pub context_window: u32,
-    /// Maximum prompt tokens a client may send (context_window - max_output_tokens).
+    /// Maximum prompt tokens independently representable within the context window.
     pub max_input_tokens: u32,
-    /// Per-request output-token ceiling from config or default.
+    /// Maximum generated tokens independently supported by context and protocol.
     pub max_output_tokens: u32,
     /// Whether the checkpoint index declares physically present visual weights.
     pub has_vision: bool,
@@ -83,12 +83,10 @@ pub struct ModelDiscoveryDirectoryScan {
 /// function returns all successfully discovered models.
 pub fn discover_models(
     model_directories: &[PathBuf],
-    max_output_tokens: u32,
 ) -> Result<Vec<ModelDiscoveryDirectoryScan>, DiscoveredModelError> {
     let mut directory_scans = Vec::with_capacity(model_directories.len());
     for directory_path in model_directories {
-        let discovered_models =
-            scan_directory_for_executable_models(directory_path, max_output_tokens)?;
+        let discovered_models = scan_directory_for_executable_models(directory_path)?;
         directory_scans.push(ModelDiscoveryDirectoryScan {
             path: directory_path.clone(),
             discovered_models,
@@ -105,17 +103,15 @@ pub fn discover_models(
 /// Each subdirectory containing `config.json` is checked for Qwen3.5 compatibility.
 fn scan_directory_for_executable_models(
     root_directory: &Path,
-    max_output_tokens: u32,
 ) -> Result<Vec<DiscoveredModel>, DiscoveredModelError> {
     let mut discovered_models = Vec::new();
-    scan_directory_recursive(root_directory, 0, max_output_tokens, &mut discovered_models)?;
+    scan_directory_recursive(root_directory, 0, &mut discovered_models)?;
     Ok(discovered_models)
 }
 
 fn scan_directory_recursive(
     current_directory: &Path,
     depth: usize,
-    max_output_tokens: u32,
     discovered_models: &mut Vec<DiscoveredModel>,
 ) -> Result<(), DiscoveredModelError> {
     const MAX_SCAN_DEPTH: usize = 4;
@@ -135,7 +131,6 @@ fn scan_directory_recursive(
         if let Some(discovered_model) = try_discover_model_with_id(
             &huggingface_cache_entry.snapshot_directory,
             &huggingface_cache_entry.model_id,
-            max_output_tokens,
         ) {
             discovered_models.push(discovered_model);
         }
@@ -144,7 +139,7 @@ fn scan_directory_recursive(
 
     // If this directory looks like a model directory, try to discover it.
     if current_directory.join("config.json").is_file()
-        && let Some(discovered_model) = try_discover_model(current_directory, max_output_tokens)
+        && let Some(discovered_model) = try_discover_model(current_directory)
     {
         discovered_models.push(discovered_model);
         // Don't recurse into a model directory — it won't contain nested models.
@@ -181,12 +176,7 @@ fn scan_directory_recursive(
             {
                 continue;
             }
-            let _ = scan_directory_recursive(
-                &entry_path,
-                depth + 1,
-                max_output_tokens,
-                discovered_models,
-            );
+            let _ = scan_directory_recursive(&entry_path, depth + 1, discovered_models);
         }
     }
 
@@ -200,12 +190,12 @@ fn scan_directory_recursive(
 /// `try_discover_model_with_id` instead.
 ///
 /// Returns `None` for classified families that are not executable yet.
-fn try_discover_model(model_directory: &Path, max_output_tokens: u32) -> Option<DiscoveredModel> {
+fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
     let model_id = model_directory
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "unknown".to_owned());
-    try_discover_model_with_id(model_directory, &model_id, max_output_tokens)
+    try_discover_model_with_id(model_directory, &model_id)
 }
 
 /// Attempts to discover an executable model from a directory with an explicit model ID.
@@ -213,11 +203,7 @@ fn try_discover_model(model_directory: &Path, max_output_tokens: u32) -> Option<
 /// This variant accepts a custom `model_id`, useful for HuggingFace cache entries
 /// where the model_id is derived from the decoded `models--org--repo` directory name
 /// rather than the snapshot hash.
-fn try_discover_model_with_id(
-    model_directory: &Path,
-    model_id: &str,
-    max_output_tokens: u32,
-) -> Option<DiscoveredModel> {
+fn try_discover_model_with_id(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
     // Read the one neutral family marker before dispatching artifact validation.
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
@@ -227,12 +213,9 @@ fn try_discover_model_with_id(
         .ok()
         .flatten()?;
     let family_metadata = match model_family {
-        ModelFamily::Qwen3_5 => {
-            qwen3_5::discover_model_metadata(model_directory, &config_value, max_output_tokens)?
-        }
+        ModelFamily::Qwen3_5 => qwen3_5::discover_model_metadata(model_directory, &config_value)?,
         ModelFamily::Laguna => {
-            let laguna_metadata =
-                laguna::discover_model_metadata(model_directory, &config_bytes, max_output_tokens)?;
+            let laguna_metadata = laguna::discover_model_metadata(model_directory, &config_bytes)?;
             return Some(DiscoveredModel {
                 model_id: model_id.to_owned(),
                 model_family,

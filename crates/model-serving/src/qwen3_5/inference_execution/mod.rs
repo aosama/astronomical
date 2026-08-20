@@ -81,10 +81,7 @@ pub type Qwen3_5Engine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     /// Starts the owner thread with an explicit `prefill_chunck_tokens` sizer.
     ///
-    /// `model_directory` is the directory containing the safetensors shard files.
-    /// It is required for expert paging to read safetensors headers at startup.
-    /// Sparse models automatically page selected expert weights for prefill and
-    /// decode while retaining their routers and shared experts.
+    /// The model directory remains required for sparse expert paging.
     // Construction dependencies remain explicit to avoid another configuration facade.
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_prompt_processing_chunk_sizer(
@@ -115,7 +112,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             PerformanceAttributionLog::disabled(),
         )
     }
-
     /// Starts the owner thread with every model-serving work boundary resolved.
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
@@ -133,7 +129,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
-        Self::new_with_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
+        let maximum_context_tokens = validated_artifact.config().maximum_position_count();
+        Self::new_with_effective_context_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
             allocator_cache_memory_limit_bytes,
@@ -141,6 +138,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             prompt_processing_chunk_sizer,
             think_end_token_id,
             model_directory,
+            maximum_context_tokens,
             chunking,
             adaptive_ram_growth_guard_enabled,
             mtp_enabled,
@@ -169,6 +167,45 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+        let maximum_context_tokens = validated_artifact.config().maximum_position_count();
+        Self::new_with_effective_context_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
+            validated_artifact,
+            active_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            persistent_prompt_cache_disk_store_config,
+            prompt_processing_chunk_sizer,
+            think_end_token_id,
+            model_directory,
+            maximum_context_tokens,
+            chunking,
+            adaptive_ram_growth_guard_enabled,
+            mtp_enabled,
+            mtp_draft_depth,
+            speculative_prefill,
+            model_loading_performance_attribution,
+            performance_attribution_log,
+        )
+    }
+
+    /// Starts the owner thread with a config-resolved context no larger than the artifact.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_effective_context_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
+        validated_artifact: ValidatedQwen3_5Artifact,
+        active_memory_limit_bytes: usize,
+        allocator_cache_memory_limit_bytes: usize,
+        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+        think_end_token_id: u32,
+        model_directory: PathBuf,
+        maximum_context_tokens: u32,
+        chunking: WorkerChunkingConfiguration,
+        adaptive_ram_growth_guard_enabled: bool,
+        mtp_enabled: bool,
+        mtp_draft_depth: Option<u8>,
+        speculative_prefill: WorkerSpeculativePrefillConfiguration,
+        model_loading_performance_attribution: PerformanceAttribution,
+        performance_attribution_log: PerformanceAttributionLog,
+    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
         let configured_mtp_draft_depth = mtp_draft_depth
             .map(MtpDraftDepth::new)
             .transpose()
@@ -181,7 +218,13 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             .config()
             .end_of_sequence_token_ids()
             .to_vec();
-        let maximum_position_count = validated_artifact.config().maximum_position_count() as usize;
+        let artifact_maximum_position_count = validated_artifact.config().maximum_position_count();
+        if maximum_context_tokens == 0 || maximum_context_tokens > artifact_maximum_position_count {
+            return Err(fatal_engine_error(
+                "effective Qwen3.5 context must be positive and not exceed the artifact context",
+            ));
+        }
+        let maximum_position_count = maximum_context_tokens as usize;
         let vocabulary_size = validated_artifact.config().vocabulary_size();
         let context_memory_reservation_bytes_per_token = validated_artifact
             .config()

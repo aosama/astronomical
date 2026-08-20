@@ -9,14 +9,13 @@ use std::{
 
 use crate::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, PromptCacheClearOutcome, WorkerControlError, WorkerHealthSnapshot,
-    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
+    GenerationStartError, PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError,
+    WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 use tokio::sync::{Semaphore, mpsc, oneshot};
-use tokio::time::sleep;
 
 use crate::worker::run_worker;
 use crate::worker_loop_types::WorkerLoopCommand;
@@ -84,16 +83,14 @@ impl WorkerHandle {
         worker_executable_path: impl AsRef<Path>,
         worker_model_load_timeout: Duration,
         performance_log: GenerationPerformanceLog,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     ) -> Result<Self, WorkerControlError> {
         Self::launch_with_optional_startup_configuration(
             worker_executable_path,
             worker_model_load_timeout,
             DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
             performance_log,
-            model_directories,
-            max_output_tokens,
+            model_policy_catalog,
             None,
         )
         .await
@@ -104,8 +101,7 @@ impl WorkerHandle {
         worker_executable_path: impl AsRef<Path>,
         worker_model_load_timeout: Duration,
         performance_log: GenerationPerformanceLog,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: WorkerStartupConfiguration,
     ) -> Result<Self, WorkerControlError> {
         Self::launch_with_optional_startup_configuration(
@@ -113,8 +109,7 @@ impl WorkerHandle {
             worker_model_load_timeout,
             DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
             performance_log,
-            model_directories,
-            max_output_tokens,
+            model_policy_catalog,
             Some(worker_startup_configuration),
         )
         .await
@@ -126,16 +121,14 @@ impl WorkerHandle {
         worker_model_load_timeout: Duration,
         worker_cancellation_acknowledgement_timeout: Duration,
         performance_log: GenerationPerformanceLog,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     ) -> Result<Self, WorkerControlError> {
         Self::launch_with_optional_startup_configuration(
             worker_executable_path,
             worker_model_load_timeout,
             worker_cancellation_acknowledgement_timeout,
             performance_log,
-            model_directories,
-            max_output_tokens,
+            model_policy_catalog,
             None,
         )
         .await
@@ -146,8 +139,7 @@ impl WorkerHandle {
         worker_model_load_timeout: Duration,
         worker_cancellation_acknowledgement_timeout: Duration,
         performance_log: GenerationPerformanceLog,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: Option<WorkerStartupConfiguration>,
     ) -> Result<Self, WorkerControlError> {
         let worker_process = match worker_startup_configuration {
@@ -174,8 +166,7 @@ impl WorkerHandle {
             worker_model_load_timeout,
             worker_cancellation_acknowledgement_timeout,
             performance_log,
-            model_directories,
-            max_output_tokens,
+            model_policy_catalog,
             Arc::clone(&active_generation_permits),
             Arc::clone(&generation_queue_permits),
         ));
@@ -217,14 +208,14 @@ impl WorkerHandle {
     pub async fn restart_worker(
         &self,
         worker_executable_path: PathBuf,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
-    ) -> Result<(), WorkerControlError> {
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+        expected_configuration_generation: String,
+    ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
         self.restart_worker_with_optional_startup_configuration(
             worker_executable_path,
-            model_directories,
-            max_output_tokens,
+            model_policy_catalog,
             None,
+            expected_configuration_generation,
         )
         .await
     }
@@ -233,15 +224,17 @@ impl WorkerHandle {
     pub async fn restart_worker_with_startup_configuration(
         &self,
         worker_executable_path: PathBuf,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: WorkerStartupConfiguration,
-    ) -> Result<(), WorkerControlError> {
+    ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
+        let expected_configuration_generation = worker_startup_configuration
+            .configuration_generation
+            .clone();
         self.restart_worker_with_optional_startup_configuration(
             worker_executable_path,
-            model_directories,
-            max_output_tokens,
+            model_policy_catalog,
             Some(worker_startup_configuration),
+            expected_configuration_generation,
         )
         .await
     }
@@ -249,10 +242,10 @@ impl WorkerHandle {
     async fn restart_worker_with_optional_startup_configuration(
         &self,
         worker_executable_path: PathBuf,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: Option<WorkerStartupConfiguration>,
-    ) -> Result<(), WorkerControlError> {
+        expected_configuration_generation: String,
+    ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
         if !self.is_generation_idle_for_control_action() {
             return Err(WorkerControlError::GenerationBusy);
         }
@@ -264,9 +257,9 @@ impl WorkerHandle {
         command_sender
             .send(WorkerLoopCommand::RestartWorker {
                 worker_executable_path,
-                model_directories,
-                max_output_tokens,
+                model_policy_catalog,
                 worker_startup_configuration,
+                expected_configuration_generation,
                 restart_sender,
             })
             .await
@@ -274,35 +267,6 @@ impl WorkerHandle {
         restart_receiver
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
-    }
-
-    /// Waits for the replacement worker to acknowledge its runtime feature policy.
-    pub async fn wait_for_worker_runtime_feature_configuration(
-        &self,
-        acknowledgement_timeout: Duration,
-    ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
-        tokio::time::timeout(acknowledgement_timeout, async {
-            loop {
-                let worker_health_snapshot = self.worker_health_snapshot();
-                // Restart publishes Loading before the new process can send any event, so an
-                // old worker acknowledgement cannot satisfy this wait. Ready plus the explicit
-                // configuration event is the one complete replacement handshake.
-                if worker_health_snapshot.status == WorkerHealthStatus::Unavailable {
-                    return Err(WorkerControlError::MissingActiveWorker);
-                }
-                if worker_health_snapshot.status == WorkerHealthStatus::Ready
-                    && let Some(worker_runtime_feature_configuration) =
-                        worker_health_snapshot.worker_runtime_feature_configuration
-                {
-                    return Ok(worker_runtime_feature_configuration);
-                }
-                sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .map_err(|_| WorkerControlError::ModelLoadTimeout {
-            model_load_timeout_millis: acknowledgement_timeout.as_millis(),
-        })?
     }
 
     /// Applies an idle MLX ceiling immediately or queues it behind one active request.
@@ -325,6 +289,35 @@ impl WorkerHandle {
         update_receiver
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
+    }
+
+    /// Stages generation attribution before a memory command can race to acknowledgement.
+    pub fn stage_memory_configuration_generation(&self, configuration_generation: String) {
+        if let Ok(mut worker_health_snapshot) = self.health_snapshot.write() {
+            worker_health_snapshot.pending_configuration_generation =
+                Some(configuration_generation);
+        }
+    }
+
+    /// Finalizes generation attribution after the memory control outcome is known.
+    pub fn record_memory_configuration_generation(
+        &self,
+        configuration_generation: String,
+        update_outcome: MlxMemoryLimitUpdateOutcome,
+    ) {
+        if let Ok(mut worker_health_snapshot) = self.health_snapshot.write() {
+            if update_outcome == MlxMemoryLimitUpdateOutcome::Applied {
+                if let Some(worker_configuration) = worker_health_snapshot
+                    .worker_runtime_feature_configuration
+                    .as_mut()
+                {
+                    worker_configuration.configuration_generation = configuration_generation;
+                }
+                worker_health_snapshot.pending_configuration_generation = None;
+            } else if update_outcome == MlxMemoryLimitUpdateOutcome::Rejected {
+                worker_health_snapshot.pending_configuration_generation = None;
+            }
+        }
     }
 
     /// Applies a cache clear immediately or queues the newest scope until idle.
@@ -365,6 +358,54 @@ impl ChatGenerationExecutor for WorkerHandle {
                 + '_,
         >,
     > {
+        self.start_chat_generation_with_queue_admission(chat_generation_command, None)
+    }
+
+    fn start_chat_generation_with_admission_signal(
+        &self,
+        chat_generation_command: ChatGenerationCommand,
+        admission_sender: oneshot::Sender<()>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<ChatGenerationStreamEvent>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        self.start_chat_generation_with_queue_admission(
+            chat_generation_command,
+            Some(admission_sender),
+        )
+    }
+
+    fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
+        match self.health_snapshot.read() {
+            Ok(health_snapshot) => health_snapshot.clone(),
+            Err(_) => WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+        }
+    }
+}
+
+impl WorkerHandle {
+    fn start_chat_generation_with_queue_admission(
+        &self,
+        chat_generation_command: ChatGenerationCommand,
+        admission_sender: Option<oneshot::Sender<()>>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<ChatGenerationStreamEvent>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
         Box::pin(async move {
             let command_sender = self
                 .command_sender
@@ -376,6 +417,9 @@ impl ChatGenerationExecutor for WorkerHandle {
             let generation_queue_permit = Arc::clone(&self.generation_queue_permits)
                 .try_acquire_owned()
                 .map_err(|_| GenerationStartError::CapacityUnavailable)?;
+            if let Some(admission_sender) = admission_sender {
+                let _admission_signal_result = admission_sender.send(());
+            }
 
             // Wait for the active-generation slot to become free. This serializes
             // requests: only one runs at a time, and queued requests proceed in
@@ -412,12 +456,5 @@ impl ChatGenerationExecutor for WorkerHandle {
 
             Ok(stream_event_receiver)
         })
-    }
-
-    fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
-        match self.health_snapshot.read() {
-            Ok(health_snapshot) => health_snapshot.clone(),
-            Err(_) => WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-        }
     }
 }

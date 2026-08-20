@@ -21,12 +21,20 @@ pub fn translate_openai_chat_completion_request(
     let request_parts = request
         .into_parts()
         .map_err(OpenAiChatTranslationError::PublicValidation)?;
+    translate_openai_chat_completion_request_parts(request_id, request_parts)
+}
+
+pub(crate) fn translate_openai_chat_completion_request_parts(
+    request_id: RequestId,
+    request_parts: OpenAiChatCompletionRequestParts,
+) -> Result<ChatGenerationCommand, OpenAiChatTranslationError> {
     let OpenAiChatCompletionRequestParts {
         model,
         messages,
         tools,
         tool_choice,
         maximum_output_tokens,
+        requested_maximum_output_tokens: _,
         temperature,
         top_p,
         seed,

@@ -109,6 +109,16 @@ impl Qwen3_5Tokenizer {
     pub fn from_validated_artifact(
         validated_artifact: &ValidatedQwen3_5Artifact,
     ) -> Result<Self, Qwen3_5TokenizerError> {
+        Self::from_validated_artifact_with_maximum_context_tokens(
+            validated_artifact,
+            validated_artifact.config().maximum_position_count(),
+        )
+    }
+
+    pub(crate) fn from_validated_artifact_with_maximum_context_tokens(
+        validated_artifact: &ValidatedQwen3_5Artifact,
+        maximum_context_tokens: u32,
+    ) -> Result<Self, Qwen3_5TokenizerError> {
         let tokenizer_bytes = validated_artifact
             .tokenizer_bytes()
             .ok_or(Qwen3_5TokenizerError::MissingValidatedTokenizer)?;
@@ -119,7 +129,7 @@ impl Qwen3_5Tokenizer {
             tokenizer_bytes,
             validated_artifact.model_id(),
             validated_artifact.config().vocabulary_size(),
-            validated_artifact.config().maximum_position_count(),
+            maximum_context_tokens,
             image_processor,
         )?;
         tokenizer.model_sampler_config =

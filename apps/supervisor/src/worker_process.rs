@@ -247,11 +247,11 @@ impl WorkerProcess {
     pub async fn swap_model(
         &mut self,
         model_directory: String,
-        max_output_tokens: u32,
+        model_configuration: astronomical_ipc_protocol::WorkerModelConfiguration,
     ) -> Result<(), WorkerControlError> {
         self.send_command_with_timeout(&WorkerCommand::SwapModel {
             model_directory,
-            max_output_tokens,
+            model_configuration,
         })
         .await
     }

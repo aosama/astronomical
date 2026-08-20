@@ -14,8 +14,8 @@ async fn should_keep_stable_running_while_development_starts_and_stops_independe
     let stable_state_directory = tempfile::tempdir().expect("stable state should be created");
     let development_state_directory =
         tempfile::tempdir().expect("development state should be created");
-    write_instance_config(stable_state_directory.path(), "127.0.0.1:0");
-    write_instance_config(development_state_directory.path(), "127.0.0.1:0");
+    write_instance_config(stable_state_directory.path());
+    write_instance_config(development_state_directory.path());
 
     let (mut stable_daemon, stable_address) = spawn_actual_instance_daemon(
         &daemon_executable_path,

@@ -98,6 +98,20 @@ async fn launch_multi_model_server(
     let resolved_config = resolver
         .load()
         .expect("the isolated family-swap configuration should resolve");
+    let model_policy_catalog = Arc::new(
+        model_directories
+            .into_iter()
+            .map(|(model_id, model_directory)| {
+                let mut model_policy = resolved_config
+                    .model_policy_catalog
+                    .get(&model_id)
+                    .unwrap_or_else(|| panic!("resolved policy should include {model_id}"))
+                    .clone();
+                model_policy.model_directory = model_directory;
+                (model_id, model_policy)
+            })
+            .collect(),
+    );
     let performance_log_directory = isolated_home.path().join("logs");
     std::fs::create_dir_all(&performance_log_directory)
         .expect("the isolated performance directory should be created");
@@ -106,8 +120,7 @@ async fn launch_multi_model_server(
         Duration::from_secs(60),
         GenerationPerformanceLog::open(&performance_log_directory)
             .expect("the performance log should open"),
-        Arc::new(model_directories),
-        20_480,
+        model_policy_catalog,
         resolved_config.worker_startup_configuration(),
     )
     .await

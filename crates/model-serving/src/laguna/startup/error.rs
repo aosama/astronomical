@@ -14,6 +14,8 @@ pub enum LagunaStartupError {
     ImmutableRevisionRequired,
     #[error("Laguna processor initialization failed")]
     ProcessorInitialization(#[source] LagunaTokenizerError),
+    #[error("Laguna serving policy is incompatible with the artifact")]
+    InvalidServingPolicy,
     #[error("Laguna weight loading failed")]
     WeightLoading,
     #[error("Laguna paging-plan construction failed")]
@@ -40,6 +42,9 @@ impl LagunaStartupError {
                 "Laguna artifact requires one immutable revision".to_owned()
             }
             Self::ProcessorInitialization(_) => "Laguna processor initialization failed".to_owned(),
+            Self::InvalidServingPolicy => {
+                "Laguna serving policy is incompatible with the artifact".to_owned()
+            }
             Self::WeightLoading => "Laguna weight loading failed".to_owned(),
             Self::PagingPlan => "Laguna paging-plan construction failed".to_owned(),
             Self::ModelConstruction => "Laguna model construction failed".to_owned(),

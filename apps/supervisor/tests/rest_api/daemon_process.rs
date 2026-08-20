@@ -18,7 +18,7 @@ async fn should_reject_a_second_daemon_for_the_same_instance_state() {
     let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
         .expect("Cargo should provide the astronomicald executable path");
     let development_state_directory = tempfile::tempdir().expect("state should be created");
-    write_instance_config(development_state_directory.path(), "127.0.0.1:0");
+    write_instance_config(development_state_directory.path());
     let (mut first_daemon, first_address) = spawn_actual_instance_daemon(
         &daemon_executable_path,
         "development",
@@ -227,7 +227,7 @@ async fn should_show_generation_progress_for_malformed_model_output_before_strea
 #[tokio::test]
 async fn should_fail_startup_when_user_config_is_malformed() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
-    write_config(
+    write_raw_config(
         temp_home.path(),
         r#"{"supervisor":{"bind_address":"127.0.0.1:0"}"#,
     );
@@ -238,7 +238,6 @@ async fn should_fail_startup_when_user_config_is_malformed() {
         Command::new(daemon_executable_path)
             .args(["--instance", "development", "--state-directory"])
             .arg(temp_home.path().join(".astronomical-dev"))
-            .env_remove("ASTRONOMICAL_SUPERVISOR_BIND_ADDRESS")
             .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
             .env("HOME", temp_home.path())
             .stdin(Stdio::null())
@@ -260,14 +259,14 @@ async fn should_fail_startup_when_user_config_is_malformed() {
 }
 
 #[tokio::test]
-async fn should_reject_a_standard_development_instance_configured_for_the_stable_endpoint() {
+async fn should_reject_retired_supervisor_configuration_for_a_standard_instance() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     let development_state_directory = temp_home.path().join(".astronomical-dev");
     std::fs::create_dir_all(&development_state_directory)
         .expect("development state directory should be created");
     std::fs::write(
         development_state_directory.join("config.json"),
-        r#"{"supervisor":{"bind_address":"127.0.0.1:6732"}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"supervisor":{"bind_address":"127.0.0.1:6732"}}"#,
     )
     .expect("development config should be written");
     let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
@@ -277,7 +276,6 @@ async fn should_reject_a_standard_development_instance_configured_for_the_stable
         Duration::from_secs(3),
         Command::new(daemon_executable_path)
             .args(["--instance", "development"])
-            .env_remove("ASTRONOMICAL_SUPERVISOR_BIND_ADDRESS")
             .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
             .env("HOME", temp_home.path())
             .stdin(Stdio::null())
@@ -287,15 +285,14 @@ async fn should_reject_a_standard_development_instance_configured_for_the_stable
             .output(),
     )
     .await
-    .expect("the daemon should reject the cross-channel endpoint before the timeout")
+    .expect("the daemon should reject the retired supervisor field before the timeout")
     .expect("the daemon should run");
 
     assert!(!daemon_output.status.success());
     let daemon_stderr = String::from_utf8_lossy(&daemon_output.stderr);
     assert!(
-        daemon_stderr
-            .contains("standard runtime instance must bind to 127.0.0.1:6733, not 127.0.0.1:6732"),
-        "stderr should explain the channel endpoint mismatch, got: {daemon_stderr}"
+        daemon_stderr.contains("unknown field `supervisor`"),
+        "stderr should explain the retired configuration field, got: {daemon_stderr}"
     );
 }
 
@@ -354,15 +351,14 @@ async fn spawn_daemon_with_worker_ready_model(
     // The resolver validates prompt-cache policy before binding the listener.
     // Keep this fixture valid so individual tests isolate the worker behavior
     // they intend to exercise.
-    write_config(
+    write_v1_config(
         temp_home.path(),
-        r#"{"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048},"supervisor":{"bind_address":"127.0.0.1:0"}}"#,
+        r#"{"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048}}"#,
     );
     let mut daemon_command = Command::new(daemon_executable_path);
     daemon_command
         .args(["--instance", "development", "--state-directory"])
         .arg(temp_home.path().join(".astronomical-dev"))
-        .env("ASTRONOMICAL_SUPERVISOR_BIND_ADDRESS", "127.0.0.1:0")
         .env("HOME", temp_home.path())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -558,19 +554,41 @@ pub(super) fn terminate_daemon(daemon_process: &Child) {
     assert!(terminate_status.success());
 }
 
-fn write_config(home_directory: &Path, config_json: &str) {
+fn write_v1_config(home_directory: &Path, configured_fields_json: &str) {
+    let configured_fields: serde_json::Value = serde_json::from_str(configured_fields_json)
+        .expect("the partial daemon config should be valid JSON");
+    let mut config_document = serde_json::json!({
+        "$schema": "./astronomical-config.schema.json",
+        "schema_version": 1,
+        "runtime": { "model_directories": [] }
+    });
+    for (field_name, field_value) in configured_fields
+        .as_object()
+        .expect("the partial daemon config should be an object")
+    {
+        config_document
+            .as_object_mut()
+            .expect("the v1 daemon config should be an object")
+            .insert(field_name.clone(), field_value.clone());
+    }
+    write_raw_config(
+        home_directory,
+        &serde_json::to_string_pretty(&config_document)
+            .expect("the daemon config should serialize"),
+    );
+}
+
+fn write_raw_config(home_directory: &Path, config_json: &str) {
     let config_directory = home_directory.join(".astronomical-dev");
     std::fs::create_dir_all(&config_directory).expect("config directory should be created");
     std::fs::write(config_directory.join("config.json"), config_json)
         .expect("config file should be written");
 }
 
-pub(super) fn write_instance_config(state_directory: &Path, bind_address: &str) {
+pub(super) fn write_instance_config(state_directory: &Path) {
     std::fs::write(
         state_directory.join("config.json"),
-        format!(
-            r#"{{"chunking":{{"fixed_prompt_processing_chunk_size_tokens":2048}},"supervisor":{{"bind_address":"{bind_address}"}}}}"#
-        ),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048}}"#,
     )
     .expect("instance config should be written");
 }

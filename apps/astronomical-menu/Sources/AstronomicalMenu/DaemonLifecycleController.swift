@@ -41,12 +41,26 @@ struct DaemonOwnershipStore {
 
 final class OwnedDaemonProcess {
   let processIdentifier: pid_t
+  private var hasBeenReaped = false
 
   init(processIdentifier: pid_t) { self.processIdentifier = processIdentifier }
 
+  func reapIfExited() -> Bool {
+    if hasBeenReaped { return true }
+    var childProcessStatus: Int32 = 0
+    let waitResult = waitpid(processIdentifier, &childProcessStatus, WNOHANG)
+    if waitResult == processIdentifier || (waitResult == -1 && errno == ECHILD) {
+      hasBeenReaped = true
+      return true
+    }
+    return false
+  }
+
   func waitUntilExit() {
+    guard !hasBeenReaped else { return }
     var childProcessStatus: Int32 = 0
     while waitpid(processIdentifier, &childProcessStatus, 0) == -1 && errno == EINTR {}
+    hasBeenReaped = true
   }
 }
 
@@ -103,15 +117,24 @@ enum DaemonLifecycleError: LocalizedError {
   case cannotLaunchDaemon(Int32)
   case bundledDaemonUnavailable
   case unownedDaemonDidNotStop
+  case existingDaemonNotReady(String)
+  case daemonExitedBeforeReady(String)
+  case readinessTimedOut(String)
 
   var errorDescription: String? {
     switch self {
     case .cannotInitializeProcessSpawn, .cannotConfigureProcessSpawn, .cannotLaunchDaemon:
-      "The bundled server could not be started"
+      "The bundled server could not be started; retry or reinstall Astronomical"
     case .bundledDaemonUnavailable:
       "The bundled server executable is unavailable"
     case .unownedDaemonDidNotStop:
       "The existing server did not stop; quit it and retry"
+    case let .existingDaemonNotReady(configurationFileLabel):
+      "A server is running but is not ready with the effective configuration. Check or reveal \(configurationFileLabel), then retry"
+    case let .daemonExitedBeforeReady(configurationFileLabel):
+      "The server exited before becoming ready. Correct or reveal \(configurationFileLabel), then retry"
+    case let .readinessTimedOut(configurationFileLabel):
+      "The server did not become ready in time. Check or reveal \(configurationFileLabel), then retry"
     }
   }
 }
@@ -121,64 +144,98 @@ final class DaemonLifecycleController {
   private let applicationIdentity: ApplicationIdentity
   private let supervisorClient: any SupervisorClient
   private let ownershipStore: DaemonOwnershipStore
+  private let readinessTimeout: Duration
+  private let readinessPollInterval: Duration
+  private let configuredMenuExecutableURL: URL?
+  private let configuredDaemonExecutableURL: URL?
+  private let configuredDaemonArguments: [String]?
   private var ownedDaemonProcess: OwnedDaemonProcess?
   private(set) var ownsDaemon = false
 
   init(
     supervisorClient: any SupervisorClient,
-    applicationIdentity: ApplicationIdentity = .current()
+    applicationIdentity: ApplicationIdentity = .current(),
+    readinessTimeout: Duration = .seconds(8),
+    readinessPollInterval: Duration = .milliseconds(100),
+    menuExecutableURL: URL? = nil,
+    daemonExecutableURL: URL? = nil,
+    ownershipRecordURL: URL? = nil,
+    daemonArguments: [String]? = nil
   ) {
     self.supervisorClient = supervisorClient
     self.applicationIdentity = applicationIdentity
+    self.readinessTimeout = readinessTimeout
+    self.readinessPollInterval = readinessPollInterval
+    configuredMenuExecutableURL = menuExecutableURL
+    configuredDaemonExecutableURL = daemonExecutableURL
+    configuredDaemonArguments = daemonArguments
     ownershipStore = DaemonOwnershipStore(
-      ownershipRecordURL: applicationIdentity.daemonOwnershipURL()
+      ownershipRecordURL: ownershipRecordURL ?? applicationIdentity.daemonOwnershipURL()
     )
   }
 
-  func startDaemonIfNeeded() async {
-    guard !(await supervisorClient.healthIsAvailable()),
-      let daemonExecutableURL = bundledDaemonExecutableURL(),
+  func startDaemonIfNeeded() async throws {
+    if await supervisorClient.healthIsAvailable() {
+      try await waitForExistingInstanceReadiness()
+      return
+    }
+    guard let daemonExecutableURL = bundledDaemonExecutableURL(),
       let menuExecutableURL = canonicalMenuExecutableURL()
-    else { return }
+    else { throw DaemonLifecycleError.bundledDaemonUnavailable }
     recoverStaleOwnershipRecord(
       menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
-    guard !(await supervisorClient.healthIsAvailable()) else { return }
-    try? startOwnedDaemon(menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
+    if await supervisorClient.healthIsAvailable() {
+      try await waitForExistingInstanceReadiness()
+      return
+    }
+    try startOwnedDaemon(menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
+    try await waitForExpectedInstanceReadiness()
   }
 
   func restartDaemon() async throws -> String {
     if await supervisorClient.healthIsAvailable() {
       try await supervisorClient.requestShutdown()
       for _ in 0..<30 where await supervisorClient.healthIsAvailable() {
-        try? await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(100))
       }
       if await supervisorClient.healthIsAvailable(), !ownsDaemon {
         throw DaemonLifecycleError.unownedDaemonDidNotStop
       }
     }
     if ownsDaemon { stopOwnedDaemon() }
+    if await supervisorClient.healthIsAvailable() {
+      throw DaemonLifecycleError.unownedDaemonDidNotStop
+    }
     guard let daemonExecutableURL = bundledDaemonExecutableURL(),
       let menuExecutableURL = canonicalMenuExecutableURL()
     else {
       throw DaemonLifecycleError.bundledDaemonUnavailable
     }
     try startOwnedDaemon(menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
+    try await waitForExpectedInstanceReadiness()
     return "Server restarted"
   }
 
   func stopOwnedDaemon() {
     guard ownsDaemon, let ownedDaemonProcess else { return }
-    terminateProcessGroup(processIdentifier: ownedDaemonProcess.processIdentifier)
-    ownedDaemonProcess.waitUntilExit()
-    self.ownedDaemonProcess = nil
-    ownsDaemon = false
-    removeOwnershipRecord()
+    if !ownedDaemonProcess.reapIfExited() {
+      _ = kill(-ownedDaemonProcess.processIdentifier, SIGTERM)
+      let shutdownDeadline = ContinuousClock.now + daemonShutdownTimeout
+      while ContinuousClock.now < shutdownDeadline, !ownedDaemonProcess.reapIfExited() {
+        usleep(25_000)
+      }
+      if !ownedDaemonProcess.reapIfExited() {
+        _ = kill(-ownedDaemonProcess.processIdentifier, SIGKILL)
+        ownedDaemonProcess.waitUntilExit()
+      }
+    }
+    clearOwnedDaemonState()
   }
 
   private func startOwnedDaemon(menuExecutableURL: URL, daemonExecutableURL: URL) throws {
     let daemonProcess = try launchOwnedDaemonProcess(
       executableURL: daemonExecutableURL,
-      arguments: applicationIdentity.daemonArguments
+      arguments: configuredDaemonArguments ?? applicationIdentity.daemonArguments
     )
     let ownershipRecord = DaemonOwnershipRecord(
       menuProcessIdentifier: getpid(),
@@ -195,6 +252,61 @@ final class DaemonLifecycleController {
       daemonProcess.waitUntilExit()
       throw error
     }
+  }
+
+  private func waitForExpectedInstanceReadiness() async throws {
+    let readinessClock = ContinuousClock()
+    let readinessDeadline = readinessClock.now.advanced(by: readinessTimeout)
+    while readinessClock.now < readinessDeadline {
+      if await supervisorClient.expectedInstanceIsHealthy() { return }
+      if ownedDaemonProcess?.reapIfExited() == true {
+        clearOwnedDaemonState()
+        throw DaemonLifecycleError.daemonExitedBeforeReady(
+          applicationIdentity.expectedConfigurationFile)
+      }
+      try await Task.sleep(for: readinessPollInterval)
+    }
+    if await supervisorClient.expectedInstanceIsHealthy() { return }
+    if ownedDaemonProcess?.reapIfExited() == true {
+      clearOwnedDaemonState()
+      throw DaemonLifecycleError.daemonExitedBeforeReady(
+        applicationIdentity.expectedConfigurationFile)
+    }
+    await stopUnreadyOwnedDaemon()
+    throw DaemonLifecycleError.readinessTimedOut(applicationIdentity.expectedConfigurationFile)
+  }
+
+  private func waitForExistingInstanceReadiness() async throws {
+    let readinessClock = ContinuousClock()
+    let readinessDeadline = readinessClock.now.advanced(by: readinessTimeout)
+    while readinessClock.now < readinessDeadline {
+      if await supervisorClient.expectedInstanceIsHealthy() { return }
+      try await Task.sleep(for: readinessPollInterval)
+    }
+    if await supervisorClient.expectedInstanceIsHealthy() { return }
+    throw DaemonLifecycleError.existingDaemonNotReady(
+      applicationIdentity.expectedConfigurationFile)
+  }
+
+  private func stopUnreadyOwnedDaemon() async {
+    guard ownsDaemon, let ownedDaemonProcess else { return }
+    _ = kill(-ownedDaemonProcess.processIdentifier, SIGTERM)
+    let shutdownClock = ContinuousClock()
+    let shutdownDeadline = shutdownClock.now.advanced(by: daemonShutdownTimeout)
+    while shutdownClock.now < shutdownDeadline, !ownedDaemonProcess.reapIfExited() {
+      try? await Task.sleep(for: .milliseconds(25))
+    }
+    if !ownedDaemonProcess.reapIfExited() {
+      _ = kill(-ownedDaemonProcess.processIdentifier, SIGKILL)
+      while !ownedDaemonProcess.reapIfExited() { await Task.yield() }
+    }
+    clearOwnedDaemonState()
+  }
+
+  private func clearOwnedDaemonState() {
+    ownedDaemonProcess = nil
+    ownsDaemon = false
+    removeOwnershipRecord()
   }
 
   private func recoverStaleOwnershipRecord(menuExecutableURL: URL, daemonExecutableURL: URL) {
@@ -274,10 +386,13 @@ final class DaemonLifecycleController {
   private func removeOwnershipRecord() { ownershipStore.remove() }
 
   private func canonicalMenuExecutableURL() -> URL? {
-    URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.resolvingSymlinksInPath()
+    if let configuredMenuExecutableURL { return configuredMenuExecutableURL }
+    return URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+      .resolvingSymlinksInPath()
   }
 
   private func bundledDaemonExecutableURL() -> URL? {
+    if let configuredDaemonExecutableURL { return configuredDaemonExecutableURL }
     let daemonExecutableURL = URL(fileURLWithPath: CommandLine.arguments[0])
       .deletingLastPathComponent().appendingPathComponent("astronomicald")
       .standardizedFileURL.resolvingSymlinksInPath()

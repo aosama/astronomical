@@ -3,15 +3,14 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatImageInput,
     ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, RequestId,
+    WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, MlxMemoryLimitUpdateOutcome, WorkerHandle, WorkerHealthSnapshot,
-    WorkerHealthStatus, WorkerProcess,
+    GenerationStartError, MlxMemoryLimitUpdateOutcome, RuntimeModelGenerationDefaults,
+    RuntimeModelPolicy, WorkerHandle, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
 };
 use tokio::time::{Instant, sleep, timeout};
-
-const DEFAULT_MAX_OUTPUT_TOKENS: u32 = 20480;
 
 #[tokio::test]
 async fn should_report_worker_exit_status_and_stderr_when_the_event_stream_closes() {
@@ -66,7 +65,6 @@ async fn should_launch_without_a_literal_host_memory_envelope() {
         Duration::from_secs(1),
         performance_log,
         Arc::new(HashMap::new()),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("machine-specific MLX limits belong to the inference worker");
@@ -93,9 +91,8 @@ async fn should_load_the_requested_model_only_after_the_first_generation_request
         performance_log,
         Arc::new(HashMap::from([(
             requested_model_id.clone(),
-            PathBuf::from("/models/requested-model"),
+            runtime_model_policy(&requested_model_id, "/models/requested-model"),
         )])),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("the idle worker should launch");
@@ -157,7 +154,6 @@ async fn should_apply_a_memory_limit_immediately_when_worker_is_idle() {
         GenerationPerformanceLog::open(temporary_log_directory.path())
             .expect("test performance log should be created"),
         Arc::new(HashMap::new()),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("the idle worker should launch");
@@ -202,7 +198,6 @@ async fn should_contain_a_worker_that_does_not_acknowledge_a_memory_limit_update
         GenerationPerformanceLog::open(temporary_log_directory.path())
             .expect("test performance log should be created"),
         Arc::new(HashMap::new()),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("the idle worker should launch");
@@ -247,14 +242,13 @@ async fn should_remain_available_after_the_first_requested_model_fails_to_load()
         Arc::new(HashMap::from([
             (
                 "astronomical/invalid-model".to_owned(),
-                PathBuf::from("/models/invalid-model"),
+                runtime_model_policy("astronomical/invalid-model", "/models/invalid-model"),
             ),
             (
                 "astronomical/requested-model".to_owned(),
-                PathBuf::from("/models/requested-model"),
+                runtime_model_policy("astronomical/requested-model", "/models/requested-model"),
             ),
         ])),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("the idle worker should launch");
@@ -308,9 +302,8 @@ async fn should_reject_an_oversized_generation_command_without_terminating_the_l
         performance_log,
         Arc::new(HashMap::from([(
             requested_model_id.to_owned(),
-            PathBuf::from("/models/requested-model"),
+            runtime_model_policy(requested_model_id, "/models/requested-model"),
         )])),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("the idle worker should launch");
@@ -367,7 +360,6 @@ async fn should_reject_an_unmapped_model_without_forwarding_generation_to_the_id
         Duration::from_secs(1),
         performance_log,
         Arc::new(HashMap::new()),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("the idle worker should launch");
@@ -406,9 +398,8 @@ async fn should_bound_the_time_waiting_for_a_requested_model_to_load() {
         performance_log,
         Arc::new(HashMap::from([(
             "astronomical/hanging-model".to_owned(),
-            PathBuf::from("/models/hanging-model"),
+            runtime_model_policy("astronomical/hanging-model", "/models/hanging-model"),
         )])),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await
     .expect("the idle worker should launch");
@@ -443,6 +434,44 @@ async fn wait_for_idle_worker(worker_handle: &WorkerHandle) {
             worker_health_snapshot.status
         );
         sleep(Duration::from_millis(10)).await;
+    }
+}
+
+fn runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeModelPolicy {
+    RuntimeModelPolicy {
+        model_directory: PathBuf::from(model_directory),
+        generation_defaults: RuntimeModelGenerationDefaults {
+            maximum_output_tokens: 128,
+            configured_maximum_output_tokens: None,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+        },
+        configured_maximum_context_tokens: None,
+        default_maximum_context_tokens: 2_048,
+        configured_chunking_fields: Default::default(),
+        acceleration_availability: Default::default(),
+        worker_model_configuration: default_worker_model_configuration(model_id),
+    }
+}
+
+fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
+    WorkerModelConfiguration {
+        model_id: model_id.to_owned(),
+        maximum_context_tokens: 2_048,
+        maximum_output_tokens: 128,
+        chunking: WorkerChunkingConfiguration {
+            fixed_prompt_processing_chunk_size_tokens: 256,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+            full_attention_key_value_growth_tokens: 256,
+            speculative_prefill_draft_forward_tokens: 256,
+            prefill_graph_submission_layer_interval: 1,
+            experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
+            prompt_cache_block_tokens: None,
+            prompt_cache_common_prefix_stride_blocks: 4,
+        },
+        mtp_draft_depth: None,
+        mtp_head_model: None,
+        speculative_prefill: None,
     }
 }
 

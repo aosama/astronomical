@@ -1,30 +1,26 @@
 #![forbid(unsafe_code)]
 
-use std::{
-    collections::HashMap, env, error::Error, net::SocketAddr, path::PathBuf, sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, env, error::Error, path::PathBuf, sync::Arc, time::Duration};
 
+use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 use astronomical_supervisor::{GenerationPerformanceLog, WorkerHandle, build_application};
 use tokio::net::TcpListener;
 
-const SUPERVISOR_BIND_ADDRESS_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_SUPERVISOR_BIND_ADDRESS";
 const TEST_WORKER_EXECUTABLE_PATH_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH";
-const DEFAULT_MAX_OUTPUT_TOKENS: u32 = 20480;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let supervisor_bind_address =
-        env::var(SUPERVISOR_BIND_ADDRESS_ENVIRONMENT_VARIABLE)?.parse::<SocketAddr>()?;
-    if !supervisor_bind_address.ip().is_loopback() {
-        return Err("the test daemon requires a loopback bind address".into());
-    }
+    let state_directory = state_directory_argument()?;
+    let instance_paths = AstronomicalInstancePaths::for_state_directory(
+        state_directory,
+        AstronomicalRuntimeInstance::Development,
+    );
+    let supervisor_bind_address = instance_paths.default_bind_address();
     let worker_executable_path =
         PathBuf::from(env::var(TEST_WORKER_EXECUTABLE_PATH_ENVIRONMENT_VARIABLE)?);
     let listener = TcpListener::bind(supervisor_bind_address).await?;
     let bound_supervisor_address = listener.local_addr()?;
-    let performance_log_directory = std::env::temp_dir().join("astronomical-test-daemon");
+    let performance_log_directory = instance_paths.logging_directory();
     std::fs::create_dir_all(&performance_log_directory)?;
     let performance_log = GenerationPerformanceLog::open(&performance_log_directory)?;
     let worker_handle = WorkerHandle::launch(
@@ -32,7 +28,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Duration::from_secs(60),
         performance_log,
         Arc::new(HashMap::new()),
-        DEFAULT_MAX_OUTPUT_TOKENS,
     )
     .await?;
     let application = build_application(worker_handle.clone());
@@ -47,6 +42,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     worker_shutdown_result?;
 
     Ok(())
+}
+
+fn state_directory_argument() -> Result<PathBuf, Box<dyn Error>> {
+    let process_arguments = env::args_os().collect::<Vec<_>>();
+    let state_directory_position = process_arguments
+        .iter()
+        .position(|argument| argument == "--state-directory")
+        .ok_or("the test daemon requires --state-directory")?;
+    process_arguments
+        .get(state_directory_position + 1)
+        .map(|state_directory| PathBuf::from(state_directory.as_os_str()))
+        .ok_or_else(|| "the test daemon requires a state-directory value".into())
 }
 
 async fn shutdown_signal() {

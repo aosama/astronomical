@@ -3,7 +3,6 @@ use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use astronomical_supervisor::{GenerationPerformanceLog, WorkerControlError, WorkerHandle};
 
 const DEFAULT_TEST_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
-const DEFAULT_TEST_MAX_OUTPUT_TOKENS: u32 = 20480;
 
 /// Creates a performance log backed by a temporary directory for test use.
 /// The temporary directory is kept (not cleaned up) so it outlives the worker.
@@ -35,7 +34,6 @@ pub(crate) async fn launch_test_executor_with_performance_log_directory(
         DEFAULT_TEST_MODEL_LOAD_TIMEOUT,
         performance_log,
         Arc::new(HashMap::new()),
-        DEFAULT_TEST_MAX_OUTPUT_TOKENS,
     )
     .await
 }
@@ -50,7 +48,6 @@ pub(crate) async fn launch_test_executor_with_cancellation_acknowledgement_timeo
         worker_cancellation_acknowledgement_timeout,
         test_performance_log(),
         Arc::new(HashMap::new()),
-        DEFAULT_TEST_MAX_OUTPUT_TOKENS,
     )
     .await
 }
@@ -64,7 +61,6 @@ pub(crate) async fn launch_test_worker_with_model_load_timeout(
         worker_model_load_timeout,
         test_performance_log(),
         Arc::new(HashMap::new()),
-        DEFAULT_TEST_MAX_OUTPUT_TOKENS,
     )
     .await
 }
