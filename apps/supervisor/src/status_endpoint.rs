@@ -37,64 +37,69 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();
-    // Read both user-facing MTP fields under one lock so a concurrent config replacement cannot
-    // publish an enabled flag from one generation and a draft depth from another.
-    let reloadable_mtp_configuration = application_state
+    let loaded_model_runtime_configuration = worker_health_snapshot
+        .worker_runtime_feature_configuration
+        .as_ref()
+        .and_then(|configuration| configuration.loaded_model.as_ref());
+    let mtp_enabled = !matches!(
+        worker_health_snapshot.mtp_runtime_state,
+        astronomical_ipc_protocol::MtpRuntimeState::Disabled
+    );
+    let configured_speculative_prefill_draft_model_id = application_state
         .reloadable_config
         .as_ref()
         .and_then(|reloadable_config| reloadable_config.read().ok())
-        .map(|resolved_config| (resolved_config.mtp_enabled, resolved_config.mtp_draft_depth));
-    // Prefer the reloadable user policy when the application owns one. Test embeddings and other
-    // non-reloadable hosts still receive the worker's explicit acknowledgement, so status never
-    // reports MTP disabled while that same worker reports an active MTP runtime.
-    let mtp_enabled = reloadable_mtp_configuration
-        .map(|(mtp_enabled, _mtp_draft_depth)| mtp_enabled)
+        .and_then(|resolved_runtime_config| {
+            let ready_model_id = worker_health_snapshot.ready_model_id.as_ref()?;
+            Some(
+                resolved_runtime_config
+                    .model_policy_catalog
+                    .get(ready_model_id)?
+                    .acceleration_availability
+                    .configured_speculative_prefill
+                    .as_ref()?
+                    .draft_model_id
+                    .clone(),
+            )
+        })
         .or_else(|| {
             worker_health_snapshot
-                .worker_runtime_feature_configuration
-                .map(|configuration| configuration.mtp_enabled)
-        })
-        .unwrap_or(false);
-    let configured_speculative_prefill_enabled = application_state
+                .speculative_prefill_draft_model_id
+                .clone()
+        });
+    let configured_speculative_prefill_enabled = configured_speculative_prefill_draft_model_id
+        .is_some()
+        || loaded_model_runtime_configuration
+            .is_some_and(|configuration| configuration.speculative_prefill_enabled);
+    let configured_speculative_prefill_unavailable_reason = application_state
         .reloadable_config
         .as_ref()
         .and_then(|reloadable_config| reloadable_config.read().ok())
-        .is_some_and(|resolved_runtime_config| {
-            resolved_runtime_config.speculative_prefill.is_enabled()
+        .and_then(|resolved_runtime_config| {
+            let ready_model_id = worker_health_snapshot.ready_model_id.as_ref()?;
+            resolved_runtime_config
+                .model_policy_catalog
+                .get(ready_model_id)?
+                .acceleration_availability
+                .speculative_prefill_unavailable_reason
+                .clone()
         });
-    let speculative_prefill_enabled = worker_health_snapshot
-        .worker_runtime_feature_configuration
-        .map(|worker_runtime_feature_configuration| {
-            worker_runtime_feature_configuration.speculative_prefill_enabled
-        })
-        .unwrap_or_else(|| {
-            !matches!(
-                worker_health_snapshot.speculative_prefill_runtime_state,
-                astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Disabled
-            )
-        });
-    let configured_speculative_prefill_draft_model_id = speculative_prefill_enabled
-        .then(|| {
-            application_state
-                .reloadable_config
-                .as_ref()
-                .and_then(|reloadable_config| reloadable_config.read().ok())
-                .and_then(|resolved_runtime_config| {
-                    resolved_runtime_config
-                        .speculative_prefill
-                        .draft_model_id()
-                        .map(str::to_owned)
-                })
-                .or_else(|| {
-                    worker_health_snapshot
-                        .speculative_prefill_draft_model_id
-                        .clone()
-                })
-        })
-        .flatten();
-    let configured_speculative_prefill_target_model_id = speculative_prefill_enabled
-        .then(|| application_state.configured_speculative_prefill_target_model_id())
-        .flatten();
+    let reported_speculative_prefill_runtime_state = if configured_speculative_prefill_enabled
+        && configured_speculative_prefill_unavailable_reason.is_some()
+        && matches!(
+            worker_health_snapshot.speculative_prefill_runtime_state,
+            astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Disabled
+        ) {
+        astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Unavailable
+    } else {
+        worker_health_snapshot.speculative_prefill_runtime_state
+    };
+    let speculative_prefill_enabled = !matches!(
+        reported_speculative_prefill_runtime_state,
+        astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Disabled
+    );
+    let configured_speculative_prefill_target_model_id =
+        application_state.configured_speculative_prefill_target_model_id();
     let mut status_json = serde_json::json!({
         "application": {
             "version": build_identity.version,
@@ -108,11 +113,8 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "status": worker_health_snapshot.status.as_str(),
         "activity": worker_health_snapshot.activity.as_str(),
         "mtp_enabled": mtp_enabled,
-        "mtp_configured_draft_depth": reloadable_mtp_configuration
-            .and_then(|(_mtp_enabled, mtp_draft_depth)| mtp_draft_depth)
-            .or_else(|| worker_health_snapshot
-                .worker_runtime_feature_configuration
-                .and_then(|configuration| configuration.mtp_draft_depth))
+        "mtp_configured_draft_depth": loaded_model_runtime_configuration
+            .and_then(|configuration| configuration.mtp_draft_depth)
             .or(worker_health_snapshot.mtp_depth_status.configured_draft_depth),
         "mtp_artifact_maximum_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_maximum_draft_depth,
         "mtp_artifact_default_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_default_draft_depth,
@@ -127,20 +129,35 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         // Keep the exact worker acknowledgement available beside the derived convenience fields.
         // The menu compares this complete value with the reload response before declaring a
         // replacement applied, so a stale Ready status cannot masquerade as the new policy.
-        "worker_runtime_feature_configuration": worker_health_snapshot.worker_runtime_feature_configuration,
+        "worker_runtime_feature_configuration": worker_health_snapshot.worker_runtime_feature_configuration.clone(),
         "speculative_prefill_runtime_state": serde_json::to_value(
-            worker_health_snapshot.speculative_prefill_runtime_state,
+            reported_speculative_prefill_runtime_state,
         )
         .unwrap_or_else(|_| serde_json::json!("disabled")),
-        "speculative_prefill_unavailable_reason": worker_health_snapshot
+        "speculative_prefill_unavailable_reason": configured_speculative_prefill_unavailable_reason
+            .as_deref()
+            .or(worker_health_snapshot
             .speculative_prefill_unavailable_reason
-            .as_deref(),
+            .as_deref()),
         "speculative_prefill_draft_model_id": configured_speculative_prefill_draft_model_id,
         "speculative_prefill_target_model_id": configured_speculative_prefill_target_model_id,
         "speculative_prefill_draft_model_revision": worker_health_snapshot
             .speculative_prefill_draft_model_revision
             .as_deref(),
     });
+    status_json["configuration"] = serde_json::to_value(
+        crate::configuration_status::ConfigurationStatusSummary::from_application(
+            &application_state,
+            &worker_health_snapshot,
+        ),
+    )
+    .unwrap_or_else(|_| serde_json::json!(null));
+    status_json["configured_generation"] =
+        status_json["configuration"]["configured_generation"].clone();
+    status_json["resolved_generation"] =
+        status_json["configuration"]["resolved_generation"].clone();
+    status_json["effective_generation"] =
+        status_json["configuration"]["effective_generation"].clone();
     if let Some(ready_model_id) = &worker_health_snapshot.ready_model_id {
         status_json["ready_model_id"] = serde_json::json!(ready_model_id);
         let ready_model_size_bytes = application_state
@@ -198,9 +215,9 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         serde_json::json!(worker_health_snapshot.mlx_memory_limit_error);
     status_json["configured_maximum_mlx_memory_gb"] = serde_json::json!(
         application_state
-            .reloadable_config
+            .configured_config_snapshot
             .as_ref()
-            .and_then(|reloadable_config| reloadable_config.read().ok())
+            .and_then(|configured_config| configured_config.read().ok())
             .and_then(|resolved_config| resolved_config.maximum_mlx_memory_bytes)
             .map(|maximum_mlx_memory_bytes| maximum_mlx_memory_bytes / 1_000_000_000)
     );

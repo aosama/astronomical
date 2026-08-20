@@ -78,14 +78,13 @@ pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::Discove
         astronomical_config::AstronomicalConfig::load_from_development_location().expect(
             "the Development Astronomical configuration should load for model qualification",
         );
-    astronomical_config::discover_models(
-        astronomical_config.model_directories(),
-        astronomical_config.max_output_tokens(),
-    )
-    .expect("configured model-directory discovery should complete")
-    .into_iter()
-    .flat_map(|configured_model_directory_scan| configured_model_directory_scan.discovered_models)
-    .collect()
+    astronomical_config::discover_models(astronomical_config.model_directories())
+        .expect("configured model-directory discovery should complete")
+        .into_iter()
+        .flat_map(|configured_model_directory_scan| {
+            configured_model_directory_scan.discovered_models
+        })
+        .collect()
 }
 
 #[cfg(any(

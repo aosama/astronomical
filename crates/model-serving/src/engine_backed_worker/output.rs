@@ -329,6 +329,7 @@ where
         // requests perform no cache-specific collection or event work.
         if self
             .worker_runtime_feature_configuration
+            .as_ref()
             .is_some_and(|configuration| !configuration.persistent_prompt_cache_enabled)
         {
             return Ok(());

@@ -16,7 +16,6 @@ use astronomical_ipc_protocol::{
 const DELAYED_COMPLETION_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
     "astronomical/generation-event-before-swap-model";
-const REQUESTED_MODEL_ID: &str = "astronomical/requested-model";
 const TELEMETRY_BEFORE_SWAP_MODEL_ID: &str = "astronomical/telemetry-before-swap-model";
 
 #[tokio::main]
@@ -34,6 +33,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut command_reader = ProtocolReader::new(tokio::io::stdin());
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());
     let mut loaded_model_id: Option<String> = None;
+    let mut acknowledged_runtime_configuration: Option<WorkerRuntimeFeatureConfiguration> = None;
     event_writer
         .send_event(&WorkerEvent::Idle {
             machine_mlx_memory_ceiling_bytes: 40_000_000_000,
@@ -45,22 +45,24 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     while let Some(worker_command) = command_reader.next_command().await? {
         match worker_command {
             WorkerCommand::InitializeWorker(worker_startup_configuration) => {
+                let runtime_configuration = WorkerRuntimeFeatureConfiguration {
+                    configuration_generation: worker_startup_configuration.configuration_generation,
+                    persistent_prompt_cache_enabled: worker_startup_configuration
+                        .persistent_prompt_cache_enabled,
+                    prompt_cache_maximum_size_bytes: worker_startup_configuration
+                        .global_prompt_cache_maximum_size_bytes,
+                    loaded_model: None,
+                };
                 event_writer
                     .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
-                        worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
-                            persistent_prompt_cache_enabled: worker_startup_configuration
-                                .persistent_prompt_cache_enabled,
-                            mtp_enabled: worker_startup_configuration.mtp_enabled,
-                            mtp_draft_depth: worker_startup_configuration.mtp_draft_depth,
-                            speculative_prefill_enabled: worker_startup_configuration
-                                .speculative_prefill
-                                .enabled,
-                        },
+                        worker_runtime_feature_configuration: runtime_configuration.clone(),
                     })
                     .await?;
+                acknowledged_runtime_configuration = Some(runtime_configuration);
             }
             WorkerCommand::SwapModel {
-                model_directory, ..
+                model_directory,
+                model_configuration,
             } => {
                 if model_directory.ends_with("hanging-model") {
                     continue;
@@ -72,7 +74,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         })
                         .await?;
                 } else {
-                    let replacement_model_id = model_id_for_directory(&model_directory);
+                    let replacement_model_id = model_configuration.model_id.as_str();
                     // These two branches deliberately violate the old assumption
                     // that ModelSwapped is always the next frame after SwapModel.
                     if replacement_model_id == TELEMETRY_BEFORE_SWAP_MODEL_ID {
@@ -108,12 +110,25 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 supports_reasoning: true,
                                 supports_tool_calls: true,
                                 has_vision: false,
-                                max_input_tokens: 1_024,
-                                max_output_tokens: 128,
-                                context_window: 2_048,
+                                max_input_tokens: model_configuration
+                                    .maximum_context_tokens
+                                    .saturating_sub(model_configuration.maximum_output_tokens),
+                                max_output_tokens: model_configuration.maximum_output_tokens,
+                                context_window: model_configuration.maximum_context_tokens,
                             },
                         })
                         .await?;
+                    if let Some(mut runtime_configuration) =
+                        acknowledged_runtime_configuration.clone()
+                    {
+                        runtime_configuration.loaded_model =
+                            Some(model_configuration.runtime_configuration());
+                        event_writer
+                            .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                                worker_runtime_feature_configuration: runtime_configuration,
+                            })
+                            .await?;
+                    }
                     loaded_model_id = Some(replacement_model_id.to_owned());
                     emit_memory_snapshot(&mut event_writer, MlxMemorySnapshotSource::ModelLoaded)
                         .await?;
@@ -185,18 +200,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
     Ok(())
-}
-
-fn model_id_for_directory(model_directory: &str) -> &'static str {
-    if model_directory.ends_with("delayed-completion-model") {
-        DELAYED_COMPLETION_MODEL_ID
-    } else if model_directory.ends_with("telemetry-before-swap-model") {
-        TELEMETRY_BEFORE_SWAP_MODEL_ID
-    } else if model_directory.ends_with("generation-event-before-swap-model") {
-        GENERATION_EVENT_BEFORE_SWAP_MODEL_ID
-    } else {
-        REQUESTED_MODEL_ID
-    }
 }
 
 async fn emit_memory_snapshot<WriteTransport>(

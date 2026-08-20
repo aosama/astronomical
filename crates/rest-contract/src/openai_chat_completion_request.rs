@@ -141,6 +141,7 @@ impl OpenAiChatCompletionRequest {
     ) -> Result<OpenAiChatCompletionRequestParts, OpenAiChatCompletionValidationError> {
         self.validate()?;
         let maximum_output_tokens = self.maximum_output_tokens();
+        let requested_maximum_output_tokens = self.max_completion_tokens.or(self.max_tokens);
         let includes_usage_in_stream = self.includes_usage_in_stream();
         Ok(OpenAiChatCompletionRequestParts {
             model: self.model,
@@ -159,6 +160,7 @@ impl OpenAiChatCompletionRequest {
                 .map(OpenAiToolChoice::into_mode)
                 .unwrap_or(OpenAiToolChoiceMode::Auto),
             maximum_output_tokens,
+            requested_maximum_output_tokens,
             temperature: self.temperature,
             top_p: self.top_p,
             seed: self.seed,
@@ -259,6 +261,8 @@ pub struct OpenAiChatCompletionRequestParts {
     pub tool_choice: OpenAiToolChoiceMode,
     /// Bounded generated-token budget.
     pub maximum_output_tokens: u32,
+    /// Caller-supplied generated-token budget, preserving omission for model defaults.
+    pub requested_maximum_output_tokens: Option<u32>,
     /// Optional OpenAI-compatible temperature.
     pub temperature: Option<f32>,
     /// Optional OpenAI-compatible nucleus threshold.

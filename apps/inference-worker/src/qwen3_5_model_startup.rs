@@ -19,8 +19,9 @@ pub(crate) fn initialize_qwen3_5_model(
     active_memory_limit_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
+    requested_model_id: String,
+    maximum_context_tokens: u32,
     max_output_tokens: u32,
-    mtp_enabled: bool,
     mtp_draft_depth: Option<u8>,
     speculative_prefill: WorkerSpeculativePrefillConfiguration,
     persistent_prompt_cache_enabled: bool,
@@ -72,16 +73,17 @@ pub(crate) fn initialize_qwen3_5_model(
         }
     };
     let artifact_model_id = validated_artifact.model_id().to_owned();
-    let loaded_model_speculative_prefill_configuration =
-        speculative_prefill.for_loaded_model(&artifact_model_id);
+    let loaded_model_speculative_prefill_configuration = speculative_prefill;
     let artifact_model_revision = validated_artifact.revision().to_owned();
     let artifact_payload_bytes = validated_artifact.total_payload_bytes();
     let artifact_shard_count = validated_artifact.shard_count();
     let generation_processor = match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::TokenizerInitialization,
         |_performance_attribution| {
-            Qwen3_5GenerationProcessor::from_validated_artifact(
+            Qwen3_5GenerationProcessor::from_validated_artifact_with_effective_policy(
                 &validated_artifact,
+                requested_model_id,
+                maximum_context_tokens,
                 true,
                 performance_attribution_enabled,
             )
@@ -146,7 +148,7 @@ pub(crate) fn initialize_qwen3_5_model(
             ));
         }
     };
-    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_effective_context_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
@@ -154,9 +156,10 @@ pub(crate) fn initialize_qwen3_5_model(
         prompt_processing_chunk_sizer,
         think_end_token_id,
         model_directory_path.clone(),
+        maximum_context_tokens,
         chunking,
         true,
-        mtp_enabled,
+        true,
         mtp_draft_depth,
         loaded_model_speculative_prefill_configuration,
         model_loading_performance_attribution,

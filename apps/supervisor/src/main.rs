@@ -61,14 +61,21 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         };
-    let _logging_guard = match initialize_tracing(&instance_paths) {
+    let user_config = match AstronomicalConfig::load_from_instance_paths(instance_paths.clone()) {
+        Ok(user_config) => user_config,
+        Err(configuration_error) => {
+            eprintln!("astronomicald configuration failed: {configuration_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let _logging_guard = match initialize_tracing(&user_config) {
         Ok(logging_guard) => logging_guard,
         Err(initialization_error) => {
             eprintln!("astronomicald logging initialization failed: {initialization_error}");
             return ExitCode::FAILURE;
         }
     };
-    match run_daemon(instance_paths).await {
+    match run_daemon(instance_paths, user_config).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(daemon_error) => {
             eprintln!("astronomicald failed: {daemon_error}");
@@ -78,9 +85,8 @@ async fn main() -> ExitCode {
 }
 
 fn initialize_tracing(
-    instance_paths: &AstronomicalInstancePaths,
+    user_config: &AstronomicalConfig,
 ) -> Result<tracing_appender::non_blocking::WorkerGuard, DaemonError> {
-    let user_config = AstronomicalConfig::load_from_instance_paths(instance_paths.clone())?;
     let logging_config = user_config.logging()?;
     std::fs::create_dir_all(logging_config.directory()).map_err(DaemonError::CreateLogDirectory)?;
     let file_appender = tracing_appender::rolling::Builder::new()
@@ -112,8 +118,10 @@ fn initialize_tracing(
     Ok(guard)
 }
 
-async fn run_daemon(instance_paths: AstronomicalInstancePaths) -> Result<(), DaemonError> {
-    let user_config = AstronomicalConfig::load_from_instance_paths(instance_paths.clone())?;
+async fn run_daemon(
+    instance_paths: AstronomicalInstancePaths,
+    user_config: AstronomicalConfig,
+) -> Result<(), DaemonError> {
     let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_instance(
         instance_paths.clone(),
         fallback_worker_executable_path()?,
@@ -138,6 +146,7 @@ async fn run_daemon(instance_paths: AstronomicalInstancePaths) -> Result<(), Dae
             .map_or("explicit", astronomical_config::AstronomicalRuntimeInstance::as_str),
         version = ApplicationBuildIdentity::current().version,
         commit = ApplicationBuildIdentity::current().commit,
+        configuration_generation = %resolved_runtime_config.configuration_generation,
         "Astronomical REST API listener bound"
     );
     let logging_config = user_config.logging()?;
@@ -147,8 +156,7 @@ async fn run_daemon(instance_paths: AstronomicalInstancePaths) -> Result<(), Dae
         &resolved_runtime_config.worker_executable_path,
         WORKER_MODEL_LOAD_TIMEOUT,
         performance_log,
-        Arc::clone(&resolved_runtime_config.model_directories),
-        resolved_runtime_config.max_output_tokens,
+        Arc::clone(&resolved_runtime_config.model_policy_catalog),
         resolved_runtime_config.worker_startup_configuration(),
     )
     .await

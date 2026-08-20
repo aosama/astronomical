@@ -9,7 +9,7 @@ mod qwen3_5;
 mod traversal;
 
 /// Writes the smallest config document needed to exercise family discovery.
-fn write_minimal_model_config(
+pub(super) fn write_minimal_model_config(
     model_directory: &Path,
     model_type: &str,
     maximum_position_embeddings: u32,
@@ -26,7 +26,7 @@ fn write_minimal_model_config(
 }
 
 /// Writes common indexed-checkpoint files used by synthetic discovery fixtures.
-fn write_required_model_files(model_directory: &Path) {
+pub(super) fn write_required_model_files(model_directory: &Path) {
     fs::write(
         model_directory.join("model.safetensors.index.json"),
         r#"{"metadata":{"total_size":0},"weight_map":{}}"#,
@@ -44,6 +44,6 @@ fn discover_configured_models(
     temporary_directory: &tempfile::TempDir,
 ) -> Vec<astronomical_config::ModelDiscoveryDirectoryScan> {
     let configured_model_directories = vec![temporary_directory.path().to_path_buf()];
-    astronomical_config::discover_models(&configured_model_directories, 20_480)
+    astronomical_config::discover_models(&configured_model_directories)
         .expect("model discovery should complete")
 }

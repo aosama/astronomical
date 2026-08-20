@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use astronomical_config::{ModelFamily, PromptCacheConfig, classify_model_directory};
-use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration,
-};
+use astronomical_ipc_protocol::{WorkerModelConfiguration, WorkerSpeculativePrefillConfiguration};
 use astronomical_model_serving::{
     LagunaServingSettings, ModelFactory, ModelFamilyGenerationProcessor,
     ModelFamilyInferenceEngine, deepseek_v4_unavailable_reason,
@@ -19,11 +17,22 @@ pub(crate) struct ModelFamilyFactory {
     pub(crate) prompt_cache_config: PromptCacheConfig,
     pub(crate) performance_attribution_enabled: bool,
     pub(crate) performance_attribution_log_path: PathBuf,
-    pub(crate) mtp_enabled: bool,
-    pub(crate) mtp_draft_depth: Option<u8>,
-    pub(crate) speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub(crate) persistent_prompt_cache_enabled: bool,
-    pub(crate) chunking: WorkerChunkingConfiguration,
+}
+
+fn disabled_speculative_prefill() -> WorkerSpeculativePrefillConfiguration {
+    WorkerSpeculativePrefillConfiguration {
+        enabled: false,
+        target_model_id: None,
+        draft_model_id: None,
+        draft_model_directory: None,
+        minimum_prompt_tokens: 1,
+        keep_percentage: 1,
+        selection_chunck_token_count: 1,
+        mandatory_trailing_token_count: 1,
+        lookahead_token_count: 1,
+        importance_pooling_kernel_token_count: 1,
+    }
 }
 
 impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
@@ -32,7 +41,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
     async fn create(
         &self,
         model_directory: &str,
-        max_output_tokens: u32,
+        model_configuration: WorkerModelConfiguration,
     ) -> Result<(ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine), String> {
         let model_directory_path = PathBuf::from(model_directory);
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
@@ -40,11 +49,8 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let prompt_cache_config = self.prompt_cache_config.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let mtp_enabled = self.mtp_enabled;
-        let mtp_draft_depth = self.mtp_draft_depth;
-        let speculative_prefill = self.speculative_prefill.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
-        let chunking = self.chunking.clone();
+        let chunking = model_configuration.chunking.clone();
 
         tokio::task::spawn_blocking(move || {
             let model_family = classify_model_directory(&model_directory_path)
@@ -56,10 +62,13 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                         effective_mlx_memory_ceiling_bytes,
                         allocator_cache_memory_limit_bytes,
                         prompt_cache_config,
-                        max_output_tokens,
-                        mtp_enabled,
-                        mtp_draft_depth,
-                        speculative_prefill,
+                        model_configuration.model_id,
+                        model_configuration.maximum_context_tokens,
+                        model_configuration.maximum_output_tokens,
+                        model_configuration.mtp_draft_depth,
+                        model_configuration
+                            .speculative_prefill
+                            .unwrap_or_else(disabled_speculative_prefill),
                         persistent_prompt_cache_enabled,
                         performance_attribution_enabled,
                         performance_attribution_log_path,
@@ -79,6 +88,12 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
                             allocator_cache_memory_limit_bytes,
                             performance_attribution_enabled,
                             LagunaServingSettings {
+                                maximum_context_tokens: Some(
+                                    model_configuration.maximum_context_tokens,
+                                ),
+                                maximum_output_tokens: Some(
+                                    model_configuration.maximum_output_tokens,
+                                ),
                                 chunking: Some(chunking),
                                 persistent_prompt_cache_enabled,
                                 prompt_cache_config: persistent_prompt_cache_enabled

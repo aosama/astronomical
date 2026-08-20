@@ -17,7 +17,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 
-use crate::common::{discovered_model_artifact, single_model_directories};
+use crate::common::discovered_model_artifact;
 
 use super::deployment_litmus_model::configured_deployment_litmus_model;
 use super::model_artifact_rest_transport::{
@@ -272,8 +272,7 @@ pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limi
         Duration::from_secs(60),
         GenerationPerformanceLog::open(performance_log_directory)
             .expect("the deployment litmus performance log should open"),
-        single_model_directories(model_id, &model_directory),
-        20_480,
+        Arc::clone(&worker_runtime_config.model_policy_catalog),
         worker_startup_configuration,
     )
     .await

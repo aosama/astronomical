@@ -111,6 +111,16 @@ final class TelemetryStore: ObservableObject {
       guard controlActionFeedbackGeneration == configurationReloadFeedbackGeneration else {
         return
       }
+      if configurationReloadResult.candidateGeneration
+        != configurationReloadResult.effectiveGeneration
+      {
+        await refresh()
+        presentControlActionFeedback(
+          configurationReloadResult.restApiRestartRequired == true
+            ? .inProgress(configurationReloadResult.message)
+            : .failure(configurationReloadResult.message))
+        return
+      }
       // A restart response proves the replacement worker acknowledged its startup policy, but
       // the menu must also observe that exact policy in a fresh status document. Otherwise a
       // poll racing with worker replacement could turn stale readiness into a false success.
@@ -154,6 +164,10 @@ final class TelemetryStore: ObservableObject {
   func failServerRestart(_ restartError: Error) {
     pendingMaximumMlxMemoryCeilingBytes = nil
     presentControlActionFeedback(.failure(controlActionErrorMessage(restartError)))
+  }
+
+  func failServerStartup(_ startupError: Error) {
+    presentControlActionFeedback(.failure(controlActionErrorMessage(startupError)))
   }
 
   private func refresh() async {

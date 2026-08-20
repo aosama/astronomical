@@ -1,5 +1,6 @@
 use astronomical_ipc_protocol::{
-    MtpDepthStatus, MtpRuntimeState, WorkerRuntimeFeatureConfiguration,
+    MtpDepthStatus, MtpRuntimeState, WorkerChunkingConfiguration,
+    WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 use astronomical_supervisor::build_application;
 use axum::{
@@ -69,16 +70,36 @@ async fn should_report_distinct_requested_and_effective_mtp_depths() {
 }
 
 #[tokio::test]
-async fn should_report_worker_acknowledged_mtp_enablement_without_reloadable_config() {
+async fn should_report_loaded_model_mtp_policy_without_reloadable_config() {
     let mut scripted_executor = ScriptedExecutor::ready(Vec::new());
     scripted_executor
         .health_snapshot
         .worker_runtime_feature_configuration = Some(WorkerRuntimeFeatureConfiguration {
+        configuration_generation:
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
         persistent_prompt_cache_enabled: false,
-        mtp_enabled: true,
-        mtp_draft_depth: Some(2),
-        speculative_prefill_enabled: false,
+        prompt_cache_maximum_size_bytes: 50_000_000_000,
+        loaded_model: Some(WorkerLoadedModelRuntimeConfiguration {
+            model_id: "astronomical/test-worker".to_owned(),
+            maximum_context_tokens: 2_048,
+            maximum_output_tokens: 128,
+            chunking: WorkerChunkingConfiguration {
+                fixed_prompt_processing_chunk_size_tokens: 256,
+                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+                full_attention_key_value_growth_tokens: 256,
+                speculative_prefill_draft_forward_tokens: 256,
+                prefill_graph_submission_layer_interval: 1,
+                experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
+                prompt_cache_block_tokens: None,
+                prompt_cache_common_prefix_stride_blocks: 4,
+            },
+            mtp_draft_depth: Some(2),
+            mtp_head_model_id: Some("fictional/mtp-head".to_owned()),
+            speculative_prefill_enabled: false,
+            speculative_prefill: None,
+        }),
     });
+    scripted_executor.health_snapshot.mtp_runtime_state = MtpRuntimeState::Active;
 
     let status_document = status_document(scripted_executor).await;
 
@@ -109,7 +130,7 @@ async fn status_document(scripted_executor: ScriptedExecutor) -> serde_json::Val
         )
         .await
         .expect("the application should return a status response");
-    let status_body = to_bytes(response.into_body(), 4 * 1024)
+    let status_body = to_bytes(response.into_body(), 16 * 1024)
         .await
         .expect("the status body should be readable");
     serde_json::from_slice(&status_body).expect("the status body should contain JSON")

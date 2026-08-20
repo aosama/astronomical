@@ -43,6 +43,9 @@ pub(crate) async fn create_response(
             return invalid_request_response(validation_error.to_string(), None, "invalid_request");
         }
     };
+    // Policy resolution and queue admission must observe one side of a worker replacement.
+    let configuration_transition_guard =
+        application_state.configuration_transition_lock.lock().await;
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();
@@ -63,6 +66,11 @@ pub(crate) async fn create_response(
     let should_stream_response = request_parts.stream;
     let response_instructions = request_parts.instructions.clone();
     let response_request_configuration = request_parts.response_configuration();
+    let settings_presence = crate::request_generation_defaults::RequestGenerationSettingsPresence {
+        maximum_output_tokens: request_parts.requested_maximum_output_tokens.is_some(),
+        temperature: request_parts.temperature.is_some(),
+        top_p: request_parts.top_p.is_some(),
+    };
     let request_id = match allocate_chat_request_id(&application_state.next_chat_request_id) {
         Some(request_id) => request_id,
         None => {
@@ -88,11 +96,12 @@ pub(crate) async fn create_response(
             }
         };
     chat_generation_command.model = resolved_model_id;
-    chat_generation_command.settings.max_output_tokens =
-        crate::generation_output_ceiling::cap_generation_output_tokens(
-            application_state.reloadable_config.as_ref(),
-            chat_generation_command.settings.max_output_tokens,
-        );
+    crate::request_generation_defaults::apply_generation_defaults(
+        application_state.reloadable_config.as_ref(),
+        &chat_generation_command.model,
+        settings_presence,
+        &mut chat_generation_command.settings,
+    );
     tracing::info!(
         request_id,
         model = %chat_generation_command.model,
@@ -103,11 +112,24 @@ pub(crate) async fn create_response(
         "accepted REST Responses request"
     );
     let model_id = chat_generation_command.model.clone();
-    let stream_event_receiver = match application_state
+    let (admission_sender, mut admission_receiver) = tokio::sync::oneshot::channel();
+    let mut generation_start_future = application_state
         .generation_executor
-        .start_chat_generation(chat_generation_command)
-        .await
-    {
+        .start_chat_generation_with_admission_signal(chat_generation_command, admission_sender);
+    let generation_start_result = tokio::select! {
+        admission_result = &mut admission_receiver => {
+            drop(configuration_transition_guard);
+            match admission_result {
+                Ok(()) => generation_start_future.await,
+                Err(_) => Err(GenerationStartError::WorkerUnavailable),
+            }
+        }
+        generation_start_result = &mut generation_start_future => {
+            drop(configuration_transition_guard);
+            generation_start_result
+        }
+    };
+    let stream_event_receiver = match generation_start_result {
         Ok(stream_event_receiver) => stream_event_receiver,
         Err(GenerationStartError::CapacityUnavailable) => {
             return (

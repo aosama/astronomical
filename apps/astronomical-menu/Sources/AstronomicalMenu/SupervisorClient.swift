@@ -9,11 +9,20 @@ protocol SupervisorClient: Sendable {
   func requestShutdown() async throws
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String
   func healthIsAvailable() async -> Bool
+  func expectedInstanceIsHealthy() async -> Bool
 }
 
 extension SupervisorClient {
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
     throw SupervisorClientError.serverRejected("Maximum model RAM control is unavailable")
+  }
+
+  func expectedInstanceIsHealthy() async -> Bool {
+    guard await healthIsAvailable() else { return false }
+    guard let statusDocument = try? await fetchStatus() else { return false }
+    return statusDocument.status == "ready"
+      && statusDocument.workerRuntimeFeatureConfigurationApplied
+      && statusDocument.configuration?.isEffective == true
   }
 }
 
@@ -117,21 +126,33 @@ struct ConfigurationReloadResult: Decodable, Equatable {
   let message: String
   let workerRestartCompleted: Bool
   let workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration?
+  let restApiRestartRequired: Bool?
+  let candidateGeneration: String?
+  let effectiveGeneration: String?
 
   init(
     message: String,
     workerRestartCompleted: Bool = false,
-    workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration? = nil
+    workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration? = nil,
+    restApiRestartRequired: Bool? = nil,
+    candidateGeneration: String? = nil,
+    effectiveGeneration: String? = nil
   ) {
     self.message = message
     self.workerRestartCompleted = workerRestartCompleted
     self.workerRuntimeFeatureConfiguration = workerRuntimeFeatureConfiguration
+    self.restApiRestartRequired = restApiRestartRequired
+    self.candidateGeneration = candidateGeneration
+    self.effectiveGeneration = effectiveGeneration
   }
 
   enum CodingKeys: String, CodingKey {
     case message
     case workerRestartCompleted = "worker_restart_completed"
     case workerRuntimeFeatureConfiguration = "worker_runtime_feature_configuration"
+    case restApiRestartRequired = "rest_api_restart_required"
+    case candidateGeneration = "candidate_generation"
+    case effectiveGeneration = "effective_generation"
   }
 
   init(from decoder: Decoder) throws {
@@ -140,6 +161,9 @@ struct ConfigurationReloadResult: Decodable, Equatable {
     workerRestartCompleted = try container.decodeIfPresent(Bool.self, forKey: .workerRestartCompleted) ?? false
     workerRuntimeFeatureConfiguration = try container.decodeIfPresent(
       WorkerRuntimeFeatureConfiguration.self, forKey: .workerRuntimeFeatureConfiguration)
+    restApiRestartRequired = try container.decodeIfPresent(Bool.self, forKey: .restApiRestartRequired)
+    candidateGeneration = try container.decodeIfPresent(String.self, forKey: .candidateGeneration)
+    effectiveGeneration = try container.decodeIfPresent(String.self, forKey: .effectiveGeneration)
   }
 }
 
@@ -148,14 +172,72 @@ struct ConfigurationReloadResult: Decodable, Equatable {
 /// This remains Codable because status fixtures also encode SupervisorStatusDocument while
 /// exercising the same localhost wire contract that the menu decodes in production.
 struct WorkerRuntimeFeatureConfiguration: Codable, Equatable {
+  let configurationGeneration: String
   let persistentPromptCacheEnabled: Bool
-  let mtpEnabled: Bool
-  let speculativePrefillEnabled: Bool
+  let promptCacheMaximumSizeBytes: UInt64
+  let loadedModel: WorkerLoadedModelRuntimeConfiguration?
 
   enum CodingKeys: String, CodingKey {
+    case configurationGeneration = "configuration_generation"
     case persistentPromptCacheEnabled = "persistent_prompt_cache_enabled"
-    case mtpEnabled = "mtp_enabled"
+    case promptCacheMaximumSizeBytes = "prompt_cache_maximum_size_bytes"
+    case loadedModel = "loaded_model"
+  }
+}
+
+struct WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
+  let modelIdentifier: String
+  let maximumContextTokens: UInt32
+  let maximumOutputTokens: UInt32
+  let chunking: WorkerChunkingConfiguration
+  let mtpDraftDepth: UInt8?
+  let mtpHeadModelIdentifier: String?
+  let speculativePrefillEnabled: Bool
+  let speculativePrefill: WorkerSpeculativePrefillRuntimeConfiguration?
+
+  enum CodingKeys: String, CodingKey {
+    case modelIdentifier = "model_id"
+    case maximumContextTokens = "maximum_context_tokens"
+    case maximumOutputTokens = "maximum_output_tokens"
+    case chunking
+    case mtpDraftDepth = "mtp_draft_depth"
+    case mtpHeadModelIdentifier = "mtp_head_model_id"
     case speculativePrefillEnabled = "speculative_prefill_enabled"
+    case speculativePrefill = "speculative_prefill"
+  }
+}
+
+struct WorkerSpeculativePrefillRuntimeConfiguration: Codable, Equatable {
+  let draftModelIdentifier: String
+  let minimumPromptTokens: UInt32
+  let keepPercentage: UInt32
+
+  enum CodingKeys: String, CodingKey {
+    case draftModelIdentifier = "draft_model_id"
+    case minimumPromptTokens = "minimum_prompt_tokens"
+    case keepPercentage = "keep_percentage"
+  }
+}
+
+struct WorkerChunkingConfiguration: Codable, Equatable {
+  let fixedPromptProcessingChunkSizeTokens: UInt32
+  let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32?
+  let fullAttentionKeyValueGrowthTokens: UInt32
+  let speculativePrefillDraftForwardTokens: UInt32
+  let prefillGraphSubmissionLayerInterval: UInt32
+  let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32
+  let promptCacheBlockTokens: UInt32?
+  let promptCacheCommonPrefixStrideBlocks: UInt32
+
+  enum CodingKeys: String, CodingKey {
+    case fixedPromptProcessingChunkSizeTokens = "fixed_prompt_processing_chunk_size_tokens"
+    case fixedSsdStreamingPromptProcessingChunkSizeTokens = "fixed_ssd_streaming_prompt_processing_chunk_size_tokens"
+    case fullAttentionKeyValueGrowthTokens = "full_attention_key_value_growth_tokens"
+    case speculativePrefillDraftForwardTokens = "speculative_prefill_draft_forward_tokens"
+    case prefillGraphSubmissionLayerInterval = "prefill_graph_submission_layer_interval"
+    case experimentalSsdPagingGenerationGraphSubmissionLayerInterval = "experimental_ssd_paging_generation_graph_submission_layer_interval"
+    case promptCacheBlockTokens = "prompt_cache_block_tokens"
+    case promptCacheCommonPrefixStrideBlocks = "prompt_cache_common_prefix_stride_blocks"
   }
 }
 

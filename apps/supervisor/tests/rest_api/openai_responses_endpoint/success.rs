@@ -35,6 +35,13 @@ async fn should_return_a_non_streaming_response_from_the_public_endpoint() {
     assert_eq!(response_document["object"], "response");
     assert_eq!(response_document["status"], "completed");
     assert_eq!(response_document["output_text"], "Done.");
+    // Response metadata echoes caller intent; runtime defaults are not rewritten as explicit input.
+    assert_eq!(response_document["temperature"], serde_json::Value::Null);
+    assert_eq!(response_document["top_p"], serde_json::Value::Null);
+    assert_eq!(
+        response_document["max_output_tokens"],
+        serde_json::Value::Null
+    );
 }
 
 #[tokio::test]

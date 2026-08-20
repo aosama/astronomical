@@ -1,12 +1,14 @@
 #![forbid(unsafe_code)]
 
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MtpRuntimeState, ProtocolWriter, SpeculativePrefillRuntimeState,
-    WorkerEvent,
+    ChatModelCapabilities, MtpRuntimeState, ProtocolReader, ProtocolWriter,
+    SpeculativePrefillRuntimeState, WorkerEvent,
 };
 
 #[tokio::main]
 async fn main() {
+    let mut command_reader = ProtocolReader::new(tokio::io::stdin());
+    let _initialization_command = command_reader.next_command().await;
     let _send_outcome = ProtocolWriter::new(tokio::io::stdout())
         .send_event(&WorkerEvent::Ready {
             mtp_runtime_state: MtpRuntimeState::Disabled,

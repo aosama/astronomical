@@ -4,7 +4,7 @@ use super::*;
 async fn should_reject_invalid_config_reload_without_mutating_live_state() {
     let temp_config_directory = tempfile::tempdir().expect("a temp config directory is needed");
     let config_home_directory = temp_config_directory.path().to_path_buf();
-    write_config_file(&config_home_directory, "{ this is not valid json }");
+    write_raw_config_file(&config_home_directory, "{ this is not valid json }");
 
     let initial_resolved_config = sample_resolved_config();
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
@@ -27,6 +27,28 @@ async fn should_reject_invalid_config_reload_without_mutating_live_state() {
         serde_json::from_slice(&response_body).expect("the reload error body should be JSON");
     assert_eq!(response_json["status"], "invalid_config");
 
+    let status_response = application
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("status should remain available");
+    let status_body = to_bytes(status_response.into_body(), 16 * 1024)
+        .await
+        .expect("the status response should be readable");
+    let status_json: serde_json::Value =
+        serde_json::from_slice(&status_body).expect("the status response should contain JSON");
+    assert_eq!(status_json["configuration"]["is_effective"], false);
+    assert_eq!(status_json["configuration"]["restart_required"], false);
+    assert_eq!(
+        status_json["configuration"]["validation_error"],
+        "Configuration is invalid; correct the local configuration file and retry"
+    );
+
     // Live state must be unchanged after an invalid reload.
     let live_config = reloadable_config
         .read()
@@ -35,7 +57,7 @@ async fn should_reject_invalid_config_reload_without_mutating_live_state() {
 }
 
 #[tokio::test]
-async fn should_reject_enabled_speculative_prefill_without_an_explicit_keep_percentage() {
+async fn should_reject_retired_top_level_speculative_prefill_configuration() {
     let temporary_config_directory =
         tempfile::tempdir().expect("a temporary config directory is needed");
     let config_home_directory = temporary_config_directory.path().to_path_buf();
@@ -68,7 +90,7 @@ async fn should_reject_enabled_speculative_prefill_without_an_explicit_keep_perc
     assert_eq!(response_json["status"], "invalid_config");
     assert_eq!(
         response_json["message"],
-        "invalid Astronomical configuration: speculative_prefill.keep_percentage is required when speculative prefill is enabled",
+        "Configuration is invalid; correct the local configuration file and retry"
     );
     assert_eq!(
         *reloadable_config
@@ -104,7 +126,7 @@ async fn should_return_invalid_config_feedback_when_fixed_prompt_processing_toke
     assert_eq!(response_json["status"], "invalid_config");
     assert_eq!(
         response_json["message"],
-        "invalid Astronomical configuration: invalid chunking.fixed_prompt_processing_chunk_size_tokens: must be positive"
+        "Configuration is invalid; correct the local configuration file and retry"
     );
     let live_config = reloadable_config
         .read()

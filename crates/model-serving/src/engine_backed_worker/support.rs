@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ExpertMemoryMode, ProtocolError, RequestId,
+    ChatGenerationCommand, ExpertMemoryMode, ProtocolError, RequestId, WorkerModelConfiguration,
     WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
 use thiserror::Error;
@@ -20,7 +20,7 @@ pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
     fn create(
         &self,
         model_directory: &str,
-        max_output_tokens: u32,
+        model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<Output = Result<(Processor, Engine), String>> + Send;
 
     /// Updates the complete process-global limit pair used by a future lazy model load.
@@ -50,7 +50,7 @@ impl<Processor, Engine> ModelFactory<Processor, Engine> for () {
     async fn create(
         &self,
         _model_directory: &str,
-        _max_output_tokens: u32,
+        _model_configuration: WorkerModelConfiguration,
     ) -> Result<(Processor, Engine), String> {
         Err("model swapping is unavailable because no model factory was configured".to_owned())
     }

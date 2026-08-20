@@ -59,10 +59,6 @@ where
     ReadTransport: AsyncRead + Unpin,
     WriteTransport: AsyncWrite + Unpin,
 {
-    // Destructure the one authoritative chunking contract before constructing
-    // model ownership. The sizing policy and every supporting boundary crossed
-    // the same validated IPC boundary and therefore cannot disagree.
-    let chunking = worker_startup_configuration.chunking;
     let prompt_cache_config = PromptCacheConfig::new(
         worker_startup_configuration
             .global_prompt_cache_root_directory
@@ -74,15 +70,16 @@ where
     let performance_attribution_log_path = worker_startup_configuration
         .logging_directory
         .join(PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME);
-    let mtp_enabled = worker_startup_configuration.mtp_enabled;
-    let mtp_draft_depth = worker_startup_configuration.mtp_draft_depth;
     let persistent_prompt_cache_enabled =
         worker_startup_configuration.persistent_prompt_cache_enabled;
     let worker_runtime_feature_configuration = WorkerRuntimeFeatureConfiguration {
+        configuration_generation: worker_startup_configuration
+            .configuration_generation
+            .clone(),
         persistent_prompt_cache_enabled,
-        mtp_enabled,
-        mtp_draft_depth,
-        speculative_prefill_enabled: worker_startup_configuration.speculative_prefill.enabled,
+        prompt_cache_maximum_size_bytes: worker_startup_configuration
+            .global_prompt_cache_maximum_size_bytes,
+        loaded_model: None,
     };
     let machine_mlx_memory_ceiling_bytes = sample_iogpu_wired_limit_bytes()
         .await
@@ -95,16 +92,12 @@ where
     );
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
-        fixed_prompt_processing_chunk_size_tokens = chunking.fixed_prompt_processing_chunk_size_tokens,
         performance_attribution_enabled,
         machine_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
-        mtp_enabled,
-        mtp_draft_depth,
-        speculative_prefill = ?worker_startup_configuration.speculative_prefill,
         persistent_prompt_cache_enabled,
-        chunking = ?chunking,
+        configuration_generation = %worker_startup_configuration.configuration_generation,
         "starting idle inference worker"
     );
     let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
@@ -115,11 +108,7 @@ where
         prompt_cache_config,
         performance_attribution_enabled,
         performance_attribution_log_path,
-        mtp_enabled,
-        mtp_draft_depth,
-        speculative_prefill: worker_startup_configuration.speculative_prefill.clone(),
         persistent_prompt_cache_enabled,
-        chunking,
     };
     let engine_worker: EngineBackedWorker<
         ModelFamilyGenerationProcessor,

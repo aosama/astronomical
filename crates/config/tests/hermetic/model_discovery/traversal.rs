@@ -86,11 +86,9 @@ fn should_reject_duplicate_model_ids_with_deterministic_directory_order() {
         write_required_model_files(model_directory);
     }
 
-    let discovery_error = astronomical_config::discover_models(
-        &[first_root_directory, second_root_directory],
-        20_480,
-    )
-    .expect_err("duplicate model IDs should be rejected");
+    let discovery_error =
+        astronomical_config::discover_models(&[first_root_directory, second_root_directory])
+            .expect_err("duplicate model IDs should be rejected");
 
     let DiscoveredModelError::DuplicateModelId {
         model_id,

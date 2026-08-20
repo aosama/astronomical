@@ -26,6 +26,13 @@ pub enum LagunaPreparationError {
         actual_context_tokens: usize,
         maximum_context_tokens: u32,
     },
+    #[error(
+        "requested output limit {requested_output_tokens} exceeds the loaded model maximum {maximum_output_tokens}"
+    )]
+    MaximumOutputTokensExceeded {
+        requested_output_tokens: u16,
+        maximum_output_tokens: u32,
+    },
     #[error("failed to initialize Laguna output parsing")]
     OutputParserInitialization(#[source] LagunaOutputParserError),
 }

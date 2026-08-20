@@ -58,6 +58,33 @@ pub enum WorkerControlError {
         model_load_timeout_millis: u128,
     },
 
+    /// A replacement candidate did not complete its two-part startup acknowledgement in time.
+    #[error(
+        "candidate worker did not acknowledge readiness and runtime configuration within the {acknowledgement_timeout_millis}-millisecond timeout"
+    )]
+    CandidateAcknowledgementTimeout {
+        /// Maximum interval permitted for the complete candidate handshake.
+        acknowledgement_timeout_millis: u128,
+    },
+
+    /// A replacement candidate acknowledged a semantic config other than the requested one.
+    #[error("candidate worker acknowledged a different configuration generation")]
+    CandidateConfigurationGenerationMismatch,
+
+    /// A replacement candidate violated the initial readiness handshake.
+    #[error("candidate worker protocol violation: {description}")]
+    CandidateProtocolViolation {
+        /// Bounded static explanation of the invalid handshake sequence.
+        description: &'static str,
+    },
+
+    /// A replacement candidate emitted an event that is invalid before serving begins.
+    #[error("candidate worker emitted an invalid startup event: {unexpected_worker_event_summary}")]
+    UnexpectedCandidateEvent {
+        /// Bounded event-kind and request-correlation summary without model payloads.
+        unexpected_worker_event_summary: String,
+    },
+
     /// The worker did not acknowledge a live memory-limit update in time.
     #[error(
         "worker memory-limit update acknowledgement did not arrive within the {memory_limit_update_timeout_millis}-millisecond timeout"

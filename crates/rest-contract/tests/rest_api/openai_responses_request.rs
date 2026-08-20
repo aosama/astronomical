@@ -26,9 +26,30 @@ fn should_parse_a_non_streaming_response_request_with_string_input() {
         OpenAiResponseInputParts::Text("Explain the repository.".to_owned())
     );
     assert_eq!(request_parts.maximum_output_tokens, 512);
+    assert_eq!(request_parts.requested_maximum_output_tokens, Some(512));
     assert_eq!(request_parts.temperature, Some(0.6));
     assert_eq!(request_parts.top_p, Some(0.95));
     assert!(!request_parts.stream);
+}
+
+#[test]
+fn should_preserve_omitted_responses_generation_settings_and_request_only_metadata() {
+    let request = serde_json::from_str::<OpenAiResponsesRequest>(
+        r#"{"model":"organization/model","input":"hello"}"#,
+    )
+    .expect("the request without generation settings should deserialize");
+
+    let request_parts = request
+        .into_parts()
+        .expect("the request without generation settings should validate");
+    let response_configuration = request_parts.response_configuration();
+
+    assert_eq!(request_parts.requested_maximum_output_tokens, None);
+    assert_eq!(request_parts.temperature, None);
+    assert_eq!(request_parts.top_p, None);
+    assert_eq!(response_configuration.max_output_tokens, None);
+    assert_eq!(response_configuration.temperature, None);
+    assert_eq!(response_configuration.top_p, None);
 }
 
 #[test]

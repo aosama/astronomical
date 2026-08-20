@@ -74,7 +74,12 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
         popoverIsShown: telemetryPopover?.isShown == true
       )
     }
-    Task { [weak self] in await self?.daemonLifecycleController.startDaemonIfNeeded() }
+    Task { [weak self] in
+      guard let self else { return }
+      await startDaemonForApplication(
+        daemonLifecycleController: daemonLifecycleController,
+        telemetryStore: telemetryStore)
+    }
     telemetryStore.startPolling()
     DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
   }
@@ -143,6 +148,18 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
 
   private func checkForUpdates() {
     requestManualApplicationUpdateCheck(using: applicationUpdateController)
+  }
+}
+
+@MainActor
+func startDaemonForApplication(
+  daemonLifecycleController: DaemonLifecycleController,
+  telemetryStore: TelemetryStore
+) async {
+  do {
+    try await daemonLifecycleController.startDaemonIfNeeded()
+  } catch {
+    telemetryStore.failServerStartup(error)
   }
 }
 

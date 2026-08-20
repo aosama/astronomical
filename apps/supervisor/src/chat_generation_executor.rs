@@ -97,6 +97,28 @@ pub trait ChatGenerationExecutor: Send + Sync + 'static {
         >,
     >;
 
+    /// Signals after policy-bound work has entered the executor's immutable admission queue.
+    fn start_chat_generation_with_admission_signal(
+        &self,
+        generation_command: ChatGenerationCommand,
+        admission_sender: tokio::sync::oneshot::Sender<()>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<ChatGenerationStreamEvent>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            let _admission_signal_result = admission_sender.send(());
+            self.start_chat_generation(generation_command).await
+        })
+    }
+
     fn worker_health_snapshot(&self) -> WorkerHealthSnapshot;
 }
 
