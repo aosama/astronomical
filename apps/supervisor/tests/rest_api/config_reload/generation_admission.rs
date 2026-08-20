@@ -90,3 +90,5 @@ impl ChatGenerationExecutor for DelayedAdmissionExecutor {
         self.delegate.worker_health_snapshot()
     }
 }
+
+impl astronomical_supervisor::ImageGenerationExecutor for DelayedAdmissionExecutor {}

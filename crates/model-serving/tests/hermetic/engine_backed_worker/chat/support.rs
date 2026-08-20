@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn chat_command(request_number: u64, seed: u64) -> ChatGenerationCommand {
+pub(crate) fn chat_command(request_number: u64, seed: u64) -> ChatGenerationCommand {
     ChatGenerationCommand {
         request_id: RequestId::new(request_number),
         model: "example/scripted-chat".to_owned(),
@@ -24,8 +24,8 @@ pub(super) fn chat_command(request_number: u64, seed: u64) -> ChatGenerationComm
     }
 }
 
-pub(super) fn worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
-    WorkerModelConfiguration {
+pub(crate) fn worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
+    WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
         model_id: model_id.to_owned(),
         maximum_context_tokens: 2_048,
         maximum_output_tokens: 128,
@@ -42,7 +42,7 @@ pub(super) fn worker_model_configuration(model_id: &str) -> WorkerModelConfigura
         mtp_draft_depth: None,
         mtp_head_model: None,
         speculative_prefill: None,
-    }
+    })
 }
 
 pub(super) fn ready_event() -> WorkerEvent {
@@ -80,7 +80,8 @@ pub(super) fn ready_event_with_speculative_prefill_load_details(
             max_input_tokens: 241_664,
             max_output_tokens: 20_480,
             context_window: 262_144,
-        },
+        }
+        .into(),
         mtp_runtime_state,
         mtp_unavailable_reason,
         mtp_depth_status: Default::default(),

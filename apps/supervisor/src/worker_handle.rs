@@ -1,20 +1,16 @@
 use std::{
     collections::HashMap,
-    future::Future,
     path::{Path, PathBuf},
-    pin::Pin,
     sync::{Arc, RwLock},
     time::Duration,
 };
 
 use crate::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError,
-    WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
+    GenerationPerformanceLog, ImageGenerationTimeouts, PromptCacheClearOutcome, RuntimeModelPolicy,
+    WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
+    WorkerTerminationOutcome,
 };
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
-};
+use astronomical_ipc_protocol::{WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
 use tokio::sync::{Semaphore, mpsc, oneshot};
 
 use crate::worker::run_worker;
@@ -23,9 +19,6 @@ use crate::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 
 const WORKER_COMMAND_CAPACITY: usize = 8;
 const DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT: Duration = Duration::from_secs(60);
-// One slot for every possible 128-token prefill progress boundary plus the
-// initial zero-progress event under Qwen3.5-MoE's 262,144-token context limit.
-const MAXIMUM_PREFILL_PROGRESS_EVENT_CAPACITY: usize = 2_049;
 
 /// How many requests can wait in the queue when one request is already active.
 /// A second request waits in the queue; the (QUEUE_DEPTH + 1)th request is
@@ -55,13 +48,13 @@ pub struct WorkerHandle {
     /// Permit for the active generation slot. Only one generation runs at a time.
     /// Acquired (awaited) by the next queued request when the current generation
     /// completes and releases its permit.
-    active_generation_permits: Arc<Semaphore>,
+    pub(super) active_generation_permits: Arc<Semaphore>,
     /// Permits for the FIFO queue. Each queued request reserves one permit;
     /// when the active slot becomes available, the permit is promoted to an
     /// active-generation permit and the queue permit is released.
-    generation_queue_permits: Arc<Semaphore>,
-    command_sender: Option<mpsc::Sender<WorkerLoopCommand>>,
-    health_snapshot: Arc<RwLock<WorkerHealthSnapshot>>,
+    pub(super) generation_queue_permits: Arc<Semaphore>,
+    pub(super) command_sender: Option<mpsc::Sender<WorkerLoopCommand>>,
+    pub(super) health_snapshot: Arc<RwLock<WorkerHealthSnapshot>>,
 }
 
 impl WorkerHandle {
@@ -89,6 +82,7 @@ impl WorkerHandle {
             worker_executable_path,
             worker_model_load_timeout,
             DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
+            ImageGenerationTimeouts::DEFAULT,
             performance_log,
             model_policy_catalog,
             None,
@@ -108,6 +102,28 @@ impl WorkerHandle {
             worker_executable_path,
             worker_model_load_timeout,
             DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
+            ImageGenerationTimeouts::DEFAULT,
+            performance_log,
+            model_policy_catalog,
+            Some(worker_startup_configuration),
+        )
+        .await
+    }
+
+    /// Launches a production worker with explicit supervisor-owned image lifecycle bounds.
+    pub async fn launch_with_startup_configuration_and_image_generation_timeouts(
+        worker_executable_path: impl AsRef<Path>,
+        worker_model_load_timeout: Duration,
+        image_generation_timeouts: ImageGenerationTimeouts,
+        performance_log: GenerationPerformanceLog,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+        worker_startup_configuration: WorkerStartupConfiguration,
+    ) -> Result<Self, WorkerControlError> {
+        Self::launch_with_optional_startup_configuration(
+            worker_executable_path,
+            worker_model_load_timeout,
+            DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
+            image_generation_timeouts,
             performance_log,
             model_policy_catalog,
             Some(worker_startup_configuration),
@@ -127,6 +143,28 @@ impl WorkerHandle {
             worker_executable_path,
             worker_model_load_timeout,
             worker_cancellation_acknowledgement_timeout,
+            ImageGenerationTimeouts::DEFAULT,
+            performance_log,
+            model_policy_catalog,
+            None,
+        )
+        .await
+    }
+
+    /// Launches a worker with explicit image lifecycle bounds for controlled deployments and tests.
+    pub async fn launch_with_image_generation_timeouts(
+        worker_executable_path: impl AsRef<Path>,
+        worker_model_load_timeout: Duration,
+        worker_cancellation_acknowledgement_timeout: Duration,
+        image_generation_timeouts: ImageGenerationTimeouts,
+        performance_log: GenerationPerformanceLog,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+    ) -> Result<Self, WorkerControlError> {
+        Self::launch_with_optional_startup_configuration(
+            worker_executable_path,
+            worker_model_load_timeout,
+            worker_cancellation_acknowledgement_timeout,
+            image_generation_timeouts,
             performance_log,
             model_policy_catalog,
             None,
@@ -138,6 +176,7 @@ impl WorkerHandle {
         worker_executable_path: impl AsRef<Path>,
         worker_model_load_timeout: Duration,
         worker_cancellation_acknowledgement_timeout: Duration,
+        image_generation_timeouts: ImageGenerationTimeouts,
         performance_log: GenerationPerformanceLog,
         model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: Option<WorkerStartupConfiguration>,
@@ -165,6 +204,7 @@ impl WorkerHandle {
             Arc::clone(&health_snapshot),
             worker_model_load_timeout,
             worker_cancellation_acknowledgement_timeout,
+            image_generation_timeouts,
             performance_log,
             model_policy_catalog,
             Arc::clone(&active_generation_permits),
@@ -340,121 +380,5 @@ impl WorkerHandle {
         clear_receiver
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
-    }
-}
-
-impl ChatGenerationExecutor for WorkerHandle {
-    fn start_chat_generation(
-        &self,
-        chat_generation_command: ChatGenerationCommand,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
-        self.start_chat_generation_with_queue_admission(chat_generation_command, None)
-    }
-
-    fn start_chat_generation_with_admission_signal(
-        &self,
-        chat_generation_command: ChatGenerationCommand,
-        admission_sender: oneshot::Sender<()>,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
-        self.start_chat_generation_with_queue_admission(
-            chat_generation_command,
-            Some(admission_sender),
-        )
-    }
-
-    fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
-        match self.health_snapshot.read() {
-            Ok(health_snapshot) => health_snapshot.clone(),
-            Err(_) => WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-        }
-    }
-}
-
-impl WorkerHandle {
-    fn start_chat_generation_with_queue_admission(
-        &self,
-        chat_generation_command: ChatGenerationCommand,
-        admission_sender: Option<oneshot::Sender<()>>,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
-        Box::pin(async move {
-            let command_sender = self
-                .command_sender
-                .as_ref()
-                .ok_or(GenerationStartError::WorkerUnavailable)?;
-
-            // Reserve a slot in the FIFO queue. If the queue is full, reject
-            // immediately with CapacityUnavailable rather than blocking.
-            let generation_queue_permit = Arc::clone(&self.generation_queue_permits)
-                .try_acquire_owned()
-                .map_err(|_| GenerationStartError::CapacityUnavailable)?;
-            if let Some(admission_sender) = admission_sender {
-                let _admission_signal_result = admission_sender.send(());
-            }
-
-            // Wait for the active-generation slot to become free. This serializes
-            // requests: only one runs at a time, and queued requests proceed in
-            // FIFO order as each previous generation completes.
-            let active_generation_permit = Arc::clone(&self.active_generation_permits)
-                .acquire_owned()
-                .await
-                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-
-            // Promoted from queue to active: release the queue reservation so
-            // another request can enter the queue.
-            drop(generation_queue_permit);
-
-            let max_output_tokens = chat_generation_command.settings.max_output_tokens;
-            let stream_event_capacity = usize::from(max_output_tokens)
-                .saturating_add(MAXIMUM_PREFILL_PROGRESS_EVENT_CAPACITY)
-                .max(1);
-            let (stream_event_sender, stream_event_receiver) = mpsc::channel(stream_event_capacity);
-            let (start_sender, start_receiver) = oneshot::channel();
-
-            command_sender
-                .send(WorkerLoopCommand::Generate {
-                    active_generation_permit,
-                    generation_command: chat_generation_command,
-                    start_sender,
-                    stream_event_sender,
-                })
-                .await
-                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-
-            start_receiver
-                .await
-                .map_err(|_| GenerationStartError::WorkerUnavailable)??;
-
-            Ok(stream_event_receiver)
-        })
     }
 }

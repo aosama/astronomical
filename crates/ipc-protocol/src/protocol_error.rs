@@ -2,9 +2,30 @@ use std::io;
 
 use thiserror::Error;
 
+use crate::{
+    ChatGenerationValidationError, ImageGenerationCompletionValidationError,
+    ImageGenerationValidationError, WorkerModelCapabilitiesValidationError,
+};
+
 /// Errors raised while serializing, transmitting, or deserializing IPC messages.
 #[derive(Debug, Error)]
 pub enum ProtocolError {
+    /// A decoded chat command violated the worker trust-boundary contract.
+    #[error("received an invalid chat-generation command")]
+    InvalidChatGenerationCommand(#[source] ChatGenerationValidationError),
+
+    /// A decoded image command violated the worker trust-boundary contract.
+    #[error("received an invalid image-generation command")]
+    InvalidImageGenerationCommand(#[source] ImageGenerationValidationError),
+
+    /// A worker advertised an impossible or empty capability contract.
+    #[error("received invalid worker model capabilities")]
+    InvalidWorkerModelCapabilities(#[source] WorkerModelCapabilitiesValidationError),
+
+    /// Image completion bytes or metadata did not describe a protocol-valid PNG outcome.
+    #[error("received an invalid image-generation completion")]
+    InvalidImageGenerationCompletion(#[source] ImageGenerationCompletionValidationError),
+
     /// The serialized message cannot fit inside one bounded IPC frame.
     #[error(
         "IPC message is {actual_message_bytes} bytes, exceeding the {maximum_message_bytes}-byte limit"

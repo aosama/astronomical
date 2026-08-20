@@ -4,15 +4,19 @@ use tokio::io::AsyncWrite;
 use super::fatal::report_fatal_engine_error;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{InferenceEngine, InferenceEngineError, PreparedInferenceRequest};
+use crate::{
+    ImageGenerationEngine, InferenceEngine, InferenceEngineError, PreparedInferenceRequest,
+};
 
-use super::EngineBackedWorker;
+use super::{EngineBackedWorker, LoadedRuntime};
 
-impl<Processor, Engine, Factory> EngineBackedWorker<Processor, Engine, Factory>
+impl<Processor, Engine, Factory, ImageEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    ImageEngine: ImageGenerationEngine,
 {
     pub(super) async fn start_generation<WriteTransport>(
         &mut self,
@@ -37,10 +41,16 @@ where
             return Ok(None);
         }
 
-        let Some(loaded_model) = self.loaded_model.as_mut() else {
-            return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
-                reason: "generation was requested before a model was loaded".to_owned(),
-            });
+        let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut() else {
+            event_writer
+                .send_event(&WorkerEvent::Failed {
+                    request_id,
+                    reason: ChatGenerationFailureReason::invalid_request(
+                        "the loaded model does not support chat generation",
+                    ),
+                })
+                .await?;
+            return Ok(None);
         };
         let prepared_generation = match loaded_model
             .processor

@@ -281,3 +281,5 @@ impl astronomical_supervisor::ChatGenerationExecutor for StatsScriptedExecutor {
         self.health_snapshot.clone()
     }
 }
+
+impl astronomical_supervisor::ImageGenerationExecutor for StatsScriptedExecutor {}

@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) struct ScriptedChatProcessor {
+pub(crate) struct ScriptedChatProcessor {
     emits_parallel_tool_calls: bool,
     prompt_token_count: usize,
 }
@@ -9,7 +9,7 @@ pub(super) struct MalformedFinishProcessor;
 pub(super) struct CorrectionRequestingProcessor;
 
 impl ScriptedChatProcessor {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             emits_parallel_tool_calls: false,
             prompt_token_count: 1,
@@ -258,7 +258,7 @@ fn prepared_generation(
     PreparedModelGeneration::new(ScriptedInferenceRequest::new(prompt_token_count), ())
 }
 
-pub(super) struct ScriptedChatEngine {
+pub(crate) struct ScriptedChatEngine {
     cancellation_count: Arc<AtomicUsize>,
     cached_token_count: u32,
     restored_prompt_prefix_token_count: u32,
@@ -280,7 +280,7 @@ pub(super) struct ScriptedChatEngine {
 }
 
 impl ScriptedChatEngine {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::with_cached_token_count(0)
     }
 

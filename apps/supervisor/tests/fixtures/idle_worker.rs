@@ -13,10 +13,16 @@ use astronomical_ipc_protocol::{
     WorkerRuntimeFeatureConfiguration,
 };
 
+// This smaller fixture reuses only capability and completion helpers from the shared scenario module.
+#[allow(dead_code)]
+mod scripted_worker_image;
+
 const DELAYED_COMPLETION_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
     "astronomical/generation-event-before-swap-model";
 const TELEMETRY_BEFORE_SWAP_MODEL_ID: &str = "astronomical/telemetry-before-swap-model";
+const DELAYED_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-policy-ack-model";
+const DELAYED_IMAGE_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-image-policy-ack-model";
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -74,7 +80,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         })
                         .await?;
                 } else {
-                    let replacement_model_id = model_configuration.model_id.as_str();
+                    let replacement_model_id = model_configuration.model_id();
                     // These two branches deliberately violate the old assumption
                     // that ModelSwapped is always the next frame after SwapModel.
                     if replacement_model_id == TELEMETRY_BEFORE_SWAP_MODEL_ID {
@@ -106,21 +112,32 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             speculative_prefill_draft_model_id: None,
                             speculative_prefill_draft_model_revision: None,
                             model_id: replacement_model_id.to_owned(),
-                            capabilities: ChatModelCapabilities {
-                                supports_reasoning: true,
-                                supports_tool_calls: true,
-                                has_vision: false,
-                                max_input_tokens: model_configuration
-                                    .maximum_context_tokens
-                                    .saturating_sub(model_configuration.maximum_output_tokens),
-                                max_output_tokens: model_configuration.maximum_output_tokens,
-                                context_window: model_configuration.maximum_context_tokens,
+                            capabilities: match model_configuration.autoregressive() {
+                                Some(autoregressive_configuration) => ChatModelCapabilities {
+                                    supports_reasoning: true,
+                                    supports_tool_calls: true,
+                                    has_vision: false,
+                                    max_input_tokens: autoregressive_configuration
+                                        .maximum_context_tokens
+                                        .saturating_sub(1),
+                                    max_output_tokens: autoregressive_configuration.maximum_output_tokens,
+                                    context_window: autoregressive_configuration.maximum_context_tokens,
+                                }.into(),
+                                None => astronomical_ipc_protocol::WorkerModelCapabilities::image_generation(
+                                    scripted_worker_image::image_capabilities(),
+                                ),
                             },
                         })
                         .await?;
                     if let Some(mut runtime_configuration) =
                         acknowledged_runtime_configuration.clone()
                     {
+                        if matches!(
+                            replacement_model_id,
+                            DELAYED_POLICY_ACK_MODEL_ID | DELAYED_IMAGE_POLICY_ACK_MODEL_ID
+                        ) {
+                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                        }
                         runtime_configuration.loaded_model =
                             Some(model_configuration.runtime_configuration());
                         event_writer
@@ -133,6 +150,20 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     emit_memory_snapshot(&mut event_writer, MlxMemorySnapshotSource::ModelLoaded)
                         .await?;
                 }
+            }
+            WorkerCommand::GenerateImage(generation_command) => {
+                if generation_command.prompt == "must-not-dispatch-after-disconnect" {
+                    return Err(std::io::Error::other(
+                        "image generation dispatched after client disconnect",
+                    )
+                    .into());
+                }
+                scripted_worker_image::send_completed_image(
+                    generation_command,
+                    std::time::Duration::ZERO,
+                    &mut event_writer,
+                )
+                .await?;
             }
             WorkerCommand::Generate(generation_command) => {
                 if loaded_model_id.as_deref() == Some(DELAYED_COMPLETION_MODEL_ID) {

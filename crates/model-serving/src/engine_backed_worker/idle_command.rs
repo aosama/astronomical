@@ -3,32 +3,42 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
-use crate::InferenceEngine;
+use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::{ImageGenerationEngine, InferenceEngine};
 
 use super::EngineBackedWorker;
 
-impl<Processor, Engine, Factory> EngineBackedWorker<Processor, Engine, Factory>
+impl<Processor, Engine, Factory, ImageEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    ImageEngine: ImageGenerationEngine,
 {
     pub(crate) async fn serve_idle_command<WriteTransport>(
         &mut self,
         worker_command: WorkerCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveWorkerRequest<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
         match worker_command {
             WorkerCommand::InitializeWorker(_) => Ok(None),
-            WorkerCommand::Generate(generation_command) => {
-                self.start_generation(generation_command, event_writer)
-                    .await
-            }
+            WorkerCommand::Generate(generation_command) => self
+                .start_generation(generation_command, event_writer)
+                .await
+                .map(|generation| {
+                    generation
+                        .map(Box::new)
+                        .map(ActiveWorkerRequest::Autoregressive)
+                }),
+            WorkerCommand::GenerateImage(generation_command) => self
+                .start_image_generation(generation_command, event_writer)
+                .await
+                .map(|generation| generation.map(ActiveWorkerRequest::Image)),
             WorkerCommand::Cancel { .. } => Ok(None),
             WorkerCommand::SampleMlxMemory => {
                 self.emit_mlx_memory_sample(MlxMemorySnapshotSource::IdlePoll, event_writer)
@@ -50,7 +60,7 @@ where
                     .swap_model(&model_directory, model_configuration, event_writer)
                     .await
                 {
-                    let loaded_model_remains_ready = self.loaded_model.is_some();
+                    let loaded_model_remains_ready = self.loaded_runtime.is_some();
                     let model_load_failure_reason = match &swap_error {
                         WorkerRuntimeError::ModelSwapFailed {
                             model_load_failure_reason,
@@ -98,7 +108,8 @@ where
                 .is_some_and(ModelFactory::performance_attribution_enabled),
             model_id.as_deref(),
         );
-        if let Some(loaded_model) = self.loaded_model.as_mut()
+        if let Some(super::LoadedRuntime::Autoregressive(loaded_model)) =
+            self.loaded_runtime.as_mut()
             && let Some(clear_event) = loaded_model
                 .engine
                 .clear_persistent_prompt_cache(model_id.clone())

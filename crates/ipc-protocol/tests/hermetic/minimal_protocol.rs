@@ -19,6 +19,33 @@ fn should_default_mtp_runtime_state_to_disabled() {
 }
 
 #[test]
+fn should_reject_a_whitespace_only_chat_model_id_before_worker_preprocessing() {
+    let serialized_command = serde_json::json!({
+        "kind": "generate",
+        "request_id": 1,
+        "model": "  ",
+        "messages": [{"role": "user", "content": "Romeo and Juliet", "images": []}],
+        "tools": [],
+        "tool_choice": {"kind": "none"},
+        "settings": {
+            "max_output_tokens": 1,
+            "temperature_thousandths": null,
+            "top_p_thousandths": null,
+            "seed": null,
+            "thinking_budget": null
+        }
+    });
+
+    let decoded_command =
+        decode_command(&serde_json::to_vec(&serialized_command).expect("command should serialize"))
+            .expect("the transport should preserve a structurally valid command");
+    let WorkerCommand::Generate(chat_command) = decoded_command else {
+        panic!("the chat command variant should survive transport");
+    };
+    assert!(chat_command.validate().is_err());
+}
+
+#[test]
 fn should_serialize_speculative_prefill_runtime_state_as_snake_case() {
     assert_eq!(
         serde_json::to_string(&SpeculativePrefillRuntimeState::Unavailable)

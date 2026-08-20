@@ -1,6 +1,36 @@
 use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_runtime::check_status, raw};
 
 impl MlxRuntime {
+    /// Samples normal noise from one explicit request-owned PRNG key.
+    pub fn random_normal(
+        &self,
+        shape: &[i32],
+        dtype: MlxDtype,
+        mean: f32,
+        standard_deviation: f32,
+        request_key: &MlxArray,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        const OPERATION: &str = "sample request-keyed MLX normal noise";
+        validate_random_key(request_key)?;
+        validate_random_normal_arguments(shape, dtype, mean, standard_deviation)?;
+        self.output_array(OPERATION, |output, stream| {
+            // SAFETY: Shape and key remain live for this copying graph call;
+            // scalar arguments were validated and output is uniquely writable.
+            unsafe {
+                raw::mlx_random_normal(
+                    output,
+                    shape.as_ptr(),
+                    shape.len(),
+                    dtype.to_raw(),
+                    mean,
+                    standard_deviation,
+                    request_key.raw(),
+                    stream,
+                )
+            }
+        })
+    }
+
     /// Samples one categorical index along `axis` from logits using a deterministic MLX key seed.
     pub fn categorical_sample(
         &self,
@@ -62,6 +92,43 @@ impl MlxRuntime {
         sample_key.require_populated("split an MLX random key")?;
         Ok((next_random_state, sample_key))
     }
+}
+
+fn validate_random_normal_arguments(
+    shape: &[i32],
+    dtype: MlxDtype,
+    mean: f32,
+    standard_deviation: f32,
+) -> Result<(), MlxRuntimeError> {
+    const OPERATION: &str = "sample request-keyed MLX normal noise";
+    if !matches!(
+        dtype,
+        MlxDtype::Float16 | MlxDtype::Float32 | MlxDtype::BFloat16
+    ) {
+        return Err(runtime_operation_error(
+            OPERATION,
+            "normal noise must use a supported floating dtype",
+        ));
+    }
+    if !mean.is_finite() || !standard_deviation.is_finite() || standard_deviation < 0.0 {
+        return Err(runtime_operation_error(
+            OPERATION,
+            "normal mean and standard deviation must be finite and deviation nonnegative",
+        ));
+    }
+    let element_count = shape
+        .iter()
+        .try_fold(1_usize, |element_count, dimension_size| {
+            let dimension_size = usize::try_from(*dimension_size).ok()?;
+            element_count.checked_mul(dimension_size)
+        });
+    if element_count.is_none() {
+        return Err(runtime_operation_error(
+            OPERATION,
+            "normal noise shape must be nonnegative and fit usize",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_categorical_arguments(logits: &MlxArray, axis: i32) -> Result<(), MlxRuntimeError> {

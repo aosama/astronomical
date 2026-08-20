@@ -26,7 +26,8 @@ async fn main() {
                 max_input_tokens: 241_664,
                 max_output_tokens: 20_480,
                 context_window: 262_144,
-            },
+            }
+            .into(),
         })
         .await;
 }

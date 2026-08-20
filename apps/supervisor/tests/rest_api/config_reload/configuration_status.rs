@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use astronomical_ipc_protocol::{
-    MtpDepthStatus, WorkerChunkingConfiguration, WorkerModelConfiguration,
-    WorkerRuntimeFeatureConfiguration,
+    MtpDepthStatus, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
+    WorkerModelConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 use astronomical_supervisor::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 
@@ -160,7 +160,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
 }
 
 fn worker_model_configuration() -> WorkerModelConfiguration {
-    WorkerModelConfiguration {
+    WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
         model_id: crate::common::MODEL_ID.to_owned(),
         maximum_context_tokens: 16_384,
         maximum_output_tokens: 4_096,
@@ -177,5 +177,5 @@ fn worker_model_configuration() -> WorkerModelConfiguration {
         mtp_draft_depth: Some(3),
         mtp_head_model: None,
         speculative_prefill: None,
-    }
+    })
 }

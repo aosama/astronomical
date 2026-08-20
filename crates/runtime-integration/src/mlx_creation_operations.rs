@@ -69,7 +69,7 @@ impl MlxRuntime {
 
     /// Creates a zero-filled MLX array with a validated static shape.
     pub fn zeros(&self, shape: &[i32], dtype: MlxDtype) -> Result<MlxArray, MlxRuntimeError> {
-        validate_creation_shape(shape)?;
+        validate_creation_shape("create a zero-filled MLX array", shape)?;
         self.output_array("create a zero-filled MLX array", |output_array, stream| {
             // SAFETY: Shape remains borrowed for this graph-building call, dtype
             // is a known MLX dtype, stream is live, and output is uniquely writable.
@@ -84,12 +84,49 @@ impl MlxRuntime {
             }
         })
     }
+
+    /// Creates a floating MLX array filled by one scalar without host expansion.
+    pub fn full(
+        &self,
+        shape: &[i32],
+        fill_value: f32,
+        dtype: MlxDtype,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        const OPERATION: &str = "create a filled MLX array";
+        validate_creation_shape(OPERATION, shape)?;
+        if !matches!(
+            dtype,
+            MlxDtype::Float16 | MlxDtype::Float32 | MlxDtype::BFloat16
+        ) || !fill_value.is_finite()
+        {
+            return Err(MlxRuntimeError::RuntimeOperation {
+                operation: OPERATION,
+                description: "fill value must be finite and dtype must be supported floating point"
+                    .to_owned(),
+            });
+        }
+        let float_fill_value = self.array_from_f32(&[fill_value], &[])?;
+        self.output_array(OPERATION, |output_array, stream| {
+            // SAFETY: Shape and scalar remain live for this graph-building call;
+            // dtype is known and output is uniquely writable.
+            unsafe {
+                raw::mlx_full(
+                    output_array,
+                    shape.as_ptr(),
+                    shape.len(),
+                    float_fill_value.raw(),
+                    dtype.to_raw(),
+                    stream,
+                )
+            }
+        })
+    }
 }
 
-fn validate_creation_shape(shape: &[i32]) -> Result<(), MlxRuntimeError> {
+fn validate_creation_shape(operation: &'static str, shape: &[i32]) -> Result<(), MlxRuntimeError> {
     if shape.iter().any(|dimension_size| *dimension_size < 0) {
         return Err(MlxRuntimeError::RuntimeOperation {
-            operation: "create a zero-filled MLX array",
+            operation,
             description: "array dimensions must be nonnegative".to_owned(),
         });
     }
@@ -102,7 +139,7 @@ fn validate_creation_shape(shape: &[i32]) -> Result<(), MlxRuntimeError> {
         });
     if element_count.is_none() {
         return Err(MlxRuntimeError::RuntimeOperation {
-            operation: "create a zero-filled MLX array",
+            operation,
             description: "array element count overflows usize".to_owned(),
         });
     }

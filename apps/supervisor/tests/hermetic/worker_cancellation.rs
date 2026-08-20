@@ -13,7 +13,7 @@ use crate::common::supervisor::{
 };
 
 #[tokio::test]
-async fn should_contain_a_worker_that_does_not_acknowledge_cancellation() {
+async fn should_replace_a_worker_that_does_not_acknowledge_cancellation() {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor_with_cancellation_acknowledgement_timeout(
@@ -31,12 +31,14 @@ async fn should_contain_a_worker_that_does_not_acknowledge_cancellation() {
         .expect("the fixture should start the cancellable request");
 
     drop(stream_receiver);
+    sleep(Duration::from_millis(300)).await;
     timeout(
         Duration::from_secs(5),
-        wait_for_health(&worker_executor, WorkerHealthStatus::Unavailable),
+        wait_for_health(&worker_executor, WorkerHealthStatus::Ready),
     )
     .await
-    .expect("the explicit cancellation timeout should bound cancellation cleanup");
+    .expect("the explicit cancellation timeout should bound worker replacement");
+    assert_worker_accepts_followup_request(&worker_executor).await;
 
     worker_executor
         .shutdown()
@@ -83,7 +85,7 @@ async fn should_keep_worker_ready_when_prefill_cancellation_acknowledgement_is_d
 }
 
 #[tokio::test]
-async fn should_record_the_unexpected_event_that_contains_a_cancellation_mismatch() {
+async fn should_replace_a_worker_after_an_unexpected_cancellation_event() {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor(worker_executable_path)
@@ -98,12 +100,14 @@ async fn should_record_the_unexpected_event_that_contains_a_cancellation_mismatc
         .expect("the fixture should start the cancellable request");
 
     drop(stream_receiver);
+    sleep(Duration::from_millis(200)).await;
     timeout(
         Duration::from_secs(5),
-        wait_for_health(&worker_executor, WorkerHealthStatus::Unavailable),
+        wait_for_health(&worker_executor, WorkerHealthStatus::Ready),
     )
     .await
-    .expect("the unexpected cancellation event should contain the worker");
+    .expect("the unexpected cancellation event should replace the worker");
+    assert_worker_accepts_followup_request(&worker_executor).await;
 
     let diagnostic_error = WorkerControlError::UnexpectedCancellationEvent {
         request_id: 1,

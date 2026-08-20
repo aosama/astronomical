@@ -125,7 +125,7 @@ async fn post_chat_and_read_body<GenerationExecutor>(
     expected_status: StatusCode,
 ) -> String
 where
-    GenerationExecutor: ChatGenerationExecutor,
+    GenerationExecutor: ChatGenerationExecutor + astronomical_supervisor::ImageGenerationExecutor,
 {
     let application = build_application(generation_executor);
     let chat_response = application
@@ -178,6 +178,8 @@ impl ChatGenerationExecutor for PanicOnChatStartExecutor {
     }
 }
 
+impl astronomical_supervisor::ImageGenerationExecutor for PanicOnChatStartExecutor {}
+
 impl ChatGenerationExecutor for ReadyChatFailureExecutor {
     fn start_chat_generation(
         &self,
@@ -200,6 +202,8 @@ impl ChatGenerationExecutor for ReadyChatFailureExecutor {
         ready_worker_health_snapshot()
     }
 }
+
+impl astronomical_supervisor::ImageGenerationExecutor for ReadyChatFailureExecutor {}
 
 impl ChatGenerationExecutor for IdleWorkerCapacityExecutor {
     fn start_chat_generation(
@@ -227,6 +231,8 @@ impl ChatGenerationExecutor for IdleWorkerCapacityExecutor {
     }
 }
 
+impl astronomical_supervisor::ImageGenerationExecutor for IdleWorkerCapacityExecutor {}
+
 fn ready_worker_health_snapshot() -> WorkerHealthSnapshot {
     WorkerHealthSnapshot::ready_with_model(
         READY_MODEL_ID.to_owned(),
@@ -246,15 +252,21 @@ fn ready_worker_health_snapshot() -> WorkerHealthSnapshot {
 fn discovered_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "requested-model".to_owned(),
+        provider_model_id: None,
         model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from("/models/requested-model"),
-        context_window: 2_048,
-        max_input_tokens: 1_024,
-        max_output_tokens: 128,
-        has_vision: false,
-        supports_reasoning: true,
-        supports_tool_calls: true,
+        capabilities: astronomical_config::ModelCapabilities::Chat(
+            astronomical_config::ChatModelCapabilities {
+                context_window: 2_048,
+                max_input_tokens: 1_024,
+                max_output_tokens: 128,
+                supports_vision: false,
+                supports_reasoning: true,
+                supports_tool_calls: true,
+            },
+        ),
+        license: None,
         model_size_bytes: 0,
     }
 }

@@ -9,11 +9,29 @@ use astronomical_ipc_protocol::{
 };
 use thiserror::Error;
 
-use crate::InferenceEngineError;
+use crate::{ImageGenerationUnavailableEngine, InferenceEngineError};
+
+/// Unloaded runtime selected by the model factory for one typed model configuration.
+pub enum ModelFactoryRuntime<Processor, Engine, ImageEngine = ImageGenerationUnavailableEngine> {
+    Autoregressive {
+        processor: Processor,
+        engine: Engine,
+    },
+    Image(ImageEngine),
+}
+
+impl<Processor, Engine, ImageEngine> ModelFactoryRuntime<Processor, Engine, ImageEngine> {
+    #[must_use]
+    pub fn autoregressive(processor: Processor, engine: Engine) -> Self {
+        Self::Autoregressive { processor, engine }
+    }
+}
 
 /// Factory that creates a new processor and engine for a selected model directory.
-pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
-    /// Creates a processor and unloaded engine with the requested output ceiling.
+pub trait ModelFactory<Processor, Engine, ImageEngine = ImageGenerationUnavailableEngine>:
+    Send + Sync + 'static
+{
+    /// Creates one unloaded runtime for the exact tagged model configuration.
     ///
     /// A failure reason is delivered to the local API caller, so it must be
     /// bounded and must not expose local filesystem paths or native errors.
@@ -21,7 +39,9 @@ pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
         &self,
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
-    ) -> impl std::future::Future<Output = Result<(Processor, Engine), String>> + Send;
+    ) -> impl std::future::Future<
+        Output = Result<ModelFactoryRuntime<Processor, Engine, ImageEngine>, String>,
+    > + Send;
 
     /// Updates the complete process-global limit pair used by a future lazy model load.
     fn update_mlx_memory_limits(
@@ -46,13 +66,66 @@ pub trait ModelFactory<Processor, Engine>: Send + Sync + 'static {
     }
 }
 
-impl<Processor, Engine> ModelFactory<Processor, Engine> for () {
+impl<Processor, Engine, ImageEngine> ModelFactory<Processor, Engine, ImageEngine> for () {
     async fn create(
         &self,
         _model_directory: &str,
         _model_configuration: WorkerModelConfiguration,
-    ) -> Result<(Processor, Engine), String> {
+    ) -> Result<ModelFactoryRuntime<Processor, Engine, ImageEngine>, String> {
         Err("model swapping is unavailable because no model factory was configured".to_owned())
+    }
+}
+
+pub(crate) enum ActiveWorkerRequest<RequestOutput> {
+    Autoregressive(Box<ActiveEngineGeneration<RequestOutput>>),
+    Image(ActiveImageGeneration),
+}
+
+pub(crate) struct ActiveImageGeneration {
+    pub(crate) request_id: RequestId,
+    pub(crate) total_steps: u16,
+    started_at: Instant,
+    performance_attribution_enabled: bool,
+}
+
+impl ActiveImageGeneration {
+    pub(crate) fn new(
+        request_id: RequestId,
+        total_steps: u16,
+        performance_attribution_enabled: bool,
+    ) -> Self {
+        if performance_attribution_enabled {
+            tracing::info!(
+                operation = "image_generation",
+                phase = "start",
+                request_id = request_id.value(),
+                "performance attribution operation started"
+            );
+        }
+        Self {
+            request_id,
+            total_steps,
+            started_at: Instant::now(),
+            performance_attribution_enabled,
+        }
+    }
+
+    pub(crate) fn elapsed_millis(&self) -> u64 {
+        u64::try_from(self.started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
+    }
+}
+
+impl Drop for ActiveImageGeneration {
+    fn drop(&mut self) {
+        if self.performance_attribution_enabled {
+            tracing::info!(
+                operation = "image_generation",
+                phase = "end",
+                request_id = self.request_id.value(),
+                elapsed_millis = self.elapsed_millis(),
+                "performance attribution operation completed"
+            );
+        }
     }
 }
 

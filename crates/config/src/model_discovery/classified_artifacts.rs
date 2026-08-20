@@ -51,7 +51,9 @@ fn scan_classified_artifacts(
     if depth > MAXIMUM_CLASSIFIED_SCAN_DEPTH {
         return Ok(());
     }
-    if current_directory.join("config.json").is_file() {
+    if current_directory.join("config.json").is_file()
+        || current_directory.join("model_index.json").is_file()
+    {
         if let Ok(Some(model_family)) = classify_model_directory(current_directory)
             && let Some(model_id) = model_identity(current_directory)
         {
@@ -127,8 +129,21 @@ fn model_identity(model_directory: &Path) -> Option<String> {
 
 /// Returns artifact provenance only when its source records an immutable revision candidate.
 pub(super) fn immutable_model_revision(model_directory: &Path) -> Option<String> {
-    let local_metadata_path =
-        model_directory.join(".cache/huggingface/download/config.json.metadata");
+    let authoritative_file_name = if model_directory.join("model_index.json").is_file() {
+        "model_index.json"
+    } else {
+        "config.json"
+    };
+    immutable_file_revision(model_directory, authoritative_file_name)
+}
+
+pub(super) fn immutable_file_revision(
+    model_directory: &Path,
+    authoritative_file_name: &str,
+) -> Option<String> {
+    let local_metadata_path = model_directory.join(format!(
+        ".cache/huggingface/download/{authoritative_file_name}.metadata"
+    ));
     if local_metadata_path
         .metadata()
         .ok()

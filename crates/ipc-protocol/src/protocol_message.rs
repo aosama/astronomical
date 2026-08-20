@@ -2,9 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, ChatModelCapabilities, WorkerModelConfiguration,
-    WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
-    WorkerStartupConfiguration,
+    ChatGenerationOutput, GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason,
+    ImageGenerationPhase, ImageGenerationResultMetadata, WorkerModelCapabilities,
+    WorkerModelConfiguration, WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -164,6 +165,8 @@ pub enum WorkerCommand {
     InitializeWorker(WorkerStartupConfiguration),
     /// Starts one bounded structured-chat generation.
     Generate(ChatGenerationCommand),
+    /// Starts one bounded text-to-image generation.
+    GenerateImage(ImageGenerationCommand),
     /// Stops the active generation with this request identifier.
     Cancel { request_id: RequestId },
     /// Swaps the loaded model to a different model directory.
@@ -250,10 +253,36 @@ pub enum WorkerEvent {
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
         expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
+    /// Reports image-generation phase and denoising-step progress.
+    ImageGenerationProgress {
+        request_id: RequestId,
+        phase: ImageGenerationPhase,
+        completed_steps: u16,
+        total_steps: u16,
+        elapsed_millis: u64,
+    },
+    /// Delivers one completed encoded image and its reproducibility metadata.
+    ImageGenerationCompleted {
+        request_id: RequestId,
+        generated_image: GeneratedImage,
+        result_metadata: ImageGenerationResultMetadata,
+    },
+    /// Reports a request-scoped image failure that leaves the worker responsive.
+    ImageGenerationFailed {
+        request_id: RequestId,
+        reason: ImageGenerationFailureReason,
+    },
+    /// Confirms that image request state has been released after any outcome.
+    ImageGenerationFinalized {
+        request_id: RequestId,
+        elapsed_millis: u64,
+        /// Present when the image engine observed MLX after releasing request arrays and cache.
+        mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    },
     /// Reports that the configured model finished loading.
     Ready {
         model_id: String,
-        capabilities: ChatModelCapabilities,
+        capabilities: WorkerModelCapabilities,
         /// Actual MTP runtime state reported by the worker after model load.
         mtp_runtime_state: MtpRuntimeState,
         /// Present when MTP is unavailable despite the preference being enabled.
@@ -342,7 +371,7 @@ pub enum WorkerEvent {
     /// Emitted after processing a SwapModel command, replacing the initial Ready event.
     ModelSwapped {
         model_id: String,
-        capabilities: ChatModelCapabilities,
+        capabilities: WorkerModelCapabilities,
         /// Expert-memory mode selected before the model became ready.
         expert_memory_mode: Option<ExpertMemoryMode>,
         /// Safe idle lower bound for the newly loaded model.
@@ -401,58 +430,4 @@ pub enum WorkerEvent {
         /// Total bytes removed across all cache file types.
         bytes_freed: u64,
     },
-}
-
-impl WorkerEvent {
-    /// Returns a bounded diagnostic summary without exposing model-generated payloads.
-    #[must_use]
-    pub fn diagnostic_summary(&self) -> String {
-        match self {
-            Self::RuntimeFeatureConfigurationApplied { .. } => {
-                "runtime_feature_configuration_applied".to_owned()
-            }
-            Self::Idle { .. } => "idle".to_owned(),
-            Self::MlxMemorySample { .. } => "mlx_memory_sample".to_owned(),
-            Self::MlxMemoryLimitChanged { .. } => "mlx_memory_limit_changed".to_owned(),
-            Self::MlxMemoryLimitRejected { .. } => "mlx_memory_limit_rejected".to_owned(),
-            Self::ExpertMemoryModeChanged { .. } => "expert_memory_mode_changed".to_owned(),
-            Self::GenerationFinalized { request_id, .. } => {
-                format!("generation_finalized request_id={}", request_id.value())
-            }
-            Self::Ready { .. } => "ready".to_owned(),
-            Self::Output { request_id, .. } => {
-                format!("output request_id={}", request_id.value())
-            }
-            Self::PrefillProgress { request_id, .. } => {
-                format!("prefill_progress request_id={}", request_id.value())
-            }
-            Self::GenerationPreparationStarted { request_id, .. } => {
-                format!(
-                    "generation_preparation_started request_id={}",
-                    request_id.value()
-                )
-            }
-            Self::GenerationProgress { request_id, .. } => {
-                format!("generation_progress request_id={}", request_id.value())
-            }
-            Self::FirstDecodeCompleted { request_id, .. } => {
-                format!("first_decode_completed request_id={}", request_id.value())
-            }
-            Self::PromptWorkReuse { request_id, .. } => {
-                format!("prompt_work_reuse request_id={}", request_id.value())
-            }
-            Self::Completed { request_id, .. } => {
-                format!("completed request_id={}", request_id.value())
-            }
-            Self::Failed { request_id, .. } => {
-                format!("failed request_id={}", request_id.value())
-            }
-            Self::ModelSwapped { .. } => "model_swapped".to_owned(),
-            Self::ModelSwapFailed { .. } => "model_swap_failed".to_owned(),
-            Self::PersistentPromptCacheStats { .. } => "persistent_prompt_cache_stats".to_owned(),
-            Self::PromptCacheCleared { model_id, .. } => {
-                format!("prompt_cache_cleared model_id={:?}", model_id)
-            }
-        }
-    }
 }

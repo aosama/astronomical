@@ -17,13 +17,8 @@ pub(super) fn handle_generation_preparation_started(
     request_id: RequestId,
     expert_residency: ExpertResidencySnapshot,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_request: &mut ActiveGeneration,
 ) -> Result<(), WorkerControlError> {
-    let Some(active_request) = active_generation.as_mut() else {
-        return Err(protocol_violation(
-            "generation preparation without an active request",
-        ));
-    };
     if active_request.request_id != request_id
         || expert_residency
             .complete_layer_count

@@ -1,23 +1,60 @@
 use std::path::PathBuf;
 
-use astronomical_config::{ModelFamily, PromptCacheConfig, classify_model_directory};
-use astronomical_ipc_protocol::{WorkerModelConfiguration, WorkerSpeculativePrefillConfiguration};
+use astronomical_config::{
+    ModelFamily, PromptCacheConfig, classify_model_directory, verify_flux2_klein_model_directory,
+};
+use astronomical_ipc_protocol::{
+    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
+    WorkerSpeculativePrefillConfiguration,
+};
 use astronomical_model_serving::{
-    LagunaServingSettings, ModelFactory, ModelFamilyGenerationProcessor,
-    ModelFamilyInferenceEngine, deepseek_v4_unavailable_reason,
-    initialize_laguna_model_with_serving_settings,
+    EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine, LagunaServingSettings,
+    ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
+    deepseek_v4_unavailable_reason, initialize_laguna_model_with_serving_settings,
 };
 
 use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
 
 /// Creates the concrete family processor and engine for a selected model directory.
-pub(crate) struct ModelFamilyFactory {
-    pub(crate) effective_mlx_memory_ceiling_bytes: usize,
-    pub(crate) allocator_cache_memory_limit_bytes: usize,
-    pub(crate) prompt_cache_config: PromptCacheConfig,
-    pub(crate) performance_attribution_enabled: bool,
-    pub(crate) performance_attribution_log_path: PathBuf,
-    pub(crate) persistent_prompt_cache_enabled: bool,
+#[doc(hidden)]
+pub struct ModelFamilyFactory {
+    effective_mlx_memory_ceiling_bytes: usize,
+    maximum_allocator_cache_memory_limit_bytes: usize,
+    allocator_cache_memory_limit_bytes: usize,
+    prompt_cache_config: PromptCacheConfig,
+    performance_attribution_enabled: bool,
+    performance_attribution_log_path: PathBuf,
+    persistent_prompt_cache_enabled: bool,
+}
+
+pub(crate) type InferenceWorker = EngineBackedWorker<
+    ModelFamilyGenerationProcessor,
+    ModelFamilyInferenceEngine,
+    ModelFamilyFactory,
+    Flux2KleinImageEngine,
+>;
+
+impl ModelFamilyFactory {
+    #[doc(hidden)]
+    #[must_use]
+    pub fn new(
+        effective_mlx_memory_ceiling_bytes: usize,
+        allocator_cache_memory_limit_bytes: usize,
+        prompt_cache_config: PromptCacheConfig,
+        performance_attribution_enabled: bool,
+        performance_attribution_log_path: PathBuf,
+        persistent_prompt_cache_enabled: bool,
+    ) -> Self {
+        Self {
+            effective_mlx_memory_ceiling_bytes,
+            maximum_allocator_cache_memory_limit_bytes: allocator_cache_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            prompt_cache_config,
+            performance_attribution_enabled,
+            performance_attribution_log_path,
+            persistent_prompt_cache_enabled,
+        }
+    }
 }
 
 fn disabled_speculative_prefill() -> WorkerSpeculativePrefillConfiguration {
@@ -35,14 +72,21 @@ fn disabled_speculative_prefill() -> WorkerSpeculativePrefillConfiguration {
     }
 }
 
-impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
+impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, Flux2KleinImageEngine>
     for ModelFamilyFactory
 {
     async fn create(
         &self,
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
-    ) -> Result<(ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine), String> {
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            Flux2KleinImageEngine,
+        >,
+        String,
+    > {
         let model_directory_path = PathBuf::from(model_directory);
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
@@ -50,84 +94,153 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine>
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
-        let chunking = model_configuration.chunking.clone();
-
-        tokio::task::spawn_blocking(move || {
-            let model_family = classify_model_directory(&model_directory_path)
-                .map_err(|_| "selected model family could not be classified".to_owned())?;
-            match model_family {
-                Some(ModelFamily::Qwen3_5) => {
-                    let (generation_processor, qwen3_5_engine) = initialize_qwen3_5_model(
-                        model_directory_path,
-                        effective_mlx_memory_ceiling_bytes,
-                        allocator_cache_memory_limit_bytes,
-                        prompt_cache_config,
-                        model_configuration.model_id,
-                        model_configuration.maximum_context_tokens,
-                        model_configuration.maximum_output_tokens,
-                        model_configuration.mtp_draft_depth,
-                        model_configuration
-                            .speculative_prefill
-                            .unwrap_or_else(disabled_speculative_prefill),
-                        persistent_prompt_cache_enabled,
-                        performance_attribution_enabled,
-                        performance_attribution_log_path,
-                        chunking,
-                    )
-                    .map_err(|startup_error| startup_error.public_model_load_failure_reason())?;
-                    Ok((
-                        ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
-                        ModelFamilyInferenceEngine::Qwen3_5(qwen3_5_engine),
-                    ))
-                }
-                Some(ModelFamily::Laguna) => {
-                    let (generation_processor, laguna_engine) =
-                        initialize_laguna_model_with_serving_settings(
-                            &model_directory_path,
+        let classification_directory_path = model_directory_path.clone();
+        let model_family = tokio::task::spawn_blocking(move || {
+            classify_model_directory(&classification_directory_path)
+                .map_err(|_| "selected model family could not be classified".to_owned())
+        })
+        .await
+        .map_err(|_| "model-family classification task failed".to_owned())??;
+        match (model_family, model_configuration) {
+            (
+                Some(ModelFamily::Qwen3_5),
+                WorkerModelConfiguration::Autoregressive(model_configuration),
+            ) => {
+                let (generation_processor, qwen3_5_engine) =
+                    tokio::task::spawn_blocking(move || {
+                        let chunking = model_configuration.chunking.clone();
+                        let (generation_processor, qwen3_5_engine) = initialize_qwen3_5_model(
+                            model_directory_path,
                             effective_mlx_memory_ceiling_bytes,
                             allocator_cache_memory_limit_bytes,
+                            prompt_cache_config,
+                            model_configuration.model_id,
+                            model_configuration.maximum_context_tokens,
+                            model_configuration.maximum_output_tokens,
+                            model_configuration.mtp_draft_depth,
+                            model_configuration
+                                .speculative_prefill
+                                .unwrap_or_else(disabled_speculative_prefill),
+                            persistent_prompt_cache_enabled,
                             performance_attribution_enabled,
-                            LagunaServingSettings {
-                                maximum_context_tokens: Some(
-                                    model_configuration.maximum_context_tokens,
-                                ),
-                                maximum_output_tokens: Some(
-                                    model_configuration.maximum_output_tokens,
-                                ),
-                                chunking: Some(chunking),
-                                persistent_prompt_cache_enabled,
-                                prompt_cache_config: persistent_prompt_cache_enabled
-                                    .then_some(prompt_cache_config),
-                                performance_attribution_log_path: Some(
-                                    performance_attribution_log_path,
-                                ),
-                            },
+                            performance_attribution_log_path,
+                            chunking,
                         )
                         .map_err(|startup_error| {
                             startup_error.public_model_load_failure_reason()
                         })?;
-                    Ok((
-                        ModelFamilyGenerationProcessor::Laguna(generation_processor),
-                        ModelFamilyInferenceEngine::Laguna(laguna_engine),
-                    ))
-                }
-                Some(ModelFamily::DeepSeekV4) => Err(deepseek_v4_unavailable_reason().to_owned()),
-                None => Err("selected model has an unsupported model family".to_owned()),
+                        Ok::<_, String>((generation_processor, qwen3_5_engine))
+                    })
+                    .await
+                    .map_err(|_| "Qwen3.5 initialization task failed".to_owned())??;
+                Ok(ModelFactoryRuntime::autoregressive(
+                    ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+                    ModelFamilyInferenceEngine::Qwen3_5(qwen3_5_engine),
+                ))
             }
-        })
-        .await
-        .map_err(|_| "model-family initialization task failed".to_owned())?
+            (
+                Some(ModelFamily::Laguna),
+                WorkerModelConfiguration::Autoregressive(model_configuration),
+            ) => {
+                let (generation_processor, laguna_engine) =
+                    tokio::task::spawn_blocking(move || {
+                        let chunking = model_configuration.chunking.clone();
+                        let (generation_processor, laguna_engine) =
+                            initialize_laguna_model_with_serving_settings(
+                                &model_directory_path,
+                                effective_mlx_memory_ceiling_bytes,
+                                allocator_cache_memory_limit_bytes,
+                                performance_attribution_enabled,
+                                LagunaServingSettings {
+                                    maximum_context_tokens: Some(
+                                        model_configuration.maximum_context_tokens,
+                                    ),
+                                    maximum_output_tokens: Some(
+                                        model_configuration.maximum_output_tokens,
+                                    ),
+                                    chunking: Some(chunking),
+                                    persistent_prompt_cache_enabled,
+                                    prompt_cache_config: persistent_prompt_cache_enabled
+                                        .then_some(prompt_cache_config),
+                                    performance_attribution_log_path: Some(
+                                        performance_attribution_log_path,
+                                    ),
+                                },
+                            )
+                            .map_err(|startup_error| {
+                                startup_error.public_model_load_failure_reason()
+                            })?;
+                        Ok::<_, String>((generation_processor, laguna_engine))
+                    })
+                    .await
+                    .map_err(|_| "Laguna initialization task failed".to_owned())??;
+                Ok(ModelFactoryRuntime::autoregressive(
+                    ModelFamilyGenerationProcessor::Laguna(generation_processor),
+                    ModelFamilyInferenceEngine::Laguna(laguna_engine),
+                ))
+            }
+            (
+                Some(ModelFamily::Flux2Klein),
+                WorkerModelConfiguration::Flux2Klein(model_configuration),
+            ) => {
+                let verification_directory_path = model_directory_path.clone();
+                let verified_evidence = tokio::task::spawn_blocking(move || {
+                    verify_flux2_klein_model_directory(&verification_directory_path)
+                        // Discovery retains typed diagnostics, while this worker boundary must not
+                        // reveal which mutable local artifact detail changed after selection.
+                        .map_err(|_| {
+                            "selected FLUX.2 Klein artifact failed exact-directory verification"
+                                .to_owned()
+                        })
+                })
+                .await
+                .map_err(|_| "FLUX.2 Klein verification task failed".to_owned())??;
+                if model_configuration.model_family != WorkerImageGenerationModelFamily::Flux2Klein
+                    || model_configuration.model_id != verified_evidence.canonical_model_id
+                    || model_configuration.artifact_revision != verified_evidence.revision
+                {
+                    return Err(
+                        "selected FLUX.2 Klein model identity or revision is unsupported"
+                            .to_owned(),
+                    );
+                }
+                let provenance = Flux2KleinArtifactProvenance::new(
+                    verified_evidence.provider_model_id,
+                    verified_evidence.revision,
+                    verified_evidence.license.spdx_identifier(),
+                );
+                Ok(ModelFactoryRuntime::Image(
+                    Flux2KleinImageEngine::from_model_family_factory(
+                        model_directory_path,
+                        provenance,
+                        effective_mlx_memory_ceiling_bytes,
+                        allocator_cache_memory_limit_bytes,
+                        performance_attribution_enabled,
+                        performance_attribution_log_path,
+                    ),
+                ))
+            }
+            (Some(ModelFamily::DeepSeekV4), WorkerModelConfiguration::Autoregressive(_)) => {
+                Err(deepseek_v4_unavailable_reason().to_owned())
+            }
+            (Some(_), _) => Err(
+                "selected model configuration does not match its classified model family"
+                    .to_owned(),
+            ),
+            (None, _) => Err("selected model has an unsupported model family".to_owned()),
+        }
     }
 
     fn update_mlx_memory_limits(
         &mut self,
         effective_mlx_memory_ceiling_bytes: u64,
-        allocator_cache_memory_limit_bytes: u64,
+        _allocator_cache_memory_limit_bytes: u64,
     ) {
         self.effective_mlx_memory_ceiling_bytes =
             usize::try_from(effective_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
-        self.allocator_cache_memory_limit_bytes =
-            usize::try_from(allocator_cache_memory_limit_bytes).unwrap_or(usize::MAX);
+        self.allocator_cache_memory_limit_bytes = self
+            .maximum_allocator_cache_memory_limit_bytes
+            .min(self.effective_mlx_memory_ceiling_bytes);
     }
 
     fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {

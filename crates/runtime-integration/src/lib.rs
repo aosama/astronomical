@@ -31,11 +31,17 @@ mod mlx_creation_operations;
 #[cfg(feature = "mlx")]
 mod mlx_descriptor_file_reader;
 #[cfg(feature = "mlx")]
+mod mlx_elementwise_math_operations;
+#[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
+#[cfg(feature = "mlx")]
+mod mlx_normalization_operations;
 #[cfg(feature = "mlx")]
 mod mlx_nvfp4_operations;
 #[cfg(feature = "mlx")]
 mod mlx_operations;
+#[cfg(feature = "mlx")]
+mod mlx_padding_operations;
 #[cfg(feature = "mlx")]
 mod mlx_quantization_construction;
 #[cfg(feature = "mlx")]

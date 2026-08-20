@@ -31,8 +31,11 @@ async fn should_complete_the_cold_tool_journey_through_real_config_worker_and_re
         let target_model_context_window = crate::common::configured_discovered_models()
             .into_iter()
             .find(|model| model.model_id == target_model_id)
-            .expect("the qualification target should be discovered")
-            .context_window;
+            .and_then(|model| {
+                crate::common::chat_capabilities(&model)
+                    .map(|chat_capabilities| chat_capabilities.context_window)
+            })
+            .expect("the qualification target should be discovered as a chat model");
         let configured_target_policy = development_config
             .resolved_model_config(&target_model_id, target_model_context_window)
             .expect("the Development target policy should resolve");

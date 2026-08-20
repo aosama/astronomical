@@ -521,3 +521,5 @@ impl astronomical_supervisor::ChatGenerationExecutor for ContractScriptedExecuto
         self.health_snapshot.clone()
     }
 }
+
+impl astronomical_supervisor::ImageGenerationExecutor for ContractScriptedExecutor {}

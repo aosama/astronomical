@@ -29,7 +29,8 @@ async fn main() {
                 max_input_tokens: 241_664,
                 max_output_tokens: 20_480,
                 context_window: 262_144,
-            },
+            }
+            .into(),
         })
         .await
         .is_err()
@@ -39,6 +40,9 @@ async fn main() {
     while let Ok(Some(worker_command)) = command_reader.next_command().await {
         match worker_command {
             WorkerCommand::InitializeWorker(_) => {}
+            WorkerCommand::GenerateImage(_) => {
+                panic!("the chat-only fixture must not receive image generation")
+            }
             WorkerCommand::Generate(generation_command) => {
                 let _send_outcome = event_writer
                     .send_event(&WorkerEvent::Completed {

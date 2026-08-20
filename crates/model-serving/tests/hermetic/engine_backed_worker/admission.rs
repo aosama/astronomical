@@ -245,7 +245,8 @@ impl ModelGenerationProcessor for PassthroughProcessor {
                 max_input_tokens: 241_664,
                 max_output_tokens: 20_480,
                 context_window: 262_144,
-            },
+            }
+            .into(),
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: Default::default(),
@@ -312,7 +313,8 @@ impl ModelGenerationProcessor for FeedbackProcessor {
                 max_input_tokens: 241_664,
                 max_output_tokens: 20_480,
                 context_window: 262_144,
-            },
+            }
+            .into(),
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: Default::default(),

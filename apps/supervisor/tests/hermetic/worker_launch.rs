@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatImageInput,
     ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, RequestId,
-    WorkerChunkingConfiguration, WorkerModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
@@ -455,7 +455,7 @@ fn runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeModelPo
 }
 
 fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
-    WorkerModelConfiguration {
+    WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
         model_id: model_id.to_owned(),
         maximum_context_tokens: 2_048,
         maximum_output_tokens: 128,
@@ -472,7 +472,7 @@ fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguratio
         mtp_draft_depth: None,
         mtp_head_model: None,
         speculative_prefill: None,
-    }
+    })
 }
 
 fn chat_command(requested_model_id: String) -> ChatGenerationCommand {

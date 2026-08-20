@@ -18,7 +18,7 @@ use crate::{
     generation_performance_log::unix_epoch_millis,
     worker_event_handler::protocol_violation,
     worker_health::{clear_active_request_progress, publish_activity, record_serving_session},
-    worker_loop_types::ActiveGeneration,
+    worker_loop_types::ActiveWorkerRequest,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -31,13 +31,16 @@ pub(super) fn handle_worker_completion_event(
     persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
     reason: ChatGenerationCompletionReason,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_worker_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
 ) -> Result<(), WorkerControlError> {
     // Cache diagnostics are request-scoped completion evidence. They go only to
     // the local performance row; the public generation stream keeps its stable
     // OpenAI-compatible completion shape unchanged.
-    let Some(active_request) = active_generation.as_ref() else {
+    let Some(active_request) = active_worker_request
+        .as_ref()
+        .and_then(ActiveWorkerRequest::chat)
+    else {
         return Err(protocol_violation("completion without an active request"));
     };
     let latest_known_generated_token_count = active_request
@@ -62,8 +65,10 @@ pub(super) fn handle_worker_completion_event(
             "completion correlation or count mismatch",
         ));
     }
-    let Some(completed_request) = active_generation.take() else {
-        return Ok(());
+    let Some(ActiveWorkerRequest::Chat(completed_request)) = active_worker_request.take() else {
+        return Err(protocol_violation(
+            "chat completion while image generation is active",
+        ));
     };
     let total_elapsed_millis = completed_request
         .request_started_at

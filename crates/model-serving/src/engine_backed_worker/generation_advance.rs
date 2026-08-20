@@ -8,15 +8,17 @@ use tokio::io::AsyncWrite;
 use super::fatal::report_fatal_engine_error;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
-use crate::{GeneratedToken, InferenceEngine, InferenceEngineError};
+use crate::{GeneratedToken, ImageGenerationEngine, InferenceEngine, InferenceEngineError};
 
-use super::EngineBackedWorker;
+use super::{EngineBackedWorker, LoadedRuntime};
 
-impl<Processor, Engine, Factory> EngineBackedWorker<Processor, Engine, Factory>
+impl<Processor, Engine, Factory, ImageEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    ImageEngine: ImageGenerationEngine,
 {
     pub(crate) async fn advance_generation<WriteTransport>(
         &mut self,
@@ -38,7 +40,8 @@ where
 
         let request_id = active_generation.request_id;
         let generated_token = {
-            let Some(loaded_model) = self.loaded_model.as_mut() else {
+            let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
+            else {
                 return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
                     reason: "generation continued after the loaded model was removed".to_owned(),
                 });
@@ -112,7 +115,9 @@ where
                         })?;
                 }
                 let (is_end_of_sequence, model_translation) = {
-                    let Some(loaded_model) = self.loaded_model.as_mut() else {
+                    let Some(LoadedRuntime::Autoregressive(loaded_model)) =
+                        self.loaded_runtime.as_mut()
+                    else {
                         return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
                             reason: "generation continued after the loaded model was removed"
                                 .to_owned(),
@@ -167,7 +172,9 @@ where
                 )
                 .await?;
                 if !model_feedback_token_ids.is_empty() {
-                    let Some(loaded_model) = self.loaded_model.as_mut() else {
+                    let Some(LoadedRuntime::Autoregressive(loaded_model)) =
+                        self.loaded_runtime.as_mut()
+                    else {
                         return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
                             reason: "generation continued after the loaded model was removed"
                                 .to_owned(),

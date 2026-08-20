@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerChunkingConfiguration, WorkerModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, GenerationPerformanceLog, ResolvedRuntimeConfig,
@@ -295,7 +295,7 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
 }
 
 fn test_worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
-    WorkerModelConfiguration {
+    WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
         model_id: model_id.to_owned(),
         maximum_context_tokens: 2_048,
         maximum_output_tokens: 128,
@@ -312,7 +312,7 @@ fn test_worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
         mtp_draft_depth: None,
         mtp_head_model: None,
         speculative_prefill: None,
-    }
+    })
 }
 
 fn delayed_generation_command(request_id: u64) -> ChatGenerationCommand {

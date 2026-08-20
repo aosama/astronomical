@@ -204,3 +204,5 @@ impl ChatGenerationExecutor for ScriptedResponsesExecutor {
         )
     }
 }
+
+impl astronomical_supervisor::ImageGenerationExecutor for ScriptedResponsesExecutor {}

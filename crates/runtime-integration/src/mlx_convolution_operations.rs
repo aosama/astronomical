@@ -1,10 +1,10 @@
 //! Thin validated wrappers over MLX-C convolution operations.
 //!
-//! C declarations: `mlx-c/mlx/c/ops.h::{mlx_conv1d, mlx_conv3d}`.
+//! C declarations: `mlx-c/mlx/c/ops.h::{mlx_conv1d, mlx_conv2d, mlx_conv3d}`.
 //! C++ forwarding definitions: `mlx-c/mlx/c/ops.cpp`. MLX uses channel-last
-//! inputs: Conv1d `[N,L,C]`, Conv3d `[N,D,H,W,C]`; Conv3d weights are
-//! `[C_out,KD,KH,KW,C_in/groups]`. These layouts differ from PyTorch. Astronomical's
-//! validated vision sidecar already stores the MLX layout.
+//! inputs: Conv1d `[N,L,C]`, Conv2d `[N,H,W,C]`, and Conv3d `[N,D,H,W,C]`.
+//! Weights begin with output channels and end with input channels per group.
+//! These layouts differ from PyTorch.
 
 use crate::{MlxArray, MlxRuntime, MlxRuntimeError, raw};
 
@@ -31,6 +31,38 @@ impl MlxRuntime {
                     stride,
                     padding,
                     dilation,
+                    groups,
+                    stream,
+                )
+            }
+        })
+    }
+
+    /// Applies MLX two-dimensional convolution over `[batch, height, width, channels]`.
+    pub fn conv2d(
+        &self,
+        input: &MlxArray,
+        weight: &MlxArray,
+        strides: [i32; 2],
+        paddings: [i32; 2],
+        dilations: [i32; 2],
+        groups: i32,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        validate_convolution_arguments(input, weight, &strides, &paddings, &dilations, groups)?;
+        self.output_array("apply MLX conv2d", |output, stream| {
+            // SAFETY: Arrays and stream are live and all convolution geometry
+            // was validated against the official channel-last contract.
+            unsafe {
+                raw::mlx_conv2d(
+                    output,
+                    input.raw(),
+                    weight.raw(),
+                    strides[0],
+                    strides[1],
+                    paddings[0],
+                    paddings[1],
+                    dilations[0],
+                    dilations[1],
                     groups,
                     stream,
                 )
@@ -92,7 +124,7 @@ fn validate_convolution_arguments(
     let expected_rank = strides.len() + 2;
     let input_shape = input.shape();
     let weight_shape = weight.shape();
-    if !matches!(strides.len(), 1 | 3)
+    if !matches!(strides.len(), 1..=3)
         || paddings.len() != strides.len()
         || dilations.len() != strides.len()
         || input_shape.len() != expected_rank
@@ -118,9 +150,24 @@ fn validate_convolution_arguments(
             "convolution paddings must be nonnegative",
         ));
     }
+    if weight_shape[1..expected_rank - 1]
+        .iter()
+        .any(|kernel_size| *kernel_size <= 0)
+    {
+        return Err(runtime_operation_error(
+            OPERATION,
+            "convolution kernel dimensions must be positive",
+        ));
+    }
     let input_channel_count = input_shape[expected_rank - 1];
     let output_channel_count = weight_shape[0];
     let weight_channel_count = weight_shape[expected_rank - 1];
+    if input_channel_count <= 0 || output_channel_count <= 0 || weight_channel_count <= 0 {
+        return Err(runtime_operation_error(
+            OPERATION,
+            "convolution channel dimensions must be positive",
+        ));
+    }
     if input_channel_count % groups != 0 || output_channel_count % groups != 0 {
         return Err(runtime_operation_error(
             OPERATION,
