@@ -1,14 +1,15 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{ChatGenerationCommand, RequestId, WorkerStartupConfiguration};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, RequestId, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
+};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::{
     ChatGenerationStreamEvent, GenerationStartError, MlxMemoryLimitUpdateOutcome,
-    PromptCacheClearOutcome, WorkerControlError, WorkerTerminationOutcome,
+    PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerTerminationOutcome,
 };
 
 pub(crate) enum WorkerLoopCommand {
@@ -23,10 +24,11 @@ pub(crate) enum WorkerLoopCommand {
     },
     RestartWorker {
         worker_executable_path: PathBuf,
-        model_directories: Arc<HashMap<String, PathBuf>>,
-        max_output_tokens: u32,
+        model_policy_catalog: Arc<std::collections::HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: Option<WorkerStartupConfiguration>,
-        restart_sender: oneshot::Sender<Result<(), WorkerControlError>>,
+        expected_configuration_generation: String,
+        restart_sender:
+            oneshot::Sender<Result<WorkerRuntimeFeatureConfiguration, WorkerControlError>>,
     },
     UpdateMlxMemoryLimit {
         effective_mlx_memory_ceiling_bytes: u64,

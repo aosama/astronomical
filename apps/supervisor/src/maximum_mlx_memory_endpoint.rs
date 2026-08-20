@@ -35,7 +35,23 @@ pub(crate) async fn update_maximum_mlx_memory(
     let Some(runtime_config_resolver) = application_state.runtime_config_resolver.as_ref() else {
         return (StatusCode::NOT_FOUND, "config persistence is unavailable").into_response();
     };
-    let _config_mutation_guard = application_state.config_mutation_lock.lock().await;
+    let _configuration_transition_guard =
+        application_state.configuration_transition_lock.lock().await;
+    let mut pending_memory_config_generation = application_state
+        .pending_memory_config_generation
+        .lock()
+        .await;
+    if pending_memory_config_generation.is_some() {
+        return (
+            StatusCode::CONFLICT,
+            Json(response_document(
+                maximum_mlx_memory_request.maximum_mlx_memory_gb,
+                &worker_handle.worker_health_snapshot(),
+                "a queued MLX memory setting is still awaiting worker acknowledgement".to_owned(),
+            )),
+        )
+            .into_response();
+    }
     let worker_health_snapshot = worker_handle.worker_health_snapshot();
     let requested_mlx_memory_ceiling_bytes = match maximum_mlx_memory_request.maximum_mlx_memory_gb
     {
@@ -66,34 +82,144 @@ pub(crate) async fn update_maximum_mlx_memory(
         );
     }
 
-    let prior_config_bytes = match astronomical_config::write_maximum_mlx_memory_gb(
+    let prior_resolved_config = application_state
+        .reloadable_config
+        .as_ref()
+        .and_then(|snapshot| {
+            snapshot
+                .read()
+                .ok()
+                .map(|resolved_config| resolved_config.clone())
+        });
+    let config_update = match astronomical_config::prepare_maximum_mlx_memory_gb_update(
         runtime_config_resolver.state_directory(),
         maximum_mlx_memory_request.maximum_mlx_memory_gb,
     ) {
-        Ok(prior_config_bytes) => prior_config_bytes,
+        Ok(config_update) => config_update,
         Err(configuration_error) => {
+            tracing::error!(error = %configuration_error, "could not prepare MLX memory configuration");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(response_document(
                     maximum_mlx_memory_request.maximum_mlx_memory_gb,
                     &worker_health_snapshot,
-                    format!("could not persist the MLX memory setting: {configuration_error}"),
+                    "could not prepare the MLX memory setting; inspect local diagnostics"
+                        .to_owned(),
                 )),
             )
                 .into_response();
         }
     };
+    let candidate_config = astronomical_config::AstronomicalConfig::load_v1_bytes(
+        runtime_config_resolver.instance_paths().clone(),
+        &config_update.candidate_config_bytes,
+    );
+    let candidate_resolved_config = match candidate_config
+        .map_err(crate::ResolvedRuntimeConfigError::from)
+        .and_then(|candidate_config| runtime_config_resolver.resolve(&candidate_config))
+    {
+        Ok(candidate_resolved_config) => candidate_resolved_config,
+        Err(configuration_error) => {
+            tracing::error!(error = %configuration_error, "prepared MLX memory configuration could not be resolved");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(response_document(
+                    maximum_mlx_memory_request.maximum_mlx_memory_gb,
+                    &worker_health_snapshot,
+                    "prepared memory setting could not be resolved; inspect local diagnostics"
+                        .to_owned(),
+                )),
+            )
+                .into_response();
+        }
+    };
+    let Some(prior_resolved_config_for_scope) = prior_resolved_config.as_ref() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(response_document(
+                maximum_mlx_memory_request.maximum_mlx_memory_gb,
+                &worker_health_snapshot,
+                "live configuration state is unavailable".to_owned(),
+            )),
+        )
+            .into_response();
+    };
+    if !memory_is_the_only_candidate_change(
+        prior_resolved_config_for_scope,
+        &candidate_resolved_config,
+    ) {
+        return (
+            StatusCode::CONFLICT,
+            Json(response_document(
+                maximum_mlx_memory_request.maximum_mlx_memory_gb,
+                &worker_health_snapshot,
+                "other configuration changes are pending; reload the complete configuration first"
+                    .to_owned(),
+            )),
+        )
+            .into_response();
+    }
+    if let Err(commit_error) = astronomical_config::commit_maximum_mlx_memory_gb_update(
+        runtime_config_resolver.state_directory(),
+        &config_update,
+    ) {
+        let status_code = if matches!(
+            commit_error,
+            astronomical_config::AstronomicalConfigError::ConfigChangedDuringUpdate
+        ) {
+            StatusCode::CONFLICT
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        };
+        tracing::warn!(error = %commit_error, "MLX memory configuration commit was not accepted");
+        return (
+            status_code,
+            Json(response_document(
+                maximum_mlx_memory_request.maximum_mlx_memory_gb,
+                &worker_health_snapshot,
+                "configuration changed during the memory update; retry after reloading".to_owned(),
+            )),
+        )
+            .into_response();
+    }
+    let astronomical_config::MaximumMlxMemoryConfigUpdate {
+        prior_config_bytes: _,
+        candidate_config_bytes,
+    } = config_update;
+    *pending_memory_config_generation =
+        Some(candidate_resolved_config.configuration_generation.clone());
+    worker_handle.stage_memory_configuration_generation(
+        candidate_resolved_config.configuration_generation.clone(),
+    );
     match worker_handle
         .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
         .await
     {
-        Ok(MlxMemoryLimitUpdateOutcome::Applied) | Ok(MlxMemoryLimitUpdateOutcome::Queued) => {
-            if let Some(reloadable_config) = application_state.reloadable_config.as_ref()
-                && let Ok(mut live_config) = reloadable_config.write()
-            {
-                live_config.maximum_mlx_memory_bytes = maximum_mlx_memory_request
-                    .maximum_mlx_memory_gb
-                    .map(|_| requested_mlx_memory_ceiling_bytes);
+        Ok(
+            update_outcome @ (MlxMemoryLimitUpdateOutcome::Applied
+            | MlxMemoryLimitUpdateOutcome::Queued),
+        ) => {
+            worker_handle.record_memory_configuration_generation(
+                candidate_resolved_config.configuration_generation.clone(),
+                update_outcome,
+            );
+            crate::maximum_mlx_memory_transaction::commit_applied_config_snapshots(
+                &application_state,
+                runtime_config_resolver,
+                &candidate_resolved_config,
+                &candidate_config_bytes,
+            );
+            if update_outcome == MlxMemoryLimitUpdateOutcome::Queued {
+                tokio::spawn(
+                    crate::maximum_mlx_memory_transaction::reconcile_queued_memory_config(
+                        application_state.clone(),
+                        candidate_resolved_config,
+                        candidate_config_bytes,
+                        prior_resolved_config,
+                    ),
+                );
+            } else {
+                *pending_memory_config_generation = None;
             }
             let updated_worker_health_snapshot = worker_handle.worker_health_snapshot();
             let is_queued = updated_worker_health_snapshot
@@ -120,21 +246,15 @@ pub(crate) async fn update_maximum_mlx_memory(
                 .into_response()
         }
         Ok(MlxMemoryLimitUpdateOutcome::Rejected) => {
-            if let Err(restore_error) = astronomical_config::restore_config_file(
-                runtime_config_resolver.state_directory(),
-                prior_config_bytes.as_deref(),
-            ) {
-                tracing::error!(error = %restore_error, "could not restore config after worker rejected MLX memory limit");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(response_document(
-                        maximum_mlx_memory_request.maximum_mlx_memory_gb,
-                        &worker_handle.worker_health_snapshot(),
-                        format!("worker rejected the MLX memory limit and config restoration failed: {restore_error}"),
-                    )),
-                )
-                    .into_response();
-            }
+            *pending_memory_config_generation = None;
+            worker_handle.record_memory_configuration_generation(
+                candidate_resolved_config.configuration_generation.clone(),
+                MlxMemoryLimitUpdateOutcome::Rejected,
+            );
+            crate::maximum_mlx_memory_transaction::retain_rejected_persisted_config(
+                &application_state,
+                runtime_config_resolver,
+            );
             let updated_worker_health_snapshot = worker_handle.worker_health_snapshot();
             invalid_request_response(
                 maximum_mlx_memory_request.maximum_mlx_memory_gb,
@@ -148,21 +268,15 @@ pub(crate) async fn update_maximum_mlx_memory(
             )
         }
         Err(worker_control_error) => {
-            if let Err(restore_error) = astronomical_config::restore_config_file(
-                runtime_config_resolver.state_directory(),
-                prior_config_bytes.as_deref(),
-            ) {
-                tracing::error!(error = %restore_error, "could not restore config after MLX memory worker-control failure");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(response_document(
-                        maximum_mlx_memory_request.maximum_mlx_memory_gb,
-                        &worker_handle.worker_health_snapshot(),
-                        format!("worker control and config restoration failed: {restore_error}"),
-                    )),
-                )
-                    .into_response();
-            }
+            *pending_memory_config_generation = None;
+            worker_handle.record_memory_configuration_generation(
+                candidate_resolved_config.configuration_generation.clone(),
+                MlxMemoryLimitUpdateOutcome::Rejected,
+            );
+            crate::maximum_mlx_memory_transaction::retain_rejected_persisted_config(
+                &application_state,
+                runtime_config_resolver,
+            );
             tracing::error!(error = %worker_control_error, "live MLX memory update failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -175,6 +289,17 @@ pub(crate) async fn update_maximum_mlx_memory(
                 .into_response()
         }
     }
+}
+
+fn memory_is_the_only_candidate_change(
+    prior_resolved_config: &crate::ResolvedRuntimeConfig,
+    candidate_resolved_config: &crate::ResolvedRuntimeConfig,
+) -> bool {
+    matches!(
+        crate::ConfigReloadDiff::compare(prior_resolved_config, candidate_resolved_config),
+        crate::ConfigReloadDecision::NoWorkerRestart { reloaded_fields, .. }
+            if reloaded_fields.iter().all(|field_name| field_name == "maximum_mlx_memory_gb")
+    )
 }
 
 fn invalid_request_response(

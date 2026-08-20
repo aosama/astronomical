@@ -43,10 +43,18 @@ pub(crate) struct ApplicationState {
     /// status/models endpoints. Present only when the application was built with
     /// Development reload support (`build_development_application_with_reload`).
     pub(crate) reloadable_config: Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
+    /// Most recently accepted persisted snapshot, which may intentionally lead
+    /// the live serving snapshot while a restart is pending or failed.
+    pub(crate) configured_config_snapshot: Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
+    /// Bounded public error retained while the durable document cannot be resolved.
+    pub(crate) configuration_validation_error: Arc<RwLock<Option<String>>>,
     /// Startup-equivalent resolver used for each config reload.
     pub(crate) runtime_config_resolver: Option<ResolvedRuntimeConfigResolver>,
-    /// Serializes config-file mutations and their worker acknowledgements.
-    pub(crate) config_mutation_lock: Arc<AsyncMutex<()>>,
+    /// Serializes request policy admission with configuration transitions and acknowledgements.
+    pub(crate) configuration_transition_lock: Arc<AsyncMutex<()>>,
+    /// Keeps a persisted live-memory update transactional until the worker
+    /// either applies or rejects a value queued behind active generation.
+    pub(crate) pending_memory_config_generation: Arc<AsyncMutex<Option<String>>>,
     /// Internal shutdown controller for `POST /v1/control/shutdown`.
     pub(crate) shutdown_controller: Option<crate::shutdown_control::ShutdownController>,
 }
@@ -60,8 +68,11 @@ impl Clone for ApplicationState {
             worker_control: self.worker_control.clone(),
             discovered_models: self.discovered_models.clone(),
             reloadable_config: self.reloadable_config.clone(),
+            configured_config_snapshot: self.configured_config_snapshot.clone(),
+            configuration_validation_error: Arc::clone(&self.configuration_validation_error),
             runtime_config_resolver: self.runtime_config_resolver.clone(),
-            config_mutation_lock: Arc::clone(&self.config_mutation_lock),
+            configuration_transition_lock: Arc::clone(&self.configuration_transition_lock),
+            pending_memory_config_generation: Arc::clone(&self.pending_memory_config_generation),
             shutdown_controller: self.shutdown_controller.clone(),
         }
     }
@@ -84,17 +95,21 @@ impl ApplicationState {
     }
 
     pub(crate) fn configured_speculative_prefill_target_model_id(&self) -> Option<String> {
+        let ready_model_id = self
+            .generation_executor
+            .worker_health_snapshot()
+            .ready_model_id?;
         self.reloadable_config
             .as_ref()
             .and_then(|reloadable_config| reloadable_config.read().ok())
             .and_then(|resolved_runtime_config| {
-                if !resolved_runtime_config.speculative_prefill.is_enabled() {
-                    return None;
-                }
-                resolved_runtime_config
-                    .speculative_prefill
-                    .target_model_id()
-                    .map(str::to_owned)
+                let _configured_policy = resolved_runtime_config
+                    .model_policy_catalog
+                    .get(&ready_model_id)?
+                    .acceleration_availability
+                    .configured_speculative_prefill
+                    .as_ref()?;
+                Some(ready_model_id)
             })
     }
 
@@ -135,8 +150,11 @@ pub fn build_application_with_discovered_models(
         worker_control: None,
         discovered_models,
         reloadable_config: None,
+        configured_config_snapshot: None,
+        configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: None,
-        config_mutation_lock: Arc::new(AsyncMutex::new(())),
+        configuration_transition_lock: Arc::new(AsyncMutex::new(())),
+        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
     };
 
@@ -157,8 +175,11 @@ pub fn build_application_with_shutdown(
         worker_control: None,
         discovered_models: Vec::new(),
         reloadable_config: None,
+        configured_config_snapshot: None,
+        configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: None,
-        config_mutation_lock: Arc::new(AsyncMutex::new(())),
+        configuration_transition_lock: Arc::new(AsyncMutex::new(())),
+        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
     };
 
@@ -187,6 +208,10 @@ pub fn build_development_application_with_reload(
         .ok()
         .map(|resolved| resolved.discovered_models.clone())
         .unwrap_or_default();
+    let configured_config_snapshot = reloadable_config
+        .read()
+        .ok()
+        .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
     let application_state = ApplicationState {
         completion_id_namespace: completion_id_namespace(),
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
@@ -194,8 +219,11 @@ pub fn build_development_application_with_reload(
         worker_control: None,
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
+        configured_config_snapshot,
+        configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: Some(runtime_config_resolver),
-        config_mutation_lock: Arc::new(AsyncMutex::new(())),
+        configuration_transition_lock: Arc::new(AsyncMutex::new(())),
+        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
     };
 
@@ -328,6 +356,10 @@ pub fn build_application_with_full_control(
         .ok()
         .map(|resolved| resolved.discovered_models.clone())
         .unwrap_or_default();
+    let configured_config_snapshot = reloadable_config
+        .read()
+        .ok()
+        .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
     let application_state = ApplicationState {
         completion_id_namespace: completion_id_namespace(),
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
@@ -335,8 +367,11 @@ pub fn build_application_with_full_control(
         worker_control: Some(worker_handle),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
+        configured_config_snapshot,
+        configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: Some(runtime_config_resolver),
-        config_mutation_lock: Arc::new(AsyncMutex::new(())),
+        configuration_transition_lock: Arc::new(AsyncMutex::new(())),
+        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
     };
 

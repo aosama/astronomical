@@ -87,19 +87,22 @@ Config, logs, prompt caches, daemon ownership, process locks, and loopback endpo
 
 Serving and qualification tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
 
-On first launch each instance creates its own `config.json`. Add one or more absolute directories to scan recursively:
+On first launch each instance creates its own versioned `config.json` and adjacent offline JSON Schema. Add one or more absolute directories to scan recursively:
 
     {
-      "model_directories": ["/path/to/models"],
-      "maximum_mlx_memory_gb": 16,
-      "persistent_prompt_cache_enabled": true,
-      "chunking": {
-        "fixed_prompt_processing_chunk_size_tokens": 2048
+      "$schema": "./astronomical-config.schema.json",
+      "schema_version": 1,
+      "runtime": {
+        "model_directories": ["/path/to/models"],
+        "maximum_mlx_memory_gb": 16
       },
-      "prompt_cache_max_size_gb": 50
+      "prompt_cache": {
+        "enabled": true,
+        "maximum_size_gb": 50
+      }
     }
 
-The memory value uses decimal gigabytes. Remove maximum_mlx_memory_gb to use the Mac-reported MLX ceiling. Set persistent_prompt_cache_enabled to false to disable SSD-backed prompt reuse. Both channels default to qualified fixed prompt-processing chunks of 2,048 tokens. Override the fixed chunk size with fixed_prompt_processing_chunk_size_tokens; a smaller fixed_ssd_streaming_prompt_processing_chunk_size_tokens can accelerate paged-expert prefill.
+The memory value uses decimal gigabytes. Remove `maximum_mlx_memory_gb` to use the Mac-reported MLX ceiling. Per-model entries can set a lower context ceiling, generation defaults, chunking overrides, SpecPrefill policy, and multi-token-prediction depth. Explicit request values override generation defaults. Overrides for temporarily absent models remain dormant and are reported as unmatched rather than preventing other models from serving. The eight global chunking controls remain available under `chunking` and each model may override individual values. See the [version 1 configuration schema](https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json) for the complete contract.
 
 ## Build the app
 

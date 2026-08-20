@@ -21,6 +21,8 @@ pub struct LagunaGenerationProcessor {
     model_id: String,
     descriptor: LagunaTextArtifactDescriptor,
     tokenizer: LagunaTokenizer,
+    maximum_context_tokens: u32,
+    maximum_output_tokens: u32,
     performance_attribution_enabled: bool,
 }
 
@@ -30,13 +32,27 @@ impl LagunaGenerationProcessor {
         model_id: impl Into<String>,
         descriptor: LagunaTextArtifactDescriptor,
     ) -> Result<Self, LagunaTokenizerError> {
-        Self::new_with_performance_attribution(model_id, descriptor, false)
+        let maximum_context_tokens = descriptor.maximum_context_tokens();
+        let maximum_output_tokens = descriptor
+            .sampler_config()
+            .maximum_new_tokens()
+            .unwrap_or(u32::from(u16::MAX))
+            .min(maximum_context_tokens.saturating_sub(1));
+        Self::new_with_performance_attribution(
+            model_id,
+            descriptor,
+            maximum_context_tokens,
+            maximum_output_tokens,
+            false,
+        )
     }
 
     /// Creates a processor whose request-local attribution can be enabled by runtime config.
     pub fn new_with_performance_attribution(
         model_id: impl Into<String>,
         descriptor: LagunaTextArtifactDescriptor,
+        maximum_context_tokens: u32,
+        maximum_output_tokens: u32,
         performance_attribution_enabled: bool,
     ) -> Result<Self, LagunaTokenizerError> {
         let tokenizer = LagunaTokenizer::from_descriptor(&descriptor)?;
@@ -44,6 +60,8 @@ impl LagunaGenerationProcessor {
             model_id: model_id.into(),
             descriptor,
             tokenizer,
+            maximum_context_tokens,
+            maximum_output_tokens,
             performance_attribution_enabled,
         })
     }
@@ -108,7 +126,7 @@ impl LagunaGenerationProcessor {
         validate_context_length(
             prompt_token_ids.len(),
             chat_command.settings.max_output_tokens,
-            self.descriptor.maximum_context_tokens(),
+            self.maximum_context_tokens,
         )?;
         let sampler_config = self.descriptor.sampler_config().with_request_overrides(
             chat_command.settings.temperature_thousandths,
@@ -171,6 +189,12 @@ impl LagunaGenerationProcessor {
                 actual_model_id: chat_command.model.clone(),
             });
         }
+        if u32::from(chat_command.settings.max_output_tokens) > self.maximum_output_tokens {
+            return Err(LagunaPreparationError::MaximumOutputTokensExceeded {
+                requested_output_tokens: chat_command.settings.max_output_tokens,
+                maximum_output_tokens: self.maximum_output_tokens,
+            });
+        }
         if chat_command.messages.iter().any(
             |message| matches!(message, ChatMessage::User { images, .. } if !images.is_empty()),
         ) {
@@ -196,20 +220,15 @@ impl ModelGenerationProcessor for LagunaGenerationProcessor {
         speculative_prefill_draft_model_id: Option<String>,
         speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
-        let context_window = self.descriptor.maximum_context_tokens();
-        let max_output_tokens = self
-            .descriptor
-            .sampler_config()
-            .maximum_new_tokens()
-            .unwrap_or(u32::from(u16::MAX))
-            .min(context_window);
+        let context_window = self.maximum_context_tokens;
+        let max_output_tokens = self.maximum_output_tokens;
         WorkerEvent::Ready {
             model_id: self.model_id.clone(),
             capabilities: ChatModelCapabilities {
                 supports_reasoning: true,
                 supports_tool_calls: true,
                 has_vision: false,
-                max_input_tokens: context_window.saturating_sub(max_output_tokens),
+                max_input_tokens: context_window.saturating_sub(1),
                 max_output_tokens,
                 context_window,
             },

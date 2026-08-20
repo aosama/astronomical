@@ -88,8 +88,13 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
     )
     .load()
     .expect("the prefill sweep worker configuration should resolve");
-    let mut worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
-    worker_startup_configuration
+    let worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
+    let model_policy = worker_runtime_config
+        .model_policy_catalog
+        .get(MODEL_ID)
+        .expect("the configured benchmark model should have a resolved policy");
+    let mut worker_model_configuration = model_policy.worker_model_configuration.clone();
+    worker_model_configuration
         .chunking
         .fixed_prompt_processing_chunk_size_tokens = prefill_chunck_tokens;
     protocol_writer
@@ -107,12 +112,11 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
     if !matches!(startup_event, WorkerEvent::Idle { .. }) {
         panic!("the first worker event should be Idle, got {startup_event:?}");
     }
-    let configured_model_directory =
-        crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
+    let configured_model_directory = &model_policy.model_directory;
     protocol_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: configured_model_directory.to_string_lossy().into_owned(),
-            max_output_tokens: u32::from(MAXIMUM_SUMMARY_TOKENS),
+            model_configuration: worker_model_configuration,
         })
         .await
         .expect("the benchmark should select its configured model");

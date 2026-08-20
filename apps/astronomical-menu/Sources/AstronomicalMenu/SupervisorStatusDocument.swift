@@ -156,12 +156,18 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let application: ServerApplicationIdentity?
   let status: String
   let activity: String
+  let configuration: ConfigurationStatusDocument?
   let readyModelIdentifier: String?
   let readyModelSizeBytes: UInt64?
   let progress: Progress?
   let expertMemoryMode: String?
   let expertResidency: ExpertResidencySnapshot?
   let mtpEnabled: Bool
+  let mtpConfiguredDraftDepth: UInt8?
+  let mtpArtifactMaximumDraftDepth: UInt8?
+  let mtpArtifactDefaultDraftDepth: UInt8?
+  let mtpResolvedRequestedDraftDepth: UInt8?
+  let mtpEffectiveExecutionDraftDepth: UInt8?
   let mtpRuntimeState: String
   let mtpUnavailableReason: String?
   let configuredSpeculativePrefillEnabled: Bool
@@ -182,12 +188,17 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let servingSession: ServingSession
 
   enum CodingKeys: String, CodingKey {
-    case application, status, activity, progress
+    case application, status, activity, progress, configuration
     case readyModelIdentifier = "ready_model_id"
     case readyModelSizeBytes = "ready_model_size_bytes"
     case expertMemoryMode = "expert_memory_mode"
     case expertResidency = "expert_residency"
     case mtpEnabled = "mtp_enabled"
+    case mtpConfiguredDraftDepth = "mtp_configured_draft_depth"
+    case mtpArtifactMaximumDraftDepth = "mtp_artifact_maximum_draft_depth"
+    case mtpArtifactDefaultDraftDepth = "mtp_artifact_default_draft_depth"
+    case mtpResolvedRequestedDraftDepth = "mtp_resolved_requested_draft_depth"
+    case mtpEffectiveExecutionDraftDepth = "mtp_effective_execution_draft_depth"
     case mtpRuntimeState = "mtp_runtime_state"
     case mtpUnavailableReason = "mtp_unavailable_reason"
     case configuredSpeculativePrefillEnabled = "configured_speculative_prefill_enabled"
@@ -209,6 +220,10 @@ struct SupervisorStatusDocument: Codable, Equatable {
     application = try container.decodeIfPresent(ServerApplicationIdentity.self, forKey: .application)
     status = try container.decode(String.self, forKey: .status)
     activity = try container.decode(String.self, forKey: .activity)
+    configuration = try container.decodeIfPresent(
+      ConfigurationStatusDocument.self,
+      forKey: .configuration
+    )
     readyModelIdentifier = try container.decodeIfPresent(String.self, forKey: .readyModelIdentifier)
     readyModelSizeBytes = try container.decodeIfPresent(UInt64.self, forKey: .readyModelSizeBytes)
     progress = try container.decodeIfPresent(Progress.self, forKey: .progress)
@@ -216,6 +231,11 @@ struct SupervisorStatusDocument: Codable, Equatable {
     expertResidency = try container.decodeIfPresent(
       ExpertResidencySnapshot.self, forKey: .expertResidency)
     mtpEnabled = try container.decodeIfPresent(Bool.self, forKey: .mtpEnabled) ?? false
+    mtpConfiguredDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpConfiguredDraftDepth)
+    mtpArtifactMaximumDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpArtifactMaximumDraftDepth)
+    mtpArtifactDefaultDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpArtifactDefaultDraftDepth)
+    mtpResolvedRequestedDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpResolvedRequestedDraftDepth)
+    mtpEffectiveExecutionDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpEffectiveExecutionDraftDepth)
     mtpRuntimeState = try container.decodeIfPresent(String.self, forKey: .mtpRuntimeState) ?? "disabled"
     mtpUnavailableReason = try container.decodeIfPresent(String.self, forKey: .mtpUnavailableReason)
     configuredSpeculativePrefillEnabled = try container.decodeIfPresent(
@@ -245,12 +265,18 @@ struct SupervisorStatusDocument: Codable, Equatable {
     application: ServerApplicationIdentity? = nil,
     status: String,
     activity: String,
+    configuration: ConfigurationStatusDocument? = nil,
     readyModelIdentifier: String?,
     readyModelSizeBytes: UInt64? = nil,
     progress: Progress?,
     expertMemoryMode: String?,
     expertResidency: ExpertResidencySnapshot? = nil,
     mtpEnabled: Bool = false,
+    mtpConfiguredDraftDepth: UInt8? = nil,
+    mtpArtifactMaximumDraftDepth: UInt8? = nil,
+    mtpArtifactDefaultDraftDepth: UInt8? = nil,
+    mtpResolvedRequestedDraftDepth: UInt8? = nil,
+    mtpEffectiveExecutionDraftDepth: UInt8? = nil,
     mtpRuntimeState: String = "disabled",
     mtpUnavailableReason: String? = nil,
     configuredSpeculativePrefillEnabled: Bool = false,
@@ -269,12 +295,18 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.application = application
     self.status = status
     self.activity = activity
+    self.configuration = configuration
     self.readyModelIdentifier = readyModelIdentifier
     self.readyModelSizeBytes = readyModelSizeBytes
     self.progress = progress
     self.expertMemoryMode = expertMemoryMode
     self.expertResidency = expertResidency
     self.mtpEnabled = mtpEnabled
+    self.mtpConfiguredDraftDepth = mtpConfiguredDraftDepth
+    self.mtpArtifactMaximumDraftDepth = mtpArtifactMaximumDraftDepth
+    self.mtpArtifactDefaultDraftDepth = mtpArtifactDefaultDraftDepth
+    self.mtpResolvedRequestedDraftDepth = mtpResolvedRequestedDraftDepth
+    self.mtpEffectiveExecutionDraftDepth = mtpEffectiveExecutionDraftDepth
     self.mtpRuntimeState = mtpRuntimeState
     self.mtpUnavailableReason = mtpUnavailableReason
     self.configuredSpeculativePrefillEnabled = configuredSpeculativePrefillEnabled

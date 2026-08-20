@@ -33,15 +33,34 @@ impl Qwen3_5GenerationProcessor {
         enable_thinking: bool,
         performance_attribution_enabled: bool,
     ) -> Result<Self, Qwen3_5TokenizerError> {
-        let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(validated_artifact)?;
-        let context_window = validated_artifact.config().maximum_position_count();
+        Self::from_validated_artifact_with_effective_policy(
+            validated_artifact,
+            validated_artifact.model_id().to_owned(),
+            validated_artifact.config().maximum_position_count(),
+            enable_thinking,
+            performance_attribution_enabled,
+        )
+    }
+
+    pub fn from_validated_artifact_with_effective_policy(
+        validated_artifact: &ValidatedQwen3_5Artifact,
+        requested_model_id: String,
+        context_window: u32,
+        enable_thinking: bool,
+        performance_attribution_enabled: bool,
+    ) -> Result<Self, Qwen3_5TokenizerError> {
+        let tokenizer = Qwen3_5Tokenizer::from_validated_artifact_with_maximum_context_tokens(
+            validated_artifact,
+            context_window,
+        )?;
         let max_output_tokens = validated_artifact.max_output_tokens();
-        let max_input_tokens = context_window.checked_sub(max_output_tokens).ok_or(
+        context_window.checked_sub(max_output_tokens).ok_or(
             Qwen3_5TokenizerError::ModelOutputBudgetExceedsContextWindow {
                 context_window,
                 max_output_tokens,
             },
         )?;
+        let max_input_tokens = context_window.saturating_sub(1);
         Ok(Self {
             enable_thinking,
             tokenizer,
@@ -49,7 +68,7 @@ impl Qwen3_5GenerationProcessor {
             max_input_tokens,
             max_output_tokens,
             supports_image_input: validated_artifact.supports_image_input(),
-            model_id: validated_artifact.model_id().to_owned(),
+            model_id: requested_model_id,
             performance_attribution_enabled,
         })
     }
@@ -102,6 +121,12 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
         PreparedModelGeneration<Self::InferenceRequest, Self::RequestOutput>,
         ChatGenerationFailureReason,
     > {
+        if u32::from(chat_generation_command.settings.max_output_tokens) > self.max_output_tokens {
+            return Err(ChatGenerationFailureReason::invalid_request(format!(
+                "requested output limit exceeds the loaded model maximum of {} tokens",
+                self.max_output_tokens
+            )));
+        }
         if !self.supports_image_input
             && chat_generation_command.messages.iter().any(|chat_message| {
                 matches!(chat_message, ChatMessage::User { images, .. } if !images.is_empty())

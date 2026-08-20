@@ -19,7 +19,7 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
         std::env::var("CARGO_BIN_EXE_astronomical-supervisor-stderr-probe-worker")
             .expect("Cargo should provide the stderr-probe worker fixture path");
     let development_state_directory = tempfile::tempdir().expect("state should be created");
-    write_instance_config(development_state_directory.path(), "127.0.0.1:0");
+    write_instance_config(development_state_directory.path());
     let synthetic_bundle_executable_directory = development_state_directory.path().join("bin");
     std::fs::create_dir(&synthetic_bundle_executable_directory)
         .expect("the synthetic bundle executable directory should be created");

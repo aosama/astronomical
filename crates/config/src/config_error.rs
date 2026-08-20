@@ -27,12 +27,32 @@ pub enum AstronomicalConfigError {
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to parse Astronomical config file at {config_file_path:?}")]
+    #[error("failed to parse Astronomical config file at {config_file_path:?}: {source}")]
     ParseConfigFile {
         config_file_path: PathBuf,
         #[source]
         source: serde_json::Error,
     },
+    #[error(
+        "Astronomical config file at {config_file_path:?} contains duplicate object key {duplicate_key:?}"
+    )]
+    DuplicateConfigKey {
+        config_file_path: PathBuf,
+        duplicate_key: String,
+    },
+    #[error(
+        "Astronomical config file at {config_file_path:?} exceeds the {maximum_bytes}-byte limit"
+    )]
+    ConfigFileTooLarge {
+        config_file_path: PathBuf,
+        maximum_bytes: usize,
+    },
+    #[error("Astronomical config changed while a live setting update was being prepared")]
+    ConfigChangedDuringUpdate,
+    #[error("unsupported Astronomical configuration schema_version {schema_version}; expected 1")]
+    UnsupportedSchemaVersion { schema_version: u32 },
+    #[error("$schema must be './astronomical-config.schema.json'")]
+    InvalidSchemaReference,
     #[error("{field_name} must be an absolute path, got {configured_path:?}")]
     PathMustBeAbsolute {
         field_name: String,
@@ -57,8 +77,32 @@ pub enum AstronomicalConfigError {
     InvalidPromptCacheMaxSizeGb { description: &'static str },
     #[error("invalid maximum_mlx_memory_gb: {description}")]
     InvalidMaximumMlxMemoryGb { description: &'static str },
-    #[error("mtp_draft_depth must be between 1 and 3")]
+    #[error("MTP draft_depth must be between 1 and 3")]
     InvalidMtpDraftDepth,
+    #[error("invalid models[{model_id:?}].{field_name}: {description}")]
+    InvalidModelConfig {
+        model_id: String,
+        field_name: &'static str,
+        description: &'static str,
+    },
+    #[error(
+        "models[{model_id:?}].limits.maximum_context_tokens ({configured_maximum_context_tokens}) exceeds the discovered artifact maximum ({artifact_maximum_context_tokens})"
+    )]
+    ConfiguredContextExceedsArtifact {
+        model_id: String,
+        configured_maximum_context_tokens: u32,
+        artifact_maximum_context_tokens: u32,
+    },
+    #[error(
+        "models[{model_id:?}].generation_defaults.maximum_output_tokens ({configured_maximum_output_tokens}) must be smaller than the effective context ({effective_maximum_context_tokens})"
+    )]
+    ConfiguredOutputNotSmallerThanContext {
+        model_id: String,
+        configured_maximum_output_tokens: u32,
+        effective_maximum_context_tokens: u32,
+    },
+    #[error("legacy Astronomical configuration cannot be migrated safely: {description}")]
+    LegacyMigration { description: String },
     #[error("Astronomical config file at {config_file_path:?} must contain a JSON object")]
     ConfigFileMustBeJsonObject { config_file_path: PathBuf },
     #[error("failed to serialize Astronomical config file at {config_file_path:?}")]
@@ -73,7 +117,7 @@ pub enum AstronomicalConfigError {
         #[source]
         source: std::io::Error,
     },
-    #[error("logging.retained_files must be positive")]
+    #[error("diagnostics.retained_log_files must be positive")]
     InvalidRetainedLogFileCount,
     #[error("speculative_prefill.draft_model_id is required when speculative prefill is enabled")]
     SpeculativePrefillDraftModelRequired,

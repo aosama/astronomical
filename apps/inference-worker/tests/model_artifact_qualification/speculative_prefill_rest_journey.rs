@@ -26,11 +26,19 @@ async fn should_complete_the_cold_tool_journey_through_real_config_worker_and_re
         let development_config =
             AstronomicalConfig::load_from_development_home_directory(&development_home_directory)
                 .expect("the Development Astronomical configuration should load");
-        let configured_speculative_prefill = development_config
-            .speculative_prefill()
-            .expect("the Development SpecPrefill configuration should resolve");
         let target_model_id =
             crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID.to_owned();
+        let target_model_context_window = crate::common::configured_discovered_models()
+            .into_iter()
+            .find(|model| model.model_id == target_model_id)
+            .expect("the qualification target should be discovered")
+            .context_window;
+        let configured_target_policy = development_config
+            .resolved_model_config(&target_model_id, target_model_context_window)
+            .expect("the Development target policy should resolve");
+        let configured_speculative_prefill = configured_target_policy
+            .speculative_prefill()
+            .expect("the Development target should configure a SpecPrefill drafter");
         let draft_model_id = configured_speculative_prefill
             .draft_model_id()
             .expect("the qualification requires a configured SpecPrefill drafter")

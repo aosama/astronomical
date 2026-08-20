@@ -10,6 +10,7 @@ mod configuration;
 mod direct_affine_artifact_validation;
 mod exact_storage_edge_cases;
 mod execution;
+mod generation_limits;
 mod index_total_size;
 mod kv_cache_metadata;
 mod optional_artifacts;

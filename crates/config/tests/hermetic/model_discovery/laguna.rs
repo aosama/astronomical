@@ -24,8 +24,8 @@ fn should_advertise_one_complete_executable_laguna_artifact() {
     assert_eq!(discovered_model.model_family, ModelFamily::Laguna);
     assert_eq!(discovered_model.revision, IMMUTABLE_REVISION);
     assert_eq!(discovered_model.context_window, 65_536);
-    assert_eq!(discovered_model.max_input_tokens, 45_056);
-    assert_eq!(discovered_model.max_output_tokens, 20_480);
+    assert_eq!(discovered_model.max_input_tokens, 65_535);
+    assert_eq!(discovered_model.max_output_tokens, 65_535);
     assert!(!discovered_model.has_vision);
     assert!(discovered_model.supports_reasoning);
     assert!(discovered_model.supports_tool_calls);

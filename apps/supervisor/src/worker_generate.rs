@@ -4,7 +4,6 @@
 //! together prevents the event loop from exposing partially started requests.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -12,8 +11,8 @@ use astronomical_ipc_protocol::ProtocolError;
 use tokio::time::{Instant, timeout};
 
 use crate::{
-    GenerationPerformanceLog, GenerationStartError, WorkerActivity, WorkerControlError,
-    WorkerHealthSnapshot, WorkerProcess,
+    GenerationPerformanceLog, GenerationStartError, RuntimeModelPolicy, WorkerActivity,
+    WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
     worker_containment::{cancel_active_generation, contain_worker_failure},
     worker_health::{clear_active_request_progress, publish_activity},
     worker_loop_types::ActiveGeneration,
@@ -31,8 +30,7 @@ pub(super) async fn handle_generate_command(
     model_load_deadline: &mut Option<Instant>,
     active_generation: &mut Option<ActiveGeneration>,
     performance_log: &mut GenerationPerformanceLog,
-    model_directories: &Arc<HashMap<String, PathBuf>>,
-    model_max_output_tokens: u32,
+    model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
     model_load_timeout: Duration,
     cancellation_acknowledgement_timeout: Duration,
 ) -> Result<(), WorkerControlError> {
@@ -53,8 +51,8 @@ pub(super) async fn handle_generate_command(
         .and_then(|snapshot| snapshot.ready_model_id.clone());
     let requested_model = &generation_command.model;
     if loaded_model_id.as_deref() != Some(requested_model) {
-        let requested_model_directory = model_directories.get(requested_model);
-        if requested_model_directory.is_none() && loaded_model_id.is_none() {
+        let requested_model_policy = model_policy_catalog.get(requested_model);
+        if requested_model_policy.is_none() && loaded_model_id.is_none() {
             tracing::warn!(
                 requested_model = %requested_model,
                 loaded_model = ?loaded_model_id,
@@ -63,17 +61,17 @@ pub(super) async fn handle_generate_command(
             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
             return Ok(());
         }
-        if let Some(model_directory) = requested_model_directory {
+        if let Some(model_policy) = requested_model_policy {
             tracing::info!(
                 requested_model = %requested_model,
                 loaded_model = ?loaded_model_id,
-                model_directory = %model_directory.display(),
+                model_directory = %model_policy.model_directory.display(),
                 "loading model to match request"
             );
             if let Err(swap_error) = worker_process
                 .swap_model(
-                    model_directory.to_string_lossy().into_owned(),
-                    model_max_output_tokens,
+                    model_policy.model_directory.to_string_lossy().into_owned(),
+                    model_policy.worker_model_configuration.clone(),
                 )
                 .await
             {

@@ -9,6 +9,7 @@ mod protocol_message;
 mod protocol_reader;
 mod protocol_writer;
 mod worker_chunking_configuration;
+mod worker_model_configuration;
 mod worker_startup_configuration;
 
 pub use chat_generation::{
@@ -36,6 +37,10 @@ pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
 pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
+};
+pub use worker_model_configuration::{
+    WorkerAuxiliaryModelConfiguration, WorkerLoadedModelRuntimeConfiguration,
+    WorkerModelConfiguration, WorkerSpeculativePrefillRuntimeConfiguration,
 };
 pub use worker_startup_configuration::{
     WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,

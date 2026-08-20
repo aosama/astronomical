@@ -124,10 +124,7 @@ fn should_generate_fixed_prompt_processing_defaults_for_both_runtime_channels() 
             "{} should default to qualified fixed prompt processing",
             runtime_instance.display_name()
         );
-        assert_eq!(
-            generated_config_json["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
-            2_048
-        );
+        assert!(generated_config_json.get("chunking").is_none());
     }
 }
 
@@ -146,7 +143,7 @@ fn should_load_a_supplied_test_home_only_from_the_development_channel() {
     .expect("Stable sentinel should be written");
     std::fs::write(
         development_state_directory.join("config.json"),
-        r#"{"supervisor":{"bind_address":"127.0.0.1:6733"}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]}}"#,
     )
     .expect("Development config should be written");
 
@@ -177,7 +174,10 @@ fn should_allow_an_explicit_test_state_directory_to_select_an_ephemeral_endpoint
             .parse()
             .expect("test bind address should parse"),
     );
-    std::fs::write(explicit_paths.config_file_path(), r#"{}"#)
+    std::fs::write(
+        explicit_paths.config_file_path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]}}"#,
+    )
         .expect("explicit config should be written");
 
     let explicit_config = AstronomicalConfig::load_from_instance_paths(explicit_paths)
@@ -190,6 +190,21 @@ fn should_allow_an_explicit_test_state_directory_to_select_an_ephemeral_endpoint
             .to_string(),
         "127.0.0.1:0"
     );
+}
+
+#[test]
+fn should_assign_an_ephemeral_endpoint_to_a_custom_channel_state_directory() {
+    let test_state_directory = tempfile::tempdir().expect("test state directory should be created");
+    let instance_paths = AstronomicalInstancePaths::for_state_directory(
+        test_state_directory.path().to_path_buf(),
+        AstronomicalRuntimeInstance::Development,
+    );
+
+    assert_eq!(
+        instance_paths.default_bind_address().to_string(),
+        "127.0.0.1:0"
+    );
+    assert!(!instance_paths.is_standard_state_directory());
 }
 
 #[test]

@@ -437,9 +437,11 @@ fn should_enforce_validated_model_context_instead_of_the_tokenizer_sentinel() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
     text_artifact.model_config["max_position_embeddings"] = json!(32);
     let processor = processor(text_artifact);
+    let mut oversized_prompt_command = romeo_and_juliet_command(9_816, None);
+    oversized_prompt_command.settings.max_output_tokens = 1;
 
     let preparation_error = processor
-        .prepare_chat(&romeo_and_juliet_command(9_816, None))
+        .prepare_chat(&oversized_prompt_command)
         .expect_err("the Romeo and Juliet prompt must exceed the 32-token model context");
 
     assert!(matches!(

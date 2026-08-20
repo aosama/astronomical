@@ -193,9 +193,10 @@ private struct SuccessfulReloadSupervisorClient: SupervisorClient {
 
 private struct RestartAcknowledgedButStatusUnconfirmedSupervisorClient: SupervisorClient {
   private let acknowledgedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
+    configurationGeneration: String(repeating: "a", count: 64),
     persistentPromptCacheEnabled: true,
-    mtpEnabled: true,
-    speculativePrefillEnabled: false
+    promptCacheMaximumSizeBytes: 50_000_000_000,
+    loadedModel: nil
   )
 
   func fetchStatus() async throws -> SupervisorStatusDocument {
@@ -229,9 +230,10 @@ private struct RestartAcknowledgedButStatusUnconfirmedSupervisorClient: Supervis
 
 private struct RestartAcknowledgedAndStatusConfirmedSupervisorClient: SupervisorClient {
   private let appliedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
+    configurationGeneration: String(repeating: "a", count: 64),
     persistentPromptCacheEnabled: true,
-    mtpEnabled: true,
-    speculativePrefillEnabled: false
+    promptCacheMaximumSizeBytes: 50_000_000_000,
+    loadedModel: nil
   )
 
   func fetchStatus() async throws -> SupervisorStatusDocument {

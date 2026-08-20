@@ -8,15 +8,15 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
-    ChatToolChoice, RequestId,
+    ChatToolChoice, RequestId, WorkerChunkingConfiguration, WorkerLogLevel,
+    WorkerModelConfiguration, WorkerStartupConfiguration,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, WorkerHandle, WorkerHealthStatus,
+    GenerationStartError, RuntimeModelPolicy, WorkerHandle, WorkerHealthStatus,
 };
 use tokio::time::{Instant, sleep, timeout};
 
-const DEFAULT_MAX_OUTPUT_TOKENS: u32 = 20_480;
 const DELAYED_COMPLETION_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
     "astronomical/generation-event-before-swap-model";
@@ -50,6 +50,25 @@ async fn should_complete_a_queued_model_swap_when_idle_telemetry_arrives_before_
     assert_eq!(
         worker_health_snapshot.ready_model_id.as_deref(),
         Some(TELEMETRY_BEFORE_SWAP_MODEL_ID)
+    );
+    assert_eq!(
+        worker_health_snapshot
+            .ready_model_capabilities
+            .as_ref()
+            .expect("loaded model capabilities should be acknowledged")
+            .max_output_tokens,
+        64
+    );
+    assert_eq!(
+        worker_health_snapshot
+            .worker_runtime_feature_configuration
+            .as_ref()
+            .expect("loaded model policy should be acknowledged")
+            .loaded_model
+            .as_ref()
+            .expect("the acknowledgement should identify the loaded model")
+            .model_id,
+        TELEMETRY_BEFORE_SWAP_MODEL_ID
     );
     worker_handle
         .shutdown()
@@ -86,7 +105,7 @@ async fn launch_idle_worker_fixture() -> WorkerHandle {
     );
     let temporary_log_directory =
         tempfile::tempdir().expect("test performance log directory should be created");
-    let worker_handle = WorkerHandle::launch(
+    let worker_handle = WorkerHandle::launch_with_startup_configuration(
         worker_executable_path,
         Duration::from_secs(1),
         GenerationPerformanceLog::open(temporary_log_directory.path())
@@ -94,23 +113,83 @@ async fn launch_idle_worker_fixture() -> WorkerHandle {
         Arc::new(HashMap::from([
             (
                 DELAYED_COMPLETION_MODEL_ID.to_owned(),
-                PathBuf::from("/models/delayed-completion-model"),
+                runtime_model_policy(
+                    DELAYED_COMPLETION_MODEL_ID,
+                    "/models/delayed-completion-model",
+                    128,
+                ),
             ),
             (
                 TELEMETRY_BEFORE_SWAP_MODEL_ID.to_owned(),
-                PathBuf::from("/models/telemetry-before-swap-model"),
+                runtime_model_policy(
+                    TELEMETRY_BEFORE_SWAP_MODEL_ID,
+                    "/models/telemetry-before-swap-model",
+                    64,
+                ),
             ),
             (
                 GENERATION_EVENT_BEFORE_SWAP_MODEL_ID.to_owned(),
-                PathBuf::from("/models/generation-event-before-swap-model"),
+                runtime_model_policy(
+                    GENERATION_EVENT_BEFORE_SWAP_MODEL_ID,
+                    "/models/generation-event-before-swap-model",
+                    32,
+                ),
             ),
         ])),
-        DEFAULT_MAX_OUTPUT_TOKENS,
+        WorkerStartupConfiguration {
+            configuration_generation: "test-configuration-generation".to_owned(),
+            global_prompt_cache_root_directory: temporary_log_directory.path().join("prompt-cache"),
+            global_prompt_cache_maximum_size_bytes: 50_000_000_000,
+            persistent_prompt_cache_enabled: true,
+            configured_maximum_mlx_memory_bytes: None,
+            performance_attribution_enabled: false,
+            logging_directory: temporary_log_directory.path().to_path_buf(),
+            logging_level: WorkerLogLevel::Warn,
+            retained_log_file_count: 7,
+        },
     )
     .await
     .expect("the idle worker should launch");
     wait_for_ready_worker(&worker_handle).await;
     worker_handle
+}
+
+fn runtime_model_policy(
+    model_id: &str,
+    model_directory: &str,
+    maximum_output_tokens: u32,
+) -> RuntimeModelPolicy {
+    RuntimeModelPolicy {
+        model_directory: PathBuf::from(model_directory),
+        generation_defaults: astronomical_supervisor::RuntimeModelGenerationDefaults {
+            maximum_output_tokens: u16::try_from(maximum_output_tokens).unwrap_or(u16::MAX),
+            configured_maximum_output_tokens: None,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+        },
+        configured_maximum_context_tokens: None,
+        default_maximum_context_tokens: 2_048,
+        configured_chunking_fields: Default::default(),
+        acceleration_availability: Default::default(),
+        worker_model_configuration: WorkerModelConfiguration {
+            model_id: model_id.to_owned(),
+            maximum_context_tokens: 2_048,
+            maximum_output_tokens,
+            chunking: WorkerChunkingConfiguration {
+                fixed_prompt_processing_chunk_size_tokens: 256,
+                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+                full_attention_key_value_growth_tokens: 256,
+                speculative_prefill_draft_forward_tokens: 256,
+                prefill_graph_submission_layer_interval: 1,
+                experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
+                prompt_cache_block_tokens: None,
+                prompt_cache_common_prefix_stride_blocks: 4,
+            },
+            mtp_draft_depth: None,
+            mtp_head_model: None,
+            speculative_prefill: None,
+        },
+    }
 }
 
 async fn wait_for_ready_worker(worker_handle: &WorkerHandle) {

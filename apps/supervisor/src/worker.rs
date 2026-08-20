@@ -7,7 +7,6 @@
 //! request or are treated as protocol violations.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -22,9 +21,9 @@ use crate::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, apply_mlx_memory_limit, contain_mlx_memory_limit_failure,
 };
 use crate::{
-    ChatGenerationStreamErrorCode, GenerationPerformanceLog, GenerationStartError, WorkerActivity,
-    WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
-    WorkerTerminationOutcome,
+    ChatGenerationStreamErrorCode, GenerationPerformanceLog, GenerationStartError,
+    RuntimeModelPolicy, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
+    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
     chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect},
     worker_containment::{
         cancel_active_generation, close_worker_if_running, contain_worker_failure,
@@ -36,6 +35,7 @@ use crate::{
         publish_pending_mlx_memory_ceiling,
     },
     worker_loop_types::{ActiveGeneration, WorkerLoopCommand},
+    worker_replacement::WorkerReplacement,
 };
 
 // Keeping process-loop dependencies explicit is clearer than hiding them in a context object.
@@ -47,8 +47,7 @@ pub(crate) async fn run_worker(
     model_load_timeout: Duration,
     cancellation_acknowledgement_timeout: Duration,
     mut performance_log: GenerationPerformanceLog,
-    mut model_directories: Arc<HashMap<String, PathBuf>>,
-    mut max_output_tokens: u32,
+    mut model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     active_generation_permits: Arc<Semaphore>,
     generation_queue_permits: Arc<Semaphore>,
 ) {
@@ -68,7 +67,6 @@ pub(crate) async fn run_worker(
         if active_generation.is_none()
             && let Some(pending_mlx_memory_ceiling_bytes) = pending_mlx_memory_ceiling_bytes.take()
         {
-            publish_pending_mlx_memory_ceiling(&health_snapshot, None);
             if let Err(memory_limit_error) = apply_mlx_memory_limit(
                 &mut worker_process,
                 pending_mlx_memory_ceiling_bytes,
@@ -140,8 +138,7 @@ pub(crate) async fn run_worker(
                             &mut model_load_deadline,
                             &mut active_generation,
                             &mut performance_log,
-                            &model_directories,
-                            max_output_tokens,
+                            &model_policy_catalog,
                             model_load_timeout,
                             cancellation_acknowledgement_timeout,
                         )
@@ -180,9 +177,9 @@ pub(crate) async fn run_worker(
                     }
                     WorkerLoopCommand::RestartWorker {
                         worker_executable_path,
-                        model_directories: replacement_model_directories,
-                        max_output_tokens: replacement_max_output_tokens,
+                        model_policy_catalog: replacement_model_policy_catalog,
                         worker_startup_configuration,
+                        expected_configuration_generation,
                         restart_sender,
                     } => {
                         if active_generation.is_some() {
@@ -191,56 +188,30 @@ pub(crate) async fn run_worker(
                             ));
                             continue;
                         }
-                        publish_health(
-                            &health_snapshot,
-                            WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Loading),
-                        );
-                        is_ready = false;
-                        model_load_deadline = None;
-
-                        if worker_process.process_id().is_some()
-                            && let Err(worker_close_error) = worker_process.close().await
-                        {
-                            publish_health(
-                                &health_snapshot,
-                                WorkerHealthSnapshot::unavailable(
-                                    WorkerHealthStatus::Unavailable,
-                                ),
-                            );
-                            let _send_outcome = restart_sender.send(Err(worker_close_error));
+                        if !is_ready {
+                            let _send_outcome = restart_sender.send(Err(
+                                WorkerControlError::MissingActiveWorker,
+                            ));
                             continue;
                         }
-
-                        let replacement_worker_launch_result = match worker_startup_configuration {
-                            Some(worker_startup_configuration) => {
-                                WorkerProcess::launch_with_startup_configuration(
-                                    &worker_executable_path,
-                                    worker_startup_configuration,
-                                )
-                                .await
-                            }
-                            None => WorkerProcess::launch(&worker_executable_path).await,
-                        };
-                        match replacement_worker_launch_result {
-                            Ok(replacement_worker_process) => {
-                                worker_process = replacement_worker_process;
-                                model_directories = replacement_model_directories;
-                                max_output_tokens = replacement_max_output_tokens;
-                                model_load_deadline =
-                                    Some(Instant::now() + model_load_timeout);
-                                let _send_outcome = restart_sender.send(Ok(()));
-                            }
-                            Err(worker_launch_error) => {
-                                publish_health(
-                                    &health_snapshot,
-                                    WorkerHealthSnapshot::unavailable(
-                                        WorkerHealthStatus::Unavailable,
-                                    ),
-                                );
-                                let _send_outcome =
-                                    restart_sender.send(Err(worker_launch_error));
-                            }
-                        }
+                        let replacement_result = WorkerReplacement::new(
+                            worker_executable_path,
+                            replacement_model_policy_catalog,
+                            worker_startup_configuration,
+                            expected_configuration_generation,
+                            model_load_timeout,
+                        )
+                        .execute(
+                            &mut worker_process,
+                            &mut model_policy_catalog,
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                        )
+                        .await;
+                        let _send_outcome = restart_sender.send(replacement_result);
                     }
                     WorkerLoopCommand::UpdateMlxMemoryLimit {
                         effective_mlx_memory_ceiling_bytes,
@@ -353,7 +324,9 @@ pub(crate) async fn run_worker(
                         model_load_timeout_millis: model_load_timeout.as_millis(),
                     },
                 ).await;
-                model_load_deadline = None;
+                model_load_deadline = worker_process
+                    .process_id()
+                    .map(|_| Instant::now() + model_load_timeout);
             }
             () = wait_for_stream_disconnect(stream_event_sender), if active_generation.is_some() => {
                 cancel_active_generation(

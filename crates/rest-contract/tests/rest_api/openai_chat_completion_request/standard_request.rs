@@ -87,6 +87,7 @@ fn should_expose_validated_request_parts_without_leaking_rest_dtos_into_ipc() {
         "mlx-community/Ornith-1.0-35B-OptiQ-4bit"
     );
     assert_eq!(request_parts.maximum_output_tokens, 512);
+    assert_eq!(request_parts.requested_maximum_output_tokens, Some(512));
     assert_eq!(request_parts.tool_choice, OpenAiToolChoiceMode::None);
     assert_eq!(request_parts.temperature, Some(0.6));
     assert_eq!(request_parts.top_p, Some(0.95));
@@ -102,4 +103,20 @@ fn should_expose_validated_request_parts_without_leaking_rest_dtos_into_ipc() {
         request_parts.messages.as_slice(),
         [OpenAiChatMessageParts::User { content, .. }] if content == "Inspect the repository."
     ));
+}
+
+#[test]
+fn should_preserve_omitted_chat_generation_settings_for_model_defaults() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{"model":"organization/model","messages":[{"role":"user","content":"hello"}]}"#,
+    )
+    .expect("the request without generation settings should deserialize");
+
+    let request_parts = request
+        .into_parts()
+        .expect("the request without generation settings should validate");
+
+    assert_eq!(request_parts.requested_maximum_output_tokens, None);
+    assert_eq!(request_parts.temperature, None);
+    assert_eq!(request_parts.top_p, None);
 }

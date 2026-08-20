@@ -74,7 +74,7 @@ async fn should_return_an_error_when_the_unit_model_factory_is_called() {
         <() as ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>>::create(
             &(),
             "/unused/model",
-            1,
+            worker_model_configuration("unused-model"),
         )
         .await;
 
@@ -87,11 +87,13 @@ async fn should_return_an_error_when_the_unit_model_factory_is_called() {
 #[tokio::test]
 async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
+    let model_configurations = Arc::new(Mutex::new(Vec::new()));
     let engine_worker = EngineBackedWorker::idle_with_model_factory(
         LazyScriptedModelFactory {
             model_factory_call_count: Arc::clone(&model_factory_call_count),
             mlx_memory_limits: (0, 0),
             model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
+            model_configurations: Arc::clone(&model_configurations),
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
         },
         0,
@@ -120,7 +122,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/requested-model".to_owned(),
-            max_output_tokens: 20_480,
+            model_configuration: worker_model_configuration("requested-model"),
         })
         .await
         .expect("the worker should receive the first requested model");
@@ -133,6 +135,13 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
         }
     ));
     assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        model_configurations
+            .lock()
+            .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
+            .as_slice(),
+        &[worker_model_configuration("requested-model")]
+    );
 
     close_worker_transport(supervisor_writer, worker_task).await;
 }
@@ -146,6 +155,7 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
             model_factory_call_count,
             mlx_memory_limits: (38_000_000_000, 38_000_000_000),
             model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
+            model_configurations: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Paged),
         },
         40_000_000_000,
@@ -165,7 +175,7 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/first-model".to_owned(),
-            max_output_tokens: 20_480,
+            model_configuration: worker_model_configuration("first-model"),
         })
         .await
         .expect("the first model should load");
@@ -188,7 +198,7 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/second-model".to_owned(),
-            max_output_tokens: 20_480,
+            model_configuration: worker_model_configuration("second-model"),
         })
         .await
         .expect("the replacement model should receive the updated MLX limit pair");
@@ -239,7 +249,7 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/invalid-model".to_owned(),
-            max_output_tokens: 20_480,
+            model_configuration: worker_model_configuration("invalid-model"),
         })
         .await
         .expect("the worker should receive the invalid model selection");
@@ -260,7 +270,7 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/valid-model".to_owned(),
-            max_output_tokens: 20_480,
+            model_configuration: worker_model_configuration("valid-model"),
         })
         .await
         .expect("the idle worker should accept a later valid model");

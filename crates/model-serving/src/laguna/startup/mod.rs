@@ -28,6 +28,8 @@ pub use error::LagunaStartupError;
 
 /// Optional serving policy supplied by the worker factory.
 pub struct LagunaServingSettings {
+    pub maximum_context_tokens: Option<u32>,
+    pub maximum_output_tokens: Option<u32>,
     pub chunking: Option<WorkerChunkingConfiguration>,
     pub persistent_prompt_cache_enabled: bool,
     pub prompt_cache_config: Option<PromptCacheConfig>,
@@ -39,6 +41,8 @@ impl LagunaServingSettings {
     #[must_use]
     pub fn default_fixed() -> Self {
         Self {
+            maximum_context_tokens: None,
+            maximum_output_tokens: None,
             chunking: None,
             persistent_prompt_cache_enabled: false,
             prompt_cache_config: None,
@@ -146,6 +150,26 @@ fn prepare_laguna_startup(
             LagunaArtifactValidator::new().validate(model_directory)
         })
         .map_err(LagunaStartupError::ArtifactValidation)?;
+    let artifact_maximum_context_tokens =
+        validated_artifact.text_artifact().maximum_context_tokens();
+    let maximum_context_tokens = serving_settings
+        .maximum_context_tokens
+        .unwrap_or(artifact_maximum_context_tokens);
+    let maximum_output_tokens = serving_settings.maximum_output_tokens.unwrap_or_else(|| {
+        validated_artifact
+            .text_artifact()
+            .sampler_config()
+            .maximum_new_tokens()
+            .unwrap_or(u32::from(u16::MAX))
+            .min(maximum_context_tokens.saturating_sub(1))
+    });
+    if maximum_context_tokens == 0
+        || maximum_context_tokens > artifact_maximum_context_tokens
+        || maximum_output_tokens == 0
+        || maximum_output_tokens >= maximum_context_tokens
+    {
+        return Err(LagunaStartupError::InvalidServingPolicy);
+    }
     let model_revision = match classified_model_revision {
         Some(revision)
             if revision.len() == 40
@@ -169,6 +193,8 @@ fn prepare_laguna_startup(
             LagunaGenerationProcessor::new_with_performance_attribution(
                 model_id.clone(),
                 validated_artifact.text_artifact().clone(),
+                maximum_context_tokens,
+                maximum_output_tokens,
                 performance_attribution_enabled,
             )
         })

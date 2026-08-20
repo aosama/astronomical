@@ -2,8 +2,7 @@
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, MlxMemorySnapshotSource,
-    ProtocolReader, ProtocolWriter, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
-    WorkerRuntimeFeatureConfiguration,
+    ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -73,10 +72,8 @@ where
                     ),
                 )
                 .await?;
-            if let Some(worker_runtime_feature_configuration) = self
-                .worker_runtime_feature_configuration_for_loaded_model(
-                    engine_load_result.speculative_prefill_runtime_state(),
-                )
+            if let Some(worker_runtime_feature_configuration) =
+                self.worker_runtime_feature_configuration()
             {
                 event_writer
                     .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
@@ -112,20 +109,7 @@ where
     pub(super) fn worker_runtime_feature_configuration(
         &self,
     ) -> Option<WorkerRuntimeFeatureConfiguration> {
-        self.worker_runtime_feature_configuration
-    }
-
-    fn worker_runtime_feature_configuration_for_loaded_model(
-        &self,
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-    ) -> Option<WorkerRuntimeFeatureConfiguration> {
-        let mut worker_runtime_feature_configuration =
-            self.worker_runtime_feature_configuration()?;
-        worker_runtime_feature_configuration.speculative_prefill_enabled = !matches!(
-            speculative_prefill_runtime_state,
-            SpeculativePrefillRuntimeState::Disabled
-        );
-        Some(worker_runtime_feature_configuration)
+        self.worker_runtime_feature_configuration.clone()
     }
 
     async fn serve_protocol<ReadTransport, WriteTransport>(

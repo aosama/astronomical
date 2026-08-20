@@ -118,6 +118,14 @@ function applicationIdentityTitle(applicationIdentity) {
     return `${applicationIdentity.version || "unknown"} · ${channelTitle} · ${applicationIdentity.commit || "unknown"}${dirtySuffix}`;
 }
 
+function configurationRequiresRestart(configurationDocument) {
+    if (!configurationDocument) { return false; }
+    return configurationDocument.restart_required === true
+        || (configurationDocument.configured_generation
+            && configurationDocument.configured_generation
+                !== configurationDocument.effective_generation);
+}
+
 function renderApplicationIdentity(applicationIdentity) {
     const identityTitle = applicationIdentityTitle(applicationIdentity);
     document.getElementById("application-build-identity").textContent = identityTitle;
@@ -410,7 +418,10 @@ async function reloadConfig() {
         if (response.ok) {
             if (parsedResponse && parsedResponse.status === "worker_restart_started") {
                 showControlFeedback(parsedResponse.message || "Config reloaded; worker restarting…", "progress");
-            } else if (parsedResponse && parsedResponse.rest_api_restart_required) {
+            } else if (parsedResponse && (
+                parsedResponse.rest_api_restart_required
+                || parsedResponse.candidate_generation !== parsedResponse.effective_generation
+            )) {
                 showControlFeedback(
                     (parsedResponse.message || "Config reloaded") +
                     " — a full server restart is required. Use the menu bar app to restart.",

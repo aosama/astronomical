@@ -41,7 +41,6 @@ pub(super) fn recognizes_model_type(model_type: Option<&str>) -> bool {
 pub(super) fn discover_model_metadata(
     model_directory: &Path,
     config_bytes: &[u8],
-    configured_max_output_tokens: u32,
 ) -> Option<LagunaDiscoveredModelMetadata> {
     let config_document: LagunaConfigDocument = serde_json::from_slice(config_bytes).ok()?;
     if config_document.model_type != "laguna" {
@@ -52,10 +51,10 @@ pub(super) fn discover_model_metadata(
         .as_ref()
         .unwrap_or(&config_document.language_fields)
         .max_position_embeddings?;
-    if context_window < 2 || configured_max_output_tokens == 0 {
+    if context_window < 2 {
         return None;
     }
-    let max_output_tokens = configured_max_output_tokens.min(context_window - 1);
+    let max_output_tokens = u32::from(u16::MAX).min(context_window - 1);
 
     // Startup requires all three text sidecars. Discovery reads only bounded
     // metadata needed to predict the supported public text contract.
@@ -119,7 +118,7 @@ pub(super) fn discover_model_metadata(
     Some(LagunaDiscoveredModelMetadata {
         revision,
         context_window,
-        max_input_tokens: context_window - max_output_tokens,
+        max_input_tokens: context_window - 1,
         max_output_tokens,
         has_vision: false,
         supports_reasoning,

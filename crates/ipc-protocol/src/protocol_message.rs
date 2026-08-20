@@ -2,8 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, ChatModelCapabilities, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
+    ChatGenerationOutput, ChatModelCapabilities, WorkerModelConfiguration,
+    WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
+    WorkerStartupConfiguration,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -171,8 +172,8 @@ pub enum WorkerCommand {
     SwapModel {
         /// Absolute path to the new model directory.
         model_directory: String,
-        /// Per-request output-token ceiling for the new model.
-        max_output_tokens: u32,
+        /// Fully resolved policy for this selected canonical model.
+        model_configuration: WorkerModelConfiguration,
     },
     /// Requests one MLX memory observation from a ready idle worker.
     SampleMlxMemory,

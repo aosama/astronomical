@@ -5,11 +5,12 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
+    WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, GenerationPerformanceLog, ResolvedRuntimeConfig,
-    ResolvedRuntimeConfigResolver, ShutdownController, WorkerHandle, WorkerHealthStatus,
-    build_application, build_application_with_full_control,
+    ResolvedRuntimeConfigResolver, RuntimeModelPolicy, ShutdownController, WorkerHandle,
+    WorkerHealthStatus, build_application, build_application_with_full_control,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -224,36 +225,47 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
     );
     let temporary_directory = tempfile::tempdir().expect("test directory should be created");
     let model_directory = temporary_directory.path().join("delayed-completion-model");
-    let model_directories = Arc::new(HashMap::from([(
+    let model_policy_catalog = Arc::new(HashMap::from([(
         DELAYED_MODEL_ID.to_owned(),
-        model_directory,
+        RuntimeModelPolicy {
+            model_directory,
+            generation_defaults: astronomical_supervisor::RuntimeModelGenerationDefaults {
+                maximum_output_tokens: 128,
+                configured_maximum_output_tokens: None,
+                temperature_thousandths: None,
+                top_p_thousandths: None,
+            },
+            configured_maximum_context_tokens: None,
+            default_maximum_context_tokens: 2_048,
+            configured_chunking_fields: Default::default(),
+            acceleration_availability: Default::default(),
+            worker_model_configuration: test_worker_model_configuration(DELAYED_MODEL_ID),
+        },
     )]));
     let worker_handle = WorkerHandle::launch(
         &worker_executable_path,
         Duration::from_secs(2),
         GenerationPerformanceLog::open(temporary_directory.path())
             .expect("test performance log should open"),
-        Arc::clone(&model_directories),
-        20_480,
+        Arc::clone(&model_policy_catalog),
     )
     .await
     .expect("idle worker fixture should launch");
     wait_for_ready_worker(&worker_handle).await;
 
     let resolved_runtime_config = ResolvedRuntimeConfig {
+        configuration_generation:
+            "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: worker_executable_path.clone(),
         discovered_models: Vec::new(),
         configured_model_directories: Vec::new(),
-        model_directories,
-        max_output_tokens: 20_480,
+        model_policy_catalog,
+        unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        chunking: astronomical_config::ChunkingConfig::default(),
         persistent_prompt_cache_enabled: true,
+        configured_persistent_prompt_cache_enabled: None,
+        configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        mtp_enabled: false,
-        mtp_draft_depth: None,
-        speculative_prefill: astronomical_config::SpeculativePrefillConfig::disabled(),
-        speculative_prefill_draft_model_directory: None,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             temporary_directory.path().join("cache"),
             50_000_000_000,
@@ -279,6 +291,27 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
         application,
         worker_handle,
         _temporary_directory: temporary_directory,
+    }
+}
+
+fn test_worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
+    WorkerModelConfiguration {
+        model_id: model_id.to_owned(),
+        maximum_context_tokens: 2_048,
+        maximum_output_tokens: 128,
+        chunking: WorkerChunkingConfiguration {
+            fixed_prompt_processing_chunk_size_tokens: 256,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+            full_attention_key_value_growth_tokens: 256,
+            speculative_prefill_draft_forward_tokens: 256,
+            prefill_graph_submission_layer_interval: 1,
+            experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
+            prompt_cache_block_tokens: None,
+            prompt_cache_common_prefix_stride_blocks: 4,
+        },
+        mtp_draft_depth: None,
+        mtp_head_model: None,
+        speculative_prefill: None,
     }
 }
 
