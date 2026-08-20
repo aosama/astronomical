@@ -12,9 +12,11 @@ pub struct OpenAiModelParts {
     pub owned_by: String,
     /// Total prompt plus generation position capacity of the model.
     pub context_window: u32,
-    /// Maximum prompt tokens a client may send.
+    /// Maximum prompt tokens a client may send when reserving the minimum
+    /// generation position. Request admission applies the selected output budget.
     pub max_input_tokens: u32,
-    /// Maximum output tokens a client may request.
+    /// Maximum output tokens a client may request when the prompt leaves enough
+    /// positions. This is independent from the maximum prompt length.
     pub max_output_tokens: u32,
     /// Modalities accepted in request input.
     pub input_modalities: Vec<String>,
@@ -57,30 +59,17 @@ impl OpenAiModelParts {
         if self.context_window == 0 {
             return Err(OpenAiModelValidationError::ContextWindowMustBePositive);
         }
-        if self.max_input_tokens > self.context_window {
+        if self.max_input_tokens >= self.context_window {
             return Err(
-                OpenAiModelValidationError::InputTokenBudgetExceedsContextWindow {
+                OpenAiModelValidationError::InputTokenBudgetMustLeaveGenerationPosition {
                     max_input_tokens: self.max_input_tokens,
                     context_window: self.context_window,
                 },
             );
         }
-        if self.max_output_tokens > self.context_window {
+        if self.max_output_tokens >= self.context_window {
             return Err(
-                OpenAiModelValidationError::OutputTokenBudgetExceedsContextWindow {
-                    max_output_tokens: self.max_output_tokens,
-                    context_window: self.context_window,
-                },
-            );
-        }
-        if self
-            .max_input_tokens
-            .checked_add(self.max_output_tokens)
-            .is_none_or(|total_token_budget| total_token_budget > self.context_window)
-        {
-            return Err(
-                OpenAiModelValidationError::CombinedTokenBudgetsExceedContextWindow {
-                    max_input_tokens: self.max_input_tokens,
+                OpenAiModelValidationError::OutputTokenBudgetMustLeavePromptPosition {
                     max_output_tokens: self.max_output_tokens,
                     context_window: self.context_window,
                 },
@@ -119,24 +108,19 @@ pub enum OpenAiModelValidationError {
     /// A model must have at least one context position.
     #[error("context window must be positive")]
     ContextWindowMustBePositive,
-    /// The advertised prompt budget cannot exceed the full context window.
-    #[error("maximum input tokens {max_input_tokens} exceed context window {context_window}")]
-    InputTokenBudgetExceedsContextWindow {
-        max_input_tokens: u32,
-        context_window: u32,
-    },
-    /// The advertised output budget cannot exceed the full context window.
-    #[error("maximum output tokens {max_output_tokens} exceed context window {context_window}")]
-    OutputTokenBudgetExceedsContextWindow {
-        max_output_tokens: u32,
-        context_window: u32,
-    },
-    /// The prompt and output budgets cannot together exceed the context window.
+    /// The advertised prompt budget must leave one position for generation.
     #[error(
-        "maximum input tokens {max_input_tokens} plus maximum output tokens {max_output_tokens} exceed context window {context_window}"
+        "maximum input tokens {max_input_tokens} must be smaller than context window {context_window}"
     )]
-    CombinedTokenBudgetsExceedContextWindow {
+    InputTokenBudgetMustLeaveGenerationPosition {
         max_input_tokens: u32,
+        context_window: u32,
+    },
+    /// The advertised output budget must leave one position for prompt input.
+    #[error(
+        "maximum output tokens {max_output_tokens} must be smaller than context window {context_window}"
+    )]
+    OutputTokenBudgetMustLeavePromptPosition {
         max_output_tokens: u32,
         context_window: u32,
     },
@@ -207,10 +191,10 @@ pub struct OpenAiModel {
     /// Total prompt plus generation position capacity of the loaded model.
     #[serde(skip_serializing_if = "Option::is_none")]
     context_window: Option<u32>,
-    /// Maximum prompt tokens a client may send.
+    /// Independent maximum prompt length when one generation position remains.
     #[serde(skip_serializing_if = "Option::is_none")]
     max_input_tokens: Option<u32>,
-    /// Advertised per-request output-token ceiling.
+    /// Independent per-request output-token ceiling.
     #[serde(skip_serializing_if = "Option::is_none")]
     max_output_tokens: Option<u32>,
     /// Input modalities accepted by the model.
