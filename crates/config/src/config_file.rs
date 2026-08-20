@@ -28,7 +28,7 @@ pub(crate) fn read_user_config_file(
     };
     let config_json = parse_json_rejecting_duplicates(&config_file_path, &config_file_bytes)?;
     if config_json.get("schema_version").is_none() {
-        return migrate_legacy_config(&config_file_path, config_json);
+        return migrate_legacy_config(&config_file_path, &config_file_bytes, config_json);
     }
     parse_and_validate_v1(&config_file_path, config_json)
 }
