@@ -6,8 +6,7 @@ use astronomical_ipc_protocol::{
     ImageGenerationResultMetadata, ImageGenerationSettings, ImageGenerationValidationError,
     MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpDepthStatus, MtpRuntimeState, ProtocolError,
     ProtocolReader, ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand,
-    WorkerEvent, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
-    WorkerModelCapabilitiesValidationError, decode_command, decode_event, encode_event,
+    WorkerEvent, WorkerMlxMemorySnapshot, WorkerModelCapabilities, decode_event, encode_event,
 };
 use image::{
     ExtendedColorType, ImageEncoder,
