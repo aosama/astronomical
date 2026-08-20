@@ -4,29 +4,28 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.6</title>
-            <pubDate>Thu, 20 Aug 2026 09:08:49 -0400</pubDate>
-            <sparkle:version>242</sparkle:version>
-            <sparkle:shortVersionString>0.2.6</sparkle:shortVersionString>
+            <title>0.2.7</title>
+            <pubDate>Thu, 20 Aug 2026 12:37:55 -0400</pubDate>
+            <sparkle:version>248</sparkle:version>
+            <sparkle:shortVersionString>0.2.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Introduces a strict, versioned runtime configuration with an offline JSON Schema, per-model generation and execution policy, and configured, resolved, and effective status reporting.
-- Applies configuration reloads transactionally across request admission, worker replacement, memory updates, and model policy changes.
-- Preserves existing unversioned configuration during the one-way schema version 1 migration. Astronomical stores the exact original bytes in a private `config.legacy-v0.json` backup before replacing a valid legacy document, while unsafe migrations leave the source unchanged.
-- Improves packaged application validation by requiring an explicitly selected model from the Development instance for optional real-model qualification.
+- Restores `GET /v1/models` when discovered or actively serving models publish independent maximum input and output token capabilities.
+- Restores the documented discovery-to-selection journey for clients that enumerate local models before loading one.
+- Adds repeatable production-discovery and ready-worker endpoint coverage so model capability metadata remains available across future releases.
 
 ## Compatibility
 
-Astronomical 0.2.6 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.7 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing model directories, prompt caches, and logs remain in place when updating from 0.2.5. Existing unversioned Stable configuration is migrated on first launch only when its behavior can be represented exactly by schema version 1, with the original bytes retained in the adjacent legacy backup.
+Existing model directories, configuration, prompt caches, and logs remain in place when updating from 0.2.6.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.6/Astronomical-0.2.6-macOS-arm64.dmg" length="12447028" type="application/octet-stream" sparkle:edSignature="SxHqf0D/t06gvMyE5sPsULkzXB5v9x9fNal4tFG4F6p/buRFjJAmxHp18aywlOowYSJIfb2b4PF84maJ7wRlBA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.7/Astronomical-0.2.7-macOS-arm64.dmg" length="12446622" type="application/octet-stream" sparkle:edSignature="NSbR0lYz/b7ry0DjuGGkjEIsHGnMe/FNWWk9rr4pE4/MVBS5kb75g0evA8qSCd9SvEyUn1XQMxLdfAbN+uZTBg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: krobAuMyVxI9yzNk3aOHexs7GNopaUOrYMp+zejayR/6As8f3t7eY9Aovf+l3xuaoYvNKoe+jxD8WK9SKzDMAg==
-length: 2536
+edSignature: UzErrMA7s5kKVSC926CmXwbsQfJX4F0Uj0+5MWPrdmAhrT0LTwOekWPffqSdRWEdmLp/fsH+RRySf9lVNuZ6Cg==
+length: 1992
 -->
