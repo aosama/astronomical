@@ -18,7 +18,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_supervisor::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedConfigurationGeneration, ResolvedRuntimeConfig,
-    ResolvedRuntimeConfigResolver, RuntimeModelPolicy,
+    RuntimeModelPolicy,
 };
 
 #[test]
