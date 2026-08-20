@@ -487,15 +487,21 @@ async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing
 fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel {
     astronomical_config::DiscoveredModel {
         model_id: model_id.to_owned(),
+        provider_model_id: None,
         model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/fictional/models/{model_id}")),
-        context_window: 2_048,
-        max_input_tokens: 1_024,
-        max_output_tokens: 128,
-        has_vision: false,
-        supports_reasoning: true,
-        supports_tool_calls: true,
+        capabilities: astronomical_config::ModelCapabilities::Chat(
+            astronomical_config::ChatModelCapabilities {
+                context_window: 2_048,
+                max_input_tokens: 1_024,
+                max_output_tokens: 128,
+                supports_vision: false,
+                supports_reasoning: true,
+                supports_tool_calls: true,
+            },
+        ),
+        license: None,
         model_size_bytes: 0,
     }
 }

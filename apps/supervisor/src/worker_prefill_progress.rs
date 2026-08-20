@@ -12,7 +12,7 @@ use crate::{
 pub(super) fn handle_worker_prefill_progress(
     worker_prefill_progress_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_generation: &mut Option<ActiveGeneration>,
+    active_request: &mut ActiveGeneration,
 ) -> Result<(), WorkerControlError> {
     let WorkerEvent::PrefillProgress {
         request_id,
@@ -31,11 +31,10 @@ pub(super) fn handle_worker_prefill_progress(
             description: "prefill progress handler received another event",
         });
     };
-    let Some(active_request) = active_generation.as_mut() else {
-        return Ok(());
-    };
     if request_id != active_request.request_id {
-        return Ok(());
+        return Err(WorkerControlError::WorkerProtocolViolation {
+            description: "prefill progress request mismatch",
+        });
     }
 
     // Worker elapsed_millis is cumulative, so retain the latest amount.

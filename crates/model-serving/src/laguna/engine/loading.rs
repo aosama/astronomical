@@ -38,6 +38,14 @@ impl LagunaInferenceExecution {
             .map_err(|_| InferenceEngineError::Fatal {
                 reason: "Laguna runtime initialization failed".to_owned(),
             })?;
+        pending_startup
+            .model_loading_performance_attribution
+            .measure_operation(PerformanceOperation::MlxAllocatorCacheCleanup, |_| {
+                runtime.clear_allocator_cache()
+            })
+            .map_err(|_| InferenceEngineError::Fatal {
+                reason: "Laguna replacement allocator cleanup failed".to_owned(),
+            })?;
         let shard_files = std::mem::take(&mut pending_startup.shard_files);
         let tensors = pending_startup
             .model_loading_performance_attribution

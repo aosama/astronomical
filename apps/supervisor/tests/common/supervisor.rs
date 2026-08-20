@@ -1,6 +1,8 @@
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
-use astronomical_supervisor::{GenerationPerformanceLog, WorkerControlError, WorkerHandle};
+use astronomical_supervisor::{
+    GenerationPerformanceLog, ImageGenerationTimeouts, WorkerControlError, WorkerHandle,
+};
 
 const DEFAULT_TEST_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -46,6 +48,22 @@ pub(crate) async fn launch_test_executor_with_cancellation_acknowledgement_timeo
         worker_executable_path,
         DEFAULT_TEST_MODEL_LOAD_TIMEOUT,
         worker_cancellation_acknowledgement_timeout,
+        test_performance_log(),
+        Arc::new(HashMap::new()),
+    )
+    .await
+}
+
+pub(crate) async fn launch_test_executor_with_image_generation_timeouts(
+    worker_executable_path: impl AsRef<Path>,
+    cancellation_acknowledgement_timeout: Duration,
+    image_generation_timeouts: ImageGenerationTimeouts,
+) -> Result<WorkerHandle, WorkerControlError> {
+    WorkerHandle::launch_with_image_generation_timeouts(
+        worker_executable_path,
+        DEFAULT_TEST_MODEL_LOAD_TIMEOUT,
+        cancellation_acknowledgement_timeout,
+        image_generation_timeouts,
         test_performance_log(),
         Arc::new(HashMap::new()),
     )

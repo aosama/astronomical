@@ -48,6 +48,7 @@
 - Post-forward peak memory includes expert pages promoted during that forward. Subtract newly retained expert payload before teaching the context-and-activation budget, or the next plan reserves those experts twice and discards the topology it just created.
 - Keep the geometry-derived cold prefill activation floor after cheaper observations. Letting one smaller chunk lower that floor can expand complete-layer retention before a later larger chunk and reproduce the near-ceiling scheduling cliff.
 - Keep every cross-component fit, reclamation, demotion, retry, residency, and live-ceiling decision behind that memory owner. Paging, caches, and model execution should report exact requirements and enact typed plans; letting each mechanism recombine the same ceiling and reserves creates conflicting retention limits, avoidable eviction, and repeated solid-state-drive reads.
+- Derive an adaptive image model's minimum MLX ceiling from its smallest safe streamed geometry, not the residency selected under the current ceiling. Take the maximum of streamed text, fixed transformer execution with no retained blocks, complete variational autoencoder decoding with workspace and RGB output, and RGB plus PNG plus base64 encoding overlap; otherwise a high initial ceiling retains extra blocks and falsely prevents a safe later reduction.
 - Distinguish predicted forward peak from recovery policy in expert-demotion decisions. A second copy of the learned transient high-water window is not simultaneous expected usage. Log stable, peak, and recovery projections separately and identify a recovery-only trigger before demoting a complete resident model; otherwise conservative retry headroom can force solid-state-drive streaming even when the measured forward peak fits the approved transient ceiling.
 - A no-op attribution recorder does not make its arguments free. Guard diagnostic manifest construction, graphics-processor route readback, source-interval traversal, clocks, and allocation behind the enabled boundary so disabled serving does not compute evidence that will be discarded.
 - `async_eval` is not a retirement or validation barrier. A true downstream `eval` root, or exact-stream `synchronize` only when no retained root exists, is the safe host completion API for expert-page correctness.
@@ -134,6 +135,18 @@
 - JavaScript Object Notation integer arrays are unsuitable for binary image payloads because decimal text and separators multiply transfer size and serialization work. Keep byte buffers internally and use standard padded base64 only at the inter-process communication boundary.
 - Enforce frame limits after serialization. Reject an oversized generation command as a request-scoped error while preserving the loaded worker; retain worker containment for transport failures, timeouts, and malformed protocol traffic.
 
+## Diffusion image pipelines
+
+- Treat text conditioning, denoising, variational-autoencoder decoding, and image encoding as sequential owners under one Machine Learning framework for Apple silicon memory ceiling. Release phase-local arrays before loading the next component.
+- Stream text-encoder layers while retaining only the hidden-state taps consumed by the denoising transformer. Retaining every intermediate state makes graphics-processor memory grow with model depth.
+- Keep flow-schedule scalar construction on the central processing unit in 64-bit floating point. Apply each Euler update to the latent in 32-bit floating point, then return to the model activation type; updating directly in brain floating point 16 rounds before accumulation.
+- Submit bounded transformer block groups so cancellation and attribution have real evaluation boundaries. Select block residency from artifact bytes and the effective memory ceiling rather than one machine profile.
+- Independent variational-autoencoder tiles do not preserve global group-normalization statistics or middle spatial attention. Require complete decoding unless an exact decomposition is established; overlap and cropping alone cannot provide arithmetic parity.
+- Finalize image requests only after synchronizing the model stream, releasing request arrays, clearing reclaimable allocator storage, and sampling final memory. Keep the completed payload private until this boundary.
+- Bind diffusion performance qualification to an independently generated decoded-image oracle containing exact source revisions, model revision, prompt digest, generation controls, and bounded pixel tolerances. Same-runtime seeded repetition detects instability but cannot prevent a consistently incorrect optimization from passing.
+- Bind cross-runtime diffusion inputs to the pseudorandom implementation version, key, data type, tensor layout, shape, and a digest after conversion to a portable byte order. A shared seed does not establish identical initial noise when pseudorandom algorithms or packing paths differ.
+- Keep reference-input validation and cancellation cleanup outside a seeded repetition journey's deadline. Combining those distinct workloads with repeated complete generation turns a responsiveness bound into an accidental machine-throughput requirement and obscures which operation regressed.
+
 ## Cache types are different
 
 - Do not confuse model state, the MLX allocator cache, and the system Metal pipeline cache.
@@ -215,6 +228,7 @@
 - Preserve the model-load cause chain across the worker boundary and return a dedicated local application programming interface error. A generic worker-unavailable response hides correctable artifact or quantization failures and encourages unnecessary worker restarts.
 - Keep disabled diagnostic state pointer-sized. Inline fixed arrays enlarge every variant of a command enum and make each decode command pay for diagnostics; allocate the bounded accumulator only when attribution is enabled.
 - Handle valid process-scoped telemetry and configuration events while waiting for a model-swap acknowledgement. Periodic idle sampling can be queued before the swap command; rejecting it terminates a healthy worker and repeats model loading.
+- Treat every validated grouped image-generation progress event as a liveness heartbeat, even when the public phase and completed denoising-step count are unchanged. Requiring a semantic step change makes stall detection depend on laptop speed and can terminate healthy low-memory execution between bounded text-encoder, transformer, or decoder groups.
 
 ## Expert paging
 

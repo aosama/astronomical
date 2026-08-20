@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use astronomical_ipc_protocol::{WorkerChunkingConfiguration, WorkerModelConfiguration};
+use astronomical_ipc_protocol::{
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
+};
 use astronomical_supervisor::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 
 use super::*;
@@ -240,39 +242,47 @@ fn runtime_model_policy(
         default_maximum_context_tokens: 262_144,
         configured_chunking_fields: Default::default(),
         acceleration_availability: Default::default(),
-        worker_model_configuration: WorkerModelConfiguration {
-            model_id: model_id.to_owned(),
-            maximum_context_tokens: 262_144,
-            maximum_output_tokens: u32::from(u16::MAX),
-            chunking: WorkerChunkingConfiguration {
-                fixed_prompt_processing_chunk_size_tokens: 2_048,
-                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
-                full_attention_key_value_growth_tokens: 256,
-                speculative_prefill_draft_forward_tokens: 2_048,
-                prefill_graph_submission_layer_interval: 1,
-                experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                prompt_cache_block_tokens: None,
-                prompt_cache_common_prefix_stride_blocks: 4,
+        worker_model_configuration: WorkerModelConfiguration::Autoregressive(
+            WorkerAutoregressiveModelConfiguration {
+                model_id: model_id.to_owned(),
+                maximum_context_tokens: 262_144,
+                maximum_output_tokens: u32::from(u16::MAX),
+                chunking: WorkerChunkingConfiguration {
+                    fixed_prompt_processing_chunk_size_tokens: 2_048,
+                    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+                    full_attention_key_value_growth_tokens: 256,
+                    speculative_prefill_draft_forward_tokens: 2_048,
+                    prefill_graph_submission_layer_interval: 1,
+                    experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
+                    prompt_cache_block_tokens: None,
+                    prompt_cache_common_prefix_stride_blocks: 4,
+                },
+                mtp_draft_depth: None,
+                mtp_head_model: None,
+                speculative_prefill: None,
             },
-            mtp_draft_depth: None,
-            mtp_head_model: None,
-            speculative_prefill: None,
-        },
+        ),
     }
 }
 
 fn discovered_model(model_id: &str) -> astronomical_config::DiscoveredModel {
     astronomical_config::DiscoveredModel {
         model_id: model_id.to_owned(),
+        provider_model_id: None,
         model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/fictional/models/{model_id}")),
-        context_window: 262_144,
-        max_input_tokens: 262_143,
-        max_output_tokens: u32::from(u16::MAX),
-        has_vision: false,
-        supports_reasoning: true,
-        supports_tool_calls: true,
+        capabilities: astronomical_config::ModelCapabilities::Chat(
+            astronomical_config::ChatModelCapabilities {
+                context_window: 262_144,
+                max_input_tokens: 262_143,
+                max_output_tokens: u32::from(u16::MAX),
+                supports_vision: false,
+                supports_reasoning: true,
+                supports_tool_calls: true,
+            },
+        ),
+        license: None,
         model_size_bytes: 1,
     }
 }

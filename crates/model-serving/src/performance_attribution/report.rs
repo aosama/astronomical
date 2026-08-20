@@ -54,6 +54,7 @@ pub struct GenerationPerformanceAttributionMetadata {
 pub enum PerformanceAttributionReport {
     ModelLoading(ModelLoadingPerformanceAttributionReport),
     Generation(GenerationPerformanceAttributionReport),
+    ImageGeneration(ImageGenerationPerformanceAttributionReport),
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -88,6 +89,31 @@ pub struct GenerationPerformanceAttributionReport {
     mlx_peak_memory_bytes: Option<u64>,
     failure_description: Option<String>,
     previous_token_expert_route_reuse_by_layer: Vec<PreviousTokenExpertRouteReuseByLayerReport>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ImageGenerationPerformanceAttributionReport {
+    #[serde(flatten)]
+    common: CommonPerformanceAttributionReport,
+    request_id: u64,
+    model_id: String,
+    model_revision: String,
+    width_pixels: u32,
+    height_pixels: u32,
+    steps: u16,
+    guidance_thousandths: u32,
+    seed: u64,
+    encoded_bytes: Option<u64>,
+    memory_snapshots: [ImageGenerationMemorySnapshot; 2],
+    failure_description: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ImageGenerationMemorySnapshot {
+    phase: &'static str,
+    mlx_active_memory_bytes: Option<u64>,
+    mlx_allocator_cache_memory_bytes: Option<u64>,
+    mlx_peak_memory_bytes: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -203,6 +229,58 @@ impl PerformanceAttribution {
                     .collect(),
             },
         ))
+    }
+
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn finish_image_generation(
+        self,
+        outcome: PerformanceAttributionOutcome,
+        request_id: u64,
+        model_id: String,
+        model_revision: String,
+        width_pixels: u32,
+        height_pixels: u32,
+        steps: u16,
+        guidance_thousandths: u32,
+        seed: u64,
+        encoded_bytes: Option<u64>,
+        request_start_memory: (Option<u64>, Option<u64>, Option<u64>),
+        final_cleanup_memory: (Option<u64>, Option<u64>, Option<u64>),
+        failure_description: Option<String>,
+    ) -> Option<PerformanceAttributionReport> {
+        let enabled_attribution = self.enabled_attribution?;
+        Some(PerformanceAttributionReport::ImageGeneration(
+            ImageGenerationPerformanceAttributionReport {
+                common: enabled_attribution.finish_common_report(outcome),
+                request_id,
+                model_id,
+                model_revision,
+                width_pixels,
+                height_pixels,
+                steps,
+                guidance_thousandths,
+                seed,
+                encoded_bytes,
+                memory_snapshots: [
+                    image_memory_snapshot("request_start", request_start_memory),
+                    image_memory_snapshot("final_cleanup", final_cleanup_memory),
+                ],
+                failure_description,
+            },
+        ))
+    }
+}
+
+fn image_memory_snapshot(
+    phase: &'static str,
+    memory: (Option<u64>, Option<u64>, Option<u64>),
+) -> ImageGenerationMemorySnapshot {
+    ImageGenerationMemorySnapshot {
+        phase,
+        mlx_active_memory_bytes: memory.0,
+        mlx_allocator_cache_memory_bytes: memory.1,
+        mlx_peak_memory_bytes: memory.2,
     }
 }
 

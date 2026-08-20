@@ -7,14 +7,18 @@ use tokio::io::AsyncWrite;
 use super::support::{ActiveEngineGeneration, engine_generation_error};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{
-    EngineBackedWorker, GenerationFinalization, InferenceEngine, MlxMemoryTelemetry,
-    WorkerRuntimeError,
+    EngineBackedWorker, GenerationFinalization, ImageGenerationEngine, InferenceEngine,
+    MlxMemoryTelemetry, WorkerRuntimeError,
 };
 
-impl<Processor, Engine, Factory> EngineBackedWorker<Processor, Engine, Factory>
+use super::LoadedRuntime;
+
+impl<Processor, Engine, Factory, ImageEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
+    ImageEngine: ImageGenerationEngine,
 {
     pub(crate) async fn emit_model_outputs<WriteTransport>(
         &self,
@@ -82,11 +86,11 @@ where
         &mut self,
         request_id: RequestId,
     ) -> Result<GenerationFinalization, WorkerRuntimeError> {
-        let loaded_model = self.loaded_model.as_mut().ok_or_else(|| {
-            WorkerRuntimeError::InferenceEngineGenerationFailed {
+        let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut() else {
+            return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
                 reason: "cancellation was requested before a model was loaded".to_owned(),
-            }
-        })?;
+            });
+        };
         loaded_model
             .engine
             .cancel_generation(request_id)
@@ -174,11 +178,11 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        let loaded_model = self.loaded_model.as_mut().ok_or_else(|| {
-            WorkerRuntimeError::InferenceEngineGenerationFailed {
+        let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut() else {
+            return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
                 reason: "generation completed after the loaded model was removed".to_owned(),
-            }
-        })?;
+            });
+        };
         let final_outputs = loaded_model
             .processor
             .finish_request_output(&mut active_generation.request_output);
@@ -334,7 +338,7 @@ where
         {
             return Ok(());
         }
-        let Some(loaded_model) = self.loaded_model.as_ref() else {
+        let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_ref() else {
             return Ok(());
         };
         match loaded_model
@@ -364,12 +368,17 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        let mlx_memory_snapshot = match self.loaded_model.as_ref() {
-            Some(loaded_model) => loaded_model
+        let mlx_memory_snapshot = match self.loaded_runtime.as_ref() {
+            Some(LoadedRuntime::Autoregressive(loaded_model)) => loaded_model
                 .engine
                 .collect_mlx_memory_telemetry()
                 .await
                 .map_err(engine_generation_error)?
+                .map(|mlx_memory_telemetry| {
+                    worker_memory_snapshot(mlx_memory_snapshot_source, mlx_memory_telemetry)
+                }),
+            Some(LoadedRuntime::Image(image_engine)) => image_engine
+                .collect_mlx_memory_telemetry()
                 .map(|mlx_memory_telemetry| {
                     worker_memory_snapshot(mlx_memory_snapshot_source, mlx_memory_telemetry)
                 }),

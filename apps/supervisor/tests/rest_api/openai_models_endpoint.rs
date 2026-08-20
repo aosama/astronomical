@@ -1,7 +1,10 @@
 use std::{fs, path::PathBuf};
 
-use astronomical_config::DiscoveredModel;
-use astronomical_ipc_protocol::ChatModelCapabilities;
+use astronomical_config::{
+    ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
+    ImageGenerationCapabilities, ModelCapabilities,
+};
+use astronomical_ipc_protocol::{ChatModelCapabilities, WorkerModelCapabilities};
 use astronomical_supervisor::{build_application, build_application_with_discovered_models};
 use axum::{
     body::{Body, to_bytes},
@@ -67,14 +70,15 @@ async fn should_list_the_independent_token_limits_produced_by_model_discovery() 
 #[tokio::test]
 async fn should_list_complete_capabilities_for_a_ready_worker_model() {
     let mut scripted_executor = ScriptedExecutor::ready(Vec::new());
-    scripted_executor.health_snapshot.ready_model_capabilities = Some(ChatModelCapabilities {
-        supports_reasoning: true,
-        supports_tool_calls: true,
-        has_vision: true,
-        max_input_tokens: 262_143,
-        max_output_tokens: 20_480,
-        context_window: 262_144,
-    });
+    scripted_executor.health_snapshot.ready_model_capabilities =
+        Some(WorkerModelCapabilities::from(ChatModelCapabilities {
+            supports_reasoning: true,
+            supports_tool_calls: true,
+            has_vision: true,
+            max_input_tokens: 262_143,
+            max_output_tokens: 20_480,
+            context_window: 262_144,
+        }));
     let application = build_application(scripted_executor);
     let models_response = application
         .oneshot(
@@ -200,10 +204,54 @@ async fn should_list_text_only_input_modality_for_a_discovered_model_without_vis
 }
 
 #[tokio::test]
+async fn should_list_image_model_metadata_without_autoregressive_token_limits() {
+    let application = build_application_with_discovered_models(
+        ScriptedExecutor::ready(Vec::new()),
+        vec![discovered_image_model()],
+    );
+
+    let models_response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/models")
+                .body(Body::empty())
+                .expect("the model-list request should be valid"),
+        )
+        .await
+        .expect("the application should return a model list");
+    let models_body = to_bytes(models_response.into_body(), 8 * 1024)
+        .await
+        .expect("the model-list body should be readable");
+    let model_list_document: serde_json::Value =
+        serde_json::from_slice(&models_body).expect("the model-list body should contain JSON");
+    let advertised_model = &model_list_document["data"][0];
+
+    assert_eq!(advertised_model["id"], "FLUX.2-klein-4B");
+    assert_eq!(
+        advertised_model["input_modalities"],
+        serde_json::json!(["text"])
+    );
+    assert_eq!(
+        advertised_model["output_modalities"],
+        serde_json::json!(["image"])
+    );
+    assert_eq!(
+        advertised_model["supported_endpoints"],
+        serde_json::json!(["/v1/images/generations"])
+    );
+    assert!(advertised_model.get("context_window").is_none());
+    assert!(advertised_model.get("max_input_tokens").is_none());
+    assert!(advertised_model.get("max_output_tokens").is_none());
+}
+
+#[tokio::test]
 async fn should_project_family_derived_reasoning_and_tool_capabilities() {
     let mut discovered_model = discovered_model_with_vision_support(false);
-    discovered_model.supports_reasoning = false;
-    discovered_model.supports_tool_calls = false;
+    let ModelCapabilities::Chat(capabilities) = &mut discovered_model.capabilities else {
+        panic!("the fixture should be a chat model");
+    };
+    capabilities.supports_reasoning = false;
+    capabilities.supports_tool_calls = false;
     let application = build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         vec![discovered_model],
@@ -277,8 +325,11 @@ async fn should_not_advertise_stale_model_metadata_when_the_worker_is_unavailabl
 #[tokio::test]
 async fn should_fail_closed_when_discovered_model_capabilities_are_invalid() {
     let mut invalid_discovered_model = discovered_model_with_vision_support(true);
-    invalid_discovered_model.max_input_tokens = invalid_discovered_model.context_window;
-    invalid_discovered_model.max_output_tokens = 1;
+    let ModelCapabilities::Chat(capabilities) = &mut invalid_discovered_model.capabilities else {
+        panic!("the fixture should be a chat model");
+    };
+    capabilities.max_input_tokens = capabilities.context_window;
+    capabilities.max_output_tokens = 1;
     let application = build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         vec![invalid_discovered_model],
@@ -307,15 +358,36 @@ fn discovered_model_with_vision_support(has_vision: bool) -> DiscoveredModel {
     const CONTEXT_WINDOW: u32 = 262_144;
     DiscoveredModel {
         model_id: DISCOVERED_VISION_MODEL_ID.to_owned(),
+        provider_model_id: None,
         model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/astronomical-discovered-vision-model"),
-        context_window: CONTEXT_WINDOW,
-        max_input_tokens: CONTEXT_WINDOW - 1,
-        max_output_tokens: u32::from(u16::MAX),
-        has_vision,
-        supports_reasoning: true,
-        supports_tool_calls: true,
+        capabilities: ModelCapabilities::Chat(DiscoveredChatModelCapabilities {
+            context_window: CONTEXT_WINDOW,
+            max_input_tokens: CONTEXT_WINDOW - 1,
+            max_output_tokens: u32::from(u16::MAX),
+            supports_vision: has_vision,
+            supports_reasoning: true,
+            supports_tool_calls: true,
+        }),
+        license: None,
+        model_size_bytes: 0,
+    }
+}
+
+fn discovered_image_model() -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: "FLUX.2-klein-4B".to_owned(),
+        provider_model_id: Some("black-forest-labs/FLUX.2-klein-4B".to_owned()),
+        model_family: astronomical_config::ModelFamily::Flux2Klein,
+        revision: "reviewed-revision".to_owned(),
+        model_directory: PathBuf::from("/tmp/fictional-flux-model"),
+        capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
+            supports_text_to_image: true,
+            supports_image_editing: false,
+            supports_multiple_reference_images: false,
+        }),
+        license: Some(astronomical_config::ModelLicense::Apache20),
         model_size_bytes: 0,
     }
 }

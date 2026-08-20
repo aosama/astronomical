@@ -231,7 +231,8 @@ impl ModelGenerationProcessor for LagunaGenerationProcessor {
                 max_input_tokens: context_window.saturating_sub(1),
                 max_output_tokens,
                 context_window,
-            },
+            }
+            .into(),
             mtp_runtime_state,
             mtp_unavailable_reason,
             mtp_depth_status,

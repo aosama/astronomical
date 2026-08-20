@@ -103,7 +103,8 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
                 max_input_tokens: self.max_input_tokens,
                 max_output_tokens: self.max_output_tokens,
                 context_window: self.context_window,
-            },
+            }
+            .into(),
             mtp_runtime_state,
             mtp_unavailable_reason,
             mtp_depth_status,

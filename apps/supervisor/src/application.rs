@@ -1,7 +1,7 @@
 use crate::config_reload::{ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver};
 use crate::status_endpoint::status_check;
 use crate::{
-    ChatGenerationExecutor, WorkerHandle,
+    ImageGenerationExecutor, WorkerHandle,
     console_assets::console_routes,
     openai_chat_endpoint,
     openai_models_endpoint::{list_models, retrieve_model},
@@ -35,7 +35,7 @@ static NEXT_APPLICATION_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct ApplicationState {
     pub(crate) completion_id_namespace: Arc<str>,
     pub(crate) next_chat_request_id: Arc<AtomicU64>,
-    pub(crate) generation_executor: Arc<dyn ChatGenerationExecutor>,
+    pub(crate) generation_executor: Arc<dyn ImageGenerationExecutor>,
     pub(crate) worker_control: Option<WorkerHandle>,
     /// Executable models discovered from configured directories at startup.
     pub(crate) discovered_models: Vec<DiscoveredModel>,
@@ -134,13 +134,13 @@ impl ApplicationState {
 }
 
 /// Builds the bounded HTTP API using the supplied generation executor.
-pub fn build_application(generation_executor: impl ChatGenerationExecutor) -> Router {
+pub fn build_application(generation_executor: impl ImageGenerationExecutor) -> Router {
     build_application_with_discovered_models(generation_executor, Vec::new())
 }
 
 /// Builds the bounded HTTP API with a discovered-model listing.
 pub fn build_application_with_discovered_models(
-    generation_executor: impl ChatGenerationExecutor,
+    generation_executor: impl ImageGenerationExecutor,
     discovered_models: Vec<DiscoveredModel>,
 ) -> Router {
     let application_state = ApplicationState {
@@ -165,7 +165,7 @@ pub fn build_application_with_discovered_models(
 /// The menu bar app calls `POST /v1/control/shutdown` to trigger a graceful
 /// daemon exit without relying on OS signals.
 pub fn build_application_with_shutdown(
-    generation_executor: impl ChatGenerationExecutor,
+    generation_executor: impl ImageGenerationExecutor,
     shutdown_controller: crate::shutdown_control::ShutdownController,
 ) -> Router {
     let application_state = ApplicationState {
@@ -190,7 +190,7 @@ pub fn build_application_with_shutdown(
 /// `Arc<RwLock<ResolvedRuntimeConfig>>` is the live, reloadable runtime state.
 /// The `development_home_directory` supplies isolated Development config reloads.
 pub fn build_development_application_with_reload(
-    generation_executor: impl ChatGenerationExecutor,
+    generation_executor: impl ImageGenerationExecutor,
     reloadable_config: Arc<RwLock<ResolvedRuntimeConfig>>,
     development_home_directory: PathBuf,
 ) -> Router {
@@ -404,6 +404,11 @@ fn application_router(application_state: ApplicationState) -> Router {
             post(openai_responses_endpoint::create_response)
                 .layer(DefaultBodyLimit::max(MAX_OPENAI_CHAT_REQUEST_BODY_BYTES)),
         );
+    let router = router.route(
+        "/v1/images/generations",
+        post(crate::openai_image_generation_endpoint::create_image_generation)
+            .layer(DefaultBodyLimit::max(MAX_OPENAI_CHAT_REQUEST_BODY_BYTES)),
+    );
     let router = if supports_config_reload {
         router.route(
             "/v1/config/reload",

@@ -9,16 +9,18 @@ use astronomical_ipc_protocol::{
     ChatGenerationOutput, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
     ChatToolChoice, ChatToolDefinition, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    SpeculativePrefillRuntimeState, WorkerChunkingConfiguration, WorkerCommand, WorkerEvent,
-    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelConfiguration,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    SpeculativePrefillRuntimeState, WorkerAutoregressiveModelConfiguration,
+    WorkerChunkingConfiguration, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerModelConfiguration, WorkerPromptProcessingPhase,
+    WorkerPromptWorkReuse,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry,
     GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
     MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory,
-    ModelGeneratedTokenTranslation, ModelGenerationOutputError, ModelGenerationProcessor,
-    PreparedInferenceRequest, PreparedModelGeneration, WorkerRuntimeError,
+    ModelFactoryRuntime, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
+    ModelGenerationProcessor, PreparedInferenceRequest, PreparedModelGeneration,
+    WorkerRuntimeError,
 };
 use tokio::{
     io::{AsyncWrite, duplex, split},
@@ -33,12 +35,12 @@ mod model_visible_correction;
 mod prefill_progress;
 mod prompt_cache_stats;
 mod ready_and_model_lifecycle;
-mod scripted_chat_test_doubles;
+pub(super) mod scripted_chat_test_doubles;
 mod scripted_model_factory_test_doubles;
-mod support;
+pub(super) mod support;
 mod tracking_chat_engine;
 
-struct ScriptedInferenceRequest {
+pub(crate) struct ScriptedInferenceRequest {
     prompt_token_count: usize,
 }
 

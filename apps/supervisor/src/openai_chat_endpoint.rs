@@ -1,5 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use astronomical_config::ModelCapabilities;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_rest_contract::{OpenAiChatCompletionRequest, OpenAiErrorResponse};
 use axum::{
@@ -105,6 +106,24 @@ pub(crate) async fn create_chat_completion(
         )
             .into_response();
     };
+    if application_state
+        .discovered_models_snapshot()
+        .iter()
+        .find(|discovered_model| discovered_model.model_id == resolved_model_id)
+        .is_some_and(|discovered_model| {
+            !matches!(discovered_model.capabilities, ModelCapabilities::Chat(_))
+        })
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(OpenAiErrorResponse::invalid_request(
+                "the requested model does not support chat generation",
+                Some("model"),
+                Some("model_capability_mismatch"),
+            )),
+        )
+            .into_response();
+    }
     let should_stream_response = chat_completion_request.stream();
     let includes_usage = chat_completion_request.includes_usage_in_stream();
     let request_parts = match chat_completion_request.into_parts() {

@@ -4,6 +4,7 @@ mod attention_benchmark;
 mod compiled_elementwise_graphs;
 mod compiled_elementwise_shape_polymorphism;
 mod compiled_swiglu;
+mod flux_operations;
 mod metal_kernel;
 mod mlx_runtime;
 mod nvfp4_quantized_operations;

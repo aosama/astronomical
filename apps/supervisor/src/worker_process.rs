@@ -1,12 +1,12 @@
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
     time::{Duration, Instant},
 };
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
-    WorkerStartupConfiguration,
+    ChatGenerationCommand, ImageGenerationCommand, ProtocolReader, ProtocolWriter, RequestId,
+    WorkerCommand, WorkerEvent, WorkerStartupConfiguration,
 };
 use tokio::{
     io::AsyncReadExt,
@@ -58,6 +58,8 @@ pub struct WorkerProcess {
     command_writer: Option<ProtocolWriter<ChildStdin>>,
     event_reader: ProtocolReader<ChildStdout>,
     command_write_timeout: Duration,
+    launch_executable_path: PathBuf,
+    launch_startup_configuration: Option<WorkerStartupConfiguration>,
     shutdown_timeout: Duration,
     stderr_drain_task: Option<JoinHandle<()>>,
     worker_stderr_tail: WorkerStderrTail,
@@ -114,7 +116,9 @@ impl WorkerProcess {
         shutdown_timeout: Duration,
         worker_startup_configuration: Option<WorkerStartupConfiguration>,
     ) -> Result<Self, WorkerControlError> {
-        let mut command = Command::new(worker_executable_path.as_ref());
+        let launch_executable_path = worker_executable_path.as_ref().to_path_buf();
+        let launch_startup_configuration = worker_startup_configuration.clone();
+        let mut command = Command::new(&launch_executable_path);
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -192,6 +196,8 @@ impl WorkerProcess {
             command_writer: Some(command_writer),
             event_reader: ProtocolReader::new(worker_stdout),
             command_write_timeout,
+            launch_executable_path,
+            launch_startup_configuration,
             shutdown_timeout,
             stderr_drain_task: Some(stderr_drain_task),
             worker_stderr_tail,
@@ -200,11 +206,38 @@ impl WorkerProcess {
         })
     }
 
+    /// Starts a clean process from this worker's exact portable launch inputs.
+    pub(crate) async fn relaunch_after_termination(&mut self) -> Result<(), WorkerControlError> {
+        let replacement_worker = Self::launch_with_timeouts_and_startup_configuration(
+            &self.launch_executable_path,
+            self.command_write_timeout,
+            self.shutdown_timeout,
+            self.launch_startup_configuration.clone(),
+        )
+        .await?;
+        *self = replacement_worker;
+        Ok(())
+    }
+
+    pub(crate) fn expected_configuration_generation(&self) -> Option<&str> {
+        self.launch_startup_configuration
+            .as_ref()
+            .map(|configuration| configuration.configuration_generation.as_str())
+    }
+
     pub async fn start_generation(
         &mut self,
         generation_command: ChatGenerationCommand,
     ) -> Result<(), WorkerControlError> {
         self.send_command_with_timeout(&WorkerCommand::Generate(generation_command))
+            .await
+    }
+
+    pub async fn start_image_generation(
+        &mut self,
+        generation_command: ImageGenerationCommand,
+    ) -> Result<(), WorkerControlError> {
+        self.send_command_with_timeout(&WorkerCommand::GenerateImage(generation_command))
             .await
     }
 

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_config::DiscoveredModel;
+use astronomical_config::{DiscoveredModel, ModelCapabilities, ModelFamily};
 use sha2::{Digest, Sha256};
 
 use crate::RuntimeModelPolicy;
@@ -25,7 +25,21 @@ impl ResolvedConfigurationGeneration {
         for discovered_model in ordered_discovered_models {
             update_text(&mut generation_digest, &discovered_model.model_id);
             update_text(&mut generation_digest, &discovered_model.revision);
-            update_number(&mut generation_digest, discovered_model.context_window);
+            update_text(
+                &mut generation_digest,
+                model_family_identity(discovered_model.model_family),
+            );
+            update_optional_text(
+                &mut generation_digest,
+                discovered_model.provider_model_id.as_deref(),
+            );
+            update_optional_text(
+                &mut generation_digest,
+                discovered_model
+                    .license
+                    .map(astronomical_config::ModelLicense::spdx_identifier),
+            );
+            update_model_capabilities(&mut generation_digest, &discovered_model.capabilities);
             update_number(&mut generation_digest, discovered_model.model_size_bytes);
         }
 
@@ -33,12 +47,6 @@ impl ResolvedConfigurationGeneration {
         ordered_model_policies.sort_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
         for (model_id, model_policy) in ordered_model_policies {
             update_text(&mut generation_digest, model_id);
-            update_number(
-                &mut generation_digest,
-                model_policy
-                    .worker_model_configuration
-                    .maximum_context_tokens,
-            );
             update_number(
                 &mut generation_digest,
                 model_policy.generation_defaults.maximum_output_tokens,
@@ -77,6 +85,41 @@ impl ResolvedConfigurationGeneration {
     }
 }
 
+fn model_family_identity(model_family: ModelFamily) -> &'static str {
+    match model_family {
+        ModelFamily::Qwen3_5 => "qwen3_5",
+        ModelFamily::Laguna => "laguna",
+        ModelFamily::DeepSeekV4 => "deepseek_v4",
+        ModelFamily::Flux2Klein => "flux2_klein",
+    }
+}
+
+fn update_model_capabilities(
+    generation_digest: &mut Sha256,
+    model_capabilities: &ModelCapabilities,
+) {
+    match model_capabilities {
+        ModelCapabilities::Chat(capabilities) => {
+            update_text(generation_digest, "chat");
+            update_number(generation_digest, capabilities.context_window);
+            update_number(generation_digest, capabilities.max_input_tokens);
+            update_number(generation_digest, capabilities.max_output_tokens);
+            update_boolean(generation_digest, capabilities.supports_vision);
+            update_boolean(generation_digest, capabilities.supports_reasoning);
+            update_boolean(generation_digest, capabilities.supports_tool_calls);
+        }
+        ModelCapabilities::ImageGeneration(capabilities) => {
+            update_text(generation_digest, "image_generation");
+            update_boolean(generation_digest, capabilities.supports_text_to_image);
+            update_boolean(generation_digest, capabilities.supports_image_editing);
+            update_boolean(
+                generation_digest,
+                capabilities.supports_multiple_reference_images,
+            );
+        }
+    }
+}
+
 fn lowercase_hex(bytes: &[u8]) -> String {
     const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -89,6 +132,20 @@ fn lowercase_hex(bytes: &[u8]) -> String {
 
 fn update_text(generation_digest: &mut Sha256, text: &str) {
     update_bytes(generation_digest, text.as_bytes());
+}
+
+fn update_optional_text(generation_digest: &mut Sha256, text: Option<&str>) {
+    match text {
+        Some(text) => {
+            generation_digest.update([1]);
+            update_text(generation_digest, text);
+        }
+        None => generation_digest.update([0]),
+    }
+}
+
+fn update_boolean(generation_digest: &mut Sha256, state: bool) {
+    generation_digest.update([u8::from(state)]);
 }
 
 fn update_bytes(generation_digest: &mut Sha256, bytes: &[u8]) {

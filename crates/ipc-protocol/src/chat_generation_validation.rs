@@ -13,7 +13,7 @@ const MAX_CHAT_TOP_P_THOUSANDTHS: u16 = 1_000;
 impl ChatGenerationCommand {
     /// Independently validates structured chat history after it crosses the worker boundary.
     pub fn validate(&self) -> Result<(), ChatGenerationValidationError> {
-        if self.model.is_empty() {
+        if self.model.trim().is_empty() {
             return Err(ChatGenerationValidationError::EmptyModelId);
         }
         if self.messages.is_empty() {

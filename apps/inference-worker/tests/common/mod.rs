@@ -58,16 +58,33 @@ pub(crate) fn discovered_model_artifact(
     const CONTEXT_WINDOW: u32 = 262_144;
     astronomical_config::DiscoveredModel {
         model_id: model_id.to_owned(),
+        provider_model_id: None,
         model_family: astronomical_config::ModelFamily::Qwen3_5,
         revision: "local-model-artifact-test".to_owned(),
         model_directory: model_directory.to_path_buf(),
-        context_window: CONTEXT_WINDOW,
-        max_input_tokens: CONTEXT_WINDOW.saturating_sub(1),
-        max_output_tokens,
-        has_vision: true,
-        supports_reasoning: true,
-        supports_tool_calls: true,
+        capabilities: astronomical_config::ModelCapabilities::Chat(
+            astronomical_config::ChatModelCapabilities {
+                context_window: CONTEXT_WINDOW,
+                max_input_tokens: CONTEXT_WINDOW.saturating_sub(1),
+                max_output_tokens,
+                supports_vision: true,
+                supports_reasoning: true,
+                supports_tool_calls: true,
+            },
+        ),
+        license: None,
         model_size_bytes: 0,
+    }
+}
+
+#[cfg(feature = "model-artifact-qualification")]
+#[allow(dead_code)] // Shared by independently feature-gated qualification modules.
+pub(crate) fn chat_capabilities(
+    discovered_model: &astronomical_config::DiscoveredModel,
+) -> Option<&astronomical_config::ChatModelCapabilities> {
+    match &discovered_model.capabilities {
+        astronomical_config::ModelCapabilities::Chat(chat_capabilities) => Some(chat_capabilities),
+        astronomical_config::ModelCapabilities::ImageGeneration(_) => None,
     }
 }
 
