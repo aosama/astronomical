@@ -62,7 +62,7 @@ pub(crate) fn discovered_model_artifact(
         revision: "local-model-artifact-test".to_owned(),
         model_directory: model_directory.to_path_buf(),
         context_window: CONTEXT_WINDOW,
-        max_input_tokens: CONTEXT_WINDOW.saturating_sub(max_output_tokens),
+        max_input_tokens: CONTEXT_WINDOW.saturating_sub(1),
         max_output_tokens,
         has_vision: true,
         supports_reasoning: true,
