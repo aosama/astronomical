@@ -27,7 +27,6 @@ pub(super) fn recognizes_model_type(model_type: Option<&str>) -> bool {
 pub(super) fn discover_model_metadata(
     model_directory: &Path,
     config_value: &serde_json::Value,
-    max_output_tokens: u32,
 ) -> Option<Qwen3_5DiscoveredModelMetadata> {
     if !model_directory
         .join("model.safetensors.index.json")
@@ -76,11 +75,15 @@ pub(super) fn discover_model_metadata(
         .or_else(|| config_value.get("max_position_embeddings"))
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0) as u32;
+    if context_window < 2 {
+        return None;
+    }
+    let protocol_maximum_output_tokens = u32::from(u16::MAX).min(context_window - 1);
 
     Some(Qwen3_5DiscoveredModelMetadata {
         context_window,
-        max_input_tokens: context_window.saturating_sub(max_output_tokens),
-        max_output_tokens,
+        max_input_tokens: context_window - 1,
+        max_output_tokens: protocol_maximum_output_tokens,
         has_vision,
         // The Qwen text processor owns both structured output contracts.
         supports_reasoning: true,

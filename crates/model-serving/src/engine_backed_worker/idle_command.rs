@@ -44,10 +44,10 @@ where
             }
             WorkerCommand::SwapModel {
                 model_directory,
-                max_output_tokens,
+                model_configuration,
             } => {
                 if let Err(swap_error) = self
-                    .swap_model(&model_directory, max_output_tokens, event_writer)
+                    .swap_model(&model_directory, model_configuration, event_writer)
                     .await
                 {
                     let loaded_model_remains_ready = self.loaded_model.is_some();

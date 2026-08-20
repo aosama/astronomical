@@ -122,12 +122,9 @@ impl AstronomicalInstancePaths {
         state_directory: PathBuf,
         runtime_instance: AstronomicalRuntimeInstance,
     ) -> Self {
-        let default_bind_address = match runtime_instance {
-            AstronomicalRuntimeInstance::Stable => STABLE_BIND_ADDRESS,
-            AstronomicalRuntimeInstance::Development => DEVELOPMENT_BIND_ADDRESS,
-        }
-        .parse()
-        .expect("built-in Astronomical loopback addresses must remain valid");
+        // Custom state must coexist with installed channels and parallel test instances without
+        // restoring a user-editable endpoint to the strict public configuration document.
+        let default_bind_address = SocketAddr::from(([127, 0, 0, 1], 0));
         Self {
             runtime_instance: Some(runtime_instance),
             state_directory,

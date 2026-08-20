@@ -59,15 +59,14 @@ async fn run_malformed_swap_journey() {
             .iter()
             .any(|model| model.model_id == MALFORMED_MODEL_ID)
     );
-    let model_directories = Arc::clone(&resolved_config.model_directories);
+    let model_policy_catalog = Arc::clone(&resolved_config.model_policy_catalog);
     let log_directory = isolated_home.path().join("logs");
     std::fs::create_dir_all(&log_directory).expect("the log directory should be created");
     let worker_handle = WorkerHandle::launch_with_startup_configuration(
         &worker_executable_path,
         Duration::from_secs(60),
         GenerationPerformanceLog::open(&log_directory).expect("the performance log should open"),
-        model_directories,
-        8,
+        model_policy_catalog,
         resolved_config.worker_startup_configuration(),
     )
     .await

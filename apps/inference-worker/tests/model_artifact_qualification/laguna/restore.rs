@@ -90,6 +90,8 @@ fn restore_from_reference_artifact() {
     let prompt_cache_home =
         tempfile::tempdir().expect("a temporary prompt-cache root should exist");
     let serving_settings = LagunaServingSettings {
+        maximum_context_tokens: None,
+        maximum_output_tokens: None,
         chunking: Some(WorkerChunkingConfiguration {
             fixed_prompt_processing_chunk_size_tokens: 8_192,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,

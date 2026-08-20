@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::{
-    MlxMemorySnapshotSource, ProtocolWriter, SpeculativePrefillRuntimeState, WorkerEvent,
+    MlxMemorySnapshotSource, ProtocolWriter, WorkerEvent, WorkerModelConfiguration,
 };
 use tokio::io::AsyncWrite;
 
@@ -18,7 +18,7 @@ where
     pub(super) async fn swap_model<WriteTransport>(
         &mut self,
         model_directory: &str,
-        max_output_tokens: u32,
+        model_configuration: WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -30,9 +30,15 @@ where
                 model_load_failure_reason: "model swapping is unavailable".to_owned(),
             });
         };
-        tracing::info!(model_directory, max_output_tokens, "starting model swap");
+        tracing::info!(
+            model_directory,
+            model_id = %model_configuration.model_id,
+            maximum_context_tokens = model_configuration.maximum_context_tokens,
+            maximum_output_tokens = model_configuration.maximum_output_tokens,
+            "starting model swap"
+        );
         let (new_processor, new_engine) = model_factory
-            .create(model_directory, max_output_tokens)
+            .create(model_directory, model_configuration.clone())
             .await
             .map_err(|model_load_failure_reason| {
                 tracing::error!(
@@ -126,10 +132,17 @@ where
         if let Some(mut worker_runtime_feature_configuration) =
             self.worker_runtime_feature_configuration()
         {
-            worker_runtime_feature_configuration.speculative_prefill_enabled = !matches!(
+            let mut loaded_model_runtime_configuration =
+                model_configuration.runtime_configuration();
+            loaded_model_runtime_configuration.speculative_prefill_enabled = !matches!(
                 engine_load_result.speculative_prefill_runtime_state(),
-                SpeculativePrefillRuntimeState::Disabled
+                astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Disabled
             );
+            if !loaded_model_runtime_configuration.speculative_prefill_enabled {
+                loaded_model_runtime_configuration.speculative_prefill = None;
+            }
+            worker_runtime_feature_configuration.loaded_model =
+                Some(loaded_model_runtime_configuration);
             event_writer
                 .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
                     worker_runtime_feature_configuration,

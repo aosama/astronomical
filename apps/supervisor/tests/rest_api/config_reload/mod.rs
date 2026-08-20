@@ -20,11 +20,14 @@ use tower::ServiceExt;
 
 use crate::common::ScriptedExecutor;
 
+mod configuration_status;
+mod generation_admission;
 mod maximum_mlx_memory;
 mod output_limits;
 mod reload_status;
 mod reload_validation;
 mod shutdown;
 mod support;
+mod transactional_replacement;
 
 use support::*;

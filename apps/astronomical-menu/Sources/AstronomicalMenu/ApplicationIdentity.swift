@@ -60,6 +60,8 @@ struct ApplicationIdentity: Equatable, Sendable {
   /// the user's absolute home directory.
   var expectedServerStateDirectory: String { "~/\(stateDirectoryName)" }
 
+  var expectedConfigurationFile: String { "\(expectedServerStateDirectory)/config.json" }
+
   var buildTitle: String {
     let dirtySuffix = isDirty ? "-dirty" : ""
     return "\(version) · \(channel.displayName) · \(commit)\(dirtySuffix)"

@@ -84,11 +84,8 @@ fn configured_dense_qwen3_5_vision_artifact()
     let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for model qualification");
     let maximum_output_tokens = astronomical_config.max_output_tokens();
-    let configured_model_directory_scans = discover_models(
-        astronomical_config.model_directories(),
-        maximum_output_tokens,
-    )
-    .expect("configured model-directory discovery should complete");
+    let configured_model_directory_scans = discover_models(astronomical_config.model_directories())
+        .expect("configured model-directory discovery should complete");
     let mut discovered_vision_models = configured_model_directory_scans
         .into_iter()
         .flat_map(|configured_model_directory_scan| {

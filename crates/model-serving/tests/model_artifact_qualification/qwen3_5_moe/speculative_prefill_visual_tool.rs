@@ -245,42 +245,41 @@ fn configured_text_only_compatible_draft(
             .expect("the visual target should retain tokenizer bytes"),
     )
     .expect("the visual target tokenizer mapping should digest");
-    discover_models(
-        astronomical_config.model_directories(),
-        astronomical_config.max_output_tokens(),
-    )
-    .expect("configured model discovery should complete for text-only draft qualification")
-    .into_iter()
-    .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
-    .filter_map(|discovered_model| {
-        if discovered_model.model_directory == target_model_directory {
-            return None;
-        }
-        let draft_artifact = Qwen3_5ArtifactValidator::new()
-            .validate(&discovered_model.model_directory, 1)
-            .ok()?;
-        let tokenizer_matches = draft_artifact
-            .tokenizer_bytes()
-            .is_some_and(|tokenizer_bytes| {
-                Qwen3_5Tokenizer::token_identifier_mapping_digest(tokenizer_bytes).is_ok_and(
-                    |draft_tokenizer_digest| draft_tokenizer_digest == target_tokenizer_digest,
-                )
-            });
-        let vocabulary_matches =
-            draft_artifact.config().vocabulary_size() == target_artifact.config().vocabulary_size();
-        let is_text_only = draft_artifact
-            .shard_index()
-            .vision_tensor_name_to_shard_file_name()
-            .is_empty();
-        (tokenizer_matches && vocabulary_matches && is_text_only).then_some((
-            draft_artifact.total_payload_bytes(),
-            discovered_model.model_directory,
-            discovered_model.model_id,
-        ))
-    })
-    .min_by_key(|(draft_payload_bytes, _, _)| *draft_payload_bytes)
-    .map(|(_, draft_model_directory, draft_model_id)| (draft_model_directory, draft_model_id))
-    .expect("configured models should contain a tokenizer-compatible text-only Qwen draft")
+    discover_models(astronomical_config.model_directories())
+        .expect("configured model discovery should complete for text-only draft qualification")
+        .into_iter()
+        .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
+        .filter_map(|discovered_model| {
+            if discovered_model.model_directory == target_model_directory {
+                return None;
+            }
+            let draft_artifact = Qwen3_5ArtifactValidator::new()
+                .validate(&discovered_model.model_directory, 1)
+                .ok()?;
+            let tokenizer_matches =
+                draft_artifact
+                    .tokenizer_bytes()
+                    .is_some_and(|tokenizer_bytes| {
+                        Qwen3_5Tokenizer::token_identifier_mapping_digest(tokenizer_bytes)
+                            .is_ok_and(|draft_tokenizer_digest| {
+                                draft_tokenizer_digest == target_tokenizer_digest
+                            })
+                    });
+            let vocabulary_matches = draft_artifact.config().vocabulary_size()
+                == target_artifact.config().vocabulary_size();
+            let is_text_only = draft_artifact
+                .shard_index()
+                .vision_tensor_name_to_shard_file_name()
+                .is_empty();
+            (tokenizer_matches && vocabulary_matches && is_text_only).then_some((
+                draft_artifact.total_payload_bytes(),
+                discovered_model.model_directory,
+                discovered_model.model_id,
+            ))
+        })
+        .min_by_key(|(draft_payload_bytes, _, _)| *draft_payload_bytes)
+        .map(|(_, draft_model_directory, draft_model_id)| (draft_model_directory, draft_model_id))
+        .expect("configured models should contain a tokenizer-compatible text-only Qwen draft")
 }
 
 fn prepare_visual_tool_prompt(

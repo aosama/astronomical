@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json",
+  "title": "Astronomical configuration version 1",
+  "description": "Instance policy and optional per-model preferences for Astronomical.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schema_version", "runtime"],
+  "properties": {
+    "$schema": {
+      "const": "./astronomical-config.schema.json",
+      "description": "Relative path to the offline schema written beside this configuration."
+    },
+    "schema_version": {
+      "const": 1,
+      "description": "Persisted configuration format version used for one-way migration."
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "prompt_cache": {
+      "$ref": "#/$defs/prompt_cache"
+    },
+    "chunking": {
+      "$ref": "#/$defs/chunking"
+    },
+    "models": {
+      "type": "object",
+      "description": "Optional preferences keyed by canonical requestable discovered model ID.",
+      "default": {},
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^\\s\\u0000-\\u001F\\u007F](?:[^\\u0000-\\u001F\\u007F]*[^\\s\\u0000-\\u001F\\u007F])?$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/model"
+      }
+    },
+    "diagnostics": {
+      "$ref": "#/$defs/diagnostics"
+    }
+  },
+  "$defs": {
+    "runtime": {
+      "type": "object",
+      "description": "Instance-wide model discovery and MLX memory policy.",
+      "additionalProperties": false,
+      "required": ["model_directories"],
+      "properties": {
+        "model_directories": {
+          "type": "array",
+          "description": "Absolute directories recursively scanned for supported model artifacts.",
+          "default": [],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^/"
+          },
+          "x-astronomical-apply-mode": "application-restart"
+        },
+        "maximum_mlx_memory_gb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073,
+          "description": "Optional MLX memory ceiling in decimal SI gigabytes; omission selects the machine maximum.",
+          "x-astronomical-apply-mode": "live"
+        }
+      }
+    },
+    "prompt_cache": {
+      "type": "object",
+      "description": "Instance-wide persistent prompt-cache policy.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether Astronomical may read and write the SSD-backed prompt cache.",
+          "x-astronomical-apply-mode": "worker-replacement"
+        },
+        "maximum_size_gb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073,
+          "default": 50,
+          "description": "Global prompt-cache capacity in decimal SI gigabytes.",
+          "x-astronomical-apply-mode": "worker-replacement"
+        }
+      }
+    },
+    "chunking": {
+      "type": "object",
+      "description": "Advanced execution boundaries. Model values override only properties explicitly present here.",
+      "additionalProperties": false,
+      "properties": {
+        "fixed_prompt_processing_chunk_size_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2048,
+          "description": "Maximum ordinary prompt-processing rows evaluated in one forward.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional smaller prompt chunk while sparse experts stream from SSD; it cannot exceed the ordinary chunk.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "full_attention_key_value_growth_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "default": 256,
+          "description": "Append-only attention capacity added by each storage growth operation.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "speculative_prefill_draft_forward_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2048,
+          "description": "Maximum prompt rows evaluated by one speculative drafter forward.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "prefill_graph_submission_layer_interval": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1,
+          "description": "Decoder-layer interval between multi-token prefill graph submissions; zero disables intermediate submission.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "experimental_ssd_paging_generation_graph_submission_layer_interval": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3,
+          "description": "Experimental one-token submission interval used only while sparse experts stream from SSD.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "prompt_cache_block_tokens": {
+          "description": "Exact persistent-cache block length, or null for model-derived sizing.",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "prompt_cache_common_prefix_stride_blocks": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 4,
+          "description": "Cache-block interval between retained common-prefix restart checkpoints.",
+          "x-astronomical-apply-mode": "model-reload"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "description": "Optional policy for one canonical discovered model identity.",
+      "additionalProperties": false,
+      "properties": {
+        "limits": {
+          "$ref": "#/$defs/model_limits"
+        },
+        "generation_defaults": {
+          "$ref": "#/$defs/generation_defaults"
+        },
+        "chunking": {
+          "$ref": "#/$defs/chunking"
+        },
+        "acceleration": {
+          "$ref": "#/$defs/acceleration"
+        }
+      }
+    },
+    "model_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maximum_context_tokens": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "Optional operational ceiling that cannot exceed the discovered artifact context.",
+          "x-astronomical-apply-mode": "next-request"
+        }
+      }
+    },
+    "generation_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "multipleOf": 0.001,
+          "description": "Sampling temperature used only when a request omits temperature.",
+          "x-astronomical-apply-mode": "next-request"
+        },
+        "top_p": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "multipleOf": 0.001,
+          "description": "Nucleus-sampling probability used only when a request omits top_p.",
+          "x-astronomical-apply-mode": "next-request"
+        },
+        "maximum_output_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 20480,
+          "description": "Output-token default used only when a request omits its output limit.",
+          "x-astronomical-apply-mode": "next-request"
+        }
+      }
+    },
+    "acceleration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "speculative_prefill": {
+          "$ref": "#/$defs/speculative_prefill"
+        },
+        "mtp": {
+          "$ref": "#/$defs/mtp"
+        }
+      }
+    },
+    "speculative_prefill": {
+      "type": "object",
+      "description": "Explicit draft-assisted prefill relationship for the containing target model.",
+      "additionalProperties": false,
+      "required": ["draft_model_id"],
+      "properties": {
+        "draft_model_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\s\\u0000-\\u001F\\u007F](?:[^\\u0000-\\u001F\\u007F]*[^\\s\\u0000-\\u001F\\u007F])?$",
+          "description": "Canonical discovered identity of the compatible draft model."
+        },
+        "keep_percentage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20,
+          "description": "Percentage of scored prompt tokens retained for target prefill."
+        },
+        "minimum_prompt_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 8192,
+          "description": "Minimum prompt length eligible for speculative prefill."
+        }
+      },
+      "x-astronomical-apply-mode": "model-reload"
+    },
+    "mtp": {
+      "type": "object",
+      "description": "Automatic multi-token prediction preference for the containing target model.",
+      "additionalProperties": false,
+      "properties": {
+        "head_model_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\s\\u0000-\\u001F\\u007F](?:[^\\u0000-\\u001F\\u007F]*[^\\s\\u0000-\\u001F\\u007F])?$",
+          "description": "Optional canonical discovered identity of a standalone MTP head artifact."
+        },
+        "draft_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Optional proposal depth; omission selects validated artifact policy."
+        }
+      },
+      "x-astronomical-apply-mode": "model-reload"
+    },
+    "diagnostics": {
+      "type": "object",
+      "description": "Bounded diagnostics policy shared by Astronomical processes.",
+      "additionalProperties": false,
+      "properties": {
+        "performance_attribution_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether critical-path operations emit detailed performance attribution.",
+          "x-astronomical-apply-mode": "worker-replacement"
+        },
+        "log_level": {
+          "type": "string",
+          "enum": ["error", "warn", "info", "debug", "trace"],
+          "default": "warn",
+          "description": "Minimum diagnostic verbosity retained in process logs.",
+          "x-astronomical-apply-mode": "worker-replacement"
+        },
+        "retained_log_files": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 7,
+          "description": "Positive number of hourly files retained per process.",
+          "x-astronomical-apply-mode": "worker-replacement"
+        }
+      }
+    }
+  }
+}

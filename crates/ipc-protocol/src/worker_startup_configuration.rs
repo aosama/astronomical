@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::WorkerChunkingConfiguration;
+use crate::WorkerLoadedModelRuntimeConfiguration;
 
 /// Logging verbosity supplied by the supervisor when starting a worker.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -45,30 +45,27 @@ impl WorkerSpeculativePrefillConfiguration {
 ///
 /// This intentionally excludes startup paths and model locations. It proves the
 /// effective policy of the worker process that will serve requests.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerRuntimeFeatureConfiguration {
+    /// Semantic generation applied by this exact worker process.
+    pub configuration_generation: String,
     /// Whether the worker will persist and restore ordinary prompt state.
     pub persistent_prompt_cache_enabled: bool,
-    /// Whether the worker may activate multi-token prediction for a compatible model.
-    pub mtp_enabled: bool,
-    /// Explicit user depth, or `None` for the artifact default and then depth one.
-    pub mtp_draft_depth: Option<u8>,
-    /// Whether the currently bound target model may execute draft-assisted prefill.
-    pub speculative_prefill_enabled: bool,
+    /// Effective global cache capacity, without disclosing its local directory.
+    pub prompt_cache_maximum_size_bytes: u64,
+    /// Present only after a swap binds one concrete model policy.
+    pub loaded_model: Option<WorkerLoadedModelRuntimeConfiguration>,
 }
 
 /// Fully resolved worker-owned startup settings.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerStartupConfiguration {
+    pub configuration_generation: String,
     pub global_prompt_cache_root_directory: PathBuf,
     pub global_prompt_cache_maximum_size_bytes: u64,
     pub persistent_prompt_cache_enabled: bool,
-    pub chunking: WorkerChunkingConfiguration,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
-    pub mtp_enabled: bool,
-    pub mtp_draft_depth: Option<u8>,
-    pub speculative_prefill: WorkerSpeculativePrefillConfiguration,
     pub performance_attribution_enabled: bool,
     pub logging_directory: PathBuf,
     pub logging_level: WorkerLogLevel,

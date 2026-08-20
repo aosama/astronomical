@@ -135,6 +135,15 @@ pub(crate) fn publish_mlx_memory_limit_changed(
         worker_health_snapshot.mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes;
         worker_health_snapshot.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
         worker_health_snapshot.pending_mlx_memory_ceiling_bytes = None;
+        if let Some(configuration_generation) = worker_health_snapshot
+            .pending_configuration_generation
+            .take()
+            && let Some(worker_configuration) = worker_health_snapshot
+                .worker_runtime_feature_configuration
+                .as_mut()
+        {
+            worker_configuration.configuration_generation = configuration_generation;
+        }
         worker_health_snapshot.mlx_memory_limit_error = None;
         worker_health_snapshot.expert_memory_mode = worker_health_snapshot
             .ready_model_id
@@ -152,6 +161,7 @@ pub(crate) fn publish_mlx_memory_limit_rejection(
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
         worker_health_snapshot.pending_mlx_memory_ceiling_bytes = None;
+        worker_health_snapshot.pending_configuration_generation = None;
         worker_health_snapshot.mlx_memory_limit_error = Some(reason);
     }
 }

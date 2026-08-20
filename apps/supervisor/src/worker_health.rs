@@ -227,6 +227,8 @@ pub struct WorkerHealthSnapshot {
     pub minimum_mlx_memory_ceiling_bytes: u64,
     /// Latest accepted limit queued until the active generation finalizes.
     pub pending_mlx_memory_ceiling_bytes: Option<u64>,
+    /// Candidate generation waiting for its queued memory update acknowledgement.
+    pub pending_configuration_generation: Option<String>,
     /// Newest cache-clear request queued behind the active generation.
     pub pending_prompt_cache_clear: Option<PendingPromptCacheClear>,
     /// Bounded last live-memory control failure. Cleared by a later success.
@@ -265,6 +267,7 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
+            pending_configuration_generation: None,
             pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes: 0,
@@ -298,6 +301,9 @@ impl WorkerHealthSnapshot {
             previous_health_snapshot.pending_prompt_cache_clear.clone();
         replacement_health_snapshot.serving_session =
             previous_health_snapshot.serving_session.clone();
+        replacement_health_snapshot.worker_runtime_feature_configuration = previous_health_snapshot
+            .worker_runtime_feature_configuration
+            .clone();
         replacement_health_snapshot
     }
 
@@ -338,6 +344,7 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
             pending_mlx_memory_ceiling_bytes: None,
+            pending_configuration_generation: None,
             pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes,
@@ -369,6 +376,7 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
+            pending_configuration_generation: None,
             pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes: 0,

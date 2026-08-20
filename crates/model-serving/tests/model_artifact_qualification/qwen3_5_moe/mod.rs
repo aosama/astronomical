@@ -166,14 +166,11 @@ fn configured_depth_one_mtp_model_artifacts() -> Vec<(u64, String, std::path::Pa
 
     let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for MTP qualification");
-    let discovered_models = discover_models(
-        astronomical_config.model_directories(),
-        astronomical_config.max_output_tokens(),
-    )
-    .expect("configured model discovery should complete for MTP qualification")
-    .into_iter()
-    .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
-    .collect::<Vec<_>>();
+    let discovered_models = discover_models(astronomical_config.model_directories())
+        .expect("configured model discovery should complete for MTP qualification")
+        .into_iter()
+        .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
+        .collect::<Vec<_>>();
     discovered_models
         .into_iter()
         .filter_map(|discovered_model| {
@@ -219,10 +216,7 @@ fn configured_speculative_prefill_draft_model_artifact(
     .expect("the configured SpecPrefill target tokenizer mapping should digest");
     let maximum_draft_payload_bytes = (target_artifact.total_payload_bytes() / 10)
         .min(MAXIMUM_SPECULATIVE_PREFILL_DRAFT_PAYLOAD_BYTES);
-    let draft_model_candidates = discover_models(
-        astronomical_config.model_directories(),
-        astronomical_config.max_output_tokens(),
-    )
+    let draft_model_candidates = discover_models(astronomical_config.model_directories())
     .expect("configured model discovery should complete for SpecPrefill qualification")
     .into_iter()
     .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
