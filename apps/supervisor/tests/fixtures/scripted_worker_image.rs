@@ -81,7 +81,7 @@ where
             })
         }
         "elapsed-progress-refresh-image-fixture" => {
-            for elapsed_millis in [1, 2, 3] {
+            for (progress_index, elapsed_millis) in [1, 2, 3].into_iter().enumerate() {
                 event_writer
                     .send_event(&WorkerEvent::ImageGenerationProgress {
                         request_id: generation_command.request_id,
@@ -91,7 +91,9 @@ where
                         elapsed_millis,
                     })
                     .await?;
-                tokio::time::sleep(Duration::from_millis(70)).await;
+                if progress_index < 2 {
+                    tokio::time::sleep(Duration::from_millis(600)).await;
+                }
             }
             send_completed_image(generation_command, Duration::ZERO, event_writer).await?;
             Ok(ScriptedImageCommandOutcome::Finished)
