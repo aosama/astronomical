@@ -65,7 +65,7 @@ pub(crate) fn discovered_model_artifact(
         capabilities: astronomical_config::ModelCapabilities::Chat(
             astronomical_config::ChatModelCapabilities {
                 context_window: CONTEXT_WINDOW,
-                max_input_tokens: CONTEXT_WINDOW.saturating_sub(max_output_tokens),
+                max_input_tokens: CONTEXT_WINDOW.saturating_sub(1),
                 max_output_tokens,
                 supports_vision: true,
                 supports_reasoning: true,
