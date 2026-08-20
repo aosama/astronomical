@@ -1,7 +1,11 @@
 //! Validates the unversioned document and atomically migrates representable user intent to v1.
 
 use std::collections::BTreeMap;
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use serde::Deserialize;
 
@@ -12,12 +16,41 @@ use crate::config_document::{
     UserConfigFile,
 };
 use crate::config_file::{
-    parse_and_validate_v1, write_adjacent_schema, write_config_file_bytes_atomically,
+    parse_and_validate_v1, read_existing_config_file_bytes, write_adjacent_schema,
+    write_config_file_bytes_atomically,
 };
 use crate::{AstronomicalConfigError, LogLevel, SpeculativePrefillConfig, discover_models};
 
+const LEGACY_CONFIG_BACKUP_FILE_NAME: &str = "config.legacy-v0.json";
+
 pub(crate) fn migrate_legacy_config(
     config_file_path: &Path,
+    legacy_config_bytes: &[u8],
+    legacy_json: serde_json::Value,
+) -> Result<UserConfigFile, AstronomicalConfigError> {
+    let migration_started_at = Instant::now();
+    tracing::info!(operation = "legacy-config-migration", status = "start");
+    let migration_result =
+        execute_legacy_config_migration(config_file_path, legacy_config_bytes, legacy_json);
+    match &migration_result {
+        Ok(_) => tracing::info!(
+            operation = "legacy-config-migration",
+            status = "success",
+            elapsed_milliseconds = migration_started_at.elapsed().as_millis()
+        ),
+        Err(error) => tracing::warn!(
+            operation = "legacy-config-migration",
+            status = "failed",
+            elapsed_milliseconds = migration_started_at.elapsed().as_millis(),
+            error = %error
+        ),
+    }
+    migration_result
+}
+
+fn execute_legacy_config_migration(
+    config_file_path: &Path,
+    legacy_config_bytes: &[u8],
     legacy_json: serde_json::Value,
 ) -> Result<UserConfigFile, AstronomicalConfigError> {
     let validated_config = prepare_legacy_config_migration(config_file_path, legacy_json)?;
@@ -27,10 +60,80 @@ pub(crate) fn migrate_legacy_config(
             source,
         }
     })?;
-    // The candidate is fully validated before either atomic write can replace user data.
+    // A successful one-way migration must retain recovery material before its commit point.
+    preserve_legacy_config_backup(config_file_path, legacy_config_bytes)?;
     write_adjacent_schema(config_file_path)?;
     write_config_file_bytes_atomically(config_file_path, &migrated_bytes)?;
     Ok(validated_config)
+}
+
+pub(crate) fn preserve_legacy_config_backup(
+    config_file_path: &Path,
+    legacy_config_bytes: &[u8],
+) -> Result<(), AstronomicalConfigError> {
+    let config_directory_path =
+        config_file_path
+            .parent()
+            .ok_or_else(|| AstronomicalConfigError::WriteConfigFile {
+                config_file_path: config_file_path.to_owned(),
+                source: std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "config file has no parent directory",
+                ),
+            })?;
+    let legacy_backup_path = config_directory_path.join(LEGACY_CONFIG_BACKUP_FILE_NAME);
+    let mut legacy_backup_file = match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&legacy_backup_path)
+    {
+        Ok(legacy_backup_file) => legacy_backup_file,
+        Err(source) if source.kind() == std::io::ErrorKind::AlreadyExists => {
+            return accept_matching_existing_backup(&legacy_backup_path, legacy_config_bytes);
+        }
+        Err(source) => {
+            return Err(AstronomicalConfigError::WriteConfigFile {
+                config_file_path: legacy_backup_path,
+                source,
+            });
+        }
+    };
+
+    if let Err(source) = legacy_backup_file
+        .write_all(legacy_config_bytes)
+        .and_then(|()| legacy_backup_file.sync_all())
+    {
+        let _removed_incomplete_backup = fs::remove_file(&legacy_backup_path);
+        return Err(AstronomicalConfigError::WriteConfigFile {
+            config_file_path: legacy_backup_path,
+            source,
+        });
+    }
+    File::open(config_directory_path)
+        .and_then(|config_directory| config_directory.sync_all())
+        .map_err(|source| AstronomicalConfigError::WriteConfigFile {
+            config_file_path: legacy_backup_path,
+            source,
+        })?;
+    Ok(())
+}
+
+fn accept_matching_existing_backup(
+    legacy_backup_path: &Path,
+    legacy_config_bytes: &[u8],
+) -> Result<(), AstronomicalConfigError> {
+    let existing_backup_bytes = read_existing_config_file_bytes(legacy_backup_path)?;
+    if existing_backup_bytes.as_deref() == Some(legacy_config_bytes) {
+        return Ok(());
+    }
+    Err(AstronomicalConfigError::LegacyMigration {
+        description: format!(
+            "the one-time backup at {} already exists with different content; preserve both files and resolve the conflict before retrying",
+            legacy_backup_path.display()
+        ),
+    })
 }
 
 /// Resolves legacy intent without writing so compare-and-commit callers retain ownership.

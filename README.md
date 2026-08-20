@@ -87,7 +87,7 @@ Config, logs, prompt caches, daemon ownership, process locks, and loopback endpo
 
 Serving and qualification tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
 
-On first launch each instance creates its own versioned `config.json` and adjacent offline JSON Schema. Add one or more absolute directories to scan recursively:
+On first launch each instance creates its own versioned `config.json` and adjacent offline JSON Schema. When an existing unversioned configuration can be migrated without changing its behavior, Astronomical preserves its exact bytes once as `config.legacy-v0.json` before atomically replacing `config.json`. An unsafe migration leaves the original configuration unchanged and creates no backup. Add one or more absolute directories to scan recursively:
 
     {
       "$schema": "./astronomical-config.schema.json",

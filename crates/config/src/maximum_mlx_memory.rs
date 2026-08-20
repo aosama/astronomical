@@ -8,6 +8,7 @@ use crate::config_file::{
 };
 use crate::duplicate_key_json::parse_json_rejecting_duplicates;
 use crate::legacy_config_migration::prepare_legacy_config_migration;
+use crate::legacy_config_migration::preserve_legacy_config_backup;
 
 const BYTES_PER_DECIMAL_GIGABYTE: u64 = 1_000_000_000;
 
@@ -80,6 +81,13 @@ pub fn commit_maximum_mlx_memory_gb_update(
     let config_file_path = state_directory.as_ref().join("config.json");
     if read_existing_config_file_bytes(&config_file_path)? != config_update.prior_config_bytes {
         return Err(AstronomicalConfigError::ConfigChangedDuringUpdate);
+    }
+    if let Some(prior_config_bytes) = config_update.prior_config_bytes.as_deref() {
+        let prior_config_json =
+            parse_json_rejecting_duplicates(&config_file_path, prior_config_bytes)?;
+        if prior_config_json.get("schema_version").is_none() {
+            preserve_legacy_config_backup(&config_file_path, prior_config_bytes)?;
+        }
     }
     // The schema precedes the document so every committed config remains locally inspectable.
     write_adjacent_schema(&config_file_path)?;
