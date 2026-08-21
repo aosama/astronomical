@@ -47,6 +47,27 @@ final class MenuControlStateTests: XCTestCase {
   }
 
   @MainActor
+  func test_should_confirm_a_worker_restart_when_polling_overlaps_delayed_confirmation() async {
+    let supervisorClient = OverlappingRestartConfirmationSupervisorClient()
+    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let configurationReloadTask = Task { @MainActor in
+      await telemetryStore.performConfigurationReload()
+    }
+    await supervisorClient.waitUntilFirstStatusRequestIsSuspended()
+
+    let pollingRefreshTask = Task { @MainActor in _ = await telemetryStore.refresh() }
+    await Task.yield()
+    await supervisorClient.resumeFirstStatusRequest()
+    await configurationReloadTask.value
+    await pollingRefreshTask.value
+
+    XCTAssertEqual(
+      telemetryStore.controlActionFeedback,
+      .success("Config reloaded and applied by the worker")
+    )
+  }
+
+  @MainActor
   func test_should_dismiss_a_successful_memory_update_one_second_after_application() async throws {
     let telemetryStore = TelemetryStore(
       supervisorClient: SuccessfulMaximumMlxMemoryUpdateSupervisorClient()
@@ -248,6 +269,59 @@ private struct RestartAcknowledgedAndStatusConfirmedSupervisorClient: Supervisor
       mlxMemoryCeilingBytes: 32_000_000_000,
       servingSession: .empty
     )
+  }
+
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(
+      message: "Config reloaded and applied by the worker",
+      workerRestartCompleted: true,
+      workerRuntimeFeatureConfiguration: appliedFeatureConfiguration
+    )
+  }
+
+  func requestShutdown() async throws {}
+
+  func healthIsAvailable() async -> Bool { true }
+}
+
+private actor OverlappingRestartConfirmationSupervisorClient: SupervisorClient {
+  private let appliedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
+    configurationGeneration: String(repeating: "a", count: 64),
+    persistentPromptCacheEnabled: true,
+    promptCacheMaximumSizeBytes: 50_000_000_000,
+    loadedModel: nil
+  )
+  private var statusRequestCount = 0
+  private var firstStatusRequestContinuation: CheckedContinuation<Void, Never>?
+
+  func fetchStatus() async throws -> SupervisorStatusDocument {
+    statusRequestCount += 1
+    let currentStatusRequestCount = statusRequestCount
+    if currentStatusRequestCount == 1 {
+      await withCheckedContinuation { continuation in
+        firstStatusRequestContinuation = continuation
+      }
+    }
+    return SupervisorStatusDocument(
+      status: "ready",
+      activity: "idle",
+      readyModelIdentifier: nil,
+      progress: nil,
+      expertMemoryMode: nil,
+      workerRuntimeFeatureConfigurationApplied: currentStatusRequestCount > 1,
+      workerRuntimeFeatureConfiguration: appliedFeatureConfiguration,
+      mlxMemoryCeilingBytes: 32_000_000_000,
+      servingSession: .empty
+    )
+  }
+
+  func waitUntilFirstStatusRequestIsSuspended() async {
+    while firstStatusRequestContinuation == nil { await Task.yield() }
+  }
+
+  func resumeFirstStatusRequest() {
+    firstStatusRequestContinuation?.resume()
+    firstStatusRequestContinuation = nil
   }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {

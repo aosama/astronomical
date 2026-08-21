@@ -1,5 +1,9 @@
 import Foundation
 
+private let maximumStatusRefreshErrorCharacterCount = 512
+private let maximumWorkerPolicyConfirmationAttempts = 3
+private let workerPolicyConfirmationRetryDelay = Duration.milliseconds(100)
+
 enum ControlActionFeedback: Equatable {
   case inProgress(String)
   case success(String)
@@ -27,6 +31,7 @@ final class TelemetryStore: ObservableObject {
   @Published private(set) var statusDocument = SupervisorStatusDocument.unavailable
   @Published private(set) var systemTelemetrySnapshot = SystemTelemetrySnapshot.unavailable
   @Published private(set) var controlActionFeedback: ControlActionFeedback?
+  @Published private(set) var lastStatusRefreshErrorMessage: String?
   @Published var editableMaximumMlxMemoryGigabytes: UInt64 = 0
   var onMenuBarTitleChanged: ((String) -> Void)?
 
@@ -34,6 +39,8 @@ final class TelemetryStore: ObservableObject {
   private let systemTelemetrySampler = SystemTelemetrySampler()
   private let systemTelemetryClock = ContinuousClock()
   private var pollingTask: Task<Void, Never>?
+  private var latestStatusRefreshTask: Task<SupervisorStatusDocument, Never>?
+  private var latestStatusRefreshSequence = 0
   private var controlActionFeedbackDismissalTask: Task<Void, Never>?
   private var controlActionFeedbackGeneration = 0
   private var pendingMaximumMlxMemoryCeilingBytes: UInt64?
@@ -91,10 +98,10 @@ final class TelemetryStore: ObservableObject {
         maximumMlxMemoryGigabytes)
       guard controlActionFeedbackGeneration == memoryUpdateFeedbackGeneration else { return }
       let successFeedbackGeneration = presentControlActionFeedback(.success(updateMessage))
-      await refresh()
+      let refreshedStatusDocument = await refresh()
       guard controlActionFeedbackGeneration == successFeedbackGeneration else { return }
-      editableMaximumMlxMemoryGigabytes = statusDocument.configuredMaximumMlxMemoryGigabytes
-        ?? maximumWholeDecimalGigabytes
+      editableMaximumMlxMemoryGigabytes = refreshedStatusDocument.configuredMaximumMlxMemoryGigabytes
+        ?? maximumWholeDecimalGigabytes(for: refreshedStatusDocument)
     } catch {
       guard controlActionFeedbackGeneration == memoryUpdateFeedbackGeneration else { return }
       pendingMaximumMlxMemoryCeilingBytes = nil
@@ -125,14 +132,15 @@ final class TelemetryStore: ObservableObject {
       // the menu must also observe that exact policy in a fresh status document. Otherwise a
       // poll racing with worker replacement could turn stale readiness into a false success.
       if configurationReloadResult.workerRestartCompleted {
-        await refresh()
         guard controlActionFeedbackGeneration == configurationReloadFeedbackGeneration else {
           return
         }
-        guard statusDocument.workerRuntimeFeatureConfigurationApplied,
-          statusDocument.workerRuntimeFeatureConfiguration
-          == configurationReloadResult.workerRuntimeFeatureConfiguration
-        else {
+        let workerPolicyWasConfirmed = await workerPolicyIsConfirmed(
+          configurationReloadResult.workerRuntimeFeatureConfiguration)
+        guard controlActionFeedbackGeneration == configurationReloadFeedbackGeneration else {
+          return
+        }
+        guard workerPolicyWasConfirmed else {
           presentControlActionFeedback(
             .failure("Worker restart completed, but its applied configuration was not confirmed")
           )
@@ -149,6 +157,26 @@ final class TelemetryStore: ObservableObject {
     // Non-restart edits still refresh telemetry, while restart edits already refreshed above
     // before success feedback was allowed.
     await refresh()
+  }
+
+  private func workerPolicyIsConfirmed(
+    _ acknowledgedWorkerPolicy: WorkerRuntimeFeatureConfiguration?
+  ) async -> Bool {
+    for confirmationAttempt in 1...maximumWorkerPolicyConfirmationAttempts {
+      let refreshedStatusDocument = await refresh()
+      if refreshedStatusDocument.workerRuntimeFeatureConfigurationApplied,
+        refreshedStatusDocument.workerRuntimeFeatureConfiguration == acknowledgedWorkerPolicy
+      {
+        return true
+      }
+      guard confirmationAttempt < maximumWorkerPolicyConfirmationAttempts else { return false }
+      do {
+        try await Task.sleep(for: workerPolicyConfirmationRetryDelay)
+      } catch {
+        return false
+      }
+    }
+    return false
   }
 
   func beginServerRestart() {
@@ -170,15 +198,42 @@ final class TelemetryStore: ObservableObject {
     presentControlActionFeedback(.failure(controlActionErrorMessage(startupError)))
   }
 
-  private func refresh() async {
-    let nextStatusDocument = (try? await supervisorClient.fetchStatus()) ?? .unavailable
-    apply(nextStatusDocument)
+  @discardableResult
+  func refresh() async -> SupervisorStatusDocument {
+    latestStatusRefreshSequence += 1
+    let statusRefreshSequence = latestStatusRefreshSequence
+    let precedingStatusRefreshTask = latestStatusRefreshTask
+    let statusRefreshTask = Task { @MainActor [weak self] in
+      if let precedingStatusRefreshTask { _ = await precedingStatusRefreshTask.value }
+      guard let self else { return SupervisorStatusDocument.unavailable }
+      return await self.performStatusRefresh()
+    }
+    latestStatusRefreshTask = statusRefreshTask
+    let refreshedStatusDocument = await statusRefreshTask.value
+    if statusRefreshSequence == latestStatusRefreshSequence {
+      latestStatusRefreshTask = nil
+    }
+    return refreshedStatusDocument
+  }
+
+  private func performStatusRefresh() async -> SupervisorStatusDocument {
+    let refreshResult: (statusDocument: SupervisorStatusDocument, errorMessage: String?)
+    do {
+      refreshResult = (try await supervisorClient.fetchStatus(), nil)
+    } catch {
+      // Polling must remain self-healing, while retaining enough bounded context to distinguish
+      // contract drift from an ordinary stopped server during qualification and support.
+      refreshResult = (.unavailable, boundedStatusRefreshErrorMessage(error))
+    }
+    lastStatusRefreshErrorMessage = refreshResult.errorMessage
+    apply(refreshResult.statusDocument)
     if systemTelemetrySamplingIsRequired(
       popoverIsVisible: popoverIsVisible,
-      requestIsActive: nextStatusDocument.isActive
+      requestIsActive: refreshResult.statusDocument.isActive
     ) {
       updateSystemTelemetryIfDue(forceUpdate: false)
     }
+    return refreshResult.statusDocument
   }
 
   private func updateSystemTelemetryIfDue(forceUpdate: Bool) {
@@ -258,6 +313,12 @@ final class TelemetryStore: ObservableObject {
   }
 
   var maximumWholeDecimalGigabytes: UInt64 {
+    maximumWholeDecimalGigabytes(for: statusDocument)
+  }
+
+  private func maximumWholeDecimalGigabytes(
+    for statusDocument: SupervisorStatusDocument
+  ) -> UInt64 {
     statusDocument.machineMlxMemoryCeilingBytes / 1_000_000_000
   }
 
@@ -268,5 +329,31 @@ final class TelemetryStore: ObservableObject {
       return localizedMessage
     }
     return controlActionError.localizedDescription
+  }
+
+  private func boundedStatusRefreshErrorMessage(_ statusRefreshError: Error) -> String {
+    let detailedErrorMessage: String
+    switch statusRefreshError {
+    case let DecodingError.keyNotFound(missingKey, context):
+      detailedErrorMessage = decodingErrorMessage(
+        kind: "Missing field", codingPath: context.codingPath + [missingKey])
+    case let DecodingError.typeMismatch(_, context):
+      detailedErrorMessage = decodingErrorMessage(
+        kind: "Unexpected field type", codingPath: context.codingPath)
+    case let DecodingError.valueNotFound(_, context):
+      detailedErrorMessage = decodingErrorMessage(
+        kind: "Missing field value", codingPath: context.codingPath)
+    case let DecodingError.dataCorrupted(context):
+      detailedErrorMessage = decodingErrorMessage(
+        kind: context.debugDescription, codingPath: context.codingPath)
+    default:
+      detailedErrorMessage = controlActionErrorMessage(statusRefreshError)
+    }
+    return String(detailedErrorMessage.prefix(maximumStatusRefreshErrorCharacterCount))
+  }
+
+  private func decodingErrorMessage(kind: String, codingPath: [CodingKey]) -> String {
+    let fieldPath = codingPath.map(\.stringValue).joined(separator: ".")
+    return fieldPath.isEmpty ? kind : "\(kind) at \(fieldPath)"
   }
 }
