@@ -1,4 +1,5 @@
 use crate::config_reload::{ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver};
+use crate::library::{DownloadCatalog, library_catalog_routes};
 use crate::status_endpoint::status_check;
 use crate::{
     ImageGenerationExecutor, WorkerHandle,
@@ -37,6 +38,8 @@ pub(crate) struct ApplicationState {
     pub(crate) next_chat_request_id: Arc<AtomicU64>,
     pub(crate) generation_executor: Arc<dyn ImageGenerationExecutor>,
     pub(crate) worker_control: Option<WorkerHandle>,
+    /// Immutable release-bundled model catalog validated before production startup.
+    pub(crate) download_catalog: Arc<DownloadCatalog>,
     /// Executable models discovered from configured directories at startup.
     pub(crate) discovered_models: Vec<DiscoveredModel>,
     /// Reloadable runtime config shared by the config-reload endpoint and the
@@ -66,6 +69,7 @@ impl Clone for ApplicationState {
             next_chat_request_id: Arc::clone(&self.next_chat_request_id),
             generation_executor: Arc::clone(&self.generation_executor),
             worker_control: self.worker_control.clone(),
+            download_catalog: Arc::clone(&self.download_catalog),
             discovered_models: self.discovered_models.clone(),
             reloadable_config: self.reloadable_config.clone(),
             configured_config_snapshot: self.configured_config_snapshot.clone(),
@@ -148,7 +152,32 @@ pub fn build_application_with_discovered_models(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
+        download_catalog: Arc::new(DownloadCatalog::empty_v1()),
         discovered_models,
+        reloadable_config: None,
+        configured_config_snapshot: None,
+        configuration_validation_error: Arc::new(RwLock::new(None)),
+        runtime_config_resolver: None,
+        configuration_transition_lock: Arc::new(AsyncMutex::new(())),
+        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        shutdown_controller: None,
+    };
+
+    application_router(application_state)
+}
+
+/// Builds the bounded HTTP API with an explicitly validated download catalog.
+pub fn build_application_with_download_catalog(
+    generation_executor: impl ImageGenerationExecutor,
+    download_catalog: DownloadCatalog,
+) -> Router {
+    let application_state = ApplicationState {
+        completion_id_namespace: completion_id_namespace(),
+        next_chat_request_id: Arc::new(AtomicU64::new(1)),
+        generation_executor: Arc::new(generation_executor),
+        worker_control: None,
+        download_catalog: Arc::new(download_catalog),
+        discovered_models: Vec::new(),
         reloadable_config: None,
         configured_config_snapshot: None,
         configuration_validation_error: Arc::new(RwLock::new(None)),
@@ -173,6 +202,7 @@ pub fn build_application_with_shutdown(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
+        download_catalog: Arc::new(DownloadCatalog::empty_v1()),
         discovered_models: Vec::new(),
         reloadable_config: None,
         configured_config_snapshot: None,
@@ -217,6 +247,7 @@ pub fn build_development_application_with_reload(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
+        download_catalog: Arc::new(DownloadCatalog::empty_v1()),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         configured_config_snapshot,
@@ -342,14 +373,29 @@ pub(crate) fn allocate_chat_request_id(next_chat_request_id: &AtomicU64) -> Opti
         .ok()
 }
 
-/// Builds the bounded HTTP API with both config-reload and shutdown control.
-/// This is the builder used by the production daemon so the menu bar app can
-/// both reload config and request a graceful daemon restart.
+/// Builds control-focused HTTP API variants with an empty test catalog.
 pub fn build_application_with_full_control(
     worker_handle: WorkerHandle,
     reloadable_config: Arc<RwLock<ResolvedRuntimeConfig>>,
     runtime_config_resolver: ResolvedRuntimeConfigResolver,
     shutdown_controller: crate::shutdown_control::ShutdownController,
+) -> Router {
+    build_application_with_full_control_and_download_catalog(
+        worker_handle,
+        reloadable_config,
+        runtime_config_resolver,
+        shutdown_controller,
+        DownloadCatalog::empty_v1(),
+    )
+}
+
+/// Builds the production HTTP API with its startup-validated catalog.
+pub fn build_application_with_full_control_and_download_catalog(
+    worker_handle: WorkerHandle,
+    reloadable_config: Arc<RwLock<ResolvedRuntimeConfig>>,
+    runtime_config_resolver: ResolvedRuntimeConfigResolver,
+    shutdown_controller: crate::shutdown_control::ShutdownController,
+    download_catalog: DownloadCatalog,
 ) -> Router {
     let initial_models = reloadable_config
         .read()
@@ -365,6 +411,7 @@ pub fn build_application_with_full_control(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(worker_handle.clone()),
         worker_control: Some(worker_handle),
+        download_catalog: Arc::new(download_catalog),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         configured_config_snapshot,
@@ -387,6 +434,7 @@ fn application_router(application_state: ApplicationState) -> Router {
         supports_config_reload && application_state.worker_control.is_some();
     let router = Router::new()
         .merge(console_routes())
+        .merge(library_catalog_routes())
         .merge(system_telemetry_routes())
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))

@@ -4,7 +4,7 @@
 //! runtime config and a candidate config into one of three decisions:
 //! no worker restart, worker restart, or full REST API restart.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -114,7 +114,9 @@ impl ResolvedRuntimeConfigResolver {
             .instance_paths
             .validate_configured_bind_address(user_config.supervisor_bind_address()?)?;
         let configured_model_directories = user_config.model_directories().to_vec();
-        let mut discovered_models = discover_models(&configured_model_directories)?
+        let effective_model_directories =
+            self.effective_model_directories(&configured_model_directories)?;
+        let mut discovered_models = discover_models(&effective_model_directories)?
             .into_iter()
             .flat_map(|directory_scan| directory_scan.discovered_models)
             .collect::<Vec<_>>();
@@ -178,6 +180,35 @@ impl ResolvedRuntimeConfigResolver {
             logging_config,
         })
     }
+
+    fn effective_model_directories(
+        &self,
+        configured_model_directories: &[PathBuf],
+    ) -> Result<Vec<PathBuf>, ResolvedRuntimeConfigError> {
+        let automatic_model_directory = self.instance_paths.models_directory();
+        let mut ordered_model_directories =
+            Vec::with_capacity(configured_model_directories.len() + 1);
+        // Only the automatic occurrence is optional; an authored occurrence must reach discovery
+        // so a missing configured root retains its actionable failure.
+        match automatic_model_directory.try_exists() {
+            Ok(true) => ordered_model_directories.push(automatic_model_directory.clone()),
+            Ok(false) => {}
+            Err(source) => {
+                return Err(
+                    ResolvedRuntimeConfigError::AutomaticModelDirectoryMetadata {
+                        model_directory: automatic_model_directory,
+                        source,
+                    },
+                );
+            }
+        }
+        ordered_model_directories.extend(configured_model_directories.iter().cloned());
+
+        let mut seen_model_directories = HashSet::with_capacity(ordered_model_directories.len());
+        ordered_model_directories
+            .retain(|model_directory| seen_model_directories.insert(model_directory.clone()));
+        Ok(ordered_model_directories)
+    }
 }
 
 impl ResolvedRuntimeConfig {
@@ -214,7 +245,14 @@ impl ResolvedRuntimeConfig {
 pub enum ResolvedRuntimeConfigError {
     #[error("invalid Astronomical configuration: {0}")]
     Configuration(#[from] AstronomicalConfigError),
-    #[error("failed to discover configured models")]
+    /// Metadata access failed before the optional automatic root could be classified as present.
+    #[error("failed to inspect automatic model directory {model_directory:?}: {source}")]
+    AutomaticModelDirectoryMetadata {
+        model_directory: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to discover models")]
     ModelDiscovery(#[from] DiscoveredModelError),
     #[error("failed to derive the resolved configuration generation")]
     ResolvedGeneration(#[from] serde_json::Error),

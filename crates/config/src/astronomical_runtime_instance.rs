@@ -195,6 +195,11 @@ impl AstronomicalInstancePaths {
     }
 
     #[must_use]
+    pub fn models_directory(&self) -> PathBuf {
+        self.state_directory.join("models")
+    }
+
+    #[must_use]
     pub fn logging_directory(&self) -> PathBuf {
         self.state_directory.join("logs")
     }

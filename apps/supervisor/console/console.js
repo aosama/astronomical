@@ -14,6 +14,7 @@ const OBSERVATORY_PATH_MAP = {
     overview: "/overview",
     chat: "/chat",
     model: "/model",
+    library: "/library",
     settings: "/settings"
 };
 
@@ -31,6 +32,7 @@ const sparklineHitRateBuffer = [];
 document.addEventListener("DOMContentLoaded", () => {
     console.log("observatory boot");
     wireObservatoryNavigation();
+    wireLibraryCatalog();
     pollStatus();
     pollCacheStats();
     pollModels();
