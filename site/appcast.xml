@@ -4,30 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.8</title>
-            <pubDate>Thu, 20 Aug 2026 20:04:10 -0400</pubDate>
-            <sparkle:version>257</sparkle:version>
-            <sparkle:shortVersionString>0.2.8</sparkle:shortVersionString>
+            <title>0.2.9</title>
+            <pubDate>Thu, 20 Aug 2026 21:32:55 -0400</pubDate>
+            <sparkle:version>263</sparkle:version>
+            <sparkle:shortVersionString>0.2.9</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Adds native text-to-image generation with the pinned FLUX.2 Klein 4B model profile on Apple Silicon.
-- Adds the OpenAI-compatible `POST /v1/images/generations` endpoint with deterministic seed controls and lossless RGB PNG output from 64 × 64 through 1,024 × 1,024 pixels.
-- Adds automatic chat-to-image model swapping while retaining one resident model, shared bounded request admission, cancellation, and reusable worker capacity.
-- Adds adaptive image-generation memory admission and operation-level performance attribution across model loading, text conditioning, denoising, VAE decoding, and PNG encoding.
-- Adds independent reference qualification, repeated deterministic generation checks, and chat-to-image-to-chat lifecycle coverage for the pinned model revision.
+- Restores the loaded-model identity and live activity shown by the macOS menu during image generation.
+- Adds step-based denoising progress and distinct prompt encoding, decoding, and image encoding phases.
+- Corrects in-memory residency presentation for dense image models.
+- Strengthens required pull-request verification with Swift menu contracts and the Rust menu-facing status wire contract.
 
 ## Compatibility
 
-Astronomical 0.2.8 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.9 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing model directories, configuration, prompt caches, and logs remain in place when updating from 0.2.7.
+Existing model directories, configuration, prompt caches, and logs remain in place when updating from 0.2.8.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.8/Astronomical-0.2.8-macOS-arm64.dmg" length="13258386" type="application/octet-stream" sparkle:edSignature="rpA+17AyMpTqk5Y0wJ0Xyklm6jNu5Sx8jQf26N8y5j9epiww24yxdkAErxUIZQTkSYGOi/9PqwL7UTULRWEzAw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.9/Astronomical-0.2.9-macOS-arm64.dmg" length="13258997" type="application/octet-stream" sparkle:edSignature="odCAZbqZIxNtkoEBmX/qadmxj/+8a8bYpPefhHCIDFqV1HTJSLXhYHLxxiPXrvEeRhSKB2g8WvBrdes3N5ZABg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: T3trl8AMn2XJq/1Nsn+VhYnYnUS9gg7YqxKHdqRScabtpfJj4V8/AhTnduQYLrgC6USLEeUUwP5osTJ418pXDA==
-length: 2371
+edSignature: IzWyiie3AttOS7rvSCZKxofhvfmPiNTUmqC/+AJ0QZHrY6N9EM870HPfhcthGAD0NYfw20gMOyXx0CuMG1qzBg==
+length: 1992
 -->
