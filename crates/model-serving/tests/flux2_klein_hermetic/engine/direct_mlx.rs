@@ -1,4 +1,5 @@
 //! Small-geometry qualification of MLX load boundaries, keyed noise, and Euler arithmetic.
+//! Direct tests share one limit contract because MLX runtime initialization is process-wide.
 
 use std::fs;
 
@@ -8,6 +9,10 @@ use astronomical_model_serving::{
     flux2_klein_keyed_noise_and_euler_for_tests,
 };
 use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+
+use crate::common::{
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+};
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
@@ -36,8 +41,8 @@ fn should_construct_the_real_artifact_factory_seam_without_loading_a_model() {
     let engine = Flux2KleinImageEngine::from_model_family_factory(
         model_directory.path(),
         Flux2KleinArtifactProvenance::official(),
-        512_000_000,
-        8_000_000,
+        DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+        DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
         false,
         model_directory.path().join("performance.jsonl"),
     );
@@ -52,8 +57,8 @@ fn should_clear_replacement_allocator_cache_and_persist_a_bounded_failed_load_re
     let mut engine = Flux2KleinImageEngine::from_model_family_factory(
         model_directory.path(),
         Flux2KleinArtifactProvenance::official(),
-        512_000_000,
-        8_000_000,
+        DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+        DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
         true,
         attribution_log_path.clone(),
     );
@@ -86,8 +91,11 @@ fn should_clear_replacement_allocator_cache_and_persist_a_bounded_failed_load_re
 #[test]
 fn should_preserve_bf16_and_determinism_for_small_keyed_noise_and_euler_geometry() {
     let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(512_000_000, 8_000_000)
-            .expect("the direct-MLX limits should be valid"),
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        )
+        .expect("the direct-MLX limits should be valid"),
     )
     .expect("the pinned MLX runtime should initialize");
     let seed = ROMEO_AND_JULIET_SOURCE
@@ -134,8 +142,11 @@ fn should_preserve_bf16_and_determinism_for_small_keyed_noise_and_euler_geometry
 #[test]
 fn should_accumulate_the_euler_update_in_float32_before_casting_to_bf16() {
     let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(512_000_000, 8_000_000)
-            .expect("the direct-MLX limits should be valid"),
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        )
+        .expect("the direct-MLX limits should be valid"),
     )
     .expect("the pinned MLX runtime should initialize");
     let sample = runtime

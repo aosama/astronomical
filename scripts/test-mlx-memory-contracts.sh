@@ -14,17 +14,20 @@ if [ "$#" -ne 0 ]; then
     exit 2
 fi
 
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
+    exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+        --lane mlx-memory-contracts -- \
+        "${repository_root}/scripts/test-mlx-memory-contracts.sh"
+fi
+CDPATH='' cd -- "$repository_root"
+
 if command -v timeout >/dev/null 2>&1; then
     timeout_executable="$(command -v timeout)"
 elif command -v gtimeout >/dev/null 2>&1; then
     timeout_executable="$(command -v gtimeout)"
 else
     print_error "GNU timeout is required; install Homebrew coreutils"
-    exit 1
-fi
-
-if ! command -v sccache >/dev/null 2>&1; then
-    print_error "sccache is required for MLX memory-contract qualification"
     exit 1
 fi
 
@@ -37,10 +40,14 @@ case "${logical_cpu_count}" in
 esac
 
 export CARGO_BUILD_JOBS="${logical_cpu_count}"
-export RUSTC_WRAPPER=sccache
+configured_compiler_wrapper="${RUSTC_WRAPPER:-}"
 
-printf '%s\n' "[mlx-memory-contracts] status=compiler_cache compiler_wrapper=${RUSTC_WRAPPER} build_jobs=${CARGO_BUILD_JOBS}"
-sccache --show-stats
+printf '%s\n' "[mlx-memory-contracts] status=compiler_cache compiler_wrapper=${configured_compiler_wrapper:-none} build_jobs=${CARGO_BUILD_JOBS}"
+if [ "${configured_compiler_wrapper##*/}" = "sccache" ] && command -v sccache >/dev/null 2>&1; then
+    sccache --show-stats
+else
+    printf '%s\n' "[mlx-memory-contracts] status=compiler_cache_stats_unavailable compiler_wrapper=${RUSTC_WRAPPER:-none}"
+fi
 
 run_cargo_test_phase() {
     test_phase_name="$1"
