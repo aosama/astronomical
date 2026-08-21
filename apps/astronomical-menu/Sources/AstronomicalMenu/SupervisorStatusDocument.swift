@@ -68,20 +68,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
         try container.decodeIfPresent(UInt64.self, forKey: .speculativePrefillDraftMemoryBytes) ?? 0
     }
   }
-  struct Progress: Codable, Equatable {
-    let phase: String
-    let processedTokens: UInt32
-    let totalTokens: UInt32
-    let elapsedMilliseconds: UInt64
-
-    enum CodingKeys: String, CodingKey {
-      case phase
-      case processedTokens = "processed_tokens"
-      case totalTokens = "total_tokens"
-      case elapsedMilliseconds = "elapsed_ms"
-    }
-  }
-
   struct ServingSession: Codable, Equatable {
     let completedRequestCount: UInt64
     let totalPromptTokenCount: UInt64
@@ -329,112 +315,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mlxMemoryCeilingBytes: 0, servingSession: .empty
   )
 
-  var isActive: Bool {
-    activity == "prompt_processing" || activity == "generation_preparation"
-      || activity == "generating"
-  }
-  // The status endpoint supplies request-elapsed time during prompt processing
-  // and phase-elapsed time during generation. Callers label those boundaries
-  // explicitly instead of presenting both as interchangeable model-forward rates.
-  var currentPhaseTokensPerSecond: Double? {
-    guard let progress, progress.processedTokens > 0, progress.elapsedMilliseconds > 0 else {
-      return nil
-    }
-    return Double(progress.processedTokens) / (Double(progress.elapsedMilliseconds) / 1_000)
-  }
-  var menuBarTitle: String {
-    guard status == "ready" else { return status == "loading" ? " Loading" : "" }
-    if activity == "generating", let currentPhaseTokensPerSecond {
-      return String(format: "GEN %.1f tok/s", currentPhaseTokensPerSecond)
-    }
-    if activity == "generation_preparation" { return "Preparing…" }
-    guard activity == "prompt_processing", let progress else { return "" }
-    let completionPercentageTitle = progress.completionPercentageTitle
-    if progress.phase == "drafter" { return "Drafting…" }
-    guard let currentPhaseTokensPerSecond else { return "Prompt \(completionPercentageTitle)" }
-    return "Prompt \(completionPercentageTitle) · \(Int(currentPhaseTokensPerSecond.rounded())) avg tok/s"
-  }
-  var flightTitle: String {
-    guard isActive else { return "Standing by" }
-    if activity == "generating" {
-      return currentPhaseTokensPerSecond.map { String(format: "Generating · %.1f tok/s", $0) }
-        ?? "Generating"
-    }
-    if activity == "generation_preparation" { return "Preparing generation…" }
-    guard let progress else { return phaseTitle }
-    if progress.phase == "drafter" { return "Drafting…" }
-    guard let currentPhaseTokensPerSecond else {
-      return "Prompt processing · \(progress.completionPercentageTitle)"
-    }
-    return "Prompt processing · \(progress.completionPercentageTitle) · \(Int(currentPhaseTokensPerSecond.rounded())) avg tok/s"
-  }
-  var phaseTitle: String {
-    switch activity {
-    case "generating": "Generating"
-    case "generation_preparation": "Preparing generation"
-    case "prompt_processing": progress?.phase == "drafter" ? "Drafting…" : "Prompt processing"
-    default:
-      switch status {
-      case "ready": "Ready"
-      case "loading": "Loading"
-      default: "Unavailable"
-      }
-    }
-  }
-  var modelFootprintTitle: String {
-    if expertMemoryMode == "resident"
-      || (expertMemoryMode == "hybrid"
-        && expertResidency?.retainsEveryLayerCompletely == true)
-    {
-      return "Fully in memory"
-    }
-    return expertMemoryMode == "paged" || expertMemoryMode == "hybrid"
-      ? "RAM + SSD streaming" : "Not loaded"
-  }
-  var modelDiskSizeTitle: String {
-    readyModelSizeBytes.map(decimalGigabyteText) ?? "Not measured"
-  }
-  var mtpRuntimeStateTitle: String {
-    guard readyModelIdentifier != nil else { return "Not loaded" }
-    switch mtpRuntimeState {
-    case "active": return "Active"
-    case "target_only": return "Standard generation"
-    case "unavailable": return "Unavailable"
-    default: return "Disabled"
-    }
-  }
-  var progressTitle: String {
-    guard let progress else { return "Standing by" }
-    if progress.phase == "generation_preparation" { return "Preparing the first output" }
-    if progress.phase == "drafter" { return "Drafting…" }
-    let tokenCountTitle = "\(progress.processedTokens) / \(progress.totalTokens) tokens"
-    return progress.phase == "generation"
-      ? tokenCountTitle
-      : "\(progress.completionPercentageTitle) · \(tokenCountTitle)"
-  }
-  var elapsedTimeMetricTitle: String {
-    progress?.phase == "generation" || progress?.phase == "generation_preparation"
-      ? "Elapsed" : "Elapsed / ETA"
-  }
-
-  var elapsedTimeTitle: String {
-    guard let progress else { return "Not active" }
-    let elapsedSeconds = Double(progress.elapsedMilliseconds) / 1_000
-    guard progress.phase != "generation" && progress.phase != "generation_preparation" else {
-      return String(format: "%.1f s", elapsedSeconds)
-    }
-    guard progress.processedTokens > 0 else {
-      return String(format: "%.1f s / Calculating", elapsedSeconds)
-    }
-    let remainingTokenCount =
-      progress.totalTokens > progress.processedTokens
-      ? progress.totalTokens - progress.processedTokens : 0
-    let estimatedRemainingSeconds =
-      elapsedSeconds * Double(remainingTokenCount) / Double(progress.processedTokens)
-    return String(format: "%.1f s / %.1f s", elapsedSeconds, estimatedRemainingSeconds)
-  }
-  var progressProcessedTokenCount: UInt32 { progress?.processedTokens ?? 0 }
-  var progressTotalTokenCount: UInt32 { max(1, progress?.totalTokens ?? 1) }
   var mlxMemoryLimitTitle: String { decimalGigabyteText(byteCount: mlxMemoryCeilingBytes) }
   var mlxMemoryActiveBytes: UInt64 { mlxMemorySnapshot?.activeMemoryBytes ?? 0 }
   var mlxMemorySourceTitle: String {
@@ -531,14 +411,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     guard let sessionPromptReuse else { return "No completed prompts" }
     return
       "\(groupedTokenCountText(sessionPromptReuse.reusedPromptTokenCount)) reused · \(groupedTokenCountText(sessionPromptReuse.newPromptTokenCount)) new"
-  }
-}
-
-extension SupervisorStatusDocument.Progress {
-  var completionPercentageTitle: String {
-    guard totalTokens > 0 else { return "0%" }
-    let boundedProcessedTokens = min(processedTokens, totalTokens)
-    return "\(Int((Double(boundedProcessedTokens) / Double(totalTokens) * 100).rounded(.down)))%"
   }
 }
 
