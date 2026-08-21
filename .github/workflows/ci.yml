@@ -28,16 +28,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Fingerprint native build inputs
+      - name: Fingerprint native source inputs
         id: native-build-fingerprint
         shell: bash
         run: |
           set -euo pipefail
-          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          printf '[native-build-fingerprint] status=start started_at=%s\n' "$started_at"
-          native_build_cache_fingerprint="$(scripts/native-build-cache-fingerprint.sh)"
+          started_at_seconds="$(date +%s)"
+          printf '[native-build-fingerprint] status=start started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          native_build_cache_fingerprint="$(scripts/native-build-cache-fingerprint.sh --source-only --profile core)"
           printf 'fingerprint=%s\n' "$native_build_cache_fingerprint" >> "$GITHUB_OUTPUT"
-          printf '[native-build-fingerprint] status=complete fingerprint=%s\n' "$native_build_cache_fingerprint"
+          printf '[native-build-fingerprint] status=complete fingerprint=%s elapsed_seconds=%s\n' \
+            "$native_build_cache_fingerprint" "$(( $(date +%s) - started_at_seconds ))"
       - name: Classify code and static-only changes
         id: classify
         shell: bash
@@ -77,15 +78,10 @@ jobs:
           git diff --name-only "$base_sha" "$head_sha" > "$changed_files_path"
           changed_file_count="$(wc -l < "$changed_files_path" | tr -d '[:space:]')"
           code_changed=false
-
           while IFS= read -r changed_path; do
             case "$changed_path" in
-              site/*|*.md|.github/assets/*|.github/workflows/pages.yml)
-                ;;
-              *)
-                code_changed=true
-                break
-                ;;
+              site/*|*.md|.github/assets/*|.github/workflows/pages.yml) ;;
+              *) code_changed=true; break ;;
             esac
           done < "$changed_files_path"
 
@@ -102,85 +98,342 @@ jobs:
     concurrency:
       group: macos-hermetic-native-${{ needs.detect-changes.outputs.native_build_cache_fingerprint }}
       cancel-in-progress: false
-    # The required check is the cost boundary; cache work must fit inside the same hard cap.
+    # Restore, verification, and publication all remain inside the cost boundary.
     timeout-minutes: 10
+    env:
+      SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Configure compiler cache
+      - name: Resolve native compatibility identity
+        id: native-build-identity
+        shell: bash
+        env:
+          ASTRONOMICAL_NATIVE_BUILD_TYPE: Release
+          ASTRONOMICAL_NATIVE_IDENTITY_TARGET: aarch64-apple-darwin
         run: |
-          printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache" >> "$GITHUB_ENV"
-          printf '%s\n' 'RUSTC_WRAPPER=sccache' >> "$GITHUB_ENV"
-      - name: Restore Rust and native build state
-        id: build-state-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          set -euo pipefail
+          started_at_seconds="$(date +%s)"
+          printf '[native-build-identity] status=start\n'
+          native_build_identity="$(scripts/native-build-cache-fingerprint.sh --profile core)"
+          native_build_store_directory="$HOME/Library/Caches/Astronomical/native-builds"
+          native_store_schema_version="$(tr -d '[:space:]' < crates/runtime-integration/native-build-store-schema-version)"
+          case "$native_store_schema_version" in
+            ''|*[!0-9]*) printf '%s\n' 'Error: native store schema version is invalid' >&2; exit 1 ;;
+          esac
+          native_build_entry_directory="$native_build_store_directory/v$native_store_schema_version/entries/$native_build_identity"
+          native_build_status_file="$RUNNER_TEMP/astronomical-native-build-status"
+          swift_toolchain_manifest="$RUNNER_TEMP/astronomical-swift-toolchain"
+          {
+            xcodebuild -version
+            swift --version
+            xcrun --sdk macosx --show-sdk-version
+            xcrun --sdk macosx --show-sdk-build-version
+          } > "$swift_toolchain_manifest"
+          swift_toolchain_digest_output="$(shasum -a 256 "$swift_toolchain_manifest")"
+          swift_toolchain_identity="${swift_toolchain_digest_output%% *}"
+          {
+            printf 'NATIVE_BUILD_IDENTITY=%s\n' "$native_build_identity"
+            printf 'NATIVE_BUILD_ENTRY_DIRECTORY=%s\n' "$native_build_entry_directory"
+            printf 'SWIFT_TOOLCHAIN_IDENTITY=%s\n' "$swift_toolchain_identity"
+            printf 'ASTRONOMICAL_NATIVE_BUILD_STORE_DIR=%s\n' "$native_build_store_directory"
+            printf 'ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE=%s\n' "$native_build_status_file"
+            printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache"
+            printf '%s\n' 'RUSTC_WRAPPER=sccache'
+          } >> "$GITHUB_ENV"
+          printf 'identity=%s\n' "$native_build_identity" >> "$GITHUB_OUTPUT"
+          printf '[native-build-identity] status=complete identity=%s elapsed_seconds=%s\n' \
+            "$native_build_identity" "$(( $(date +%s) - started_at_seconds ))"
+
+      - name: Start cargo-downloads-cache restoration timer
+        id: cargo-downloads-cache-start
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Restore cargo-downloads-cache
+        id: cargo-downloads-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-            apps/astronomical-menu/.build
-            ~/Library/Caches/Astronomical/sccache
-            ~/Library/Caches/Astronomical/native-dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml') }}-swift-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-source-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}-native-${{ needs.detect-changes.outputs.native_build_cache_fingerprint }}
+          key: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml') }}-swift-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-source-
-            ${{ runner.os }}-${{ runner.arch }}-rust-
-      - name: Report build cache restoration
-        shell: bash
+            astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
+      - name: Report cargo-downloads-cache restoration
         env:
-          CACHE_HIT: ${{ steps.build-state-cache.outputs.cache-hit }}
-          CACHE_MATCHED_KEY: ${{ steps.build-state-cache.outputs.cache-matched-key }}
-          CACHE_PRIMARY_KEY: ${{ steps.build-state-cache.outputs.cache-primary-key }}
-        run: scripts/report-build-cache-restoration.sh
+          CACHE_OWNER: cargo-downloads
+          CACHE_OPERATION: restore
+          CACHE_STEP_OUTCOME: ${{ steps.cargo-downloads-cache.outcome }}
+          CACHE_HIT: ${{ steps.cargo-downloads-cache.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.cargo-downloads-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_KEY: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.cargo-downloads-cache-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start native-archives-cache restoration timer
+        id: native-archives-cache-start
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Restore native-archives-cache
+        id: native-archives-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/Library/Caches/Astronomical/native-dependencies
+          key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
+      - name: Report native-archives-cache restoration
+        env:
+          CACHE_OWNER: native-archives
+          CACHE_OPERATION: restore
+          CACHE_STEP_OUTCOME: ${{ steps.native-archives-cache.outcome }}
+          CACHE_HIT: ${{ steps.native-archives-cache.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.native-archives-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_KEY: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.native-archives-cache-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start native-build-cache restoration timer
+        id: native-build-cache-start
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Restore native-build-cache
+        id: native-build-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
+          key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+          restore-keys: |
+            astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-
+      - name: Report native-build-cache restoration
+        env:
+          CACHE_OWNER: native-build
+          CACHE_OPERATION: restore
+          CACHE_STEP_OUTCOME: ${{ steps.native-build-cache.outcome }}
+          CACHE_HIT: ${{ steps.native-build-cache.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.native-build-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_KEY: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.native-build-cache-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start sccache-cache restoration timer
+        id: sccache-cache-start
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Restore sccache-cache
+        id: sccache-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/Library/Caches/Astronomical/sccache
+          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-
+            astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-
+      - name: Report sccache-cache restoration
+        env:
+          CACHE_OWNER: sccache
+          CACHE_OPERATION: restore
+          CACHE_STEP_OUTCOME: ${{ steps.sccache-cache.outcome }}
+          CACHE_HIT: ${{ steps.sccache-cache.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.sccache-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_KEY: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.sccache-cache-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start swiftpm-cache restoration timer
+        id: swiftpm-cache-start
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Restore swiftpm-cache
+        id: swiftpm-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: apps/astronomical-menu/.build
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+          restore-keys: |
+            astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-
+      - name: Report swiftpm-cache restoration
+        env:
+          CACHE_OWNER: swiftpm
+          CACHE_OPERATION: restore
+          CACHE_STEP_OUTCOME: ${{ steps.swiftpm-cache.outcome }}
+          CACHE_HIT: ${{ steps.swiftpm-cache.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.swiftpm-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_KEY: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.swiftpm-cache-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Verify CI native cache contracts
+        run: scripts/test-ci-native-cache-coordination.sh
+        timeout-minutes: 2
       - name: Run macOS menu status contracts
+        id: macos-menu-contracts
         run: scripts/test-macos-menu-contracts.sh
         timeout-minutes: 2
       - name: Install verification tools
         run: |
+          started_at_seconds="$(date +%s)"
+          printf '[verification-tools] status=start\n'
           case "$(brew tap)" in
             *aws/tap*) brew untap aws/tap ;;
           esac
           brew install cargo-about sccache
+          printf '[verification-tools] status=success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
       - name: Verify Rust dependency notices
         run: scripts/generate-rust-dependency-notices.sh --check
         timeout-minutes: 2
       - name: Provision verified native dependencies
+        id: native-archive-provisioning
         run: scripts/bootstrap-native-dependencies.sh
       - name: Set maximum parallel build jobs
         run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
         run: cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
         timeout-minutes: 7
+      - name: Classify native build result
+        id: native-build-result
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE" ] || {
+            printf '%s\n' 'Error: native build status was not published' >&2
+            exit 1
+          }
+          native_build_status="$(tr -d '[:space:]' < "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE")"
+          case "$native_build_status" in
+            built) printf 'was_built=true\n' >> "$GITHUB_OUTPUT" ;;
+            reused) printf 'was_built=false\n' >> "$GITHUB_OUTPUT" ;;
+            *) printf 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
+          esac
+          printf '[native-build-result] status=%s\n' "$native_build_status"
       - name: Run hermetic tests
         run: cargo test --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
         timeout-minutes: 2
       - name: Verify menu-facing status wire contract
         run: cargo test -p astronomical-supervisor --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact
         timeout-minutes: 2
-      - name: Save Rust and native build state
-        if: success() && steps.build-state-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+
+      - name: Start cargo-downloads-cache save timer
+        id: cargo-downloads-cache-save-start
+        if: success() && steps.cargo-downloads-cache.outputs.cache-hit != 'true'
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Save cargo-downloads-cache
+        id: cargo-downloads-cache-save
+        if: success() && steps.cargo-downloads-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-            apps/astronomical-menu/.build
-            ~/Library/Caches/Astronomical/sccache
-            ~/Library/Caches/Astronomical/native-dependencies
-          key: ${{ steps.build-state-cache.outputs.cache-primary-key }}
+          key: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+      - name: Report cargo-downloads-cache save
+        if: always() && steps.cargo-downloads-cache-save-start.outcome == 'success'
+        env:
+          CACHE_OWNER: cargo-downloads
+          CACHE_OPERATION: save
+          CACHE_STEP_OUTCOME: ${{ steps.cargo-downloads-cache-save.outcome }}
+          CACHE_PRIMARY_KEY: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.cargo-downloads-cache-save-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start native-archives-cache save timer
+        id: native-archives-cache-save-start
+        if: success() && steps.native-archives-cache.outputs.cache-hit != 'true'
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Save native-archives-cache
+        id: native-archives-cache-save
+        if: success() && steps.native-archives-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/Library/Caches/Astronomical/native-dependencies
+          key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
+      - name: Report native-archives-cache save
+        if: always() && steps.native-archives-cache-save-start.outcome == 'success'
+        env:
+          CACHE_OWNER: native-archives
+          CACHE_OPERATION: save
+          CACHE_STEP_OUTCOME: ${{ steps.native-archives-cache-save.outcome }}
+          CACHE_PRIMARY_KEY: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.native-archives-cache-save-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start native-build-cache save timer
+        id: native-build-cache-save-start
+        if: success() && steps.native-build-result.outputs.was_built == 'true'
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Save native-build-cache
+        id: native-build-cache-save
+        if: success() && steps.native-build-result.outputs.was_built == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
+          key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+      - name: Report native-build-cache save
+        if: always() && steps.native-build-cache-save-start.outcome == 'success'
+        env:
+          CACHE_OWNER: native-build
+          CACHE_OPERATION: save
+          CACHE_STEP_OUTCOME: ${{ steps.native-build-cache-save.outcome }}
+          CACHE_PRIMARY_KEY: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.native-build-cache-save-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start sccache-cache save timer
+        id: sccache-cache-save-start
+        if: success() && steps.sccache-cache.outputs.cache-hit != 'true'
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Save sccache-cache
+        id: sccache-cache-save
+        if: success() && steps.sccache-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/Library/Caches/Astronomical/sccache
+          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+      - name: Report sccache-cache save
+        if: always() && steps.sccache-cache-save-start.outcome == 'success'
+        env:
+          CACHE_OWNER: sccache
+          CACHE_OPERATION: save
+          CACHE_STEP_OUTCOME: ${{ steps.sccache-cache-save.outcome }}
+          CACHE_PRIMARY_KEY: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.sccache-cache-save-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
+      - name: Start swiftpm-cache save timer
+        id: swiftpm-cache-save-start
+        if: success() && steps.swiftpm-cache.outputs.cache-hit != 'true'
+        run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Save swiftpm-cache
+        id: swiftpm-cache-save
+        if: success() && steps.swiftpm-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: apps/astronomical-menu/.build
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+      - name: Report swiftpm-cache save
+        if: always() && steps.swiftpm-cache-save-start.outcome == 'success'
+        env:
+          CACHE_OWNER: swiftpm
+          CACHE_OPERATION: save
+          CACHE_STEP_OUTCOME: ${{ steps.swiftpm-cache-save.outcome }}
+          CACHE_PRIMARY_KEY: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+          CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.swiftpm-cache-save-start.outputs.started_at }}
+        run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
+
       - name: Upload Cargo timing report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: cargo-timings-macos-hermetic-${{ github.run_attempt }}
           path: target/cargo-timings/
           if-no-files-found: ignore
           retention-days: 7
       - name: Print compiler cache statistics
-        run: sccache --show-stats
         if: always()
+        run: sccache --show-stats

@@ -2,6 +2,7 @@
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
+const NATIVE_BUILD_STORE: &str = include_str!("../../build_native_store.rs");
 const BINDGEN_CONFIGURATION: &str = include_str!("../../build_bindings.rs");
 
 #[test]
@@ -32,6 +33,42 @@ fn should_allowlist_the_pinned_mlx_c_flux_primitives() {
         assert!(
             BINDGEN_CONFIGURATION.contains(required_binding),
             "the narrow bindgen surface must include {required_binding}"
+        );
+    }
+}
+
+#[test]
+fn should_keep_reusable_native_products_outside_the_cargo_output_directory() {
+    assert!(
+        NATIVE_BUILD_SCRIPT.contains("ASTRONOMICAL_NATIVE_BUILD_STORE_DIR"),
+        "native products need a stable store that does not follow Cargo package-version output paths"
+    );
+    assert!(
+        !NATIVE_BUILD_SCRIPT.contains("output_directory.join(\"mlx-c-runtime-build\")"),
+        "the complete CMake tree must not remain under package-version-sensitive OUT_DIR"
+    );
+    assert!(
+        BINDGEN_CONFIGURATION.contains("output_directory.join(\"mlx_c_bindings.rs\")"),
+        "generated Rust bindings remain Cargo-owned because rustc includes them from OUT_DIR"
+    );
+    assert!(
+        NATIVE_BUILD_STORE.contains("entries"),
+        "the reusable store must separate complete compatibility-keyed entries"
+    );
+}
+
+#[test]
+fn should_control_the_compiler_and_sdk_that_define_native_compatibility() {
+    for required_configuration in [
+        "-DCMAKE_C_COMPILER=",
+        "-DCMAKE_CXX_COMPILER=",
+        "-DCMAKE_OSX_SYSROOT=",
+        "-DCMAKE_OSX_ARCHITECTURES=arm64",
+        "remove_uncontrolled_native_environment",
+    ] {
+        assert!(
+            NATIVE_BUILD_SCRIPT.contains(required_configuration),
+            "the native build must control compatibility input {required_configuration}"
         );
     }
 }

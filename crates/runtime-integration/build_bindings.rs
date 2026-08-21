@@ -32,12 +32,12 @@ const BINDGEN_TYPE_ALLOWLIST: &str = concat!(
 );
 
 pub fn generate_bindings(
-    mlx_c_source_directory: &Path,
+    native_include_directory: &Path,
     manifest_directory: &Path,
     output_directory: &Path,
     should_build_experimental_aligned_expert_packs: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let mlx_c_header = mlx_c_source_directory.join("mlx/c/mlx.h");
+    let mlx_c_header = native_include_directory.join("mlx/c/mlx.h");
     let astronomical_metal_expert_loader_header = manifest_directory
         .join("native")
         .join("experimental/aligned_expert_packs/astronomical_metal_expert_loader.h");
@@ -47,7 +47,7 @@ pub fn generate_bindings(
     require_file(&mlx_c_header, "MLX C umbrella header")?;
     let mut bindings_builder = bindgen::Builder::default()
         .header(mlx_c_header.to_string_lossy())
-        .clang_arg(format!("-I{}", mlx_c_source_directory.display()))
+        .clang_arg(format!("-I{}", native_include_directory.display()))
         .allowlist_function(BINDGEN_FUNCTION_ALLOWLIST)
         .allowlist_type(BINDGEN_TYPE_ALLOWLIST);
     if should_build_experimental_aligned_expert_packs {
