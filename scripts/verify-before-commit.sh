@@ -41,17 +41,20 @@ parse_arguments() {
 
 parse_arguments "$@"
 
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
+    exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+        --lane commit-verification -- \
+        "${repository_root}/scripts/verify-before-commit.sh" "$@"
+fi
+CDPATH='' cd -- "$repository_root"
+
 if command -v timeout >/dev/null 2>&1; then
     timeout_executable="$(command -v timeout)"
 elif command -v gtimeout >/dev/null 2>&1; then
     timeout_executable="$(command -v gtimeout)"
 else
     print_error "GNU timeout is required; install Homebrew coreutils"
-    exit 1
-fi
-
-if ! command -v sccache >/dev/null 2>&1; then
-    print_error "sccache is required for commit verification"
     exit 1
 fi
 
@@ -64,16 +67,24 @@ case "${logical_cpu_count}" in
 esac
 
 export CARGO_BUILD_JOBS="${logical_cpu_count}"
-export RUSTC_WRAPPER=sccache
+configured_compiler_wrapper="${RUSTC_WRAPPER:-}"
 
-printf '%s\n' "[commit-verification] compiler_cache=${RUSTC_WRAPPER} build_jobs=${CARGO_BUILD_JOBS} test_threads=${logical_cpu_count}"
+show_compiler_cache_stats() {
+    if [ "${configured_compiler_wrapper##*/}" = "sccache" ] && command -v sccache >/dev/null 2>&1; then
+        sccache --show-stats
+    else
+        printf '%s\n' "[commit-verification] compiler_cache_stats=unavailable compiler_wrapper=${RUSTC_WRAPPER:-none}"
+    fi
+}
+
+printf '%s\n' "[commit-verification] compiler_cache=${configured_compiler_wrapper:-none} build_jobs=${CARGO_BUILD_JOBS} test_threads=${logical_cpu_count}"
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
-    printf '%s\n' "[commit-verification] included_tests=hermetic,ci_native_cache_contract,channel_isolation_contract,macos_app_validation_contract,macos_menu_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,cargo_artifact_lifecycle_contract,cargo_artifact_cleanup_signal_contract,legacy_native_output_cleanup_contract,ci_native_cache_contract,channel_isolation_contract,macos_app_validation_contract,macos_menu_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 else
-    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract,macos_menu_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,cargo_artifact_lifecycle_contract,cargo_artifact_cleanup_signal_contract,legacy_native_output_cleanup_contract,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract,macos_menu_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 fi
-printf '%s\n' "[commit-verification] sccache stats before verification:"
-sccache --show-stats
+printf '%s\n' "[commit-verification] compiler cache stats before verification:"
+show_compiler_cache_stats
 
 if [ "$RUN_HERMITIC_CI_ONLY" != "true" ]; then
     printf '\n%s\n' "[commit-verification] step=rust-dependency-notices timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
@@ -91,6 +102,21 @@ printf '\n%s\n' "[commit-verification] step=ci-native-cache-contract timeout_sec
 ci_native_cache_started_at_seconds="$(date +%s)"
 "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-ci-native-cache-coordination.sh
 printf '%s\n' "[commit-verification] PASSED step=ci-native-cache-contract elapsed_seconds=$(( $(date +%s) - ci_native_cache_started_at_seconds ))"
+
+printf '\n%s\n' "[commit-verification] step=cargo-artifact-lifecycle-contract timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+cargo_artifact_lifecycle_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-cargo-artifact-lifecycle-contract.sh
+printf '%s\n' "[commit-verification] PASSED step=cargo-artifact-lifecycle-contract elapsed_seconds=$(( $(date +%s) - cargo_artifact_lifecycle_started_at_seconds ))"
+
+printf '\n%s\n' "[commit-verification] step=cargo-artifact-cleanup-signal-contract timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+cargo_artifact_cleanup_signal_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-cargo-artifact-cleanup-signal-contract.sh
+printf '%s\n' "[commit-verification] PASSED step=cargo-artifact-cleanup-signal-contract elapsed_seconds=$(( $(date +%s) - cargo_artifact_cleanup_signal_started_at_seconds ))"
+
+printf '\n%s\n' "[commit-verification] step=legacy-native-output-cleanup-contract timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+legacy_native_output_cleanup_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-retired-cargo-native-output-cleanup.sh
+printf '%s\n' "[commit-verification] PASSED step=legacy-native-output-cleanup-contract elapsed_seconds=$(( $(date +%s) - legacy_native_output_cleanup_started_at_seconds ))"
 
 run_cargo_step() {
     step_name="$1"
@@ -134,8 +160,8 @@ run_cargo_step compile-hermetic "${hermetic_compile_timeout_seconds}" test --no-
 
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
     run_cargo_step run-hermetic "${MAXIMUM_TEST_SECONDS}" test --no-fail-fast --jobs "${logical_cpu_count}" -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "${logical_cpu_count}"
-    printf '\n%s\n' "[commit-verification] sccache stats after verification:"
-    sccache --show-stats
+    printf '\n%s\n' "[commit-verification] compiler cache stats after verification:"
+    show_compiler_cache_stats
     printf '\n%s\n' "[commit-verification] ALL STEPS PASSED"
     exit 0
 fi
@@ -144,6 +170,6 @@ run_cargo_step compile-rest-api "${DEFAULT_COMPILE_TIMEOUT_SECONDS}" test --no-f
 run_cargo_step run-hermetic "${MAXIMUM_TEST_SECONDS}" test --no-fail-fast --jobs "${logical_cpu_count}" -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "${logical_cpu_count}"
 run_cargo_step run-rest-api "${MAXIMUM_TEST_SECONDS}" test --no-fail-fast --jobs "${logical_cpu_count}" -p astronomical-rest-contract -p astronomical-supervisor --test rest_api_tests -- --test-threads "${logical_cpu_count}"
 
-printf '\n%s\n' "[commit-verification] sccache stats after verification:"
-sccache --show-stats
+printf '\n%s\n' "[commit-verification] compiler cache stats after verification:"
+show_compiler_cache_stats
 printf '\n%s\n' "[commit-verification] ALL STEPS PASSED"

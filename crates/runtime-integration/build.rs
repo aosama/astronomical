@@ -15,10 +15,12 @@ use std::{
 };
 
 mod build_bindings;
+mod build_legacy_native_output;
 mod build_native_linking;
 mod build_native_store;
 
 use build_bindings::generate_bindings;
+use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 use build_native_linking::configure_rust_linking;
 use build_native_store::{NativeBuildArtifacts, NativeBuildProfile, NativeBuildStore};
 
@@ -66,6 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             native_build_profile,
         )
     })?;
+    remove_legacy_cargo_native_build_directory(&output_directory)?;
     write_native_build_status(&native_build_artifacts)?;
 
     generate_bindings(

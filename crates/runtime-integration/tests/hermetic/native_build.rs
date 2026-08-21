@@ -1,4 +1,11 @@
-//! Structural contracts for native configuration that Cargo cannot infer.
+//! Structural and filesystem contracts for native configuration that Cargo cannot infer.
+
+use std::fs;
+
+#[path = "../../build_legacy_native_output.rs"]
+mod build_legacy_native_output;
+
+use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
@@ -52,9 +59,53 @@ fn should_keep_reusable_native_products_outside_the_cargo_output_directory() {
         "generated Rust bindings remain Cargo-owned because rustc includes them from OUT_DIR"
     );
     assert!(
+        NATIVE_BUILD_SCRIPT.contains("remove_legacy_cargo_native_build_directory"),
+        "the current Cargo build unit must remove the retired complete native tree from OUT_DIR"
+    );
+    assert!(
         NATIVE_BUILD_STORE.contains("entries"),
         "the reusable store must separate complete compatibility-keyed entries"
     );
+}
+
+#[test]
+fn should_remove_only_the_retired_native_tree_from_the_current_cargo_output() {
+    let cargo_output = tempfile::tempdir().expect("the test should create Cargo output");
+    let legacy_native_output = cargo_output.path().join("mlx-c-runtime-build");
+    let retained_bindings = cargo_output.path().join("mlx_c_bindings.rs");
+    fs::create_dir(&legacy_native_output).expect("the test should create legacy native output");
+    fs::write(legacy_native_output.join("CMakeCache.txt"), "retired")
+        .expect("the test should create retired native evidence");
+    fs::write(&retained_bindings, "bindings")
+        .expect("the test should create retained binding evidence");
+
+    remove_legacy_cargo_native_build_directory(cargo_output.path())
+        .expect("the exact retired native directory should be removable");
+
+    assert!(!legacy_native_output.exists());
+    assert!(retained_bindings.is_file());
+}
+
+#[cfg(unix)]
+#[test]
+fn should_refuse_a_symbolic_link_at_the_retired_native_output_boundary() {
+    use std::os::unix::fs::symlink;
+
+    let cargo_output = tempfile::tempdir().expect("the test should create Cargo output");
+    let unowned_directory = tempfile::tempdir().expect("the test should create unowned output");
+    let unowned_evidence = unowned_directory.path().join("evidence");
+    fs::write(&unowned_evidence, "preserve").expect("the test should create unowned evidence");
+    symlink(
+        unowned_directory.path(),
+        cargo_output.path().join("mlx-c-runtime-build"),
+    )
+    .expect("the test should create a symbolic-link boundary");
+
+    let cleanup_error = remove_legacy_cargo_native_build_directory(cargo_output.path())
+        .expect_err("symbolic-link cleanup must be refused");
+
+    assert!(cleanup_error.to_string().contains("refusing"));
+    assert!(unowned_evidence.is_file());
 }
 
 #[test]
