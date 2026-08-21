@@ -17,6 +17,6 @@ execute_process(
     RESULT_VARIABLE patch_application_status
 )
 if(NOT patch_application_status EQUAL 0)
-    message(FATAL_ERROR "Native dependency patch conflicts with generated source state: ${PATCH_FILE}. Remove the generated mlx-c-runtime-build directory and rebuild from the verified archive.")
+    message(FATAL_ERROR "Native dependency patch conflicts with generated source state: ${PATCH_FILE}. Remove only the affected staged native build and rebuild from the verified archive.")
 endif()
 file(TOUCH "${patch_marker_file}")

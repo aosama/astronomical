@@ -70,6 +70,11 @@ option(
     "Build the experimental aligned expert-pack Metal input/output loader"
     OFF
 )
+option(
+    ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE
+    "Build the explicit MLX allocator memory-contract probe"
+    OFF
+)
 
 # These declarations intentionally use the dependency names expected by MLX
 # and MLX C. FetchContent's first declaration wins, so every nested request is

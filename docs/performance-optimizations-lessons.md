@@ -150,6 +150,8 @@
 ## Cache types are different
 
 - Do not confuse model state, the MLX allocator cache, and the system Metal pipeline cache.
+- Cargo `OUT_DIR` follows package identity, not native binary compatibility. Publish expensive native products in a locked, atomic, digest-validated store keyed by native source, architecture, toolchain, software development kit, build type, and feature profile; keep generated Rust bindings in `OUT_DIR`.
+- Cache dependency downloads, verified native archives, compiled native products, compiler outputs, and Swift Package Manager state separately. This prevents an unrelated source change from transferring or republishing unchanged native state; cache Cargo `target` only after measured extraction and transfer evidence proves a net benefit.
 - Model state contains full-attention key-value tensors, linear-attention recurrent state, and convolution state. Clearing it changes generation.
 - The MLX allocator cache holds reusable memory. Clearing it does not clear model context, but retaining too much can trigger a long-context throughput cliff.
 - Treat the macOS GPU wired-memory recommendation as a numeric admission ceiling, not permission to enable MLX per-buffer wired residency. On macOS 26.5.2, allocation-pressure cache reclamation entered MLX residency-set removal and triggered an IOGPU prepare-count-underflow kernel panic. Leave the MLX wired residency set empty while retaining active-memory enforcement and synchronized allocator cleanup.
