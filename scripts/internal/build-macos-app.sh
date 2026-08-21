@@ -120,6 +120,17 @@ sign_code_object() {
 }
 
 main() {
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
+    if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
+        exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+            --lane app-release -- \
+            "${repository_root}/scripts/internal/build-macos-app.sh" "$@"
+    fi
+    [ -n "${CARGO_TARGET_DIR:-}" ] || {
+        print_error "disposable app build is missing CARGO_TARGET_DIR"
+        exit 1
+    }
+
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --channel)
@@ -163,6 +174,7 @@ main() {
     require_command cmake
     require_command xcrun
     require_command cargo
+    require_command rustc
     require_command swift
     require_command sysctl
     require_command codesign
@@ -174,7 +186,6 @@ main() {
     require_command jq
     finish_phase "success"
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     case "$APPLICATION_CHANNEL" in
         development)
             # The .noindex suffix keeps this generated app out of Spotlight
@@ -236,6 +247,13 @@ main() {
 
     start_phase 3 "build optimized release binaries and native menu application"
     logical_cpu_count="$(sysctl -n hw.logicalcpu)"
+    host_target_triple="$(rustc --print host-tuple)"
+    case "$host_target_triple" in
+        ''|*[!A-Za-z0-9_.-]*)
+            print_error "rustc did not return a valid host target triple"
+            exit 1
+            ;;
+    esac
     export CARGO_BUILD_JOBS="$logical_cpu_count"
     if command -v sccache >/dev/null 2>&1; then
         export RUSTC_WRAPPER=sccache
@@ -244,7 +262,7 @@ main() {
         printf '  %s parallel jobs (no sccache detected)\n' "$logical_cpu_count"
     fi
     # Cargo prints its own live compilation progress to stderr.
-    cargo build --release \
+    cargo build --release --target "$host_target_triple" \
         -p astronomical-inference-worker --bin astronomical-inference-worker \
         -p astronomical-supervisor --bin astronomicald
     swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu"
@@ -298,9 +316,10 @@ main() {
 
     cp "${repository_root}/apps/astronomical-menu/.build/release/astronomical-menu" \
        "${app_bundle_path}/Contents/MacOS/astronomical-menu"
-    cp "${repository_root}/target/release/astronomicald" \
+    cargo_release_directory="${CARGO_TARGET_DIR}/${host_target_triple}/release"
+    cp "${cargo_release_directory}/astronomicald" \
        "${app_bundle_path}/Contents/MacOS/astronomicald"
-    cp "${repository_root}/target/release/astronomical-inference-worker" \
+    cp "${cargo_release_directory}/astronomical-inference-worker" \
        "${app_bundle_path}/Contents/MacOS/astronomical-inference-worker"
     cp "${repository_root}/LICENSE" \
        "${app_bundle_path}/Contents/Resources/LICENSE"

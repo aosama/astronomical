@@ -1,9 +1,15 @@
+//! Direct MLX text-conditioning oracles share the process-wide suite memory limits.
+
 use std::fs::File;
 use std::time::Duration;
 
 use super::error::Flux2KleinTextConditioningError;
 use astronomical_runtime_integration::{
     MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime, MlxSafetensors,
+};
+
+use crate::common::{
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
 
 #[allow(dead_code)]
@@ -357,8 +363,11 @@ fn nontraditional_rope_oracle(source_values: &[f32]) -> Vec<f32> {
 
 fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
-        MlxMemoryLimits::new(512_000_000, 8_000_000)
-            .expect("the direct-MLX oracle limits should be valid"),
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        )
+        .expect("the direct-MLX oracle limits should be valid"),
     )
     .expect("the pinned MLX runtime should initialize")
 }
