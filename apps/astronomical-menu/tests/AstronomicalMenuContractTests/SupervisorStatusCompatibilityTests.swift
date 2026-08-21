@@ -4,6 +4,20 @@ import XCTest
 @testable import AstronomicalMenu
 
 final class SupervisorStatusCompatibilityTests: XCTestCase {
+  func test_should_decode_image_generation_progress_from_the_public_status_contract() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","progress":{"phase":"denoising","completed_steps":2,"total_steps":4,"elapsed_ms":1000}}"#.utf8
+      )
+    )
+
+    XCTAssertEqual(statusDocument.readyModelIdentifier, "fictional/flux-model")
+    XCTAssertEqual(statusDocument.progress?.completedUnitCount, 2)
+    XCTAssertEqual(statusDocument.progress?.totalUnitCount, 4)
+    XCTAssertEqual(statusDocument.progress?.unit, .steps)
+  }
+
   func test_should_decode_complete_mtp_depth_status_without_inventing_application() throws {
     let statusDocument = try JSONDecoder().decode(
       SupervisorStatusDocument.self,
