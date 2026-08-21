@@ -38,6 +38,18 @@ fn should_keep_stable_and_development_state_and_endpoints_separate() {
         stable_paths.prompt_cache_directory(),
         development_paths.prompt_cache_directory()
     );
+    assert_eq!(
+        stable_paths.models_directory(),
+        fictional_home_directory.join(".astronomical/models")
+    );
+    assert_eq!(
+        development_paths.models_directory(),
+        fictional_home_directory.join(".astronomical-dev/models")
+    );
+    assert_ne!(
+        stable_paths.models_directory(),
+        development_paths.models_directory()
+    );
     assert_ne!(
         stable_paths.logging_directory(),
         development_paths.logging_directory()
@@ -60,10 +72,15 @@ fn should_keep_every_writable_path_beneath_an_explicit_test_state_directory() {
             .expect("test bind address should parse"),
     );
     assert!(!instance_paths.is_standard_state_directory());
+    assert_eq!(
+        instance_paths.models_directory(),
+        test_state_directory.path().join("models")
+    );
 
     for writable_path in [
         instance_paths.config_file_path(),
         instance_paths.prompt_cache_directory(),
+        instance_paths.models_directory(),
         instance_paths.logging_directory(),
         instance_paths.daemon_ownership_file_path(),
         instance_paths.instance_lock_file_path(),

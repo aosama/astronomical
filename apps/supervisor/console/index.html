@@ -23,6 +23,7 @@
                 <button class="navigation-button" type="button" data-observatory-destination="overview" aria-controls="overview-view" aria-current="page">Overview</button>
                 <button class="navigation-button" type="button" data-observatory-destination="chat" aria-controls="chat-view">Chat</button>
                 <button class="navigation-button" type="button" data-observatory-destination="model" aria-controls="model-view">Model</button>
+                <button class="navigation-button" type="button" data-observatory-destination="library" aria-controls="library-view">Library</button>
                 <button class="navigation-button" type="button" data-observatory-destination="settings" aria-controls="settings-view">Settings</button>
             </nav>
             <p class="sidebar-note">Private, local, and served by astronomicald on this Mac.</p>
@@ -191,6 +192,16 @@
                     </section>
                 </section>
 
+                <section id="library-view" class="observatory-view" data-observatory-view="library" aria-labelledby="library-title" hidden>
+                    <div class="view-heading">
+                        <div><p class="eyebrow">Release catalog</p><h2 id="library-title">Library</h2></div>
+                        <p>Model metadata authored for this Astronomical release.</p>
+                    </div>
+                    <section id="library-catalog" class="panel library-catalog" data-library-state="loading">
+                        <p id="library-catalog-status" class="library-catalog-state" role="status" aria-live="polite">Loading the model catalog.</p>
+                    </section>
+                </section>
+
                 <section id="settings-view" class="observatory-view" data-observatory-view="settings" aria-labelledby="settings-title" hidden>
                     <div class="view-heading">
                         <div><p class="eyebrow">Local controls</p><h2 id="settings-title">Settings</h2></div>
@@ -226,6 +237,7 @@
         </div>
     </div>
     <script src="/memory-control.js" defer></script>
+    <script src="/library.js" defer></script>
     <script src="/console.js" defer></script>
     <script src="/overview-compact.js" defer></script>
     <script src="/playground.js" defer></script>

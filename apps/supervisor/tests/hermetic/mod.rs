@@ -1,6 +1,7 @@
 mod chat_generation_executor;
 mod config_reload;
 mod config_reload_resolver;
+mod download_catalog;
 mod generation_performance_log;
 mod image_generation;
 mod logging;

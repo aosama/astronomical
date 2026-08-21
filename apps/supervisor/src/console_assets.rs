@@ -10,6 +10,7 @@ use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
 const INDEX_HTML: &str = include_str!("../console/index.html");
 const CONSOLE_JS: &str = include_str!("../console/console.js");
+const LIBRARY_JS: &str = include_str!("../console/library.js");
 const OVERVIEW_COMPACT_JS: &str = include_str!("../console/overview-compact.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../console/memory-control.js");
 const PLAYGROUND_JS: &str = include_str!("../console/playground.js");
@@ -30,8 +31,10 @@ where
         .route("/overview", get(console_index))
         .route("/chat", get(console_index))
         .route("/model", get(console_index))
+        .route("/library", get(console_index))
         .route("/settings", get(console_index))
         .route("/console.js", get(console_script))
+        .route("/library.js", get(library_script))
         .route("/overview-compact.js", get(overview_compact_script))
         .route("/memory-control.js", get(memory_control_script))
         .route("/playground.js", get(playground_script))
@@ -48,6 +51,10 @@ pub(crate) async fn console_index() -> Response {
 /// framework, no build step).
 pub(crate) async fn console_script() -> Response {
     embedded_text_response(CONSOLE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn library_script() -> Response {
+    embedded_text_response(LIBRARY_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn overview_compact_script() -> Response {

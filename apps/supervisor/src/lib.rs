@@ -13,6 +13,7 @@ mod console_assets;
 mod generation_performance_log;
 mod image_generation_executor;
 mod instance_lock;
+mod library;
 mod maximum_mlx_memory_endpoint;
 mod maximum_mlx_memory_transaction;
 mod openai_chat_completion;
@@ -33,6 +34,7 @@ mod runtime_model_policy;
 mod serving_session_snapshot;
 mod shutdown_control;
 mod status_endpoint;
+mod supervisor_performance_attribution;
 mod system_telemetry;
 mod worker;
 mod worker_cache_clear;
@@ -60,7 +62,8 @@ mod worker_stderr_tail;
 
 pub use application::{
     build_application, build_application_with_discovered_models,
-    build_application_with_full_control, build_application_with_shutdown,
+    build_application_with_download_catalog, build_application_with_full_control,
+    build_application_with_full_control_and_download_catalog, build_application_with_shutdown,
     build_development_application_with_reload,
 };
 pub use application_build_identity::ApplicationBuildIdentity;
@@ -91,6 +94,9 @@ pub use image_generation_executor::{
     ImageGenerationTimeouts,
 };
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
+pub use library::{
+    DownloadCatalog, DownloadCatalogEntry, DownloadCatalogError, DownloadCatalogFamily,
+};
 pub use openai_chat_translation::{
     OpenAiChatTranslationError, translate_openai_chat_completion_request,
 };
@@ -108,6 +114,10 @@ pub use runtime_model_policy::{
 };
 pub use serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;
+pub use supervisor_performance_attribution::{
+    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
+    SupervisorPerformanceOperation,
+};
 pub use system_telemetry::parse_macos_memory_pressure_level;
 pub use worker_cache_clear::PromptCacheClearOutcome;
 pub use worker_control_error::WorkerControlError;

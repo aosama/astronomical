@@ -225,6 +225,9 @@ jobs:
         id: macos-menu-contracts
         run: scripts/test-macos-menu-contracts.sh
         timeout-minutes: 2
+      - name: Run Observatory contracts
+        run: node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js
+        timeout-minutes: 2
       - name: Install verification tools
         run: |
           started_at_seconds="$(date +%s)"
@@ -263,6 +266,9 @@ jobs:
           printf '[native-build-result] status=%s\n' "$native_build_status"
       - name: Run hermetic tests
         run: cargo test --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
+        timeout-minutes: 2
+      - name: Run Library REST contracts
+        run: cargo test --timings -p astronomical-supervisor --test rest_api_tests library -- --nocapture
         timeout-minutes: 2
       - name: Verify menu-facing status wire contract
         run: cargo test -p astronomical-supervisor --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact
