@@ -10,10 +10,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   detect-changes:
     name: Classify changed files
@@ -21,24 +17,14 @@ jobs:
     timeout-minutes: 2
     outputs:
       code_changed: ${{ steps.classify.outputs.code_changed }}
-      native_build_cache_fingerprint: ${{ steps.native-build-fingerprint.outputs.fingerprint }}
+      native_inputs_changed: ${{ steps.classify.outputs.native_inputs_changed }}
+      macos_verification_required: ${{ steps.classify.outputs.macos_verification_required }}
     steps:
       - name: Check out source history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Fingerprint native source inputs
-        id: native-build-fingerprint
-        shell: bash
-        run: |
-          set -euo pipefail
-          started_at_seconds="$(date +%s)"
-          printf '[native-build-fingerprint] status=start started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          native_build_cache_fingerprint="$(scripts/native-build-cache-fingerprint.sh --source-only --profile core)"
-          printf 'fingerprint=%s\n' "$native_build_cache_fingerprint" >> "$GITHUB_OUTPUT"
-          printf '[native-build-fingerprint] status=complete fingerprint=%s elapsed_seconds=%s\n' \
-            "$native_build_cache_fingerprint" "$(( $(date +%s) - started_at_seconds ))"
       - name: Classify code and static-only changes
         id: classify
         shell: bash
@@ -48,61 +34,29 @@ jobs:
           PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          printf '[ci-change-detection] status=start event=%s started_at=%s\n' "$EVENT_NAME" "$started_at"
-
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            printf 'code_changed=true\n' >> "$GITHUB_OUTPUT"
-            printf '[ci-change-detection] status=complete classification=manual_run code_changed=true\n'
-            exit 0
-          fi
-
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base_sha="$PULL_REQUEST_BASE_SHA"
-            head_sha="$PULL_REQUEST_HEAD_SHA"
-          else
-            base_sha="$PUSH_BEFORE_SHA"
-            head_sha="$CURRENT_SHA"
-          fi
-
-          if [ -z "$base_sha" ] || [ -z "$head_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
-            printf 'code_changed=true\n' >> "$GITHUB_OUTPUT"
-            printf '[ci-change-detection] status=complete classification=unknown_history code_changed=true\n'
-            exit 0
-          fi
-
-          changed_files_path="$(mktemp)"
-          trap 'rm -f "$changed_files_path"' EXIT
-          git diff --name-only "$base_sha" "$head_sha" > "$changed_files_path"
-          changed_file_count="$(wc -l < "$changed_files_path" | tr -d '[:space:]')"
-          code_changed=false
-          while IFS= read -r changed_path; do
-            case "$changed_path" in
-              site/*|*.md|.github/assets/*|.github/workflows/pages.yml) ;;
-              *) code_changed=true; break ;;
-            esac
-          done < "$changed_files_path"
-
-          printf 'code_changed=%s\n' "$code_changed" >> "$GITHUB_OUTPUT"
-          printf '[ci-change-detection] status=complete classification=%s changed_files=%s\n' \
-            "$([ "$code_changed" = true ] && printf code_or_build || printf static_only)" \
-            "$changed_file_count"
+        run: scripts/classify-ci-change-scope.sh
 
   verify:
-    if: ${{ needs.detect-changes.outputs.code_changed == 'true' }}
+    if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
     name: 10-minute macOS hermetic verification
     runs-on: macos-26
     concurrency:
-      group: macos-hermetic-native-${{ needs.detect-changes.outputs.native_build_cache_fingerprint }}
-      cancel-in-progress: false
+      group: macos-hermetic-${{ github.event_name }}-${{ github.ref }}
+      # New pull-request revisions supersede stale verification. Default-branch
+      # publishers must finish so a lightweight merge cannot discard the only
+      # reusable cache for newly merged native inputs.
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     # Restore, verification, and publication all remain inside the cost boundary.
     timeout-minutes: 10
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
+      - name: Require successful change classification
+        if: ${{ needs.detect-changes.result != 'success' }}
+        run: |
+          printf '%s\n' 'Error: required macOS verification could not classify the changed content' >&2
+          exit 1
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
