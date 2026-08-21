@@ -116,6 +116,11 @@ struct OrbitalTelemetryPopover: View {
         summaryMetric("Size on disk", statusDocument.modelDiskSizeTitle)
         summaryMetric("Residency", statusDocument.modelFootprintTitle)
       }
+      if statusDocument.status == "unavailable",
+        let statusRefreshErrorMessage = telemetryStore.lastStatusRefreshErrorMessage
+      {
+        StatusRefreshErrorView(message: statusRefreshErrorMessage)
+      }
       if let mtpUnavailableReason = statusDocument.mtpUnavailableReason {
         Text(mtpUnavailableReason)
           .font(.caption)
