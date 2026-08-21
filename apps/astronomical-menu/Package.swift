@@ -13,6 +13,10 @@ let package = Package(
             name: "AstronomicalMenu",
             dependencies: [.product(name: "Sparkle", package: "Sparkle")]
         ),
-        .testTarget(name: "AstronomicalMenuContractTests", dependencies: ["AstronomicalMenu"]),
+        .testTarget(
+            name: "AstronomicalMenuContractTests",
+            dependencies: ["AstronomicalMenu"],
+            resources: [.process("Fixtures")]
+        ),
     ]
 )
