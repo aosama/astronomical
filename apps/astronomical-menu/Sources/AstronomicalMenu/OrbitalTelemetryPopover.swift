@@ -125,10 +125,14 @@ struct OrbitalTelemetryPopover: View {
       }
       Divider()
       metricRow("Flight", statusDocument.flightTitle)
-      ProgressView(
-        value: Double(statusDocument.progressProcessedTokenCount),
-        total: Double(statusDocument.progressTotalTokenCount)
-      ).tint(.cyan)
+      if statusDocument.hasDeterminateProgress {
+        ProgressView(
+          value: Double(statusDocument.progressCompletedUnitCount),
+          total: Double(statusDocument.progressTotalUnitCount)
+        ).tint(.cyan)
+      } else {
+        ProgressView().tint(.cyan)
+      }
       metricRow("Progress", statusDocument.progressTitle)
       metricRow(statusDocument.elapsedTimeMetricTitle, statusDocument.elapsedTimeTitle)
       Divider()

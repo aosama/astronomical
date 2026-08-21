@@ -15,8 +15,8 @@ print_error() {
 print_usage() {
     printf '%s\n' "Usage: scripts/verify-before-commit.sh [--hermetic-only]"
     printf '%s\n' ""
-    printf '%s\n' "Without arguments, verifies formatting, dependency notices, CI contracts, hermetic tests, and REST API tests."
-    printf '%s\n' "--hermetic-only  Compile and run hermetic Rust tests within the bounded macOS CI budget."
+    printf '%s\n' "Without arguments, verifies formatting, dependency notices, CI contracts, menu contracts, hermetic tests, and REST API tests."
+    printf '%s\n' "--hermetic-only  Run menu contracts and compile and run hermetic Rust tests within the bounded macOS CI budget."
 }
 
 parse_arguments() {
@@ -68,9 +68,9 @@ export RUSTC_WRAPPER=sccache
 
 printf '%s\n' "[commit-verification] compiler_cache=${RUSTC_WRAPPER} build_jobs=${CARGO_BUILD_JOBS} test_threads=${logical_cpu_count}"
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
-    printf '%s\n' "[commit-verification] included_tests=hermetic,channel_isolation_contract,macos_app_validation_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,channel_isolation_contract,macos_app_validation_contract,macos_menu_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 else
-    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,macos_menu_contract,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract,macos_menu_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 fi
 printf '%s\n' "[commit-verification] sccache stats before verification:"
 sccache --show-stats
@@ -123,6 +123,11 @@ printf '\n%s\n' "[commit-verification] step=test-channel-isolation timeout_secon
 channel_isolation_started_at_seconds="$(date +%s)"
 "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/check-test-channel-isolation.sh
 printf '%s\n' "[commit-verification] PASSED step=test-channel-isolation elapsed_seconds=$(( $(date +%s) - channel_isolation_started_at_seconds ))"
+
+printf '\n%s\n' "[commit-verification] step=test-macos-menu-contracts timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+macos_menu_contracts_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-macos-menu-contracts.sh
+printf '%s\n' "[commit-verification] PASSED step=test-macos-menu-contracts elapsed_seconds=$(( $(date +%s) - macos_menu_contracts_started_at_seconds ))"
 
 run_cargo_step compile-hermetic "${hermetic_compile_timeout_seconds}" test --no-fail-fast --no-run --jobs "${logical_cpu_count}" -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
 

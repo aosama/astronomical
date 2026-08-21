@@ -216,8 +216,8 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.progressTitle, "27 / 512 tokens")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s")
-    XCTAssertEqual(statusDocument.progressProcessedTokenCount, 27)
-    XCTAssertEqual(statusDocument.progressTotalTokenCount, 512)
+    XCTAssertEqual(statusDocument.progressCompletedUnitCount, 27)
+    XCTAssertEqual(statusDocument.progressTotalUnitCount, 512)
     XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "40.00 GB")
     XCTAssertEqual(statusDocument.sessionTitle, "4 requests · 27 tok/s avg")
     XCTAssertEqual(statusDocument.modelDiskSizeTitle, "18.42 GB")
@@ -236,6 +236,57 @@ final class StatusPresentationContractTests: XCTestCase {
         + statusDocument.mlxMemoryBreakdown.runtimeWorkByteCount,
       statusDocument.mlxMemoryActiveBytes
     )
+  }
+
+  func test_should_present_image_generation_as_active_model_work() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","ready_model_size_bytes":4200000000,"progress":{"phase":"denoising","completed_steps":2,"total_steps":4,"elapsed_ms":1000},"expert_memory_mode":null}
+        """.utf8)
+    )
+
+    XCTAssertTrue(statusDocument.isActive)
+    XCTAssertEqual(statusDocument.menuBarTitle, "Image 50%")
+    XCTAssertEqual(statusDocument.phaseTitle, "Generating image")
+    XCTAssertEqual(statusDocument.flightTitle, "Generating image · 50%")
+    XCTAssertEqual(statusDocument.progressTitle, "50% · 2 / 4 steps")
+    XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
+    XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s")
+    XCTAssertEqual(statusDocument.progressCompletedUnitCount, 2)
+    XCTAssertEqual(statusDocument.progressTotalUnitCount, 4)
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "Fully in memory")
+    XCTAssertEqual(statusDocument.modelDiskSizeTitle, "4.20 GB")
+  }
+
+  func test_should_keep_post_denoising_image_work_active_without_claiming_completion() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","progress":{"phase":"decoding","completed_steps":4,"total_steps":4,"elapsed_ms":1250}}"#.utf8
+      )
+    )
+
+    XCTAssertEqual(statusDocument.menuBarTitle, "Image · Decoding")
+    XCTAssertEqual(statusDocument.phaseTitle, "Decoding image")
+    XCTAssertEqual(statusDocument.flightTitle, "Decoding image")
+    XCTAssertEqual(statusDocument.progressTitle, "Decoding image")
+    XCTAssertFalse(statusDocument.hasDeterminateProgress)
+  }
+
+  func test_should_label_completed_denoising_as_one_finished_phase_not_a_finished_image() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","progress":{"phase":"denoising","completed_steps":4,"total_steps":4,"elapsed_ms":1000}}"#.utf8
+      )
+    )
+
+    XCTAssertEqual(statusDocument.menuBarTitle, "Image · Denoising")
+    XCTAssertEqual(statusDocument.flightTitle, "Denoising complete")
+    XCTAssertEqual(statusDocument.progressTitle, "Denoising complete")
+    XCTAssertTrue(statusDocument.isActive)
   }
 
   func test_should_present_a_complete_pager_owned_topology_as_fully_in_memory() throws {
@@ -323,8 +374,8 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.flightTitle, "Standing by")
     XCTAssertEqual(statusDocument.progressTitle, "Standing by")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "Not active")
-    XCTAssertEqual(statusDocument.progressProcessedTokenCount, 0)
-    XCTAssertEqual(statusDocument.progressTotalTokenCount, 1)
+    XCTAssertEqual(statusDocument.progressCompletedUnitCount, 0)
+    XCTAssertEqual(statusDocument.progressTotalUnitCount, 1)
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Not loaded")
     XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "40.00 GB")
   }
@@ -338,8 +389,8 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertEqual(statusDocument.progressTitle, "40% · 2048 / 5000 tokens")
-    XCTAssertEqual(statusDocument.progressProcessedTokenCount, 2_048)
-    XCTAssertEqual(statusDocument.progressTotalTokenCount, 5_000)
+    XCTAssertEqual(statusDocument.progressCompletedUnitCount, 2_048)
+    XCTAssertEqual(statusDocument.progressTotalUnitCount, 5_000)
   }
 
   func test_should_calculate_eta_after_the_first_progress_token() throws {
@@ -384,8 +435,8 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.phaseTitle, "Drafting…")
     XCTAssertEqual(statusDocument.flightTitle, "Drafting…")
     XCTAssertEqual(statusDocument.progressTitle, "Drafting…")
-    XCTAssertEqual(statusDocument.progressProcessedTokenCount, 0)
-    XCTAssertEqual(statusDocument.progressTotalTokenCount, 14_412)
+    XCTAssertEqual(statusDocument.progressCompletedUnitCount, 0)
+    XCTAssertEqual(statusDocument.progressTotalUnitCount, 14_412)
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "0.2 s / Calculating")
   }
 
