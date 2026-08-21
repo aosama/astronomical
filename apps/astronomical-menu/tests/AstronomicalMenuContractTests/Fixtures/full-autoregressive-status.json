@@ -1,0 +1,213 @@
+{
+  "activity": "idle",
+  "application": {
+    "build_number": 300,
+    "channel": "development",
+    "channel_display_name": "Development",
+    "commit": "abcdef1",
+    "is_dirty": true,
+    "state_directory": "~/.astronomical-dev",
+    "version": "0.3.0"
+  },
+  "configuration": {
+    "configured_generation": null,
+    "effective_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "is_effective": false,
+    "memory": {
+      "configured_maximum_bytes": null,
+      "effective_maximum_bytes": 0,
+      "error": null,
+      "pending_maximum_bytes": null
+    },
+    "prompt_cache": {
+      "capacity_bytes": {
+        "configured": null,
+        "default": 50000000000,
+        "effective": 10000000000
+      },
+      "enabled": {
+        "configured": null,
+        "default": true,
+        "effective": true
+      }
+    },
+    "ready_model": {
+      "chunking": {
+        "experimental_ssd_paging_generation_graph_submission_layer_interval": {
+          "configured": null,
+          "default": 3,
+          "effective": 3
+        },
+        "fixed_prompt_processing_chunk_size_tokens": {
+          "configured": null,
+          "default": 2048,
+          "effective": 2048
+        },
+        "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
+          "configured": null,
+          "default": null,
+          "effective": null
+        },
+        "full_attention_key_value_growth_tokens": {
+          "configured": null,
+          "default": 256,
+          "effective": 256
+        },
+        "prefill_graph_submission_layer_interval": {
+          "configured": null,
+          "default": 1,
+          "effective": 1
+        },
+        "prompt_cache_block_tokens": {
+          "configured": null,
+          "default": null,
+          "effective": null,
+          "is_configured": false
+        },
+        "prompt_cache_common_prefix_stride_blocks": {
+          "configured": null,
+          "default": 4,
+          "effective": 4
+        },
+        "speculative_prefill_draft_forward_tokens": {
+          "configured": null,
+          "default": 2048,
+          "effective": 2048
+        }
+      },
+      "maximum_context_tokens": {
+        "configured": null,
+        "default": null,
+        "effective": 65536
+      },
+      "maximum_output_default_tokens": {
+        "configured": null,
+        "default": null,
+        "effective": null
+      },
+      "model_id": "fictional/autoregressive-model",
+      "mtp_draft_depth": {
+        "configured": null,
+        "default": null,
+        "effective": null
+      },
+      "mtp_head_model_id": {
+        "configured": null,
+        "default": null,
+        "effective": null
+      },
+      "mtp_head_unavailable_reason": null,
+      "speculative_prefill": {
+        "draft_model_id": {
+          "configured": null,
+          "default": null,
+          "effective": null
+        },
+        "enabled": {
+          "configured": false,
+          "default": false,
+          "effective": false
+        },
+        "keep_percentage": {
+          "configured": null,
+          "default": 20,
+          "effective": null
+        },
+        "minimum_prompt_tokens": {
+          "configured": null,
+          "default": 8192,
+          "effective": null
+        }
+      },
+      "speculative_prefill_unavailable_reason": null,
+      "temperature": {
+        "configured": null,
+        "default": null,
+        "effective": null
+      },
+      "top_p": {
+        "configured": null,
+        "default": null,
+        "effective": null
+      }
+    },
+    "resolved_generation": null,
+    "restart_required": false,
+    "unmatched_model_config_ids": [],
+    "validation_error": null
+  },
+  "configured_generation": null,
+  "configured_maximum_mlx_memory_gb": null,
+  "configured_speculative_prefill_enabled": false,
+  "effective_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expert_memory_mode": null,
+  "expert_residency": null,
+  "machine_mlx_memory_ceiling_bytes": 0,
+  "minimum_mlx_memory_ceiling_bytes": 1,
+  "mlx_memory_ceiling_bytes": 0,
+  "mlx_memory_limit_error": null,
+  "mlx_memory_snapshot": null,
+  "mtp_artifact_default_draft_depth": null,
+  "mtp_artifact_maximum_draft_depth": null,
+  "mtp_configured_draft_depth": null,
+  "mtp_effective_execution_draft_depth": null,
+  "mtp_enabled": false,
+  "mtp_resolved_requested_draft_depth": null,
+  "mtp_runtime_state": "disabled",
+  "mtp_unavailable_reason": null,
+  "pending_mlx_memory_ceiling_bytes": null,
+  "persistent_prompt_cache": {
+    "hit_rate": 0.0,
+    "hits": 0,
+    "misses": 0,
+    "tokens_saved": 0
+  },
+  "ready_model_id": "fictional/autoregressive-model",
+  "ready_model_size_bytes": null,
+  "resolved_generation": null,
+  "serving_session": {
+    "average_generation_tok_per_second": 0.0,
+    "average_prefill_tok_per_second": 0.0,
+    "completed_request_count": 0,
+    "drafter_prompt_work_token_count": 0,
+    "drafter_reused_prompt_work_token_count": 0,
+    "target_prompt_work_token_count": 0,
+    "target_reused_prompt_work_token_count": 0,
+    "total_prompt_token_count": 0,
+    "total_reused_prompt_token_count": 0
+  },
+  "speculative_prefill_draft_model_id": null,
+  "speculative_prefill_draft_model_revision": null,
+  "speculative_prefill_enabled": false,
+  "speculative_prefill_runtime_state": "disabled",
+  "speculative_prefill_target_model_id": null,
+  "speculative_prefill_unavailable_reason": null,
+  "status": "ready",
+  "worker_runtime_feature_configuration": {
+    "configuration_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "loaded_model": {
+      "configuration": {
+        "chunking": {
+          "experimental_ssd_paging_generation_graph_submission_layer_interval": 3,
+          "fixed_prompt_processing_chunk_size_tokens": 2048,
+          "full_attention_key_value_growth_tokens": 256,
+          "prefill_graph_submission_layer_interval": 1,
+          "prompt_cache_block_tokens": null,
+          "prompt_cache_common_prefix_stride_blocks": 4,
+          "speculative_prefill_draft_forward_tokens": 2048
+        },
+        "maximum_context_tokens": 65536,
+        "maximum_output_tokens": 8192,
+        "model_id": "fictional/autoregressive-model",
+        "mtp_draft_depth": null,
+        "mtp_head_model_id": null,
+        "speculative_prefill": null,
+        "speculative_prefill_enabled": false
+      },
+      "kind": "autoregressive"
+    },
+    "persistent_prompt_cache_enabled": true,
+    "prompt_cache_maximum_size_bytes": 10000000000
+  },
+  "worker_runtime_feature_configuration_applied": true
+}
