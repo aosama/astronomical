@@ -68,7 +68,7 @@ export RUSTC_WRAPPER=sccache
 
 printf '%s\n' "[commit-verification] compiler_cache=${RUSTC_WRAPPER} build_jobs=${CARGO_BUILD_JOBS} test_threads=${logical_cpu_count}"
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
-    printf '%s\n' "[commit-verification] included_tests=hermetic,channel_isolation_contract,macos_app_validation_contract,macos_menu_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,ci_native_cache_contract,channel_isolation_contract,macos_app_validation_contract,macos_menu_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 else
     printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract,macos_menu_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 fi
@@ -85,11 +85,12 @@ if [ "$RUN_HERMITIC_CI_ONLY" != "true" ]; then
     "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-commit-release-isolation.sh
     printf '%s\n' "[commit-verification] PASSED step=commit-release-isolation elapsed_seconds=$(( $(date +%s) - release_isolation_started_at_seconds ))"
 
-    printf '\n%s\n' "[commit-verification] step=ci-native-cache-coordination timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
-    ci_native_cache_started_at_seconds="$(date +%s)"
-    "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-ci-native-cache-coordination.sh
-    printf '%s\n' "[commit-verification] PASSED step=ci-native-cache-coordination elapsed_seconds=$(( $(date +%s) - ci_native_cache_started_at_seconds ))"
 fi
+
+printf '\n%s\n' "[commit-verification] step=ci-native-cache-contract timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+ci_native_cache_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-ci-native-cache-coordination.sh
+printf '%s\n' "[commit-verification] PASSED step=ci-native-cache-contract elapsed_seconds=$(( $(date +%s) - ci_native_cache_started_at_seconds ))"
 
 run_cargo_step() {
     step_name="$1"

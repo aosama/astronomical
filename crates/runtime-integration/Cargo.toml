@@ -28,7 +28,10 @@ thiserror.workspace = true
 
 [build-dependencies]
 bindgen = "0.72"
+fs4.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+fs4.workspace = true
+sha2.workspace = true
 tempfile = "=3.27.0"
