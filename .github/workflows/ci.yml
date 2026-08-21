@@ -102,8 +102,8 @@ jobs:
     concurrency:
       group: macos-hermetic-native-${{ needs.detect-changes.outputs.native_build_cache_fingerprint }}
       cancel-in-progress: false
-    # Keep the required status-check name stable; extra job time covers cache restore and save.
-    timeout-minutes: 15
+    # The required check is the cost boundary; cache work must fit inside the same hard cap.
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -122,11 +122,12 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            apps/astronomical-menu/.build
             ~/Library/Caches/Astronomical/sccache
             ~/Library/Caches/Astronomical/native-dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml') }}-native-${{ needs.detect-changes.outputs.native_build_cache_fingerprint }}
+          key: ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml') }}-swift-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-source-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}-native-${{ needs.detect-changes.outputs.native_build_cache_fingerprint }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml') }}-native-
+            ${{ runner.os }}-${{ runner.arch }}-rust-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml') }}-swift-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-source-
             ${{ runner.os }}-${{ runner.arch }}-rust-
       - name: Report build cache restoration
         shell: bash
@@ -135,6 +136,9 @@ jobs:
           CACHE_MATCHED_KEY: ${{ steps.build-state-cache.outputs.cache-matched-key }}
           CACHE_PRIMARY_KEY: ${{ steps.build-state-cache.outputs.cache-primary-key }}
         run: scripts/report-build-cache-restoration.sh
+      - name: Run macOS menu status contracts
+        run: scripts/test-macos-menu-contracts.sh
+        timeout-minutes: 2
       - name: Install verification tools
         run: |
           case "$(brew tap)" in
@@ -154,6 +158,9 @@ jobs:
       - name: Run hermetic tests
         run: cargo test --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
         timeout-minutes: 2
+      - name: Verify menu-facing status wire contract
+        run: cargo test -p astronomical-supervisor --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact
+        timeout-minutes: 2
       - name: Save Rust and native build state
         if: success() && steps.build-state-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -162,6 +169,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            apps/astronomical-menu/.build
             ~/Library/Caches/Astronomical/sccache
             ~/Library/Caches/Astronomical/native-dependencies
           key: ${{ steps.build-state-cache.outputs.cache-primary-key }}
