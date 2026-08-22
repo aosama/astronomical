@@ -4,6 +4,8 @@ use astronomical_config::ModelCapabilities;
 
 use super::{discover_configured_models, write_minimal_model_config, write_required_model_files};
 
+const IMMUTABLE_PROVIDER_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
+
 /// Writes the config and tokenizer for a dense Qwen vision fixture.
 fn write_dense_qwen3_5_vision_model_files(model_directory: &std::path::Path) {
     let dense_model_config_json = serde_json::json!({
@@ -81,6 +83,41 @@ fn should_discover_supported_text_and_vision_qwen_models() {
                 ModelCapabilities::Chat(ref capabilities) if capabilities.supports_vision
             ))
     );
+}
+
+#[test]
+fn should_retain_provider_identity_and_revision_for_a_published_qwen_model() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory
+        .path()
+        .join("astronomical-test")
+        .join("Published-Qwen");
+    fs::create_dir_all(model_directory.join(".cache/huggingface/download"))
+        .expect("published model directories should be created");
+    write_minimal_model_config(&model_directory, "qwen3_5_moe", 262_144);
+    write_required_model_files(&model_directory);
+    fs::write(
+        model_directory.join(".cache/huggingface/download/config.json.metadata"),
+        format!("{IMMUTABLE_PROVIDER_REVISION}\n"),
+    )
+    .expect("immutable provider provenance should be written");
+    fs::write(
+        model_directory.join(".astronomical-library-provenance.json"),
+        format!(
+            "{{\"schema_version\":1,\"provider_model_id\":\"astronomical-test/Published-Qwen\",\"revision\":\"{IMMUTABLE_PROVIDER_REVISION}\"}}"
+        ),
+    )
+    .expect("Library provider identity should be written");
+
+    let discovered_model =
+        &discover_configured_models(&temporary_directory)[0].discovered_models[0];
+
+    assert_eq!(
+        discovered_model.provider_model_id.as_deref(),
+        Some("astronomical-test/Published-Qwen")
+    );
+    assert_eq!(discovered_model.revision, IMMUTABLE_PROVIDER_REVISION);
+    assert_eq!(discovered_model.model_id, "Published-Qwen");
 }
 
 #[test]

@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, RwLock, atomic::AtomicU64};
 
+use astronomical_config::discover_models;
 use axum::Router;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -51,6 +52,16 @@ pub fn build_application_with_library_download(
     download_catalog: Arc<DownloadCatalog>,
     library_download_coordinator: Arc<LibraryDownloadCoordinator>,
 ) -> Router {
+    let discovered_models = discover_models(&[library_download_coordinator
+        .models_directory()
+        .to_path_buf()])
+    .map(|directory_scans| {
+        directory_scans
+            .into_iter()
+            .flat_map(|directory_scan| directory_scan.discovered_models)
+            .collect()
+    })
+    .unwrap_or_default();
     application_router(ApplicationState {
         completion_id_namespace: Arc::from("library-test"),
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
@@ -58,7 +69,7 @@ pub fn build_application_with_library_download(
         worker_control: None,
         download_catalog,
         library_download_coordinator: Some(library_download_coordinator),
-        discovered_models: Vec::new(),
+        discovered_models,
         reloadable_config: None,
         configured_config_snapshot: None,
         configuration_validation_error: Arc::new(RwLock::new(None)),

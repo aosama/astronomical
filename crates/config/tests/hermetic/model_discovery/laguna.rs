@@ -36,6 +36,32 @@ fn should_advertise_one_complete_executable_laguna_artifact() {
 }
 
 #[test]
+fn should_retain_library_provider_identity_for_an_executable_laguna_artifact() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory
+        .path()
+        .join("astronomical-test")
+        .join("Published-Laguna");
+    write_executable_laguna_artifact(&model_directory);
+    fs::write(
+        model_directory.join(".astronomical-library-provenance.json"),
+        format!(
+            "{{\"schema_version\":1,\"provider_model_id\":\"astronomical-test/Published-Laguna\",\"revision\":\"{IMMUTABLE_REVISION}\"}}"
+        ),
+    )
+    .expect("Library provider identity should be written");
+
+    let discovered_model =
+        &discover_configured_models(&temporary_directory)[0].discovered_models[0];
+
+    assert_eq!(
+        discovered_model.provider_model_id.as_deref(),
+        Some("astronomical-test/Published-Laguna")
+    );
+    assert_eq!(discovered_model.revision, IMMUTABLE_REVISION);
+}
+
+#[test]
 fn should_advertise_standalone_laguna_templates_when_the_embedded_source_is_absent_or_null() {
     for embedded_template in [None, Some(Value::Null)] {
         let temporary_directory =

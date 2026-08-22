@@ -423,7 +423,7 @@ impl DownloadJobStore {
             .collect()
     }
 
-    fn remove_staging_directory_if_present(
+    pub(super) fn remove_staging_directory_if_present(
         &self,
         staging_directory: &Path,
     ) -> Result<(), DownloadJobStoreError> {
