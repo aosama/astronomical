@@ -1,3 +1,7 @@
+## Linked issue
+
+<!-- Use Fixes #N for implementation work or Refs #N for documentation, CI, and maintenance work. Keep the issue open until this pull request merges. -->
+
 ## Problem
 
 Describe the concrete problem and why it belongs in Astronomical.
