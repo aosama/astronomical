@@ -111,6 +111,14 @@ pub enum DownloadJobStoreError {
     InconsistentPublicationState,
     #[error("the model publication destination already exists")]
     PublishedModelAlreadyExists,
+    #[error("failed to serialize immutable publication provenance: {0}")]
+    SerializePublicationProvenance(#[source] serde_json::Error),
+    #[error("failed to write immutable publication provenance at {path:?}: {source}")]
+    WritePublicationProvenance {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("failed to atomically publish model at {path:?}: {source}")]
     PublishModel {
         path: PathBuf,

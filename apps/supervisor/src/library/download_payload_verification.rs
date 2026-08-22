@@ -10,15 +10,28 @@ use std::{
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
-use super::{DownloadFileDigest, DownloadJob, DownloadPayloadTransferError};
+use super::{
+    DownloadFileDigest, DownloadJob, DownloadPayloadTransferError,
+    download_job_store_filesystem::safely_join_existing_path,
+};
 
 pub(super) fn verify_download_job(
     models_directory: &Path,
     download_job: &DownloadJob,
 ) -> Result<(), DownloadPayloadTransferError> {
     let staging_directory = download_job.staging_directory(models_directory);
+    verify_download_job_at_directory(&staging_directory, download_job)
+}
+
+pub(super) fn verify_download_job_at_directory(
+    download_directory: &Path,
+    download_job: &DownloadJob,
+) -> Result<(), DownloadPayloadTransferError> {
     for download_file in download_job.files() {
-        let staged_file_path = staging_directory.join(download_file.relative_path());
+        let staged_file_path = safely_join_existing_path(
+            download_directory,
+            Path::new(download_file.relative_path()),
+        )?;
         let staged_file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW)

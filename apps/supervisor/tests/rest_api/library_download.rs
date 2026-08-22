@@ -19,6 +19,7 @@ use tower::ServiceExt;
 
 use crate::common::ScriptedExecutor;
 
+mod restart;
 mod support;
 
 use support::ScriptedHub;

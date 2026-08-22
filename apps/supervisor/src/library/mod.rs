@@ -19,6 +19,8 @@ mod download_payload_transfer;
 mod download_payload_verification;
 mod download_progress_snapshot;
 mod download_publication;
+mod download_publication_provenance;
+mod download_publication_reconciliation;
 mod download_staged_file;
 mod hub_payload_transport;
 mod hub_transport;
