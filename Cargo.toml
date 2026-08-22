@@ -61,12 +61,12 @@ unused_must_use = "deny"
 all = { level = "warn", priority = -1 }
 
 # Keep source-line backtraces for Astronomical code without retaining full
-# variable-level debug information or unpacked macOS object-file diagnostics.
+# variable-level debug information or adjacent macOS dSYM generations.
 # Incremental compilation is disabled because this workspace exercises many
 # feature combinations and otherwise retains an unbounded artifact graph.
 [profile.dev]
 debug = "line-tables-only"
-split-debuginfo = "packed"
+split-debuginfo = "off"
 incremental = false
 
 # Third-party dependencies do not need local debug information.
@@ -78,7 +78,7 @@ debug = false
 # object-file and incremental-cache growth avoided by the development profile.
 [profile.test]
 debug = "line-tables-only"
-split-debuginfo = "packed"
+split-debuginfo = "off"
 incremental = false
 
 [profile.test.package."*"]
@@ -87,6 +87,7 @@ debug = false
 [profile.full-debug]
 inherits = "dev"
 debug = true
+split-debuginfo = "packed"
 
 [profile.release]
 lto = "thin"

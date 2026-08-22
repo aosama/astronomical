@@ -14,6 +14,13 @@ if [ "$#" -ne 0 ]; then
     exit 2
 fi
 
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
+    exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+        --lane direct-mlx -- "${repository_root}/scripts/test-direct-mlx.sh"
+fi
+CDPATH='' cd -- "$repository_root"
+
 if command -v timeout >/dev/null 2>&1; then
     timeout_executable="$(command -v timeout)"
 elif command -v gtimeout >/dev/null 2>&1; then
@@ -28,7 +35,7 @@ printf '%s\n' "[direct-mlx-tests] status=start timeout_seconds=120 warm_test_eta
 
 # One test thread keeps mutable environment and allocator-policy tests
 # deterministic inside each direct-MLX test process.
-if "$timeout_executable" -k 5s 120s \
+if "$timeout_executable" --foreground -k 5s 120s \
     cargo --verbose test \
         --package astronomical-model-serving \
         --package astronomical-runtime-integration \

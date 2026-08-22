@@ -1,3 +1,5 @@
+//! Direct transformer contracts reuse the process-wide direct-MLX memory limits.
+
 use std::collections::BTreeMap;
 
 use astronomical_model_serving::{
@@ -56,6 +58,10 @@ fn adjacent_pair_rope_scalar_oracle(
         .collect()
 }
 use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+
+use crate::common::{
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+};
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
@@ -404,7 +410,10 @@ fn patterned_weights(
 }
 
 fn test_runtime() -> MlxRuntime {
-    let limits = MlxMemoryLimits::new(512_000_000, 8_000_000)
-        .expect("the bounded test MLX limits should be valid");
+    let limits = MlxMemoryLimits::new(
+        DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+        DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    )
+    .expect("the bounded test MLX limits should be valid");
     MlxRuntime::initialize(limits).expect("the native MLX test runtime should initialize")
 }
