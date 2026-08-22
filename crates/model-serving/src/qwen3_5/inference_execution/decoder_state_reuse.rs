@@ -14,8 +14,9 @@ use astronomical_ipc_protocol::{
 
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
-    PersistentPromptCachePrefixLookup, persistent_context_restore_workspace_bytes,
+    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
+    PersistentPromptCacheDiskStore, PersistentPromptCachePrefixLookup,
+    persistent_context_restore_workspace_bytes,
 };
 
 use super::super::RequestDecoderStateStack;
@@ -41,7 +42,7 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
         persistent_prompt_cache: &PersistentPromptCacheDiskStore,
         prompt_token_ids: &[u32],
-        ordered_image_sha256_digests: &[[u8; 32]],
+        block_causal_inputs: &[PersistentPromptCacheBlockCausalInput],
         total_context_tokens: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
@@ -52,13 +53,22 @@ impl Qwen3_5EngineState {
         let lookup_result = performance_attribution.measure_operation(
             PerformanceOperation::PersistentPromptCachePrefixLookup,
             |_performance_attribution| {
-                PersistentPromptCachePrefixLookup::for_prompt_with_image_digests(
-                    &persistent_prompt_cache.model_contract,
-                    prompt_token_ids,
-                    ordered_image_sha256_digests,
-                    |block_hash| persistent_prompt_cache.has_kv_block(block_hash),
-                    |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
-                )
+                if block_causal_inputs.is_empty() {
+                    PersistentPromptCachePrefixLookup::for_prompt(
+                        &persistent_prompt_cache.model_contract,
+                        prompt_token_ids,
+                        |block_hash| persistent_prompt_cache.has_kv_block(block_hash),
+                        |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
+                    )
+                } else {
+                    PersistentPromptCachePrefixLookup::for_prompt_with_block_causal_inputs(
+                        &persistent_prompt_cache.model_contract,
+                        prompt_token_ids,
+                        block_causal_inputs,
+                        |block_hash| persistent_prompt_cache.has_kv_block(block_hash),
+                        |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
+                    )
+                }
             },
         );
         let restored_token_count = lookup_result.restored_token_count();
@@ -158,7 +168,7 @@ impl Qwen3_5EngineState {
                 block_start,
                 block_end,
                 block_index,
-                ordered_image_sha256_digests,
+                block_causal_inputs,
                 last_restored_persistent_prompt_cache_block_key.as_ref(),
                 &persistent_prompt_cache.model_contract,
             )?;
@@ -416,17 +426,27 @@ fn restored_persistent_prompt_cache_block_key(
     block_start: usize,
     block_end: usize,
     block_index: usize,
-    ordered_image_sha256_digests: &[[u8; 32]],
+    block_causal_inputs: &[PersistentPromptCacheBlockCausalInput],
     last_restored_persistent_prompt_cache_block_key: Option<&PersistentPromptCacheBlockKey>,
     persistent_prompt_cache_model_contract: &crate::PersistentPromptCacheModelContract,
 ) -> Result<PersistentPromptCacheBlockKey, InferenceEngineError> {
+    let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
+    let block_causal_input = if block_causal_inputs.is_empty() {
+        &empty_block_causal_input
+    } else {
+        block_causal_inputs.get(block_index).ok_or_else(|| {
+            fatal_engine_error(
+                "persistent prompt-cache causal input plan does not cover restored block",
+            )
+        })?
+    };
     if block_index == 0 {
         // Root blocks are explicitly bound to the pinned model identity. Child
         // keys inherit that binding through their parent hash chain.
-        return PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
+        return PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
             persistent_prompt_cache_model_contract,
             &prompt_token_ids[block_start..block_end],
-            ordered_image_sha256_digests,
+            block_causal_input,
         )
         .map_err(|_| {
             fatal_engine_error(
@@ -443,7 +463,10 @@ fn restored_persistent_prompt_cache_block_key(
                 "persistent prompt-cache block identity chain was lost during restore",
             )
         })?
-        .for_child_block(&prompt_token_ids[block_start..block_end])
+        .for_child_block_with_causal_input(
+            &prompt_token_ids[block_start..block_end],
+            block_causal_input,
+        )
         .map_err(|_| {
             fatal_engine_error(
                 "persistent prompt-cache block identity construction failed during restore",

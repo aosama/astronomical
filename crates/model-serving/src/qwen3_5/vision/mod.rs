@@ -1,5 +1,7 @@
 mod image_processor;
 #[cfg(feature = "direct-mlx")]
+mod speculative_draft_visual_cache_identity;
+#[cfg(feature = "direct-mlx")]
 mod vision_attention;
 mod vision_config;
 mod vision_input_plan;
@@ -15,10 +17,15 @@ pub(crate) mod visual_embedding_injection;
 mod visual_embeddings;
 #[cfg(feature = "direct-mlx")]
 mod visual_embeddings_runtime;
+mod visual_prompt_cache_identity;
 
 pub use image_processor::{
     Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,
     Qwen3_5ProcessedImage,
+};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use speculative_draft_visual_cache_identity::{
+    qwen3_5_speculative_draft_block_causal_input, qwen3_5_speculative_draft_block_causal_inputs,
 };
 pub use vision_config::Qwen3_5VisionConfig;
 pub use vision_input_plan::{Qwen3_5VisionInputPlan, Qwen3_5VisionInputPlanError};
@@ -32,6 +39,10 @@ pub use visual_embedding_injection::qwen3_5_inject_visual_embeddings;
 pub use visual_embeddings::{
     Qwen3_5VisualEmbeddingRequiredImage, Qwen3_5VisualEmbeddingSuffixPlan,
     Qwen3_5VisualEmbeddingSuffixPlanError, plan_qwen3_5_visual_embedding_suffix,
+};
+pub use visual_prompt_cache_identity::{
+    Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
+    plan_qwen3_5_visual_prompt_cache_block_inputs,
 };
 
 #[cfg(feature = "direct-mlx")]
