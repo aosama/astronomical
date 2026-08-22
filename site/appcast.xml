@@ -4,29 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.10</title>
-            <pubDate>Thu, 20 Aug 2026 23:36:21 -0400</pubDate>
-            <sparkle:version>269</sparkle:version>
-            <sparkle:shortVersionString>0.2.10</sparkle:shortVersionString>
+            <title>0.2.11</title>
+            <pubDate>Sat, 22 Aug 2026 11:35:54 -0400</pubDate>
+            <sparkle:version>284</sparkle:version>
+            <sparkle:shortVersionString>0.2.11</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Restores reliable macOS menu status decoding for both autoregressive and image-generation models.
-- Keeps loaded-model identity, activity, and runtime policy visible while status refreshes are in flight.
-- Adds bounded automatic recovery when a status refresh or worker-policy update is temporarily unavailable.
-- Strengthens shared Rust and Swift contracts for complete menu-facing status documents.
+- Adds curated model installation from Observatory for supported chat, vision, tool-use, reasoning, and image-generation models.
+- Makes downloads durable across interruption with live progress, pause, resume, cancel, and restart recovery.
+- Verifies immutable provider revisions, selected executable payloads, file digests, and available disk space before atomic publication.
+- Reports a downloaded model as ready only after validated discovery confirms the exact published revision.
+- Adds Library family filtering, capability-aware actions, automatic catalog recovery, and detailed opt-in download performance attribution.
 
 ## Compatibility
 
-Astronomical 0.2.10 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.11 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing model directories, configuration, prompt caches, and logs remain in place when updating from 0.2.9.
+Existing model directories, configuration, prompt caches, and logs remain in place when updating from 0.2.10.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.10/Astronomical-0.2.10-macOS-arm64.dmg" length="13291561" type="application/octet-stream" sparkle:edSignature="1GjLmuqN6abVlfS7P0wDceEeh6gOGYAjIa6fWMMAqs5lHZnD33a2ejXMmx00Vcplvp1lZ+60J2b5W1h9RDSbBg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.11/Astronomical-0.2.11-macOS-arm64.dmg" length="15356471" type="application/octet-stream" sparkle:edSignature="73bP5PRt/daBWn21XxG4pK0708pmhG7fKWZOe9lUG+ntOrguVXon/sD70HaoOWV02I6asXfO995cecdaQINyCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 7nMnfsR1eMfm3dov5iskvTIbEJdMaiDMHfHEBv6QZ8n+3gxJj/RXgUtpqr3S2CfxLnFmMCBYzpgt/k/OM/EPAw==
-length: 2002
+edSignature: qyqZIi+/n+teXs7Q6Ss6gIKV/fiQBle2LNL2h0efmXCA100fS9pzWkP+GKei0TBPVcAazpbFuGsLYGK3HmoHDQ==
+length: 2226
 -->
