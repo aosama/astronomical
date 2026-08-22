@@ -122,7 +122,7 @@ fn should_count_startup_quota_eviction_by_artifact_and_block() {
     fs::create_dir_all(&foreign_block_directory)
         .expect("the test should create a foreign block directory");
     let foreign_manifest = serde_json::json!({
-        "format_version": "11",
+        "format_version": "12",
         "block_hash": "f".repeat(64),
         "block_index": 0,
         "parent_block_hash": null,

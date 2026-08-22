@@ -235,7 +235,7 @@ fn write_cyclic_foreign_block(
     let block_directory = foreign_blocks_directory.join(block_hash);
     fs::create_dir_all(&block_directory).expect("the cyclic block directory should be created");
     let manifest = serde_json::json!({
-        "format_version": "11",
+        "format_version": "12",
         "block_hash": block_hash,
         "block_index": 1,
         "parent_block_hash": parent_block_hash,
@@ -260,7 +260,7 @@ fn write_foreign_block(
     let block_directory = foreign_blocks_directory.join(block_hash);
     fs::create_dir_all(&block_directory).expect("the foreign block directory should be created");
     let manifest = serde_json::json!({
-        "format_version": "11",
+        "format_version": "12",
         "block_hash": block_hash,
         "block_index": usize::from(parent_block_hash.is_some()),
         "parent_block_hash": parent_block_hash,

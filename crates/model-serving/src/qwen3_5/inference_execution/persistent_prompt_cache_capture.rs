@@ -117,19 +117,40 @@ impl Qwen3_5EngineState {
             };
             let block_end = absolute_boundary;
             let block_tokens = &active_request.input_token_ids[block_start..block_end];
-            // Root identity binds model contract, tokens, and ordered images.
-            // Every child then hashes its parent, making prompt history explicit.
+            let block_index = block_start / persistent_prompt_cache_block_token_count;
+            let empty_block_causal_input = crate::PersistentPromptCacheBlockCausalInput::empty();
+            let block_causal_input = if active_request
+                .persistent_prompt_cache_block_causal_inputs
+                .is_empty()
+            {
+                &empty_block_causal_input
+            } else {
+                let Some(block_causal_input) = active_request
+                    .persistent_prompt_cache_block_causal_inputs
+                    .get(block_index)
+                else {
+                    return Err(required_prompt_state_persistence_failure(
+                        prompt_state_persistence_owner,
+                        active_request,
+                        "required persistent prompt-state capture",
+                        "prompt-cache causal input plan does not cover captured block",
+                    ));
+                };
+                block_causal_input
+            };
+            // Each block binds only new causal inputs; descendants inherit them through ancestry.
             let persistent_prompt_cache_block_key = match active_request
                 .last_restored_persistent_prompt_cache_block_key
                 .as_ref()
             {
-                None => PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
+                None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
                     &persistent_prompt_cache.model_contract,
                     block_tokens,
-                    &active_request.ordered_image_sha256_digests,
+                    block_causal_input,
                 ),
                 Some(parent_persistent_prompt_cache_block_key) => {
-                    parent_persistent_prompt_cache_block_key.for_child_block(block_tokens)
+                    parent_persistent_prompt_cache_block_key
+                        .for_child_block_with_causal_input(block_tokens, block_causal_input)
                 }
             };
             let Ok(persistent_prompt_cache_block_key) = persistent_prompt_cache_block_key else {

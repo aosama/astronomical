@@ -9,6 +9,9 @@ use super::super::text::sampler::{random_state_for_seed, validate_sampled_strate
 use super::super::text::sampling_seed::current_time_millis_since_unix_epoch;
 use super::super::{RequestDecoderStateStack, plan_qwen3_5_visual_embedding_suffix};
 use super::engine_request::Qwen3_5EngineRequest;
+use super::persistent_prompt_cache_visual_identity::{
+    Qwen3_5PersistentPromptCacheVisualIdentity, Qwen3_5PersistentPromptCacheVisualIdentityInput,
+};
 use super::{
     Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error,
     speculative_prefill::configured_speculative_prefill_failure,
@@ -99,46 +102,24 @@ impl Qwen3_5EngineState {
             // prompt reuse without restoring an incompatible shifted history.
             let mut can_use_persistent_prompt_cache =
                 persistent_prompt_cache_is_available && !has_precomputed_visual_embeddings;
-            // Image digests are cache identity only when either persistent
-            // target state or speculative-prefill selection/reuse can consume
-            // them. Ordinary cache-disabled vision generation avoids hashing
-            // and retaining storage-specific request identity.
-            let ordered_image_sha256_digests = if has_processed_visual_images
-                && (persistent_prompt_cache_is_available || self.speculative_prefill.enabled)
-            {
-                inference_request
-                    .processed_visual_images()
-                    .iter()
-                    .map(|processed_visual_image| processed_visual_image.encoded_image_sha256)
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            };
-            let ordered_image_visual_embedding_row_counts = if has_processed_visual_images {
-                inference_request
-                    .processed_visual_images()
-                    .iter()
-                    .map(|processed_visual_image| {
-                        processed_visual_image.image_token_count_after_spatial_merge
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            };
-            let expected_processed_visual_embedding_row_count =
-                ordered_image_visual_embedding_row_counts
-                    .iter()
-                    .try_fold(0usize, |accumulated_visual_token_count, image_row_count| {
-                        accumulated_visual_token_count.checked_add(*image_row_count)
-                    })
-                    .ok_or_else(|| fatal_engine_error("processed image token count overflowed"))?;
-            if has_processed_visual_images
-                && prompt_image_pad_token_count != expected_processed_visual_embedding_row_count
-            {
-                return Err(invalid_request_error(
-                    "image pad token count does not match processed image token count",
-                ));
-            }
+            let visual_prompt_cache_identity = Qwen3_5PersistentPromptCacheVisualIdentity::prepare(
+                &inference_request,
+                Qwen3_5PersistentPromptCacheVisualIdentityInput {
+                    prompt_token_ids: &prompt_token_ids,
+                    prompt_image_pad_token_count,
+                    image_pad_token_id,
+                    persistent_prompt_cache: self.persistent_prompt_cache.as_deref(),
+                    can_use_persistent_prompt_cache,
+                    speculative_prefill_is_enabled: self.speculative_prefill.enabled,
+                },
+                &mut performance_attribution,
+            )?;
+            let ordered_image_sha256_digests =
+                visual_prompt_cache_identity.ordered_image_sha256_digests;
+            let ordered_image_visual_embedding_row_counts =
+                visual_prompt_cache_identity.ordered_image_visual_embedding_row_counts;
+            let persistent_prompt_cache_block_causal_inputs =
+                visual_prompt_cache_identity.block_causal_inputs;
             let precomputed_visual_embeddings =
                 if let Some(visual_embedding_values) = inference_request.visual_embeddings() {
                     let visual_embedding_row_count = inference_request.visual_embedding_row_count();
@@ -221,7 +202,7 @@ impl Qwen3_5EngineState {
                             inference_request.request_id(),
                             persistent_prompt_cache,
                             &prompt_token_ids,
-                            &ordered_image_sha256_digests,
+                            &persistent_prompt_cache_block_causal_inputs,
                             total_context_tokens,
                             &mut request_decoder_state,
                             &mut performance_attribution,
@@ -437,6 +418,7 @@ impl Qwen3_5EngineState {
                 can_use_persistent_prompt_cache,
                 maximum_output_tokens: inference_request.max_output_tokens(),
                 ordered_image_sha256_digests,
+                persistent_prompt_cache_block_causal_inputs,
                 next_position_tokens,
                 pending_generated_token: None,
                 prefill_cursor,

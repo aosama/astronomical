@@ -2,9 +2,12 @@
 
 use sha2::{Digest, Sha256};
 
+use super::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use super::model_contract::PersistentPromptCacheModelContract;
 
 const PERSISTENT_PROMPT_CACHE_ROOT_SEED: &[u8] = b"astronomical-decoder-cache-root";
+const PERSISTENT_PROMPT_CACHE_BLOCK_CAUSAL_INPUT_DOMAIN: &[u8] =
+    b"astronomical-decoder-cache-block-causal-input";
 
 /// One immutable, content-addressed block identity inside a model-state chain.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -22,18 +25,18 @@ impl PersistentPromptCacheBlockKey {
         persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
         block_tokens: &[u32],
     ) -> Result<Self, PersistentPromptCacheBlockKeyError> {
-        Self::for_root_block_with_image_digests(
+        Self::for_root_block_with_causal_input(
             persistent_prompt_cache_model_contract,
             block_tokens,
-            &[],
+            &PersistentPromptCacheBlockCausalInput::empty(),
         )
     }
 
-    /// Hashes the first block while binding the ordered images in the prompt.
-    pub fn for_root_block_with_image_digests(
+    /// Hashes the first block while binding non-token causal input introduced there.
+    pub fn for_root_block_with_causal_input(
         persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
         block_tokens: &[u32],
-        ordered_image_sha256_digests: &[[u8; 32]],
+        block_causal_input: &PersistentPromptCacheBlockCausalInput,
     ) -> Result<Self, PersistentPromptCacheBlockKeyError> {
         let block_token_count = persistent_prompt_cache_model_contract.block_token_count();
         validate_block_tokens(block_tokens, block_token_count)?;
@@ -42,11 +45,11 @@ impl PersistentPromptCacheBlockKey {
         // crossing model revisions, dtypes, layer layouts, or model-derived block lengths.
         let storage_contract_fingerprint =
             persistent_prompt_cache_model_contract.storage_contract_fingerprint();
-        let block_hash = chain_hash_with_image_digests(
+        let block_hash = chain_hash_with_causal_input(
             None,
             &storage_contract_fingerprint,
             block_tokens,
-            ordered_image_sha256_digests,
+            block_causal_input,
         );
         Ok(Self {
             block_hash,
@@ -63,14 +66,26 @@ impl PersistentPromptCacheBlockKey {
         &self,
         block_tokens: &[u32],
     ) -> Result<Self, PersistentPromptCacheBlockKeyError> {
+        self.for_child_block_with_causal_input(
+            block_tokens,
+            &PersistentPromptCacheBlockCausalInput::empty(),
+        )
+    }
+
+    /// Hashes the next block with the non-token causal input introduced by that block.
+    pub fn for_child_block_with_causal_input(
+        &self,
+        block_tokens: &[u32],
+        block_causal_input: &PersistentPromptCacheBlockCausalInput,
+    ) -> Result<Self, PersistentPromptCacheBlockKeyError> {
         validate_block_tokens(block_tokens, self.block_token_count)?;
         // Include the parent digest rather than only the child tokens so a shared suffix cannot
         // restore state produced by a divergent prompt prefix.
-        let block_hash = chain_hash_with_image_digests(
+        let block_hash = chain_hash_with_causal_input(
             Some(&self.block_hash),
             &self.storage_contract_fingerprint,
             block_tokens,
-            &[],
+            block_causal_input,
         );
         let next_block_index = self
             .block_index
@@ -125,11 +140,11 @@ fn validate_block_tokens(
     Ok(())
 }
 
-fn chain_hash_with_image_digests(
+fn chain_hash_with_causal_input(
     parent_hash: Option<&[u8; 32]>,
     storage_contract_fingerprint: &[u8; 32],
     block_tokens: &[u32],
-    ordered_image_sha256_digests: &[[u8; 32]],
+    block_causal_input: &PersistentPromptCacheBlockCausalInput,
 ) -> [u8; 32] {
     let mut block_digest = Sha256::new();
     if let Some(parent_hash) = parent_hash {
@@ -138,12 +153,9 @@ fn chain_hash_with_image_digests(
         block_digest.update(PERSISTENT_PROMPT_CACHE_ROOT_SEED);
     }
     block_digest.update(storage_contract_fingerprint);
-    if parent_hash.is_none() && !ordered_image_sha256_digests.is_empty() {
-        block_digest.update(b"astronomical-decoder-cache-prompt-attachments");
-        block_digest.update((ordered_image_sha256_digests.len() as u64).to_be_bytes());
-        for encoded_image_sha256_digest in ordered_image_sha256_digests {
-            block_digest.update(encoded_image_sha256_digest);
-        }
+    if let Some(block_causal_input_digest) = block_causal_input.canonical_digest() {
+        block_digest.update(PERSISTENT_PROMPT_CACHE_BLOCK_CAUSAL_INPUT_DOMAIN);
+        block_digest.update(block_causal_input_digest);
     }
     for block_token in block_tokens {
         block_digest.update(block_token.to_be_bytes());

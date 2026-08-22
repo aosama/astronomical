@@ -19,6 +19,7 @@ mod persistent_speculative_prefill_selection;
 mod persistent_speculative_prefill_target_state;
 mod persistent_visual_embedding_key;
 mod persistent_visual_embedding_suffix_plan;
+mod persistent_visual_prompt_cache_identity;
 mod processor;
 mod prompt;
 mod sampler_config;
