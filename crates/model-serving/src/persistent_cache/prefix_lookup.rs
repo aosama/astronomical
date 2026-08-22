@@ -8,7 +8,10 @@
 //! for forward processing, even when the prompt ends exactly on a block
 //! boundary.
 
-use crate::{PersistentPromptCacheBlockKey, PersistentPromptCacheModelContract};
+use crate::{
+    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
+    PersistentPromptCacheModelContract,
+};
 
 /// The exact reason a prompt prefix could not be restored from the persistent prompt cache.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -180,10 +183,10 @@ impl PersistentPromptCachePrefixLookup {
         persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
         persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
     ) -> PersistentPromptCachePrefixLookupResult {
-        Self::for_prompt_with_image_digests_and_boundary_policy(
+        Self::for_prompt_with_block_causal_inputs_and_boundary_policy(
             persistent_prompt_cache_model_contract,
             prompt_tokens,
-            &[],
+            None,
             false,
             persistent_prompt_cache_kv_block_exists,
             persistent_prompt_cache_recurrent_snapshot_exists,
@@ -201,38 +204,38 @@ impl PersistentPromptCachePrefixLookup {
         persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
         persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
     ) -> PersistentPromptCachePrefixLookupResult {
-        Self::for_prompt_with_image_digests_and_boundary_policy(
+        Self::for_prompt_with_block_causal_inputs_and_boundary_policy(
             persistent_prompt_cache_model_contract,
             prompt_tokens,
-            &[],
+            None,
             true,
             persistent_prompt_cache_kv_block_exists,
             persistent_prompt_cache_recurrent_snapshot_exists,
         )
     }
 
-    /// Computes the longest restorable prefix while binding ordered image identities.
-    pub fn for_prompt_with_image_digests(
+    /// Computes the longest restorable prefix with model-owned causal input for each block.
+    pub fn for_prompt_with_block_causal_inputs(
         persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
         prompt_tokens: &[u32],
-        ordered_image_sha256_digests: &[[u8; 32]],
+        block_causal_inputs: &[PersistentPromptCacheBlockCausalInput],
         persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
         persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
     ) -> PersistentPromptCachePrefixLookupResult {
-        Self::for_prompt_with_image_digests_and_boundary_policy(
+        Self::for_prompt_with_block_causal_inputs_and_boundary_policy(
             persistent_prompt_cache_model_contract,
             prompt_tokens,
-            ordered_image_sha256_digests,
+            Some(block_causal_inputs),
             false,
             persistent_prompt_cache_kv_block_exists,
             persistent_prompt_cache_recurrent_snapshot_exists,
         )
     }
 
-    fn for_prompt_with_image_digests_and_boundary_policy(
+    fn for_prompt_with_block_causal_inputs_and_boundary_policy(
         persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
         prompt_tokens: &[u32],
-        ordered_image_sha256_digests: &[[u8; 32]],
+        block_causal_inputs: Option<&[PersistentPromptCacheBlockCausalInput]>,
         allow_exact_block_boundary_restore: bool,
         persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
         persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
@@ -275,19 +278,32 @@ impl PersistentPromptCachePrefixLookup {
             Vec::with_capacity(maximum_restorable_block_count);
         let mut parent_persistent_prompt_cache_block_key: Option<PersistentPromptCacheBlockKey> =
             None;
+        let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
         for block_index in 0..maximum_restorable_block_count {
             let block_start = block_index * persistent_prompt_cache_block_token_count;
             let block_end = block_start + persistent_prompt_cache_block_token_count;
             let block_tokens = &prompt_tokens[block_start..block_end];
+            let block_causal_input = match block_causal_inputs {
+                None => &empty_block_causal_input,
+                Some(block_causal_inputs) => {
+                    let Some(block_causal_input) = block_causal_inputs.get(block_index) else {
+                        lookup_diagnostics
+                            .record_first_missing_sequence_state_block_index(block_index, None);
+                        break;
+                    };
+                    block_causal_input
+                }
+            };
             let persistent_prompt_cache_block_key =
                 match parent_persistent_prompt_cache_block_key.as_ref() {
-                    None => PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
+                    None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
                         persistent_prompt_cache_model_contract,
                         block_tokens,
-                        ordered_image_sha256_digests,
+                        block_causal_input,
                     ),
                     Some(parent_persistent_prompt_cache_block_key) => {
-                        parent_persistent_prompt_cache_block_key.for_child_block(block_tokens)
+                        parent_persistent_prompt_cache_block_key
+                            .for_child_block_with_causal_input(block_tokens, block_causal_input)
                     }
                 };
             let persistent_prompt_cache_block_key = match persistent_prompt_cache_block_key {

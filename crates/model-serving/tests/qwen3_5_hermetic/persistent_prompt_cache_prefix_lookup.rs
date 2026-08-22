@@ -1,6 +1,7 @@
 use astronomical_model_serving::{
-    PersistentPromptCacheBlockKey, PersistentPromptCacheMissReason,
-    PersistentPromptCacheModelContract, PersistentPromptCachePrefixLookup,
+    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
+    PersistentPromptCacheMissReason, PersistentPromptCacheModelContract,
+    PersistentPromptCachePrefixLookup,
 };
 
 use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
@@ -244,39 +245,47 @@ fn should_not_match_blocks_when_the_root_block_differs() {
 }
 
 #[test]
-fn should_not_restore_image_prompt_state_for_a_different_image_digest() {
+fn should_restore_blocks_before_changed_visual_content() {
     let prompt_tokens = prompt_tokens_with_complete_blocks_and_trailing_tokens(2, 100);
-    let cached_image_sha256 = [1_u8; 32];
-    let requested_image_sha256 = [2_u8; 32];
-    let cached_root_block_key = PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
+    let empty_causal_input = PersistentPromptCacheBlockCausalInput::empty();
+    let cached_visual_input = PersistentPromptCacheBlockCausalInput::from_canonical_bytes(&[1]);
+    let requested_visual_input = PersistentPromptCacheBlockCausalInput::from_canonical_bytes(&[2]);
+    let cached_root_block_key = PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
         persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens[..persistent_prompt_cache_block_token_count()],
-        &[cached_image_sha256],
+        &empty_causal_input,
     )
-    .expect("the image-aware root block should hash");
+    .expect("the root block should hash");
     let cached_child_block_key = cached_root_block_key
-        .for_child_block(
+        .for_child_block_with_causal_input(
             &prompt_tokens[persistent_prompt_cache_block_token_count()
                 ..persistent_prompt_cache_block_token_count() * 2],
+            &cached_visual_input,
         )
-        .expect("the image-aware child block should hash");
+        .expect("the visual child block should hash");
 
-    let lookup_result = PersistentPromptCachePrefixLookup::for_prompt_with_image_digests(
+    let lookup_result = PersistentPromptCachePrefixLookup::for_prompt_with_block_causal_inputs(
         persistent_prompt_cache_model_contract_ref(),
         &prompt_tokens,
-        &[requested_image_sha256],
+        &[empty_causal_input, requested_visual_input],
         |block_hash| {
             *block_hash == cached_root_block_key.block_hash()
                 || *block_hash == cached_child_block_key.block_hash()
         },
-        |block_hash| *block_hash == cached_child_block_key.block_hash(),
+        |block_hash| *block_hash == cached_root_block_key.block_hash(),
     );
 
-    assert_eq!(lookup_result.restored_token_count(), 0);
     assert_eq!(
-        lookup_result.diagnostics().miss_reason(),
-        Some(PersistentPromptCacheMissReason::RootSequenceStateBlockMissing)
+        lookup_result.restored_token_count(),
+        persistent_prompt_cache_block_token_count()
     );
+    assert_eq!(
+        lookup_result
+            .diagnostics()
+            .first_missing_sequence_state_block_index(),
+        Some(1)
+    );
+    assert_eq!(lookup_result.diagnostics().miss_reason(), None);
 }
 
 #[test]
