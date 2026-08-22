@@ -24,7 +24,7 @@ Run focused tests while developing. Before proposing a pull request, run:
 
 Run direct MLX or model-artifact qualification only when the change crosses those boundaries. State exactly which checks ran and which hardware-dependent checks could not run.
 
-Routine hermetic and Representational State Transfer (REST) tests retain one stable Cargo graph for warm iteration. Release and qualification commands create marker-owned disposable targets and remove them automatically; list named qualification commands with `scripts/run-disposable-cargo-journey.sh --list`. Use the `full-debug` profile only when complete packed symbols are required.
+Routine hermetic, Representational State Transfer (REST), and commit verification tests retain one stable Cargo graph for warm iteration. Commit verification preserves caller-selected Cargo and compiler-cache configuration. Release and qualification commands create marker-owned disposable targets and remove them automatically; list named qualification commands with `scripts/run-disposable-cargo-journey.sh --list`. Use the `full-debug` profile only when complete packed symbols are required.
 
 Preview retired native CMake output with `scripts/clean-retired-cargo-native-output.sh --dry-run`. Its explicit `--apply` mode holds every affected Cargo profile lock and preserves generated bindings and diagnostics.
 

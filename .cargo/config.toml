@@ -1,3 +1,4 @@
 [alias]
 test-hermetic = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-ipc-protocol", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-supervisor", "--test", "hermetic_tests"]
 test-rest-api = ["test", "--no-fail-fast", "-p", "astronomical-rest-contract", "-p", "astronomical-supervisor", "--test", "rest_api_tests"]
+verify-commit-rust = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-ipc-protocol", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-supervisor", "-p", "astronomical-rest-contract", "--test", "hermetic_tests", "--test", "rest_api_tests"]
