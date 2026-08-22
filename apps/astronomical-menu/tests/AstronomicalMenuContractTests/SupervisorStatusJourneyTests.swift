@@ -87,42 +87,6 @@ final class SupervisorStatusJourneyTests: XCTestCase {
   }
 
   @MainActor
-  func test_should_diagnose_a_missing_nullable_worker_policy_field_and_recover() async throws {
-    let validStatusResponse = try fixtureData(named: "full-autoregressive-status")
-    var malformedStatusFixture = try jsonObject(from: validStatusResponse)
-    var runtimeConfiguration = try XCTUnwrap(
-      malformedStatusFixture["worker_runtime_feature_configuration"] as? [String: Any])
-    var loadedModel = try XCTUnwrap(runtimeConfiguration["loaded_model"] as? [String: Any])
-    var loadedModelConfiguration = try XCTUnwrap(
-      loadedModel["configuration"] as? [String: Any])
-    loadedModelConfiguration.removeValue(forKey: "mtp_head_model_id")
-    loadedModel["configuration"] = loadedModelConfiguration
-    runtimeConfiguration["loaded_model"] = loadedModel
-    malformedStatusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
-      statusCode: 200,
-      responseBody: try JSONSerialization.data(withJSONObject: malformedStatusFixture)
-    )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
-
-    await telemetryStore.refresh()
-
-    XCTAssertEqual(telemetryStore.statusDocument.status, "unavailable")
-    XCTAssertTrue(
-      telemetryStore.lastStatusRefreshErrorMessage?.contains("mtp_head_model_id") == true)
-
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
-      statusCode: 200,
-      responseBody: validStatusResponse
-    )
-    await telemetryStore.refresh()
-
-    XCTAssertEqual(telemetryStore.statusDocument.status, "ready")
-    XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
-  }
-
-  @MainActor
   func test_should_reject_null_for_a_worker_policy_field_that_rust_omits() async throws {
     let validStatusResponse = try fixtureData(named: "full-autoregressive-status")
     var malformedStatusFixture = try jsonObject(from: validStatusResponse)

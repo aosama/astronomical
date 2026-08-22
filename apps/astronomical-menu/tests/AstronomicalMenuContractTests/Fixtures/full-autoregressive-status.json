@@ -91,12 +91,6 @@
         "default": null,
         "effective": null
       },
-      "mtp_head_model_id": {
-        "configured": null,
-        "default": null,
-        "effective": null
-      },
-      "mtp_head_unavailable_reason": null,
       "speculative_prefill": {
         "draft_model_id": {
           "configured": null,
@@ -201,7 +195,6 @@
         "maximum_output_tokens": 8192,
         "model_id": "fictional/autoregressive-model",
         "mtp_draft_depth": null,
-        "mtp_head_model_id": null,
         "speculative_prefill": null,
         "speculative_prefill_enabled": false
       },

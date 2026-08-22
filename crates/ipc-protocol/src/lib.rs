@@ -48,10 +48,10 @@ pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
 };
 pub use worker_model_configuration::{
-    WorkerAutoregressiveModelConfiguration, WorkerAuxiliaryModelConfiguration,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
-    WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
-    WorkerModelConfiguration, WorkerSpeculativePrefillRuntimeConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerFlux2KleinModelConfiguration,
+    WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
+    WorkerLoadedModelRuntimeConfiguration, WorkerModelConfiguration,
+    WorkerSpeculativePrefillRuntimeConfiguration,
 };
 pub use worker_startup_configuration::{
     WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,
