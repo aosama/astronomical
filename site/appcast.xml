@@ -4,30 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.11</title>
-            <pubDate>Sat, 22 Aug 2026 11:35:54 -0400</pubDate>
-            <sparkle:version>284</sparkle:version>
-            <sparkle:shortVersionString>0.2.11</sparkle:shortVersionString>
+            <title>0.2.12</title>
+            <pubDate>Sat, 22 Aug 2026 17:01:24 -0400</pubDate>
+            <sparkle:version>290</sparkle:version>
+            <sparkle:shortVersionString>0.2.12</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Adds curated model installation from Observatory for supported chat, vision, tool-use, reasoning, and image-generation models.
-- Makes downloads durable across interruption with live progress, pause, resume, cancel, and restart recovery.
-- Verifies immutable provider revisions, selected executable payloads, file digests, and available disk space before atomic publication.
-- Reports a downloaded model as ready only after validated discovery confirms the exact published revision.
-- Adds Library family filtering, capability-aware actions, automatic catalog recovery, and detailed opt-in download performance attribution.
+- Keeps Astronomical available when separate configured model directories contain the same public model identity.
+- Excludes only the ambiguous model while continuing to advertise and serve unrelated models.
+- Shows persistent, path-safe duplicate-model guidance in the menu and Observatory, with a direct **Reveal config** action.
+- Preserves the previous effective serving configuration when a duplicate is introduced during live reload and restores the model after correction.
+- Makes Library download progress more responsive while reducing synchronized metadata writes during payload transfer.
 
 ## Compatibility
 
-Astronomical 0.2.11 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.12 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing model directories, configuration, prompt caches, and logs remain in place when updating from 0.2.10.
+Existing model directories, configuration, prompt caches, downloads, and logs remain in place when updating from 0.2.11.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.11/Astronomical-0.2.11-macOS-arm64.dmg" length="15356471" type="application/octet-stream" sparkle:edSignature="73bP5PRt/daBWn21XxG4pK0708pmhG7fKWZOe9lUG+ntOrguVXon/sD70HaoOWV02I6asXfO995cecdaQINyCQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.12/Astronomical-0.2.12-macOS-arm64.dmg" length="15377993" type="application/octet-stream" sparkle:edSignature="ddxsaYLYhW2syn2nRUrdtO0Lpryv4upNtwr/N/3rlHjuGnpfB2rbAVkx1O2iTAzPlUXjcRDwOTPaz/I573hQDA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: qyqZIi+/n+teXs7Q6Ss6gIKV/fiQBle2LNL2h0efmXCA100fS9pzWkP+GKei0TBPVcAazpbFuGsLYGK3HmoHDQ==
-length: 2226
+edSignature: YpbP1ob58nW6qq1gipUrqz9mMtiY3Kt9L/KpCex4cyvRwu/keveOeEOiqI00ffuQzgiRLh08iVzvEs+NDQBiCg==
+length: 2210
 -->
