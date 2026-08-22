@@ -303,7 +303,7 @@ fn should_return_a_typed_error_when_automatic_root_metadata_cannot_be_read() {
 }
 
 #[test]
-fn should_reject_duplicate_model_identities_from_distinct_effective_roots() {
+fn should_prefer_the_automatic_library_copy_when_the_same_identity_exists_elsewhere() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
     let automatic_models_directory = config_home_directory
         .path()
@@ -323,22 +323,15 @@ fn should_reject_duplicate_model_identities_from_distinct_effective_roots() {
     );
     let resolver = development_resolver(config_home_directory.path());
 
-    let resolution_error = resolver
+    let resolved_config = resolver
         .load()
-        .expect_err("distinct roots with one public identity should remain ambiguous");
+        .expect("a later configured copy should not block the Library copy");
 
-    let ResolvedRuntimeConfigError::ModelDiscovery(DiscoveredModelError::DuplicateModelId {
-        model_id,
-        model_directories,
-    }) = resolution_error
-    else {
-        panic!("duplicate identities should return the typed discovery error");
-    };
-    let mut expected_model_directories =
-        vec![automatic_model_directory, configured_model_directory];
-    expected_model_directories.sort();
-    assert_eq!(model_id, "shared-qwen");
-    assert_eq!(model_directories, expected_model_directories);
+    assert_eq!(resolved_config.discovered_models.len(), 1);
+    assert_eq!(
+        resolved_config.discovered_models[0].model_directory,
+        automatic_model_directory
+    );
 }
 
 fn development_resolver(config_home_directory: &Path) -> ResolvedRuntimeConfigResolver {

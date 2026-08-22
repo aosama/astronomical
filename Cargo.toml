@@ -26,7 +26,7 @@ license = "Apache-2.0"
 publish = false
 repository = "https://github.com/aosama/astronomical"
 rust-version = "1.97.1"
-version = "0.2.10"
+version = "0.2.11"
 
 [workspace.dependencies]
 async-openai = { version = "0.41.3", default-features = false, features = ["byot", "chat-completion"] }
@@ -39,9 +39,11 @@ fs4 = "1.1.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = "0.2"
 minijinja = { version = "2", features = ["fuel", "json", "preserve_order"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "stream"] }
 safetensors = "=0.8.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha1 = "=0.11.0"
 sha2 = "=0.11.0"
 thiserror = "2"
 tokenizers = { version = "=0.23.1", default-features = false, features = ["fancy-regex"] }

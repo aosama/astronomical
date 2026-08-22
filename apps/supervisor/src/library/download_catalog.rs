@@ -5,11 +5,17 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use thiserror::Error;
 
+use super::DownloadPathSelection;
+
 const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 1;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
 const MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT: usize = 1_024;
 const MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH: usize = 96;
 const MAXIMUM_DISPLAY_NAME_BYTES: usize = 256;
+const MAXIMUM_DESCRIPTION_BYTES: usize = 512;
+const MAXIMUM_QUANTIZATION_LABEL_BYTES: usize = 64;
+const MAXIMUM_ARCHITECTURE_SUMMARY_BYTES: usize = 256;
+const MAXIMUM_UPSTREAM_LICENSE_BYTES: usize = 128;
 const GIT_COMMIT_SHA_HEX_CHARACTER_COUNT: usize = 40;
 const MAXIMUM_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const BUNDLED_DOWNLOAD_CATALOG_JSON: &str =
@@ -30,6 +36,23 @@ pub struct DownloadCatalogEntry {
     display_name: String,
     family: DownloadCatalogFamily,
     approximate_size_bytes: u64,
+    description: Option<String>,
+    capabilities: DownloadCatalogCapabilities,
+    quantization_label: Option<String>,
+    architecture_summary: Option<String>,
+    upstream_license: Option<String>,
+    download_path_selection: DownloadPathSelection,
+}
+
+/// Human-facing capability badges surfaced from the catalog so users can compare models.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DownloadCatalogCapabilities {
+    pub supports_reasoning: bool,
+    pub supports_vision: bool,
+    pub supports_tool_calls: bool,
+    pub context_window: Option<u32>,
+    pub max_output_tokens: Option<u32>,
+    pub supports_image_generation: bool,
 }
 
 /// Executable model families intentionally supported by catalog version 1.
@@ -38,6 +61,7 @@ pub struct DownloadCatalogEntry {
 pub enum DownloadCatalogFamily {
     Qwen3_5,
     Laguna,
+    Flux2Klein,
 }
 
 impl DownloadCatalogFamily {
@@ -46,6 +70,7 @@ impl DownloadCatalogFamily {
         match self {
             Self::Qwen3_5 => "qwen3_5",
             Self::Laguna => "laguna",
+            Self::Flux2Klein => "flux2_klein",
         }
     }
 }
@@ -67,6 +92,16 @@ pub enum DownloadCatalogError {
     InvalidRevision { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid display name")]
     InvalidDisplayName { entry_index: usize },
+    #[error("download catalog entry {entry_index} has an invalid description")]
+    InvalidDescription { entry_index: usize },
+    #[error("download catalog entry {entry_index} has invalid capabilities")]
+    InvalidCapabilities { entry_index: usize },
+    #[error("download catalog entry {entry_index} has an invalid quantization label")]
+    InvalidQuantizationLabel { entry_index: usize },
+    #[error("download catalog entry {entry_index} has an invalid architecture summary")]
+    InvalidArchitectureSummary { entry_index: usize },
+    #[error("download catalog entry {entry_index} has an invalid upstream license")]
+    InvalidUpstreamLicense { entry_index: usize },
     #[error(
         "download catalog entry {entry_index} must declare approximate_size_bytes between 1 and 9007199254740991"
     )]
@@ -75,6 +110,8 @@ pub enum DownloadCatalogError {
     ModelNotPublic { entry_index: usize },
     #[error("download catalog contains a duplicate or case-colliding Hugging Face identity")]
     DuplicateHuggingFaceId,
+    #[error("download catalog entry {entry_index} has invalid or overlapping included paths")]
+    InvalidIncludedPaths { entry_index: usize },
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,6 +131,27 @@ struct DownloadCatalogEntryDocument {
     approximate_size_bytes: u64,
     #[serde(rename = "public")]
     is_public: bool,
+    description: Option<String>,
+    capabilities: Option<DownloadCatalogCapabilitiesDocument>,
+    quantization_label: Option<String>,
+    architecture_summary: Option<String>,
+    upstream_license: Option<String>,
+    included_paths: Option<Vec<String>>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DownloadCatalogCapabilitiesDocument {
+    #[serde(default)]
+    supports_reasoning: bool,
+    #[serde(default)]
+    supports_vision: bool,
+    #[serde(default)]
+    supports_tool_calls: bool,
+    context_window: Option<u32>,
+    max_output_tokens: Option<u32>,
+    #[serde(default)]
+    supports_image_generation: bool,
 }
 
 impl DownloadCatalog {
@@ -118,18 +176,15 @@ impl DownloadCatalog {
         let mut normalized_huggingface_ids = BTreeSet::new();
         let mut entries = Vec::with_capacity(catalog_document.entries.len());
         for (entry_index, entry_document) in catalog_document.entries.into_iter().enumerate() {
-            validate_huggingface_id(&entry_document.huggingface_id, entry_index)?;
+            if !is_valid_huggingface_id(&entry_document.huggingface_id) {
+                return Err(DownloadCatalogError::InvalidHuggingFaceId { entry_index });
+            }
             if !normalized_huggingface_ids
                 .insert(entry_document.huggingface_id.to_ascii_lowercase())
             {
                 return Err(DownloadCatalogError::DuplicateHuggingFaceId);
             }
-            if entry_document.revision.len() != GIT_COMMIT_SHA_HEX_CHARACTER_COUNT
-                || !entry_document
-                    .revision
-                    .bytes()
-                    .all(|character| character.is_ascii_hexdigit())
-            {
+            if !is_valid_immutable_revision(&entry_document.revision) {
                 return Err(DownloadCatalogError::InvalidRevision { entry_index });
             }
             if entry_document.display_name.len() > MAXIMUM_DISPLAY_NAME_BYTES
@@ -146,12 +201,96 @@ impl DownloadCatalog {
             if !entry_document.is_public {
                 return Err(DownloadCatalogError::ModelNotPublic { entry_index });
             }
+            let description = entry_document
+                .description
+                .filter(|description| !description.trim().is_empty())
+                .map(|description| {
+                    if description.len() > MAXIMUM_DESCRIPTION_BYTES
+                        || description.chars().any(char::is_control)
+                    {
+                        return Err(DownloadCatalogError::InvalidDescription { entry_index });
+                    }
+                    Ok(description)
+                })
+                .transpose()?;
+            let capabilities = entry_document
+                .capabilities
+                .map(|capabilities_document| {
+                    if capabilities_document.supports_reasoning
+                        || capabilities_document.supports_vision
+                        || capabilities_document.supports_tool_calls
+                        || capabilities_document.context_window.is_some()
+                        || capabilities_document.max_output_tokens.is_some()
+                        || capabilities_document.supports_image_generation
+                    {
+                        Ok(DownloadCatalogCapabilities {
+                            supports_reasoning: capabilities_document.supports_reasoning,
+                            supports_vision: capabilities_document.supports_vision,
+                            supports_tool_calls: capabilities_document.supports_tool_calls,
+                            context_window: capabilities_document.context_window,
+                            max_output_tokens: capabilities_document.max_output_tokens,
+                            supports_image_generation: capabilities_document
+                                .supports_image_generation,
+                        })
+                    } else {
+                        Err(DownloadCatalogError::InvalidCapabilities { entry_index })
+                    }
+                })
+                .transpose()?
+                .unwrap_or_default();
+            let quantization_label = entry_document
+                .quantization_label
+                .filter(|label| !label.trim().is_empty())
+                .map(|label| {
+                    if label.len() > MAXIMUM_QUANTIZATION_LABEL_BYTES
+                        || label.chars().any(char::is_control)
+                    {
+                        return Err(DownloadCatalogError::InvalidQuantizationLabel { entry_index });
+                    }
+                    Ok(label)
+                })
+                .transpose()?;
+            let architecture_summary = entry_document
+                .architecture_summary
+                .filter(|summary| !summary.trim().is_empty())
+                .map(|summary| {
+                    if summary.len() > MAXIMUM_ARCHITECTURE_SUMMARY_BYTES
+                        || summary.chars().any(char::is_control)
+                    {
+                        return Err(DownloadCatalogError::InvalidArchitectureSummary {
+                            entry_index,
+                        });
+                    }
+                    Ok(summary)
+                })
+                .transpose()?;
+            let upstream_license = entry_document
+                .upstream_license
+                .filter(|license| !license.trim().is_empty())
+                .map(|license| {
+                    if license.len() > MAXIMUM_UPSTREAM_LICENSE_BYTES
+                        || license.chars().any(char::is_control)
+                    {
+                        return Err(DownloadCatalogError::InvalidUpstreamLicense { entry_index });
+                    }
+                    Ok(license)
+                })
+                .transpose()?;
+            let download_path_selection =
+                DownloadPathSelection::try_new(entry_document.included_paths)
+                    .map_err(|()| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
             entries.push(DownloadCatalogEntry {
                 huggingface_id: entry_document.huggingface_id,
                 revision: entry_document.revision,
                 display_name: entry_document.display_name,
                 family: entry_document.family,
                 approximate_size_bytes: entry_document.approximate_size_bytes,
+                description,
+                capabilities,
+                quantization_label,
+                architecture_summary,
+                upstream_license,
+                download_path_selection,
             });
         }
 
@@ -216,23 +355,53 @@ impl DownloadCatalogEntry {
     pub const fn approximate_size_bytes(&self) -> u64 {
         self.approximate_size_bytes
     }
+
+    #[must_use]
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    #[must_use]
+    pub const fn capabilities(&self) -> &DownloadCatalogCapabilities {
+        &self.capabilities
+    }
+
+    #[must_use]
+    pub fn quantization_label(&self) -> Option<&str> {
+        self.quantization_label.as_deref()
+    }
+
+    #[must_use]
+    pub fn architecture_summary(&self) -> Option<&str> {
+        self.architecture_summary.as_deref()
+    }
+
+    #[must_use]
+    pub fn upstream_license(&self) -> Option<&str> {
+        self.upstream_license.as_deref()
+    }
+
+    #[must_use]
+    pub const fn download_path_selection(&self) -> &DownloadPathSelection {
+        &self.download_path_selection
+    }
 }
 
-fn validate_huggingface_id(
-    huggingface_id: &str,
-    entry_index: usize,
-) -> Result<(), DownloadCatalogError> {
+pub(crate) fn is_valid_huggingface_id(huggingface_id: &str) -> bool {
     let mut identity_components = huggingface_id.split('/');
     let organization = identity_components.next().unwrap_or_default();
     let model_name = identity_components.next().unwrap_or_default();
-    if identity_components.next().is_some()
-        || !is_valid_hugging_face_component(organization)
-        || !is_valid_hugging_face_component(model_name)
-        || model_name.ends_with(".git")
-    {
-        return Err(DownloadCatalogError::InvalidHuggingFaceId { entry_index });
-    }
-    Ok(())
+    identity_components.next().is_none()
+        && is_valid_hugging_face_component(organization)
+        && is_valid_hugging_face_component(model_name)
+        && !model_name.ends_with(".git")
+}
+
+pub(crate) fn is_valid_immutable_revision(revision: &str) -> bool {
+    revision.len() == GIT_COMMIT_SHA_HEX_CHARACTER_COUNT
+        && revision
+            .bytes()
+            .all(|character| character.is_ascii_digit() || (b'a'..=b'f').contains(&character))
 }
 
 fn is_valid_hugging_face_component(component: &str) -> bool {

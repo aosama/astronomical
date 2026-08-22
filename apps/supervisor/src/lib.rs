@@ -14,6 +14,8 @@ mod generation_performance_log;
 mod image_generation_executor;
 mod instance_lock;
 mod library;
+mod library_application;
+mod library_model_discovery_refresh;
 mod maximum_mlx_memory_endpoint;
 mod maximum_mlx_memory_transaction;
 mod openai_chat_completion;
@@ -34,7 +36,9 @@ mod runtime_model_policy;
 mod serving_session_snapshot;
 mod shutdown_control;
 mod status_endpoint;
+mod supervisor_download_attribution;
 mod supervisor_performance_attribution;
+mod supervisor_performance_record;
 mod system_telemetry;
 mod worker;
 mod worker_cache_clear;
@@ -67,6 +71,10 @@ pub use application::{
     build_development_application_with_reload,
 };
 pub use application_build_identity::ApplicationBuildIdentity;
+pub use library_application::{
+    build_application_with_full_control_and_library_download,
+    build_application_with_library_download,
+};
 
 /// Returns the rolling policy shared by the supervisor process log.
 #[must_use]
@@ -95,8 +103,20 @@ pub use image_generation_executor::{
 };
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use library::{
-    DownloadCatalog, DownloadCatalogEntry, DownloadCatalogError, DownloadCatalogFamily,
+    DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadCatalogError,
+    DownloadCatalogFamily, DownloadDiskCapacityCheck, DownloadDiskPreflight,
+    DownloadDiskPreflightError, DownloadFileDigest, DownloadJob, DownloadJobError, DownloadJobFile,
+    DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
+    DownloadManifestPreflight, DownloadManifestPreflightError, DownloadPayloadTransfer,
+    DownloadPayloadTransferError, DownloadPayloadTransferOutcome, DownloadPublication,
+    DownloadPublicationError, DownloadPublicationRefresh, DownloadTransferControl,
+    Fs4DiskCapacityQuery, HubHttpMethod, HubHttpRequest, HubHttpResponse, HubHttpResponseError,
+    HubManifestFile, HubPayloadByteStream, HubPayloadFuture, HubPayloadRequest, HubPayloadResponse,
+    HubPayloadTransport, HubTransport, HubTransportError, HubTransportFuture, HuggingFaceHub,
+    HuggingFaceHubError, HuggingFaceHubLimits, HuggingFaceManifest, LibraryDownloadCoordinator,
+    LibraryDownloadCoordinatorError, ReqwestHubTransport, ReqwestHubTransportBuildError,
 };
+pub use library_model_discovery_refresh::LibraryModelDiscoveryRefresh;
 pub use openai_chat_translation::{
     OpenAiChatTranslationError, translate_openai_chat_completion_request,
 };

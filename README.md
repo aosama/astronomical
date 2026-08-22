@@ -72,7 +72,7 @@ Astronomical is experimental and deliberately focused:
 - One local user and one active generation at a time.
 - OpenAI-compatible chat completions, responses, model discovery, and server-sent event streaming over loopback only.
 
-Astronomical does not bundle, download, or redistribute model weights. Model licenses remain separate and must permit the intended use.
+Astronomical does not bundle or redistribute model weights. Observatory can download curated public Hugging Face catalog entries directly onto this Mac; each payload is verified before it becomes discoverable. Model licenses remain separate and must permit the intended use.
 
 ## Stable and Development instances
 
@@ -87,7 +87,7 @@ Config, logs, prompt caches, daemon ownership, process locks, and loopback endpo
 
 Serving and qualification tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
 
-On first launch each instance creates its own versioned `config.json` and adjacent offline JSON Schema. When an existing unversioned configuration can be migrated without changing its behavior, Astronomical preserves its exact bytes once as `config.legacy-v0.json` before atomically replacing `config.json`. An unsafe migration leaves the original configuration unchanged and creates no backup. Add one or more absolute directories to scan recursively:
+On first launch each instance creates its own versioned `config.json` and adjacent offline JSON Schema. Open Library in Observatory to install a curated model under that instance's automatic models directory. When an existing unversioned configuration can be migrated without changing its behavior, Astronomical preserves its exact bytes once as `config.legacy-v0.json` before atomically replacing `config.json`. An unsafe migration leaves the original configuration unchanged and creates no backup. Additional existing model locations remain available as recursive scan roots:
 
     {
       "$schema": "./astronomical-config.schema.json",

@@ -7,6 +7,7 @@
     <title>Astronomical Observatory</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/console.css">
+    <link rel="stylesheet" href="/library.css">
 </head>
 <body class="observatory">
     <div class="observatory-shell">
@@ -195,7 +196,7 @@
                 <section id="library-view" class="observatory-view" data-observatory-view="library" aria-labelledby="library-title" hidden>
                     <div class="view-heading">
                         <div><p class="eyebrow">Release catalog</p><h2 id="library-title">Library</h2></div>
-                        <p>Model metadata authored for this Astronomical release.</p>
+                        <p>Download and manage curated public models on this Mac.</p>
                     </div>
                     <section id="library-catalog" class="panel library-catalog" data-library-state="loading">
                         <p id="library-catalog-status" class="library-catalog-state" role="status" aria-live="polite">Loading the model catalog.</p>
@@ -238,6 +239,7 @@
     </div>
     <script src="/memory-control.js" defer></script>
     <script src="/library.js" defer></script>
+    <script src="/library-render.js" defer></script>
     <script src="/console.js" defer></script>
     <script src="/overview-compact.js" defer></script>
     <script src="/playground.js" defer></script>

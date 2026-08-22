@@ -10,9 +10,11 @@ protocol SupervisorClient: Sendable {
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String
   func healthIsAvailable() async -> Bool
   func expectedInstanceIsHealthy() async -> Bool
+  func modelsAreAvailable() async -> Bool
 }
 
 extension SupervisorClient {
+  func modelsAreAvailable() async -> Bool { false }
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
     throw SupervisorClientError.serverRejected("Maximum model RAM control is unavailable")
   }
@@ -92,6 +94,14 @@ struct LocalSupervisorClient: SupervisorClient {
     (try? await request(path: "/health", method: "GET", acceptedStatusCodes: [200])) != nil
   }
 
+  func modelsAreAvailable() async -> Bool {
+    guard let responseBody = try? await request(
+      path: "/v1/models", method: "GET", acceptedStatusCodes: [200]
+    ), let modelsDocument = try? JSONDecoder().decode(ModelsDocument.self, from: responseBody)
+    else { return false }
+    return !modelsDocument.data.isEmpty
+  }
+
   private func request(
     path: String,
     method: String,
@@ -120,6 +130,14 @@ struct LocalSupervisorClient: SupervisorClient {
     }
     return responseBody
   }
+}
+
+private struct ModelsDocument: Decodable {
+  let data: [ModelIdentity]
+}
+
+private struct ModelIdentity: Decodable {
+  let id: String
 }
 
 struct ConfigurationReloadResult: Decodable, Equatable {

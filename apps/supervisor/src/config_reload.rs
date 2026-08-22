@@ -114,12 +114,8 @@ impl ResolvedRuntimeConfigResolver {
             .instance_paths
             .validate_configured_bind_address(user_config.supervisor_bind_address()?)?;
         let configured_model_directories = user_config.model_directories().to_vec();
-        let effective_model_directories =
-            self.effective_model_directories(&configured_model_directories)?;
-        let mut discovered_models = discover_models(&effective_model_directories)?
-            .into_iter()
-            .flat_map(|directory_scan| directory_scan.discovered_models)
-            .collect::<Vec<_>>();
+        let mut discovered_models =
+            self.discover_effective_models(&configured_model_directories)?;
         let discovered_model_ids = discovered_models
             .iter()
             .map(|discovered_model| discovered_model.model_id.clone())
@@ -208,6 +204,41 @@ impl ResolvedRuntimeConfigResolver {
         ordered_model_directories
             .retain(|model_directory| seen_model_directories.insert(model_directory.clone()));
         Ok(ordered_model_directories)
+    }
+
+    fn discover_effective_models(
+        &self,
+        configured_model_directories: &[PathBuf],
+    ) -> Result<Vec<DiscoveredModel>, ResolvedRuntimeConfigError> {
+        let effective_model_directories =
+            self.effective_model_directories(configured_model_directories)?;
+        let automatic_model_directory = self.instance_paths.models_directory();
+        let has_automatic_model_directory = effective_model_directories
+            .first()
+            .is_some_and(|model_directory| model_directory == &automatic_model_directory);
+        if !has_automatic_model_directory {
+            return Ok(discover_models(&effective_model_directories)?
+                .into_iter()
+                .flat_map(|directory_scan| directory_scan.discovered_models)
+                .collect());
+        }
+
+        let mut automatic_models = discover_models(&effective_model_directories[..1])?
+            .into_iter()
+            .flat_map(|directory_scan| directory_scan.discovered_models)
+            .collect::<Vec<_>>();
+        let automatic_model_ids = automatic_models
+            .iter()
+            .map(|discovered_model| discovered_model.model_id.clone())
+            .collect::<HashSet<_>>();
+        let configured_models = discover_models(&effective_model_directories[1..])?
+            .into_iter()
+            .flat_map(|directory_scan| directory_scan.discovered_models)
+            .filter(|discovered_model| !automatic_model_ids.contains(&discovered_model.model_id));
+        // Library publication owns the automatic destination, while authored roots retain strict
+        // duplicate detection among themselves instead of changing discovery semantics globally.
+        automatic_models.extend(configured_models);
+        Ok(automatic_models)
     }
 }
 

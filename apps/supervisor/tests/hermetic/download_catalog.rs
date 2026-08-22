@@ -10,35 +10,65 @@ use std::{
 };
 
 use astronomical_supervisor::{
-    DownloadCatalog, SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation,
+    DownloadCatalog, DownloadCatalogFamily, SupervisorPerformanceAttributionLog,
+    SupervisorPerformanceMeasurement, SupervisorPerformanceOperation,
 };
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 
 #[test]
-fn should_load_the_empty_bundled_production_catalog() {
+fn should_load_the_bundled_production_catalog() {
     let download_catalog = DownloadCatalog::load_bundled()
         .expect("the bundled production catalog should remain valid");
 
     assert_eq!(download_catalog.schema_version(), 1);
-    assert!(download_catalog.entries().is_empty());
 }
 
 #[test]
-fn should_accept_complete_fictional_qwen_and_laguna_entries_in_authored_order() {
+fn should_package_flux_with_only_its_executable_diffusers_graph() {
+    let download_catalog = DownloadCatalog::load_bundled()
+        .expect("the bundled production catalog should remain valid");
+    let flux_entry = download_catalog
+        .entries()
+        .iter()
+        .find(|entry| entry.family() == DownloadCatalogFamily::Flux2Klein)
+        .expect("the release catalog should include the executable FLUX profile");
+
+    assert!(flux_entry.capabilities().supports_image_generation);
+    for required_path in [
+        "LICENSE.md",
+        "model_index.json",
+        "scheduler/scheduler_config.json",
+        "text_encoder/config.json",
+        "tokenizer/tokenizer.json",
+        "transformer/diffusion_pytorch_model.safetensors",
+        "vae/diffusion_pytorch_model.safetensors",
+    ] {
+        assert!(flux_entry.download_path_selection().includes(required_path));
+    }
+    assert!(
+        !flux_entry
+            .download_path_selection()
+            .includes("flux-2-klein-4b.safetensors")
+    );
+    assert!(!flux_entry.download_path_selection().includes("editing.jpg"));
+}
+
+#[test]
+fn should_accept_complete_entries_for_all_executable_families_in_authored_order() {
     let catalog_json = serde_json::json!({
         "schema_version": 1,
         "entries": [
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-laguna", "laguna"),
+            valid_entry("astronomical-test/example-flux", "flux2_klein"),
         ]
     });
 
     let download_catalog = DownloadCatalog::parse_json(&catalog_json.to_string())
         .expect("complete fictional entries should be accepted");
 
-    assert_eq!(download_catalog.entries().len(), 2);
+    assert_eq!(download_catalog.entries().len(), 3);
     assert_eq!(
         download_catalog.entries()[0].huggingface_id(),
         "astronomical-test/example-qwen"
@@ -47,6 +77,38 @@ fn should_accept_complete_fictional_qwen_and_laguna_entries_in_authored_order() 
         download_catalog.entries()[1].huggingface_id(),
         "astronomical-test/example-laguna"
     );
+    assert_eq!(
+        download_catalog.entries()[2].huggingface_id(),
+        "astronomical-test/example-flux"
+    );
+}
+
+#[test]
+fn should_accept_bounded_executable_payload_selection_and_reject_unsafe_rules() {
+    let selected_entry = entry_with_overrides(serde_json::json!({
+        "included_paths": ["LICENSE.md", "model_index.json", "transformer/"]
+    }));
+    let download_catalog =
+        DownloadCatalog::parse_json(&catalog_with_entry(selected_entry).to_string())
+            .expect("release-authored files and directory prefixes should be selectable");
+    let selection = download_catalog.entries()[0].download_path_selection();
+    assert!(selection.includes("LICENSE.md"));
+    assert!(selection.includes("transformer/model.safetensors"));
+    assert!(!selection.includes("alternate-model.safetensors"));
+
+    for invalid_paths in [
+        serde_json::json!([]),
+        serde_json::json!(["../weights"]),
+        serde_json::json!(["weights\\model.safetensors"]),
+        serde_json::json!(["weights/", "weights/model.safetensors"]),
+        serde_json::json!(["Transformer/", "transformer/"]),
+    ] {
+        let invalid_entry = entry_with_overrides(serde_json::json!({
+            "included_paths": invalid_paths
+        }));
+        DownloadCatalog::parse_json(&catalog_with_entry(invalid_entry).to_string())
+            .expect_err("unsafe, empty, colliding, or redundant selections must fail closed");
+    }
 }
 
 #[test]
@@ -132,7 +194,10 @@ fn should_reject_invalid_revision_family_visibility_size_and_display_name() {
         entry_with_overrides(serde_json::json!({
             "revision": "0123456789abcdef0123456789abcdef0123456g"
         })),
-        entry_with_overrides(serde_json::json!({"family": "flux2_klein"})),
+        entry_with_overrides(serde_json::json!({
+            "revision": "0123456789abcdef0123456789abcdef0123456A"
+        })),
+        entry_with_overrides(serde_json::json!({"family": "unsupported_family"})),
         entry_with_overrides(serde_json::json!({"public": false})),
         entry_with_overrides(serde_json::json!({"approximate_size_bytes": 0})),
         entry_with_overrides(
@@ -196,9 +261,8 @@ fn should_reject_unknown_duplicate_and_case_colliding_entries() {
 #[test]
 fn should_leave_the_supervisor_attribution_file_absent_when_disabled() {
     let log_directory = tempfile::tempdir().expect("a log directory should be created");
-    let mut attribution_log =
-        SupervisorPerformanceAttributionLog::open(log_directory.path(), false)
-            .expect("disabled attribution should remain inert");
+    let attribution_log = SupervisorPerformanceAttributionLog::open(log_directory.path(), false)
+        .expect("disabled attribution should remain inert");
 
     let measured_catalog = attribution_log
         .measure_operation(
@@ -226,7 +290,7 @@ fn should_leave_the_supervisor_attribution_file_absent_when_disabled() {
 #[test]
 fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let log_directory = tempfile::tempdir().expect("a log directory should be created");
-    let mut attribution_log = SupervisorPerformanceAttributionLog::open(log_directory.path(), true)
+    let attribution_log = SupervisorPerformanceAttributionLog::open(log_directory.path(), true)
         .expect("enabled attribution should open its writer");
 
     let successful_catalog = attribution_log
@@ -285,7 +349,7 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
 
 #[test]
 fn should_return_a_typed_io_error_when_an_enabled_attribution_write_fails() {
-    let mut attribution_log = SupervisorPerformanceAttributionLog::from_writer(AlwaysFailingWriter);
+    let attribution_log = SupervisorPerformanceAttributionLog::from_writer(AlwaysFailingWriter);
 
     let attribution_error = attribution_log
         .measure_operation(
@@ -309,7 +373,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_timestamp_fails() 
     let measured_operation_executed = Arc::new(AtomicBool::new(false));
     let clock_call_count_for_writer = Arc::clone(&clock_call_count);
     let measured_operation_executed_for_operation = Arc::clone(&measured_operation_executed);
-    let mut attribution_log =
+    let attribution_log =
         SupervisorPerformanceAttributionLog::from_writer_and_clock(io::sink(), move || {
             if clock_call_count_for_writer.fetch_add(1, Ordering::SeqCst) == 0 {
                 Ok(1_000)

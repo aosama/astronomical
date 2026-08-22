@@ -78,7 +78,15 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
                         "display_name": "Example Qwen",
                         "family": "qwen3_5",
                         "approximate_size_bytes": 4_000_000_000_u64,
-                        "public": true
+                        "public": true,
+                        "ready_on_this_mac": false,
+                        "download_state": null,
+                        "capabilities": {
+                            "supports_reasoning": false,
+                            "supports_vision": false,
+                            "supports_tool_calls": false,
+                            "supports_image_generation": false
+                        }
                     },
                     {
                         "huggingface_id": "astronomical-test/example-laguna",
@@ -86,7 +94,15 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
                         "display_name": "Example Laguna",
                         "family": "laguna",
                         "approximate_size_bytes": 5_000_000_000_u64,
-                        "public": true
+                        "public": true,
+                        "ready_on_this_mac": false,
+                        "download_state": null,
+                        "capabilities": {
+                            "supports_reasoning": false,
+                            "supports_vision": false,
+                            "supports_tool_calls": false,
+                            "supports_image_generation": false
+                        }
                     }
                 ]
             })
