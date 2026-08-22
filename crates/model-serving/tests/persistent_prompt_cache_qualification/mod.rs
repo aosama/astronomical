@@ -5,10 +5,10 @@
 //! restore. Each test has an internal 115-second timeout.
 //!
 //! Do **not** run these as part of the normal development loop. Use the dedicated
-//! cache Cargo alias:
+//! cache qualification journey:
 //!
 //! ```sh
-//! cargo qualify-persistent-prompt-cache
+//! scripts/run-disposable-cargo-journey.sh qualify-persistent-prompt-cache
 //! ```
 
 mod cache_disabled;

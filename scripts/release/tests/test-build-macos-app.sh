@@ -127,7 +127,10 @@ main() {
         "${sandbox_repository}/third-party"
     cp "${repository_root}/scripts/internal/build-macos-app.sh" \
         "${sandbox_internal_scripts_directory}/build-macos-app.sh"
-    chmod +x "${sandbox_internal_scripts_directory}/build-macos-app.sh"
+    cp "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+        "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
+    chmod +x "${sandbox_internal_scripts_directory}/build-macos-app.sh" \
+        "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
     printf '%s\n' fixture > "${sandbox_repository}/LICENSE"
     printf '%s\n' fixture > "${sandbox_repository}/third-party/THIRD_PARTY_NOTICES"
     printf '%s\n' fixture > "${sandbox_repository}/third-party/RUST_DEPENDENCY_NOTICES"
@@ -140,11 +143,30 @@ if [ "${1:-}" = "metadata" ]; then
     printf '%s\n' '{"packages":[{"name":"astronomical-supervisor","version":"0.2.0","repository":"https://github.com/example/astronomical"}]}'
     exit 0
 fi
-mkdir -p target/release
-printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > target/release/astronomicald
-cp target/release/astronomicald target/release/astronomical-inference-worker
-chmod +x target/release/astronomicald target/release/astronomical-inference-worker
+cargo_target_directory="${CARGO_TARGET_DIR:?disposable Cargo target is required}"
+printf '%s\n' "$cargo_target_directory" > "${FAKE_CARGO_TARGET_RECORD:?}"
+target_triple=""
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--target" ]; then
+        target_triple="$2"
+        break
+    fi
+    shift
+done
+[ -n "$target_triple" ] || exit 1
+cargo_release_directory="${cargo_target_directory}/${target_triple}/release"
+mkdir -p "$cargo_release_directory"
+printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > "${cargo_release_directory}/astronomicald"
+cp "${cargo_release_directory}/astronomicald" \
+    "${cargo_release_directory}/astronomical-inference-worker"
+chmod +x "${cargo_release_directory}/astronomicald" \
+    "${cargo_release_directory}/astronomical-inference-worker"
 CARGO
+    cat > "${fake_command_directory}/rustc" <<'RUSTC'
+#!/usr/bin/env sh
+[ "$*" = "--print host-tuple" ] || exit 1
+printf '%s\n' 'fixture-apple-darwin'
+RUSTC
     cat > "${fake_command_directory}/swift" <<'SWIFT'
 #!/usr/bin/env sh
 if [ "${1:-}" != "build" ]; then
@@ -233,9 +255,15 @@ CODESIGN
     write_successful_command "${sandbox_scripts_directory}/bootstrap-native-dependencies.sh"
     write_successful_command "${sandbox_internal_scripts_directory}/validate-macos-app.sh"
 
+    cargo_lane_root="${SANDBOX_DIRECTORY}/cargo-lanes"
+    mkdir -p "$cargo_lane_root"
+
     printf '%s\n' '[app-builder-test] case=development-output-is-noindex status=start'
+    development_cargo_target_record="${SANDBOX_DIRECTORY}/development-cargo-target"
     (CDPATH='' cd -- "$sandbox_repository" && \
         FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/development-codesign.log" \
+            FAKE_CARGO_TARGET_RECORD="$development_cargo_target_record" \
+            ASTRONOMICAL_CARGO_LANE_ROOT="$cargo_lane_root" \
             PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
             "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel development)
     development_app_bundle="${sandbox_repository}/target/astronomical-macos-development.noindex/Astronomical Development.app"
@@ -244,11 +272,19 @@ CODESIGN
         print_error "Development bundle did not request the Development icon identity"
         exit 1
     }
+    development_cargo_target="$(cat "$development_cargo_target_record")"
+    [ ! -e "$development_cargo_target" ] || {
+        print_error "Development build retained its disposable Cargo target"
+        exit 1
+    }
     printf '%s\n' '[app-builder-test] case=development-output-is-noindex status=success'
 
     printf '%s\n' '[app-builder-test] case=stable-output-is-noindex status=start'
+    stable_cargo_target_record="${SANDBOX_DIRECTORY}/stable-cargo-target"
     (CDPATH='' cd -- "$sandbox_repository" && \
         FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/stable-codesign.log" \
+            FAKE_CARGO_TARGET_RECORD="$stable_cargo_target_record" \
+            ASTRONOMICAL_CARGO_LANE_ROOT="$cargo_lane_root" \
             PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
             "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel stable \
                 --signing-identity "Developer ID Application: Example (ABCDE12345)")
@@ -271,6 +307,15 @@ CODESIGN
         print_error "Development bundle unexpectedly requested distribution signing"
         exit 1
     fi
+    stable_cargo_target="$(cat "$stable_cargo_target_record")"
+    [ ! -e "$stable_cargo_target" ] || {
+        print_error "Stable build retained its disposable Cargo target"
+        exit 1
+    }
+    [ -z "$(ls -A "$cargo_lane_root")" ] || {
+        print_error "app builds retained files beneath the disposable Cargo lane root"
+        exit 1
+    }
     printf '%s\n' '[app-builder-test] case=stable-output-is-noindex status=success'
 }
 

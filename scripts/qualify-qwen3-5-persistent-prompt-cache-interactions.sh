@@ -7,6 +7,14 @@ if [ "$#" -ne 0 ]; then
     exit 2
 fi
 
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
+    exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+        --lane prompt-cache-interactions -- \
+        "${repository_root}/scripts/qualify-qwen3-5-persistent-prompt-cache-interactions.sh"
+fi
+CDPATH='' cd -- "$repository_root"
+
 if command -v timeout >/dev/null 2>&1; then
     timeout_executable="$(command -v timeout)"
 elif command -v gtimeout >/dev/null 2>&1; then
@@ -32,7 +40,7 @@ for qualification_cell in ${qualification_cells}; do
     printf '%s\n' "[prompt-cache-interaction-matrix] status=start cell=${qualification_cell} completed=${completed_cell_count}/${total_cell_count} timeout_seconds=120"
     ASTRONOMICAL_PROMPT_CACHE_INTERACTION_QUALIFICATION_CELL="${qualification_cell}" \
         CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$(sysctl -n hw.logicalcpu)}" \
-        "${timeout_executable}" -k 5s 120s \
+        "${timeout_executable}" --foreground -k 5s 120s \
         cargo --verbose test \
             --package astronomical-model-serving \
             --features direct-mlx \
