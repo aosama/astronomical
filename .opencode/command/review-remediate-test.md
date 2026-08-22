@@ -3,9 +3,9 @@ description: Review and remediate the current code changes, then run proportiona
 subtask: false
 ---
 
-Review the current uncommitted changes as your own work:
+Do a self code review for the current uncommitted changes:
 
-- Remediate correctness, maintainability, naming, and architecture findings.
-- Improve comments where rationale is not clear from the code.
-- Split files when doing so creates a clearer owner or keeps source files near the repository size limit.
+- Remediate correctness, maintainability and naming of variables, functions and file names.
+- Improve code comments.
+- Split files following separation of concerns when it makes sense, think deeply and use your judgement.
 - Run proportionate tests with the repository-required progress and timeout controls.
