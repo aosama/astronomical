@@ -1,7 +1,5 @@
 //! Per-model execution policy carried with each model swap.
 
-use std::path::PathBuf;
-
 use serde::{Deserialize, Serialize};
 
 use crate::{WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration};
@@ -15,14 +13,6 @@ pub struct WorkerSpeculativePrefillRuntimeConfiguration {
     pub keep_percentage: u32,
 }
 
-/// Identity and resolved directory for an explicitly configured auxiliary model.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct WorkerAuxiliaryModelConfiguration {
-    pub model_id: String,
-    pub model_directory: PathBuf,
-}
-
 /// Complete autoregressive execution policy for one canonical requestable model.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -34,7 +24,6 @@ pub struct WorkerAutoregressiveModelConfiguration {
     pub maximum_output_tokens: u32,
     pub chunking: WorkerChunkingConfiguration,
     pub mtp_draft_depth: Option<u8>,
-    pub mtp_head_model: Option<WorkerAuxiliaryModelConfiguration>,
     pub speculative_prefill: Option<WorkerSpeculativePrefillConfiguration>,
 }
 
@@ -49,7 +38,6 @@ pub struct WorkerLoadedAutoregressiveModelRuntimeConfiguration {
     pub maximum_output_tokens: u32,
     pub chunking: WorkerChunkingConfiguration,
     pub mtp_draft_depth: Option<u8>,
-    pub mtp_head_model_id: Option<String>,
     pub speculative_prefill_enabled: bool,
     pub speculative_prefill: Option<WorkerSpeculativePrefillRuntimeConfiguration>,
 }
@@ -138,9 +126,6 @@ impl WorkerModelConfiguration {
                         maximum_output_tokens: configuration.maximum_output_tokens,
                         chunking: configuration.chunking.clone(),
                         mtp_draft_depth: configuration.mtp_draft_depth,
-                        // A configured relationship is not effective until a model factory
-                        // validates and binds the auxiliary artifact into the execution graph.
-                        mtp_head_model_id: None,
                         speculative_prefill_enabled: configuration.speculative_prefill.is_some(),
                         speculative_prefill: configuration.speculative_prefill.as_ref().and_then(
                             |speculative_prefill| {

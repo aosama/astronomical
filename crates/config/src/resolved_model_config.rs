@@ -7,33 +7,6 @@ use crate::{AstronomicalConfigError, SpeculativePrefillConfig};
 /// Internal output default used when a model has no configured preference.
 pub const DEFAULT_MAXIMUM_OUTPUT_TOKENS: u32 = 20_480;
 
-/// Resolved automatic MTP preference for one target model.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ResolvedMtpConfig {
-    head_model_id: Option<String>,
-    draft_depth: Option<u8>,
-}
-
-impl ResolvedMtpConfig {
-    /// MTP remains automatic; these fields only refine artifact selection and depth.
-    #[must_use]
-    pub const fn is_automatic(&self) -> bool {
-        true
-    }
-
-    /// Returns the explicitly paired standalone head identity, when configured.
-    #[must_use]
-    pub fn head_model_id(&self) -> Option<&str> {
-        self.head_model_id.as_deref()
-    }
-
-    /// Returns the configured proposal depth, or `None` for artifact policy.
-    #[must_use]
-    pub const fn draft_depth(&self) -> Option<u8> {
-        self.draft_depth
-    }
-}
-
 /// Complete config-owned policy after global and per-model inheritance.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedModelConfig {
@@ -45,7 +18,7 @@ pub struct ResolvedModelConfig {
     chunking: ChunkingConfig,
     configured_chunking_fields: ConfiguredChunkingFields,
     speculative_prefill: Option<SpeculativePrefillConfig>,
-    mtp: ResolvedMtpConfig,
+    mtp_draft_depth: Option<u8>,
 }
 
 impl ResolvedModelConfig {
@@ -100,7 +73,6 @@ impl ResolvedModelConfig {
                     configured.keep_percentage,
                 )
             });
-        let configured_mtp = acceleration.and_then(|acceleration| acceleration.mtp.as_ref());
         Ok(Self {
             maximum_context_tokens,
             // The internal default is policy, not an explicit user demand, so tiny
@@ -115,10 +87,9 @@ impl ResolvedModelConfig {
             chunking: ChunkingConfig::resolve(&effective_chunking)?,
             configured_chunking_fields: effective_chunking.configured_fields(),
             speculative_prefill,
-            mtp: ResolvedMtpConfig {
-                head_model_id: configured_mtp.and_then(|mtp| mtp.head_model_id.clone()),
-                draft_depth: configured_mtp.and_then(|mtp| mtp.draft_depth),
-            },
+            mtp_draft_depth: acceleration
+                .and_then(|acceleration| acceleration.mtp.as_ref())
+                .and_then(|mtp| mtp.draft_depth),
         })
     }
 
@@ -175,9 +146,9 @@ impl ResolvedModelConfig {
         self.speculative_prefill.as_ref()
     }
 
-    /// Returns automatic MTP selection preferences for this model.
+    /// Returns the configured proposal depth, or `None` for artifact policy.
     #[must_use]
-    pub const fn mtp(&self) -> &ResolvedMtpConfig {
-        &self.mtp
+    pub const fn mtp_draft_depth(&self) -> Option<u8> {
+        self.mtp_draft_depth
     }
 }

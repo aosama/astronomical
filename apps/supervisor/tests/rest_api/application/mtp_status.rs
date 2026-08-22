@@ -96,7 +96,6 @@ async fn should_report_loaded_model_mtp_policy_without_reloadable_config() {
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
                 mtp_draft_depth: Some(2),
-                mtp_head_model_id: Some("fictional/mtp-head".to_owned()),
                 speculative_prefill_enabled: false,
                 speculative_prefill: None,
             },
