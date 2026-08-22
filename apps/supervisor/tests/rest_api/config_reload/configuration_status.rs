@@ -49,10 +49,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
                     speculative_prefill_unavailable_reason: Some(
                         "configured drafter is not currently available".to_owned(),
                     ),
-                    configured_mtp_head_model_id: Some("fictional/mtp-head".to_owned()),
-                    mtp_head_unavailable_reason: Some(
-                        "standalone MTP head execution is not available".to_owned(),
-                    ),
                     ..Default::default()
                 },
             worker_model_configuration: worker_model_configuration.clone(),
@@ -127,10 +123,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         0.7
     );
     assert_eq!(
-        status_document["configuration"]["ready_model"]["mtp_head_model_id"]["configured"],
-        "fictional/mtp-head"
-    );
-    assert_eq!(
         status_document["configured_speculative_prefill_enabled"],
         true
     );
@@ -150,9 +142,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     assert_eq!(
         status_document["speculative_prefill_target_model_id"],
         crate::common::MODEL_ID
-    );
-    assert!(
-        status_document["configuration"]["ready_model"]["mtp_head_model_id"]["effective"].is_null()
     );
     assert_eq!(
         status_document["configuration"]["ready_model"]["chunking"]["fixed_prompt_processing_chunk_size_tokens"]
@@ -189,7 +178,6 @@ fn worker_model_configuration() -> WorkerModelConfiguration {
             prompt_cache_common_prefix_stride_blocks: 4,
         },
         mtp_draft_depth: Some(3),
-        mtp_head_model: None,
         speculative_prefill: None,
     })
 }

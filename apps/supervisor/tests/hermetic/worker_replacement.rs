@@ -445,7 +445,6 @@ fn model_policy_catalog(model_id: &str) -> Arc<HashMap<String, RuntimeModelPolic
                         prompt_cache_common_prefix_stride_blocks: 4,
                     },
                     mtp_draft_depth: None,
-                    mtp_head_model: None,
                     speculative_prefill: None,
                 },
             ),

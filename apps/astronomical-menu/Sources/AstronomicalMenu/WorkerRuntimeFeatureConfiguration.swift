@@ -98,7 +98,6 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
   let maximumOutputTokens: UInt32
   let chunking: WorkerChunkingConfiguration
   let mtpDraftDepth: UInt8?
-  let mtpHeadModelIdentifier: String?
   let speculativePrefillEnabled: Bool
   let speculativePrefill: WorkerSpeculativePrefillRuntimeConfiguration?
 
@@ -108,7 +107,6 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
     case maximumOutputTokens = "maximum_output_tokens"
     case chunking
     case mtpDraftDepth = "mtp_draft_depth"
-    case mtpHeadModelIdentifier = "mtp_head_model_id"
     case speculativePrefillEnabled = "speculative_prefill_enabled"
     case speculativePrefill = "speculative_prefill"
   }
@@ -121,8 +119,6 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
     maximumOutputTokens = try container.decode(UInt32.self, forKey: .maximumOutputTokens)
     chunking = try container.decode(WorkerChunkingConfiguration.self, forKey: .chunking)
     mtpDraftDepth = try container.decodeRequiredNullable(UInt8.self, forKey: .mtpDraftDepth)
-    mtpHeadModelIdentifier = try container.decodeRequiredNullable(
-      String.self, forKey: .mtpHeadModelIdentifier)
     speculativePrefillEnabled = try container.decode(
       Bool.self, forKey: .speculativePrefillEnabled)
     speculativePrefill = try container.decodeRequiredNullable(

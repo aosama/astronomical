@@ -55,9 +55,7 @@ pub use model_identity::{
     decode_huggingface_cache_directory_name, leaf_model_id, resolve_model_id,
 };
 pub use prompt_cache_config::PromptCacheConfig;
-pub use resolved_model_config::{
-    DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig, ResolvedMtpConfig,
-};
+pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 pub use speculative_prefill_config::SpeculativePrefillConfig;
 
 use config_document::UserConfigFile;

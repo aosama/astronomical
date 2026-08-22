@@ -64,7 +64,6 @@ async fn should_preserve_generation_and_full_path_free_model_configuration_in_ac
                         prompt_cache_common_prefix_stride_blocks: 4,
                     },
                     mtp_draft_depth: Some(3),
-                    mtp_head_model_id: Some("fictional/mtp-head".to_owned()),
                     speculative_prefill_enabled: true,
                     speculative_prefill: Some(WorkerSpeculativePrefillRuntimeConfiguration {
                         draft_model_id: "fictional/draft".to_owned(),

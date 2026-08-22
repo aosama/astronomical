@@ -13,7 +13,7 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
           "runtime":{"model_directories":[],"maximum_mlx_memory_gb":16},
           "prompt_cache":{"enabled":false,"maximum_size_gb":20},
           "chunking":{"fixed_prompt_processing_chunk_size_tokens":2048,"full_attention_key_value_growth_tokens":256},
-          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096},"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":30,"minimum_prompt_tokens":8192},"mtp":{"head_model_id":"organization/mtp","draft_depth":2}}}},
+          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096},"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":30,"minimum_prompt_tokens":8192},"mtp":{"draft_depth":2}}}},
           "diagnostics":{"performance_attribution_enabled":true,"log_level":"debug","retained_log_files":3}
         }"#,
     );
@@ -48,9 +48,7 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
             .draft_model_id(),
         Some("organization/draft")
     );
-    assert_eq!(model_config.mtp().draft_depth(), Some(2));
-    assert_eq!(model_config.mtp().head_model_id(), Some("organization/mtp"));
-    assert!(model_config.mtp().is_automatic());
+    assert_eq!(model_config.mtp_draft_depth(), Some(2));
     assert_eq!(
         astronomical_config
             .maximum_mlx_memory_bytes()
@@ -117,7 +115,7 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
         Some(1_024)
     );
     assert!(configured_model.speculative_prefill().is_none());
-    assert_eq!(configured_model.mtp().draft_depth(), None);
+    assert_eq!(configured_model.mtp_draft_depth(), None);
     assert_eq!(unconfigured_model.maximum_output_tokens(), 20_480);
 }
 
@@ -232,11 +230,22 @@ fn should_reject_invalid_model_ranges_and_unknown_nested_fields() {
 }
 
 #[test]
+fn should_reject_the_retired_standalone_mtp_head_configuration() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"target":{"acceleration":{"mtp":{"head_model_id":"organization/mtp"}}}}}"#,
+    );
+
+    AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+        .expect_err("the strict schema must reject standalone MTP head selection");
+}
+
+#[test]
 fn should_reject_control_characters_in_model_relationship_identities() {
     for configured_models in [
         serde_json::json!({"target\nmodel": {}}),
         serde_json::json!({"target": {"acceleration": {"speculative_prefill": {"draft_model_id": "draft\nmodel"}}}}),
-        serde_json::json!({"target": {"acceleration": {"mtp": {"head_model_id": "head\tmodel"}}}}),
     ] {
         let temporary_home_directory =
             tempfile::tempdir().expect("temporary home should be created");

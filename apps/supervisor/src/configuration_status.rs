@@ -54,8 +54,6 @@ struct ReadyModelConfigurationSummary {
     top_p: ConfigurationValue<f64>,
     chunking: ChunkingConfigurationSummary,
     mtp_draft_depth: ConfigurationValue<u8>,
-    mtp_head_model_id: ConfigurationValue<String>,
-    mtp_head_unavailable_reason: Option<String>,
     speculative_prefill: SpeculativePrefillConfigurationSummary,
     speculative_prefill_unavailable_reason: Option<String>,
 }
@@ -247,23 +245,6 @@ fn ready_model_summary(
             default: None,
             effective: effective_mtp_draft_depth,
         },
-        mtp_head_model_id: ConfigurationValue {
-            configured: configured_policy.and_then(|policy| {
-                policy
-                    .acceleration_availability
-                    .configured_mtp_head_model_id
-                    .clone()
-            }),
-            default: None,
-            effective: effective_autoregressive_model
-                .and_then(|model| model.mtp_head_model_id.clone()),
-        },
-        mtp_head_unavailable_reason: configured_policy.and_then(|policy| {
-            policy
-                .acceleration_availability
-                .mtp_head_unavailable_reason
-                .clone()
-        }),
         speculative_prefill: speculative_prefill_summary(
             configured_speculative_prefill,
             effective_speculative_prefill,

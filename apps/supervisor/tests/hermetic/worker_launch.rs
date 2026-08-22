@@ -470,7 +470,6 @@ fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguratio
             prompt_cache_common_prefix_stride_blocks: 4,
         },
         mtp_draft_depth: None,
-        mtp_head_model: None,
         speculative_prefill: None,
     })
 }

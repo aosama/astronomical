@@ -4,10 +4,9 @@ use std::path::PathBuf;
 
 use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerAutoregressiveModelConfiguration,
-    WorkerAuxiliaryModelConfiguration, WorkerChunkingConfiguration, WorkerCommand,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
-    WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel, WorkerModelConfiguration,
-    WorkerStartupConfiguration,
+    WorkerChunkingConfiguration, WorkerCommand, WorkerFlux2KleinModelConfiguration,
+    WorkerImageGenerationModelFamily, WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel,
+    WorkerModelConfiguration, WorkerStartupConfiguration,
 };
 use tokio::io::duplex;
 
@@ -46,40 +45,6 @@ async fn should_round_trip_worker_startup_configuration() {
     );
 }
 
-#[test]
-fn should_not_claim_a_configured_mtp_head_is_effective_before_worker_binding() {
-    let model_configuration =
-        WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
-            model_id: "organization/target".to_owned(),
-            maximum_context_tokens: 32_768,
-            maximum_output_tokens: 4_096,
-            chunking: WorkerChunkingConfiguration {
-                fixed_prompt_processing_chunk_size_tokens: 4_096,
-                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
-                full_attention_key_value_growth_tokens: 256,
-                speculative_prefill_draft_forward_tokens: 2_048,
-                prefill_graph_submission_layer_interval: 1,
-                experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                prompt_cache_block_tokens: None,
-                prompt_cache_common_prefix_stride_blocks: 4,
-            },
-            mtp_draft_depth: Some(2),
-            mtp_head_model: Some(WorkerAuxiliaryModelConfiguration {
-                model_id: "organization/mtp-head".to_owned(),
-                model_directory: PathBuf::from("/tmp/fictional-mtp-head"),
-            }),
-            speculative_prefill: None,
-        });
-
-    let astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration::Autoregressive(
-        runtime_configuration,
-    ) = model_configuration.runtime_configuration()
-    else {
-        panic!("the chat policy must remain autoregressive");
-    };
-    assert_eq!(runtime_configuration.mtp_head_model_id, None);
-}
-
 #[tokio::test]
 async fn should_round_trip_selected_model_policy_on_swap_model() {
     let worker_command = WorkerCommand::SwapModel {
@@ -100,7 +65,6 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
                 mtp_draft_depth: Some(2),
-                mtp_head_model: None,
                 speculative_prefill: None,
             },
         ),
@@ -141,7 +105,6 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                 prompt_cache_common_prefix_stride_blocks: 4,
             },
             mtp_draft_depth: Some(2),
-            mtp_head_model: None,
             speculative_prefill: None,
         });
 
@@ -166,7 +129,6 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                     "prompt_cache_common_prefix_stride_blocks": 4
                 },
                 "mtp_draft_depth": 2,
-                "mtp_head_model": null,
                 "speculative_prefill": null
             }
         })

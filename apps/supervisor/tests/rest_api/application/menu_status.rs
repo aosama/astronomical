@@ -161,7 +161,6 @@ fn autoregressive_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
                 mtp_draft_depth: None,
-                mtp_head_model_id: None,
                 speculative_prefill_enabled: false,
                 speculative_prefill: None,
             },
