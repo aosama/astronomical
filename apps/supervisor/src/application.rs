@@ -445,6 +445,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         .merge(console_routes())
         .merge(library_catalog_routes())
         .merge(library_download_routes())
+        .merge(crate::config_reveal_endpoint::config_reveal_routes())
         .merge(system_telemetry_routes())
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))

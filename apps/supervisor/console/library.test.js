@@ -211,6 +211,10 @@ test("presents progress and only the controls valid for each durable download st
     );
     assert.equal(vm.runInContext("formatLibraryRate(27_500_000)", scriptContext), "27.5 MB/s");
     assert.equal(
+        vm.runInContext("smoothLibraryTransferRate(20_000_000, 4_000_000)", scriptContext),
+        16_000_000
+    );
+    assert.equal(
         vm.runInContext("formatLibraryRemainingTime(16 * 60)", scriptContext),
         "About 16 minutes left"
     );

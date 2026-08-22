@@ -104,6 +104,47 @@ fn should_reject_duplicate_model_ids_with_deterministic_directory_order() {
 }
 
 #[test]
+fn should_exclude_ambiguous_models_and_report_path_safe_configured_root_numbers() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let first_root_directory = temporary_directory.path().join("first-root");
+    let second_root_directory = temporary_directory.path().join("second-root");
+    let first_shared_model_directory = first_root_directory.join("SharedModel");
+    let second_shared_model_directory = second_root_directory.join("SharedModel");
+    let available_model_directory = second_root_directory.join("AvailableModel");
+    for model_directory in [
+        &first_shared_model_directory,
+        &second_shared_model_directory,
+        &available_model_directory,
+    ] {
+        fs::create_dir_all(model_directory).expect("model directory should be created");
+        write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
+        write_required_model_files(model_directory);
+    }
+
+    let discovery_report = astronomical_config::discover_models_excluding_ambiguous_identities(&[
+        first_root_directory,
+        second_root_directory,
+    ])
+    .expect("non-conflicting model discovery should remain available");
+    let discovered_model_ids = discovery_report
+        .directory_scans
+        .iter()
+        .flat_map(|directory_scan| &directory_scan.discovered_models)
+        .map(|discovered_model| discovered_model.model_id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(discovered_model_ids, vec!["AvailableModel"]);
+    assert_eq!(discovery_report.diagnostics.len(), 1);
+    assert_eq!(discovery_report.diagnostics[0].model_id, "SharedModel");
+    assert_eq!(
+        discovery_report.diagnostics[0].configured_root_numbers,
+        vec![1, 2]
+    );
+    let diagnostic_debug_text = format!("{:?}", discovery_report.diagnostics[0]);
+    assert!(!diagnostic_debug_text.contains(temporary_directory.path().to_string_lossy().as_ref()));
+}
+
+#[test]
 fn should_discover_an_organization_model_tree_and_skip_hidden_incomplete_staging() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let models_root_directory = temporary_directory.path().join("models");

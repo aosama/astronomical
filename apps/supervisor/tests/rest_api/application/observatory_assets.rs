@@ -16,6 +16,8 @@ const EXPECTED_COMPACT_OVERVIEW_MARKER: &str =
     "id=\"compact-memory-panel\" class=\"overview-summary-section compact-memory-panel\"";
 const EXPECTED_MEMORY_PRESSURE_MARKER: &str =
     "id=\"compact-memory-pressure-state\" class=\"compact-memory-pressure-state\"";
+const EXPECTED_DISCOVERY_REVEAL_MARKER: &str =
+    "id=\"model-discovery-reveal-config\" class=\"button button-secondary\"";
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_index_html_at_root() {
@@ -50,6 +52,10 @@ async fn should_serve_the_embedded_observatory_index_html_at_root() {
     assert!(
         shell_text.contains(EXPECTED_HTML_TITLE_MARKER),
         "the observatory shell should declare its title"
+    );
+    assert!(
+        shell_text.contains(EXPECTED_DISCOVERY_REVEAL_MARKER),
+        "the Observatory should provide a persistent duplicate-model repair control"
     );
 }
 

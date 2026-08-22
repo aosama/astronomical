@@ -233,6 +233,65 @@ fn should_scan_a_repeated_automatic_root_once_while_preserving_authored_configur
 }
 
 #[test]
+fn should_keep_unrelated_models_available_and_report_duplicate_authored_identities() {
+    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
+    let first_models_directory = config_home_directory.path().join("first-models");
+    let second_models_directory = config_home_directory.path().join("second-models");
+    write_minimal_qwen_model(&first_models_directory.join("ambiguous-model"));
+    write_minimal_qwen_model(&second_models_directory.join("ambiguous-model"));
+    write_minimal_qwen_model(&second_models_directory.join("available-model"));
+    write_development_config(
+        config_home_directory.path(),
+        &[first_models_directory, second_models_directory],
+    );
+    let resolver = development_resolver(config_home_directory.path());
+
+    let resolved_config = resolver
+        .load()
+        .expect("ambiguous authored identities should not prevent startup");
+    let discovered_model_ids = resolved_config
+        .discovered_models
+        .iter()
+        .map(|model| model.model_id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(discovered_model_ids, vec!["available-model"]);
+    assert_eq!(resolved_config.model_discovery_diagnostics.len(), 1);
+    assert_eq!(
+        resolved_config.model_discovery_diagnostics[0].model_id,
+        "ambiguous-model"
+    );
+    assert_eq!(
+        resolved_config.model_discovery_diagnostics[0].configured_root_numbers,
+        vec![1, 2]
+    );
+    assert!(
+        !format!("{:?}", resolved_config.model_discovery_diagnostics)
+            .contains(config_home_directory.path().to_string_lossy().as_ref())
+    );
+
+    let corrected_models_directory = resolved_config.configured_model_directories[1].clone();
+    write_development_config(
+        config_home_directory.path(),
+        std::slice::from_ref(&corrected_models_directory),
+    );
+    let corrected_config = resolver
+        .load()
+        .expect("removing one duplicate root should restore the model");
+    let mut corrected_model_ids = corrected_config
+        .discovered_models
+        .iter()
+        .map(|model| model.model_id.as_str())
+        .collect::<Vec<_>>();
+    corrected_model_ids.sort_unstable();
+    assert!(corrected_config.model_discovery_diagnostics.is_empty());
+    assert_eq!(
+        corrected_model_ids,
+        vec!["ambiguous-model", "available-model"]
+    );
+}
+
+#[test]
 fn should_retain_the_configured_root_failure_when_the_missing_automatic_path_is_authored() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
     let missing_models_directory = config_home_directory

@@ -85,6 +85,7 @@ fn development_resolved_config() -> ResolvedRuntimeConfig {
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/fictional/astronomical-inference-worker"),
         discovered_models: Vec::new(),
+        model_discovery_diagnostics: Vec::new(),
         configured_model_directories: Vec::new(),
         model_policy_catalog: Arc::new(HashMap::new()),
         unmatched_model_config_ids: Vec::new(),

@@ -57,6 +57,64 @@ async fn should_reject_invalid_config_reload_without_mutating_live_state() {
 }
 
 #[tokio::test]
+async fn should_preserve_live_serving_and_expose_path_safe_duplicate_model_feedback() {
+    let temporary_home = tempfile::tempdir().expect("a temporary home should be created");
+    let first_root = temporary_home.path().join("first-root");
+    let second_root = temporary_home.path().join("second-root");
+    write_minimal_qwen_model(&first_root.join("ambiguous-model"));
+    write_minimal_qwen_model(&second_root.join("ambiguous-model"));
+    write_config_file(
+        temporary_home.path(),
+        &serde_json::json!({
+            "runtime": { "model_directories": [first_root, second_root] }
+        })
+        .to_string(),
+    );
+    let initial_resolved_config = sample_resolved_config();
+    let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
+    let application = build_development_application_with_reload(
+        ScriptedExecutor::ready(Vec::new()),
+        Arc::clone(&reloadable_config),
+        temporary_home.path().to_path_buf(),
+    );
+
+    let response = post_config_reload(&application).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response_body = to_bytes(response.into_body(), 4 * 1024)
+        .await
+        .expect("the reload response should be readable");
+    let response_text = String::from_utf8_lossy(&response_body);
+    assert!(response_text.contains("ambiguous-model"));
+    assert!(response_text.contains("entries 1, 2"));
+    assert!(!response_text.contains(temporary_home.path().to_string_lossy().as_ref()));
+    assert_eq!(
+        *reloadable_config
+            .read()
+            .expect("the live configuration should remain readable"),
+        initial_resolved_config
+    );
+
+    let status_response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("status should remain available");
+    let status_body = to_bytes(status_response.into_body(), 16 * 1024)
+        .await
+        .expect("status should remain readable");
+    let status_json: serde_json::Value =
+        serde_json::from_slice(&status_body).expect("status should contain JSON");
+    assert_eq!(
+        status_json["configuration"]["model_discovery_diagnostics"][0]["model_id"],
+        "ambiguous-model"
+    );
+}
+
+#[tokio::test]
 async fn should_reject_retired_top_level_speculative_prefill_configuration() {
     let temporary_config_directory =
         tempfile::tempdir().expect("a temporary config directory is needed");

@@ -8,6 +8,7 @@ mod chat_generation_executor;
 mod config_reload;
 mod config_reload_endpoint;
 mod config_reload_response;
+mod config_reveal_endpoint;
 mod configuration_status;
 mod console_assets;
 mod generation_performance_log;
@@ -108,13 +109,14 @@ pub use library::{
     DownloadDiskPreflightError, DownloadFileDigest, DownloadJob, DownloadJobError, DownloadJobFile,
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
     DownloadManifestPreflight, DownloadManifestPreflightError, DownloadPayloadTransfer,
-    DownloadPayloadTransferError, DownloadPayloadTransferOutcome, DownloadPublication,
-    DownloadPublicationError, DownloadPublicationRefresh, DownloadTransferControl,
-    Fs4DiskCapacityQuery, HubHttpMethod, HubHttpRequest, HubHttpResponse, HubHttpResponseError,
-    HubManifestFile, HubPayloadByteStream, HubPayloadFuture, HubPayloadRequest, HubPayloadResponse,
-    HubPayloadTransport, HubTransport, HubTransportError, HubTransportFuture, HuggingFaceHub,
-    HuggingFaceHubError, HuggingFaceHubLimits, HuggingFaceManifest, LibraryDownloadCoordinator,
-    LibraryDownloadCoordinatorError, ReqwestHubTransport, ReqwestHubTransportBuildError,
+    DownloadPayloadTransferError, DownloadPayloadTransferOutcome, DownloadProgressSnapshot,
+    DownloadPublication, DownloadPublicationError, DownloadPublicationRefresh,
+    DownloadTransferControl, Fs4DiskCapacityQuery, HubHttpMethod, HubHttpRequest, HubHttpResponse,
+    HubHttpResponseError, HubManifestFile, HubPayloadByteStream, HubPayloadFuture,
+    HubPayloadRequest, HubPayloadResponse, HubPayloadTransport, HubTransport, HubTransportError,
+    HubTransportFuture, HuggingFaceHub, HuggingFaceHubError, HuggingFaceHubLimits,
+    HuggingFaceManifest, LibraryDownloadCoordinator, LibraryDownloadCoordinatorError,
+    ReqwestHubTransport, ReqwestHubTransportBuildError,
 };
 pub use library_model_discovery_refresh::LibraryModelDiscoveryRefresh;
 pub use openai_chat_translation::{

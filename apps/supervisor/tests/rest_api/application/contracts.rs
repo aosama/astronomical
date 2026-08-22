@@ -296,7 +296,7 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         .await
         .expect("the application should return a status response");
     assert_eq!(response.status(), StatusCode::OK);
-    let status_body = to_bytes(response.into_body(), 4 * 1024)
+    let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the status body should be readable");
     let status_document: serde_json::Value =
@@ -371,7 +371,7 @@ async fn should_report_generating_activity_for_an_active_worker() {
         )
         .await
         .expect("the application should return a status response");
-    let status_body = to_bytes(response.into_body(), 4 * 1024)
+    let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the status body should be readable");
     let status_document: serde_json::Value =
@@ -403,7 +403,7 @@ async fn should_report_completed_prefill_chunk_tokens_for_prompt_processing_prog
         )
         .await
         .expect("the application should return a status response");
-    let status_body = to_bytes(response.into_body(), 4 * 1024)
+    let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the status body should be readable");
     let status_document: serde_json::Value =

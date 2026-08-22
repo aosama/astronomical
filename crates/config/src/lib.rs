@@ -45,9 +45,11 @@ pub use maximum_mlx_memory::{
 pub use model_discovery::{
     ChatModelCapabilities, ClassifiedModelArtifact, DiscoveredModel, DiscoveredModelError,
     Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError, ImageGenerationCapabilities,
-    ModelCapabilities, ModelDiscoveryDirectoryScan, ModelFamily, ModelFamilyClassificationError,
-    ModelLicense, classify_model_directory, discover_classified_model_artifacts, discover_models,
-    requestable_model_id, verify_flux2_klein_model_directory,
+    ModelCapabilities, ModelDiscoveryDiagnostic, ModelDiscoveryDirectoryScan, ModelDiscoveryReport,
+    ModelFamily, ModelFamilyClassificationError, ModelLicense, classify_model_directory,
+    discover_classified_model_artifacts, discover_models,
+    discover_models_excluding_ambiguous_identities, requestable_model_id,
+    verify_flux2_klein_model_directory,
 };
 pub use model_identity::{
     decode_huggingface_cache_directory_name, leaf_model_id, resolve_model_id,
