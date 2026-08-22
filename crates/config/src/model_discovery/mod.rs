@@ -334,11 +334,18 @@ fn try_discover_model_with_id(model_directory: &Path, model_id: &str) -> Option<
             let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
             let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
             let family_metadata = qwen3_5::discover_model_metadata(model_directory, &config_value)?;
+            let immutable_provenance =
+                classified_artifacts::immutable_model_provenance(model_directory);
             Some(DiscoveredModel {
                 model_id: model_id.to_owned(),
-                provider_model_id: None,
+                provider_model_id: immutable_provenance
+                    .as_ref()
+                    .map(|(provider_model_id, _)| provider_model_id.clone()),
                 model_family,
-                revision: derive_revision_from_config_bytes(&config_bytes),
+                revision: immutable_provenance.map_or_else(
+                    || derive_revision_from_config_bytes(&config_bytes),
+                    |(_, revision)| revision,
+                ),
                 model_directory: model_directory.to_path_buf(),
                 capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
                     context_window: family_metadata.context_window,
@@ -355,9 +362,13 @@ fn try_discover_model_with_id(model_directory: &Path, model_id: &str) -> Option<
         ModelFamily::Laguna => {
             let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
             let laguna_metadata = laguna::discover_model_metadata(model_directory, &config_bytes)?;
+            let provider_model_id =
+                classified_artifacts::immutable_model_provenance(model_directory)
+                    .filter(|(_, revision)| revision == &laguna_metadata.revision)
+                    .map(|(provider_model_id, _)| provider_model_id);
             Some(DiscoveredModel {
                 model_id: model_id.to_owned(),
-                provider_model_id: None,
+                provider_model_id,
                 model_family,
                 revision: laguna_metadata.revision,
                 model_directory: model_directory.to_path_buf(),

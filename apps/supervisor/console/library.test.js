@@ -259,6 +259,26 @@ test("presents progress and only the controls valid for each durable download st
         ))),
         ["Resume", "Cancel"]
     );
+
+    vm.runInContext(
+        `libraryCurrentDownload = {
+            state: "failed",
+            huggingface_id: "astronomical-test/example-qwen",
+            error_code: "model_already_present"
+        }`,
+        scriptContext
+    );
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(vm.runInContext(
+            "libraryActionButtons(catalogRow).map(button => button.textContent)",
+            scriptContext
+        ))),
+        ["Cancel"]
+    );
+    assert.match(
+        vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
+        /move it elsewhere/i
+    );
 });
 
 test("accepts the largest catalog size that JavaScript can represent exactly", () => {

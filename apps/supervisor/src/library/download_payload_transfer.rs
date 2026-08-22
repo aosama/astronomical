@@ -18,6 +18,7 @@ use super::{
     HubTransportError,
     download_payload_response::{payload_url, validate_payload_response},
     download_payload_verification::verify_download_job,
+    download_publication_reconciliation::reconcile_publication_intent,
     download_staged_file::open_staged_file_for_append,
 };
 use crate::{
@@ -265,12 +266,11 @@ impl DownloadPayloadTransfer {
             .map_err(DownloadJobStoreError::from)?;
         let publication_job = download_job.clone();
         let publication_store = self.job_store.clone();
-        if let Err(publication_error) = tokio::task::spawn_blocking(move || {
-            publication_store.replace_current_for_publication(&publication_job)
-        })
-        .await
-        .map_err(DownloadPayloadTransferError::Task)?
-        {
+        let publication_reconciliation_outcome =
+            reconcile_publication_intent(publication_store, &self.attribution_log, publication_job)
+                .await
+                .map_err(DownloadPayloadTransferError::Attribution)?;
+        if let Err(publication_error) = publication_reconciliation_outcome {
             let public_error_code = if matches!(
                 publication_error,
                 DownloadJobStoreError::PublishedModelAlreadyExists
