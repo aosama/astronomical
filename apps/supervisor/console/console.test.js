@@ -135,6 +135,37 @@ test("activates a directly requested Observatory path without replacing it", () 
     assert.deepEqual(replacedPaths, []);
 });
 
+test("retains direct Library navigation and restores it from browser history", () => {
+    const scriptContext = createConsoleContext();
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("library")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("library")];
+    let popstateHandler;
+    scriptContext.document = {
+        querySelectorAll(selector) {
+            return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
+        }
+    };
+    scriptContext.window = {
+        location: { pathname: "/library" },
+        addEventListener(eventName, eventHandler) {
+            if (eventName === "popstate") { popstateHandler = eventHandler; }
+        }
+    };
+    scriptContext.history = { pushState() {}, replaceState() {} };
+
+    vm.runInContext("wireObservatoryNavigation()", scriptContext);
+    assert.equal(navigationButtons[1].attributes["aria-current"], "page");
+    assert.equal(observatoryViews[1].hidden, false);
+
+    scriptContext.window.location.pathname = "/overview";
+    popstateHandler();
+    scriptContext.window.location.pathname = "/library";
+    popstateHandler();
+
+    assert.equal(navigationButtons[1].attributes["aria-current"], "page");
+    assert.equal(observatoryViews[1].hidden, false);
+});
+
 test("selects the ready model metadata instead of the first advertised model", () => {
     const scriptContext = createConsoleContext();
     const selectedModel = vm.runInContext(
@@ -223,6 +254,7 @@ test("maps every observatory destination to a stable URL path", () => {
 
     assert.equal(pathMap.overview, "/overview");
     assert.equal(pathMap.chat, "/chat");
+    assert.equal(pathMap.library, "/library");
     assert.equal(pathMap.memory, undefined);
     assert.equal(pathMap.cache, undefined);
     assert.equal(pathMap.model, "/model");
@@ -236,6 +268,7 @@ test("maps every observatory URL path back to its destination", () => {
 
     assert.equal(reverseMap["/overview"], "overview");
     assert.equal(reverseMap["/chat"], "chat");
+    assert.equal(reverseMap["/library"], "library");
     assert.equal(reverseMap["/memory"], undefined);
     assert.equal(reverseMap["/cache"], undefined);
     assert.equal(reverseMap["/model"], "model");

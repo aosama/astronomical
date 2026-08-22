@@ -49,7 +49,8 @@ main() {
         --config "${repository_root}/third-party/about.toml" \
         --output-file "$generation_destination_path" \
         "${repository_root}/third-party/rust-dependency-notices.hbs"
-    perl -0pi -e 's/\r\n/\n/g; s/\n+\z/\n/' "$generation_destination_path"
+    # Upstream license files can contain invisible line-end padding; stripping it keeps the generated artifact reviewable and diff-check clean without changing license wording.
+    perl -0pi -e 's/\r\n/\n/g; s/[ \t]+(?=\n)//g; s/\n+\z/\n/' "$generation_destination_path"
 
     if [ "$check_only" = true ]; then
         if ! cmp -s "$temporary_notices_path" "$generated_notices_path"; then

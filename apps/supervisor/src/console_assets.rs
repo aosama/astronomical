@@ -10,10 +10,13 @@ use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
 const INDEX_HTML: &str = include_str!("../console/index.html");
 const CONSOLE_JS: &str = include_str!("../console/console.js");
+const LIBRARY_JS: &str = include_str!("../console/library.js");
+const LIBRARY_RENDER_JS: &str = include_str!("../console/library-render.js");
 const OVERVIEW_COMPACT_JS: &str = include_str!("../console/overview-compact.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../console/memory-control.js");
 const PLAYGROUND_JS: &str = include_str!("../console/playground.js");
 const CONSOLE_CSS: &str = include_str!("../console/console.css");
+const LIBRARY_CSS: &str = include_str!("../console/library.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
@@ -30,12 +33,16 @@ where
         .route("/overview", get(console_index))
         .route("/chat", get(console_index))
         .route("/model", get(console_index))
+        .route("/library", get(console_index))
         .route("/settings", get(console_index))
         .route("/console.js", get(console_script))
+        .route("/library.js", get(library_script))
+        .route("/library-render.js", get(library_render_script))
         .route("/overview-compact.js", get(overview_compact_script))
         .route("/memory-control.js", get(memory_control_script))
         .route("/playground.js", get(playground_script))
         .route("/console.css", get(console_stylesheet))
+        .route("/library.css", get(library_stylesheet))
 }
 
 /// `GET /` — the Observatory single-page shell. References `/console.js` and
@@ -48,6 +55,14 @@ pub(crate) async fn console_index() -> Response {
 /// framework, no build step).
 pub(crate) async fn console_script() -> Response {
     embedded_text_response(CONSOLE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn library_script() -> Response {
+    embedded_text_response(LIBRARY_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn library_render_script() -> Response {
+    embedded_text_response(LIBRARY_RENDER_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn overview_compact_script() -> Response {
@@ -65,6 +80,10 @@ pub(crate) async fn playground_script() -> Response {
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.
 pub(crate) async fn console_stylesheet() -> Response {
     embedded_text_response(CONSOLE_CSS, CSS_CONTENT_TYPE)
+}
+
+pub(crate) async fn library_stylesheet() -> Response {
+    embedded_text_response(LIBRARY_CSS, CSS_CONTENT_TYPE)
 }
 
 fn embedded_text_response(body: &'static str, content_type: &'static str) -> Response {

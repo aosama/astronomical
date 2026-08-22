@@ -45,6 +45,10 @@ pub(crate) enum WorkerLoopCommand {
         effective_mlx_memory_ceiling_bytes: u64,
         update_sender: oneshot::Sender<Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>>,
     },
+    UpdateModelPolicyCatalog {
+        model_policy_catalog: Arc<std::collections::HashMap<String, RuntimeModelPolicy>>,
+        update_sender: oneshot::Sender<Result<(), WorkerControlError>>,
+    },
     ClearPromptCache {
         model_id: Option<String>,
         clear_sender: oneshot::Sender<Result<PromptCacheClearOutcome, WorkerControlError>>,
