@@ -9,9 +9,37 @@ body:
       value: |
         Do not paste credentials, prompts, personal paths, local model inventories, proprietary model files, or unredacted logs.
   - type: textarea
-    id: report
+    id: goal
     attributes:
-      label: What happened?
-      description: Describe the problem in your own words.
+      label: Goal
+      description: Describe the correct user-visible or engineering behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Describe the observed behavior and reproducible evidence without private machine details.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Identify the affected journey and the smallest complete correction.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Record relevant safety, precision, performance, memory, licensing, or provenance limits. Enter "None" when no special constraint applies.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: List the observable conditions that prove the correction is complete and prevent regression.
     validations:
       required: true

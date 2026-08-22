@@ -161,6 +161,11 @@ macos_menu_contracts_started_at_seconds="$(date +%s)"
 "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-macos-menu-contracts.sh
 printf '%s\n' "[commit-verification] PASSED step=test-macos-menu-contracts elapsed_seconds=$(( $(date +%s) - macos_menu_contracts_started_at_seconds ))"
 
+printf '\n%s\n' "[commit-verification] step=test-pull-request-policy-contracts timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+pull_request_policy_contracts_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" node --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js
+printf '%s\n' "[commit-verification] PASSED step=test-pull-request-policy-contracts elapsed_seconds=$(( $(date +%s) - pull_request_policy_contracts_started_at_seconds ))"
+
 printf '\n%s\n' "[commit-verification] step=test-observatory-contracts timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
 observatory_contracts_started_at_seconds="$(date +%s)"
 "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js
