@@ -16,6 +16,7 @@ let libraryCurrentDownload = { state: "idle" };
 let libraryPollingTimer = null;
 let libraryRefreshPromise = null;
 let libraryProgressSample = null;
+let libraryMeasuredBytesPerSecond = null;
 // Active filter state: search query, family filter, and readiness filter.
 let librarySearchQuery = "";
 let libraryFamilyFilter = "all";
@@ -276,19 +277,52 @@ function libraryProgressDetail(catalogRow) {
     const currentFile = activeDownload.current_file_relative_path
         ? "Now saving " + activeDownload.current_file_relative_path
         : "";
-    const sample = libraryProgressSample;
-    if (!sample || !(activeDownload.bytes_completed > sample.bytesCompleted)) {
+    const bytesPerSecond = libraryMeasuredBytesPerSecond;
+    if (!(bytesPerSecond > 0)) {
         return currentFile || "Measuring transfer rate…";
     }
-    const elapsedSeconds = (Date.now() - sample.sampledAtMillis) / 1_000;
-    if (!(elapsedSeconds > 0)) return currentFile || "Measuring transfer rate…";
-    const bytesPerSecond = (activeDownload.bytes_completed - sample.bytesCompleted)
-        / elapsedSeconds;
     const remainingBytes = activeDownload.bytes_total - activeDownload.bytes_completed;
     const rateDetail = formatLibraryRate(bytesPerSecond)
         + " · "
         + formatLibraryRemainingTime(remainingBytes / bytesPerSecond);
     return currentFile ? currentFile + " · " + rateDetail : rateDetail;
+}
+
+function smoothLibraryTransferRate(previousBytesPerSecond, measuredBytesPerSecond) {
+    if (!(previousBytesPerSecond > 0)) return measuredBytesPerSecond;
+    // A quarter of each new sample reacts within a few polls while preventing one CDN burst or
+    // quiet interval from turning a large model's estimate into misleading hours.
+    return previousBytesPerSecond * 0.75 + measuredBytesPerSecond * 0.25;
+}
+
+function recordLibraryProgressMeasurement(activeDownload, sampledAtMillis = Date.now()) {
+    const previousSample = libraryProgressSample;
+    const canMeasure = activeDownload?.state === "downloading"
+        && typeof activeDownload.huggingface_id === "string"
+        && Number.isFinite(activeDownload.bytes_completed)
+        && previousSample?.huggingfaceId === activeDownload.huggingface_id
+        && activeDownload.bytes_completed >= previousSample.bytesCompleted;
+    if (canMeasure) {
+        const elapsedSeconds = (sampledAtMillis - previousSample.sampledAtMillis) / 1_000;
+        const receivedBytes = activeDownload.bytes_completed - previousSample.bytesCompleted;
+        if (elapsedSeconds > 0 && receivedBytes > 0) {
+            libraryMeasuredBytesPerSecond = smoothLibraryTransferRate(
+                libraryMeasuredBytesPerSecond,
+                receivedBytes / elapsedSeconds
+            );
+        }
+    } else {
+        libraryMeasuredBytesPerSecond = null;
+    }
+    libraryProgressSample = activeDownload?.state === "downloading"
+        && activeDownload.huggingface_id
+        && Number.isFinite(activeDownload.bytes_completed)
+        ? {
+            huggingfaceId: activeDownload.huggingface_id,
+            bytesCompleted: activeDownload.bytes_completed,
+            sampledAtMillis
+        }
+        : null;
 }
 
 function formatLibraryRate(bytesPerSecond) {
@@ -398,11 +432,7 @@ async function refreshLibraryDownloadStateOnce() {
         const downloadResponse = await fetch(LIBRARY_DOWNLOAD_URL);
         if (!downloadResponse.ok) return;
         libraryCurrentDownload = await downloadResponse.json();
-        if (libraryCurrentDownload.state !== "downloading"
-            || libraryProgressSample?.huggingfaceId !== libraryCurrentDownload.huggingface_id
-            || libraryCurrentDownload.bytes_completed < (libraryProgressSample?.bytesCompleted || 0)) {
-            libraryProgressSample = null;
-        }
+        recordLibraryProgressMeasurement(libraryCurrentDownload);
         if (libraryCurrentDownload.state === "idle"
             || libraryCurrentDownload.state === "verifying"
             || libraryCurrentDownload.state === "publishing") {
@@ -410,15 +440,6 @@ async function refreshLibraryDownloadStateOnce() {
             if (catalogResponse.ok) libraryCatalogDocument = await catalogResponse.json();
         }
         renderLibraryCatalogDocument(libraryCatalogDocument);
-        if (libraryCurrentDownload.state === "downloading"
-            && libraryCurrentDownload.huggingface_id
-            && Number.isFinite(libraryCurrentDownload.bytes_completed)) {
-            libraryProgressSample = {
-                huggingfaceId: libraryCurrentDownload.huggingface_id,
-                bytesCompleted: libraryCurrentDownload.bytes_completed,
-                sampledAtMillis: Date.now()
-            };
-        }
     } catch {
         // Polling is self-healing and must never cancel daemon-owned work.
     }

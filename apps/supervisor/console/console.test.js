@@ -197,6 +197,31 @@ test("detects configured and effective generation mismatch", () => {
     );
 });
 
+test("renders a path-safe duplicate-model warning with its reveal control", () => {
+    const scriptContext = createConsoleContext();
+    const warningElement = { hidden: true };
+    const messageElement = { textContent: "" };
+    scriptContext.document.getElementById = (elementId) => ({
+        "model-discovery-warning": warningElement,
+        "model-discovery-warning-message": messageElement
+    })[elementId];
+
+    scriptContext.renderModelDiscoveryDiagnostic({
+        model_discovery_diagnostics: [{
+            code: "ambiguous_model_identity",
+            model_id: "shared-model",
+            configured_root_numbers: [1, 2]
+        }]
+    });
+
+    assert.equal(warningElement.hidden, false);
+    assert.equal(
+        messageElement.textContent,
+        "Model shared-model appears in model_directories entries 1, 2. Remove one duplicate root."
+    );
+    assert.equal(messageElement.textContent.includes("private-root-marker"), false);
+});
+
 test("computes whole decimal gigabyte bounds from exact status bytes", () => {
     const scriptContext = createConsoleContext();
     const bounds = vm.runInContext(

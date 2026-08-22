@@ -133,6 +133,7 @@
     },
     "resolved_generation": null,
     "restart_required": false,
+    "model_discovery_diagnostics": [],
     "unmatched_model_config_ids": [],
     "validation_error": null
   },

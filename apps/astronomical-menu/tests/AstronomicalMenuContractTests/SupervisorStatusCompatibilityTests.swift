@@ -45,4 +45,18 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.speculativePrefillDraftMemoryByteCount, 0)
     XCTAssertEqual(statusDocument.servingSession.completedRequestCount, 0)
   }
+
+  func test_should_decode_path_safe_duplicate_model_feedback_for_the_menu() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"idle","configuration":{"configured_generation":"configured","resolved_generation":"resolved","effective_generation":"effective","is_effective":false,"restart_required":false,"model_discovery_diagnostics":[{"code":"ambiguous_model_identity","model_id":"shared-model","configured_root_numbers":[1,2]}]}}"#.utf8
+      )
+    )
+
+    let diagnostic = try XCTUnwrap(statusDocument.configuration?.modelDiscoveryDiagnostics?.first)
+    XCTAssertEqual(diagnostic.code, "ambiguous_model_identity")
+    XCTAssertEqual(diagnostic.message, "Model shared-model appears in model_directories entries 1, 2. Remove one duplicate root.")
+    XCTAssertFalse(diagnostic.message.contains("private-root-marker"))
+  }
 }

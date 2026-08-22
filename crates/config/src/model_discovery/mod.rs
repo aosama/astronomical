@@ -6,6 +6,8 @@ use thiserror::Error;
 
 use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
 
+const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
+
 mod bounded_artifact_file;
 mod classified_artifacts;
 mod deepseek_v4;
@@ -116,6 +118,21 @@ pub struct ModelDiscoveryDirectoryScan {
     pub discovered_models: Vec<DiscoveredModel>,
 }
 
+/// Path-safe explanation for one public identity excluded from tolerant discovery.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModelDiscoveryDiagnostic {
+    pub model_id: String,
+    /// One-based positions in the authored `model_directories` array.
+    pub configured_root_numbers: Vec<usize>,
+}
+
+/// Executable models and bounded ambiguity diagnostics from authored roots.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModelDiscoveryReport {
+    pub directory_scans: Vec<ModelDiscoveryDirectoryScan>,
+    pub diagnostics: Vec<ModelDiscoveryDiagnostic>,
+}
+
 /// Recursively scans configured directories for executable model families.
 ///
 /// For each directory, walks subdirectories one level deep looking for
@@ -137,6 +154,61 @@ pub fn discover_models(
     }
     reject_duplicate_model_ids(&directory_scans)?;
     Ok(directory_scans)
+}
+
+/// Preserves available models while excluding identities found beneath multiple authored roots.
+pub fn discover_models_excluding_ambiguous_identities(
+    model_directories: &[PathBuf],
+) -> Result<ModelDiscoveryReport, DiscoveredModelError> {
+    let mut directory_scans = Vec::with_capacity(model_directories.len());
+    let mut scanned_directories = std::collections::BTreeSet::new();
+    for directory_path in model_directories {
+        let discovered_models = if scanned_directories.insert(directory_path.clone()) {
+            scan_directory_for_executable_models(directory_path)?
+        } else {
+            Vec::new()
+        };
+        directory_scans.push(ModelDiscoveryDirectoryScan {
+            path: directory_path.clone(),
+            discovered_models,
+        });
+    }
+
+    let mut model_id_to_root_numbers: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (root_index, directory_scan) in directory_scans.iter().enumerate() {
+        for discovered_model in &directory_scan.discovered_models {
+            model_id_to_root_numbers
+                .entry(discovered_model.model_id.clone())
+                .or_default()
+                .push(root_index + 1);
+        }
+    }
+    let mut ambiguous_model_ids = std::collections::BTreeSet::new();
+    let mut diagnostics = Vec::new();
+    for (model_id, mut configured_root_numbers) in model_id_to_root_numbers {
+        if configured_root_numbers.len() < 2 {
+            continue;
+        }
+        configured_root_numbers.sort_unstable();
+        configured_root_numbers.dedup();
+        ambiguous_model_ids.insert(model_id.clone());
+        if diagnostics.len() < MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS {
+            diagnostics.push(ModelDiscoveryDiagnostic {
+                model_id,
+                configured_root_numbers,
+            });
+        }
+    }
+    for directory_scan in &mut directory_scans {
+        directory_scan
+            .discovered_models
+            .retain(|model| !ambiguous_model_ids.contains(&model.model_id));
+    }
+
+    Ok(ModelDiscoveryReport {
+        directory_scans,
+        diagnostics,
+    })
 }
 
 /// Scans a single root directory recursively for executable models.

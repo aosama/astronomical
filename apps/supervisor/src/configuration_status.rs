@@ -31,10 +31,18 @@ pub(crate) struct ConfigurationStatusSummary {
     is_effective: bool,
     restart_required: bool,
     validation_error: Option<String>,
+    model_discovery_diagnostics: Vec<ModelDiscoveryDiagnosticSummary>,
     unmatched_model_config_ids: Vec<String>,
     ready_model: Option<ReadyModelConfigurationSummary>,
     prompt_cache: PromptCacheConfigurationSummary,
     memory: MemoryConfigurationSummary,
+}
+
+#[derive(Serialize)]
+struct ModelDiscoveryDiagnosticSummary {
+    code: &'static str,
+    model_id: String,
+    configured_root_numbers: Vec<usize>,
 }
 
 #[derive(Serialize)]
@@ -133,6 +141,20 @@ impl ConfigurationStatusSummary {
             is_effective,
             restart_required,
             validation_error,
+            model_discovery_diagnostics: configured_config
+                .as_ref()
+                .map(|config| {
+                    config
+                        .model_discovery_diagnostics
+                        .iter()
+                        .map(|diagnostic| ModelDiscoveryDiagnosticSummary {
+                            code: "ambiguous_model_identity",
+                            model_id: diagnostic.model_id.clone(),
+                            configured_root_numbers: diagnostic.configured_root_numbers.clone(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             unmatched_model_config_ids: configured_config
                 .as_ref()
                 .map(|config| config.unmatched_model_config_ids.clone())

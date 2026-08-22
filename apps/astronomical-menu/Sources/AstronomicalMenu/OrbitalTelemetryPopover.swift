@@ -169,6 +169,18 @@ struct OrbitalTelemetryPopover: View {
           )
           .accessibilityLabel("Server control: \(controlActionFeedback.message)")
       }
+      if let discoveryDiagnostic = telemetryStore.statusDocument.configuration?
+        .modelDiscoveryDiagnostics?.first
+      {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(discoveryDiagnostic.message)
+            .font(.caption)
+            .foregroundStyle(.orange)
+          Button("Reveal config", action: revealConfiguration)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Model discovery warning. \(discoveryDiagnostic.message)")
+      }
       Divider()
       VStack(alignment: .leading, spacing: 2) {
         Text(telemetryStore.statusDocument.application?.buildTitle ?? applicationIdentity.buildTitle)

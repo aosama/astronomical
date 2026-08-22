@@ -4,8 +4,8 @@ use std::{fs, sync::Arc, time::Duration};
 
 use astronomical_supervisor::{
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadPayloadTransfer,
-    DownloadPayloadTransferOutcome, DownloadPublication, DownloadTransferControl,
-    HubPayloadResponse, HubTransportError,
+    DownloadPayloadTransferOutcome, DownloadProgressSnapshot, DownloadPublication,
+    DownloadTransferControl, HubPayloadResponse, HubTransportError,
 };
 use bytes::Bytes;
 use futures_util::{StreamExt, stream};
@@ -139,7 +139,7 @@ async fn should_verify_git_blob_sha1_without_requesting_already_complete_bytes()
 }
 
 #[tokio::test]
-async fn should_publish_live_progress_before_a_large_file_finishes() {
+async fn should_publish_live_progress_without_synchronizing_job_metadata_during_the_file() {
     tokio::time::timeout(Duration::from_secs(5), async {
         const CHECKPOINT_BYTES: usize = 1_000_000;
         let first_chunk = vec![b'R'; CHECKPOINT_BYTES];
@@ -160,17 +160,17 @@ async fn should_publish_live_progress_before_a_large_file_finishes() {
                 None,
             ))
             .expect("exact manifest job should persist");
-        let observed_store = job_store.clone();
+        let progress_snapshot = DownloadProgressSnapshot::new();
+        let observed_progress_snapshot = progress_snapshot.clone();
         let first_chunk_bytes = Bytes::from(first_chunk);
         let remaining_chunk_bytes = Bytes::from_static(remaining_chunk);
         let live_progress = tokio::spawn(async move {
             for _poll_attempt in 0..100 {
-                if let Some(download_job) = observed_store.load().expect("live job should load") {
-                    if download_job.bytes_completed() >= CHECKPOINT_BYTES as u64
-                        && download_job.bytes_completed() < download_job.bytes_total()
-                    {
-                        return download_job.bytes_completed();
-                    }
+                if let Some(download_job) = observed_progress_snapshot.current()
+                    && download_job.bytes_completed() >= CHECKPOINT_BYTES as u64
+                    && download_job.bytes_completed() < download_job.bytes_total()
+                {
+                    return download_job.bytes_completed();
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
@@ -180,8 +180,8 @@ async fn should_publish_live_progress_before_a_large_file_finishes() {
             tokio::time::sleep(Duration::from_millis(40)).await;
             Ok(remaining_chunk_bytes)
         }));
-        let transfer = DownloadPayloadTransfer::new(
-            job_store,
+        let transfer = DownloadPayloadTransfer::with_progress_snapshot(
+            job_store.clone(),
             Arc::new(ScriptedPayloadTransport::new([HubPayloadResponse::new(
                 200,
                 None,
@@ -190,16 +190,27 @@ async fn should_publish_live_progress_before_a_large_file_finishes() {
             )])),
             disabled_attribution(&test_directory),
             DownloadTransferControl::new(),
+            progress_snapshot,
         );
+        let transfer_task = tokio::spawn(async move { transfer.resume(200).await });
 
-        transfer
-            .resume(200)
-            .await
-            .expect("large file should finish after publishing live progress");
         let published_bytes = live_progress
             .await
             .expect("live progress observer should finish");
         assert_eq!(published_bytes, CHECKPOINT_BYTES as u64);
+        assert_eq!(
+            job_store
+                .load()
+                .expect("durable job should load")
+                .expect("durable job should remain")
+                .bytes_completed(),
+            0,
+            "live rendering must not force a synchronized job rewrite while a file is streaming"
+        );
+        transfer_task
+            .await
+            .expect("transfer task should finish")
+            .expect("large file should finish after publishing live progress");
     })
     .await
     .expect("live progress journey should remain bounded");
@@ -294,16 +305,29 @@ async fn should_retain_staging_and_fail_closed_for_bad_range_or_checksum() {
             DownloadTransferControl::new(),
         );
 
-        transfer
+        let transfer_error = transfer
             .resume(200)
             .await
             .expect_err("invalid payload must fail");
+        if expected_error_code == DownloadJobPublicErrorCode::ChecksumMismatch {
+            assert!(
+                matches!(
+                    transfer_error,
+                    astronomical_supervisor::DownloadPayloadTransferError::ChecksumMismatch { .. }
+                ),
+                "checksum corruption returned {transfer_error:?}"
+            );
+        }
 
         let failed_job = job_store
             .load()
             .expect("failed job should load")
             .expect("failed job should exist");
-        assert_eq!(failed_job.state(), DownloadJobState::Failed);
+        assert_eq!(
+            failed_job.state(),
+            DownloadJobState::Failed,
+            "{expected_error_code:?} must become durable"
+        );
         assert_eq!(failed_job.error_code(), Some(expected_error_code));
         assert!(staged_file.exists());
     }
