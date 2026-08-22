@@ -265,12 +265,6 @@
       "description": "Automatic multi-token prediction preference for the containing target model.",
       "additionalProperties": false,
       "properties": {
-        "head_model_id": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^[^\\s\\u0000-\\u001F\\u007F](?:[^\\u0000-\\u001F\\u007F]*[^\\s\\u0000-\\u001F\\u007F])?$",
-          "description": "Optional canonical discovered identity of a standalone MTP head artifact."
-        },
         "draft_depth": {
           "type": "integer",
           "minimum": 1,

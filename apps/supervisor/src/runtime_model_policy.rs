@@ -22,13 +22,11 @@ pub struct ConfiguredSpeculativePrefillPolicy {
     pub minimum_prompt_tokens: u32,
 }
 
-/// Configured acceleration intent and bounded reasons it cannot currently execute.
+/// Configured speculative-prefill intent and the bounded reason it cannot currently execute.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RuntimeModelAccelerationAvailability {
     pub configured_speculative_prefill: Option<ConfiguredSpeculativePrefillPolicy>,
     pub speculative_prefill_unavailable_reason: Option<String>,
-    pub configured_mtp_head_model_id: Option<String>,
-    pub mtp_head_unavailable_reason: Option<String>,
 }
 
 /// One canonical requestable model's directory and fully resolved execution policy.

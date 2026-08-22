@@ -399,7 +399,6 @@ fn sample_runtime_model_policy() -> RuntimeModelPolicy {
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
                 mtp_draft_depth: None,
-                mtp_head_model: None,
                 speculative_prefill: None,
             },
         ),

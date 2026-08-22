@@ -118,14 +118,13 @@ impl ResolvedModelPolicyCatalog {
                         )
                     })
             });
-        let configured_mtp_head_model_id = resolved_model_config
-            .mtp()
-            .head_model_id()
-            .map(str::to_owned);
         let acceleration_availability = RuntimeModelAccelerationAvailability {
             configured_speculative_prefill: configured_speculative_prefill.map(|configuration| {
                 ConfiguredSpeculativePrefillPolicy {
-                    draft_model_id: configuration.draft_model_id().unwrap_or_default().to_owned(),
+                    draft_model_id: configuration
+                        .draft_model_id()
+                        .unwrap_or_default()
+                        .to_owned(),
                     keep_percentage: configuration.keep_percentage(),
                     minimum_prompt_tokens: configuration.minimum_prompt_tokens(),
                 }
@@ -135,13 +134,6 @@ impl ResolvedModelPolicyCatalog {
                 .map(|_| {
                     "configured speculative-prefill drafter is not currently discovered".to_owned()
                 }),
-            configured_mtp_head_model_id: configured_mtp_head_model_id.clone(),
-            // Issue #132 owns standalone-head compatibility, so unresolved intent must not reach
-            // the worker as an unbound path or make the otherwise valid target unloadable.
-            mtp_head_unavailable_reason: configured_mtp_head_model_id.as_ref().map(|_| {
-                "standalone MTP head execution is not available until compatibility validation is implemented"
-                    .to_owned()
-            }),
         };
 
         (
@@ -151,8 +143,7 @@ impl ResolvedModelPolicyCatalog {
                 // Worker policy carries model capability rather than a request default.
                 maximum_output_tokens: chat_capabilities.max_output_tokens,
                 chunking: worker_chunking_configuration(resolved_model_config.chunking()),
-                mtp_draft_depth: resolved_model_config.mtp().draft_depth(),
-                mtp_head_model: None,
+                mtp_draft_depth: resolved_model_config.mtp_draft_depth(),
                 speculative_prefill,
             }),
             acceleration_availability,

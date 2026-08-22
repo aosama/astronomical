@@ -257,18 +257,6 @@ impl AccelerationConfigFile {
         {
             return Err(AstronomicalConfigError::InvalidMtpDraftDepth);
         }
-        if self
-            .mtp
-            .as_ref()
-            .and_then(|mtp| mtp.head_model_id.as_deref())
-            .is_some_and(|head_model_id| !is_valid_model_identity(head_model_id))
-        {
-            return Err(invalid_model_value(
-                model_id,
-                "acceleration.mtp.head_model_id",
-                "must be nonempty and contain no surrounding whitespace or control characters",
-            ));
-        }
         Ok(())
     }
 }
@@ -314,8 +302,6 @@ fn is_valid_model_identity(model_id: &str) -> bool {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MtpConfigFile {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) head_model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) draft_depth: Option<u8>,
 }

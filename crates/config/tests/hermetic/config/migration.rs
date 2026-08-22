@@ -93,7 +93,7 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
             .is_none()
     );
     assert_eq!(model_config.maximum_output_tokens(), 4_096);
-    assert_eq!(model_config.mtp().draft_depth(), Some(2));
+    assert_eq!(model_config.mtp_draft_depth(), Some(2));
     assert_eq!(
         model_config
             .chunking()
