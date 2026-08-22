@@ -474,4 +474,7 @@ When a model worker closes its protocol stream during startup, forwarding child 
 ## Durable model transfer
 
 - Stream one model file at a time directly into hidden staging and resume from synchronized file lengths with Hypertext Transfer Protocol Range requests. This bounds transfer memory and avoids retransmitting verified progress after pause, failure, or restart.
+- Benchmark transport protocols against the payload provider before changing them. Hypertext Transfer Protocol version 2 with adaptive receive windows can be slower than version 1.1 for a single large range stream, so protocol availability does not establish higher throughput.
+- Keep high-frequency user-interface progress in process memory. Do not atomically rewrite and synchronize durable job metadata for each small payload increment; filesystem barriers serialize the network hot path. Persist at file completion, pause, failure, verification, and publication boundaries, then reconcile interrupted progress from synchronized staged-file lengths.
+- Smooth displayed transfer rate across several observations. A one-second sample can land between content-delivery-network bursts and overstate a large model's remaining time even when sustained throughput is healthy.
 - Attribute manifest fetch, each file transfer, verification, atomic publication, and discovery refresh separately. End-to-end download time alone cannot distinguish network, hashing, filesystem, and discovery costs.

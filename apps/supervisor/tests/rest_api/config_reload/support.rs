@@ -45,6 +45,34 @@ pub(super) fn write_raw_config_file(home_directory: &std::path::Path, config_bod
     std::fs::write(&config_file, config_body).expect("the config file should be written");
 }
 
+pub(super) fn write_minimal_qwen_model(model_directory: &std::path::Path) {
+    const MODEL_SHARD_BYTES: &[u8] = b"fictional-shard";
+    std::fs::create_dir_all(model_directory).expect("the model directory should be created");
+    std::fs::write(
+        model_directory.join("config.json"),
+        r#"{"model_type":"qwen3_5_moe","text_config":{"max_position_embeddings":262144}}"#,
+    )
+    .expect("the model config should be written");
+    std::fs::write(
+        model_directory.join("model-00001.safetensors"),
+        MODEL_SHARD_BYTES,
+    )
+    .expect("the model shard should be written");
+    std::fs::write(
+        model_directory.join("model.safetensors.index.json"),
+        format!(
+            r#"{{"metadata":{{"total_size":{}}},"weight_map":{{"model.embed_tokens.weight":"model-00001.safetensors"}}}}"#,
+            MODEL_SHARD_BYTES.len()
+        ),
+    )
+    .expect("the model index should be written");
+    std::fs::write(
+        model_directory.join("tokenizer.json"),
+        r#"{"version":1,"model":{"type":"BPE"}}"#,
+    )
+    .expect("the tokenizer should be written");
+}
+
 pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
     use std::collections::HashMap;
     ResolvedRuntimeConfig {
@@ -52,6 +80,7 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),
         discovered_models: Vec::new(),
+        model_discovery_diagnostics: Vec::new(),
         configured_model_directories: Vec::new(),
         model_policy_catalog: Arc::new(HashMap::new()),
         unmatched_model_config_ids: Vec::new(),

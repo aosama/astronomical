@@ -76,6 +76,28 @@ pub(crate) async fn reload_config(State(application_state): State<ApplicationSta
             candidate_resolved.clone();
     }
     let candidate_generation = candidate_resolved.configuration_generation.clone();
+    if let Some(discovery_diagnostic) = candidate_resolved.model_discovery_diagnostics.first() {
+        let configured_root_numbers = discovery_diagnostic
+            .configured_root_numbers
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(
+                ConfigReloadResponse::invalid_config(format!(
+                    "Model '{}' appears in model_directories entries {}; remove one duplicate root and retry",
+                    discovery_diagnostic.model_id, configured_root_numbers
+                ))
+                .with_generations(
+                    &candidate_generation,
+                    effective_worker_generation(&application_state),
+                ),
+            ),
+        )
+            .into_response();
+    }
     let current_resolved = match reloadable_config.read() {
         Ok(current_resolved) => current_resolved.clone(),
         Err(_) => {

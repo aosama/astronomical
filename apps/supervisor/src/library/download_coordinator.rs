@@ -15,8 +15,9 @@ use super::{
     DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadDiskPreflight, DownloadJob,
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
     DownloadManifestPreflight, DownloadManifestPreflightError, DownloadPayloadTransfer,
-    DownloadPayloadTransferOutcome, DownloadPublication, DownloadPublicationRefresh,
-    DownloadTransferControl, HubPayloadTransport, HubTransport, HuggingFaceHub,
+    DownloadPayloadTransferOutcome, DownloadProgressSnapshot, DownloadPublication,
+    DownloadPublicationRefresh, DownloadTransferControl, HubPayloadTransport, HubTransport,
+    HuggingFaceHub,
 };
 use crate::SupervisorPerformanceAttributionLog;
 
@@ -26,6 +27,24 @@ struct SharedDiskCapacityQuery(Arc<dyn DiskCapacityQuery>);
 impl DiskCapacityQuery for SharedDiskCapacityQuery {
     fn available_space_bytes(&self, existing_same_volume_path: &Path) -> io::Result<u64> {
         self.0.available_space_bytes(existing_same_volume_path)
+    }
+}
+
+struct ProgressPublishingRefresh {
+    discovery_refresh: Arc<dyn DownloadPublicationRefresh>,
+    progress_snapshot: DownloadProgressSnapshot,
+    publishing_job: DownloadJob,
+}
+
+impl DownloadPublicationRefresh for ProgressPublishingRefresh {
+    fn refresh(
+        &self,
+        published_directory: &Path,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // The destination exists at this boundary, so user interfaces may now report publishing
+        // without racing ahead of the atomic staging rename.
+        self.progress_snapshot.publish(self.publishing_job.clone());
+        self.discovery_refresh.refresh(published_directory)
     }
 }
 
@@ -42,6 +61,7 @@ pub struct LibraryDownloadCoordinator {
     active_control: Mutex<Option<DownloadTransferControl>>,
     command_lock: Mutex<()>,
     validated_publications: Arc<Mutex<BTreeSet<String>>>,
+    progress_snapshot: DownloadProgressSnapshot,
 }
 
 #[derive(Debug, Error)]
@@ -81,6 +101,7 @@ impl LibraryDownloadCoordinator {
             active_control: Mutex::new(None),
             command_lock: Mutex::new(()),
             validated_publications: Arc::new(Mutex::new(BTreeSet::new())),
+            progress_snapshot: DownloadProgressSnapshot::new(),
         }
     }
 
@@ -109,6 +130,11 @@ impl LibraryDownloadCoordinator {
     pub async fn current_job(
         &self,
     ) -> Result<Option<DownloadJob>, LibraryDownloadCoordinatorError> {
+        if self.has_active_task().await
+            && let Some(download_job) = self.progress_snapshot.current()
+        {
+            return Ok(Some(download_job));
+        }
         let job_store = self.job_store.clone();
         Ok(tokio::task::spawn_blocking(move || job_store.load()).await??)
     }
@@ -189,6 +215,7 @@ impl LibraryDownloadCoordinator {
     }
 
     async fn spawn_download_task(&self, catalog_entry: DownloadCatalogEntry) {
+        self.progress_snapshot.clear();
         let transfer_control = DownloadTransferControl::new();
         *self.active_control.lock().await = Some(transfer_control.clone());
         let task_dependencies = DownloadTaskDependencies {
@@ -200,6 +227,7 @@ impl LibraryDownloadCoordinator {
             attribution_log: self.attribution_log.clone(),
             transfer_control,
             validated_publications: Arc::clone(&self.validated_publications),
+            progress_snapshot: self.progress_snapshot.clone(),
         };
         *self.active_task.lock().await = Some(tokio::spawn(async move {
             if let Err(download_error) = run_download(catalog_entry, task_dependencies).await {
@@ -209,15 +237,18 @@ impl LibraryDownloadCoordinator {
     }
 
     async fn spawn_publication_task(&self) -> Result<(), LibraryDownloadCoordinatorError> {
-        let huggingface_id = self
+        let publishing_job = self
             .current_job()
             .await?
-            .ok_or(LibraryDownloadCoordinatorError::JobNotFound)?
-            .huggingface_id()
-            .to_owned();
+            .ok_or(LibraryDownloadCoordinatorError::JobNotFound)?;
+        let huggingface_id = publishing_job.huggingface_id().to_owned();
         let publication =
             DownloadPublication::new(self.job_store.clone(), self.attribution_log.clone());
-        let discovery_refresh = Arc::clone(&self.discovery_refresh);
+        let discovery_refresh = Arc::new(ProgressPublishingRefresh {
+            discovery_refresh: Arc::clone(&self.discovery_refresh),
+            progress_snapshot: self.progress_snapshot.clone(),
+            publishing_job,
+        });
         let validated_publications = Arc::clone(&self.validated_publications);
         *self.active_task.lock().await = Some(tokio::spawn(async move {
             match publication.publish(discovery_refresh).await {
@@ -279,6 +310,7 @@ struct DownloadTaskDependencies {
     attribution_log: SupervisorPerformanceAttributionLog,
     transfer_control: DownloadTransferControl,
     validated_publications: Arc<Mutex<BTreeSet<String>>>,
+    progress_snapshot: DownloadProgressSnapshot,
 }
 
 async fn run_download(
@@ -303,17 +335,23 @@ async fn run_download(
         .await;
         return Err(preflight_error.to_string());
     }
-    let transfer = DownloadPayloadTransfer::new(
+    let transfer = DownloadPayloadTransfer::with_progress_snapshot(
         dependencies.job_store.clone(),
         dependencies.payload_transport,
         dependencies.attribution_log.clone(),
         dependencies.transfer_control,
+        dependencies.progress_snapshot.clone(),
     );
     match transfer.resume(current_unix_millis()).await {
         Ok(DownloadPayloadTransferOutcome::Paused(_)) => Ok(()),
-        Ok(DownloadPayloadTransferOutcome::ReadyToPublish(_)) => {
+        Ok(DownloadPayloadTransferOutcome::ReadyToPublish(publishing_job)) => {
+            let discovery_refresh = Arc::new(ProgressPublishingRefresh {
+                discovery_refresh: dependencies.discovery_refresh,
+                progress_snapshot: dependencies.progress_snapshot,
+                publishing_job,
+            });
             DownloadPublication::new(dependencies.job_store, dependencies.attribution_log)
-                .publish(dependencies.discovery_refresh)
+                .publish(discovery_refresh)
                 .await
                 .map_err(|error| error.to_string())?;
             dependencies

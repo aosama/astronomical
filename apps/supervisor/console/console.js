@@ -6,6 +6,7 @@ const MODELS_URL = "/v1/models";
 const CACHE_STATS_URL = "/v1/cache/stats";
 const SYSTEM_TELEMETRY_URL = "/v1/system/telemetry";
 const CONFIG_RELOAD_URL = "/v1/config/reload";
+const CONFIG_REVEAL_URL = "/v1/config/reveal";
 const SERVER_SHUTDOWN_URL = "/v1/control/shutdown";
 const POLL_INTERVAL_MILLIS = 1000;
 const SPARKLINE_BUFFER_SIZE = 60;
@@ -106,6 +107,7 @@ async function pollStatus() {
         renderAboutFromStatus(data);
         renderCompactMlxMemory(data);
         renderMemoryLimitControl(data);
+        renderModelDiscoveryDiagnostic(data.configuration);
         renderSession(data);
         renderAboutEnhanced(data);
     } catch (fetchError) {
@@ -126,6 +128,25 @@ function configurationRequiresRestart(configurationDocument) {
         || (configurationDocument.configured_generation
             && configurationDocument.configured_generation
                 !== configurationDocument.effective_generation);
+}
+
+function renderModelDiscoveryDiagnostic(configurationDocument) {
+    const warningElement = document.getElementById("model-discovery-warning");
+    const messageElement = document.getElementById("model-discovery-warning-message");
+    const diagnostic = configurationDocument
+        && Array.isArray(configurationDocument.model_discovery_diagnostics)
+        ? configurationDocument.model_discovery_diagnostics[0]
+        : null;
+    if (!diagnostic || diagnostic.code !== "ambiguous_model_identity"
+        || typeof diagnostic.model_id !== "string"
+        || !Array.isArray(diagnostic.configured_root_numbers)) {
+        warningElement.hidden = true;
+        messageElement.textContent = "";
+        return;
+    }
+    const configuredRootNumbers = diagnostic.configured_root_numbers.join(", ");
+    messageElement.textContent = `Model ${diagnostic.model_id} appears in model_directories entries ${configuredRootNumbers}. Remove one duplicate root.`;
+    warningElement.hidden = false;
 }
 
 function renderApplicationIdentity(applicationIdentity) {
@@ -404,8 +425,21 @@ function renderSession(data) {
 function wireServerControls() {
     const reloadButton = document.getElementById("control-reload");
     const stopButton = document.getElementById("control-stop");
+    const revealConfigButton = document.getElementById("model-discovery-reveal-config");
     reloadButton.addEventListener("click", reloadConfig);
     stopButton.addEventListener("click", stopServer);
+    revealConfigButton.addEventListener("click", revealConfig);
+}
+
+async function revealConfig() {
+    try {
+        const response = await fetch(CONFIG_REVEAL_URL, { method: "POST" });
+        if (!response.ok) {
+            showControlFeedback("Could not reveal the configuration file", "error");
+        }
+    } catch (fetchError) {
+        showControlFeedback("Could not reveal the configuration file", "error");
+    }
 }
 
 async function reloadConfig() {

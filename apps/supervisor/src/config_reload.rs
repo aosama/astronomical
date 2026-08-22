@@ -11,7 +11,8 @@ use std::sync::Arc;
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
     AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError, LogLevel, LoggingConfig,
-    ModelCapabilities, PromptCacheConfig, ResolvedModelConfig, discover_models,
+    ModelCapabilities, ModelDiscoveryDiagnostic, PromptCacheConfig, ResolvedModelConfig,
+    discover_models, discover_models_excluding_ambiguous_identities,
 };
 use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
 use thiserror::Error;
@@ -30,6 +31,8 @@ pub struct ResolvedRuntimeConfig {
     pub worker_executable_path: PathBuf,
     /// All Qwen3.5-MoE-family models discovered from the resolved directories.
     pub discovered_models: Vec<DiscoveredModel>,
+    /// Path-safe authored-root conflicts excluded from executable discovery.
+    pub model_discovery_diagnostics: Vec<ModelDiscoveryDiagnostic>,
     /// Configured discovery roots, including roots that currently contain no model.
     pub configured_model_directories: Vec<PathBuf>,
     /// Canonical requestable identity to resolved directory and execution policy.
@@ -114,7 +117,7 @@ impl ResolvedRuntimeConfigResolver {
             .instance_paths
             .validate_configured_bind_address(user_config.supervisor_bind_address()?)?;
         let configured_model_directories = user_config.model_directories().to_vec();
-        let mut discovered_models =
+        let (mut discovered_models, model_discovery_diagnostics) =
             self.discover_effective_models(&configured_model_directories)?;
         let discovered_model_ids = discovered_models
             .iter()
@@ -161,6 +164,7 @@ impl ResolvedRuntimeConfigResolver {
             configuration_generation,
             worker_executable_path: self.fallback_worker_executable_path.clone(),
             discovered_models,
+            model_discovery_diagnostics,
             configured_model_directories,
             model_policy_catalog,
             unmatched_model_config_ids,
@@ -209,7 +213,8 @@ impl ResolvedRuntimeConfigResolver {
     fn discover_effective_models(
         &self,
         configured_model_directories: &[PathBuf],
-    ) -> Result<Vec<DiscoveredModel>, ResolvedRuntimeConfigError> {
+    ) -> Result<(Vec<DiscoveredModel>, Vec<ModelDiscoveryDiagnostic>), ResolvedRuntimeConfigError>
+    {
         let effective_model_directories =
             self.effective_model_directories(configured_model_directories)?;
         let automatic_model_directory = self.instance_paths.models_directory();
@@ -217,10 +222,16 @@ impl ResolvedRuntimeConfigResolver {
             .first()
             .is_some_and(|model_directory| model_directory == &automatic_model_directory);
         if !has_automatic_model_directory {
-            return Ok(discover_models(&effective_model_directories)?
-                .into_iter()
-                .flat_map(|directory_scan| directory_scan.discovered_models)
-                .collect());
+            let discovery_report =
+                discover_models_excluding_ambiguous_identities(configured_model_directories)?;
+            return Ok((
+                discovery_report
+                    .directory_scans
+                    .into_iter()
+                    .flat_map(|directory_scan| directory_scan.discovered_models)
+                    .collect(),
+                discovery_report.diagnostics,
+            ));
         }
 
         let mut automatic_models = discover_models(&effective_model_directories[..1])?
@@ -231,14 +242,20 @@ impl ResolvedRuntimeConfigResolver {
             .iter()
             .map(|discovered_model| discovered_model.model_id.clone())
             .collect::<HashSet<_>>();
-        let configured_models = discover_models(&effective_model_directories[1..])?
+        let mut configured_discovery_report =
+            discover_models_excluding_ambiguous_identities(configured_model_directories)?;
+        let configured_models = configured_discovery_report
+            .directory_scans
             .into_iter()
             .flat_map(|directory_scan| directory_scan.discovered_models)
             .filter(|discovered_model| !automatic_model_ids.contains(&discovered_model.model_id));
-        // Library publication owns the automatic destination, while authored roots retain strict
-        // duplicate detection among themselves instead of changing discovery semantics globally.
+        // Library publication owns the automatic destination, so authored ambiguity cannot hide a
+        // validated Library copy of the same public identity.
         automatic_models.extend(configured_models);
-        Ok(automatic_models)
+        configured_discovery_report
+            .diagnostics
+            .retain(|diagnostic| !automatic_model_ids.contains(&diagnostic.model_id));
+        Ok((automatic_models, configured_discovery_report.diagnostics))
     }
 }
 
