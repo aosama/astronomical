@@ -1,0 +1,106 @@
+# Publishes a trusted metadata-only check so pull-request code cannot weaken the
+# issue provenance policy or gain elevated workflow credentials.
+name: Pull request issue compliance
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Pull request number to validate
+        required: true
+        type: number
+
+permissions:
+  checks: write
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  publish-compliance-check:
+    name: Validate documented issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    concurrency:
+      group: pr-issue-compliance-${{ github.event.pull_request.number || inputs.pull_request_number }}
+      cancel-in-progress: true
+    steps:
+      # pull_request_target deliberately loads policy only from the trusted default
+      # branch; pull-request-authored code is never checked out or executed.
+      - name: Check out trusted compliance policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Publish PR issue compliance
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const path = require("node:path");
+            const { validatePullRequestIssue } = require(
+              path.join(process.env.GITHUB_WORKSPACE, ".github/scripts/pull-request-issue-compliance.js"),
+            );
+
+            const startedAtMilliseconds = Date.now();
+            const pullRequestNumber = context.eventName === "workflow_dispatch"
+              ? Number(context.payload.inputs.pull_request_number)
+              : context.payload.pull_request.number;
+            core.info(`[pr-issue-compliance] status=start pull_request=${pullRequestNumber}`);
+
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pullRequestNumber,
+            });
+            try {
+              const compliance = await validatePullRequestIssue({
+                pullRequestBody: pullRequest.body,
+                loadIssue: async (issueNumber) => {
+                  const { data: issue } = await github.rest.issues.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber,
+                  });
+                  return issue;
+                },
+              });
+
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head_sha: pullRequest.head.sha,
+                name: "PR issue compliance",
+                status: "completed",
+                conclusion: "success",
+                output: {
+                  title: `Issue #${compliance.issueNumber} satisfies the contribution contract`,
+                  summary: `${compliance.relationship} [#${compliance.issueNumber}](${compliance.issueUrl})`,
+                },
+              });
+              core.info(`[pr-issue-compliance] status=success issue=${compliance.issueNumber}`);
+            } catch (error) {
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head_sha: pullRequest.head.sha,
+                name: "PR issue compliance",
+                status: "completed",
+                conclusion: "failure",
+                output: {
+                  title: "Document the pull request in an open issue",
+                  summary: error.message,
+                },
+              });
+              core.setFailed(error.message);
+            } finally {
+              core.info(
+                `[pr-issue-compliance] status=complete elapsed_milliseconds=${Date.now() - startedAtMilliseconds}`,
+              );
+            }

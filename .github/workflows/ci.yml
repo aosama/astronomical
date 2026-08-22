@@ -35,6 +35,9 @@ jobs:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
         run: scripts/classify-ci-change-scope.sh
+      - name: Run pull request policy contracts
+        run: node --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js
+        timeout-minutes: 2
 
   verify:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
