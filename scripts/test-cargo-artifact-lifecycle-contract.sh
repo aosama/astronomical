@@ -457,7 +457,7 @@ assert profiles["full-debug"]["split-debuginfo"] == "packed"
 
 cargo_configuration = tomllib.loads((repository_root / ".cargo/config.toml").read_text())
 aliases = cargo_configuration["alias"]
-assert set(aliases) == {"test-hermetic", "test-rest-api"}
+assert set(aliases) == {"test-hermetic", "test-rest-api", "verify-commit-rust"}
 assert all(isinstance(alias_command, list) for alias_command in aliases.values())
 
 bounded_test_runner = (repository_root / "scripts/run-bounded-cargo-test.sh").read_text()
