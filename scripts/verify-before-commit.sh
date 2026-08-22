@@ -15,8 +15,8 @@ print_error() {
 print_usage() {
     printf '%s\n' "Usage: scripts/verify-before-commit.sh [--hermetic-only]"
     printf '%s\n' ""
-    printf '%s\n' "Without arguments, verifies formatting, dependency notices, CI contracts, menu contracts, hermetic tests, and REST API tests."
-    printf '%s\n' "--hermetic-only  Run menu contracts and compile and run hermetic Rust tests within the bounded macOS CI budget."
+    printf '%s\n' "Without arguments, verifies formatting, dependency notices, CI contracts, menu and Observatory contracts, hermetic tests, and REST API tests."
+    printf '%s\n' "--hermetic-only  Run menu and Observatory contracts and compile and run hermetic Rust tests within the bounded macOS CI budget."
 }
 
 parse_arguments() {
@@ -58,6 +58,11 @@ else
     exit 1
 fi
 
+if ! command -v node >/dev/null 2>&1; then
+    print_error "Node.js is required for Observatory contract verification"
+    exit 1
+fi
+
 logical_cpu_count="$(sysctl -n hw.logicalcpu)"
 case "${logical_cpu_count}" in
     ''|*[!0-9]*|0)
@@ -79,9 +84,9 @@ show_compiler_cache_stats() {
 
 printf '%s\n' "[commit-verification] compiler_cache=${configured_compiler_wrapper:-none} build_jobs=${CARGO_BUILD_JOBS} test_threads=${logical_cpu_count}"
 if [ "$RUN_HERMITIC_CI_ONLY" = "true" ]; then
-    printf '%s\n' "[commit-verification] included_tests=hermetic,cargo_artifact_lifecycle_contract,cargo_artifact_cleanup_signal_contract,legacy_native_output_cleanup_contract,ci_native_cache_contract,channel_isolation_contract,macos_app_validation_contract,macos_menu_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,cargo_artifact_lifecycle_contract,cargo_artifact_cleanup_signal_contract,legacy_native_output_cleanup_contract,ci_native_cache_contract,channel_isolation_contract,macos_app_validation_contract,macos_menu_contract,observatory_contract excluded_tests=format,rust_dependency_notices,rest_api,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 else
-    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,cargo_artifact_lifecycle_contract,cargo_artifact_cleanup_signal_contract,legacy_native_output_cleanup_contract,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract,macos_menu_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
+    printf '%s\n' "[commit-verification] included_tests=hermetic,rest_api,cargo_artifact_lifecycle_contract,cargo_artifact_cleanup_signal_contract,legacy_native_output_cleanup_contract,ci_native_cache_coordination,commit_release_isolation,macos_app_validation_contract,macos_menu_contract,observatory_contract excluded_tests=release,stable_installation,dmg,notarization,publication,direct_mlx,mlx_memory_contract,model_artifact_qualification,persistent_prompt_cache_qualification,performance_measurement,native_metal_contract,structural_guard"
 fi
 printf '%s\n' "[commit-verification] compiler cache stats before verification:"
 show_compiler_cache_stats
@@ -155,6 +160,11 @@ printf '\n%s\n' "[commit-verification] step=test-macos-menu-contracts timeout_se
 macos_menu_contracts_started_at_seconds="$(date +%s)"
 "${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" scripts/test-macos-menu-contracts.sh
 printf '%s\n' "[commit-verification] PASSED step=test-macos-menu-contracts elapsed_seconds=$(( $(date +%s) - macos_menu_contracts_started_at_seconds ))"
+
+printf '\n%s\n' "[commit-verification] step=test-observatory-contracts timeout_seconds=${MAXIMUM_TEST_SECONDS} started_at=$(date +%H:%M:%S)"
+observatory_contracts_started_at_seconds="$(date +%s)"
+"${timeout_executable}" --foreground -k 5s "${MAXIMUM_TEST_SECONDS}s" node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js
+printf '%s\n' "[commit-verification] PASSED step=test-observatory-contracts elapsed_seconds=$(( $(date +%s) - observatory_contracts_started_at_seconds ))"
 
 run_cargo_step compile-hermetic "${hermetic_compile_timeout_seconds}" test --no-fail-fast --no-run --jobs "${logical_cpu_count}" -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
 

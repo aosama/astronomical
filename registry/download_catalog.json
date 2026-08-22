@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "huggingface_id": "scottlowry/Ornith-1.5-35B-A3B-oQ6e-mtp",
+      "revision": "571c2bfc3550805d9b97fabec1351c149744d7a9",
+      "display_name": "Ornith 1.5 35B A3B",
+      "family": "qwen3_5",
+      "approximate_size_bytes": 30167174693,
+      "public": true,
+      "description": "A fast mixture-of-experts model with vision and multi-token prediction. Great for chat, reasoning, and tool use.",
+      "capabilities": {
+        "supports_reasoning": true,
+        "supports_vision": true,
+        "supports_tool_calls": true,
+        "context_window": 262144,
+        "max_output_tokens": 8192
+      },
+      "quantization_label": "oQ6e (6-bit enhanced)",
+      "architecture_summary": "Qwen 3.5 MoE, 35B params, 3B active (A3B)",
+      "upstream_license": "MIT"
+    },
+    {
+      "huggingface_id": "ornith-ai/Ornith-1.5-9B-MLX-4bit",
+      "revision": "a48173b246ac705be75c05bedf1a0666db522d53",
+      "display_name": "Ornith 1.5 9B",
+      "family": "qwen3_5",
+      "approximate_size_bytes": 5061168474,
+      "public": true,
+      "description": "A lightweight 9B dense reasoning model with vision, tool use, and strong coding benchmarks. Fits comfortably on any Apple Silicon Mac.",
+      "capabilities": {
+        "supports_reasoning": true,
+        "supports_vision": true,
+        "supports_tool_calls": true,
+        "context_window": 262144,
+        "max_output_tokens": 8192
+      },
+      "quantization_label": "4-bit MLX affine (group 64)",
+      "architecture_summary": "Qwen 3.5 dense, 9B params, 32 layers",
+      "upstream_license": "Apache-2.0"
+    },
+    {
+      "huggingface_id": "black-forest-labs/FLUX.2-klein-4B",
+      "revision": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
+      "display_name": "FLUX.2 Klein 4B",
+      "family": "flux2_klein",
+      "approximate_size_bytes": 15980141329,
+      "public": true,
+      "description": "A local text-to-image model that creates one lossless PNG from a prompt.",
+      "capabilities": {
+        "supports_image_generation": true
+      },
+      "included_paths": [
+        "LICENSE.md",
+        "model_index.json",
+        "scheduler/",
+        "text_encoder/",
+        "tokenizer/",
+        "transformer/",
+        "vae/"
+      ],
+      "architecture_summary": "FLUX.2 Klein, 4B parameters, BF16 weights",
+      "upstream_license": "Apache-2.0"
+    }
+  ]
+}

@@ -32,6 +32,7 @@ final class TelemetryStore: ObservableObject {
   @Published private(set) var systemTelemetrySnapshot = SystemTelemetrySnapshot.unavailable
   @Published private(set) var controlActionFeedback: ControlActionFeedback?
   @Published private(set) var lastStatusRefreshErrorMessage: String?
+  @Published private(set) var hasDiscoveredModels = false
   @Published var editableMaximumMlxMemoryGigabytes: UInt64 = 0
   var onMenuBarTitleChanged: ((String) -> Void)?
 
@@ -220,10 +221,12 @@ final class TelemetryStore: ObservableObject {
     let refreshResult: (statusDocument: SupervisorStatusDocument, errorMessage: String?)
     do {
       refreshResult = (try await supervisorClient.fetchStatus(), nil)
+      hasDiscoveredModels = await supervisorClient.modelsAreAvailable()
     } catch {
       // Polling must remain self-healing, while retaining enough bounded context to distinguish
       // contract drift from an ordinary stopped server during qualification and support.
       refreshResult = (.unavailable, boundedStatusRefreshErrorMessage(error))
+      hasDiscoveredModels = false
     }
     lastStatusRefreshErrorMessage = refreshResult.errorMessage
     apply(refreshResult.statusDocument)

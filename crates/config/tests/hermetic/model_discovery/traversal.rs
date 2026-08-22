@@ -102,3 +102,41 @@ fn should_reject_duplicate_model_ids_with_deterministic_directory_order() {
     assert_eq!(model_id, "SharedModel");
     assert_eq!(model_directories, expected_directories);
 }
+
+#[test]
+fn should_discover_an_organization_model_tree_and_skip_hidden_incomplete_staging() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let models_root_directory = temporary_directory.path().join("models");
+    let published_model_directory = models_root_directory
+        .join("astronomical-test")
+        .join("example-qwen");
+    let incomplete_model_directory = models_root_directory
+        .join(".incomplete")
+        .join("astronomical-test")
+        .join("staged-qwen");
+    for model_directory in [&published_model_directory, &incomplete_model_directory] {
+        fs::create_dir_all(model_directory).expect("model fixture directory should be created");
+        write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
+        write_required_model_files(model_directory);
+    }
+
+    let directory_scans = astronomical_config::discover_models(&[models_root_directory])
+        .expect("ordinary model discovery should complete");
+    let discovered_models = &directory_scans[0].discovered_models;
+
+    assert_eq!(discovered_models.len(), 1);
+    assert_eq!(discovered_models[0].model_id, "example-qwen");
+    assert_eq!(
+        discovered_models[0].model_directory,
+        published_model_directory
+    );
+    let shard_size = fs::metadata(
+        discovered_models[0]
+            .model_directory
+            .join("model-00001.safetensors"),
+    )
+    .expect("the published model shard metadata should be readable")
+    .len();
+    assert!(shard_size > 0);
+    assert_eq!(discovered_models[0].model_size_bytes, shard_size);
+}

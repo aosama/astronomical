@@ -39,6 +39,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
         telemetryStore: telemetryStore,
         applicationIdentity: applicationIdentity,
         openObservatory: { [weak self] in self?.openObservatory() },
+        openLibrary: { [weak self] in self?.openLibrary() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
         checkForUpdates: { [weak self] in self?.checkForUpdates() },
@@ -134,6 +135,17 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
     do {
       let observatoryURL = try applicationIdentity.endpointURL(path: "/")
       guard NSWorkspace.shared.open(observatoryURL) else {
+        throw ObservatoryLaunchError.defaultBrowserUnavailable
+      }
+    } catch {
+      NSApp.presentError(error)
+    }
+  }
+
+  private func openLibrary() {
+    do {
+      let libraryURL = try applicationIdentity.endpointURL(path: "/library")
+      guard NSWorkspace.shared.open(libraryURL) else {
         throw ObservatoryLaunchError.defaultBrowserUnavailable
       }
     } catch {

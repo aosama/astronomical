@@ -219,7 +219,7 @@ assert_workflow_contract() {
     # GitHub expressions must reach Ruby unchanged so the contract compares the
     # workflow's actual expression strings rather than shell-expanded values.
     # shellcheck disable=SC2016
-    ruby -ryaml -e '
+    ruby -ryaml -rshellwords -e '
         workflow = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)
         triggers = workflow.fetch(true)
         raise "pull-request verification trigger is missing" unless triggers.key?("pull_request")
@@ -252,6 +252,23 @@ assert_workflow_contract() {
         raise "classification failure guard is missing" unless classification_guard
         raise "classification guard condition changed" unless classification_guard.fetch("if").include?("detect-changes.result != '\''success'\''")
         raise "classification guard does not fail the required check" unless classification_guard.fetch("run").include?("exit 1")
+        observatory_step = steps.find { |step| step["name"] == "Run Observatory contracts" }
+        raise "Observatory contracts are missing from required CI" unless observatory_step
+        expected_observatory_command = [
+          "node", "--test", "--test-reporter=spec",
+          "apps/supervisor/console/console.test.js",
+          "apps/supervisor/console/library.test.js",
+        ]
+        raise "Observatory required-CI command changed" unless Shellwords.split(observatory_step.fetch("run")) == expected_observatory_command
+        raise "Observatory contracts exceeded their bounded timeout" unless observatory_step.fetch("timeout-minutes") <= 2
+        library_rest_step = steps.find { |step| step["name"] == "Run Library REST contracts" }
+        raise "Library REST contracts are missing from required CI" unless library_rest_step
+        expected_library_rest_command = [
+          "cargo", "test", "--timings", "-p", "astronomical-supervisor",
+          "--test", "rest_api_tests", "library", "--", "--nocapture",
+        ]
+        raise "Library REST required-CI command changed" unless Shellwords.split(library_rest_step.fetch("run")) == expected_library_rest_command
+        raise "Library REST contracts exceeded their bounded timeout" unless library_rest_step.fetch("timeout-minutes") <= 2
         cache_owners = {
           "cargo-downloads-cache" => ["~/.cargo/registry", "~/.cargo/git"],
           "native-archives-cache" => ["~/Library/Caches/Astronomical/native-dependencies"],

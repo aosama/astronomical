@@ -28,9 +28,18 @@ pub(super) fn write_minimal_model_config(
 
 /// Writes common indexed-checkpoint files used by synthetic discovery fixtures.
 pub(super) fn write_required_model_files(model_directory: &Path) {
+    const MODEL_SHARD_BYTES: &[u8] = b"fictional-shard";
+    fs::write(
+        model_directory.join("model-00001.safetensors"),
+        MODEL_SHARD_BYTES,
+    )
+    .expect("model shard should be written");
     fs::write(
         model_directory.join("model.safetensors.index.json"),
-        r#"{"metadata":{"total_size":0},"weight_map":{}}"#,
+        format!(
+            r#"{{"metadata":{{"total_size":{}}},"weight_map":{{"model.embed_tokens.weight":"model-00001.safetensors"}}}}"#,
+            MODEL_SHARD_BYTES.len()
+        ),
     )
     .expect("safetensors index should be written");
     fs::write(
