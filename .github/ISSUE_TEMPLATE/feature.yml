@@ -5,9 +5,37 @@ labels:
   - enhancement
 body:
   - type: textarea
-    id: proposal
+    id: goal
     attributes:
-      label: What would make Astronomical better?
-      description: Describe the improvement in your own words. Do not include private machine details.
+      label: Goal
+      description: Describe the user or engineering outcome. Do not include private machine details.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Explain the observed need, compatibility requirement, or measured opportunity.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Identify the smallest complete change and what remains outside it.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Record relevant safety, precision, performance, memory, licensing, or provenance limits. Enter "None" when no special constraint applies.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: List the observable conditions that prove the outcome is complete.
     validations:
       required: true
