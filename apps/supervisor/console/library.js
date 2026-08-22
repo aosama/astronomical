@@ -357,7 +357,7 @@ function libraryFailureTitle(errorCode) {
         insufficient_disk: "Not enough disk space",
         download_gated: "This model requires Hugging Face access",
         checksum_mismatch: "Downloaded files did not pass verification",
-        model_already_present: "A model already exists at this destination"
+        model_already_present: "Another model uses this Library location. Move it elsewhere, then cancel this download and try again."
     };
     return messages[errorCode] || "Download failed. You can resume it.";
 }
@@ -367,6 +367,10 @@ function libraryActionButtons(catalogRow) {
     const isCurrentDownload = libraryCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
     const state = isCurrentDownload ? libraryCurrentDownload.state : catalogRow.downloadState;
     if (state === "verifying" || state === "publishing") return [];
+    if (isCurrentDownload && state === "failed"
+        && libraryCurrentDownload.error_code === "model_already_present") {
+        return [libraryActionButton("Cancel", "cancel")];
+    }
     if (state === "paused" || state === "failed") {
         return [libraryActionButton("Resume", "resume"), libraryActionButton("Cancel", "cancel")];
     }

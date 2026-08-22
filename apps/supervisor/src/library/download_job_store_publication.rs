@@ -10,11 +10,13 @@ use super::{
         synchronize_directory,
     },
     download_job_store_lock::acquire_existing_store_transaction_lock,
+    download_payload_verification::verify_download_job_at_directory,
+    download_publication_provenance::write_publication_provenance,
     download_staged_file::create_descendant_directories,
 };
 
 impl DownloadJobStore {
-    /// Persists publication intent only while the verified final destination is absent.
+    /// Persists publication intent after preparing new staging or digest-matching prior output.
     pub(crate) fn replace_current_for_publication(
         &self,
         replacement_job: &DownloadJob,
@@ -36,14 +38,32 @@ impl DownloadJobStore {
         }
         let published_directory = self.published_directory(replacement_job);
         ensure_descendant_directory_or_absent(&self.models_directory, &published_directory)?;
-        if metadata_without_symlink(&published_directory)?.is_some() {
-            return Err(DownloadJobStoreError::PublishedModelAlreadyExists);
-        }
         let staging_directory = replacement_job.staging_directory(&self.models_directory);
         ensure_descendant_directory_or_absent(&self.models_directory, &staging_directory)?;
         if !metadata_without_symlink(&staging_directory)?.is_some_and(|metadata| metadata.is_dir())
         {
             return Err(DownloadJobStoreError::InconsistentPublicationState);
+        }
+        match metadata_without_symlink(&published_directory)? {
+            Some(metadata)
+                if metadata.is_dir()
+                    && verify_download_job_at_directory(&published_directory, replacement_job)
+                        .is_ok() =>
+            {
+                // Exact provider digests make adopting an interrupted prior publication safe;
+                // names, sizes, or structural discovery alone are insufficient evidence.
+                write_publication_provenance(
+                    &published_directory,
+                    replacement_job.huggingface_id(),
+                    replacement_job.revision(),
+                )?;
+            }
+            Some(_) => return Err(DownloadJobStoreError::PublishedModelAlreadyExists),
+            None => write_publication_provenance(
+                &staging_directory,
+                replacement_job.huggingface_id(),
+                replacement_job.revision(),
+            )?,
         }
         self.save_unlocked(replacement_job)
     }
@@ -85,6 +105,17 @@ impl DownloadJobStore {
                 synchronize_directory(&self.models_directory)?;
             }
             (None, Some(published)) if published.is_dir() => {}
+            (Some(staging), Some(published)) if staging.is_dir() && published.is_dir() => {
+                if verify_download_job_at_directory(&published_directory, &download_job).is_err() {
+                    return Err(DownloadJobStoreError::PublishedModelAlreadyExists);
+                }
+                write_publication_provenance(
+                    &published_directory,
+                    download_job.huggingface_id(),
+                    download_job.revision(),
+                )?;
+                self.remove_staging_directory_if_present(&staging_directory)?;
+            }
             _ => return Err(DownloadJobStoreError::InconsistentPublicationState),
         }
         discovery_refresh
