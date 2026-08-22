@@ -293,6 +293,13 @@ pub(crate) async fn run_worker(
                         .await;
                         let _send_outcome = update_sender.send(update_outcome);
                     }
+                    WorkerLoopCommand::UpdateModelPolicyCatalog {
+                        model_policy_catalog: replacement_model_policy_catalog,
+                        update_sender,
+                    } => {
+                        model_policy_catalog = replacement_model_policy_catalog;
+                        let _send_outcome = update_sender.send(Ok(()));
+                    }
                     WorkerLoopCommand::ClearPromptCache {
                         model_id,
                         clear_sender,

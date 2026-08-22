@@ -4,6 +4,8 @@ use std::{path::Path, process::Stdio, time::Duration};
 
 use tokio::{process::Command, time::timeout};
 
+use astronomical_supervisor::DownloadCatalog;
+
 use super::daemon_process::{
     get_endpoint, spawn_actual_instance_daemon, terminate_daemon, write_instance_config,
 };
@@ -34,10 +36,8 @@ async fn should_serve_the_library_and_discover_instance_models_without_configure
         let catalog_document: serde_json::Value =
             serde_json::from_str(http_response_body(&catalog_response))
                 .expect("the process catalog response should contain JSON");
-        assert_eq!(
-            catalog_document,
-            serde_json::json!({"schema_version": 1, "entries": []})
-        );
+        assert_eq!(catalog_document["schema_version"], 1);
+        assert!(catalog_document["entries"].is_array());
         let library_response = get_endpoint(daemon_address, "/library").await;
         assert!(library_response.starts_with("HTTP/1.1 200 OK"));
         assert!(library_response.contains("data-observatory-view=\"library\""));
@@ -105,7 +105,13 @@ async fn should_record_the_startup_catalog_load_when_attribution_is_enabled() {
             .expect("the startup attribution record should contain JSON");
         assert_eq!(attribution_record["operation"], "library_catalog_load");
         assert_eq!(attribution_record["outcome"], "success");
-        assert_eq!(attribution_record["catalog_entry_count"], 0);
+        let bundled_entry_count = DownloadCatalog::load_bundled()
+            .expect("the daemon and test should share one valid bundled catalog")
+            .entry_count();
+        assert_eq!(
+            attribution_record["catalog_entry_count"],
+            bundled_entry_count
+        );
 
         terminate_daemon(&daemon_process);
         assert!(

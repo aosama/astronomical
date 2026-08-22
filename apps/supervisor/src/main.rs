@@ -8,10 +8,11 @@ use std::{
 use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
 use astronomical_supervisor::{
     ApplicationBuildIdentity, AstronomicalInstanceLock, DownloadCatalog, DownloadCatalogError,
-    GenerationPerformanceLog, ImageGenerationTimeouts, ResolvedRuntimeConfigError,
+    GenerationPerformanceLog, ImageGenerationTimeouts, LibraryDownloadCoordinatorError,
+    LibraryModelDiscoveryRefresh, ReqwestHubTransportBuildError, ResolvedRuntimeConfigError,
     ResolvedRuntimeConfigResolver, ShutdownController, SupervisorPerformanceAttributionLog,
     SupervisorPerformanceMeasurement, SupervisorPerformanceOperation, WorkerControlError,
-    WorkerHandle, build_application_with_full_control_and_download_catalog,
+    WorkerHandle, build_application_with_full_control_and_library_download,
 };
 use thiserror::Error;
 use tokio::{net::TcpListener, signal};
@@ -125,7 +126,7 @@ async fn run_daemon(
     user_config: AstronomicalConfig,
 ) -> Result<(), DaemonError> {
     let logging_config = user_config.logging()?;
-    let mut supervisor_attribution_log = SupervisorPerformanceAttributionLog::open(
+    let supervisor_attribution_log = SupervisorPerformanceAttributionLog::open(
         logging_config.directory(),
         user_config.performance_attribution_enabled(),
     )
@@ -192,12 +193,37 @@ async fn run_daemon(
     let reloadable_config = Arc::new(RwLock::new(resolved_runtime_config));
     let shutdown_controller = ShutdownController::new();
     let internal_shutdown_receiver = shutdown_controller.subscribe();
-    let application = build_application_with_full_control_and_download_catalog(
+    let download_catalog = Arc::new(download_catalog);
+    let hub_transport = Arc::new(
+        astronomical_supervisor::ReqwestHubTransport::production()
+            .map_err(DaemonError::BuildHubTransport)?,
+    );
+    let discovery_refresh = Arc::new(LibraryModelDiscoveryRefresh::new(
+        runtime_config_resolver.clone(),
+        Arc::clone(&reloadable_config),
+        worker_handle.clone(),
+    ));
+    let library_download_coordinator =
+        Arc::new(astronomical_supervisor::LibraryDownloadCoordinator::new(
+            Arc::clone(&download_catalog),
+            instance_paths.models_directory(),
+            Arc::new(astronomical_supervisor::Fs4DiskCapacityQuery),
+            hub_transport.clone(),
+            hub_transport,
+            discovery_refresh,
+            supervisor_attribution_log,
+        ));
+    library_download_coordinator
+        .recover_startup_state()
+        .await
+        .map_err(DaemonError::RecoverLibraryDownload)?;
+    let application = build_application_with_full_control_and_library_download(
         worker_handle.clone(),
         Arc::clone(&reloadable_config),
         runtime_config_resolver,
         shutdown_controller,
         download_catalog,
+        library_download_coordinator,
     );
 
     println!("astronomicald listening on http://{bound_supervisor_address}");
@@ -299,6 +325,10 @@ enum DaemonError {
     RecordSupervisorPerformanceAttribution(#[source] io::Error),
     #[error("invalid bundled download catalog: {0}")]
     LoadDownloadCatalog(#[source] DownloadCatalogError),
+    #[error("failed to construct the Hugging Face transfer client: {0}")]
+    BuildHubTransport(#[source] ReqwestHubTransportBuildError),
+    #[error("failed to recover the durable Library download: {0}")]
+    RecoverLibraryDownload(#[source] LibraryDownloadCoordinatorError),
     #[error("failed to resolve runtime configuration: {0}")]
     ResolveRuntimeConfig(#[source] ResolvedRuntimeConfigError),
     #[error("resolved supervisor bind address became invalid: {0}")]

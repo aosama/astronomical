@@ -331,6 +331,28 @@ impl WorkerHandle {
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
     }
 
+    /// Replaces discovery-derived model policies without restarting the idle worker process.
+    pub async fn update_model_policy_catalog(
+        &self,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+    ) -> Result<(), WorkerControlError> {
+        let command_sender = self
+            .command_sender
+            .as_ref()
+            .ok_or(WorkerControlError::MissingActiveWorker)?;
+        let (update_sender, update_receiver) = oneshot::channel();
+        command_sender
+            .send(WorkerLoopCommand::UpdateModelPolicyCatalog {
+                model_policy_catalog,
+                update_sender,
+            })
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)?;
+        update_receiver
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)?
+    }
+
     /// Stages generation attribution before a memory command can race to acknowledgement.
     pub fn stage_memory_configuration_generation(&self, configuration_generation: String) {
         if let Ok(mut worker_health_snapshot) = self.health_snapshot.write() {

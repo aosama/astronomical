@@ -67,6 +67,7 @@ struct OrbitalTelemetryPopover: View {
   @ObservedObject var telemetryStore: TelemetryStore
   let applicationIdentity: ApplicationIdentity
   let openObservatory: () -> Void
+  let openLibrary: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
   let checkForUpdates: () -> Void
@@ -184,8 +185,11 @@ struct OrbitalTelemetryPopover: View {
           .font(.caption)
           .foregroundStyle(.secondary)
       }
-      Button(action: openObservatory) {
-        Label("Open Observatory", systemImage: "safari")
+      Button(action: telemetryStore.hasDiscoveredModels ? openObservatory : openLibrary) {
+        Label(
+          telemetryStore.hasDiscoveredModels ? "Open Observatory" : "Download a model",
+          systemImage: telemetryStore.hasDiscoveredModels ? "safari" : "arrow.down.circle"
+        )
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)

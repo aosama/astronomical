@@ -15,7 +15,8 @@ final class MenuStructureContractTests: XCTestCase {
     let popoverSource = try String(contentsOf: popoverSourceURL, encoding: .utf8)
 
     let openObservatoryButtonStart = try XCTUnwrap(
-      popoverSource.range(of: "Button(action: openObservatory)"))
+      popoverSource.range(
+        of: "Button(action: telemetryStore.hasDiscoveredModels ? openObservatory : openLibrary)"))
     let overflowMenuStart = try XCTUnwrap(popoverSource.range(of: "Menu {"))
 
     XCTAssertLessThan(openObservatoryButtonStart.lowerBound, overflowMenuStart.lowerBound)
@@ -39,5 +40,18 @@ final class MenuStructureContractTests: XCTestCase {
       restartButtonStart.lowerBound..<trailingActionsStart.lowerBound]
 
     XCTAssertFalse(restartButtonSource.contains(".disabled("))
+  }
+
+  func test_should_expose_download_a_model_as_a_direct_popover_action() throws {
+    let packageDirectoryURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let popoverSource = try String(
+      contentsOf: packageDirectoryURL.appendingPathComponent(
+        "Sources/AstronomicalMenu/OrbitalTelemetryPopover.swift"),
+      encoding: .utf8)
+    let downloadActionStart = try XCTUnwrap(popoverSource.range(of: "\"Download a model\""))
+    let overflowMenuStart = try XCTUnwrap(popoverSource.range(of: "Menu {"))
+
+    XCTAssertLessThan(downloadActionStart.lowerBound, overflowMenuStart.lowerBound)
   }
 }

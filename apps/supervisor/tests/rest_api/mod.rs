@@ -7,6 +7,7 @@ mod daemon_instance_isolation;
 mod daemon_process;
 mod diagnostics;
 mod library_catalog;
+mod library_download;
 mod library_process;
 mod openai_chat_completion_non_streaming;
 mod openai_chat_endpoint_negative;

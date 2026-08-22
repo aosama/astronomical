@@ -1,5 +1,7 @@
 use crate::config_reload::{ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver};
-use crate::library::{DownloadCatalog, library_catalog_routes};
+use crate::library::{
+    DownloadCatalog, LibraryDownloadCoordinator, library_catalog_routes, library_download_routes,
+};
 use crate::status_endpoint::status_check;
 use crate::{
     ImageGenerationExecutor, WorkerHandle,
@@ -40,6 +42,7 @@ pub(crate) struct ApplicationState {
     pub(crate) worker_control: Option<WorkerHandle>,
     /// Immutable release-bundled model catalog validated before production startup.
     pub(crate) download_catalog: Arc<DownloadCatalog>,
+    pub(crate) library_download_coordinator: Option<Arc<LibraryDownloadCoordinator>>,
     /// Executable models discovered from configured directories at startup.
     pub(crate) discovered_models: Vec<DiscoveredModel>,
     /// Reloadable runtime config shared by the config-reload endpoint and the
@@ -70,6 +73,7 @@ impl Clone for ApplicationState {
             generation_executor: Arc::clone(&self.generation_executor),
             worker_control: self.worker_control.clone(),
             download_catalog: Arc::clone(&self.download_catalog),
+            library_download_coordinator: self.library_download_coordinator.clone(),
             discovered_models: self.discovered_models.clone(),
             reloadable_config: self.reloadable_config.clone(),
             configured_config_snapshot: self.configured_config_snapshot.clone(),
@@ -153,6 +157,7 @@ pub fn build_application_with_discovered_models(
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
         download_catalog: Arc::new(DownloadCatalog::empty_v1()),
+        library_download_coordinator: None,
         discovered_models,
         reloadable_config: None,
         configured_config_snapshot: None,
@@ -177,6 +182,7 @@ pub fn build_application_with_download_catalog(
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
         download_catalog: Arc::new(download_catalog),
+        library_download_coordinator: None,
         discovered_models: Vec::new(),
         reloadable_config: None,
         configured_config_snapshot: None,
@@ -203,6 +209,7 @@ pub fn build_application_with_shutdown(
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
         download_catalog: Arc::new(DownloadCatalog::empty_v1()),
+        library_download_coordinator: None,
         discovered_models: Vec::new(),
         reloadable_config: None,
         configured_config_snapshot: None,
@@ -248,6 +255,7 @@ pub fn build_development_application_with_reload(
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
         download_catalog: Arc::new(DownloadCatalog::empty_v1()),
+        library_download_coordinator: None,
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         configured_config_snapshot,
@@ -412,6 +420,7 @@ pub fn build_application_with_full_control_and_download_catalog(
         generation_executor: Arc::new(worker_handle.clone()),
         worker_control: Some(worker_handle),
         download_catalog: Arc::new(download_catalog),
+        library_download_coordinator: None,
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         configured_config_snapshot,
@@ -425,7 +434,7 @@ pub fn build_application_with_full_control_and_download_catalog(
     application_router(application_state)
 }
 
-fn application_router(application_state: ApplicationState) -> Router {
+pub(crate) fn application_router(application_state: ApplicationState) -> Router {
     let supports_config_reload = application_state.reloadable_config.is_some()
         && application_state.runtime_config_resolver.is_some();
     let supports_shutdown = application_state.shutdown_controller.is_some();
@@ -435,6 +444,7 @@ fn application_router(application_state: ApplicationState) -> Router {
     let router = Router::new()
         .merge(console_routes())
         .merge(library_catalog_routes())
+        .merge(library_download_routes())
         .merge(system_telemetry_routes())
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))
