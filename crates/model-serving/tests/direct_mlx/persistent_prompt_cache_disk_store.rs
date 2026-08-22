@@ -295,9 +295,7 @@ async fn should_delete_incompatible_format_file_during_scan() {
         .join("blocks")
         .join(&block_hash_hex);
     fs::create_dir_all(&block_directory).expect("the test should create the block directory");
-    write_block_manifest_for_hash(&block_directory, &block_hash_hex, 1);
-    let format_four_sequence_state_file_path = block_directory.join("sequence.safetensors");
-    write_format_four_cache_file(&format_four_sequence_state_file_path);
+    write_block_manifest_for_hash_with_format(&block_directory, &block_hash_hex, 1, "11");
 
     let persistent_prompt_cache = open_persistent_prompt_cache_disk_store(
         &persistent_prompt_cache_directory,
@@ -317,9 +315,18 @@ fn write_block_manifest_for_hash(
     block_hash_hex: &str,
     block_index: u32,
 ) {
+    write_block_manifest_for_hash_with_format(block_directory, block_hash_hex, block_index, "12");
+}
+
+fn write_block_manifest_for_hash_with_format(
+    block_directory: &std::path::Path,
+    block_hash_hex: &str,
+    block_index: u32,
+    format_version: &str,
+) {
     let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
     let manifest_json = serde_json::json!({
-        "format_version": "11",
+        "format_version": format_version,
         "block_hash": block_hash_hex,
         "block_index": block_index,
         "parent_block_hash": null,

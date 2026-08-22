@@ -26,7 +26,7 @@ use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
 
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockKey, Qwen3_5SamplingStrategy,
+    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey, Qwen3_5SamplingStrategy,
 };
 
 use super::super::text::sampler::build_qwen3_5_sampled_token;
@@ -61,6 +61,9 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) can_use_persistent_prompt_cache: bool,
     pub(super) maximum_output_tokens: u16,
     pub(super) ordered_image_sha256_digests: Vec<[u8; 32]>,
+    /// Qwen-owned visual identity aligned to ordinary target prompt-cache blocks.
+    pub(super) persistent_prompt_cache_block_causal_inputs:
+        Vec<PersistentPromptCacheBlockCausalInput>,
     pub(super) next_position_tokens: u32,
     /// One-token-ahead successor submitted during the previous advancement.
     pub(super) pending_generated_token: Option<MlxArray>,

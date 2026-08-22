@@ -5,6 +5,7 @@
 //! prefix lookup, quota enforcement, and descriptor-backed tensor files for
 //! decoder state and projected visual embeddings.
 
+mod block_causal_input;
 mod block_format;
 mod block_format_error;
 mod block_key;
@@ -61,6 +62,7 @@ mod visual_embedding_format;
 mod visual_embedding_key;
 mod visual_embedding_model_contract;
 
+pub use block_causal_input::PersistentPromptCacheBlockCausalInput;
 pub use block_format::PersistentPromptCacheBlockHeader;
 pub use block_format_error::PersistentPromptCacheBlockError;
 pub use block_key::{PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError};

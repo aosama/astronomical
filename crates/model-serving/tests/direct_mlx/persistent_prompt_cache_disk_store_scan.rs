@@ -63,7 +63,7 @@ fn write_cross_model_block_directory(
     fs::create_dir_all(&cross_model_block_directory)
         .expect("the test should create a cross-model block directory");
     let manifest_json = serde_json::json!({
-        "format_version": "11",
+        "format_version": "12",
         "block_hash": block_hash_hex,
         "block_index": 0,
         "parent_block_hash": parent_block_hash_hex,
