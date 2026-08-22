@@ -15,6 +15,7 @@ mod model_loading_finalization;
 mod mtp_decode_attempt;
 mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
+mod persistent_prompt_cache_visual_identity;
 mod prefill_advance;
 mod prefill_capacity_recovery;
 mod prefill_execution_context;
@@ -27,7 +28,6 @@ mod resident_memory_pressure;
 mod speculative_prefill;
 mod start_generation;
 mod test_controls;
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;

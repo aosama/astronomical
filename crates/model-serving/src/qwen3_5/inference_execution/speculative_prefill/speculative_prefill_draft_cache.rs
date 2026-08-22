@@ -16,9 +16,12 @@ use crate::{
     Qwen3_5ExecutionError,
 };
 
-use super::super::super::RequestDecoderStateStack;
 use super::super::super::model::{
     Qwen3_5Model, Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,
+};
+use super::super::super::{
+    RequestDecoderStateStack, qwen3_5_speculative_draft_block_causal_input,
+    qwen3_5_speculative_draft_block_causal_inputs,
 };
 use super::super::Qwen3_5EngineState;
 use super::super::engine_request::{
@@ -136,10 +139,17 @@ impl Qwen3_5EngineState {
             .measure_operation(
                 PerformanceOperation::PersistentPromptCachePrefixLookup,
                 |_performance_attribution| {
-                    PersistentPromptCachePrefixLookup::for_prompt_with_image_digests(
+                    let block_causal_inputs = qwen3_5_speculative_draft_block_causal_inputs(
+                        prompt_token_ids.len(),
+                        draft_persistent_prompt_cache
+                            .model_contract_ref()
+                            .block_token_count(),
+                        ordered_image_sha256_digests,
+                    );
+                    PersistentPromptCachePrefixLookup::for_prompt_with_block_causal_inputs(
                         draft_persistent_prompt_cache.model_contract_ref(),
                         prompt_token_ids,
-                        ordered_image_sha256_digests,
+                        &block_causal_inputs,
                         |block_hash| draft_persistent_prompt_cache.has_kv_block(block_hash),
                         |block_hash| {
                             draft_persistent_prompt_cache.has_recurrent_snapshot(block_hash)
@@ -296,18 +306,23 @@ impl Qwen3_5EngineState {
             match previous_persistent_prompt_cache_block_key.as_ref() {
                 // Child identities commit to parent ancestry and this block's tokens.
                 Some(parent_persistent_prompt_cache_block_key) => {
-                    parent_persistent_prompt_cache_block_key.for_child_block(
+                    parent_persistent_prompt_cache_block_key.for_child_block_with_causal_input(
                         &prompt_token_ids[persistent_prompt_cache_block.block_start_tokens
                             ..persistent_prompt_cache_block.block_end_tokens],
+                        &qwen3_5_speculative_draft_block_causal_input(
+                            ordered_image_sha256_digests,
+                            persistent_prompt_cache_block.block_start_tokens
+                                / expected_block_token_count,
+                        ),
                     )
                 }
                 // Root identities additionally commit to the model storage
                 // contract and ordered images associated with the prompt.
-                None => PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
+                None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
                     draft_persistent_prompt_cache.model_contract_ref(),
                     &prompt_token_ids[persistent_prompt_cache_block.block_start_tokens
                         ..persistent_prompt_cache_block.block_end_tokens],
-                    ordered_image_sha256_digests,
+                    &qwen3_5_speculative_draft_block_causal_input(ordered_image_sha256_digests, 0),
                 ),
             };
         let persistent_prompt_cache_block_key = match persistent_prompt_cache_block_key {
@@ -435,16 +450,25 @@ fn draft_prompt_cache_block_key(
     match parent_persistent_prompt_cache_block_key {
         // Every block after index zero extends the previously validated chain.
         Some(parent_persistent_prompt_cache_block_key) => parent_persistent_prompt_cache_block_key
-            .for_child_block(block_tokens)
+            .for_child_block_with_causal_input(
+                block_tokens,
+                &qwen3_5_speculative_draft_block_causal_input(
+                    ordered_image_sha256_digests,
+                    block_index,
+                ),
+            )
             .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
                 description: "speculative-prefill drafter child cache block identity failed",
             }),
         // Only the first block has no parent; image order participates in its
         // identity so visually different prompts cannot share decoder state.
-        None => PersistentPromptCacheBlockKey::for_root_block_with_image_digests(
+        None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
             draft_persistent_prompt_cache.model_contract_ref(),
             block_tokens,
-            ordered_image_sha256_digests,
+            &qwen3_5_speculative_draft_block_causal_input(
+                ordered_image_sha256_digests,
+                block_index,
+            ),
         )
         .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
             description: "speculative-prefill drafter root cache block identity failed",

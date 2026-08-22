@@ -27,6 +27,7 @@ pub enum PerformanceOperation {
     AdaptiveRamGrowthMemoryAdmission,
     LinearAttentionGraphConstruction,
     FullAttentionGraphConstruction,
+    PersistentPromptCacheCausalInputPlanning,
     PersistentPromptCachePrefixLookup,
     PersistentPromptCacheKvBlockRead,
     PersistentPromptCacheRecurrentSnapshotRead,
@@ -147,6 +148,7 @@ impl PerformanceOperation {
         Self::AdaptiveRamGrowthMemoryAdmission,
         Self::LinearAttentionGraphConstruction,
         Self::FullAttentionGraphConstruction,
+        Self::PersistentPromptCacheCausalInputPlanning,
         Self::PersistentPromptCachePrefixLookup,
         Self::PersistentPromptCacheKvBlockRead,
         Self::PersistentPromptCacheRecurrentSnapshotRead,
@@ -272,6 +274,9 @@ impl PerformanceOperation {
             Self::AdaptiveRamGrowthMemoryAdmission => "adaptive_ram_growth_memory_admission",
             Self::LinearAttentionGraphConstruction => "linear_attention_graph_construction",
             Self::FullAttentionGraphConstruction => "full_attention_graph_construction",
+            Self::PersistentPromptCacheCausalInputPlanning => {
+                "persistent_prompt_cache_causal_input_planning"
+            }
             Self::PersistentPromptCachePrefixLookup => "persistent_prompt_cache_prefix_lookup",
             Self::PersistentPromptCacheKvBlockRead => "persistent_prompt_cache_kv_block_read",
             Self::PersistentPromptCacheRecurrentSnapshotRead => {

@@ -83,7 +83,13 @@ pub use vision::{
     Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
     Qwen3_5VisionInputPlanError, Qwen3_5VisualEmbeddingRequiredImage,
     Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
-    plan_qwen3_5_visual_embedding_suffix, qwen3_5_vision_tensor_profiles,
+    Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
+    plan_qwen3_5_visual_embedding_suffix, plan_qwen3_5_visual_prompt_cache_block_inputs,
+    qwen3_5_vision_tensor_profiles,
 };
 #[cfg(feature = "direct-mlx")]
 pub use vision::{Qwen3_5VisionModel, Qwen3_5VisionWeights, qwen3_5_inject_visual_embeddings};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use vision::{
+    qwen3_5_speculative_draft_block_causal_input, qwen3_5_speculative_draft_block_causal_inputs,
+};
