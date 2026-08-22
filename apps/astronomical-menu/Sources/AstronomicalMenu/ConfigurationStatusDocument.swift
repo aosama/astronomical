@@ -8,6 +8,7 @@ struct ConfigurationStatusDocument: Codable, Equatable {
   let effectiveGeneration: String?
   let isEffective: Bool
   let restartRequired: Bool
+  let modelDiscoveryDiagnostics: [ModelDiscoveryDiagnosticDocument]?
 
   enum CodingKeys: String, CodingKey {
     case configuredGeneration = "configured_generation"
@@ -15,5 +16,23 @@ struct ConfigurationStatusDocument: Codable, Equatable {
     case effectiveGeneration = "effective_generation"
     case isEffective = "is_effective"
     case restartRequired = "restart_required"
+    case modelDiscoveryDiagnostics = "model_discovery_diagnostics"
+  }
+}
+
+struct ModelDiscoveryDiagnosticDocument: Codable, Equatable {
+  let code: String
+  let modelID: String
+  let configuredRootNumbers: [Int]
+
+  var message: String {
+    let entries = configuredRootNumbers.map(String.init).joined(separator: ", ")
+    return "Model \(modelID) appears in model_directories entries \(entries). Remove one duplicate root."
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case code
+    case modelID = "model_id"
+    case configuredRootNumbers = "configured_root_numbers"
   }
 }

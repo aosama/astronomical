@@ -146,6 +146,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),
         discovered_models: Vec::new(),
+        model_discovery_diagnostics: Vec::new(),
         configured_model_directories: Vec::new(),
         model_policy_catalog: Arc::new(std::collections::HashMap::new()),
         unmatched_model_config_ids: Vec::new(),

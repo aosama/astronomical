@@ -15,6 +15,11 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     let mut resolved_config = sample_resolved_config();
     resolved_config.configuration_generation = configured_generation.to_owned();
     resolved_config.unmatched_model_config_ids = vec!["fictional/dormant-model".to_owned()];
+    resolved_config.model_discovery_diagnostics =
+        vec![astronomical_config::ModelDiscoveryDiagnostic {
+            model_id: "ambiguous-model".to_owned(),
+            configured_root_numbers: vec![1, 3],
+        }];
     let worker_model_configuration = worker_model_configuration();
     resolved_config.model_policy_catalog = Arc::new(HashMap::from([(
         crate::common::MODEL_ID.to_owned(),
@@ -104,6 +109,15 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         status_document["configuration"]["unmatched_model_config_ids"],
         serde_json::json!(["fictional/dormant-model"])
     );
+    assert_eq!(
+        status_document["configuration"]["model_discovery_diagnostics"],
+        serde_json::json!([{
+            "code": "ambiguous_model_identity",
+            "model_id": "ambiguous-model",
+            "configured_root_numbers": [1, 3]
+        }])
+    );
+    assert!(!String::from_utf8_lossy(&status_bytes).contains("/fictional/private"));
     assert_eq!(
         status_document["configuration"]["ready_model"]["mtp_draft_depth"]["effective"],
         1

@@ -1,8 +1,11 @@
 //! One-file-at-a-time ranged transfer and provider-digest verification.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
 };
 
 use futures_util::StreamExt;
@@ -11,7 +14,8 @@ use tokio::io::AsyncWriteExt;
 
 use super::{
     DownloadJob, DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore,
-    DownloadJobStoreError, HubPayloadRequest, HubPayloadTransport, HubTransportError,
+    DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadRequest, HubPayloadTransport,
+    HubTransportError,
     download_payload_response::{payload_url, validate_payload_response},
     download_payload_verification::verify_download_job,
     download_staged_file::open_staged_file_for_append,
@@ -21,9 +25,7 @@ use crate::{
     SupervisorPerformanceOperation,
 };
 
-// Persist live progress often enough for Observatory to move, without a job-file
-// write on every HTTP chunk of a multi-gigabyte shard.
-const LIVE_PROGRESS_CHECKPOINT_BYTES: u64 = 1_000_000;
+const LIVE_PROGRESS_PUBLICATION_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Default)]
 pub struct DownloadTransferControl {
@@ -41,6 +43,7 @@ pub struct DownloadPayloadTransfer {
     transport: Arc<dyn HubPayloadTransport>,
     attribution_log: SupervisorPerformanceAttributionLog,
     transfer_control: DownloadTransferControl,
+    progress_snapshot: DownloadProgressSnapshot,
 }
 
 #[derive(Debug, Error)]
@@ -90,11 +93,29 @@ impl DownloadPayloadTransfer {
         attribution_log: SupervisorPerformanceAttributionLog,
         transfer_control: DownloadTransferControl,
     ) -> Self {
+        Self::with_progress_snapshot(
+            job_store,
+            transport,
+            attribution_log,
+            transfer_control,
+            DownloadProgressSnapshot::new(),
+        )
+    }
+
+    #[must_use]
+    pub fn with_progress_snapshot(
+        job_store: DownloadJobStore,
+        transport: Arc<dyn HubPayloadTransport>,
+        attribution_log: SupervisorPerformanceAttributionLog,
+        transfer_control: DownloadTransferControl,
+        progress_snapshot: DownloadProgressSnapshot,
+    ) -> Self {
         Self {
             job_store,
             transport,
             attribution_log,
             transfer_control,
+            progress_snapshot,
         }
     }
 
@@ -115,6 +136,7 @@ impl DownloadPayloadTransfer {
             .mark_downloading(updated_at_unix_millis)
             .map_err(DownloadJobStoreError::from)?;
         self.replace_job(download_job.clone()).await?;
+        self.progress_snapshot.publish(download_job.clone());
 
         for file_index in 0..download_job.files().len() {
             let download_file = download_job.files()[file_index].clone();
@@ -128,6 +150,7 @@ impl DownloadPayloadTransfer {
                 .select_download_file(download_file.relative_path(), updated_at_unix_millis)
                 .map_err(DownloadJobStoreError::from)?;
             self.replace_job(download_job.clone()).await?;
+            self.progress_snapshot.publish(download_job.clone());
             let resume_offset_bytes = download_file.bytes_on_disk();
             let huggingface_id = download_job.huggingface_id().to_owned();
             let revision = download_job.revision().to_owned();
@@ -136,13 +159,7 @@ impl DownloadPayloadTransfer {
                 .attribution_log
                 .measure_async_operation(
                     SupervisorPerformanceOperation::FileTransfer,
-                    || {
-                        self.transfer_file(
-                            &mut download_job,
-                            &download_file,
-                            updated_at_unix_millis,
-                        )
-                    },
+                    || self.transfer_file(&download_job, &download_file, updated_at_unix_millis),
                     |transfer_outcome| {
                         let measurement = if transfer_outcome.is_ok() {
                             SupervisorPerformanceMeasurement::success()
@@ -188,6 +205,7 @@ impl DownloadPayloadTransfer {
                 )
                 .map_err(DownloadJobStoreError::from)?;
             self.replace_job(download_job.clone()).await?;
+            self.progress_snapshot.publish(download_job.clone());
             if self.transfer_control.is_pause_requested() {
                 return self.pause(updated_at_unix_millis).await;
             }
@@ -197,6 +215,7 @@ impl DownloadPayloadTransfer {
             .mark_verifying(updated_at_unix_millis)
             .map_err(DownloadJobStoreError::from)?;
         self.replace_job(download_job.clone()).await?;
+        self.progress_snapshot.publish(download_job.clone());
         let verification_job = download_job.clone();
         let models_directory = self.job_store.models_directory().to_path_buf();
         let verification_outcome = self
@@ -269,7 +288,7 @@ impl DownloadPayloadTransfer {
 
     async fn transfer_file(
         &self,
-        download_job: &mut DownloadJob,
+        download_job: &DownloadJob,
         download_file: &super::DownloadJobFile,
         updated_at_unix_millis: u64,
     ) -> Result<u64, DownloadPayloadTransferError> {
@@ -306,7 +325,8 @@ impl DownloadPayloadTransfer {
         let mut staged_file = tokio::fs::File::from_std(staged_file);
         let expected_transfer_bytes = download_file.expected_bytes() - resume_offset_bytes;
         let mut transferred_bytes = 0_u64;
-        let mut last_persisted_bytes = 0_u64;
+        let mut last_progress_publication_at = None;
+        let mut observed_download_job = download_job.clone();
         let mut deferred_transfer_error = None;
         let mut payload_stream = payload_response.into_byte_stream();
         while let Some(payload_chunk) = payload_stream.next().await {
@@ -333,16 +353,21 @@ impl DownloadPayloadTransfer {
                 .write_all(&payload_chunk)
                 .await
                 .map_err(DownloadPayloadTransferError::WritePayload)?;
-            if transferred_bytes - last_persisted_bytes >= LIVE_PROGRESS_CHECKPOINT_BYTES {
-                download_job
+            let should_publish_progress =
+                last_progress_publication_at.is_none_or(|last_publication_at: Instant| {
+                    last_publication_at.elapsed() >= LIVE_PROGRESS_PUBLICATION_INTERVAL
+                });
+            if should_publish_progress {
+                observed_download_job
                     .record_file_progress(
                         download_file.relative_path(),
                         resume_offset_bytes + transferred_bytes,
                         updated_at_unix_millis,
                     )
                     .map_err(DownloadJobStoreError::from)?;
-                self.replace_job(download_job.clone()).await?;
-                last_persisted_bytes = transferred_bytes;
+                self.progress_snapshot
+                    .publish(observed_download_job.clone());
+                last_progress_publication_at = Some(Instant::now());
             }
             if self.transfer_control.is_pause_requested() {
                 break;
@@ -421,7 +446,9 @@ impl DownloadPayloadTransfer {
         download_job
             .mark_checksum_failed_for_retry(relative_path, updated_at_unix_millis)
             .map_err(DownloadJobStoreError::from)?;
-        self.replace_job(download_job.clone()).await
+        self.replace_job(download_job.clone()).await?;
+        self.progress_snapshot.publish(download_job.clone());
+        Ok(())
     }
 
     async fn pause(
@@ -435,6 +462,7 @@ impl DownloadPayloadTransfer {
         .await
         .map_err(DownloadPayloadTransferError::Task)??
         .ok_or(DownloadPayloadTransferError::InvalidJobState)?;
+        self.progress_snapshot.publish(paused_job.clone());
         Ok(DownloadPayloadTransferOutcome::Paused(paused_job))
     }
 
@@ -444,15 +472,17 @@ impl DownloadPayloadTransfer {
         updated_at_unix_millis: u64,
     ) -> Result<(), DownloadPayloadTransferError> {
         let job_store = self.job_store.clone();
-        tokio::task::spawn_blocking(move || {
+        let failed_job = tokio::task::spawn_blocking(move || {
             let mut failed_job = job_store
                 .pause_current_job(updated_at_unix_millis)?
                 .ok_or(DownloadJobStoreError::JobNotFound)?;
             failed_job.mark_failed(error_code, updated_at_unix_millis)?;
-            job_store.replace_current(&failed_job)
+            job_store.replace_current(&failed_job)?;
+            Ok::<DownloadJob, DownloadJobStoreError>(failed_job)
         })
         .await
         .map_err(DownloadPayloadTransferError::Task)??;
+        self.progress_snapshot.publish(failed_job);
         Ok(())
     }
 }

@@ -1,17 +1,10 @@
 //! Complete REST journey for daemon-owned download, verification, and publication.
 
-use std::{
-    collections::VecDeque,
-    io,
-    path::Path,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{io, path::Path, sync::Arc, time::Duration};
 
 use astronomical_supervisor::{
-    DiskCapacityQuery, DownloadCatalog, DownloadPublicationRefresh, HubHttpRequest,
-    HubHttpResponse, HubPayloadFuture, HubPayloadRequest, HubPayloadResponse, HubPayloadTransport,
-    HubTransport, HubTransportError, HubTransportFuture, LibraryDownloadCoordinator,
+    DiskCapacityQuery, DownloadCatalog, DownloadJobStore, DownloadPublicationRefresh,
+    HubPayloadRequest, HubTransportError, LibraryDownloadCoordinator,
     SupervisorPerformanceAttributionLog, build_application_with_library_download,
 };
 use axum::{
@@ -19,14 +12,16 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use bytes::Bytes;
-use futures_util::stream;
 use sha1::Sha1;
 use sha2::Digest;
 use tokio::time::timeout;
 use tower::ServiceExt;
 
 use crate::common::ScriptedExecutor;
+
+mod support;
+
+use support::ScriptedHub;
 
 const REPOSITORY_ID: &str = "astronomical-test/example-qwen";
 const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -215,6 +210,49 @@ async fn should_pause_survive_a_new_coordinator_and_resume_the_same_rest_job() {
 }
 
 #[tokio::test]
+async fn should_report_streaming_progress_without_persisting_every_ui_refresh() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let application = build_test_application(
+            test_directory.path(),
+            Arc::new(ScriptedHub::progressive(Duration::from_millis(250))),
+        );
+
+        assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
+        let mut live_download = None;
+        for _poll_attempt in 0..100 {
+            let download_document = get_download_document(&application).await;
+            let completed_bytes = download_document["bytes_completed"].as_u64().unwrap_or(0);
+            let total_bytes = download_document["bytes_total"].as_u64().unwrap_or(0);
+            if download_document["state"] == "downloading"
+                && completed_bytes > 0
+                && completed_bytes < total_bytes
+            {
+                live_download = Some(download_document);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let live_download = live_download.expect("REST should observe in-memory stream progress");
+        let durable_job = DownloadJobStore::new(test_directory.path().join("models"))
+            .load()
+            .expect("durable job should load")
+            .expect("durable job should exist");
+
+        assert!(live_download["bytes_completed"].as_u64().unwrap_or(0) > 0);
+        assert_eq!(
+            durable_job.bytes_completed(),
+            0,
+            "UI polling must not add synchronized job writes to the payload hot path"
+        );
+        let cancel_response = post_without_body(&application, "/v1/library/download/cancel").await;
+        assert_eq!(cancel_response.status(), StatusCode::OK);
+    })
+    .await
+    .expect("live REST progress journey should remain bounded");
+}
+
+#[tokio::test]
 async fn should_cancel_and_remove_the_staging_tree_through_rest() {
     timeout(Duration::from_secs(5), async {
         let test_directory = tempfile::tempdir().expect("temporary directory should be available");
@@ -341,122 +379,6 @@ impl DownloadPublicationRefresh for FailingDiscoveryRefresh {
     }
 }
 
-struct ScriptedHub {
-    metadata_responses: Mutex<VecDeque<HubHttpResponse>>,
-    payload_delay: Duration,
-    corrupt_model_config: bool,
-}
-
-impl ScriptedHub {
-    fn new() -> Self {
-        Self::with_payload_behavior(Duration::ZERO, false)
-    }
-
-    fn delayed(payload_delay: Duration) -> Self {
-        Self::with_payload_behavior(payload_delay, false)
-    }
-
-    fn checksum_mismatch() -> Self {
-        Self::with_payload_behavior(Duration::ZERO, true)
-    }
-
-    fn gated() -> Self {
-        Self {
-            metadata_responses: Mutex::new(
-                [HubHttpResponse::try_new(403, [], [b"{}".to_vec()])
-                    .expect("gated response should be valid")]
-                .into(),
-            ),
-            payload_delay: Duration::ZERO,
-            corrupt_model_config: false,
-        }
-    }
-
-    fn with_payload_behavior(payload_delay: Duration, corrupt_model_config: bool) -> Self {
-        let config_git_blob_sha1 = git_blob_sha1_hex(MODEL_CONFIG);
-        Self {
-            metadata_responses: Mutex::new(
-                [
-                    HubHttpResponse::try_new(
-                        200,
-                        [],
-                        [serde_json::to_vec(&serde_json::json!({
-                            "id": REPOSITORY_ID,
-                            "sha": REVISION,
-                            "private": false,
-                            "gated": false
-                        }))
-                        .expect("metadata fixture should serialize")],
-                    )
-                    .expect("metadata response should be valid"),
-                    HubHttpResponse::try_new(
-                        200,
-                        [],
-                        [serde_json::to_vec(&serde_json::json!([
-                            {
-                                "type": "file",
-                                "size": MODEL_CONFIG.len(),
-                                "path": "config.json",
-                                "oid": config_git_blob_sha1
-                            },
-                            {
-                                "type": "file",
-                                "size": TOKENIZER_CONFIG.len(),
-                                "path": "tokenizer.json",
-                                "oid": git_blob_sha1_hex(TOKENIZER_CONFIG)
-                            },
-                            {
-                                "type": "file",
-                                "size": MODEL_WEIGHTS.len(),
-                                "path": "model-00001.safetensors",
-                                "oid": git_blob_sha1_hex(MODEL_WEIGHTS)
-                            },
-                            {
-                                "type": "file",
-                                "size": MODEL_INDEX.len(),
-                                "path": "model.safetensors.index.json",
-                                "oid": git_blob_sha1_hex(MODEL_INDEX)
-                            }
-                        ]))
-                        .expect("tree fixture should serialize")],
-                    )
-                    .expect("tree response should be valid"),
-                ]
-                .into(),
-            ),
-            payload_delay,
-            corrupt_model_config,
-        }
-    }
-}
-
-impl HubTransport for ScriptedHub {
-    fn execute(&self, _request: HubHttpRequest) -> HubTransportFuture<'_> {
-        Box::pin(async move {
-            self.metadata_responses
-                .lock()
-                .map_err(|_| HubTransportError::new("metadata lock was poisoned"))?
-                .pop_front()
-                .ok_or_else(|| HubTransportError::new("unexpected metadata request"))
-        })
-    }
-}
-
-impl HubPayloadTransport for ScriptedHub {
-    fn execute_payload(&self, request: HubPayloadRequest) -> HubPayloadFuture<'_> {
-        Box::pin(async move {
-            tokio::time::sleep(self.payload_delay).await;
-            let payload = payload_for_request(&request, self.corrupt_model_config)?;
-            Ok(HubPayloadResponse::new(
-                200,
-                None,
-                Some(payload.len() as u64),
-                Box::pin(stream::iter([Ok(Bytes::from_static(payload))])),
-            ))
-        })
-    }
-}
-
 fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Router {
     let download_catalog = test_catalog();
     let coordinator = Arc::new(LibraryDownloadCoordinator::new(
@@ -543,22 +465,26 @@ async fn post_without_body(application: &Router, path: &str) -> axum::response::
 
 async fn wait_for_download_state(application: &Router, expected_state: &str) -> serde_json::Value {
     for _poll_attempt in 0..100 {
-        let response = application
-            .clone()
-            .oneshot(
-                Request::get("/v1/library/download")
-                    .body(Body::empty())
-                    .expect("download status request should be valid"),
-            )
-            .await
-            .expect("download status response should be available");
-        let download_document = response_json(response).await;
+        let download_document = get_download_document(application).await;
         if download_document["state"] == expected_state {
             return download_document;
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("download did not reach expected state {expected_state}");
+}
+
+async fn get_download_document(application: &Router) -> serde_json::Value {
+    let response = application
+        .clone()
+        .oneshot(
+            Request::get("/v1/library/download")
+                .body(Body::empty())
+                .expect("download status request should be valid"),
+        )
+        .await
+        .expect("download status response should be available");
+    response_json(response).await
 }
 
 fn git_blob_sha1_hex(payload: &[u8]) -> String {

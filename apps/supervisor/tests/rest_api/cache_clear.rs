@@ -258,6 +258,7 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: worker_executable_path.clone(),
         discovered_models: Vec::new(),
+        model_discovery_diagnostics: Vec::new(),
         configured_model_directories: Vec::new(),
         model_policy_catalog,
         unmatched_model_config_ids: Vec::new(),
