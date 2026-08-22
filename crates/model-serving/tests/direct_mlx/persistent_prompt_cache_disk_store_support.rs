@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fs;
 
 use astronomical_model_serving::{
     DecoderCachePersistedTensorLayout, PersistentPromptCacheBlockKey,
@@ -49,23 +48,6 @@ pub(super) fn runtime_with_shared_limits() -> MlxRuntime {
     )
     .expect("the test memory limits should be valid");
     MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize")
-}
-
-pub(super) fn write_format_four_cache_file(format_four_cache_file_path: &std::path::Path) {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
-    let mut header_bytes = format!(
-        r#"{{"__metadata__":{{"format_version":"4","model_id":"{}","model_revision":"{}","block_token_count":"{}"}}}}"#,
-        persistent_prompt_cache_model_contract.model_id(),
-        persistent_prompt_cache_model_contract.model_revision(),
-        persistent_prompt_cache_model_contract.block_token_count(),
-    )
-    .into_bytes();
-    let header_padding_byte_count = (8 - header_bytes.len() % 8) % 8;
-    header_bytes.extend(std::iter::repeat_n(b' ', header_padding_byte_count));
-    let mut format_four_file_bytes = (header_bytes.len() as u64).to_le_bytes().to_vec();
-    format_four_file_bytes.extend(header_bytes);
-    fs::write(format_four_cache_file_path, format_four_file_bytes)
-        .expect("the test should write the format-four cache file");
 }
 
 pub(super) fn persistent_prompt_cache_block_key_for_seed(

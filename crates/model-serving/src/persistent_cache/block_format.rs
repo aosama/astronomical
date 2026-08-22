@@ -32,7 +32,9 @@ use super::persistent_safetensors_header::{
 /// contract fingerprint while allowing each declared state kind independently.
 /// Version 11: atomically publishes complete block directories and removes
 /// redundant model identity metadata from state files.
-pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "11";
+/// Version 12: binds model-owned non-token causal input at the block where it
+/// enters the prompt instead of binding every visual attachment at the root.
+pub(crate) const PERSISTENT_PROMPT_CACHE_FORMAT_VERSION: &str = "12";
 
 /// Parsed and validated metadata for one Qwen3.5-MoE persistent prompt-cache block on disk.
 #[derive(Clone, Debug, Eq, PartialEq)]

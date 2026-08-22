@@ -188,7 +188,7 @@ fn should_reject_a_previous_disposable_format_version() {
         None,
         None,
     );
-    replace_metadata_value(&sequence_state_file_path, "format_version", "10".to_owned());
+    replace_metadata_value(&sequence_state_file_path, "format_version", "11".to_owned());
 
     let sequence_state_file =
         File::open(&sequence_state_file_path).expect("the generated old-format file should reopen");
@@ -199,7 +199,7 @@ fn should_reject_a_previous_disposable_format_version() {
     )
     .expect_err("the old disposable format must be rejected");
 
-    assert!(rejection.to_string().contains("expected 11"));
+    assert!(rejection.to_string().contains("expected 12"));
 }
 
 fn write_contract_generated_file(
@@ -267,7 +267,7 @@ fn write_contract_generated_file(
     header_entries.insert(
         "__metadata__".to_owned(),
         json!({
-            "format_version": "11",
+            "format_version": "12",
             "block_token_count": persistent_prompt_cache_model_contract.block_token_count().to_string(),
             "storage_contract_fingerprint": persistent_prompt_cache_model_contract.storage_contract_fingerprint_hex(),
         }),
