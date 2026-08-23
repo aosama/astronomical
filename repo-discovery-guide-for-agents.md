@@ -6,7 +6,7 @@ Agent orientation map for non-obvious repository facts; this is not user-facing 
 
 Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old.
 
-Last verified: 2026-08-22 (spot-checked: automatic model discovery precedence, bundled Library catalog, supervisor attribution, Observatory Library route)
+Last verified: 2026-08-23 (spot-checked: automatic model discovery precedence, bundled Library catalog, supervisor attribution, Observatory Library route)
 
 ## Project overview
 
