@@ -27,7 +27,11 @@ mod expert_paging_representative_performance;
 mod expert_paging_romeo_and_juliet_performance;
 mod model;
 #[cfg(feature = "direct-mlx")]
+mod model_ssd_streaming;
+#[cfg(feature = "direct-mlx")]
 mod mtp;
+#[cfg(feature = "direct-mlx")]
+mod ornith_1_5_35b_a3b_eight_bit_expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod paged_mode_endurance;
 #[cfg(feature = "direct-mlx")]
@@ -36,8 +40,6 @@ mod paged_prefill_no_replay;
 mod performance_attribution;
 #[cfg(feature = "direct-mlx")]
 mod prefill_chunck_qualification;
-#[cfg(feature = "direct-mlx")]
-mod qwen3_6_35b_a3b_eight_bit_expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill;
 #[cfg(feature = "direct-mlx")]
@@ -124,12 +126,10 @@ fn select_smallest_compatible_speculative_prefill_draft_model(
         })
 }
 
-fn qwen3_6_35b_a3b_eight_bit_model_directory() -> std::path::PathBuf {
-    crate::common::configured_model_artifact_directory_by_id("Qwen3.6-35B-A3B-8bit")
-}
-
-fn xyz_aquila_mini_optiq_four_bit_model_directory() -> std::path::PathBuf {
-    crate::common::configured_model_artifact_directory_by_id("XYZ-Aquila-mini-OptiQ-4bit")
+fn ornith_1_5_35b_a3b_eight_bit_model_directory() -> std::path::PathBuf {
+    crate::common::configured_model_artifact_directory_by_id(
+        crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID,
+    )
 }
 
 fn configured_depth_one_mtp_model_artifact_directory() -> std::path::PathBuf {

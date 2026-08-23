@@ -192,7 +192,10 @@ pub(crate) async fn update_maximum_mlx_memory(
         candidate_resolved_config.configuration_generation.clone(),
     );
     match worker_handle
-        .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+        .update_mlx_memory_limit(
+            requested_mlx_memory_ceiling_bytes,
+            candidate_resolved_config.configuration_generation.clone(),
+        )
         .await
     {
         Ok(

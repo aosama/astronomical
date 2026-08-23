@@ -20,11 +20,11 @@ const CONFIGURED_TARGET_SUMMARY_MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 768;
 const CONFIGURED_TARGET_SUMMARY_REQUEST_IDENTIFIER: u64 = 95_260;
 const CONFIGURED_TARGET_SUMMARY_TIMEOUT: Duration = Duration::from_secs(115);
 const CONFIGURED_TARGET_SUMMARY_ACTIVE_MEMORY_LIMIT_BYTES: usize = 16_000_000_000;
-const OPTIQ_FOUR_BIT_PROMPT_TOKEN_COUNT: usize = 104_249;
-const OPTIQ_FOUR_BIT_MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 5_000;
-const OPTIQ_FOUR_BIT_REQUEST_IDENTIFIER: u64 = 95_261;
-const OPTIQ_FOUR_BIT_ACTIVE_MEMORY_LIMIT_BYTES: usize = 32_000_000_000;
-const OPTIQ_FOUR_BIT_TARGET_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+const LARGE_TARGET_PROMPT_TOKEN_COUNT: usize = 104_249;
+const LARGE_TARGET_MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 5_000;
+const LARGE_TARGET_REQUEST_IDENTIFIER: u64 = 95_261;
+const LARGE_TARGET_ACTIVE_MEMORY_LIMIT_BYTES: usize = 32_000_000_000;
+const LARGE_TARGET_MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 
 #[tokio::test]
 #[ignore = "loads the configured target and drafter for a cold-cache 60K Romeo and Juliet summary journey"]
@@ -45,16 +45,16 @@ async fn should_complete_the_configured_cold_cache_60k_three_paragraph_summary_w
 }
 
 #[tokio::test]
-#[ignore = "requires model_directories to discover the Ornith-1.0-35B-OptiQ-4bit target and loads it with the configured drafter for a cold-cache 104,249-token journey"]
-async fn should_complete_the_optiq_four_bit_104249_token_journey_within_32_gb() {
+#[ignore = "requires model_directories to discover the Ornith 1.5 oQ6e target and loads it with the configured drafter for a cold-cache 104,249-token journey"]
+async fn should_complete_the_large_ornith_104249_token_journey_within_32_gb() {
     tokio::time::timeout(
         CONFIGURED_TARGET_SUMMARY_TIMEOUT,
         run_configured_cold_cache_summary_journey(
-            OPTIQ_FOUR_BIT_PROMPT_TOKEN_COUNT,
-            OPTIQ_FOUR_BIT_MAXIMUM_OUTPUT_TOKEN_COUNT,
-            OPTIQ_FOUR_BIT_REQUEST_IDENTIFIER,
-            OPTIQ_FOUR_BIT_ACTIVE_MEMORY_LIMIT_BYTES,
-            Some(OPTIQ_FOUR_BIT_TARGET_MODEL_ID),
+            LARGE_TARGET_PROMPT_TOKEN_COUNT,
+            LARGE_TARGET_MAXIMUM_OUTPUT_TOKEN_COUNT,
+            LARGE_TARGET_REQUEST_IDENTIFIER,
+            LARGE_TARGET_ACTIVE_MEMORY_LIMIT_BYTES,
+            Some(LARGE_TARGET_MODEL_ID),
         ),
     )
     .await
@@ -81,7 +81,7 @@ async fn run_configured_cold_cache_summary_journey(
     let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for the summary journey");
     let target_model_id_to_qualify = required_target_model_id
-        .unwrap_or(astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID);
+        .unwrap_or(crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID);
     let discovered_target_model = crate::common::configured_discovered_model_by_id(
         &astronomical_config,
         target_model_id_to_qualify,

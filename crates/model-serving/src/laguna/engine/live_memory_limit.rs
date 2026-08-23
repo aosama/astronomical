@@ -1,6 +1,5 @@
 //! Live Laguna MLX-ceiling validation and application.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::{
@@ -51,6 +50,7 @@ impl LagunaInferenceExecution {
             current_active_memory_bytes,
             retained_paged_expert_payload_bytes: expert_statistics.resident_payload_byte_count,
             complete_experts_are_resident,
+            complete_residency_required_headroom_bytes: 0,
         }
         .decide();
         if matches!(
@@ -65,6 +65,13 @@ impl LagunaInferenceExecution {
             });
         }
         if ceiling_change_decision == MemoryCeilingChangeDecision::Unchanged {
+            let expert_residency_telemetry = self
+                .model
+                .as_ref()
+                .ok_or(InferenceEngineError::Fatal {
+                    reason: "the Laguna model is not loaded".to_owned(),
+                })?
+                .expert_residency_telemetry();
             return Ok(MlxMemoryLimitAdjustment::new(
                 requested_mlx_memory_ceiling_bytes,
                 u64::try_from(current_memory_limits.allocator_cache_memory_limit_bytes())
@@ -72,7 +79,8 @@ impl LagunaInferenceExecution {
                 minimum_mlx_memory_ceiling_bytes,
                 expert_memory_mode,
                 self.collect_current_mlx_memory_telemetry(),
-            ));
+            )
+            .with_expert_residency_telemetry(expert_residency_telemetry));
         }
         let previous_retained_expert_ceiling_bytes = self
             .model
@@ -249,20 +257,19 @@ impl LagunaInferenceExecution {
         }
         self.mlx_ram_budget = Some(updated_mlx_ram_budget);
         self.adaptive_ram_growth_guard = Some(updated_adaptive_ram_growth_guard);
-        self.model
-            .as_mut()
-            .ok_or(InferenceEngineError::Fatal {
-                reason: "the Laguna model is not loaded".to_owned(),
-            })?
-            .update_expert_allocation_ceiling(requested_mlx_memory_ceiling_bytes);
+        let model = self.model.as_mut().ok_or(InferenceEngineError::Fatal {
+            reason: "the Laguna model is not loaded".to_owned(),
+        })?;
+        model.update_expert_allocation_ceiling(requested_mlx_memory_ceiling_bytes);
+        let expert_memory_mode = model.expert_memory_mode();
+        let expert_residency_telemetry = model.expert_residency_telemetry();
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
             u64::try_from(updated_limits.allocator_cache_memory_limit_bytes()).unwrap_or(u64::MAX),
             minimum_mlx_memory_ceiling_bytes,
-            self.model
-                .as_ref()
-                .map_or(ExpertMemoryMode::Paged, |model| model.expert_memory_mode()),
+            expert_memory_mode,
             self.collect_current_mlx_memory_telemetry(),
-        ))
+        )
+        .with_expert_residency_telemetry(expert_residency_telemetry))
     }
 }

@@ -29,7 +29,7 @@ pub trait ExpertWeightPage: std::fmt::Debug {
     fn resident_payload_byte_count(&self) -> u64;
 }
 #[cfg(feature = "direct-mlx")]
-pub(crate) use bounded_expert_reader::load_quantized_expert_page;
+pub use bounded_expert_reader::load_quantized_expert_page;
 pub use quantized_expert_manifest::{
     ExpertManifestError, ExpertPageRoutePartition, QuantizationMode, QuantizedExpertLayerPlan,
     QuantizedExpertPageManifest, QuantizedExpertShardManifest, QuantizedExpertSourceInterval,

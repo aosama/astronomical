@@ -2,6 +2,8 @@
 
 mod rust_layer_streaming;
 
+pub(crate) use rust_layer_streaming::Qwen3_5ExpertStreamingRequestShape;
+
 use std::fs::File;
 use std::path::PathBuf;
 

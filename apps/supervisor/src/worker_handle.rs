@@ -313,6 +313,7 @@ impl WorkerHandle {
     pub async fn update_mlx_memory_limit(
         &self,
         effective_mlx_memory_ceiling_bytes: u64,
+        configuration_generation: String,
     ) -> Result<MlxMemoryLimitUpdateOutcome, WorkerControlError> {
         let command_sender = self
             .command_sender
@@ -322,6 +323,7 @@ impl WorkerHandle {
         command_sender
             .send(WorkerLoopCommand::UpdateMlxMemoryLimit {
                 effective_mlx_memory_ceiling_bytes,
+                configuration_generation,
                 update_sender,
             })
             .await

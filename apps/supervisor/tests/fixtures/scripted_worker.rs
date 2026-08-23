@@ -463,6 +463,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
             WorkerCommand::SampleMlxMemory => {}
             WorkerCommand::UpdateMlxMemoryLimit {
                 effective_mlx_memory_ceiling_bytes,
+                configuration_generation: _,
             } => {
                 event_writer
                     .send_event(&WorkerEvent::MlxMemoryLimitChanged {
@@ -470,6 +471,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         minimum_mlx_memory_ceiling_bytes: 1,
                         expert_memory_mode: ExpertMemoryMode::Resident,
                         mlx_memory_snapshot: None,
+                        expert_residency: None,
                     })
                     .await?;
             }

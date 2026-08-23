@@ -3,7 +3,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use super::output::worker_memory_snapshot;
+use super::output::{worker_expert_residency_snapshot, worker_memory_snapshot};
 use super::support::{ModelFactory, WorkerRuntimeError, engine_generation_error};
 use crate::{
     ImageGenerationEngine, InferenceEngine, InferenceEngineError, ModelGenerationProcessor,
@@ -22,6 +22,7 @@ where
     pub(crate) async fn update_mlx_memory_limit<WriteTransport>(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
+        configuration_generation: String,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -53,12 +54,14 @@ where
                 requested_mlx_memory_ceiling_bytes,
             );
             self.effective_mlx_memory_ceiling_bytes = requested_mlx_memory_ceiling_bytes;
+            self.record_configuration_generation(configuration_generation);
             event_writer
                 .send_event(&WorkerEvent::MlxMemoryLimitChanged {
                     effective_mlx_memory_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
                     minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,
                     expert_memory_mode: ExpertMemoryMode::Resident,
                     mlx_memory_snapshot: None,
+                    expert_residency: None,
                 })
                 .await?;
             return Ok(());
@@ -102,6 +105,7 @@ where
                         mlx_memory_limit_adjustment.allocator_cache_memory_limit_bytes(),
                     );
                 }
+                self.record_configuration_generation(configuration_generation);
                 event_writer
                     .send_event(&WorkerEvent::MlxMemoryLimitChanged {
                         effective_mlx_memory_ceiling_bytes: self.effective_mlx_memory_ceiling_bytes,
@@ -115,6 +119,9 @@ where
                                     mlx_memory_telemetry,
                                 )
                             }),
+                        expert_residency: mlx_memory_limit_adjustment
+                            .expert_residency_telemetry()
+                            .map(worker_expert_residency_snapshot),
                     })
                     .await?;
                 Ok(())
@@ -141,6 +148,15 @@ where
                 .await
             }
             Err(engine_error) => Err(engine_generation_error(engine_error)),
+        }
+    }
+
+    fn record_configuration_generation(&mut self, configuration_generation: String) {
+        if let Some(worker_runtime_feature_configuration) =
+            self.worker_runtime_feature_configuration.as_mut()
+        {
+            worker_runtime_feature_configuration.configuration_generation =
+                configuration_generation;
         }
     }
 

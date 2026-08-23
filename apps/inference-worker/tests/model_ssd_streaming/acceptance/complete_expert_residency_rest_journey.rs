@@ -1,6 +1,6 @@
 //! User journey proving that a fitting model stays completely resident.
 //!
-//! At a 25 GB decimal-SI MLX ceiling, the selected fixture model has enough room
+//! At a 38 GB decimal-SI MLX ceiling, the selected fixture model has enough room
 //! for model core, every expert, and required request headroom. The journey sends
 //! a long public streaming request and proves three user-visible consequences:
 //!
@@ -23,20 +23,20 @@ use crate::common::real_model_rest_server::{
     JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 
-const MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
 // Qualification cells are explicit evidence, not production constants. Runtime
 // policy continues to derive capacity from user/machine ceiling and model geometry.
-const MAXIMUM_MLX_MEMORY_BYTES: u64 = 25_000_000_000;
+const MAXIMUM_MLX_MEMORY_BYTES: u64 = 38_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 7_000;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 1_280;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 256;
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 const ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept complete expert residency without request-time SSD streaming"]
-async fn should_keep_all_experts_resident_and_avoid_expert_ssd_streaming_under_twenty_five_gb() {
+async fn should_keep_all_experts_resident_and_avoid_ssd_reads_when_the_model_fits_memory() {
     timeout(
         JOURNEY_TIMEOUT,
         run_complete_expert_residency_rest_journey(),
@@ -123,7 +123,7 @@ async fn run_complete_expert_residency_rest_journey() {
                 memory_admission_decision.contains("decision=\"admit_with_recovery_constraint\"")
                     && memory_admission_decision.contains("recovery_reserve_only_trigger=true")
             }),
-        "the 25 GB journey must prove that a recovery-only shortfall was admitted: {memory_admission_decisions:?}"
+        "the 38 GB journey must prove that a recovery-only shortfall was admitted: {memory_admission_decisions:?}"
     );
     assert!(
         complete_residency_transitions.iter().any(|transition| {
@@ -309,17 +309,15 @@ fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) 
         .expect("the complete-residency configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
-        "maximum_mlx_memory_gb": 25,
+        "maximum_mlx_memory_gb": MAXIMUM_MLX_MEMORY_BYTES / 1_000_000_000,
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": false,
         "performance_attribution_enabled": true,
-        "mtp_enabled": false,
         "logging": {
             "level": "debug",
             "retained_files": 2,
         },
         "chunking": {
-
             "fixed_prompt_processing_chunk_size_tokens": 2_048,
         },
     });

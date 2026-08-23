@@ -5,7 +5,7 @@ use astronomical_runtime_integration::{MlxDtype, MlxRuntime};
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 
 #[tokio::test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 async fn should_project_one_minimum_sized_image_into_text_embedding_width() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_ornith_model_artifact_directory();

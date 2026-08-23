@@ -77,6 +77,7 @@ async fn main() {
             WorkerCommand::SampleMlxMemory => {}
             WorkerCommand::UpdateMlxMemoryLimit {
                 effective_mlx_memory_ceiling_bytes,
+                configuration_generation: _,
             } => {
                 let _send_outcome = event_writer
                     .send_event(&WorkerEvent::MlxMemoryLimitChanged {
@@ -84,6 +85,7 @@ async fn main() {
                         minimum_mlx_memory_ceiling_bytes: 1,
                         expert_memory_mode: astronomical_ipc_protocol::ExpertMemoryMode::Resident,
                         mlx_memory_snapshot: None,
+                        expert_residency: None,
                     })
                     .await;
             }

@@ -45,6 +45,7 @@ impl Qwen3_5EngineState {
             .runtime()
             .memory_snapshot()
             .map_err(super::qwen3_5_runtime_error)?;
+        let expert_memory_mode_before_adjustment = model.expert_memory_mode();
         let adjustment_started_at = Instant::now();
         let (minimum_mlx_memory_ceiling_bytes, updated_mlx_memory_limits) =
             model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
@@ -78,6 +79,8 @@ impl Qwen3_5EngineState {
             model.finalized_active_memory_breakdown(active_memory_bytes, 0),
         ));
         let expert_memory_mode = model.expert_memory_mode();
+        let expert_residency_transition_occurred =
+            expert_memory_mode != expert_memory_mode_before_adjustment;
         tracing::info!(
             old_mlx_memory_ceiling_bytes,
             new_mlx_memory_ceiling_bytes = requested_mlx_memory_ceiling_bytes,
@@ -88,6 +91,7 @@ impl Qwen3_5EngineState {
             allocator_cache_memory_bytes_before = mlx_memory_snapshot_before_adjustment.allocator_cache_memory_bytes(),
             allocator_cache_memory_bytes_after = mlx_memory_snapshot_after_adjustment.allocator_cache_memory_bytes(),
             expert_memory_mode = ?expert_memory_mode,
+            expert_residency_transition_occurred,
             "applied live MLX memory ceiling adjustment"
         );
         Ok(MlxMemoryLimitAdjustment::new(
@@ -102,6 +106,7 @@ impl Qwen3_5EngineState {
             minimum_mlx_memory_ceiling_bytes,
             expert_memory_mode,
             mlx_memory_telemetry,
-        ))
+        )
+        .with_expert_residency_telemetry(model.expert_residency_telemetry()))
     }
 }

@@ -520,7 +520,14 @@ impl InferenceEngine for ScriptedChatEngine {
             1,
             ExpertMemoryMode::Resident,
             None,
-        ))
+        )
+        .with_expert_residency_telemetry(ExpertResidencyTelemetry {
+            total_layer_count: 2,
+            complete_layer_count: 2,
+            complete_layer_payload_bytes: 8_000,
+            partial_layer_count: 0,
+            partial_layer_payload_bytes: 0,
+        }))
     }
 
     async fn collect_persistent_prompt_cache_stats(

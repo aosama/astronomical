@@ -19,7 +19,6 @@ use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
 #[doc(hidden)]
 pub struct ModelFamilyFactory {
     effective_mlx_memory_ceiling_bytes: usize,
-    maximum_allocator_cache_memory_limit_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
     performance_attribution_enabled: bool,
@@ -47,7 +46,6 @@ impl ModelFamilyFactory {
     ) -> Self {
         Self {
             effective_mlx_memory_ceiling_bytes,
-            maximum_allocator_cache_memory_limit_bytes: allocator_cache_memory_limit_bytes,
             allocator_cache_memory_limit_bytes,
             prompt_cache_config,
             performance_attribution_enabled,
@@ -234,13 +232,14 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, Fl
     fn update_mlx_memory_limits(
         &mut self,
         effective_mlx_memory_ceiling_bytes: u64,
-        _allocator_cache_memory_limit_bytes: u64,
+        allocator_cache_memory_limit_bytes: u64,
     ) {
         self.effective_mlx_memory_ceiling_bytes =
             usize::try_from(effective_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
-        self.allocator_cache_memory_limit_bytes = self
-            .maximum_allocator_cache_memory_limit_bytes
-            .min(self.effective_mlx_memory_ceiling_bytes);
+        // MLX limits are process-global, so every replacement runtime must reuse the exact
+        // policy acknowledged by the loaded engine rather than derive a fresh cache limit.
+        self.allocator_cache_memory_limit_bytes =
+            usize::try_from(allocator_cache_memory_limit_bytes).unwrap_or(usize::MAX);
     }
 
     fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {

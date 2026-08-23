@@ -236,6 +236,7 @@ async fn should_fail_closed_across_modalities_and_apply_an_idle_image_memory_upd
     commands
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes: 7_000,
+            configuration_generation: "image-memory-generation".to_owned(),
         })
         .await
         .expect("memory update");

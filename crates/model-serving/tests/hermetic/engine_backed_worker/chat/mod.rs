@@ -12,7 +12,7 @@ use astronomical_ipc_protocol::{
     SpeculativePrefillRuntimeState, WorkerAutoregressiveModelConfiguration,
     WorkerChunkingConfiguration, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
     WorkerMlxMemorySnapshot, WorkerModelConfiguration, WorkerPromptProcessingPhase,
-    WorkerPromptWorkReuse,
+    WorkerPromptWorkReuse, WorkerRuntimeFeatureConfiguration,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry,

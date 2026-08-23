@@ -25,7 +25,7 @@ use super::model_artifact_rest_transport::{
     streamed_model_text_from_chat_response,
 };
 
-pub(super) const E2E_TIMEOUT: Duration = Duration::from_secs(115);
+pub(crate) const E2E_TIMEOUT: Duration = Duration::from_secs(115);
 const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const READY_ATTEMPT_LIMIT: u8 = 70;
 // The litmus checks stream completion and worker reuse, not long output volume.
@@ -33,9 +33,9 @@ const DEPLOYMENT_LITMUS_MAX_OUTPUT_TOKENS: u32 = 512;
 pub(super) const DEPLOYMENT_LITMUS_PROMPT: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
-pub(super) struct ModelArtifactRestServer {
+pub(crate) struct ModelArtifactRestServer {
     worker_handle: WorkerHandle,
-    pub(super) server_address: SocketAddr,
+    pub(crate) server_address: SocketAddr,
     shutdown_sender: oneshot::Sender<()>,
     server_task: JoinHandle<Result<(), std::io::Error>>,
     isolated_development_home: Option<tempfile::TempDir>,
@@ -209,7 +209,7 @@ async fn launch_model_artifact_rest_server() -> ModelArtifactRestServer {
         .await
 }
 
-pub(super) async fn launch_model_artifact_rest_server_for_model(
+pub(crate) async fn launch_model_artifact_rest_server_for_model(
     model_id: &str,
     model_directory: PathBuf,
     isolated_worker_home_directory: Option<&Path>,
@@ -225,7 +225,7 @@ pub(super) async fn launch_model_artifact_rest_server_for_model(
     .await
 }
 
-pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limit(
+pub(crate) async fn launch_model_artifact_rest_server_for_model_with_memory_limit(
     model_id: &str,
     model_directory: PathBuf,
     isolated_worker_home_directory: Option<&Path>,
@@ -324,7 +324,7 @@ pub(super) async fn launch_model_artifact_rest_server_for_model_with_memory_limi
     }
 }
 
-pub(super) async fn stop_model_artifact_rest_server(
+pub(crate) async fn stop_model_artifact_rest_server(
     model_artifact_rest_server: ModelArtifactRestServer,
 ) {
     let ModelArtifactRestServer {
@@ -362,7 +362,7 @@ async fn wait_until_ready(server_address: SocketAddr) {
     panic!("the model-artifact worker did not become ready before the E2E deadline");
 }
 
-pub(super) async fn get_endpoint(server_address: SocketAddr, endpoint_path: &str) -> String {
+pub(crate) async fn get_endpoint(server_address: SocketAddr, endpoint_path: &str) -> String {
     send_http_request(
         server_address,
         format!(
@@ -372,7 +372,7 @@ pub(super) async fn get_endpoint(server_address: SocketAddr, endpoint_path: &str
     .await
 }
 
-pub(super) async fn post_chat_completion(
+pub(crate) async fn post_chat_completion(
     server_address: SocketAddr,
     request_body: String,
 ) -> String {
@@ -481,7 +481,7 @@ pub(super) fn image_chat_request_body_for_model(model_id: &str) -> String {
     .to_string()
 }
 
-pub(super) fn assert_successful_streaming_chat_response(chat_response: &str) {
+pub(crate) fn assert_successful_streaming_chat_response(chat_response: &str) {
     assert!(
         chat_response.starts_with("HTTP/1.1 200 OK"),
         "unexpected HTTP response: {chat_response}"

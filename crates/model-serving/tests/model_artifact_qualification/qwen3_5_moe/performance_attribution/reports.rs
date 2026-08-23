@@ -26,7 +26,7 @@ pub(crate) fn generation_report_for_request(
             panic!("the benchmark should write a generation report for request {request_id}")
         })
 }
-pub(super) fn model_loading_report(attribution_report_documents: &[Value]) -> &Value {
+pub(crate) fn model_loading_report(attribution_report_documents: &[Value]) -> &Value {
     attribution_report_documents
         .iter()
         .find(|document| document["report_kind"] == "model_loading")

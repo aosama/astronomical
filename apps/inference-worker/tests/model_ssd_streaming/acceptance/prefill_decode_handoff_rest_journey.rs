@@ -25,13 +25,13 @@ use support::{
 };
 
 const LOG_MARKER: &str = "[prefill-decode-residency-interaction]";
-const MODEL_ID: &str = "Qwen3.6-35B-A3B-Fable-Holo3.1-Qwopus-KAT-Coder-C-qx86-hi-mlx";
+const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
 // This qualification cell is deliberately below complete-resident prefill need
 // for the configured artifact, while the launcher still clamps it to the host's
 // machine-derived ceiling. Production policy contains no corresponding constant.
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 32_000_000_000;
 const INITIAL_PROMPT_TOKEN_COUNT: usize = 10_000;
-const PREFILL_CHUNCK_TOKEN_COUNT: u32 = 4_096;
+const PREFILL_CHUNK_TOKEN_COUNT: u32 = 4_096;
 const PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
 // A short generation budget keeps the residency journey inside the bounded
 // acceptance window. The long prefill source above supplies the memory pressure
@@ -42,11 +42,12 @@ const TOOL_COUNT: usize = 46;
 const STATUS_SAMPLE_INTERVAL: Duration = Duration::from_millis(100);
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 const ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches one real worker and reproduces cached prefill/decode expert residency"]
-async fn should_reproduce_prefill_decode_expert_residency_interaction_with_live_evidence() {
+async fn should_complete_cold_and_cached_append_requests_with_consistent_prefill_decode_residency()
+{
     timeout(JOURNEY_TIMEOUT, run_interaction_journey())
         .await
         .expect("the prefill/decode residency interaction must finish within 115 seconds");
@@ -64,7 +65,7 @@ async fn run_interaction_journey() {
         INITIAL_PROMPT_TOKEN_COUNT,
     );
     eprintln!(
-        "{LOG_MARKER} request=journey status=start timeout_seconds={} mlx_ceiling_bytes={MAXIMUM_MLX_MEMORY_BYTES} mlx_ceiling_gb={:.3} initial_prompt_tokens={INITIAL_PROMPT_TOKEN_COUNT} fixed_prefill_tokens={PREFILL_CHUNCK_TOKEN_COUNT} paging_graph_submission_layer_interval={PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL} persistent_prompt_cache_enabled=true",
+        "{LOG_MARKER} request=journey status=start timeout_seconds={} mlx_ceiling_bytes={MAXIMUM_MLX_MEMORY_BYTES} mlx_ceiling_gb={:.3} initial_prompt_tokens={INITIAL_PROMPT_TOKEN_COUNT} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} paging_graph_submission_layer_interval={PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL} persistent_prompt_cache_enabled=true",
         JOURNEY_TIMEOUT.as_secs(),
         MAXIMUM_MLX_MEMORY_BYTES as f64 / 1_000_000_000.0,
     );

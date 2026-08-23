@@ -14,7 +14,7 @@ async fn should_complete_persistent_speculative_prefill_when_keep_percentage_is_
         let target_model_directory = crate::common::configured_ornith_model_artifact_directory();
         let astronomical_config = AstronomicalConfig::load_from_development_location()
             .expect("the standard Astronomical configuration should load");
-        let target_model_id = astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID;
+        let target_model_id = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
         let discovered_target_model = crate::common::configured_discovered_model_by_id(
             &astronomical_config,
             target_model_id,
