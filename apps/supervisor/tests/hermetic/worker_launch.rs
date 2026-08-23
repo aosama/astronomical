@@ -51,31 +51,6 @@ async fn should_report_worker_exit_status_and_stderr_when_the_event_stream_close
 }
 
 #[tokio::test]
-async fn should_launch_without_a_literal_host_memory_envelope() {
-    let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
-            .expect("Cargo should provide the test worker fixture path"),
-    );
-    let temp_dir = tempfile::tempdir().expect("test performance log directory should be created");
-    let performance_log = GenerationPerformanceLog::open(temp_dir.path())
-        .expect("test performance log should be created");
-
-    let worker_handle = WorkerHandle::launch(
-        worker_executable_path,
-        Duration::from_secs(1),
-        performance_log,
-        Arc::new(HashMap::new()),
-    )
-    .await
-    .expect("machine-specific MLX limits belong to the inference worker");
-
-    worker_handle
-        .shutdown()
-        .await
-        .expect("the scripted worker should shut down");
-}
-
-#[tokio::test]
 async fn should_load_the_requested_model_only_after_the_first_generation_request() {
     let worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")

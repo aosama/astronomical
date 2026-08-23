@@ -101,9 +101,8 @@ pub use flux2_klein::{
     Flux2KleinTransformer, Flux2KleinTransformerError, Flux2KleinTransformerGeometry,
     Flux2KleinTransformerGeometryError, Flux2KleinTransformerInputs, Flux2KleinTransformerOutput,
     Flux2KleinTransformerWeights, Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder,
-    apply_rope_for_component_oracle, flux2_klein_allocator_cache_limit_for_tests,
-    flux2_klein_euler_update_for_tests, flux2_klein_initial_latents_for_tests,
-    flux2_klein_keyed_noise_and_euler_for_tests,
+    apply_rope_for_component_oracle, flux2_klein_euler_update_for_tests,
+    flux2_klein_initial_latents_for_tests, flux2_klein_keyed_noise_and_euler_for_tests,
 };
 pub use image_generation_engine::{
     ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
@@ -287,10 +286,7 @@ pub use qwen3_5_moe::{
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
-pub use qwen3_5_moe::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    prefill_recovery_must_demote_complete_resident_owner, retained_expert_fill_budget_bytes,
-};
+pub use qwen3_5_moe::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION};
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
     ExpertAssignmentOrder, SortedExpertAssignments, StackedExpertProjection,
@@ -298,9 +294,7 @@ pub use sparse_experts::{
     sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
     unsorted_expert_weighted_sum,
 };
-pub use sparse_experts::{
-    SparseExpertError, gathered_indices_use_sorted_contract, invert_assignment_order,
-};
+pub use sparse_experts::{SparseExpertError, invert_assignment_order};
 
 /// Validates a safetensors shard where some tensors have strict dtype/shape profiles
 /// and remaining tensors are accepted by name only.

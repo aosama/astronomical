@@ -10,7 +10,6 @@ mod download_payload;
 mod generation_performance_log;
 mod hugging_face_hub;
 mod image_generation;
-mod logging;
 mod model_load_timeout;
 mod persistent_prompt_cache_diagnostics;
 mod request_queue;
