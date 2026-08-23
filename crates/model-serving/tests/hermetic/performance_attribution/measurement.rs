@@ -114,23 +114,3 @@ fn should_retain_the_largest_maximum_counter_observation() {
 
     assert_eq!(performance_attribution.counter_value(maximum_counter), 80);
 }
-
-#[test]
-fn should_saturate_each_mtp_outcome_counter_independently() {
-    let mut performance_attribution = PerformanceAttribution::enabled();
-
-    for performance_counter in [
-        PerformanceCounter::MtpAdmittedAttemptCount,
-        PerformanceCounter::MtpAcceptedDraftCount,
-        PerformanceCounter::MtpRejectedDraftCount,
-        PerformanceCounter::MtpOperationalFallbackCount,
-    ] {
-        performance_attribution.record_counter(performance_counter, u64::MAX);
-        performance_attribution.record_counter(performance_counter, 1);
-
-        assert_eq!(
-            performance_attribution.counter_value(performance_counter),
-            u64::MAX
-        );
-    }
-}

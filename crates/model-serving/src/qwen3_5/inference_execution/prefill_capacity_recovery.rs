@@ -19,8 +19,7 @@
 use astronomical_ipc_protocol::RequestId;
 
 use crate::qwen3_5_moe::{
-    Qwen3_5ExpertResidencyTransitionReason, prefill_recovery_must_demote_complete_resident_owner,
-    reclaim_retained_experts_for_request_memory_pressure,
+    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
 };
 use crate::{
     ForwardRecoveryPolicy, InferenceEngineError, PerformanceCounter, PerformanceOperation,
@@ -263,7 +262,7 @@ fn demote_complete_resident_owner_for_prefill_recovery(
         .model
         .as_ref()
         .is_some_and(|model| model.resident_expert_weights.is_some());
-    if !prefill_recovery_must_demote_complete_resident_owner(complete_experts_are_resident) {
+    if !complete_experts_are_resident {
         return Ok(false);
     }
     engine_state

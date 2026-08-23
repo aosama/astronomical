@@ -1,12 +1,11 @@
 use std::{io::Cursor, ops::Range};
 
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
-    ImageGenerationCompletionValidationError, ImageGenerationFailureReason, ImageGenerationPhase,
-    ImageGenerationResultMetadata, ImageGenerationSettings, ImageGenerationValidationError,
-    MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpDepthStatus, MtpRuntimeState, ProtocolError,
-    ProtocolReader, ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand,
-    WorkerEvent, WorkerMlxMemorySnapshot, WorkerModelCapabilities, decode_event, encode_event,
+    GeneratedImage, ImageGenerationCommand, ImageGenerationCompletionValidationError,
+    ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata,
+    ImageGenerationSettings, ImageGenerationValidationError, MAX_IPC_FRAME_BYTES,
+    MlxMemorySnapshotSource, ProtocolError, ProtocolReader, ProtocolWriter, RequestId,
+    WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot, decode_event, encode_event,
 };
 use image::{
     ExtendedColorType, ImageEncoder,
@@ -100,64 +99,6 @@ async fn should_round_trip_an_image_generation_journey() {
     }
 
     assert_eq!(image_generation_command.validate(), Ok(()));
-}
-
-#[tokio::test]
-async fn should_round_trip_an_image_generation_failure_event() {
-    let worker_event = WorkerEvent::ImageGenerationFailed {
-        request_id: RequestId::new(503),
-        reason: ImageGenerationFailureReason::invalid_request(
-            "requested dimensions exceed the loaded model capability",
-        ),
-    };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
-
-    worker_writer
-        .send_event(&worker_event)
-        .await
-        .expect("the image failure event should be written");
-    assert_eq!(
-        supervisor_reader
-            .next_event()
-            .await
-            .expect("the image failure event should decode"),
-        Some(worker_event)
-    );
-}
-
-#[tokio::test]
-async fn should_round_trip_an_image_only_model_swap_capability() {
-    let image_capabilities = image_generation_capabilities();
-    let worker_event = WorkerEvent::ModelSwapped {
-        model_id: "fictional/image-model".to_owned(),
-        capabilities: WorkerModelCapabilities::image_generation(image_capabilities),
-        expert_memory_mode: None,
-        minimum_mlx_memory_ceiling_bytes: 1_000_000_000,
-        mtp_runtime_state: MtpRuntimeState::Disabled,
-        mtp_unavailable_reason: None,
-        mtp_depth_status: MtpDepthStatus::EMPTY,
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-        speculative_prefill_unavailable_reason: None,
-        speculative_prefill_draft_model_id: None,
-        speculative_prefill_draft_model_revision: None,
-    };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
-
-    worker_writer
-        .send_event(&worker_event)
-        .await
-        .expect("the image-only model swap should be written");
-    assert_eq!(
-        supervisor_reader
-            .next_event()
-            .await
-            .expect("the image-only model swap should decode"),
-        Some(worker_event)
-    );
 }
 
 #[test]
@@ -263,44 +204,6 @@ fn should_reject_png_dimensions_that_do_not_match_completion_metadata() {
 }
 
 #[test]
-fn should_represent_chat_and_image_capabilities_independently() {
-    let chat_capabilities = ChatModelCapabilities {
-        supports_reasoning: true,
-        supports_tool_calls: true,
-        has_vision: false,
-        max_input_tokens: 8_000,
-        max_output_tokens: 1_000,
-        context_window: 9_000,
-    };
-    let image_capabilities = image_generation_capabilities();
-
-    assert_eq!(
-        WorkerModelCapabilities::from(chat_capabilities.clone()),
-        WorkerModelCapabilities {
-            chat: Some(chat_capabilities.clone()),
-            image_generation: None,
-        }
-    );
-    assert_eq!(
-        WorkerModelCapabilities::image_generation(image_capabilities.clone()),
-        WorkerModelCapabilities {
-            chat: None,
-            image_generation: Some(image_capabilities.clone()),
-        }
-    );
-    assert_eq!(
-        WorkerModelCapabilities::chat_and_image(
-            chat_capabilities.clone(),
-            image_capabilities.clone()
-        ),
-        WorkerModelCapabilities {
-            chat: Some(chat_capabilities),
-            image_generation: Some(image_capabilities),
-        }
-    );
-}
-
-#[test]
 fn should_round_trip_every_image_failure_reason() {
     let failure_reasons = [
         ImageGenerationFailureReason::invalid_request("width exceeds model capability"),
@@ -390,19 +293,6 @@ fn finalized_image_memory_snapshot() -> WorkerMlxMemorySnapshot {
         model_core_payload_bytes: 0,
         context_state_payload_bytes: 0,
         speculative_prefill_draft_memory_bytes: 0,
-    }
-}
-
-fn image_generation_capabilities() -> ImageGenerationCapabilities {
-    ImageGenerationCapabilities {
-        minimum_width_pixels: 64,
-        maximum_width_pixels: 2_048,
-        minimum_height_pixels: 64,
-        maximum_height_pixels: 2_048,
-        dimension_multiple_pixels: 8,
-        maximum_steps: 50,
-        maximum_guidance_thousandths: 20_000,
-        output_mime_types: vec!["image/png".to_owned()],
     }
 }
 

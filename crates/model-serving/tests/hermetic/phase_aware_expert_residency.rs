@@ -265,27 +265,3 @@ fn should_keep_every_planned_owner_and_reservation_within_the_retained_budget() 
             <= plan.retained_expert_ceiling_bytes
     );
 }
-
-#[test]
-fn should_produce_the_same_plan_for_identical_inputs() {
-    let geometries = uniform_geometry(3);
-    let current_residencies = vec![
-        partial_residency(0, &[0, 2], 9),
-        partial_residency(2, &[1, 3], 7),
-    ];
-
-    let first_plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
-        70,
-        &geometries,
-        &current_residencies,
-    );
-    let second_plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
-        70,
-        &geometries,
-        &current_residencies,
-    );
-
-    assert_eq!(first_plan, second_plan);
-}

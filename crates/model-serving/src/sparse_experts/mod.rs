@@ -16,7 +16,7 @@ mod gathered_projection;
 #[cfg(feature = "direct-mlx")]
 mod weighted_sum;
 
-pub use assignment_permutation::{gathered_indices_use_sorted_contract, invert_assignment_order};
+pub use assignment_permutation::invert_assignment_order;
 #[cfg(feature = "direct-mlx")]
 pub use assignment_sort::{
     SortedExpertAssignments, restore_expert_assignment_order, sort_expert_assignments,

@@ -31,15 +31,6 @@ pub struct DownloadDiskPreflight<CapacityQuery = Fs4DiskCapacityQuery> {
     capacity_query: CapacityQuery,
 }
 
-impl DownloadDiskPreflight<Fs4DiskCapacityQuery> {
-    #[must_use]
-    pub const fn production() -> Self {
-        Self {
-            capacity_query: Fs4DiskCapacityQuery,
-        }
-    }
-}
-
 impl<CapacityQuery> DownloadDiskPreflight<CapacityQuery>
 where
     CapacityQuery: DiskCapacityQuery,

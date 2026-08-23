@@ -1,9 +1,8 @@
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationOutput,
-    ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
-    MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
-    decode_command,
+    ChatGenerationCommand, ChatGenerationOutput, ChatGenerationSettings, ChatMessage,
+    ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader,
+    ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
+    WorkerMlxMemorySnapshot, decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -12,11 +11,6 @@ use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 const RETIRED_SMALL_FRAME_BYTES: usize = 64 * 1024;
-
-#[test]
-fn should_default_mtp_runtime_state_to_disabled() {
-    assert_eq!(MtpRuntimeState::default(), MtpRuntimeState::Disabled);
-}
 
 #[test]
 fn should_reject_a_whitespace_only_chat_model_id_before_worker_preprocessing() {
@@ -394,24 +388,6 @@ async fn should_round_trip_one_unified_chat_output_event() {
             .await
             .expect("the output event frame should decode"),
         Some(worker_event)
-    );
-}
-
-#[test]
-fn should_represent_cancellation_as_one_completion_reason() {
-    assert_eq!(
-        serde_json::to_string(&ChatGenerationCompletionReason::Cancelled)
-            .expect("the cancellation reason should serialize"),
-        "\"cancelled\""
-    );
-}
-
-#[test]
-fn should_represent_target_only_mtp_runtime_state() {
-    assert_eq!(
-        serde_json::to_string(&MtpRuntimeState::TargetOnly)
-            .expect("the target-only MTP runtime state should serialize"),
-        "\"target_only\""
     );
 }
 

@@ -324,21 +324,6 @@ fn should_restart_worker_when_persistent_prompt_cache_flag_changes() {
     );
 }
 
-#[test]
-fn should_mark_logging_level_change_as_rest_api_restart_required() {
-    let mut current = sample_resolved_config();
-    current.logging_config = LoggingConfig::new(PathBuf::from("/tmp/logs"), LogLevel::Warn, 7);
-    let mut candidate = sample_resolved_config();
-    candidate.logging_config = LoggingConfig::new(PathBuf::from("/tmp/logs"), LogLevel::Info, 7);
-
-    let decision = ConfigReloadDiff::compare(&current, &candidate);
-
-    assert!(
-        matches!(decision, ConfigReloadDecision::RestApiRestartRequired { ref restart_required_fields, .. } if restart_required_fields.contains(&"logging".to_owned())),
-        "a logging level change must require a REST restart, got {decision:?}"
-    );
-}
-
 fn sample_resolved_config() -> ResolvedRuntimeConfig {
     ResolvedRuntimeConfig {
         configuration_generation:

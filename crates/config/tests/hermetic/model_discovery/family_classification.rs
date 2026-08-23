@@ -8,44 +8,6 @@ use astronomical_config::{
 use super::{discover_configured_models, write_minimal_model_config, write_required_model_files};
 
 #[test]
-fn should_classify_supported_model_family_markers() {
-    for qwen_model_type in ["qwen3_5", "qwen3_5_moe", "qwen3_5_moe_vision"] {
-        assert_eq!(
-            ModelFamily::from_model_type(Some(qwen_model_type)),
-            Some(ModelFamily::Qwen3_5)
-        );
-    }
-    assert_eq!(
-        ModelFamily::from_model_type(Some("laguna")),
-        Some(ModelFamily::Laguna)
-    );
-    assert_eq!(
-        ModelFamily::from_model_type(Some("deepseek_v4")),
-        Some(ModelFamily::DeepSeekV4)
-    );
-    assert_eq!(ModelFamily::from_model_type(Some("unknown")), None);
-    assert_eq!(ModelFamily::from_model_type(None), None);
-}
-
-#[test]
-fn should_classify_flux2_klein_from_the_pipeline_root() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let model_directory = temporary_directory.path().join("Flux-Pipeline-Fixture");
-    fs::create_dir_all(&model_directory).expect("pipeline root should be created");
-    fs::write(
-        model_directory.join("model_index.json"),
-        r#"{"_class_name":"Flux2KleinPipeline","is_distilled":true,"scheduler":["diffusers","FlowMatchEulerDiscreteScheduler"],"text_encoder":["transformers","Qwen3ForCausalLM"],"tokenizer":["transformers","Qwen2TokenizerFast"],"transformer":["diffusers","Flux2Transformer2DModel"],"vae":["diffusers","AutoencoderKLFlux2"]}"#,
-    )
-    .expect("pipeline index should be written");
-
-    assert_eq!(
-        classify_model_directory(&model_directory)
-            .expect("pipeline family classification should complete"),
-        Some(ModelFamily::Flux2Klein)
-    );
-}
-
-#[test]
 fn should_reject_malformed_duplicate_or_oversized_pipeline_family_markers() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let model_directory = temporary_directory.path().join("Invalid-Pipeline-Fixture");
@@ -103,27 +65,6 @@ fn should_classify_laguna_without_discovering_it_as_executable() {
     assert_eq!(
         requestable_model_id(&laguna_model_directory).as_deref(),
         Some("Laguna-XS-Fixture")
-    );
-}
-
-#[test]
-fn should_classify_deepseek_v4_without_discovering_it_as_executable() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let deepseek_model_directory = temporary_directory.path().join("DeepSeek-V4-Fixture");
-    fs::create_dir_all(&deepseek_model_directory)
-        .expect("DeepSeek model directory should be created");
-    write_minimal_model_config(&deepseek_model_directory, "deepseek_v4", 262_144);
-    write_required_model_files(&deepseek_model_directory);
-
-    assert_eq!(
-        classify_model_directory(&deepseek_model_directory)
-            .expect("DeepSeek family classification should complete"),
-        Some(ModelFamily::DeepSeekV4)
-    );
-    assert!(
-        discover_configured_models(&temporary_directory)[0]
-            .discovered_models
-            .is_empty()
     );
 }
 

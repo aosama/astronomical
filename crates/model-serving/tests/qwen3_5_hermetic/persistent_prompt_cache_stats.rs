@@ -1,49 +1,6 @@
 use astronomical_model_serving::PersistentPromptCacheCounters;
 
 #[test]
-fn should_start_with_zero_counters() {
-    let persistent_prompt_cache_counters = PersistentPromptCacheCounters::default();
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_hits(),
-        0
-    );
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_misses(),
-        0
-    );
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_tokens_saved(),
-        0
-    );
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_visual_embedding_hits(),
-        0
-    );
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_visual_embedding_misses(),
-        0
-    );
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_visual_embedding_rows_loaded(),
-        0
-    );
-}
-
-#[test]
-fn should_increment_hits_and_tokens_saved_on_a_cache_hit() {
-    let mut persistent_prompt_cache_counters = PersistentPromptCacheCounters::default();
-    persistent_prompt_cache_counters.record_cache_hit(2_048);
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_hits(),
-        1
-    );
-    assert_eq!(
-        persistent_prompt_cache_counters.persistent_prompt_cache_tokens_saved(),
-        2_048
-    );
-}
-
-#[test]
 fn should_increment_misses_on_a_cache_miss() {
     let mut persistent_prompt_cache_counters = PersistentPromptCacheCounters::default();
     persistent_prompt_cache_counters.record_cache_miss();

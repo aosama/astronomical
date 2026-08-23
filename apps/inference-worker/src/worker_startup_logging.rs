@@ -4,19 +4,13 @@ use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt};
 
-/// Returns the rolling policy shared by the worker process log.
-#[must_use]
-pub fn astronomical_log_rotation() -> tracing_appender::rolling::Rotation {
-    tracing_appender::rolling::Rotation::HOURLY
-}
-
 /// Initializes bounded worker diagnostics in the configured rolling log file.
 pub fn initialize_tracing(
     worker_startup_configuration: &WorkerStartupConfiguration,
 ) -> Result<WorkerGuard, Box<dyn Error + Send + Sync>> {
     std::fs::create_dir_all(&worker_startup_configuration.logging_directory)?;
     let file_appender = tracing_appender::rolling::Builder::new()
-        .rotation(astronomical_log_rotation())
+        .rotation(tracing_appender::rolling::Rotation::HOURLY)
         .filename_prefix("worker")
         .filename_suffix("log")
         .max_log_files(worker_startup_configuration.retained_log_file_count)

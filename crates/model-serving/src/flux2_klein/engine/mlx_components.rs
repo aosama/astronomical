@@ -9,17 +9,6 @@ pub use request_execution::{
     flux2_klein_keyed_noise_and_euler_for_tests,
 };
 
-#[doc(hidden)]
-pub fn flux2_klein_allocator_cache_limit_for_tests(
-    original_allocator_cache_memory_limit_bytes: usize,
-    requested_mlx_memory_ceiling_bytes: usize,
-) -> usize {
-    allocator_cache_limit_for_ceiling(
-        original_allocator_cache_memory_limit_bytes,
-        requested_mlx_memory_ceiling_bytes,
-    )
-}
-
 use std::path::PathBuf;
 use std::time::Instant;
 

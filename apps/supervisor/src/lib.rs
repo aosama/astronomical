@@ -77,11 +77,6 @@ pub use library_application::{
     build_application_with_library_download,
 };
 
-/// Returns the rolling policy shared by the supervisor process log.
-#[must_use]
-pub fn astronomical_log_rotation() -> tracing_appender::rolling::Rotation {
-    tracing_appender::rolling::Rotation::HOURLY
-}
 pub use chat_diagnostics::{
     OpenAiChatRequestDiagnosticSnapshot, OpenAiChatRequestInfoDiagnosticSnapshot,
     build_openai_chat_request_diagnostic_snapshot,

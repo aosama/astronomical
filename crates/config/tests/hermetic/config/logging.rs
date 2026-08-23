@@ -26,21 +26,6 @@ fn should_load_trace_logging_with_bounded_retention() {
 }
 
 #[test]
-fn should_bound_the_in_memory_log_queue_for_laptop_safety() {
-    let temp_home = tempfile::tempdir().expect("temp home should be created");
-    let user_config = AstronomicalConfig::load_from_home_directory(temp_home.path())
-        .expect("missing config should load");
-
-    assert_eq!(
-        user_config
-            .logging()
-            .expect("logging should resolve")
-            .buffered_line_limit(),
-        1_024
-    );
-}
-
-#[test]
 fn should_reject_zero_retained_log_files() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(

@@ -1,7 +1,7 @@
 use astronomical_model_serving::{
-    PerformanceAttribution, PerformanceOperation, gathered_indices_use_sorted_contract,
-    restore_expert_assignment_order, router_weighted_expert_inputs, sort_expert_assignments,
-    sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
+    PerformanceAttribution, PerformanceOperation, restore_expert_assignment_order,
+    router_weighted_expert_inputs, sort_expert_assignments, sorted_expert_weighted_sum,
+    sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };
 use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
 
@@ -111,8 +111,6 @@ async fn should_sort_assignments_and_reduce_without_restoring_the_expanded_tenso
             .expect("sorted ids should evaluate"),
         vec![0, 1, 2, 3, 4, 5]
     );
-    assert!(gathered_indices_use_sorted_contract(true));
-
     let sorted_expert_outputs = runtime
         .array_from_f32(
             &[

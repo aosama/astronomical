@@ -5,8 +5,7 @@ use std::fs;
 
 use astronomical_model_serving::{
     Flux2KleinArtifactProvenance, Flux2KleinImageEngine, ImageGenerationEngine,
-    flux2_klein_allocator_cache_limit_for_tests, flux2_klein_euler_update_for_tests,
-    flux2_klein_keyed_noise_and_euler_for_tests,
+    flux2_klein_euler_update_for_tests, flux2_klein_keyed_noise_and_euler_for_tests,
 };
 use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
 
@@ -17,38 +16,6 @@ use crate::common::{
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
-
-#[test]
-fn should_restore_the_original_image_allocator_cache_policy_after_a_ceiling_increase() {
-    let original_allocator_cache_limit_bytes = 384_000_000;
-
-    let reduced_limit = flux2_klein_allocator_cache_limit_for_tests(
-        original_allocator_cache_limit_bytes,
-        256_000_000,
-    );
-    let restored_limit = flux2_klein_allocator_cache_limit_for_tests(
-        original_allocator_cache_limit_bytes,
-        512_000_000,
-    );
-
-    assert_eq!(reduced_limit, 256_000_000);
-    assert_eq!(restored_limit, original_allocator_cache_limit_bytes);
-}
-
-#[test]
-fn should_construct_the_real_artifact_factory_seam_without_loading_a_model() {
-    let model_directory = tempfile::tempdir().expect("the constructor fixture should exist");
-    let engine = Flux2KleinImageEngine::from_model_family_factory(
-        model_directory.path(),
-        Flux2KleinArtifactProvenance::official(),
-        DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-        DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-        false,
-        model_directory.path().join("performance.jsonl"),
-    );
-
-    assert_eq!(engine.loaded_revision(), None);
-}
 
 #[test]
 fn should_clear_replacement_allocator_cache_and_persist_a_bounded_failed_load_report() {

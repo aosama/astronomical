@@ -4,17 +4,15 @@ use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::batch::{
-    FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH, FLUX2_KLEIN_CONDITIONING_WIDTH,
-    FLUX2_KLEIN_HIDDEN_STATE_TAPS, Flux2KleinPreparedTextBatch,
-};
+use super::batch::{FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH, Flux2KleinPreparedTextBatch};
 use super::error::Flux2KleinTextConditioningError;
 use super::layer::{
     build_causal_padding_mask, forward_decoder_layer_attention, forward_decoder_layer_feed_forward,
 };
 use super::weights::{EXECUTED_LAYER_COUNT, Flux2KleinTextWeights, HIDDEN_WIDTH};
 
-const CONDITIONING_WIDTH: i32 = FLUX2_KLEIN_CONDITIONING_WIDTH as i32;
+const CONDITIONING_WIDTH: i32 = 7_680;
+const HIDDEN_STATE_TAPS: [usize; 3] = [9, 18, 27];
 
 pub(crate) struct Flux2KleinTextConditioningState {
     weights: Flux2KleinTextWeights,
@@ -91,7 +89,7 @@ impl Flux2KleinTextConditioningState {
             hidden_states,
             attention_mask,
             combined_attention_mask,
-            captured_hidden_states: Vec::with_capacity(FLUX2_KLEIN_HIDDEN_STATE_TAPS.len()),
+            captured_hidden_states: Vec::with_capacity(HIDDEN_STATE_TAPS.len()),
             batch_size: prepared_batch.batch_size(),
             signed_batch_size,
             signed_sequence_length,
@@ -150,7 +148,7 @@ impl Flux2KleinTextConditioningState {
         )?;
         self.next_layer_index += 1;
         self.hidden_states = next_hidden_states;
-        if FLUX2_KLEIN_HIDDEN_STATE_TAPS.contains(&self.next_layer_index) {
+        if HIDDEN_STATE_TAPS.contains(&self.next_layer_index) {
             self.captured_hidden_states
                 .push(self.hidden_states.retain()?);
         }

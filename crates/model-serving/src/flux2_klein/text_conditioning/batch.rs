@@ -3,8 +3,6 @@
 use super::error::Flux2KleinTextConditioningError;
 
 pub(crate) const FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH: usize = 512;
-pub(crate) const FLUX2_KLEIN_CONDITIONING_WIDTH: usize = 7_680;
-pub(crate) const FLUX2_KLEIN_HIDDEN_STATE_TAPS: [usize; 3] = [9, 18, 27];
 pub(crate) const FLUX2_KLEIN_PAD_TOKEN_ID: u32 = 151_643;
 
 #[derive(Debug, Eq, PartialEq)]
