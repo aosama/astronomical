@@ -1,2 +1,2 @@
-- If you change any code here, you have to prove it is correct using tests under /Users<repo-root>/apps/inference-worker/tests/memory_management_acceptance , if the tests are insufficient then you need to make a new one.
-- Logging is very imporant for the code in this folder so you can introspect the logs and understand what was the memory and/or streaming behaviour given the change you made.
+- If you change code here, prove it with the model-memory journeys under `apps/inference-worker/tests/model_ssd_streaming/acceptance/`; add a focused journey there when the existing coverage is insufficient.
+- Logging is very important for the code in this folder so you can introspect the logs and understand what was the memory and/or streaming behaviour given the change you made.

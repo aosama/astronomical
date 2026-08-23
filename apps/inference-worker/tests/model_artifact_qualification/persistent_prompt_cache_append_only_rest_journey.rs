@@ -13,20 +13,20 @@ use super::persistent_prompt_cache_rest_support::{
     write_cache_pressure_worker_config,
 };
 
-const MAXIMUM_MLX_MEMORY_BYTES: u64 = 11_000_000_000;
+const MAXIMUM_MLX_MEMORY_BYTES: u64 = 23_000_000_000;
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 40_001;
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and reference model for an append-only 40K Romeo and Juliet cache journey"]
-async fn should_restore_every_completed_cold_block_for_an_appended_chat_at_eleven_gb_through_rest()
-{
+async fn should_restore_every_completed_cold_block_for_an_appended_chat_at_twenty_three_gb_through_rest()
+ {
     timeout(E2E_TIMEOUT, run_append_only_rest_journey())
         .await
         .expect("the append-only persistent prompt-cache journey must finish within 115 seconds");
 }
 
 async fn run_append_only_rest_journey() {
-    let qualification_log_prefix = "[persistent-prompt-cache-append-only-rest:11gb]";
+    let qualification_log_prefix = "[persistent-prompt-cache-append-only-rest:23gb]";
     let model_directory =
         crate::common::configured_model_artifact_directory_by_id(CACHE_PRESSURE_MODEL_ID);
     let configured_worker_home = tempfile::tempdir()

@@ -1,13 +1,14 @@
-use std::{fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
 use astronomical_ipc_protocol::WorkerStartupConfiguration;
-use astronomical_supervisor::ResolvedRuntimeConfigResolver;
+use astronomical_supervisor::{ResolvedRuntimeConfigResolver, RuntimeModelPolicy};
 
 pub(super) fn create_cache_stats_worker_configuration() -> (
     tempfile::TempDir,
     PathBuf,
     PathBuf,
     PathBuf,
+    Arc<HashMap<String, RuntimeModelPolicy>>,
     WorkerStartupConfiguration,
 ) {
     let configured_model_directory = crate::common::configured_model_artifact_directory_by_id(
@@ -46,12 +47,14 @@ pub(super) fn create_cache_stats_worker_configuration() -> (
     )
     .load()
     .expect("the cache-stats worker configuration should resolve");
+    let model_policy_catalog = worker_runtime_config.model_policy_catalog.clone();
 
     (
         isolated_worker_home,
         persistent_prompt_cache_directory_path,
         production_worker_executable_path,
         configured_model_directory,
+        model_policy_catalog,
         worker_runtime_config.worker_startup_configuration(),
     )
 }

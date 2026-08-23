@@ -136,7 +136,7 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids(
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     prepare_reproduced_long_prompt_token_ids_for_model(
         &model_directory,
-        "Ornith-1.0-35B-OptiQ-4bit",
+        crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID,
         prompt_token_count,
         maximum_output_token_count,
     )

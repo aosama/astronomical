@@ -5,12 +5,12 @@ use tokio::{process::Command, time::timeout};
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Copy)]
-pub(super) struct WorkerPhysicalFootprint {
-    pub(super) current_bytes: u64,
-    pub(super) peak_bytes: u64,
+pub(crate) struct WorkerPhysicalFootprint {
+    pub(crate) current_bytes: u64,
+    pub(crate) peak_bytes: u64,
 }
 
-pub(super) async fn find_worker_process_id() -> u32 {
+pub(crate) async fn find_worker_process_id() -> u32 {
     for _process_lookup_attempt in 1..=20 {
         let parent_process_id = std::process::id().to_string();
         let process_lookup_output = timeout(
@@ -47,7 +47,7 @@ pub(super) async fn find_worker_process_id() -> u32 {
     panic!("the metrics harness could not identify the inference-worker child process");
 }
 
-pub(super) async fn measure_worker_physical_footprint(
+pub(crate) async fn measure_worker_physical_footprint(
     worker_process_id: u32,
 ) -> Result<WorkerPhysicalFootprint, String> {
     let footprint_output = timeout(

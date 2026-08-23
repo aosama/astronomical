@@ -56,6 +56,8 @@ pub(crate) enum Qwen3_5ExpertResidencyTransitionReason {
     Startup,
     /// A new request projected that complete experts still fit beside context.
     RequestAdmission,
+    /// The user raised the public memory ceiling while the model was idle.
+    CeilingRaise,
     /// Prefill activations did not fit, so demote the complete owner now.
     RequestPressure,
     /// The user lowered the public memory ceiling.
@@ -81,7 +83,60 @@ pub(crate) enum Qwen3_5ExpertResidencyPromotionOutcome {
     RecoverableCapacityRejection,
 }
 
+struct CompleteExpertResidencyHeadroom {
+    observed_transient_high_water_bytes: u64,
+    required_activation_headroom_bytes: u64,
+    gate_up_fusion_transient_payload_bytes: u64,
+    required_residency_headroom_bytes: u64,
+}
+
 impl Qwen3_5Model {
+    pub(crate) fn required_complete_expert_residency_headroom_bytes(
+        &self,
+    ) -> Result<u64, Qwen3_5ExecutionError> {
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
+            return Ok(0);
+        };
+        let complete_expert_payload_bytes = expert_pager.complete_expert_payload_byte_count()?;
+        Ok(self
+            .complete_expert_residency_headroom(complete_expert_payload_bytes)?
+            .required_residency_headroom_bytes)
+    }
+
+    fn complete_expert_residency_headroom(
+        &self,
+        complete_expert_payload_bytes: u64,
+    ) -> Result<CompleteExpertResidencyHeadroom, Qwen3_5ExecutionError> {
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
+            return Ok(CompleteExpertResidencyHeadroom {
+                observed_transient_high_water_bytes: 0,
+                required_activation_headroom_bytes: 0,
+                gate_up_fusion_transient_payload_bytes: 0,
+                required_residency_headroom_bytes: 0,
+            });
+        };
+        let observed_transient_high_water_bytes =
+            expert_pager.observed_transient_high_water_bytes();
+        let required_activation_headroom_bytes =
+            required_complete_residency_activation_headroom_bytes(
+                complete_expert_payload_bytes,
+                observed_transient_high_water_bytes.max(
+                    self.mlx_ram_budget
+                        .borrow()
+                        .activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
+                ),
+            );
+        let gate_up_fusion_transient_payload_bytes =
+            maximum_resident_gate_up_fusion_transient_payload_bytes(expert_pager.layer_plans())?;
+        Ok(CompleteExpertResidencyHeadroom {
+            observed_transient_high_water_bytes,
+            required_activation_headroom_bytes,
+            gate_up_fusion_transient_payload_bytes,
+            required_residency_headroom_bytes: required_activation_headroom_bytes
+                .max(gate_up_fusion_transient_payload_bytes),
+        })
+    }
+
     pub(crate) fn try_promote_experts_to_resident(
         &mut self,
         transition_reason: Qwen3_5ExpertResidencyTransitionReason,
@@ -151,37 +206,22 @@ impl Qwen3_5Model {
                         description: "idle MLX active memory exceeds the u64 range",
                     }
                 })?;
-            let stable_memory_ceiling_bytes = u64::try_from(
-                self.runtime.memory_limits().active_memory_limit_bytes(),
-            )
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                description: "MLX active memory ceiling exceeds the u64 range",
-            })?;
+            let stable_memory_ceiling_bytes = self
+                .mlx_ram_budget
+                .borrow()
+                .mlx_active_memory_ceiling_bytes();
 
             // Static payload fit is not enough. Prefill activations, key-value
             // growth, and temporary workspaces still need spare ceiling after
             // complete experts occupy memory. Without this reservation the model
             // promotes into a ceiling it cannot serve from and thrashes near the
             // MLX active-memory limit.
-            let observed_transient_high_water_bytes =
-                expert_pager.observed_transient_high_water_bytes();
-            let required_activation_headroom_bytes =
-                required_complete_residency_activation_headroom_bytes(
-                    complete_expert_payload_bytes,
-                    observed_transient_high_water_bytes.max(
-                        self.mlx_ram_budget
-                            .borrow()
-                            .activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
-                    ),
-                );
             // Resident fusion and request activations occur in disjoint phases,
-            // so admission reserves whichever phase has the larger peak.
-            let gate_up_fusion_transient_payload_bytes =
-                maximum_resident_gate_up_fusion_transient_payload_bytes(
-                    expert_pager.layer_plans(),
-                )?;
+            // so the shared policy helper reserves whichever phase has the larger peak.
+            let residency_headroom =
+                self.complete_expert_residency_headroom(complete_expert_payload_bytes)?;
             let required_residency_headroom_bytes =
-                required_activation_headroom_bytes.max(gate_up_fusion_transient_payload_bytes);
+                residency_headroom.required_residency_headroom_bytes;
             let complete_residency_decision = CompleteResidencyRequirements {
                 current_active_memory_bytes: idle_active_memory_bytes,
                 retained_paged_expert_payload_bytes: retained_streamed_expert_payload_bytes,
@@ -198,8 +238,10 @@ impl Qwen3_5Model {
                     tracing::debug!(
                         ?transition_reason,
                         projected_active_memory_bytes,
-                        required_activation_headroom_bytes,
-                        gate_up_fusion_transient_payload_bytes,
+                        required_activation_headroom_bytes =
+                            residency_headroom.required_activation_headroom_bytes,
+                        gate_up_fusion_transient_payload_bytes =
+                            residency_headroom.gate_up_fusion_transient_payload_bytes,
                         required_residency_headroom_bytes,
                         stable_memory_ceiling_bytes,
                         "admitted complete-model expert residency replacement"
@@ -217,9 +259,12 @@ impl Qwen3_5Model {
                         retained_streamed_expert_payload_bytes,
                         complete_expert_payload_bytes,
                         projected_resident_active_memory_bytes = projected_active_memory_bytes,
-                        observed_transient_high_water_bytes,
-                        required_activation_headroom_bytes,
-                        gate_up_fusion_transient_payload_bytes,
+                        observed_transient_high_water_bytes =
+                            residency_headroom.observed_transient_high_water_bytes,
+                        required_activation_headroom_bytes =
+                            residency_headroom.required_activation_headroom_bytes,
+                        gate_up_fusion_transient_payload_bytes =
+                            residency_headroom.gate_up_fusion_transient_payload_bytes,
                         required_residency_headroom_bytes,
                         stable_memory_ceiling_bytes,
                         ?boundary,

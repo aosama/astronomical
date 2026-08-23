@@ -6,6 +6,7 @@
 
 mod catalog;
 mod counter_catalog;
+mod expert_streaming_source;
 mod log;
 mod measurement_catalog;
 mod report;
@@ -40,6 +41,8 @@ pub(super) struct EnabledPerformanceAttribution {
     pub(super) previous_token_selected_expert_ids_by_layer: Vec<Option<Vec<usize>>>,
     pub(super) previous_token_expert_route_reuse_by_layer:
         Vec<PreviousTokenExpertRouteReuseMeasurement>,
+    pub(super) expert_streaming_source_summaries:
+        Vec<Option<expert_streaming_source::ExpertStreamingSourceSummary>>,
     #[cfg(feature = "direct-mlx")]
     pub(super) positional_file_read_metrics:
         Arc<astronomical_runtime_integration::PositionalFileReadMetrics>,
@@ -82,6 +85,7 @@ impl PerformanceAttribution {
                 counter_values: [0; PerformanceCounter::COUNT],
                 previous_token_selected_expert_ids_by_layer: Vec::new(),
                 previous_token_expert_route_reuse_by_layer: Vec::new(),
+                expert_streaming_source_summaries: Vec::new(),
                 #[cfg(feature = "direct-mlx")]
                 positional_file_read_metrics: Arc::new(
                     astronomical_runtime_integration::PositionalFileReadMetrics::default(),

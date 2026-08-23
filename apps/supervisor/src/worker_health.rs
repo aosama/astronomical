@@ -1,8 +1,8 @@
 use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
     ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, SpeculativePrefillRuntimeState, WorkerEvent,
-    WorkerMlxMemorySnapshot, WorkerModelCapabilities, WorkerPromptProcessingPhase,
-    WorkerRuntimeFeatureConfiguration,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
+    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -121,6 +121,18 @@ pub struct ExpertResidencySnapshot {
     pub complete_layer_payload_bytes: u64,
     pub partial_layer_count: u32,
     pub partial_layer_payload_bytes: u64,
+}
+
+impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
+    fn from(expert_residency: WorkerExpertResidencySnapshot) -> Self {
+        Self {
+            total_layer_count: expert_residency.total_layer_count,
+            complete_layer_count: expert_residency.complete_layer_count,
+            complete_layer_payload_bytes: expert_residency.complete_layer_payload_bytes,
+            partial_layer_count: expert_residency.partial_layer_count,
+            partial_layer_payload_bytes: expert_residency.partial_layer_payload_bytes,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

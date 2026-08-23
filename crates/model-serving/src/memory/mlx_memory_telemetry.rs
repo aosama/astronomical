@@ -107,6 +107,7 @@ pub struct MlxMemoryLimitAdjustment {
     minimum_mlx_memory_ceiling_bytes: u64,
     expert_memory_mode: ExpertMemoryMode,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+    expert_residency_telemetry: Option<crate::ExpertResidencyTelemetry>,
 }
 
 impl MlxMemoryLimitAdjustment {
@@ -125,7 +126,18 @@ impl MlxMemoryLimitAdjustment {
             minimum_mlx_memory_ceiling_bytes,
             expert_memory_mode,
             mlx_memory_telemetry,
+            expert_residency_telemetry: None,
         }
+    }
+
+    /// Attaches sparse-expert ownership when the adjusted engine has routed experts.
+    #[must_use]
+    pub const fn with_expert_residency_telemetry(
+        mut self,
+        expert_residency_telemetry: crate::ExpertResidencyTelemetry,
+    ) -> Self {
+        self.expert_residency_telemetry = Some(expert_residency_telemetry);
+        self
     }
 
     #[must_use]
@@ -152,5 +164,11 @@ impl MlxMemoryLimitAdjustment {
     #[must_use]
     pub const fn mlx_memory_telemetry(self) -> Option<MlxMemoryTelemetry> {
         self.mlx_memory_telemetry
+    }
+
+    /// Returns the sparse-expert ownership produced by the same atomic adjustment.
+    #[must_use]
+    pub const fn expert_residency_telemetry(self) -> Option<crate::ExpertResidencyTelemetry> {
+        self.expert_residency_telemetry
     }
 }

@@ -72,6 +72,15 @@ async fn should_resume_native_paging_when_resident_promotion_fails() {
                 .expect("the failed promotion should retain a truthful mode"),
             Some(ExpertMemoryMode::Paged)
         );
+        let rollback_adjustment = qwen3_5_engine
+            .update_mlx_memory_limit(CONSTRAINED_MLX_MEMORY_CEILING_BYTES as u64)
+            .await
+            .expect("the failed raise should leave the prior constrained ceiling usable");
+        assert_eq!(
+            rollback_adjustment.effective_mlx_memory_ceiling_bytes(),
+            CONSTRAINED_MLX_MEMORY_CEILING_BYTES as u64,
+            "failed resident promotion must restore the prior native and Rust ceilings"
+        );
         let pager_statistics_before_request = qwen3_5_engine
             .expert_weight_memory_cache_statistics_for_tests()
             .await

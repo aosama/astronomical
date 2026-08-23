@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 
 use super::model_artifact_rest_qualification::get_endpoint;
 
-pub(super) const CACHE_PRESSURE_MODEL_ID: &str = "Ornith-1.0-35B-MLX-2bit";
+pub(super) const CACHE_PRESSURE_MODEL_ID: &str =
+    crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 pub(super) const MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 2_048;
 pub(super) const THINKING_BUDGET_TOKEN_COUNT: u16 = 256;
 pub(super) const PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;

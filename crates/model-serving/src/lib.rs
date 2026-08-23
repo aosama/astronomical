@@ -63,6 +63,8 @@ pub use deepseek_v4::{
 pub use engine_backed_worker::{
     EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
 };
+#[cfg(feature = "direct-mlx")]
+pub use expert_paging::load_quantized_expert_page;
 pub use expert_paging::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertManifestError, ExpertPageRoutePartition, ExpertResidencyPhase,

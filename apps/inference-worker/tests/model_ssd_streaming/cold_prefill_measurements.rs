@@ -1,3 +1,5 @@
+//! Cold prompt-processing measurements for representative summarization workloads.
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -15,13 +17,15 @@ use astronomical_supervisor::{
 use serde_json::json;
 use tokio::time::{Instant, interval, sleep, timeout};
 
-use super::model_process_metrics::{find_worker_process_id, measure_worker_physical_footprint};
+use crate::performance_measurement::model_process_metrics::{
+    find_worker_process_id, measure_worker_physical_footprint,
+};
 
 const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 const DOCUMENT_WORD_COUNT: usize = 5_000;
-const FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS: u32 = 8_192;
+const FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS: u32 = 8_192;
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
-const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
+const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
@@ -41,7 +45,7 @@ struct StreamingMeasurement {
     prompt_token_count: u64,
 }
 
-struct MetricsCase {
+struct ColdPrefillMeasurementCase {
     instruction: &'static str,
     maximum_output_tokens: u16,
     source_document: &'static str,
@@ -81,17 +85,17 @@ fn should_configure_fixed_prompt_processing_chunks_for_summary_metrics_worker() 
 
     assert_eq!(
         configuration_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
-        FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS,
+        FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS,
         "summary metrics should use the fixed benchmark prefill chunk size"
     );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model and benchmarks a 5,000-word summarization request"]
-async fn should_measure_model_artifact_summarization_throughput_and_peak_memory() {
+async fn should_measure_model_ssd_streaming_summarization_throughput_and_peak_memory() {
     timeout(
         BENCHMARK_TIMEOUT,
-        run_model_artifact_measurement(five_thousand_word_case()),
+        run_cold_prefill_measurement(five_thousand_word_case()),
     )
     .await
     .expect("the model-artifact measurement must finish within 115 seconds");
@@ -99,16 +103,16 @@ async fn should_measure_model_artifact_summarization_throughput_and_peak_memory(
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model and measures cold-cache 50,000-word prefill"]
-async fn should_measure_model_artifact_cold_prefill_at_fifty_thousand_words() {
+async fn should_measure_model_ssd_streaming_cold_prefill_at_fifty_thousand_words() {
     timeout(
         BENCHMARK_TIMEOUT,
-        run_model_artifact_measurement(fifty_thousand_word_case()),
+        run_cold_prefill_measurement(fifty_thousand_word_case()),
     )
     .await
     .expect("the model-artifact cold-cache 50K measurement must finish within 115 seconds");
 }
 
-async fn run_model_artifact_measurement(metrics_case: MetricsCase) {
+async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCase) {
     let configured_model_directory = configured_model_directory_from_user_config();
     let production_worker_executable_path =
         std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
@@ -131,26 +135,26 @@ async fn run_model_artifact_measurement(metrics_case: MetricsCase) {
     )
     .load()
     .expect("the isolated metrics worker configuration should resolve");
+    let model_policy_catalog = worker_runtime_config.model_policy_catalog.clone();
     let worker_handle = WorkerHandle::launch_with_startup_configuration(
         worker_executable_path,
         Duration::from_secs(60),
         GenerationPerformanceLog::open(&performance_log_directory)
             .expect("the metrics performance log should open"),
-        crate::common::single_model_directories(MODEL_ID, &configured_model_directory),
-        u32::from(metrics_case.maximum_output_tokens),
+        model_policy_catalog,
         worker_runtime_config.worker_startup_configuration(),
     )
     .await
     .expect("the supervisor should launch the real worker");
     wait_until_idle(&worker_handle).await;
     let worker_process_id = find_worker_process_id().await;
-    let source_document = static_source_document(metrics_case.source_document);
+    let source_document = static_source_document(measurement_case.source_document);
     eprintln!(
         "[performance-measurement] sending {} source words from the static fixture",
-        metrics_case.source_word_count,
+        measurement_case.source_word_count,
     );
     let streaming_measurement =
-        measure_worker_summarization(&worker_handle, &source_document, &metrics_case).await;
+        measure_worker_summarization(&worker_handle, &source_document, &measurement_case).await;
     let physical_footprint_result = measure_worker_physical_footprint(worker_process_id).await;
 
     worker_handle
@@ -162,12 +166,12 @@ async fn run_model_artifact_measurement(metrics_case: MetricsCase) {
         physical_footprint_result.expect("Apple footprint should report worker memory");
     assert_eq!(
         source_document.split_whitespace().count(),
-        metrics_case.source_word_count
+        measurement_case.source_word_count
     );
-    if metrics_case.maximum_output_tokens > 1 {
+    if measurement_case.maximum_output_tokens > 1 {
         assert!(!streaming_measurement.generated_text.trim().is_empty());
     }
-    if metrics_case.should_require_three_paragraphs {
+    if measurement_case.should_require_three_paragraphs {
         assert!(
             streaming_measurement
                 .generated_text
@@ -213,7 +217,7 @@ async fn run_model_artifact_measurement(metrics_case: MetricsCase) {
         "generation_seconds": generation_duration.as_secs_f64(),
         "generation_tokens_per_second": generation_tokens_per_second,
         "gpu_wired_limit_bytes": maximum_gpu_wired_memory_bytes,
-        "max_output_tokens": metrics_case.maximum_output_tokens,
+        "max_output_tokens": measurement_case.maximum_output_tokens,
         "maximum_prefill_mlx_active_memory_bytes": streaming_measurement.maximum_prefill_mlx_active_memory_bytes,
         "maximum_prefill_mlx_allocator_cache_memory_bytes": streaming_measurement.maximum_prefill_mlx_allocator_cache_memory_bytes,
         "maximum_prefill_mlx_peak_memory_bytes": streaming_measurement.maximum_prefill_mlx_peak_memory_bytes,
@@ -224,7 +228,7 @@ async fn run_model_artifact_measurement(metrics_case: MetricsCase) {
         "prompt_processing_tokens_per_second": prompt_tokens_per_second,
         "prompt_tokens": streaming_measurement.prompt_token_count,
         "seed": 1,
-        "source_words": metrics_case.source_word_count,
+        "source_words": measurement_case.source_word_count,
         "temperature": 1.0,
         "top_p": 0.95,
         "total_request_seconds": total_request_duration.as_secs_f64(),
@@ -248,7 +252,7 @@ fn isolated_prompt_cache_worker_launcher(
     let configuration_document = json!({
         "model_directories": [model_directory],
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": FIXED_BENCHMARK_PREFILL_CHUNCK_TOKENS,
+            "fixed_prompt_processing_chunk_size_tokens": FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS,
         },
     });
     fs::write(
@@ -294,9 +298,9 @@ async fn wait_until_idle(worker_handle: &WorkerHandle) {
 async fn measure_worker_summarization(
     worker_handle: &WorkerHandle,
     source_document: &str,
-    metrics_case: &MetricsCase,
+    measurement_case: &ColdPrefillMeasurementCase,
 ) -> StreamingMeasurement {
-    let user_prompt = format!("{}\n\n{source_document}", metrics_case.instruction);
+    let user_prompt = format!("{}\n\n{source_document}", measurement_case.instruction);
     let request_started_at = Instant::now();
     let mut stream_receiver = worker_handle
         .start_chat_generation(ChatGenerationCommand {
@@ -309,7 +313,7 @@ async fn measure_worker_summarization(
             tools: Vec::new(),
             tool_choice: ChatToolChoice::None,
             settings: ChatGenerationSettings {
-                max_output_tokens: metrics_case.maximum_output_tokens,
+                max_output_tokens: measurement_case.maximum_output_tokens,
                 temperature_thousandths: None,
                 top_p_thousandths: None,
                 seed: None,
@@ -434,8 +438,8 @@ fn maximum_optional_u64(current_maximum: Option<u64>, candidate: Option<u64>) ->
     }
 }
 
-fn five_thousand_word_case() -> MetricsCase {
-    MetricsCase {
+fn five_thousand_word_case() -> ColdPrefillMeasurementCase {
+    ColdPrefillMeasurementCase {
         instruction: "Summarize the following document in exactly three concise paragraphs. Do not use headings or bullet points.",
         maximum_output_tokens: MAXIMUM_SUMMARY_TOKENS,
         source_document: SOURCE_DOCUMENT_FIXTURE,
@@ -444,8 +448,8 @@ fn five_thousand_word_case() -> MetricsCase {
     }
 }
 
-fn fifty_thousand_word_case() -> MetricsCase {
-    MetricsCase {
+fn fifty_thousand_word_case() -> ColdPrefillMeasurementCase {
+    ColdPrefillMeasurementCase {
         instruction: "Read the following public-domain book excerpt and reply with OK.",
         maximum_output_tokens: 1,
         source_document: CACHE_SCALING_FIXTURE,

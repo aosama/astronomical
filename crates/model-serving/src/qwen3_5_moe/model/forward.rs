@@ -7,7 +7,9 @@ use crate::{
     PagedDecodeLayerDisposition, PerformanceAttribution, PerformanceCounter, PerformanceOperation,
 };
 
-use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
+use super::super::expert_paging::expert_pager::{
+    Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
+};
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::feed_forward_weights::{Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights};
 use super::routing::qwen3_5_moe_route_experts;
@@ -282,6 +284,10 @@ impl Qwen3_5Model {
                             &self.runtime,
                             layer_index,
                             &route_partition.missing_expert_ids,
+                            Qwen3_5ExpertStreamingRequestShape {
+                                route_token_count: token_count,
+                                routed_expert_count: sorted_unique_expert_ids.len(),
+                            },
                             performance_attribution,
                         )?;
                     retained_expert_layers.borrow_mut().record_disk_load(
@@ -353,6 +359,7 @@ impl Qwen3_5Model {
                         mixture_of_experts_weights,
                         expert_pager,
                         layer_index,
+                        token_count,
                         &selected_indices,
                         &selected_scores,
                         should_use_compiled_elementwise_graphs,

@@ -353,12 +353,12 @@ impl MlxRamBudget {
             .saturating_add(activation_headroom_bytes)
             .saturating_add(complete_layer_stream_slot_bytes)
             .saturating_add(other_fixed_bytes);
-        let retained_expert_budget_bytes = self
-            .mlx_active_memory_ceiling_bytes
-            .saturating_sub(fixed_non_expert_bytes);
+        let mlx_active_memory_ceiling_bytes = self.mlx_active_memory_ceiling_bytes();
+        let retained_expert_budget_bytes =
+            mlx_active_memory_ceiling_bytes.saturating_sub(fixed_non_expert_bytes);
 
         MlxRamBudgetSnapshot {
-            mlx_active_memory_ceiling_bytes: self.mlx_active_memory_ceiling_bytes,
+            mlx_active_memory_ceiling_bytes,
             model_core_payload_bytes: self.model_geometry.model_core_payload_bytes,
             context_window_reserve_bytes,
             activation_headroom_bytes,
@@ -384,13 +384,13 @@ impl MlxRamBudget {
     ) -> u64 {
         let projected_active_memory_bytes =
             current_active_memory_bytes.saturating_add(admitted_forward_reserve_bytes);
-        if projected_active_memory_bytes <= self.mlx_active_memory_ceiling_bytes {
-            return current_retained_expert_payload_bytes.saturating_add(
-                self.mlx_active_memory_ceiling_bytes - projected_active_memory_bytes,
-            );
+        let mlx_active_memory_ceiling_bytes = self.mlx_active_memory_ceiling_bytes();
+        if projected_active_memory_bytes <= mlx_active_memory_ceiling_bytes {
+            return current_retained_expert_payload_bytes
+                .saturating_add(mlx_active_memory_ceiling_bytes - projected_active_memory_bytes);
         }
         current_retained_expert_payload_bytes
-            .saturating_sub(projected_active_memory_bytes - self.mlx_active_memory_ceiling_bytes)
+            .saturating_sub(projected_active_memory_bytes - mlx_active_memory_ceiling_bytes)
     }
 
     /// Reclamation needed so a fixed forward workspace fits the ceiling.
@@ -404,7 +404,7 @@ impl MlxRamBudget {
         u64::try_from(expert_reclamation_bytes_to_fit_fixed_forward(
             usize::try_from(current_active_memory_bytes).unwrap_or(usize::MAX),
             usize::try_from(retained_expert_payload_bytes).unwrap_or(usize::MAX),
-            usize::try_from(self.mlx_active_memory_ceiling_bytes).unwrap_or(usize::MAX),
+            usize::try_from(self.mlx_active_memory_ceiling_bytes()).unwrap_or(usize::MAX),
             usize::try_from(fixed_forward_workspace_bytes).unwrap_or(usize::MAX),
         ))
         .unwrap_or(u64::MAX)

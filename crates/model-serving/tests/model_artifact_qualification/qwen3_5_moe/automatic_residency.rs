@@ -255,15 +255,17 @@ async fn should_transition_the_complete_sparse_model_across_live_memory_limits()
             resident_statistics_after_ceiling_raise.maximum_resident_payload_byte_count,
             "repromotion must restore the complete resident expert payload"
         );
+        assert!(
+            native_cache_statistics_after_paged_request.disk_page_load_count > 0,
+            "the constrained request must establish that paging was exercised"
+        );
         assert_eq!(
             resident_statistics_after_ceiling_raise.disk_page_load_count,
-            native_cache_statistics_after_paged_request.disk_page_load_count,
-            "repromotion must load contiguous resident arrays without consulting the Rust pager"
+            0
         );
         assert_eq!(
             resident_statistics_after_ceiling_raise.disk_batch_load_count,
-            native_cache_statistics_after_paged_request.disk_batch_load_count,
-            "repromotion must not add streamed expert-page batches"
+            0
         );
         eprintln!("[live-residency-transition 7/7] status=success");
     })
@@ -272,8 +274,8 @@ async fn should_transition_the_complete_sparse_model_across_live_memory_limits()
 }
 
 #[tokio::test]
-#[ignore = "loads one fitting sparse model and verifies request-pressure demotion without immediate resident reload"]
-async fn should_page_for_a_large_request_without_immediate_resident_repromotion() {
+#[ignore = "loads one fitting sparse model and verifies live-ceiling headroom demotion before the next request"]
+async fn should_demote_before_the_next_request_when_a_lower_ceiling_lacks_serving_headroom() {
     timeout(Duration::from_secs(120), async {
         initialize_automatic_residency_tracing();
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -322,20 +324,21 @@ async fn should_page_for_a_large_request_without_immediate_resident_repromotion(
         qwen3_5_engine
             .update_mlx_memory_limit(request_pressure_ceiling_bytes)
             .await
-            .expect("the tighter ceiling should retain the idle resident model");
+            .expect("the tighter ceiling should demote before acknowledging unsafe headroom");
         assert_eq!(
             qwen3_5_engine
                 .expert_memory_mode_for_tests()
                 .await
                 .expect("the tightened model should expose its mode"),
-            Some(ExpertMemoryMode::Resident)
+            Some(ExpertMemoryMode::Paged),
+            "an idle snapshot fitting is insufficient when the next request lacks execution headroom"
         );
         let expert_statistics_before_request = qwen3_5_engine
             .expert_weight_memory_cache_statistics_for_tests()
             .await
             .expect("the resident model should expose expert statistics");
 
-        eprintln!("[request-pressure-residency 2/5] status=progress phase=request_admission");
+        eprintln!("[request-pressure-residency 2/5] status=progress phase=request_after_live_ceiling_demotion");
         qwen3_5_engine
             .start_generation(
                 Qwen3_5InferenceRequest::new(request_id, prompt_token_ids, 2)

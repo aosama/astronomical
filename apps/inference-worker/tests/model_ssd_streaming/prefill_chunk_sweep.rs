@@ -1,3 +1,5 @@
+//! Compares fixed prompt-processing chunk sizes on the same SSD-streamed model workload.
+
 use std::time::Duration;
 
 use astronomical_inference_worker::worker_startup::run_bootstrapped_worker;
@@ -9,15 +11,15 @@ use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use tokio::time::{Instant, timeout};
 
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
-const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
+const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 const SWEEP_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct PrefillChunckMetrics {
-    prefill_chunck_tokens: u32,
+struct PrefillChunkMetrics {
+    prefill_chunk_tokens: u32,
     prompt_tokens_per_second: f64,
     generation_tokens_per_second: f64,
     prompt_token_count: u64,
@@ -27,52 +29,51 @@ struct PrefillChunckMetrics {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 1024"]
-async fn should_measure_model_throughput_with_prefill_chunck_tokens_1024() {
-    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(1024).await);
+#[ignore = "loads the Ornith model in-process and benchmarks 1,024-token model SSD streaming prefill chunks"]
+async fn should_measure_model_ssd_streaming_with_1024_token_prefill_chunks() {
+    assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(1024).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 2048 (baseline)"]
-async fn should_measure_model_throughput_with_prefill_chunck_tokens_2048() {
-    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(2048).await);
+#[ignore = "loads the Ornith model in-process and benchmarks 2,048-token model SSD streaming prefill chunks"]
+async fn should_measure_model_ssd_streaming_with_2048_token_prefill_chunks() {
+    assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(2048).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 4096"]
-async fn should_measure_model_throughput_with_prefill_chunck_tokens_4096() {
-    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(4096).await);
+#[ignore = "loads the Ornith model in-process and benchmarks 4,096-token model SSD streaming prefill chunks"]
+async fn should_measure_model_ssd_streaming_with_4096_token_prefill_chunks() {
+    assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(4096).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks prefill_chunck_tokens 8192"]
-async fn should_measure_model_throughput_with_prefill_chunck_tokens_8192() {
-    assert_valid_prefill_chunck_sweep_result(run_prefill_chunck_sweep_with_timeout(8192).await);
+#[ignore = "loads the Ornith model in-process and benchmarks 8,192-token model SSD streaming prefill chunks"]
+async fn should_measure_model_ssd_streaming_with_8192_token_prefill_chunks() {
+    assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(8192).await);
 }
 
-async fn run_prefill_chunck_sweep_with_timeout(prefill_chunck_tokens: u32) -> PrefillChunckMetrics {
+async fn run_prefill_chunk_sweep_with_timeout(prefill_chunk_tokens: u32) -> PrefillChunkMetrics {
+    let local_task_set = tokio::task::LocalSet::new();
     timeout(
         SWEEP_TIMEOUT,
-        run_model_artifact_with_prefill_chunck_tokens(prefill_chunck_tokens),
+        local_task_set.run_until(run_model_with_prefill_chunk_tokens(prefill_chunk_tokens)),
     )
     .await
-    .expect("the prefill_chunck_tokens benchmark must finish within 115 seconds")
+    .expect("the model SSD streaming prefill-chunk benchmark must finish within 115 seconds")
 }
 
-fn assert_valid_prefill_chunck_sweep_result(prefill_chunck_metrics: PrefillChunckMetrics) {
+fn assert_valid_prefill_chunk_sweep_result(prefill_chunk_metrics: PrefillChunkMetrics) {
     assert!(
-        prefill_chunck_metrics.prompt_token_count > 0
-            && prefill_chunck_metrics.completion_token_count > 1
+        prefill_chunk_metrics.prompt_token_count > 0
+            && prefill_chunk_metrics.completion_token_count > 1
     );
 }
 
 /// Loads the Ornith model over duplex pipes with one neutral fixed chunk policy.
-async fn run_model_artifact_with_prefill_chunck_tokens(
-    prefill_chunck_tokens: u32,
-) -> PrefillChunckMetrics {
+async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> PrefillChunkMetrics {
     let (test_to_worker, worker_from_test) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let (worker_to_test, test_from_worker) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
-    let worker_task = tokio::spawn(async move {
+    let worker_task = tokio::task::spawn_local(async move {
         run_bootstrapped_worker(worker_from_test, worker_to_test)
             .await
             .expect("the in-process worker should run successfully");
@@ -95,8 +96,10 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
         .expect("the configured benchmark model should have a resolved policy");
     let mut worker_model_configuration = model_policy.worker_model_configuration.clone();
     worker_model_configuration
+        .autoregressive_mut()
+        .expect("the model SSD streaming benchmark requires an autoregressive model")
         .chunking
-        .fixed_prompt_processing_chunk_size_tokens = prefill_chunck_tokens;
+        .fixed_prompt_processing_chunk_size_tokens = prefill_chunk_tokens;
     protocol_writer
         .send_command(&WorkerCommand::InitializeWorker(
             worker_startup_configuration,
@@ -136,7 +139,7 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
             }
         }
     };
-    eprintln!("[prefill-chunck-sweep-{prefill_chunck_tokens}] worker ready: {model_id}");
+    eprintln!("[model-ssd-streaming-prefill-{prefill_chunk_tokens}] worker ready: {model_id}");
 
     let source_document = static_source_document();
     let user_prompt = format!(
@@ -160,7 +163,7 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
         },
     };
 
-    eprintln!("[prefill-chunck-sweep-{prefill_chunck_tokens}] sending generate command");
+    eprintln!("[model-ssd-streaming-prefill-{prefill_chunk_tokens}] sending generate command");
     let request_started_at = Instant::now();
     protocol_writer
         .send_command(&WorkerCommand::Generate(chat_command))
@@ -184,7 +187,7 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
                 if first_output_at.is_none() {
                     first_output_at = Some(Instant::now());
                     eprintln!(
-                        "[prefill-chunck-sweep-{prefill_chunck_tokens}] first output received"
+                        "[model-ssd-streaming-prefill-{prefill_chunk_tokens}] first output received"
                     );
                 }
             }
@@ -198,7 +201,7 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
                 break;
             }
             WorkerEvent::Failed { reason, .. } => {
-                panic!("the worker failed the prefill_chunck_tokens sweep request: {reason:?}");
+                panic!("the worker failed the model SSD streaming prefill sweep: {reason:?}");
             }
             WorkerEvent::ModelSwapFailed { .. } => {
                 panic!("the worker failed to load the prefill sweep model");
@@ -219,32 +222,47 @@ async fn run_model_artifact_with_prefill_chunck_tokens(
             | WorkerEvent::Idle { .. }
             | WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
             | WorkerEvent::Ready { .. } => {}
+            WorkerEvent::ImageGenerationProgress { .. }
+            | WorkerEvent::ImageGenerationCompleted { .. }
+            | WorkerEvent::ImageGenerationFailed { .. }
+            | WorkerEvent::ImageGenerationFinalized { .. } => {
+                panic!("an autoregressive model SSD streaming benchmark received an image event")
+            }
         }
     }
     let response_completed_at = Instant::now();
 
-    // Best-effort cleanup: measurement already captured, close/join errors irrelevant.
-    let _close_outcome = protocol_writer.close().await;
-    let _worker_join = worker_task.await;
+    // Each sweep cell must release its MLX process state before another fixed-size
+    // cell can establish an independent measurement.
+    protocol_writer
+        .close()
+        .await
+        .expect("the benchmark protocol should close cleanly");
+    worker_task
+        .await
+        .expect("the in-process benchmark worker should not panic");
 
-    let first_output_at = first_output_at.unwrap_or(response_completed_at);
+    let first_output_at = first_output_at.expect("the benchmark should receive generated output");
+    let prompt_token_count =
+        prompt_token_count.expect("the terminal event should report prompt tokens");
+    let completion_token_count =
+        completion_token_count.expect("the terminal event should report generated tokens");
     let prompt_processing_duration = first_output_at.duration_since(request_started_at);
     let generation_duration = response_completed_at.duration_since(first_output_at);
     let prompt_tokens_per_second =
-        prompt_token_count.unwrap_or(0) as f64 / prompt_processing_duration.as_secs_f64();
-    let generation_tokens_per_second = (completion_token_count.unwrap_or(0).saturating_sub(1))
-        as f64
-        / generation_duration.as_secs_f64();
+        prompt_token_count as f64 / prompt_processing_duration.as_secs_f64();
+    let generation_tokens_per_second =
+        completion_token_count.saturating_sub(1) as f64 / generation_duration.as_secs_f64();
     eprintln!(
-        "[prefill-chunck-sweep-{prefill_chunck_tokens}] done: prompt={prompt_tokens_per_second:.1} tok/s, generation={generation_tokens_per_second:.1} tok/s"
+        "[model-ssd-streaming-prefill-{prefill_chunk_tokens}] done: prompt={prompt_tokens_per_second:.1} tok/s, generation={generation_tokens_per_second:.1} tok/s"
     );
 
-    PrefillChunckMetrics {
-        prefill_chunck_tokens,
+    PrefillChunkMetrics {
+        prefill_chunk_tokens,
         prompt_tokens_per_second,
         generation_tokens_per_second,
-        prompt_token_count: prompt_token_count.unwrap_or(0),
-        completion_token_count: completion_token_count.unwrap_or(0),
+        prompt_token_count,
+        completion_token_count,
         prompt_processing_seconds: prompt_processing_duration.as_secs_f64(),
         generation_seconds: generation_duration.as_secs_f64(),
     }

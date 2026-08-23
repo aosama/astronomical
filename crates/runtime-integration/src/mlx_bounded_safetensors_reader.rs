@@ -1,7 +1,8 @@
+//! Presents validated source-file intervals as one virtual SafeTensors payload to MLX.
+
 use std::{
     ffi::{c_char, c_int, c_void},
     fs::File,
-    os::unix::fs::FileExt,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -9,7 +10,9 @@ use std::{
 };
 
 use crate::{
-    MlxRuntimeError, PositionalFileReadMetrics, mlx_safetensors::BoundedReadInterval, raw,
+    MlxRuntimeError, PositionalFileReadMetrics,
+    mlx_bounded_safetensors_read_concurrency::read_source_interval,
+    mlx_safetensors::BoundedReadInterval, raw,
 };
 
 const BOUNDED_READER_LABEL: &[u8] = b"bounded multi-range expert page reader\0";
@@ -73,7 +76,6 @@ impl BoundedMultiRangeReaderState {
                 ),
             });
         }
-
         Ok(Self {
             source_file,
             synthetic_header_bytes,
@@ -370,21 +372,12 @@ fn read_payload_at_offset(
         let bytes_from_interval = bytes_remaining.min(bytes_available_in_interval);
         let source_offset = interval.source_file_offset + offset_within_interval;
         let destination_end = current_destination_offset + bytes_from_interval;
-        let mut read_operation = || {
-            reader_state
-                .source_file
-                .read_exact_at(
-                    &mut destination[current_destination_offset..destination_end],
-                    source_offset,
-                )
-                .is_ok()
-        };
-        let read_succeeded = match reader_state.expert_file_read_metrics.as_ref() {
-            Some(expert_file_read_metrics) => {
-                expert_file_read_metrics.measure_read(bytes_from_interval, read_operation)
-            }
-            None => read_operation(),
-        };
+        let read_succeeded = read_source_interval(
+            &reader_state.source_file,
+            &mut destination[current_destination_offset..destination_end],
+            source_offset,
+            reader_state.expert_file_read_metrics.as_deref(),
+        );
         if !read_succeeded {
             reader_state.is_good.store(false, Ordering::Release);
             return;

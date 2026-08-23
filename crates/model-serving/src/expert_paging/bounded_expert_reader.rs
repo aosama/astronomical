@@ -33,7 +33,11 @@ use super::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
 };
 
-pub(crate) fn load_quantized_expert_page(
+/// Loads only the validated tensor ranges described by one expert-page manifest.
+///
+/// This is public so architecture-neutral qualification tools can compare the
+/// production bounded-reader baseline with alternative expert-pack layouts.
+pub fn load_quantized_expert_page(
     runtime: &astronomical_runtime_integration::MlxRuntime,
     page_manifest: &QuantizedExpertPageManifest,
     expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,

@@ -98,7 +98,7 @@ async fn should_queue_a_memory_limit_while_generation_is_active() {
 
     assert_eq!(
         worker_executor
-            .update_mlx_memory_limit(32_000_000_000)
+            .update_mlx_memory_limit(32_000_000_000, "queued-memory-generation".to_owned())
             .await
             .expect("the active request should accept a queued limit"),
         MlxMemoryLimitUpdateOutcome::Queued

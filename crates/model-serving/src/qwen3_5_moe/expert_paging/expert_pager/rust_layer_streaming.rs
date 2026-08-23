@@ -21,6 +21,13 @@ use crate::expert_paging::{
 };
 use crate::qwen3_5_moe::expert_paging::paged_expert_weights::build_paged_expert_weights;
 
+/// Request dimensions needed to attribute one source plan without retaining routes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Qwen3_5ExpertStreamingRequestShape {
+    pub(crate) route_token_count: i32,
+    pub(crate) routed_expert_count: usize,
+}
+
 impl Qwen3_5ExpertPager {
     /// Loads one exact page selected by Rust. Multi-token callers pass all expert
     /// identifiers and therefore stream one complete layer; decode passes top-K.
@@ -29,6 +36,7 @@ impl Qwen3_5ExpertPager {
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,
         expert_ids: &[usize],
+        request_shape: Qwen3_5ExpertStreamingRequestShape,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), ExpertPagingError> {
         // `layer_plan` is startup-validated immutable geometry. Building a page
@@ -88,6 +96,14 @@ impl Qwen3_5ExpertPager {
         // This conversion consumes named tensors from the map. Any absent weight,
         // scale, or bias fails before model execution can observe a partial page.
         let streamed_weights = build_paged_expert_weights(&mut loaded_tensors, layer_plan)?;
+        performance_attribution.record_expert_streaming_source_plan(
+            layer_index,
+            request_shape.route_token_count,
+            request_shape.routed_expert_count,
+            expert_ids.len(),
+            page_manifest.source_manifests.len(),
+            page_manifest.payload_byte_count,
+        );
         // This counter is logical selected payload. Positional-read counters and
         // process-attributed physical I/O answer different questions and remain
         // separate in performance reports.

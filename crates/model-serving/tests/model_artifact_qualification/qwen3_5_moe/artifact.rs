@@ -23,7 +23,7 @@ fn link_or_copy_file(source: &std::path::Path, target: &std::path::Path) {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let text_artifact_directory = tempfile::tempdir()
@@ -92,7 +92,7 @@ fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
     let vision_artifact_directory = tempfile::tempdir()
@@ -147,7 +147,7 @@ fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_ignore_non_execution_files_in_the_configured_local_artifact() {
     let model_directory = crate::common::configured_ornith_model_artifact_directory();
 
@@ -157,10 +157,9 @@ fn should_ignore_non_execution_files_in_the_configured_local_artifact() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-6bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 oQ6e artifact"]
 fn should_validate_a_standard_six_bit_qwen3_5_artifact() {
-    let model_directory =
-        crate::common::configured_model_artifact_directory_by_id("Ornith-1.0-35B-6bit");
+    let model_directory = crate::common::configured_ornith_model_artifact_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
@@ -187,41 +186,40 @@ fn should_validate_a_standard_six_bit_qwen3_5_artifact() {
 
 #[cfg(feature = "direct-mlx")]
 #[tokio::test]
-#[ignore = "loads and decodes the configured Ornith-1.0-35B-bf16 artifact"]
-async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expert_paging() {
+#[ignore = "loads and decodes the configured Ornith 1.5 oQ6e artifact"]
+async fn should_load_and_decode_affine_six_bit_qwen3_5_moe_through_bounded_expert_paging() {
     use std::time::Duration;
 
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory =
-        crate::common::configured_model_artifact_directory_by_id("Ornith-1.0-35B-bf16");
-    eprintln!("native-bf16-paging status=progress phase=artifact_validation");
+    let model_directory = crate::common::configured_ornith_model_artifact_directory();
+    eprintln!("affine-six-bit-paging status=progress phase=artifact_validation");
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the native BF16 Ornith artifact should validate before engine loading");
+        .expect("the affine six-bit Ornith artifact should validate before engine loading");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-        .expect("the native BF16 tokenizer should load for image-pad-token resolution");
+        .expect("the affine six-bit tokenizer should load for image-pad-token resolution");
     let image_pad_token_id = tokenizer.image_pad_token_id();
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    let mut native_bfloat16_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
+    let mut affine_six_bit_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
-            .expect("the BF16 qualification prefill chunk size should be valid"),
+            .expect("the six-bit qualification prefill chunk size should be valid"),
         image_pad_token_id,
         model_directory,
         crate::common::standard_worker_chunking_configuration(),
         false,
         crate::common::disabled_worker_speculative_prefill_configuration(),
     )
-    .expect("the native BF16 paged engine settings should be valid");
-    eprintln!("native-bf16-paging status=progress phase=model_load");
-    tokio::time::timeout(Duration::from_secs(110), native_bfloat16_engine.load())
+    .expect("the affine six-bit paged engine settings should be valid");
+    eprintln!("affine-six-bit-paging status=progress phase=model_load");
+    tokio::time::timeout(Duration::from_secs(110), affine_six_bit_engine.load())
         .await
-        .expect("native BF16 model load must finish within 110 seconds")
-        .expect("native BF16 dense weights and paged experts should load");
+        .expect("affine six-bit model load must finish within 110 seconds")
+        .expect("affine six-bit dense weights and paged experts should load");
     // Use tokenizer-derived control tokens for the prompt construction.
     let im_start = tokenizer.im_start_token_id();
     let im_end = tokenizer.im_end_token_id();
@@ -229,7 +227,7 @@ async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expe
     let newline_id: u32 = 198;
     let assistant_id: u32 = 74_455;
     let space_id: u32 = 271;
-    native_bfloat16_engine
+    affine_six_bit_engine
         .start_generation(
             Qwen3_5InferenceRequest::new(
                 astronomical_ipc_protocol::RequestId::new(90_001),
@@ -252,14 +250,14 @@ async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expe
             .with_image_pad_token_id(image_pad_token_id),
         )
         .await
-        .expect("the native BF16 paged engine should accept a short request");
-    eprintln!("native-bf16-paging status=progress phase=decode");
+        .expect("the affine six-bit paged engine should accept a short request");
+    eprintln!("affine-six-bit-paging status=progress phase=decode");
     let generated_token = tokio::time::timeout(Duration::from_secs(110), async {
         loop {
-            match native_bfloat16_engine
+            match affine_six_bit_engine
                 .decode_next_token(astronomical_ipc_protocol::RequestId::new(90_001))
                 .await
-                .expect("native BF16 paged decode should succeed")
+                .expect("affine six-bit paged decode should succeed")
             {
                 GeneratedToken::PrefillProgress { .. } => continue,
                 generated_token => return generated_token,
@@ -267,7 +265,7 @@ async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expe
         }
     })
     .await
-    .expect("native BF16 prefill and decode must finish within 110 seconds");
+    .expect("affine six-bit prefill and decode must finish within 110 seconds");
     assert!(matches!(
         generated_token,
         GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence
@@ -275,15 +273,15 @@ async fn should_load_and_decode_native_bfloat16_qwen3_5_moe_through_bounded_expe
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Qwen3.6-35B-A3B-8bit"]
-fn should_validate_the_qwen3_6_35b_a3b_eight_bit_artifact() {
-    const EXPECTED_MODEL_ID: &str = "Qwen3.6-35B-A3B-8bit";
+#[ignore = "requires model_directories to discover the Ornith 1.5 oQ8e artifact"]
+fn should_validate_the_ornith_1_5_35b_a3b_eight_bit_artifact() {
+    const EXPECTED_MODEL_ID: &str = crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID;
 
-    let model_directory = super::qwen3_6_35b_a3b_eight_bit_model_directory();
+    let model_directory = super::ornith_1_5_35b_a3b_eight_bit_model_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the complete Qwen3.6-35B-A3B eight-bit artifact should validate");
+        .expect("the complete Ornith 1.5 35B A3B eight-bit artifact should validate");
 
     // Structural validity: positive shard count, positive payload, architecture from config.
     assert!(validated_artifact.shard_count() > 0);
@@ -303,36 +301,6 @@ fn should_validate_the_qwen3_6_35b_a3b_eight_bit_artifact() {
     );
     assert!(validated_artifact.supports_image_input());
     assert!(!validated_artifact.has_separate_vision_sidecar());
-}
-
-#[test]
-#[ignore = "requires model_directories to discover XYZ-Aquila-mini-OptiQ-4bit"]
-fn should_validate_the_xyz_aquila_mini_optiq_four_bit_artifact() {
-    const EXPECTED_MODEL_ID: &str = "XYZ-Aquila-mini-OptiQ-4bit";
-
-    let model_directory = super::xyz_aquila_mini_optiq_four_bit_model_directory();
-
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the complete XYZ-Aquila-mini OptiQ artifact should validate");
-
-    // Structural validity: positive shard count, positive payload, architecture from config.
-    assert!(validated_artifact.shard_count() > 0);
-    assert!(validated_artifact.total_payload_bytes() > 0);
-    assert_eq!(validated_artifact.model_id(), EXPECTED_MODEL_ID);
-    assert!(validated_artifact.config().layer_count() > 0);
-    assert!(validated_artifact.config().expert_count() > 0);
-    assert!(validated_artifact.config().experts_per_token() > 0);
-    assert_eq!(validated_artifact.config().default_quantization_bits(), 4);
-    // Group size must be a valid MLX affine group size.
-    assert!(
-        [32u32, 64, 128].contains(
-            &validated_artifact
-                .config()
-                .default_quantization_group_size()
-        )
-    );
-    assert!(validated_artifact.has_separate_vision_sidecar());
 }
 
 #[test]
