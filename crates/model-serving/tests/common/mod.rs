@@ -230,21 +230,48 @@ pub(crate) fn configured_ornith_model_artifact_directory() -> PathBuf {
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathBuf {
-    let astronomical_config = AstronomicalConfig::load_from_development_location()
-        .expect("the standard Astronomical configuration should load for model qualification");
-    astronomical_config
-        .find_configured_model_directory_by_id(model_id)
+pub(crate) fn configured_discovered_model_by_id(
+    astronomical_config: &AstronomicalConfig,
+    model_id: &str,
+) -> astronomical_config::DiscoveredModel {
+    astronomical_config::discover_models(astronomical_config.model_directories())
         .unwrap_or_else(|discovery_error| {
             panic!(
                 "model_directories discovery should complete for model ID {model_id}: {discovery_error}"
             )
         })
+        .into_iter()
+        .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
+        .find(|discovered_model| discovered_model.model_id == model_id)
         .unwrap_or_else(|| {
             panic!(
                 "the standard Astronomical configuration model_directories should discover model ID {model_id}"
             )
         })
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn discovered_chat_capabilities(
+    discovered_model: &astronomical_config::DiscoveredModel,
+) -> &astronomical_config::ChatModelCapabilities {
+    let astronomical_config::ModelCapabilities::Chat(chat_capabilities) =
+        &discovered_model.capabilities
+    else {
+        panic!(
+            "model ID {} should identify a discovered chat model",
+            discovered_model.model_id
+        );
+    };
+    chat_capabilities
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathBuf {
+    let astronomical_config = AstronomicalConfig::load_from_development_location()
+        .expect("the standard Astronomical configuration should load for model qualification");
+    configured_discovered_model_by_id(&astronomical_config, model_id).model_directory
 }
 
 #[cfg(feature = "direct-mlx")]

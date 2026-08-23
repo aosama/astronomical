@@ -1,6 +1,5 @@
 #include "astronomical_metal_expert_loader.h"
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -10,17 +9,18 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
-#include <tuple>
 #include <vector>
 
-#include "mlx/allocator.h"
-#include "mlx/array.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/event.h"
+#include "mlx/error.h"
+#include "mlx/event.h"
 #include "mlx/c/error.h"
 #include "mlx/c/private/array.h"
-#include "mlx/c/private/enums.h"
 #include "mlx/c/private/stream.h"
+#include "mlx/stream.h"
+
+#include "metal_expert_loader_validation.h"
 
 namespace {
 
@@ -32,9 +32,21 @@ constexpr auto kNativeCompletionTimeout = std::chrono::seconds(10);
 struct IoCompletionState {
   std::mutex mutex;
   std::condition_variable completion_condition;
-  bool has_completed{false};
+  bool has_published_completion{false};
   uint64_t elapsed_nanoseconds{0};
   int final_status{0};
+};
+
+struct IoSynchronization {
+  mlx::core::Error completion_error;
+  mlx::core::Event completion_event;
+  mlx::core::Stream target_gpu_stream;
+
+  explicit IoSynchronization(mlx::core::Stream target_gpu_stream)
+      : completion_event(target_gpu_stream),
+        target_gpu_stream(target_gpu_stream) {
+    completion_event.set_value(kSharedEventValue);
+  }
 };
 
 struct IoCompletionObserver {
@@ -86,146 +98,6 @@ void report_unknown_native_failure() {
   mlx_error("Metal I/O expert-pack operation failed with an unknown native exception");
 }
 
-std::vector<size_t> validate_output_tensors(
-    const astronomical_metal_expert_loader_output_tensor* output_tensors,
-    size_t output_tensor_count) {
-  if (output_tensors == nullptr || output_tensor_count == 0) {
-    throw std::invalid_argument("at least one Metal I/O output tensor is required");
-  }
-  std::vector<size_t> output_tensor_byte_counts;
-  output_tensor_byte_counts.reserve(output_tensor_count);
-  for (size_t output_tensor_index = 0;
-       output_tensor_index < output_tensor_count;
-       ++output_tensor_index) {
-    const auto& output_tensor = output_tensors[output_tensor_index];
-    if (output_tensor.shape == nullptr || output_tensor.dimension_count <= 0) {
-      throw std::invalid_argument("Metal I/O output tensor shape is invalid");
-    }
-    mlx::core::Shape output_shape(
-        output_tensor.shape,
-        output_tensor.shape + output_tensor.dimension_count);
-    for (const auto output_dimension : output_shape) {
-      if (output_dimension <= 0) {
-        throw std::invalid_argument("Metal I/O output tensor shape is invalid");
-      }
-    }
-    const auto output_dtype = mlx_dtype_to_cpp(output_tensor.dtype);
-    output_tensor_byte_counts.push_back(
-        mlx::core::array(output_shape, output_dtype, nullptr, {}).nbytes());
-  }
-  return output_tensor_byte_counts;
-}
-
-void validate_load_ranges(
-    const astronomical_metal_expert_loader_load_range* load_ranges,
-    size_t load_range_count,
-    const std::vector<size_t>& output_tensor_byte_counts,
-    uint64_t source_file_size_bytes) {
-  if (load_ranges == nullptr || load_range_count == 0) {
-    throw std::invalid_argument("at least one Metal I/O load range is required");
-  }
-  struct DestinationRange {
-    size_t output_tensor_index;
-    size_t start_offset_bytes;
-    size_t end_offset_bytes;
-  };
-  std::vector<DestinationRange> destination_ranges;
-  destination_ranges.reserve(load_range_count);
-  for (size_t load_range_index = 0; load_range_index < load_range_count;
-       ++load_range_index) {
-    const auto& load_range = load_ranges[load_range_index];
-    if (load_range.output_tensor_index >= output_tensor_byte_counts.size()) {
-      throw std::out_of_range("Metal I/O output tensor index is invalid");
-    }
-    if (load_range.byte_count == 0) {
-      throw std::invalid_argument("Metal I/O load range byte count must be positive");
-    }
-    if (load_range.byte_count >
-            std::numeric_limits<uint64_t>::max() -
-                load_range.source_file_offset_bytes ||
-        load_range.byte_count >
-            std::numeric_limits<size_t>::max() -
-                load_range.output_tensor_offset_bytes) {
-      throw std::out_of_range("Metal I/O expert-pack range overflowed");
-    }
-    const auto source_range_end_offset_bytes =
-        load_range.source_file_offset_bytes + load_range.byte_count;
-    const auto destination_range_end_offset_bytes =
-        load_range.output_tensor_offset_bytes + load_range.byte_count;
-    if (source_range_end_offset_bytes > source_file_size_bytes ||
-        destination_range_end_offset_bytes >
-            output_tensor_byte_counts[load_range.output_tensor_index]) {
-      throw std::out_of_range("Metal I/O expert-pack range is invalid");
-    }
-    destination_ranges.push_back({
-        load_range.output_tensor_index,
-        load_range.output_tensor_offset_bytes,
-        destination_range_end_offset_bytes,
-    });
-  }
-  std::sort(
-      destination_ranges.begin(),
-      destination_ranges.end(),
-      [](const DestinationRange& first_range,
-         const DestinationRange& second_range) {
-        return std::tie(
-                   first_range.output_tensor_index,
-                   first_range.start_offset_bytes) <
-            std::tie(
-                   second_range.output_tensor_index,
-                   second_range.start_offset_bytes);
-      });
-  size_t destination_range_index = 0;
-  for (size_t output_tensor_index = 0;
-       output_tensor_index < output_tensor_byte_counts.size();
-       ++output_tensor_index) {
-    size_t expected_start_offset_bytes = 0;
-    while (destination_range_index < destination_ranges.size() &&
-           destination_ranges[destination_range_index].output_tensor_index ==
-               output_tensor_index) {
-      const auto& destination_range =
-          destination_ranges[destination_range_index];
-      if (destination_range.start_offset_bytes != expected_start_offset_bytes) {
-        throw std::invalid_argument(
-            "Metal I/O load ranges must exactly cover every output tensor");
-      }
-      expected_start_offset_bytes = destination_range.end_offset_bytes;
-      ++destination_range_index;
-    }
-    if (expected_start_offset_bytes !=
-        output_tensor_byte_counts[output_tensor_index]) {
-      throw std::invalid_argument(
-          "Metal I/O load ranges must exactly cover every output tensor");
-    }
-  }
-}
-
-void allocate_output_arrays(
-    const astronomical_metal_expert_loader_output_tensor* output_tensors,
-    size_t output_tensor_count,
-    const std::vector<size_t>& output_tensor_byte_counts,
-    mlx_array* output_arrays) {
-  if (output_arrays == nullptr) {
-    throw std::invalid_argument("Metal I/O output arrays are required");
-  }
-  for (size_t output_tensor_index = 0;
-       output_tensor_index < output_tensor_count;
-       ++output_tensor_index) {
-    const auto& output_tensor = output_tensors[output_tensor_index];
-    const auto output_dtype = mlx_dtype_to_cpp(output_tensor.dtype);
-    mlx::core::Shape output_shape(
-        output_tensor.shape,
-        output_tensor.shape + output_tensor.dimension_count);
-    mlx::core::array output_array(
-        mlx::core::allocator::malloc(
-            output_tensor_byte_counts[output_tensor_index]),
-        output_shape,
-        output_dtype,
-        mlx::core::allocator::free);
-    output_arrays[output_tensor_index] = mlx_array_new_(std::move(output_array));
-  }
-}
-
 NS::SharedPtr<MTL::IOCommandQueue> shared_io_command_queue(
     mlx::core::metal::Device& metal_device) {
   static auto io_command_queue = [&metal_device]() {
@@ -254,7 +126,6 @@ struct astronomical_metal_expert_loader_handle_ {
   NS::SharedPtr<MTL::IOCommandQueue> io_command_queue;
   NS::SharedPtr<MTL::IOCommandBuffer> io_command_buffer;
   NS::SharedPtr<MTL::IOFileHandle> source_file_handle;
-  std::shared_ptr<mlx::core::metal::EventImpl> completion_event;
   uint64_t requested_byte_count;
   size_t command_count;
   uint64_t host_encoding_elapsed_nanoseconds;
@@ -271,7 +142,8 @@ static int start_metal_expert_loader(
     mlx_array* output_arrays,
     astronomical_metal_expert_loader_handle** output_handle,
     astronomical_metal_expert_loader_metrics* output_submission_metrics,
-    std::shared_ptr<IoCompletionObserver> completion_observer) {
+    std::shared_ptr<IoCompletionObserver> completion_observer,
+    bool inject_asynchronous_failure) {
   if (output_handle != nullptr) {
     *output_handle = nullptr;
   }
@@ -281,8 +153,8 @@ static int start_metal_expert_loader(
       throw std::invalid_argument("Metal I/O expert-pack arguments are invalid");
     }
     const auto encoding_started_at = SteadyClock::now();
-    const auto output_tensor_byte_counts =
-        validate_output_tensors(output_tensors, output_tensor_count);
+    const auto output_tensor_byte_counts = validate_output_tensors(
+        output_tensors, output_tensor_count);
     const auto source_file_size_bytes = std::filesystem::file_size(source_file_path);
     validate_load_ranges(
         load_ranges,
@@ -312,8 +184,8 @@ static int start_metal_expert_loader(
       throw std::runtime_error(
           "Metal I/O could not create an expert-pack command buffer");
     }
-    auto completion_event =
-        std::make_shared<mlx::core::metal::EventImpl>(metal_device);
+    auto io_synchronization = std::make_shared<IoSynchronization>(
+        mlx_stream_get_(target_gpu_stream));
     uint64_t requested_byte_count = 0;
     for (size_t load_range_index = 0; load_range_index < load_range_count;
          ++load_range_index) {
@@ -334,43 +206,72 @@ static int start_metal_expert_loader(
       }
       requested_byte_count += load_range.byte_count;
     }
-    io_command_buffer->signalEvent(
-        completion_event->mtl_event(), kSharedEventValue);
-    auto completion_event_for_failure = completion_event;
+    if (!inject_asynchronous_failure) {
+      // Metal I/O must signal the exact shared event retained by MLX's public
+      // Event so GPU work observes the file writes without a host round trip.
+      io_command_buffer->signalEvent(
+          io_synchronization->completion_event
+              .cast<mlx::core::metal::EventImpl>()
+              .mtl_event(),
+          kSharedEventValue);
+    }
     const auto submitted_at = SteadyClock::now();
     auto completion_state = std::make_shared<IoCompletionState>();
     io_command_buffer->addCompletedHandler(
-        [completion_event_for_failure,
+        [io_synchronization,
           completion_state,
           completion_observer,
+          inject_asynchronous_failure,
           submitted_at](MTL::IOCommandBuffer* completed_command_buffer) {
-          const auto final_status = completed_command_buffer->status();
+          const bool load_succeeded =
+              completed_command_buffer->status() == MTL::IOStatusComplete &&
+              !inject_asynchronous_failure;
+          const auto final_status = load_succeeded
+              ? MTL::IOStatusComplete
+              : MTL::IOStatusError;
+          const auto elapsed_nanoseconds = static_cast<uint64_t>(
+              std::chrono::duration_cast<std::chrono::nanoseconds>(
+                  SteadyClock::now() - submitted_at)
+                  .count());
+          if (!load_succeeded) {
+            io_synchronization->completion_error.set_message(
+                std::make_shared<std::string>(
+                    "Metal I/O expert-pack command buffer failed asynchronously"));
+            io_synchronization->completion_event.set_error(
+                io_synchronization->completion_error);
+            // Failed Metal I/O does not signal its encoded event. Publishing
+            // the error first ensures every awakened MLX waiter rejects the
+            // incomplete destination instead of deadlocking or consuming it.
+            io_synchronization->completion_event
+                .cast<mlx::core::metal::EventImpl>()
+                .signal(kSharedEventValue);
+          }
           {
             std::lock_guard completion_lock(completion_state->mutex);
-            completion_state->elapsed_nanoseconds = static_cast<uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    SteadyClock::now() - submitted_at)
-                    .count());
+            completion_state->elapsed_nanoseconds = elapsed_nanoseconds;
             completion_state->final_status = static_cast<int>(final_status);
-            completion_state->has_completed = true;
-          }
-          if (completed_command_buffer->status() != MTL::IOStatusComplete) {
-            completion_event_for_failure->set_error(
-                std::make_shared<std::string>(
-                    "Metal I/O expert-pack command buffer failed"));
-            completion_event_for_failure->signal(kSharedEventValue);
           }
           if (completion_observer) {
             completion_observer->record(
-                completion_state->elapsed_nanoseconds,
-                completed_command_buffer->status() == MTL::IOStatusComplete);
+                elapsed_nanoseconds, load_succeeded);
+          }
+          {
+            // Publication is the completion boundary because callback-owned
+            // metrics are intentionally not forced to use atomics or this mutex.
+            std::lock_guard completion_lock(completion_state->mutex);
+            completion_state->has_published_completion = true;
           }
           completion_state->completion_condition.notify_all();
         });
     io_command_buffer->commit();
-    auto& command_encoder = mlx::core::metal::get_command_encoder(
-        mlx_stream_get_(target_gpu_stream));
-    command_encoder.wait_event(completion_event, kSharedEventValue);
+    io_synchronization->completion_event.wait(
+        io_synchronization->target_gpu_stream);
+    auto& target_command_encoder = mlx::core::metal::get_command_encoder(
+        io_synchronization->target_gpu_stream);
+    // The pinned completion closure remains owned until after MLX copies any
+    // waited-event error into the stream, so it is the retirement owner even
+    // when the C handle is released from another thread.
+    target_command_encoder.commit([io_synchronization]() {});
     const auto host_encoding_elapsed_nanoseconds = static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             SteadyClock::now() - encoding_started_at)
@@ -379,7 +280,6 @@ static int start_metal_expert_loader(
         std::move(io_command_queue),
         std::move(io_command_buffer),
         std::move(source_file_handle),
-        std::move(completion_event),
         requested_byte_count,
         load_range_count,
         host_encoding_elapsed_nanoseconds,
@@ -435,7 +335,8 @@ extern "C" int astronomical_metal_expert_loader_start(
           output_arrays,
           output_handle,
           nullptr,
-          nullptr);
+          nullptr,
+          false);
     }
     if (output_submission_metrics == nullptr || completion_callback == nullptr ||
         release_callback == nullptr) {
@@ -454,7 +355,8 @@ extern "C" int astronomical_metal_expert_loader_start(
         output_arrays,
         output_handle,
         output_submission_metrics,
-        std::move(completion_observer));
+        std::move(completion_observer),
+        false);
   } catch (const std::exception& native_failure) {
     if (completion_callback_context != nullptr && release_callback != nullptr) {
       release_callback(completion_callback_context);
@@ -470,6 +372,57 @@ extern "C" int astronomical_metal_expert_loader_start(
   }
 }
 
+#ifdef ASTRONOMICAL_METAL_EXPERT_LOADER_TESTING
+extern "C" int astronomical_metal_expert_loader_start_with_async_failure(
+    const char* source_file_path,
+    const astronomical_metal_expert_loader_output_tensor* output_tensors,
+    size_t output_tensor_count,
+    const astronomical_metal_expert_loader_load_range* load_ranges,
+    size_t load_range_count,
+    mlx_stream target_gpu_stream,
+    mlx_array* output_arrays,
+    astronomical_metal_expert_loader_handle** output_handle,
+    astronomical_metal_expert_loader_metrics* output_submission_metrics,
+    void* completion_callback_context,
+    astronomical_metal_expert_loader_completion_callback completion_callback,
+    astronomical_metal_expert_loader_release_callback release_callback) {
+  try {
+    if (completion_callback_context == nullptr ||
+        output_submission_metrics == nullptr || completion_callback == nullptr ||
+        release_callback == nullptr) {
+      throw std::invalid_argument(
+          "asynchronous-failure attribution arguments are invalid");
+    }
+    auto completion_observer = std::make_shared<IoCompletionObserver>(
+        completion_callback_context, completion_callback, release_callback);
+    return start_metal_expert_loader(
+        source_file_path,
+        output_tensors,
+        output_tensor_count,
+        load_ranges,
+        load_range_count,
+        target_gpu_stream,
+        output_arrays,
+        output_handle,
+        output_submission_metrics,
+        std::move(completion_observer),
+        true);
+  } catch (const std::exception& native_failure) {
+    if (completion_callback_context != nullptr && release_callback != nullptr) {
+      release_callback(completion_callback_context);
+    }
+    report_native_failure(native_failure);
+    return 1;
+  } catch (...) {
+    if (completion_callback_context != nullptr && release_callback != nullptr) {
+      release_callback(completion_callback_context);
+    }
+    report_unknown_native_failure();
+    return 1;
+  }
+}
+#endif
+
 extern "C" int astronomical_metal_expert_loader_wait(
     astronomical_metal_expert_loader_handle* load_handle,
     astronomical_metal_expert_loader_metrics* output_metrics) {
@@ -481,10 +434,10 @@ extern "C" int astronomical_metal_expert_loader_wait(
     const auto did_complete =
         load_handle->completion_state->completion_condition.wait_for(
             completion_lock,
-            kNativeCompletionTimeout,
-            [&completion_state = *load_handle->completion_state]() {
-              return completion_state.has_completed;
-            });
+             kNativeCompletionTimeout,
+             [&completion_state = *load_handle->completion_state]() {
+               return completion_state.has_published_completion;
+             });
     if (!did_complete) {
       throw std::runtime_error(
           "Metal I/O expert-pack completion exceeded 10 seconds");
@@ -515,14 +468,21 @@ extern "C" void astronomical_metal_expert_loader_free(
     return;
   }
   auto scoped_memory_pool = mlx::core::metal::new_scoped_memory_pool();
+  bool did_publish_completion = false;
   {
     std::unique_lock completion_lock(load_handle->completion_state->mutex);
-    load_handle->completion_state->completion_condition.wait_for(
-        completion_lock,
-        kNativeCompletionTimeout,
-        [&completion_state = *load_handle->completion_state]() {
-          return completion_state.has_completed;
-        });
+    did_publish_completion =
+        load_handle->completion_state->completion_condition.wait_for(
+            completion_lock,
+            kNativeCompletionTimeout,
+            [&completion_state = *load_handle->completion_state]() {
+              return completion_state.has_published_completion;
+            });
+  }
+  if (!did_publish_completion) {
+    // A timed-out callback may still access handle-owned native resources.
+    // Retaining the small handle is safer than racing asynchronous completion.
+    return;
   }
   delete load_handle;
 }

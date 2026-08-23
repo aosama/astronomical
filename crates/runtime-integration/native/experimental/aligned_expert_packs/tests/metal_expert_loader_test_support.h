@@ -306,4 +306,10 @@ class CompleteTransactionOwner {
   bool emit_detailed_progress_;
 };
 
+void should_fail_downstream_wait_and_recover_after_asynchronous_io_failure();
+void should_keep_failed_event_error_alive_when_handle_is_freed_on_another_thread();
+void should_wait_until_completion_observer_publication_finishes();
+void should_release_native_transaction_allocations_between_repetitions();
+void should_repeat_large_eight_range_native_transactions();
+
 #endif

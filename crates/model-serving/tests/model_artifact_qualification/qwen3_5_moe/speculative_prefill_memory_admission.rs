@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use astronomical_config::AstronomicalConfig;
+use astronomical_config::{AstronomicalConfig, ResolvedModelConfig};
 use astronomical_ipc_protocol::{
     RequestId, WorkerPromptProcessingPhase, WorkerSpeculativePrefillConfiguration,
 };
@@ -80,19 +80,25 @@ async fn run_configured_cold_cache_summary_journey(
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for the summary journey");
-    let resolved_speculative_prefill = astronomical_config
-        .speculative_prefill()
-        .expect("the configured SpecPrefill policy should resolve");
     let target_model_id_to_qualify = required_target_model_id
-        .or(resolved_speculative_prefill.target_model_id())
-        .expect("the configured SpecPrefill policy should name a target model");
-    let target_model_directory =
-        crate::common::configured_model_artifact_directory_by_id(target_model_id_to_qualify);
+        .unwrap_or(astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID);
+    let discovered_target_model = crate::common::configured_discovered_model_by_id(
+        &astronomical_config,
+        target_model_id_to_qualify,
+    );
+    let target_chat_capabilities =
+        crate::common::discovered_chat_capabilities(&discovered_target_model);
+    let target_context_window = target_chat_capabilities.context_window;
+    let target_maximum_output_tokens = target_chat_capabilities.max_output_tokens;
+    let resolved_target_config = astronomical_config
+        .resolved_model_config(target_model_id_to_qualify, target_context_window)
+        .expect("the selected target model policy should resolve");
+    let resolved_speculative_prefill = resolved_target_config
+        .speculative_prefill()
+        .expect("the selected target should configure SpecPrefill");
+    let target_model_directory = discovered_target_model.model_directory;
     let validated_target_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(
-            &target_model_directory,
-            u32::from(maximum_output_token_count),
-        )
+        .validate(&target_model_directory, target_maximum_output_tokens)
         .expect("the selected target should validate for the summary journey");
     let target_model_id = validated_target_artifact.model_id().to_owned();
     assert_eq!(
@@ -114,16 +120,15 @@ async fn run_configured_cold_cache_summary_journey(
         .draft_model_id()
         .expect("the configured SpecPrefill policy should name a drafter")
         .to_owned();
-    let draft_model_directory = astronomical_config
-        .find_configured_model_directory_by_id(&draft_model_id)
-        .expect("configured drafter model discovery should complete")
-        .expect("the configured drafter should be present under model_directories");
+    let draft_model_directory =
+        crate::common::configured_discovered_model_by_id(&astronomical_config, &draft_model_id)
+            .model_directory;
     let mlx_memory_limits = MlxMemoryLimits::new(active_memory_limit_bytes, 0)
         .expect("the configured MLX memory limits should be valid");
     let target_maximum_position_count = validated_target_artifact.config().maximum_position_count();
     let target_model_revision = validated_target_artifact.revision().to_owned();
     let prefill_chunck_sizer = configured_prefill_chunck_sizer(
-        &astronomical_config,
+        &resolved_target_config,
         target_maximum_position_count,
         &target_model_id,
         &target_model_revision,
@@ -168,7 +173,7 @@ async fn run_configured_cold_cache_summary_journey(
         importance_pooling_kernel_token_count: resolved_speculative_prefill
             .importance_pooling_kernel_token_count(),
     };
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
         validated_target_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -178,7 +183,8 @@ async fn run_configured_cold_cache_summary_journey(
         target_model_directory,
         crate::common::standard_worker_chunking_configuration(),
         true,
-        astronomical_config.mtp_enabled(),
+        true,
+        resolved_target_config.mtp_draft_depth(),
         speculative_prefill_configuration,
         PerformanceAttribution::enabled(),
         PerformanceAttributionLog::open(&performance_attribution_log_path, true)
@@ -323,14 +329,12 @@ async fn run_configured_cold_cache_summary_journey(
 }
 
 fn configured_prefill_chunck_sizer(
-    astronomical_config: &AstronomicalConfig,
+    resolved_target_config: &ResolvedModelConfig,
     _target_maximum_position_count: u32,
     _target_model_id: &str,
     _target_model_revision: &str,
 ) -> Qwen3_5PromptProcessingChunkSizer {
-    let chunking = astronomical_config
-        .chunking()
-        .expect("the configured chunking policy should resolve");
+    let chunking = resolved_target_config.chunking();
     Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
         chunking.fixed_prompt_processing_chunk_size_tokens(),
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),

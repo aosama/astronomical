@@ -156,26 +156,34 @@ fn write_enabled_speculative_prefill_config(
     std::fs::create_dir(&configuration_directory)
         .expect("the isolated Astronomical configuration directory should be created");
     let configuration_document = json!({
-        "model_directories": [target_model_directory, draft_model_directory],
-        "max_output_tokens": 256,
-        "mtp_enabled": false,
-        "persistent_prompt_cache_enabled": true,
-        "prompt_cache_max_size_gb": 50,
-        "performance_attribution_enabled": true,
+        "$schema": "./astronomical-config.schema.json",
+        "schema_version": 1,
+        "runtime": {
+            "model_directories": [target_model_directory, draft_model_directory],
+        },
+        "prompt_cache": {
+            "enabled": true,
+            "maximum_size_gb": 50,
+        },
         "chunking": {
-
             "fixed_prompt_processing_chunk_size_tokens": 32,
         },
-        "speculative_prefill": {
-            "enabled": true,
-            "target_model_id": target_model_id,
-            "draft_model_id": draft_model_id,
-            "minimum_prompt_tokens": 2048,
-            "keep_percentage": 20,
-            "selection_chunck_token_count": 32,
-            "mandatory_trailing_token_count": 512,
-            "lookahead_token_count": 8,
-            "importance_pooling_kernel_token_count": 13,
+        "models": {
+            (target_model_id): {
+                "generation_defaults": {
+                    "maximum_output_tokens": 256,
+                },
+                "acceleration": {
+                    "speculative_prefill": {
+                        "draft_model_id": draft_model_id,
+                        "minimum_prompt_tokens": 2048,
+                        "keep_percentage": 20,
+                    },
+                },
+            },
+        },
+        "diagnostics": {
+            "performance_attribution_enabled": true,
         },
     });
     std::fs::write(
