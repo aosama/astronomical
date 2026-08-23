@@ -14,30 +14,30 @@
         "supports_vision": true,
         "supports_tool_calls": true,
         "context_window": 262144,
-        "max_output_tokens": 8192
+        "max_output_tokens": 32768
       },
       "quantization_label": "oQ6e (6-bit enhanced)",
       "architecture_summary": "Qwen 3.5 MoE, 35B params, 3B active (A3B)",
       "upstream_license": "MIT"
     },
     {
-      "huggingface_id": "ornith-ai/Ornith-1.5-9B-MLX-4bit",
-      "revision": "a48173b246ac705be75c05bedf1a0666db522d53",
-      "display_name": "Ornith 1.5 9B",
+      "huggingface_id": "Shiftedx/ornith-1.5-9b-affine4-bf16recurrence-vision-mlx",
+      "revision": "750596c078284ae61aa1cd085c8d839909b686e5",
+      "display_name": "Ornith 1.5 9B Vision",
       "family": "qwen3_5",
-      "approximate_size_bytes": 5061168474,
+      "approximate_size_bytes": 6541441712,
       "public": true,
-      "description": "A lightweight 9B dense reasoning model with vision, tool use, and strong coding benchmarks. Fits comfortably on any Apple Silicon Mac.",
+      "description": "A lightweight 9B dense reasoning model with vision, tool use, and strong coding benchmarks. Affine 4-bit language with BF16 recurrence and BF16 vision tower.",
       "capabilities": {
         "supports_reasoning": true,
         "supports_vision": true,
         "supports_tool_calls": true,
         "context_window": 262144,
-        "max_output_tokens": 8192
+        "max_output_tokens": 32768
       },
-      "quantization_label": "4-bit MLX affine (group 64)",
-      "architecture_summary": "Qwen 3.5 dense, 9B params, 32 layers",
-      "upstream_license": "Apache-2.0"
+      "quantization_label": "4-bit affine (group 32) + BF16 recurrence + BF16 vision",
+      "architecture_summary": "Qwen 3.5 dense, 9B params, 32 layers, 27-layer vision tower",
+      "upstream_license": "MIT"
     },
     {
       "huggingface_id": "black-forest-labs/FLUX.2-klein-4B",
