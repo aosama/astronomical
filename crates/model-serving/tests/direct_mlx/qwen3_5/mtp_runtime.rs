@@ -10,7 +10,7 @@ fn should_report_bounded_unavailability_after_optional_mtp_initialization_fails(
         true,
         &Qwen3_5MtpArtifactCapability::MtpCapable {
             stored_mtp_layer_count: 1,
-            artifact_maximum_draft_depth: MtpDraftDepth::DEPTH_ONE,
+            artifact_maximum_draft_depth: Some(MtpDraftDepth::DEPTH_ONE),
             artifact_default_draft_depth: None,
             mtp_tensor_count: 42,
         },
@@ -29,7 +29,7 @@ fn should_resolve_explicit_depth_as_the_effective_execution_depth() {
     let artifact_maximum_depth = MtpDraftDepth::new(3).expect("depth three should be valid");
     let capability = Qwen3_5MtpArtifactCapability::MtpCapable {
         stored_mtp_layer_count: 1,
-        artifact_maximum_draft_depth: artifact_maximum_depth,
+        artifact_maximum_draft_depth: Some(artifact_maximum_depth),
         artifact_default_draft_depth: Some(
             MtpDraftDepth::new(2).expect("depth two should be valid"),
         ),
@@ -55,7 +55,7 @@ fn should_use_an_explicit_artifact_default_for_automatic_depth() {
     let default_depth = MtpDraftDepth::new(2).expect("depth two should be valid");
     let capability = Qwen3_5MtpArtifactCapability::MtpCapable {
         stored_mtp_layer_count: 1,
-        artifact_maximum_draft_depth: maximum_depth,
+        artifact_maximum_draft_depth: Some(maximum_depth),
         artifact_default_draft_depth: Some(default_depth),
         mtp_tensor_count: 42,
     };
@@ -70,7 +70,9 @@ fn should_use_an_explicit_artifact_default_for_automatic_depth() {
 fn should_use_production_qualified_depth_one_when_the_artifact_has_no_default() {
     let capability = Qwen3_5MtpArtifactCapability::MtpCapable {
         stored_mtp_layer_count: 1,
-        artifact_maximum_draft_depth: MtpDraftDepth::new(3).expect("depth three should be valid"),
+        artifact_maximum_draft_depth: Some(
+            MtpDraftDepth::new(3).expect("depth three should be valid"),
+        ),
         artifact_default_draft_depth: None,
         mtp_tensor_count: 42,
     };
@@ -82,10 +84,10 @@ fn should_use_production_qualified_depth_one_when_the_artifact_has_no_default() 
 }
 
 #[test]
-fn should_report_unavailable_when_explicit_depth_exceeds_artifact_support() {
+fn should_clamp_an_over_requested_depth_to_a_declared_artifact_maximum_without_disabling() {
     let capability = Qwen3_5MtpArtifactCapability::MtpCapable {
         stored_mtp_layer_count: 1,
-        artifact_maximum_draft_depth: MtpDraftDepth::DEPTH_ONE,
+        artifact_maximum_draft_depth: Some(MtpDraftDepth::DEPTH_ONE),
         artifact_default_draft_depth: None,
         mtp_tensor_count: 42,
     };
@@ -93,15 +95,68 @@ fn should_report_unavailable_when_explicit_depth_exceeds_artifact_support() {
         true,
         Some(MtpDraftDepth::new(3).expect("depth three should be valid")),
         &capability,
-        false,
+        true,
     );
 
-    assert_eq!(runtime_state, Qwen3_5MtpRuntimeState::Unavailable);
+    assert_eq!(runtime_state, Qwen3_5MtpRuntimeState::Active);
+    assert_eq!(reason, None);
+    assert_eq!(depth_status.configured_draft_depth, Some(3));
+    assert_eq!(depth_status.artifact_maximum_draft_depth, Some(1));
+    assert_eq!(depth_status.resolved_requested_draft_depth, Some(3));
+    assert_eq!(depth_status.capped_draft_depth, Some(1));
+    assert_eq!(depth_status.effective_execution_draft_depth, Some(1));
     assert_eq!(
-        reason.as_deref(),
-        Some("configured MTP draft depth 3 exceeds artifact maximum 1")
+        depth_status.resolution_reason,
+        Some(astronomical_ipc_protocol::MtpDepthResolutionReason::ConfiguredDepthClampedToArtifactMaximum)
     );
-    assert_eq!(depth_status.effective_execution_draft_depth, None);
+}
+
+#[test]
+fn should_honor_an_explicit_depth_when_the_artifact_declares_no_maximum() {
+    let capability = Qwen3_5MtpArtifactCapability::MtpCapable {
+        stored_mtp_layer_count: 1,
+        artifact_maximum_draft_depth: None,
+        artifact_default_draft_depth: None,
+        mtp_tensor_count: 42,
+    };
+    let (runtime_state, reason, depth_status) = qwen3_5_mtp_runtime_configuration_after_load(
+        true,
+        Some(MtpDraftDepth::new(3).expect("depth three should be valid")),
+        &capability,
+        true,
+    );
+
+    assert_eq!(runtime_state, Qwen3_5MtpRuntimeState::Active);
+    assert_eq!(reason, None);
+    assert_eq!(depth_status.configured_draft_depth, Some(3));
+    assert_eq!(depth_status.artifact_maximum_draft_depth, None);
+    assert_eq!(depth_status.resolved_requested_draft_depth, Some(3));
+    assert_eq!(depth_status.capped_draft_depth, Some(3));
+    assert_eq!(depth_status.effective_execution_draft_depth, Some(3));
+    assert_eq!(
+        depth_status.resolution_reason,
+        Some(astronomical_ipc_protocol::MtpDepthResolutionReason::ConfiguredDepthExceedsAutomaticGuidance)
+    );
+}
+
+#[test]
+fn should_keep_depth_one_as_the_automatic_default_on_a_silent_artifact() {
+    let capability = Qwen3_5MtpArtifactCapability::MtpCapable {
+        stored_mtp_layer_count: 1,
+        artifact_maximum_draft_depth: None,
+        artifact_default_draft_depth: None,
+        mtp_tensor_count: 42,
+    };
+
+    let (runtime_state, reason, depth_status) =
+        qwen3_5_mtp_runtime_configuration_after_load(true, None, &capability, true);
+
+    assert_eq!(runtime_state, Qwen3_5MtpRuntimeState::Active);
+    assert_eq!(reason, None);
+    assert_eq!(depth_status.resolved_requested_draft_depth, Some(1));
+    assert_eq!(depth_status.capped_draft_depth, Some(1));
+    assert_eq!(depth_status.effective_execution_draft_depth, Some(1));
+    assert_eq!(depth_status.resolution_reason, None);
 }
 
 #[test]

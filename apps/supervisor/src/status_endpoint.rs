@@ -121,7 +121,9 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "mtp_artifact_maximum_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_maximum_draft_depth,
         "mtp_artifact_default_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_default_draft_depth,
         "mtp_resolved_requested_draft_depth": worker_health_snapshot.mtp_depth_status.resolved_requested_draft_depth,
+        "mtp_capped_draft_depth": worker_health_snapshot.mtp_depth_status.capped_draft_depth,
         "mtp_effective_execution_draft_depth": worker_health_snapshot.mtp_depth_status.effective_execution_draft_depth,
+        "mtp_depth_resolution_reason": worker_health_snapshot.mtp_depth_status.resolution_reason.map(|reason| reason.to_string()),
         "mtp_runtime_state": serde_json::to_value(worker_health_snapshot.mtp_runtime_state())
             .unwrap_or_else(|_| serde_json::json!("disabled")),
         "mtp_unavailable_reason": worker_health_snapshot.mtp_unavailable_reason(),

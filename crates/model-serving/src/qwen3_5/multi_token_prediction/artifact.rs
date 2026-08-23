@@ -5,7 +5,7 @@ use crate::qwen3_5::{Qwen3_5Config, Qwen3_5MtpContract, Qwen3_5ShardIndex};
 
 use super::{MtpDraftDepth, tensor_namespace::qwen3_5_mtp_tensor_names};
 
-/// Bounded artifact or configuration reason that keeps optional MTP target-only.
+/// Bounded artifact reason that keeps optional MTP target-only.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Qwen3_5MtpTargetOnlyReason {
     NoTensorInventory,
@@ -19,10 +19,6 @@ pub enum Qwen3_5MtpTargetOnlyReason {
     ContractRuntimeDocumentTooLarge,
     ContractFieldDisagreement,
     ContractIncompatible,
-    ConfiguredDepthExceedsArtifact {
-        configured_depth: MtpDraftDepth,
-        artifact_maximum_depth: MtpDraftDepth,
-    },
 }
 
 impl fmt::Display for Qwen3_5MtpTargetOnlyReason {
@@ -53,15 +49,6 @@ impl fmt::Display for Qwen3_5MtpTargetOnlyReason {
             Self::ContractIncompatible => {
                 formatter.write_str("optional MTP contract uses unsupported execution semantics")
             }
-            Self::ConfiguredDepthExceedsArtifact {
-                configured_depth,
-                artifact_maximum_depth,
-            } => write!(
-                formatter,
-                "configured MTP draft depth {} exceeds artifact maximum {}",
-                configured_depth.get(),
-                artifact_maximum_depth.get()
-            ),
         }
     }
 }
@@ -74,7 +61,7 @@ pub enum Qwen3_5MtpArtifactCapability {
     },
     MtpCapable {
         stored_mtp_layer_count: usize,
-        artifact_maximum_draft_depth: MtpDraftDepth,
+        artifact_maximum_draft_depth: Option<MtpDraftDepth>,
         artifact_default_draft_depth: Option<MtpDraftDepth>,
         mtp_tensor_count: usize,
     },
@@ -131,12 +118,14 @@ impl Qwen3_5MtpArtifactCapability {
         {
             return Self::target_only(Qwen3_5MtpTargetOnlyReason::IncompleteTensorInventory);
         }
-        let artifact_maximum_draft_depth = optional_contract
-            .and_then(Qwen3_5MtpContract::artifact_maximum_depth)
-            .unwrap_or(MtpDraftDepth::DEPTH_ONE);
+        let artifact_maximum_draft_depth =
+            optional_contract.and_then(Qwen3_5MtpContract::artifact_maximum_depth);
         let artifact_default_draft_depth = optional_contract
             .and_then(Qwen3_5MtpContract::artifact_default_depth)
-            .filter(|default_depth| *default_depth <= artifact_maximum_draft_depth);
+            .filter(|default_depth| {
+                artifact_maximum_draft_depth
+                    .is_none_or(|maximum_depth| *default_depth <= maximum_depth)
+            });
         Self::MtpCapable {
             stored_mtp_layer_count: Self::SUPPORTED_STORED_MTP_LAYER_COUNT,
             artifact_maximum_draft_depth,
@@ -164,7 +153,7 @@ impl Qwen3_5MtpArtifactCapability {
             Self::MtpCapable {
                 artifact_maximum_draft_depth,
                 ..
-            } => Some(*artifact_maximum_draft_depth),
+            } => *artifact_maximum_draft_depth,
             Self::TargetOnly { .. } => None,
         }
     }
@@ -177,17 +166,6 @@ impl Qwen3_5MtpArtifactCapability {
                 ..
             } => *artifact_default_draft_depth,
             Self::TargetOnly { .. } => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn supports_configured_depth(&self, configured_depth: Option<MtpDraftDepth>) -> bool {
-        match (self.artifact_maximum_draft_depth(), configured_depth) {
-            (Some(artifact_maximum_depth), Some(configured_depth)) => {
-                configured_depth.get() <= artifact_maximum_depth.get()
-            }
-            (Some(_), None) => true,
-            (None, _) => false,
         }
     }
 }
