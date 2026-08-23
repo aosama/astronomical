@@ -122,8 +122,10 @@ struct OrbitalTelemetryPopover: View {
       {
         StatusRefreshErrorView(message: statusRefreshErrorMessage)
       }
-      if let mtpUnavailableReason = statusDocument.mtpUnavailableReason {
-        Text(mtpUnavailableReason)
+      if let mtpStatusReason =
+        statusDocument.mtpUnavailableReason ?? statusDocument.mtpDepthResolutionReason
+      {
+        Text(mtpStatusReason)
           .font(.caption)
           .foregroundStyle(.secondary)
           .lineLimit(2)

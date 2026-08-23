@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -79,6 +81,26 @@ pub enum MtpRuntimeState {
     Unavailable,
 }
 
+/// Bounded explanation when MTP depth resolution changes or cautions user intent.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MtpDepthResolutionReason {
+    ConfiguredDepthClampedToArtifactMaximum,
+    ConfiguredDepthExceedsAutomaticGuidance,
+}
+
+impl fmt::Display for MtpDepthResolutionReason {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ConfiguredDepthClampedToArtifactMaximum => formatter.write_str(
+                "configured MTP draft depth was clamped to the declared artifact maximum",
+            ),
+            Self::ConfiguredDepthExceedsAutomaticGuidance => formatter
+                .write_str("configured MTP draft depth exceeds the automatic depth-one guidance"),
+        }
+    }
+}
+
 /// Fixed MTP depth metadata resolved by the loaded model and active executor.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MtpDepthStatus {
@@ -86,7 +108,9 @@ pub struct MtpDepthStatus {
     pub artifact_maximum_draft_depth: Option<u8>,
     pub artifact_default_draft_depth: Option<u8>,
     pub resolved_requested_draft_depth: Option<u8>,
+    pub capped_draft_depth: Option<u8>,
     pub effective_execution_draft_depth: Option<u8>,
+    pub resolution_reason: Option<MtpDepthResolutionReason>,
 }
 
 impl MtpDepthStatus {
@@ -95,7 +119,9 @@ impl MtpDepthStatus {
         artifact_maximum_draft_depth: None,
         artifact_default_draft_depth: None,
         resolved_requested_draft_depth: None,
+        capped_draft_depth: None,
         effective_execution_draft_depth: None,
+        resolution_reason: None,
     };
 }
 

@@ -1,5 +1,5 @@
 use astronomical_model_serving::{
-    MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5MtpTargetOnlyReason, Qwen3_5ShardIndex,
+    Qwen3_5MtpArtifactCapability, Qwen3_5MtpTargetOnlyReason, Qwen3_5ShardIndex,
     qwen3_5_mtp_tensor_names,
 };
 use serde_json::Value;
@@ -48,7 +48,7 @@ fn should_classify_complete_mtp_inventory_as_mtp_capable() {
         mtp_artifact_capability,
         Qwen3_5MtpArtifactCapability::MtpCapable {
             stored_mtp_layer_count: 1,
-            artifact_maximum_draft_depth: MtpDraftDepth::DEPTH_ONE,
+            artifact_maximum_draft_depth: None,
             artifact_default_draft_depth: None,
             mtp_tensor_count: 42,
         }

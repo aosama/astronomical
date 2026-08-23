@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::{
-    MtpDepthStatus, MtpRuntimeState, WorkerChunkingConfiguration,
+    MtpDepthResolutionReason, MtpDepthStatus, MtpRuntimeState, WorkerChunkingConfiguration,
     WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
     WorkerRuntimeFeatureConfiguration,
 };
@@ -55,19 +55,55 @@ async fn should_report_distinct_requested_and_effective_mtp_depths() {
     scripted_executor.health_snapshot.mtp_runtime_state = MtpRuntimeState::Active;
     scripted_executor.health_snapshot.mtp_depth_status = MtpDepthStatus {
         configured_draft_depth: Some(3),
-        artifact_maximum_draft_depth: Some(3),
-        artifact_default_draft_depth: Some(2),
+        artifact_maximum_draft_depth: Some(1),
+        artifact_default_draft_depth: Some(1),
         resolved_requested_draft_depth: Some(3),
+        capped_draft_depth: Some(1),
         effective_execution_draft_depth: Some(1),
+        resolution_reason: Some(MtpDepthResolutionReason::ConfiguredDepthClampedToArtifactMaximum),
     };
 
     let status_document = status_document(scripted_executor).await;
 
     assert_eq!(status_document["mtp_configured_draft_depth"], 3);
-    assert_eq!(status_document["mtp_artifact_maximum_draft_depth"], 3);
-    assert_eq!(status_document["mtp_artifact_default_draft_depth"], 2);
+    assert_eq!(status_document["mtp_artifact_maximum_draft_depth"], 1);
+    assert_eq!(status_document["mtp_artifact_default_draft_depth"], 1);
     assert_eq!(status_document["mtp_resolved_requested_draft_depth"], 3);
+    assert_eq!(status_document["mtp_capped_draft_depth"], 1);
     assert_eq!(status_document["mtp_effective_execution_draft_depth"], 1);
+    assert_eq!(
+        status_document["mtp_depth_resolution_reason"],
+        "configured MTP draft depth was clamped to the declared artifact maximum"
+    );
+}
+
+#[tokio::test]
+async fn should_report_guidance_without_capping_an_explicit_depth_for_a_silent_artifact() {
+    let mut scripted_executor = ScriptedExecutor::ready(Vec::new());
+    scripted_executor.health_snapshot.mtp_runtime_state = MtpRuntimeState::Active;
+    scripted_executor.health_snapshot.mtp_depth_status = MtpDepthStatus {
+        configured_draft_depth: Some(3),
+        artifact_maximum_draft_depth: None,
+        artifact_default_draft_depth: None,
+        resolved_requested_draft_depth: Some(3),
+        capped_draft_depth: Some(3),
+        effective_execution_draft_depth: Some(3),
+        resolution_reason: Some(MtpDepthResolutionReason::ConfiguredDepthExceedsAutomaticGuidance),
+    };
+
+    let status_document = status_document(scripted_executor).await;
+
+    assert_eq!(
+        status_document["mtp_artifact_maximum_draft_depth"],
+        serde_json::Value::Null
+    );
+    assert_eq!(status_document["mtp_resolved_requested_draft_depth"], 3);
+    assert_eq!(status_document["mtp_capped_draft_depth"], 3);
+    assert_eq!(status_document["mtp_effective_execution_draft_depth"], 3);
+    assert_eq!(
+        status_document["mtp_depth_resolution_reason"],
+        "configured MTP draft depth exceeds the automatic depth-one guidance"
+    );
 }
 
 #[tokio::test]
