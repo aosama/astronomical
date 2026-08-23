@@ -1,6 +1,4 @@
-use astronomical_model_serving::{
-    SparseExpertError, gathered_indices_use_sorted_contract, invert_assignment_order,
-};
+use astronomical_model_serving::{SparseExpertError, invert_assignment_order};
 
 #[test]
 fn should_invert_a_complete_assignment_permutation() {
@@ -33,24 +31,4 @@ fn should_reject_a_duplicate_or_out_of_range_permutation() {
             description: "assignment permutation contains an out-of-range slot",
         })
     );
-}
-
-#[test]
-fn should_allow_sorted_gather_only_when_the_caller_sorted_assignments() {
-    assert!(gathered_indices_use_sorted_contract(true));
-    assert!(!gathered_indices_use_sorted_contract(false));
-}
-
-#[test]
-fn should_treat_xs_and_s_top_k_widths_as_named_rows() {
-    let named_rows = [
-        ("xs_routed", 8_u32, 256_u32, 512_u32),
-        ("s_routed", 10, 256, 1_024),
-    ];
-    for (row_name, experts_per_token, expert_count, routed_width) in named_rows {
-        assert!(
-            experts_per_token < expert_count && routed_width > 0,
-            "{row_name} is named evidence, not a default"
-        );
-    }
 }

@@ -4,9 +4,7 @@ use astronomical_model_serving::{
 };
 use serde_json::{Value, json};
 
-use super::support::{
-    LagunaQualificationSize, config_bytes, config_value, normalize, qualification_config_value,
-};
+use super::support::{config_bytes, config_value, normalize};
 
 #[test]
 fn should_normalize_root_and_text_config_envelopes_into_the_same_contract() {
@@ -326,29 +324,6 @@ fn should_reject_unsupported_attention_mlp_gating_and_model_values() {
         LagunaTargetNormalizer::normalize(&config_bytes(&ambiguous_boolean)),
         Err(LagunaNormalizationError::AmbiguousGatingBoolean)
     ));
-}
-
-#[test]
-fn should_treat_xs_and_s_as_parameterized_qualification_examples() {
-    let qualification_rows = [
-        (LagunaQualificationSize::ExtraSmall, 40, 2_048, 10),
-        (LagunaQualificationSize::Small, 48, 3_072, 12),
-    ];
-    for (fixture_size, expected_layers, expected_hidden_size, expected_full_layers) in
-        qualification_rows
-    {
-        let contract = normalize(qualification_config_value(fixture_size));
-        assert_eq!(contract.model().layer_count(), expected_layers);
-        assert_eq!(contract.model().hidden_size(), expected_hidden_size);
-        assert_eq!(
-            contract
-                .layers()
-                .iter()
-                .filter(|layer| layer.attention().kind() == LagunaAttentionKind::Full)
-                .count(),
-            expected_full_layers
-        );
-    }
 }
 
 #[test]

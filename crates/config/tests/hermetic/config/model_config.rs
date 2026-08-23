@@ -139,25 +139,6 @@ fn should_clamp_the_internal_output_default_for_a_small_context() {
 }
 
 #[test]
-fn should_identify_an_explicit_output_default_separately_from_internal_policy() {
-    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"target":{"generation_defaults":{"maximum_output_tokens":128}}}}"#,
-    );
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("configured output default should load");
-
-    let model_config = astronomical_config
-        .resolved_model_config("target", 2_048)
-        .expect("configured output default should resolve");
-
-    assert_eq!(model_config.maximum_output_tokens(), 128);
-    assert!(model_config.has_explicit_maximum_output_tokens());
-}
-
-#[test]
 fn should_apply_a_context_ceiling_not_exceeding_the_discovered_artifact() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     write_config(

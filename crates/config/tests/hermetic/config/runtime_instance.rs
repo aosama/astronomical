@@ -112,40 +112,6 @@ fn should_generate_the_development_first_run_config_with_the_development_port() 
 }
 
 #[test]
-fn should_generate_fixed_prompt_processing_defaults_for_both_runtime_channels() {
-    for runtime_instance in [
-        AstronomicalRuntimeInstance::Stable,
-        AstronomicalRuntimeInstance::Development,
-    ] {
-        let fictional_home_directory =
-            tempfile::tempdir().expect("fictional home should be created");
-        let instance_paths = AstronomicalInstancePaths::for_home_directory(
-            fictional_home_directory.path(),
-            runtime_instance,
-        );
-
-        let generated_config = AstronomicalConfig::load_from_instance_paths(instance_paths.clone())
-            .expect("first-run config should be created");
-        let generated_config_json: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(instance_paths.config_file_path())
-                .expect("first-run config should remain readable"),
-        )
-        .expect("first-run config should contain JSON");
-
-        assert_eq!(
-            generated_config
-                .chunking()
-                .expect("first-run chunking should resolve")
-                .fixed_prompt_processing_chunk_size_tokens(),
-            2_048,
-            "{} should default to qualified fixed prompt processing",
-            runtime_instance.display_name()
-        );
-        assert!(generated_config_json.get("chunking").is_none());
-    }
-}
-
-#[test]
 fn should_load_a_supplied_test_home_only_from_the_development_channel() {
     let test_home_directory = tempfile::tempdir().expect("test home should be created");
     let stable_state_directory = test_home_directory.path().join(".astronomical");

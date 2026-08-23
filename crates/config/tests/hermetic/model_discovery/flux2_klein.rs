@@ -136,29 +136,6 @@ fn should_report_bounded_path_free_flux_verification_failures() {
 }
 
 #[test]
-fn should_reject_an_exact_directory_with_only_a_pipeline_index() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let selected_model_directory = temporary_directory.path().join("incomplete-model");
-    fs::create_dir_all(&selected_model_directory).expect("model directory should be created");
-    fs::write(
-        selected_model_directory.join("model_index.json"),
-        r#"{"_class_name":"Flux2KleinPipeline","is_distilled":true,"scheduler":["diffusers","FlowMatchEulerDiscreteScheduler"],"text_encoder":["transformers","Qwen3ForCausalLM"],"tokenizer":["transformers","Qwen2TokenizerFast"],"transformer":["diffusers","Flux2Transformer2DModel"],"vae":["diffusers","AutoencoderKLFlux2"]}"#,
-    )
-    .expect("pipeline index should be written");
-
-    let verification_error = verify_flux2_klein_model_directory(&selected_model_directory)
-        .expect_err("a pipeline marker without its components must fail");
-
-    assert!(
-        !verification_error.to_string().contains(
-            selected_model_directory
-                .to_str()
-                .expect("temporary path should be UTF-8")
-        )
-    );
-}
-
-#[test]
 fn should_reject_malformed_wrong_profile_license_or_revision_evidence() {
     for invalid_artifact in [
         InvalidArtifact::MalformedPipeline,

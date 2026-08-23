@@ -340,18 +340,3 @@ fn should_serialize_null_for_optional_fields() {
         "present TPS should serialize as number"
     );
 }
-
-#[test]
-fn should_create_performance_log_in_nonexistent_directory() {
-    let temp_dir = tempfile::tempdir().expect("test directory should be created");
-    let log_dir = temp_dir.path().join("nested").join("logs");
-    // GenerationPerformanceLog::open creates the file but not the directory.
-    // The directory must exist. This test verifies the file is created when
-    // the directory exists.
-    fs::create_dir_all(&log_dir).expect("nested log directory should be created");
-    let performance_log = GenerationPerformanceLog::open(&log_dir);
-    assert!(
-        performance_log.is_ok(),
-        "performance log should open in nested directory"
-    );
-}

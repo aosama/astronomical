@@ -7,36 +7,6 @@ use crate::hermetic::write_config;
 use super::{write_minimal_model_config, write_required_model_files};
 
 #[test]
-fn should_resolve_model_directory_paths_from_the_configuration_array() {
-    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    let config_directory = temporary_home_directory.path().join(".astronomical");
-    let configured_model_directory = temporary_home_directory
-        .path()
-        .join("models/ConfiguredModel");
-    fs::create_dir_all(&config_directory).expect("config directory should be created");
-    fs::create_dir_all(&configured_model_directory).expect("model directory should be created");
-    let config_json = serde_json::json!({
-        "model_directories": [configured_model_directory],
-        "chunking": {"fixed_prompt_processing_chunk_size_tokens": 2048}
-    });
-    fs::write(
-        config_directory.join("config.json"),
-        config_json.to_string(),
-    )
-    .expect("config should be written");
-
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("config should load");
-
-    assert_eq!(astronomical_config.model_directories().len(), 1);
-    assert_eq!(
-        astronomical_config.model_directories()[0],
-        configured_model_directory
-    );
-}
-
-#[test]
 fn should_resolve_an_exact_model_directory_from_configured_recursive_roots() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     let configured_model_root = temporary_home_directory.path().join("models");

@@ -8,11 +8,17 @@ use astronomical_model_serving::{
 use tokio::time::timeout;
 
 use super::ORNITH_IMAGE_PAD_TOKEN_ID;
+use super::performance_attribution::{
+    generation_report_for_request, read_attribution_report_documents,
+};
 
 const LOCAL_AI_PROMPT_TOKEN_IDS: [u32; 20] = [
     248_045, 846, 198, 657, 799, 14_542, 8_495, 314, 2_136, 14_791, 13, 248_046, 198, 248_045,
     74_455, 198, 248_068, 271, 248_069, 271,
 ];
+const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
+    "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+);
 const LIVE_CONTEXT_TELEMETRY_PROMPT_TOKEN_COUNT: usize = 2_049;
 const LIVE_MEMORY_LIMIT_INITIAL_BYTES: usize = 10_000_000_000;
 const LIVE_MEMORY_LIMIT_RAISED_BYTES: u64 = 16_000_000_000;
@@ -167,15 +173,35 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith and verifies live context telemetry without adaptive RAM growth admission"]
-async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard() {
+#[ignore = "loads Ornith and verifies live and finalized memory telemetry without adaptive RAM growth admission"]
+async fn should_report_live_and_finalized_memory_without_adaptive_ram_growth_guard() {
     timeout(Duration::from_secs(115), async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let model_directory = crate::common::configured_ornith_model_artifact_directory();
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
             .expect("the Ornith artifact should validate before engine loading");
+        let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
+            .expect("the Ornith tokenizer should prepare the Romeo and Juliet prompt");
+        let mut prompt_token_ids = tokenizer
+            .encode_prompt(ROMEO_AND_JULIET_SOURCE)
+            .expect("the Romeo and Juliet fixture should encode");
+        assert!(
+            prompt_token_ids.len() >= LIVE_CONTEXT_TELEMETRY_PROMPT_TOKEN_COUNT,
+            "the Romeo and Juliet fixture must cover the live-context telemetry boundary"
+        );
+        prompt_token_ids.truncate(LIVE_CONTEXT_TELEMETRY_PROMPT_TOKEN_COUNT);
+        let injected_feedback_text = ROMEO_AND_JULIET_SOURCE
+            .chars()
+            .take(256)
+            .collect::<String>();
+        let injected_feedback_token_ids = tokenizer
+            .encode_model_visible_correction(&injected_feedback_text, false)
+            .expect("the Romeo and Juliet feedback should encode");
         let mlx_memory_limits = crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
+        let attribution_directory = tempfile::tempdir()
+            .expect("the telemetry qualification should create an attribution directory");
+        let attribution_log_path = attribution_directory.path().join("performance.jsonl");
         let mut qwen3_5_engine =
             Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
                 validated_artifact,
@@ -193,10 +219,14 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
                 false,
                 crate::common::disabled_worker_speculative_prefill_configuration(),
                 astronomical_model_serving::PerformanceAttribution::disabled(),
-                astronomical_model_serving::PerformanceAttributionLog::disabled(),
+                astronomical_model_serving::PerformanceAttributionLog::open(
+                    &attribution_log_path,
+                    true,
+                )
+                .expect("the telemetry qualification attribution log should open"),
             )
             .expect("the disabled adaptive-guard engine settings should be valid");
-        eprintln!("[live-context-telemetry 0/2] status=progress phase=model_load");
+        eprintln!("[live-context-telemetry 0/3] status=progress phase=model_load");
         qwen3_5_engine
             .load()
             .await
@@ -206,40 +236,99 @@ async fn should_report_live_context_telemetry_without_adaptive_ram_growth_guard(
             .start_generation(
                 Qwen3_5InferenceRequest::new(
                     request_id,
-                    vec![198; LIVE_CONTEXT_TELEMETRY_PROMPT_TOKEN_COUNT],
-                    1,
+                    prompt_token_ids,
+                    2,
                 )
-                .with_image_pad_token_id(ORNITH_IMAGE_PAD_TOKEN_ID),
+                .with_image_pad_token_id(ORNITH_IMAGE_PAD_TOKEN_ID)
+                .with_performance_attribution(
+                    astronomical_model_serving::PerformanceAttribution::enabled(),
+                ),
             )
             .await
             .expect("the telemetry request should be admitted");
 
-        eprintln!("[live-context-telemetry 1/2] status=progress phase=prefill");
-        match qwen3_5_engine
-            .decode_next_token(request_id)
-            .await
-            .expect("the first prefill chunck should complete")
-        {
-            GeneratedToken::PrefillProgress {
-                mlx_memory_telemetry: Some(mlx_memory_telemetry),
-                ..
-            } => {
-                assert!(
-                    mlx_memory_telemetry
-                        .active_memory_breakdown
-                        .context_state_payload_bytes
-                        > 0,
-                    "an active request must report its live context payload even when adaptive admission is disabled"
-                );
-                eprintln!("[live-context-telemetry 2/2] status=success");
+        eprintln!("[live-context-telemetry 1/3] status=progress phase=prefill");
+        let mut published_forward_count = 0_u64;
+        loop {
+            match qwen3_5_engine
+                .decode_next_token(request_id)
+                .await
+                .expect("the telemetry request should advance")
+            {
+                GeneratedToken::PrefillProgress {
+                    mlx_memory_telemetry: Some(mlx_memory_telemetry),
+                    ..
+                } => {
+                    published_forward_count = published_forward_count.saturating_add(1);
+                    assert!(
+                        mlx_memory_telemetry
+                            .active_memory_breakdown
+                            .context_state_payload_bytes
+                            > 0,
+                        "an active request must report its live context payload even when adaptive admission is disabled"
+                    );
+                }
+                GeneratedToken::TokenId { .. } => {
+                    published_forward_count = published_forward_count.saturating_add(1);
+                    break;
+                }
+                GeneratedToken::PromptProcessingPhaseStarted { .. }
+                | GeneratedToken::GenerationPreparationStarted { .. } => {}
+                GeneratedToken::PrefillProgress {
+                    mlx_memory_telemetry: None,
+                    ..
+                } => panic!("disabled adaptive admission must still publish live memory telemetry"),
+                GeneratedToken::EndOfSequence => {
+                    panic!("the telemetry request must remain active for feedback injection")
+                }
             }
-            other_generation_event => panic!(
-                "the first advance should report live prefill telemetry, got {other_generation_event:?}"
-            ),
         }
+        qwen3_5_engine
+            .inject_input_tokens(request_id, injected_feedback_token_ids)
+            .await
+            .expect("Romeo and Juliet feedback injection should complete");
+        eprintln!("[live-context-telemetry 2/3] status=progress phase=finalization");
+        let generation_finalization = qwen3_5_engine
+            .cancel_generation(request_id)
+            .await
+            .expect("the disabled-admission request should finalize cleanly");
+        let finalized_mlx_memory_telemetry = generation_finalization
+            .mlx_memory_telemetry()
+            .expect(
+                "finalized MLX telemetry must remain available when adaptive admission is disabled",
+            );
+        assert_eq!(
+            finalized_mlx_memory_telemetry.allocator_cache_memory_bytes, 0,
+            "finalized telemetry must describe memory after allocator cleanup"
+        );
+        let attribution_reports = read_attribution_report_documents(&attribution_log_path);
+        let generation_report =
+            generation_report_for_request(&attribution_reports, request_id.value());
+        assert_eq!(
+            operation_occurrence_count(
+                generation_report,
+                "completed_forward_memory_snapshot",
+            ),
+            published_forward_count,
+            "unpublished feedback forwards must not sample memory when adaptive admission is disabled"
+        );
+        eprintln!("[live-context-telemetry 3/3] status=success");
     })
     .await
     .expect("the live-context telemetry regression must finish within 115 seconds");
+}
+
+fn operation_occurrence_count(report: &serde_json::Value, operation_identifier: &str) -> u64 {
+    report["operations"]
+        .as_array()
+        .and_then(|operation_reports| {
+            operation_reports.iter().find_map(|operation_report| {
+                (operation_report["operation"] == operation_identifier)
+                    .then(|| operation_report["occurrence_count"].as_u64())
+                    .flatten()
+            })
+        })
+        .unwrap_or(0)
 }
 
 #[tokio::test]

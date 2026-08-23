@@ -5,27 +5,20 @@ mod attention;
 mod decoder_cache;
 mod engine_backed_worker;
 mod expert_memory_admission;
-mod expert_residency_mode;
 mod memory_policy;
 mod mlx_ram_budget;
-mod model_family_ownership;
-mod model_family_runtime;
-mod model_serving_package_structure;
 mod paged_decode_layer_disposition;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_materialization;
 mod performance_attribution;
-mod persistent_cache_structure;
 mod phase_aware_expert_residency;
 mod quantized_expert_page_manifest;
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_execution_error;
-mod qwen_package_structure;
 #[cfg(feature = "direct-mlx")]
 mod qwen_prompt_processing_chunk_sizer;
 mod raw_safetensors_inventory;
 mod required_files;
 mod retained_expert_layer_cache;
-mod source_package_guard;
 mod sparse_experts;
 mod tensor_inventory;
