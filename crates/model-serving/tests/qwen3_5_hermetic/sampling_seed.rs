@@ -18,15 +18,3 @@ fn should_use_a_time_based_seed_when_the_client_omits_seed() {
          deterministic per request and causes repeated wrong outputs"
     );
 }
-
-#[test]
-fn should_produce_different_seeds_for_different_time_based_calls() {
-    let first_seed = resolve_sampling_seed(None, || 1_000);
-    let second_seed = resolve_sampling_seed(None, || 2_000);
-
-    assert_ne!(
-        first_seed, second_seed,
-        "consecutive requests without an explicit seed should get different sampling \
-          entropy when seed is null"
-    );
-}

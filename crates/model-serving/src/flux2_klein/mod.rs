@@ -35,8 +35,8 @@ pub use engine::{Flux2KleinComponentLoad, Flux2KleinEngineComponents, Flux2Klein
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use engine::{
-    flux2_klein_allocator_cache_limit_for_tests, flux2_klein_euler_update_for_tests,
-    flux2_klein_initial_latents_for_tests, flux2_klein_keyed_noise_and_euler_for_tests,
+    flux2_klein_euler_update_for_tests, flux2_klein_initial_latents_for_tests,
+    flux2_klein_keyed_noise_and_euler_for_tests,
 };
 pub use image_encoding::{
     Flux2KleinImageEncodingError, Flux2KleinPngEncoder, flux2_klein_reference_rgb_u8,

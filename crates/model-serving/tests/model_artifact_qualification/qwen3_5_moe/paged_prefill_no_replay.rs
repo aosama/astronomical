@@ -81,6 +81,12 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
             prefill_chunck_count, 2,
             "4,096 prompt tokens with fixed 2,048-token chunks must use two prefill chunks"
         );
+        let allocator_cache_cleanup_count =
+            operation_occurrence_count(generation_report, "mlx_allocator_cache_cleanup");
+        assert!(
+            allocator_cache_cleanup_count >= prefill_chunck_count.saturating_add(1),
+            "each completed prefill chunk and request finalization must execute synchronized allocator cleanup; pressure recovery may add more cleanups"
+        );
         let route_preparation_count = operation_occurrence_count(
             generation_report,
             "rust_expert_streaming_layer_preparation",

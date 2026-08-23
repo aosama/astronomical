@@ -31,16 +31,6 @@ pub struct WorkerSpeculativePrefillConfiguration {
     pub importance_pooling_kernel_token_count: u32,
 }
 
-impl WorkerSpeculativePrefillConfiguration {
-    /// Returns this policy enabled only when the loaded model is its configured target.
-    pub fn for_loaded_model(&self, loaded_model_id: &str) -> Self {
-        let mut loaded_model_speculative_prefill_configuration = self.clone();
-        loaded_model_speculative_prefill_configuration.enabled =
-            self.enabled && self.target_model_id.as_deref() == Some(loaded_model_id);
-        loaded_model_speculative_prefill_configuration
-    }
-}
-
 /// Worker-acknowledged feature settings safe to expose through local status.
 ///
 /// This intentionally excludes startup paths and model locations. It proves the

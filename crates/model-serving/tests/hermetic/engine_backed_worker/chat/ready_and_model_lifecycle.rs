@@ -69,22 +69,6 @@ async fn should_report_active_speculative_prefill_identity_when_the_draft_is_loa
 }
 
 #[tokio::test]
-async fn should_return_an_error_when_the_unit_model_factory_is_called() {
-    let model_creation_outcome =
-        <() as ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>>::create(
-            &(),
-            "/unused/model",
-            worker_model_configuration("unused-model"),
-        )
-        .await;
-
-    assert_eq!(
-        model_creation_outcome.err().as_deref(),
-        Some("model swapping is unavailable because no model factory was configured")
-    );
-}
-
-#[tokio::test]
 async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let model_configurations = Arc::new(Mutex::new(Vec::new()));

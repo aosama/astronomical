@@ -6,13 +6,14 @@ use std::{
 
 use astronomical_experimental_aligned_expert_packs::{
     ALIGNED_EXPERT_PACK_SEGMENT_ALIGNMENT_BYTES, AlignedExpertPackBuildRequest,
-    AlignedExpertPackError, AlignedExpertPackHeader, build_aligned_expert_pack,
+    AlignedExpertPackError, build_aligned_expert_pack,
     build_aligned_expert_pack_metal_io_descriptors, read_aligned_expert_pack_header,
     validate_aligned_expert_pack_header, validate_aligned_expert_pack_payload,
 };
 use astronomical_model_serving::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
+use astronomical_runtime_integration::MlxMetalExpertPackLoadRange;
 
 #[test]
 fn should_create_byte_identical_aligned_packs_from_identical_sources() {
@@ -193,112 +194,99 @@ fn should_reject_pack_payload_bytes_that_differ_from_the_validated_source_tensor
 }
 
 #[test]
-fn should_coalesce_adjacent_selected_experts_into_one_metal_io_range_per_tensor() {
-    let (pack_header, metal_load_ranges) = build_metal_io_ranges_for_selected_experts(&[1, 2, 3]);
+fn should_plan_compact_metal_io_ranges_for_adjacent_scattered_and_mixed_experts() {
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let source_file_path = temporary_directory.path().join("expert-source.bin");
+    let layer_plan = write_synthetic_expert_source(&source_file_path);
+    let pack_path = temporary_directory.path().join("layer.expert-pack");
+    let pack_header =
+        build_aligned_expert_pack(&pack_path, &aligned_expert_pack_build_request(&layer_plan))
+            .expect("the aligned expert pack should build");
+    let source_bytes = fs::read(&source_file_path).expect("the source fixture should be readable");
+    let pack_bytes = fs::read(&pack_path).expect("the aligned pack should be readable");
+    let selection_cases: [(&str, &[usize], usize); 3] = [
+        ("adjacent", &[1, 2, 3], 1),
+        ("scattered", &[0, 2], 2),
+        ("mixed", &[0, 1, 3], 2),
+    ];
 
-    assert_eq!(
-        metal_load_ranges.len(),
-        pack_header.tensor_descriptors.len()
-    );
-    for (output_tensor_index, (tensor_descriptor, metal_load_range)) in pack_header
-        .tensor_descriptors
+    for (case_name, selected_expert_ids, expected_run_count) in selection_cases {
+        let (_metal_output_tensors, metal_load_ranges) =
+            build_aligned_expert_pack_metal_io_descriptors(
+                &pack_header.tensor_descriptors,
+                &layer_plan,
+                selected_expert_ids,
+            )
+            .expect("the selected experts should produce Metal I/O descriptors");
+        assert_eq!(
+            metal_load_ranges.len(),
+            pack_header.tensor_descriptors.len() * expected_run_count,
+            "{case_name}: every tensor must use one range per contiguous source run"
+        );
+        let loaded_tensor_bytes = replay_metal_load_ranges(
+            &pack_bytes,
+            pack_header.tensor_descriptors.len(),
+            &metal_load_ranges,
+        );
+
+        for (output_tensor_index, tensor_descriptor) in
+            pack_header.tensor_descriptors.iter().enumerate()
+        {
+            let tensor_source = layer_plan
+                .tensor_sources
+                .iter()
+                .find(|tensor_source| tensor_source.tensor_name == tensor_descriptor.tensor_name)
+                .expect("the fixture should contain every packed tensor");
+            let expected_tensor_bytes =
+                selected_source_expert_bytes(&source_bytes, tensor_source, selected_expert_ids);
+            assert_eq!(
+                loaded_tensor_bytes[output_tensor_index], expected_tensor_bytes,
+                "{case_name}: {} must load the selected source experts into compact page slots",
+                tensor_descriptor.tensor_name
+            );
+        }
+    }
+}
+
+fn replay_metal_load_ranges(
+    pack_bytes: &[u8],
+    output_tensor_count: usize,
+    metal_load_ranges: &[MlxMetalExpertPackLoadRange],
+) -> Vec<Vec<u8>> {
+    let mut loaded_tensor_bytes = vec![Vec::new(); output_tensor_count];
+    for load_range in metal_load_ranges {
+        let source_start = usize::try_from(load_range.source_file_offset_bytes())
+            .expect("the fixture pack offset should fit usize");
+        let source_end = source_start
+            .checked_add(load_range.byte_count())
+            .expect("the fixture source range should fit usize");
+        let destination_start = load_range.output_tensor_offset_bytes();
+        let destination_end = destination_start
+            .checked_add(load_range.byte_count())
+            .expect("the fixture destination range should fit usize");
+        loaded_tensor_bytes[load_range.output_tensor_index()].resize(destination_end, 0);
+        loaded_tensor_bytes[load_range.output_tensor_index()][destination_start..destination_end]
+            .copy_from_slice(&pack_bytes[source_start..source_end]);
+    }
+    loaded_tensor_bytes
+}
+
+fn selected_source_expert_bytes(
+    source_bytes: &[u8],
+    tensor_source: &QuantizedTensorSource,
+    selected_expert_ids: &[usize],
+) -> Vec<u8> {
+    let tensor_payload_start = usize::try_from(tensor_source.tensor_payload_offset)
+        .expect("the fixture tensor offset should fit usize");
+    let source_experts = source_bytes[tensor_payload_start..]
+        .chunks_exact(tensor_source.bytes_per_expert)
+        .take(tensor_source.expert_capacity)
+        .collect::<Vec<_>>();
+    selected_expert_ids
         .iter()
-        .zip(&metal_load_ranges)
-        .enumerate()
-    {
-        assert_eq!(metal_load_range.output_tensor_index(), output_tensor_index);
-        assert_eq!(
-            metal_load_range.source_file_offset_bytes(),
-            tensor_descriptor.pack_segment_offset_bytes
-                + u64::try_from(tensor_descriptor.bytes_per_expert)
-                    .expect("the nonzero expert source offset should fit u64")
-        );
-        assert_eq!(metal_load_range.output_tensor_offset_bytes(), 0);
-        assert_eq!(
-            metal_load_range.byte_count(),
-            tensor_descriptor.bytes_per_expert * 3
-        );
-    }
-}
-
-#[test]
-fn should_keep_non_adjacent_selected_experts_in_separate_metal_io_ranges() {
-    let (pack_header, metal_load_ranges) = build_metal_io_ranges_for_selected_experts(&[0, 2]);
-    let tensor_descriptor_count = pack_header.tensor_descriptors.len();
-
-    assert_eq!(metal_load_ranges.len(), tensor_descriptor_count * 2);
-    let first_tensor_descriptor = &pack_header.tensor_descriptors[0];
-    assert_eq!(metal_load_ranges[0].output_tensor_index(), 0);
-    assert_eq!(
-        metal_load_ranges[0].source_file_offset_bytes(),
-        first_tensor_descriptor.pack_segment_offset_bytes
-    );
-    assert_eq!(metal_load_ranges[0].output_tensor_offset_bytes(), 0);
-    assert_eq!(
-        metal_load_ranges[1].source_file_offset_bytes(),
-        first_tensor_descriptor.pack_segment_offset_bytes
-            + u64::try_from(first_tensor_descriptor.bytes_per_expert * 2)
-                .expect("the synthetic source offset should fit u64")
-    );
-    assert_eq!(
-        metal_load_ranges[1].output_tensor_offset_bytes(),
-        first_tensor_descriptor.bytes_per_expert
-    );
-    assert_eq!(
-        metal_load_ranges[0].byte_count(),
-        first_tensor_descriptor.bytes_per_expert
-    );
-    assert_eq!(
-        metal_load_ranges[1].byte_count(),
-        first_tensor_descriptor.bytes_per_expert
-    );
-}
-
-#[test]
-fn should_preserve_compact_page_slots_when_adjacent_and_scattered_experts_mix() {
-    let (pack_header, metal_load_ranges) = build_metal_io_ranges_for_selected_experts(&[0, 1, 3]);
-    let tensor_descriptor_count = pack_header.tensor_descriptors.len();
-
-    assert_eq!(metal_load_ranges.len(), tensor_descriptor_count * 2);
-    for (output_tensor_index, tensor_descriptor) in
-        pack_header.tensor_descriptors.iter().enumerate()
-    {
-        let first_tensor_range = &metal_load_ranges[output_tensor_index * 2];
-        let second_tensor_range = &metal_load_ranges[output_tensor_index * 2 + 1];
-        assert_eq!(
-            first_tensor_range.output_tensor_index(),
-            output_tensor_index
-        );
-        assert_eq!(
-            second_tensor_range.output_tensor_index(),
-            output_tensor_index
-        );
-        assert_eq!(first_tensor_range.output_tensor_offset_bytes(), 0);
-        assert_eq!(
-            first_tensor_range.byte_count(),
-            tensor_descriptor.bytes_per_expert * 2
-        );
-        assert_eq!(
-            second_tensor_range.source_file_offset_bytes(),
-            tensor_descriptor.pack_segment_offset_bytes
-                + u64::try_from(tensor_descriptor.bytes_per_expert * 3)
-                    .expect("the synthetic source offset should fit u64")
-        );
-        assert_eq!(
-            second_tensor_range.output_tensor_offset_bytes(),
-            first_tensor_range.byte_count(),
-            "the second source run must continue the compact output without a hole"
-        );
-        assert_eq!(
-            second_tensor_range.byte_count(),
-            tensor_descriptor.bytes_per_expert
-        );
-        assert_eq!(
-            first_tensor_range.byte_count() + second_tensor_range.byte_count(),
-            tensor_descriptor.bytes_per_expert * 3,
-            "Metal I/O must write exactly the three selected experts, not the skipped gap"
-        );
-    }
+        .flat_map(|expert_id| source_experts[*expert_id].iter().copied())
+        .collect()
 }
 
 fn aligned_expert_pack_build_request(
@@ -310,30 +298,6 @@ fn aligned_expert_pack_build_request(
         layer_index: 0,
         layer_plan,
     }
-}
-
-fn build_metal_io_ranges_for_selected_experts(
-    selected_expert_ids: &[usize],
-) -> (
-    AlignedExpertPackHeader,
-    Vec<astronomical_runtime_integration::MlxMetalExpertPackLoadRange>,
-) {
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let source_file_path = temporary_directory.path().join("expert-source.bin");
-    let layer_plan = write_synthetic_expert_source(&source_file_path);
-    let pack_path = temporary_directory.path().join("layer.expert-pack");
-    let pack_header =
-        build_aligned_expert_pack(&pack_path, &aligned_expert_pack_build_request(&layer_plan))
-            .expect("the aligned expert pack should build");
-    let (_metal_output_tensors, metal_load_ranges) =
-        build_aligned_expert_pack_metal_io_descriptors(
-            &pack_header.tensor_descriptors,
-            &layer_plan,
-            selected_expert_ids,
-        )
-        .expect("the selected experts should produce Metal I/O descriptors");
-    (pack_header, metal_load_ranges)
 }
 
 fn write_synthetic_expert_source(source_file_path: &Path) -> QuantizedExpertLayerPlan {

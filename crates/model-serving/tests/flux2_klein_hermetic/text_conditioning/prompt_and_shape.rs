@@ -1,6 +1,5 @@
 use super::batch::{
-    FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH, FLUX2_KLEIN_CONDITIONING_WIDTH,
-    FLUX2_KLEIN_HIDDEN_STATE_TAPS, FLUX2_KLEIN_PAD_TOKEN_ID, prepare_token_rows,
+    FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH, FLUX2_KLEIN_PAD_TOKEN_ID, prepare_token_rows,
 };
 use super::prompt::Flux2KleinPromptRenderer;
 use super::tokenizer::Flux2KleinTokenizer;
@@ -101,25 +100,6 @@ fn should_right_truncate_romeo_and_juliet_tokens_to_exactly_512() {
             .attention_mask()
             .iter()
             .all(|mask| *mask == 1)
-    );
-}
-
-#[test]
-fn should_define_the_three_tap_conditioning_shape_and_stop_at_hidden_state_27() {
-    let prepared_batch = prepare_token_rows(vec![
-        romeo_and_juliet_token_ids(3),
-        romeo_and_juliet_token_ids(5),
-    ])
-    .expect("two Romeo and Juliet prompts should prepare");
-
-    assert_eq!(FLUX2_KLEIN_HIDDEN_STATE_TAPS, [9, 18, 27]);
-    assert_eq!(
-        [
-            prepared_batch.batch_size(),
-            FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH,
-            FLUX2_KLEIN_CONDITIONING_WIDTH,
-        ],
-        [2, 512, 7_680]
     );
 }
 

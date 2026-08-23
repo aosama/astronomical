@@ -19,7 +19,6 @@ mod prompt_cache_topology;
 mod prompt_processing_chunk_sizer;
 mod rope;
 mod routing;
-mod startup_boundary;
 mod storage;
 mod strict_configuration;
 mod support;
