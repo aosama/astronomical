@@ -4,30 +4,28 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.13</title>
-            <pubDate>Sat, 22 Aug 2026 23:40:04 -0400</pubDate>
-            <sparkle:version>318</sparkle:version>
-            <sparkle:shortVersionString>0.2.13</sparkle:shortVersionString>
+            <title>0.2.14</title>
+            <pubDate>Sun, 23 Aug 2026 15:07:35 -0400</pubDate>
+            <sparkle:version>325</sparkle:version>
+            <sparkle:shortVersionString>0.2.14</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Preserves Library model readiness across daemon restarts after a completed download has been published.
-- Reuses causal multimodal prompt-cache prefixes while retaining the image context required by later requests.
-- Keeps multi-token prediction tensors attached to their target artifact and honors explicit draft depths when an artifact does not declare a maximum.
-- Clamps draft depth to a declared artifact maximum without disabling multi-token prediction, with requested, capped, and effective depth visible in status.
-- Improves native model-loading reliability and qualification compatibility across supported packaging variants.
+- Recommends the qualified vision-capable Ornith 1.5 9B profile in the Library, with affine 4-bit language weights, BF16 recurrence, and a BF16 vision tower.
+- Raises the recommended maximum output for both Ornith Library profiles to 32,768 tokens.
+- Presents the shipped Mac application, Observatory, Library, local APIs, chat, vision, image generation, memory, and precision capabilities more clearly on the public product page.
 
 ## Compatibility
 
-Astronomical 0.2.13 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
+Astronomical 0.2.14 supports Apple Silicon Macs running macOS 26 or later. The DMG is signed, Apple-notarized, and stapled for Gatekeeper verification. The update archive and feed remain protected by Sparkle Ed25519 signatures.
 
-Existing model directories, configuration, prompt caches, downloads, and logs remain in place when updating from 0.2.12.
+Existing model directories, downloaded models, configuration, prompt caches, downloads, and logs remain in place when updating from 0.2.13. Replacing a Library recommendation does not delete an already-downloaded model.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.13/Astronomical-0.2.13-macOS-arm64.dmg" length="15382461" type="application/octet-stream" sparkle:edSignature="GSdPuc9Jpcv3GQL2Vu3qikj4DxytxbKCvGjFvvUIJ+3c0aDQYYT15eAwwaEyNGbENoXXkTehyiwFeYKErYIzDA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.14/Astronomical-0.2.14-macOS-arm64.dmg" length="15382804" type="application/octet-stream" sparkle:edSignature="iFGIJLsIBM41vBH+e8Yn47mFhddKOQcby7ImQCX5R9jmQe8tdDdlGA+0Ip42n6137FCfVJLwl5pdlVqXYhjcBA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: LVfDfweO2qw1xJdesEGssiJ4WOb6AYcrk6Zzs3nnJ2F12fIPiIsNVVJ0soAoIP5SO3AMzqpbuACE0SIXECJ5DQ==
-length: 2249
+edSignature: SyOcJpfbJUqU/iBVme3hzB4NN7Y1wKOnAUMTOKkh6s4zZNA9QzypyLaGVw7aqoCaV5vOULAPvduoOIj6J10aDg==
+length: 2141
 -->
