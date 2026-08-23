@@ -136,7 +136,7 @@ fn should_resolve_complete_known_qwen_inventory_with_named_contract_depth_safely
         capability,
         Qwen3_5MtpArtifactCapability::MtpCapable {
             stored_mtp_layer_count: 1,
-            artifact_maximum_draft_depth,
+            artifact_maximum_draft_depth: Some(artifact_maximum_draft_depth),
             artifact_default_draft_depth: None,
             ..
         } if artifact_maximum_draft_depth.get() == 3

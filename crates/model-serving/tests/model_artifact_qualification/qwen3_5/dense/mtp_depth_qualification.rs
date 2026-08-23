@@ -42,7 +42,10 @@ fn should_recognize_qwen3_8_mtplx_as_a_depth_three_mtp_artifact() {
             mtp_tensor_count,
         } => {
             assert_eq!(*stored_mtp_layer_count, 1);
-            assert_eq!(artifact_maximum_draft_depth.get(), 3);
+            assert_eq!(
+                artifact_maximum_draft_depth.map(|depth| depth.get()),
+                Some(3)
+            );
             assert_eq!(*artifact_default_draft_depth, None);
             assert_eq!(*mtp_tensor_count, 15);
         }

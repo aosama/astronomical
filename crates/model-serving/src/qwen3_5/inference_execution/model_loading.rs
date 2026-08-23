@@ -59,9 +59,11 @@ impl Qwen3_5EngineState {
             let target_max_output_tokens = validated_artifact.max_output_tokens();
             let qwen3_5_vision_config = validated_artifact.vision_config().cloned();
             qwen3_5_mtp_artifact_capability = validated_artifact.mtp_artifact_capability().clone();
-            let should_bind_mtp_weights = self.mtp_enabled
-                && qwen3_5_mtp_artifact_capability
-                    .supports_configured_depth(self.configured_mtp_draft_depth);
+            // A declared maximum caps execution depth; it does not invalidate compatible weights.
+            // Binding first lets resolution degrade to the artifact ceiling instead of silently
+            // converting an explicit user preference into target-only serving.
+            let should_bind_mtp_weights =
+                self.mtp_enabled && qwen3_5_mtp_artifact_capability.is_mtp_capable();
             model_id = Some(validated_artifact.model_id().to_owned());
             model_revision = Some(validated_artifact.revision().to_owned());
             total_artifact_payload_bytes = Some(validated_artifact.total_payload_bytes());

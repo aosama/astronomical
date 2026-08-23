@@ -68,7 +68,9 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         artifact_maximum_draft_depth: Some(3),
         artifact_default_draft_depth: Some(2),
         resolved_requested_draft_depth: Some(3),
+        capped_draft_depth: Some(1),
         effective_execution_draft_depth: Some(1),
+        resolution_reason: None,
     };
     let temporary_home = tempfile::tempdir().expect("status config home should exist");
     let application = build_development_application_with_reload(

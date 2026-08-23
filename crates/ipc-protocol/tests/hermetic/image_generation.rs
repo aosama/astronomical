@@ -404,7 +404,9 @@ fn model_swapped_event_json(capabilities: serde_json::Value) -> serde_json::Valu
             "artifact_maximum_draft_depth": null,
             "artifact_default_draft_depth": null,
             "resolved_requested_draft_depth": null,
-            "effective_execution_draft_depth": null
+            "capped_draft_depth": null,
+            "effective_execution_draft_depth": null,
+            "resolution_reason": null
         },
         "speculative_prefill_runtime_state": "disabled",
         "speculative_prefill_unavailable_reason": null,
