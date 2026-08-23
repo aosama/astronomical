@@ -1,6 +1,6 @@
 ## Linked issue
 
-<!-- Use Fixes #N for implementation work or Refs #N for documentation, CI, and maintenance work. Keep the issue open until this pull request merges. -->
+<!-- Use Fixes #N, Closes #N, or Resolves #N when merging should close the issue. Use Refs #N when the issue should remain open. -->
 
 ## Problem
 
