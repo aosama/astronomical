@@ -13,6 +13,8 @@ mod mlx_array_vector;
 #[cfg(feature = "mlx")]
 mod mlx_attention_operations;
 #[cfg(feature = "mlx")]
+mod mlx_bounded_safetensors_read_concurrency;
+#[cfg(feature = "mlx")]
 mod mlx_bounded_safetensors_reader;
 #[cfg(feature = "mlx")]
 mod mlx_compiled_attention_output_gate;

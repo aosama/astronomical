@@ -27,7 +27,7 @@ fn load_tokenizer() -> Qwen3_5Tokenizer {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_load_the_ornith_tokenizer_and_expose_control_tokens() {
     let tokenizer = load_tokenizer();
 
@@ -64,7 +64,7 @@ fn should_load_the_ornith_tokenizer_and_expose_control_tokens() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_encode_a_structured_chat_prompt_into_valid_token_ids() {
     let tokenizer = load_tokenizer();
     let source_excerpt = ROMEO_AND_JULIET_SOURCE
@@ -97,7 +97,7 @@ fn should_encode_a_structured_chat_prompt_into_valid_token_ids() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_incrementally_decode_text_and_suppress_stop_tokens() {
     let tokenizer = load_tokenizer();
     let mut token_decoder = tokenizer.incremental_decoder();
@@ -144,12 +144,12 @@ fn should_incrementally_decode_text_and_suppress_stop_tokens() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_prepare_a_validated_structured_chat_command_for_ornith_prefill() {
     let tokenizer = load_tokenizer();
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(800),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID.to_owned(),
         messages: vec![ChatMessage::User {
             content: "Explain Mars in one sentence.".to_owned(),
             images: Vec::new(),
@@ -196,12 +196,12 @@ fn should_prepare_a_validated_structured_chat_command_for_ornith_prefill() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
     let tokenizer = load_tokenizer();
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(801),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID.to_owned(),
         messages: vec![ChatMessage::User {
             content: "What color is this image?".to_owned(),
             images: vec![ChatImageInput {
@@ -243,7 +243,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_decode_generated_tokens_into_separate_reasoning_and_text_events() {
     let tokenizer = load_tokenizer();
     let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false)
@@ -302,7 +302,7 @@ fn should_decode_generated_tokens_into_separate_reasoning_and_text_events() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_flush_pending_byte_fallback_text_when_request_output_finishes() {
     let tokenizer = load_tokenizer();
     let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false)

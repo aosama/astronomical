@@ -18,7 +18,7 @@ use super::persistent_prompt_cache_rest_support::{
 // arithmetic; this test protects the complete server-to-client journey.
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 10_001;
 const RESIDENT_RESTORE_PRESSURE_PROMPT_TOKEN_COUNT: usize = 90_001;
-const RESIDENT_RESTORE_PRESSURE_MLX_MEMORY_BYTES: u64 = 14_000_000_000;
+const RESIDENT_RESTORE_PRESSURE_MLX_MEMORY_BYTES: u64 = 38_000_000_000;
 const RESIDENT_RESTORE_PRESSURE_MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 16;
 const RESIDENT_RESTORE_PRESSURE_THINKING_BUDGET_TOKEN_COUNT: u16 = 8;
 
@@ -47,44 +47,44 @@ macro_rules! persistent_prompt_cache_memory_rest_qualification {
 }
 
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_romeo_and_juliet_cache_at_eleven_gb_through_rest,
-    11_000_000_000,
-    Some("paged")
-);
-persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_romeo_and_juliet_cache_at_eleven_point_five_gb_through_rest,
-    11_500_000_000,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_twenty_three_gb_through_rest,
+    23_000_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_romeo_and_juliet_cache_at_twelve_gb_through_rest,
-    12_000_000_000,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_twenty_five_gb_through_rest,
+    25_000_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_romeo_and_juliet_cache_at_twelve_point_five_gb_through_rest,
-    12_500_000_000,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_twenty_eight_gb_through_rest,
+    28_000_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirteen_gb_through_rest,
-    13_000_000_000,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirty_gb_through_rest,
+    30_000_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirteen_point_five_gb_through_rest,
-    13_500_000_000,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirty_two_gb_through_rest,
+    32_000_000_000,
     None
 );
 persistent_prompt_cache_memory_rest_qualification!(
-    should_publish_and_restore_the_romeo_and_juliet_cache_at_fourteen_gb_through_rest,
-    14_000_000_000,
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirty_five_gb_through_rest,
+    35_000_000_000,
+    None
+);
+persistent_prompt_cache_memory_rest_qualification!(
+    should_publish_and_restore_the_romeo_and_juliet_cache_at_thirty_eight_gb_through_rest,
+    38_000_000_000,
     Some("resident")
 );
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and proves a long cache restore demotes resident experts before allocation"]
-async fn should_demote_resident_experts_before_restoring_a_long_cached_prompt_at_fourteen_gb_through_rest()
+async fn should_demote_resident_experts_before_restoring_a_long_cached_prompt_at_thirty_eight_gb_through_rest()
  {
     timeout(
         E2E_TIMEOUT,

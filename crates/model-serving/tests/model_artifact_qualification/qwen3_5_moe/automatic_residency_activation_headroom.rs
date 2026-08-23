@@ -20,15 +20,15 @@ use super::automatic_residency_support::{
     initialize_automatic_residency_tracing, serve_romeo_and_juliet_request,
 };
 
-/// Qualification ceiling: static Fable experts fit, activation headroom does not.
+/// Qualification ceiling: static oQ8e experts fit, activation headroom does not.
 const STATIC_FIT_WITHOUT_HEADROOM_CEILING_BYTES: usize = 40_000_000_000;
 
 /// Large sparse checkpoint whose complete experts nearly fill a 40 GB ceiling.
 const LARGE_SPARSE_HEADROOM_REGRESSION_MODEL_ID: &str =
-    "Qwen3.6-35B-A3B-Fable-Holo3.1-Qwopus-KAT-Coder-C-qx86-hi-mlx";
+    crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID;
 
 #[tokio::test]
-#[ignore = "loads Fable under a static-fit 40 GB ceiling and proves activation headroom prevents complete residency"]
+#[ignore = "loads Ornith 1.5 oQ8e under a static-fit 40 GB ceiling and proves activation headroom prevents complete residency"]
 async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activation_headroom_does_not()
  {
     timeout(Duration::from_secs(120), async {

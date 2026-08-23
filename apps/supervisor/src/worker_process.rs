@@ -259,9 +259,11 @@ impl WorkerProcess {
     pub async fn update_mlx_memory_limit(
         &mut self,
         effective_mlx_memory_ceiling_bytes: u64,
+        configuration_generation: String,
     ) -> Result<(), WorkerControlError> {
         self.send_command_with_timeout(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes,
+            configuration_generation,
         })
         .await
     }

@@ -430,7 +430,7 @@ CARGO
     ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
         ASTRONOMICAL_TEST_CARGO_TARGET_RECORD="$named_journey_target_record" \
         PATH="${fake_command_directory}:${PATH}" \
-        run_subject "$timeout_executable" "$journey_subject" test-performance-measurement-support
+        run_subject "$timeout_executable" "$journey_subject" test-model-ssd-streaming-support
     assert_path_is_absent "$(cat "$named_journey_target_record")"
     assert_lane_root_is_empty "$lane_root"
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=named-qualification-journey-is-disposable status=success'
@@ -471,24 +471,34 @@ assert "--foreground" in (
 ).read_text()
 
 expected_journeys = {
-    "accept-memory-management",
+    "accept-model-ssd-streaming",
     "qualify-model-artifacts",
     "qualify-deployed-model-rest-liveness",
     "qualify-persistent-prompt-cache",
-    "test-performance-measurement-support",
-    "measure-model-artifact-summary",
+    "test-model-ssd-streaming-support",
+    "test-model-ssd-streaming-attribution-support",
+    "test-persistent-prompt-cache-performance-support",
+    "measure-model-ssd-streaming-summary",
     "measure-persistent-prompt-cache-warmup",
     "measure-persistent-prompt-cache-warmup-50k",
     "measure-persistent-prompt-cache-warmup-100k",
-    "measure-model-artifact-cold-prefill-50k",
-    "measure-model-artifact-prefill-1024",
-    "measure-model-artifact-prefill-2048",
-    "measure-model-artifact-prefill-4096",
-    "measure-model-artifact-prefill-8192",
-    "measure-model-artifact-performance-attribution",
+    "measure-model-ssd-streaming-cold-prefill-50k",
+    "measure-model-ssd-streaming-prefill-1024",
+    "measure-model-ssd-streaming-prefill-2048",
+    "measure-model-ssd-streaming-prefill-4096",
+    "measure-model-ssd-streaming-prefill-8192",
+    "measure-model-ssd-streaming-read-concurrency",
+    "measure-model-ssd-streaming-attribution",
+    "measure-model-ssd-streaming-opencode-long-context-reuse",
+    "measure-model-ssd-streaming-complete-expert-residency",
+    "measure-model-ssd-streaming-live-memory-ceiling-round-trip",
+    "measure-model-ssd-streaming-decode-expert-retention",
+    "measure-model-ssd-streaming-prefill-decode-handoff",
+    "measure-model-ssd-streaming-prefill-memory-progress",
+    "measure-model-ssd-streaming-laguna-paging",
     "measure-experimental-aligned-expert-packs-ornith-generation",
     "measure-experimental-aligned-expert-packs-ornith-prompt-processing",
-    "measure-experimental-aligned-expert-packs-oq4e-data-plane",
+    "measure-experimental-aligned-expert-packs-oq6e-data-plane",
 }
 assert set(journey_list_path.read_text().splitlines()) == expected_journeys
 PYTHON

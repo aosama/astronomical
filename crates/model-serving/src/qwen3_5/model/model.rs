@@ -44,7 +44,7 @@ pub struct Qwen3_5Model {
         Option<RefCell<RetainedExpertLayerCache<Qwen3_5RetainedExpertLayer>>>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
-    /// Pure target consulted only when execution performs a mandatory expert read.
+    /// Pure target published at load and refreshed before mandatory expert reads.
     pub(crate) active_expert_residency_plan: RefCell<Option<PhaseAwareExpertResidencyPlan>>,
 
     pub(crate) gated_delta_kernel: MlxMetalKernel,

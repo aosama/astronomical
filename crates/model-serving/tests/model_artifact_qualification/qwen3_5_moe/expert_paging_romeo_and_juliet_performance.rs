@@ -8,7 +8,7 @@ use super::expert_paging_decode::{
 };
 use super::speculative_prefill_qualification_support::prepare_romeo_and_juliet_three_paragraph_summary_prompt;
 
-const MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const ROUTE_WARMUP_PROMPT_TOKEN_COUNT: usize = 2_048;
 const MEASURED_PROMPT_TOKEN_COUNT: usize = 31_913;
 const PREFILL_CHUNCK_TOKEN_COUNT: usize = 2_048;

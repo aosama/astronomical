@@ -6,7 +6,7 @@ use tokio::{
     net::TcpStream,
 };
 
-pub(super) fn streamed_model_text_from_chat_response(chat_response: &str) -> String {
+pub(crate) fn streamed_model_text_from_chat_response(chat_response: &str) -> String {
     let mut streamed_model_text = String::new();
     for response_line in chat_response.lines() {
         let Some(server_sent_event_payload) = response_line.strip_prefix("data: ") else {

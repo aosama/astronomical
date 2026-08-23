@@ -10,6 +10,7 @@
 //! the just-built worker executable path; no developer-machine path is embedded.
 
 use std::{
+    collections::HashMap,
     fs,
     net::SocketAddr,
     path::{Path, PathBuf},
@@ -46,6 +47,19 @@ pub(crate) async fn launch_real_model_rest_server(
     isolated_worker_home_directory: &Path,
     maximum_mlx_memory_bytes: u64,
 ) -> RealModelRestServer {
+    launch_real_model_rest_server_for_models(
+        &[(model_id.to_owned(), model_directory)],
+        isolated_worker_home_directory,
+        maximum_mlx_memory_bytes,
+    )
+    .await
+}
+
+pub(crate) async fn launch_real_model_rest_server_for_models(
+    model_artifacts: &[(String, PathBuf)],
+    isolated_worker_home_directory: &Path,
+    maximum_mlx_memory_bytes: u64,
+) -> RealModelRestServer {
     let production_worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
             .expect("Cargo should provide the production inference-worker executable path"),
@@ -57,10 +71,26 @@ pub(crate) async fn launch_real_model_rest_server(
         isolated_worker_home_directory.to_path_buf(),
         production_worker_executable_path.clone(),
     );
-    let mut worker_startup_configuration = runtime_config_resolver
+    let resolved_runtime_config = runtime_config_resolver
         .load()
-        .expect("the real-model worker configuration should resolve")
-        .worker_startup_configuration();
+        .expect("the real-model worker configuration should resolve");
+    let model_policy_catalog = Arc::new(
+        model_artifacts
+            .iter()
+            .map(|(model_id, model_directory)| {
+                let mut model_policy = resolved_runtime_config
+                    .model_policy_catalog
+                    .get(model_id)
+                    .unwrap_or_else(|| {
+                        panic!("the resolved policy catalog should include {model_id}")
+                    })
+                    .clone();
+                model_policy.model_directory = model_directory.clone();
+                (model_id.clone(), model_policy)
+            })
+            .collect::<HashMap<_, _>>(),
+    );
+    let mut worker_startup_configuration = resolved_runtime_config.worker_startup_configuration();
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         Some(maximum_mlx_memory_bytes);
     // Keep the supervisor record beside the isolated worker logs so acceptance
@@ -74,8 +104,7 @@ pub(crate) async fn launch_real_model_rest_server(
         Duration::from_secs(60),
         GenerationPerformanceLog::open(&performance_log_directory)
             .expect("the real-model performance log should open"),
-        crate::common::single_model_directories(model_id, &model_directory),
-        20_480,
+        model_policy_catalog,
         worker_startup_configuration,
     )
     .await
@@ -150,6 +179,36 @@ pub(crate) async fn get_json_endpoint(
         .split_once("\r\n\r\n")
         .expect("the status response should contain HTTP headers");
     serde_json::from_str(response_body).expect("the status response body should be valid JSON")
+}
+
+pub(crate) async fn put_json_endpoint(
+    server_address: SocketAddr,
+    endpoint_path: &str,
+    request_body: &serde_json::Value,
+) -> serde_json::Value {
+    let serialized_request_body =
+        serde_json::to_string(request_body).expect("the real-model REST PUT body should serialize");
+    let request_text = format!(
+        "PUT {endpoint_path} HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{serialized_request_body}",
+        serialized_request_body.len(),
+    );
+    let response_text = send_http_request(server_address, request_text).await;
+    let (response_headers, response_body) = response_text
+        .split_once("\r\n\r\n")
+        .expect("the real-model REST PUT response should contain HTTP headers");
+    let status_line = response_headers
+        .lines()
+        .next()
+        .unwrap_or("missing status line");
+    assert!(
+        status_line.starts_with("HTTP/1.1 200 "),
+        "the real-model REST PUT should succeed; status={status_line}; body={response_body}"
+    );
+    serde_json::from_str(response_body).unwrap_or_else(|response_parse_error| {
+        panic!(
+            "the successful real-model REST PUT body should be valid JSON: {response_parse_error}; status={status_line}; body={response_body}"
+        )
+    })
 }
 
 async fn wait_until_ready(server_address: SocketAddr) {

@@ -5,7 +5,9 @@ use astronomical_runtime_integration::MlxArray;
 use crate::PerformanceAttribution;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 
-use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
+use super::super::expert_paging::expert_pager::{
+    Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
+};
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 
@@ -18,6 +20,7 @@ impl Qwen3_5Model {
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
+        route_token_count: i32,
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
@@ -29,6 +32,10 @@ impl Qwen3_5Model {
                 &self.runtime,
                 layer_index,
                 &sorted_unique_expert_ids,
+                Qwen3_5ExpertStreamingRequestShape {
+                    route_token_count,
+                    routed_expert_count: sorted_unique_expert_ids.len(),
+                },
                 performance_attribution,
             )?;
         self.forward_moe_paged_with_performance_attribution(

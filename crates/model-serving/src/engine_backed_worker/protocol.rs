@@ -206,6 +206,7 @@ where
                             }
                             WorkerCommand::UpdateMlxMemoryLimit {
                                 effective_mlx_memory_ceiling_bytes,
+                                configuration_generation: _,
                             } => {
                                 event_writer
                                     .send_event(&WorkerEvent::MlxMemoryLimitRejected {
@@ -250,7 +251,7 @@ where
                                 self.emit_image_failure_and_finalization(generation_command.request_id, ImageGenerationFailureReason::EngineBusy, 0, &mut event_writer).await?;
                                 active_request = Some(ActiveWorkerRequest::Image(current_generation));
                             }
-                            WorkerCommand::UpdateMlxMemoryLimit { effective_mlx_memory_ceiling_bytes } => {
+                            WorkerCommand::UpdateMlxMemoryLimit { effective_mlx_memory_ceiling_bytes, configuration_generation: _ } => {
                                 event_writer.send_event(&WorkerEvent::MlxMemoryLimitRejected {
                                     requested_mlx_memory_ceiling_bytes: effective_mlx_memory_ceiling_bytes,
                                     minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,

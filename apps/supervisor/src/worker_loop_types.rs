@@ -43,6 +43,7 @@ pub(crate) enum WorkerLoopCommand {
     },
     UpdateMlxMemoryLimit {
         effective_mlx_memory_ceiling_bytes: u64,
+        configuration_generation: String,
         update_sender: oneshot::Sender<Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>>,
     },
     UpdateModelPolicyCatalog {

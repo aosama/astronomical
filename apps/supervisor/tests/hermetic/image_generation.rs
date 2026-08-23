@@ -460,7 +460,7 @@ async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_fina
 
     assert_eq!(
         worker_handle
-            .update_mlx_memory_limit(32_000_000_000)
+            .update_mlx_memory_limit(32_000_000_000, "queued-memory-generation".to_owned())
             .await
             .expect("memory update should queue"),
         MlxMemoryLimitUpdateOutcome::Queued,

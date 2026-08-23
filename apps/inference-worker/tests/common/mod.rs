@@ -4,7 +4,7 @@
     feature = "performance-measurement"
 ))]
 
-use std::{collections::HashMap, fs, path::Path, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf};
 
 pub(crate) mod exact_model_prompt;
 #[cfg(feature = "memory-management-acceptance")]
@@ -14,8 +14,11 @@ pub(crate) mod real_model_rest_server;
 pub(crate) mod solid_png;
 
 #[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
-pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str =
-    astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID;
+pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
+
+/// Current large sparse fixture for model-weight SSD-streaming journeys.
+#[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
+pub(crate) const ORNITH_SSD_STREAMING_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
 
 /// Copies Development configuration into a temporary Development-shaped home
 /// so qualification reads user policy without sharing mutable runtime state.
@@ -37,22 +40,11 @@ pub(crate) fn isolated_development_home_from_user_config() -> tempfile::TempDir 
     isolated_development_home
 }
 
-#[allow(dead_code)] // Used only by feature-specific test binaries.
-pub(crate) fn single_model_directories(
-    model_id: &str,
-    model_directory: &Path,
-) -> Arc<HashMap<String, PathBuf>> {
-    Arc::new(HashMap::from([(
-        model_id.to_owned(),
-        model_directory.to_path_buf(),
-    )]))
-}
-
 #[cfg(feature = "model-artifact-qualification")]
 #[allow(dead_code)] // Used only by feature-specific test binaries.
 pub(crate) fn discovered_model_artifact(
     model_id: &str,
-    model_directory: &Path,
+    model_directory: &std::path::Path,
     max_output_tokens: u32,
 ) -> astronomical_config::DiscoveredModel {
     const CONTEXT_WINDOW: u32 = 262_144;

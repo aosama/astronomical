@@ -3,7 +3,9 @@
 use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_moe::expert_paging::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
+use crate::qwen3_5_moe::expert_paging::expert_pager::{
+    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
+};
 use crate::{
     ExpertLayerResidencyTarget, PerformanceAttribution, PerformanceCounter, PerformanceOperation,
     RetainedExpertLayerCommitOutcome,
@@ -44,11 +46,16 @@ impl Qwen3_5Model {
         } else {
             sorted_unique_expert_ids.to_vec()
         };
+        let residency_target = self.expert_residency_target(layer_index);
         let (streamed_expert_weights, page_manifest) = expert_pager
             .load_rust_streamed_expert_layer(
                 &self.runtime,
                 layer_index,
                 &streamed_expert_ids,
+                Qwen3_5ExpertStreamingRequestShape {
+                    route_token_count,
+                    routed_expert_count: sorted_unique_expert_ids.len(),
+                },
                 performance_attribution,
             )?;
         if let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() {
@@ -57,14 +64,6 @@ impl Qwen3_5Model {
                 page_manifest.source_manifests.len(),
             );
         }
-        performance_attribution.record_counter(
-            if route_token_count > 1 {
-                PerformanceCounter::MandatoryPrefillExpertSourcePayloadBytes
-            } else {
-                PerformanceCounter::MandatoryDecodeExpertSourcePayloadBytes
-            },
-            page_manifest.payload_byte_count,
-        );
         performance_attribution.measure_operation(
             PerformanceOperation::ExpertPagingDiagnosticLogging,
             |_performance_attribution| {
@@ -79,7 +78,6 @@ impl Qwen3_5Model {
             },
         );
 
-        let residency_target = self.expert_residency_target(layer_index);
         let layer_has_no_retained_page =
             self.retained_expert_layers
                 .as_ref()

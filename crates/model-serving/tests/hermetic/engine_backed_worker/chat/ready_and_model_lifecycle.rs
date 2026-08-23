@@ -131,7 +131,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
 }
 
 #[tokio::test]
-async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_model() {
+async fn should_reuse_the_live_memory_limit_and_configuration_generation_for_the_next_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let model_creation_memory_limits = Arc::new(Mutex::new(Vec::new()));
     let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
@@ -144,7 +144,13 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
         },
         40_000_000_000,
         38_000_000_000,
-    );
+    )
+    .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
+        configuration_generation: "generation-before-memory-update".to_owned(),
+        persistent_prompt_cache_enabled: false,
+        prompt_cache_maximum_size_bytes: 0,
+        loaded_model: None,
+    });
     let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
     let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
@@ -156,6 +162,7 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
             .await
     });
     let _idle_event = next_event(&mut supervisor_reader).await;
+    let _idle_runtime_configuration = next_event(&mut supervisor_reader).await;
     supervisor_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/first-model".to_owned(),
@@ -164,10 +171,12 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
         .await
         .expect("the first model should load");
     let _model_swapped_event = next_event(&mut supervisor_reader).await;
+    let _first_model_runtime_configuration = next_event(&mut supervisor_reader).await;
 
     supervisor_writer
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes: 40_000_000_000,
+            configuration_generation: "generation-after-memory-update".to_owned(),
         })
         .await
         .expect("the live memory limit should reach the worker");
@@ -175,6 +184,13 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
         next_event(&mut supervisor_reader).await,
         WorkerEvent::MlxMemoryLimitChanged {
             effective_mlx_memory_ceiling_bytes: 40_000_000_000,
+            expert_residency: Some(WorkerExpertResidencySnapshot {
+                total_layer_count: 2,
+                complete_layer_count: 2,
+                complete_layer_payload_bytes: 8_000,
+                partial_layer_count: 0,
+                partial_layer_payload_bytes: 0,
+            }),
             ..
         }
     ));
@@ -189,6 +205,13 @@ async fn should_reuse_the_loaded_engines_complete_mlx_limit_pair_for_the_next_mo
     assert!(matches!(
         next_event(&mut supervisor_reader).await,
         WorkerEvent::ModelSwapped { .. }
+    ));
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::RuntimeFeatureConfigurationApplied {
+            worker_runtime_feature_configuration,
+        } if worker_runtime_feature_configuration.configuration_generation
+            == "generation-after-memory-update"
     ));
     assert_eq!(
         *model_creation_memory_limits

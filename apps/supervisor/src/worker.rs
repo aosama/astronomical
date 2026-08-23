@@ -40,6 +40,11 @@ use crate::{
     worker_replacement::WorkerReplacement,
 };
 
+struct PendingMlxMemoryLimitUpdate {
+    effective_mlx_memory_ceiling_bytes: u64,
+    configuration_generation: String,
+}
+
 // Keeping process-loop dependencies explicit is clearer than hiding them in a context object.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_worker(
@@ -63,16 +68,17 @@ pub(crate) async fn run_worker(
     let mut model_load_deadline = Some(Instant::now() + model_load_timeout);
     let mut idle_control_interval = interval(Duration::from_secs(1));
     idle_control_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut pending_mlx_memory_ceiling_bytes = None;
+    let mut pending_mlx_memory_limit_update: Option<PendingMlxMemoryLimitUpdate> = None;
     let mut pending_prompt_cache_clear: Option<crate::PendingPromptCacheClear> = None;
 
     loop {
         if active_generation.is_none()
-            && let Some(pending_mlx_memory_ceiling_bytes) = pending_mlx_memory_ceiling_bytes.take()
+            && let Some(pending_memory_limit_update) = pending_mlx_memory_limit_update.take()
         {
             if let Err(memory_limit_error) = apply_mlx_memory_limit(
                 &mut worker_process,
-                pending_mlx_memory_ceiling_bytes,
+                pending_memory_limit_update.effective_mlx_memory_ceiling_bytes,
+                pending_memory_limit_update.configuration_generation,
                 model_load_timeout,
                 &health_snapshot,
                 &mut is_ready,
@@ -267,14 +273,17 @@ pub(crate) async fn run_worker(
                     }
                     WorkerLoopCommand::UpdateMlxMemoryLimit {
                         effective_mlx_memory_ceiling_bytes,
+                        configuration_generation,
                         update_sender,
                     } => {
                         if active_generation.is_some() {
-                            pending_mlx_memory_ceiling_bytes =
-                                Some(effective_mlx_memory_ceiling_bytes);
+                            pending_mlx_memory_limit_update = Some(PendingMlxMemoryLimitUpdate {
+                                effective_mlx_memory_ceiling_bytes,
+                                configuration_generation,
+                            });
                             publish_pending_mlx_memory_ceiling(
                                 &health_snapshot,
-                                pending_mlx_memory_ceiling_bytes,
+                                Some(effective_mlx_memory_ceiling_bytes),
                             );
                             let _send_outcome = update_sender
                                 .send(Ok(MlxMemoryLimitUpdateOutcome::Queued));
@@ -283,6 +292,7 @@ pub(crate) async fn run_worker(
                         let update_outcome = apply_mlx_memory_limit(
                             &mut worker_process,
                             effective_mlx_memory_ceiling_bytes,
+                            configuration_generation,
                             model_load_timeout,
                             &health_snapshot,
                             &mut is_ready,

@@ -17,6 +17,8 @@ pub struct MemoryCeilingChangeRequirements {
     pub retained_paged_expert_payload_bytes: u64,
     /// Whether expert ownership must first transition from complete to paged.
     pub complete_experts_are_resident: bool,
+    /// Request workspace that must remain available beside complete experts.
+    pub complete_residency_required_headroom_bytes: u64,
 }
 
 impl MemoryCeilingChangeRequirements {
@@ -41,9 +43,12 @@ impl MemoryCeilingChangeRequirements {
         let required_reclamation_bytes = self
             .current_active_memory_bytes
             .saturating_sub(self.requested_ceiling_bytes);
+        let complete_residency_projection_bytes = self
+            .current_active_memory_bytes
+            .saturating_add(self.complete_residency_required_headroom_bytes);
         MemoryCeilingChangeDecision::Lower {
             must_demote_complete_residency: self.complete_experts_are_resident
-                && required_reclamation_bytes > 0,
+                && complete_residency_projection_bytes > self.requested_ceiling_bytes,
             retained_paged_expert_reclamation_bytes: if self.complete_experts_are_resident {
                 0
             } else if required_reclamation_bytes < self.retained_paged_expert_payload_bytes {

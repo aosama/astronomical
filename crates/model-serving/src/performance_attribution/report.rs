@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use super::{
     EnabledPerformanceAttribution, PerformanceAttribution, PerformanceCounter,
-    PerformanceOperation, unix_epoch_millis,
+    PerformanceOperation, expert_streaming_source::ExpertStreamingSourceSummary, unix_epoch_millis,
 };
 
 /// Outcome recorded when one bounded attribution report ends.
@@ -89,6 +89,7 @@ pub struct GenerationPerformanceAttributionReport {
     mlx_peak_memory_bytes: Option<u64>,
     failure_description: Option<String>,
     previous_token_expert_route_reuse_by_layer: Vec<PreviousTokenExpertRouteReuseByLayerReport>,
+    expert_streaming_source_summaries: Vec<ExpertStreamingSourceSummary>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -226,6 +227,12 @@ impl PerformanceAttribution {
                             examined_layer_count: layer_measurement.examined_layer_count,
                         }
                     })
+                    .collect(),
+                expert_streaming_source_summaries: enabled_attribution
+                    .expert_streaming_source_summaries
+                    .iter()
+                    .flatten()
+                    .copied()
                     .collect(),
             },
         ))

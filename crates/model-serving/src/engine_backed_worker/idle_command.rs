@@ -47,9 +47,14 @@ where
             }
             WorkerCommand::UpdateMlxMemoryLimit {
                 effective_mlx_memory_ceiling_bytes,
+                configuration_generation,
             } => {
-                self.update_mlx_memory_limit(effective_mlx_memory_ceiling_bytes, event_writer)
-                    .await?;
+                self.update_mlx_memory_limit(
+                    effective_mlx_memory_ceiling_bytes,
+                    configuration_generation,
+                    event_writer,
+                )
+                .await?;
                 Ok(None)
             }
             WorkerCommand::SwapModel {

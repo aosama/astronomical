@@ -142,6 +142,7 @@ pub(super) fn handle_worker_event(
             minimum_mlx_memory_ceiling_bytes,
             expert_memory_mode,
             mlx_memory_snapshot,
+            expert_residency,
         } => {
             publish_mlx_memory_limit_changed(
                 health_snapshot,
@@ -149,6 +150,7 @@ pub(super) fn handle_worker_event(
                 minimum_mlx_memory_ceiling_bytes,
                 expert_memory_mode,
                 mlx_memory_snapshot,
+                expert_residency,
             );
         }
         WorkerEvent::MlxMemoryLimitRejected {

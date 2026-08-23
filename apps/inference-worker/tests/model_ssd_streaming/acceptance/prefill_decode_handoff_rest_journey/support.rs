@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use super::{
     MAXIMUM_MLX_MEMORY_BYTES, MAXIMUM_OUTPUT_TOKEN_COUNT, PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL,
-    PREFILL_CHUNCK_TOKEN_COUNT,
+    PREFILL_CHUNK_TOKEN_COUNT,
 };
 
 /// Builds realistic tool-control pressure without coupling qualification to one client.
@@ -42,11 +42,9 @@ pub(super) fn write_interaction_config(isolated_worker_home: &Path, model_direct
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": 10,
         "performance_attribution_enabled": true,
-        "mtp_enabled": false,
         "logging": {"level": "debug", "retained_files": 2},
         "chunking": {
-
-            "fixed_prompt_processing_chunk_size_tokens": PREFILL_CHUNCK_TOKEN_COUNT,
+            "fixed_prompt_processing_chunk_size_tokens": PREFILL_CHUNK_TOKEN_COUNT,
             "prefill_graph_submission_layer_interval": PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL,
         },

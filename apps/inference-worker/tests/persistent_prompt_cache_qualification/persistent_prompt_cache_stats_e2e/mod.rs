@@ -11,7 +11,7 @@ use tokio::{
 };
 
 use super::cache_stats_worker_launcher::create_cache_stats_worker_configuration;
-use crate::common::{discovered_model_artifact, single_model_directories};
+use crate::common::discovered_model_artifact;
 
 pub(super) const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const READY_ATTEMPT_LIMIT: u8 = 70;
