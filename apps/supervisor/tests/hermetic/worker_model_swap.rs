@@ -23,7 +23,7 @@ use tokio::time::{Instant, sleep, timeout};
 const DELAYED_COMPLETION_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
     "astronomical/generation-event-before-swap-model";
-const TELEMETRY_BEFORE_SWAP_MODEL_ID: &str = "astronomical/telemetry-before-swap-model";
+pub(super) const TELEMETRY_BEFORE_SWAP_MODEL_ID: &str = "astronomical/telemetry-before-swap-model";
 const IMAGE_MODEL_ID: &str = "astronomical/image-generation-model";
 const INVALID_IMAGE_MODEL_ID: &str = "astronomical/invalid-image-generation-model";
 const DELAYED_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-policy-ack-model";
@@ -291,7 +291,7 @@ async fn should_not_dispatch_an_image_after_disconnect_during_model_swap() {
         .expect("worker should shut down");
 }
 
-async fn launch_idle_worker_fixture() -> WorkerHandle {
+pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
     let worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
@@ -462,7 +462,7 @@ async fn wait_for_ready_worker(worker_handle: &WorkerHandle) {
     }
 }
 
-async fn assert_generation_completed(
+pub(super) async fn assert_generation_completed(
     generation_events: &mut tokio::sync::mpsc::Receiver<ChatGenerationStreamEvent>,
 ) {
     let generation_event = timeout(Duration::from_secs(2), generation_events.recv())
@@ -478,7 +478,7 @@ async fn assert_generation_completed(
     ));
 }
 
-fn chat_command(model_id: &str, request_id: u64) -> ChatGenerationCommand {
+pub(super) fn chat_command(model_id: &str, request_id: u64) -> ChatGenerationCommand {
     ChatGenerationCommand {
         request_id: RequestId::new(request_id),
         model: model_id.to_owned(),

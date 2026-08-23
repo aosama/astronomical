@@ -1,16 +1,18 @@
+//! Repeated OpenCode-shaped REST requests proving worker availability and expert reuse.
+
 use std::{fs, path::Path};
 
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, interval, timeout};
 
-use super::model_artifact_rest_qualification::{
+use crate::model_artifact_qualification::model_artifact_rest_qualification::{
     E2E_TIMEOUT, assert_successful_streaming_chat_response,
     launch_model_artifact_rest_server_for_model_with_memory_limit, post_chat_completion,
     stop_model_artifact_rest_server,
 };
-use super::model_artifact_rest_transport::streamed_model_text_from_chat_response;
+use crate::model_artifact_qualification::model_artifact_rest_transport::streamed_model_text_from_chat_response;
 
-const MODEL_ID: &str = "Qwen3.6-35B-A3B-Fable-Holo3.1-Qwopus-KAT-Coder-C-qx86-hi-mlx";
+const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 32_000_000_000;
 const MAXIMUM_QUALIFICATION_PEAK_MEMORY_BYTES: u64 = 32_320_000_000;
 // This is the last historical logical-copy target, not a physical disk limit.
@@ -28,13 +30,14 @@ const LONG_PROMPT_SOURCE: &str =
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker for an OpenCode-shaped long-context reuse journey"]
-async fn should_keep_the_local_worker_available_through_an_opencode_shaped_rest_journey() {
-    timeout(E2E_TIMEOUT, run_opencode_worker_availability_rest_journey())
+async fn should_keep_the_worker_available_and_reuse_experts_across_repeated_opencode_long_context_requests()
+ {
+    timeout(E2E_TIMEOUT, run_opencode_long_context_reuse_rest_journey())
         .await
         .expect("the OpenCode worker-availability REST journey must finish within 115 seconds");
 }
 
-async fn run_opencode_worker_availability_rest_journey() {
+async fn run_opencode_long_context_reuse_rest_journey() {
     let model_directory = crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
     let isolated_worker_home =
         tempfile::tempdir().expect("the OpenCode qualification worker home should be created");
@@ -61,7 +64,7 @@ async fn run_opencode_worker_availability_rest_journey() {
     let mut finalized_expert_payload_bytes_by_phase = Vec::new();
     for (request_phase_name, request_body) in request_phases {
         eprintln!(
-            "[opencode-worker-availability] status=progress phase={request_phase_name} request_bytes={}",
+            "[opencode-long-context-reuse] status=progress phase={request_phase_name} request_bytes={}",
             request_body.len()
         );
         let chat_response =
@@ -80,7 +83,11 @@ async fn run_opencode_worker_availability_rest_journey() {
             break;
         }
         let ready_response =
-            super::model_artifact_rest_qualification::get_endpoint(server_address, "/ready").await;
+            crate::model_artifact_qualification::model_artifact_rest_qualification::get_endpoint(
+                server_address,
+                "/ready",
+            )
+            .await;
         if !ready_response.starts_with("HTTP/1.1 200 OK") {
             failure_reason = Some(format!(
                 "{request_phase_name} completed, but /ready became unhealthy: {ready_response}"
@@ -100,14 +107,14 @@ async fn run_opencode_worker_availability_rest_journey() {
         }
         finalized_expert_payload_bytes_by_phase.push(finalized_expert_payload_bytes);
         eprintln!(
-            "[opencode-worker-availability] status=progress phase={request_phase_name} worker_ready=true finalized_expert_payload_bytes={finalized_expert_payload_bytes}"
+            "[opencode-long-context-reuse] status=progress phase={request_phase_name} worker_ready=true finalized_expert_payload_bytes={finalized_expert_payload_bytes}"
         );
     }
 
     stop_model_artifact_rest_server(model_artifact_rest_server).await;
 
     if let Some(failure_reason) = failure_reason {
-        panic!("repeatable OpenCode worker-unavailability reproduction: {failure_reason}");
+        panic!("OpenCode long-context reuse journey failed: {failure_reason}");
     }
     assert_eq!(
         finalized_expert_payload_bytes_by_phase.len(),
@@ -115,7 +122,7 @@ async fn run_opencode_worker_availability_rest_journey() {
         "both repeated long-context phases must publish retained expert payload"
     );
     assert_authoritative_paging_attribution(isolated_worker_home.path());
-    eprintln!("[opencode-worker-availability] status=success phases=2 worker_reused=true");
+    eprintln!("[opencode-long-context-reuse] status=success phases=2 worker_reused=true");
 }
 
 fn write_opencode_qualification_config(isolated_worker_home: &Path, model_directory: &Path) {
@@ -128,9 +135,7 @@ fn write_opencode_qualification_config(isolated_worker_home: &Path, model_direct
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": false,
         "performance_attribution_enabled": true,
-        "mtp_enabled": false,
         "chunking": {
-
             "fixed_prompt_processing_chunk_size_tokens": 2_048,
         },
     });
@@ -184,7 +189,7 @@ fn assert_authoritative_paging_attribution(isolated_worker_home: &Path) {
         // what macOS attributes to physical disk service over the whole request.
         // Neither metric is a substitute for request latency or worker health.
         eprintln!(
-            "[opencode-worker-availability] status=attribution phase={request_phase_name} authoritative_route_synchronizations={phase_route_synchronization_count} logical_source_copy_bytes={phase_source_read_byte_count} process_physical_disk_read_bytes={process_physical_disk_read_bytes}"
+            "[opencode-long-context-reuse] status=attribution phase={request_phase_name} authoritative_route_synchronizations={phase_route_synchronization_count} logical_source_copy_bytes={phase_source_read_byte_count} process_physical_disk_read_bytes={process_physical_disk_read_bytes}"
         );
     }
 
@@ -211,7 +216,7 @@ fn assert_authoritative_paging_attribution(isolated_worker_home: &Path) {
     );
 
     eprintln!(
-        "[opencode-worker-availability] status=attribution forward_attempts={forward_attempt_count} authoritative_route_synchronizations={route_synchronization_count} logical_source_copy_bytes={source_read_byte_count} historical_logical_read_reference_bytes={HISTORICAL_LOGICAL_EXPERT_SOURCE_READ_REFERENCE_BYTES} logical_read_variance_bytes={} maximum_peak_memory_bytes={maximum_peak_memory_bytes}",
+        "[opencode-long-context-reuse] status=attribution forward_attempts={forward_attempt_count} authoritative_route_synchronizations={route_synchronization_count} logical_source_copy_bytes={source_read_byte_count} historical_logical_read_reference_bytes={HISTORICAL_LOGICAL_EXPERT_SOURCE_READ_REFERENCE_BYTES} logical_read_variance_bytes={} maximum_peak_memory_bytes={maximum_peak_memory_bytes}",
         i128::from(source_read_byte_count)
             - i128::from(HISTORICAL_LOGICAL_EXPERT_SOURCE_READ_REFERENCE_BYTES)
     );
@@ -231,7 +236,11 @@ fn assert_authoritative_paging_attribution(isolated_worker_home: &Path) {
 
 async fn get_status_document(server_address: std::net::SocketAddr) -> Value {
     let status_response =
-        super::model_artifact_rest_qualification::get_endpoint(server_address, "/v1/status").await;
+        crate::model_artifact_qualification::model_artifact_rest_qualification::get_endpoint(
+            server_address,
+            "/v1/status",
+        )
+        .await;
     let (_, status_response_body) = status_response
         .split_once("\r\n\r\n")
         .expect("the status response should contain HTTP headers");
@@ -277,23 +286,23 @@ async fn run_request_with_progress(
                 ));
             }
             _ = progress_interval.tick() => {
-                let status_response = super::model_artifact_rest_qualification::get_endpoint(
+                let status_response = crate::model_artifact_qualification::model_artifact_rest_qualification::get_endpoint(
                     server_address,
                     "/v1/status",
                 ).await;
                 eprintln!(
-                    "[opencode-worker-availability] status=progress phase={request_phase_name} elapsed_seconds={:.1} status_response={}",
+                    "[opencode-long-context-reuse] status=progress phase={request_phase_name} elapsed_seconds={:.1} status_response={}",
                     request_started_at.elapsed().as_secs_f64(),
                     response_body_preview(&status_response),
                 );
             }
             _ = &mut request_timeout => {
                 request_task.as_mut().abort();
-                let status_response = super::model_artifact_rest_qualification::get_endpoint(
+                let status_response = crate::model_artifact_qualification::model_artifact_rest_qualification::get_endpoint(
                     server_address,
                     "/v1/status",
                 ).await;
-                let ready_response = super::model_artifact_rest_qualification::get_endpoint(
+                let ready_response = crate::model_artifact_qualification::model_artifact_rest_qualification::get_endpoint(
                     server_address,
                     "/ready",
                 ).await;

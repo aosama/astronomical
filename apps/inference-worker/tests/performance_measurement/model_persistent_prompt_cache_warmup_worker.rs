@@ -1,6 +1,8 @@
 use std::{
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -10,7 +12,8 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_supervisor::{
     ActiveRequestProgress, ChatGenerationExecutor, ChatGenerationStreamEvent,
-    GenerationPerformanceLog, ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
+    GenerationPerformanceLog, ResolvedRuntimeConfigResolver, RuntimeModelPolicy, WorkerHandle,
+    WorkerHealthStatus,
 };
 use serde_json::json;
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
@@ -90,7 +93,7 @@ pub(super) async fn run_worker_pass(
     benchmark_started_at: Instant,
     worker_executable_path: PathBuf,
     worker_startup_configuration: WorkerStartupConfiguration,
-    model_directory: &Path,
+    model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     source_document: &str,
     persistent_prompt_cache_warmup_case: &PersistentPromptCacheWarmupCase,
     persistent_prompt_cache_directory: &Path,
@@ -105,8 +108,7 @@ pub(super) async fn run_worker_pass(
         Duration::from_secs(60),
         GenerationPerformanceLog::open(&performance_log_directory)
             .expect("the persistent prompt-cache performance log should open"),
-        crate::common::single_model_directories(MODEL_ID, model_directory),
-        u32::from(persistent_prompt_cache_warmup_case.maximum_output_tokens),
+        model_policy_catalog,
         worker_startup_configuration,
     )
     .await
@@ -147,6 +149,7 @@ pub(super) fn persistent_prompt_cache_enabled_worker_configuration(
     tempfile::TempDir,
     PathBuf,
     PathBuf,
+    Arc<HashMap<String, RuntimeModelPolicy>>,
     WorkerStartupConfiguration,
 ) {
     let production_worker_executable_path =
@@ -177,10 +180,12 @@ pub(super) fn persistent_prompt_cache_enabled_worker_configuration(
     )
     .load()
     .expect("the persistent prompt-cache worker configuration should resolve");
+    let model_policy_catalog = worker_runtime_config.model_policy_catalog.clone();
     (
         isolated_worker_home,
         persistent_prompt_cache_directory,
         PathBuf::from(production_worker_executable_path),
+        model_policy_catalog,
         worker_runtime_config.worker_startup_configuration(),
     )
 }

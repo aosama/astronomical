@@ -2,7 +2,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationOutput, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader,
     ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
-    WorkerMlxMemorySnapshot, decode_command,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -165,6 +165,7 @@ async fn should_round_trip_idle_worker_mlx_memory_ceiling() {
 async fn should_round_trip_update_mlx_memory_limit_command() {
     let worker_command = WorkerCommand::UpdateMlxMemoryLimit {
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
+        configuration_generation: "memory-generation".to_owned(),
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
@@ -191,6 +192,13 @@ async fn should_round_trip_changed_and_rejected_memory_limit_events() {
             minimum_mlx_memory_ceiling_bytes: 24_000_000_000,
             expert_memory_mode: ExpertMemoryMode::Paged,
             mlx_memory_snapshot: None,
+            expert_residency: Some(WorkerExpertResidencySnapshot {
+                total_layer_count: 24,
+                complete_layer_count: 0,
+                complete_layer_payload_bytes: 0,
+                partial_layer_count: 2,
+                partial_layer_payload_bytes: 4_000,
+            }),
         },
         WorkerEvent::MlxMemoryLimitRejected {
             requested_mlx_memory_ceiling_bytes: 20_000_000_000,

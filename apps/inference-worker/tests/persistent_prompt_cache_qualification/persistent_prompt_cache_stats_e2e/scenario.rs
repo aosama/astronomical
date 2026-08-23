@@ -81,6 +81,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         persistent_prompt_cache_directory_path,
         worker_executable_path,
         configured_model_directory,
+        model_policy_catalog,
         worker_startup_configuration,
     ) = create_cache_stats_worker_configuration();
 
@@ -93,8 +94,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         Duration::from_secs(60),
         GenerationPerformanceLog::open(isolated_worker_home.path().join("logs").as_path())
             .expect("performance log should open"),
-        single_model_directories(MODEL_ID, &configured_model_directory),
-        20_480,
+        model_policy_catalog,
         worker_startup_configuration,
     )
     .await

@@ -72,8 +72,8 @@ impl ExpertDataPlaneScenario {
 async fn should_measure_one_layer_generation_expert_data_plane() {
     require_aligned_expert_pack_completion(run_expert_data_plane_measurements(
         ExpertDataPlaneModel {
-            configured_model_directory_name: "Ornith-1.0-35B-8bit",
-            model_id: "mlx-community/Ornith-1.0-35B-8bit",
+            configured_model_directory_name: super::ORNITH_OQ8_MODEL_ID,
+            model_id: super::ORNITH_OQ8_PROVIDER_MODEL_ID,
         },
         &[ExpertDataPlaneScenario::generation()],
     ))
@@ -85,8 +85,8 @@ async fn should_measure_one_layer_generation_expert_data_plane() {
 async fn should_measure_one_layer_prompt_processing_expert_data_plane() {
     require_aligned_expert_pack_completion(run_expert_data_plane_measurements(
         ExpertDataPlaneModel {
-            configured_model_directory_name: "Ornith-1.0-35B-8bit",
-            model_id: "mlx-community/Ornith-1.0-35B-8bit",
+            configured_model_directory_name: super::ORNITH_OQ8_MODEL_ID,
+            model_id: super::ORNITH_OQ8_PROVIDER_MODEL_ID,
         },
         &[ExpertDataPlaneScenario::prompt_processing()],
     ))
@@ -94,12 +94,12 @@ async fn should_measure_one_layer_prompt_processing_expert_data_plane() {
 }
 
 #[tokio::test]
-#[ignore = "measures exact oQ4e generation and prefill data planes in balanced order"]
-async fn should_measure_oq4e_expert_data_plane_in_both_orders() {
+#[ignore = "measures exact oQ6e generation and prefill data planes in balanced order"]
+async fn should_measure_oq6e_expert_data_plane_in_both_orders() {
     require_aligned_expert_pack_completion(run_expert_data_plane_measurements(
         ExpertDataPlaneModel {
-            configured_model_directory_name: "Qwen3.6-35B-A3B-oQ4e-mtp",
-            model_id: "Jundot/Qwen3.6-35B-A3B-oQ4e-mtp",
+            configured_model_directory_name: super::ORNITH_OQ6_MODEL_ID,
+            model_id: super::ORNITH_OQ6_PROVIDER_MODEL_ID,
         },
         &[
             ExpertDataPlaneScenario::generation(),

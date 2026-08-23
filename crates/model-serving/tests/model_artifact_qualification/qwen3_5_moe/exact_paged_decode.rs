@@ -13,7 +13,7 @@ use super::speculative_prefill_qualification_support::prepare_romeo_and_juliet_t
 
 const PROMPT_TOKEN_COUNT: usize = 48;
 const OUTPUT_TOKEN_COUNT: u16 = 32;
-const MODEL_ID: &str = "Ornith-1.0-397B-mlx-4bit";
+const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 const COLD_REQUEST_ID: RequestId = RequestId::new(96_100);
 const WARM_REQUEST_ID: RequestId = RequestId::new(96_101);
 

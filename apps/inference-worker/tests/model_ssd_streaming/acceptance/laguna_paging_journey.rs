@@ -16,15 +16,15 @@ use tokio::time::{Duration, timeout};
 const LIVE_TRANSITION_CHILD_KEY: &str = "ASTRONOMICAL_LAGUNA_MEMORY_ACCEPTANCE_CHILD";
 const CONSTRAINED_STARTUP_CHILD_KEY: &str =
     "ASTRONOMICAL_LAGUNA_CONSTRAINED_STARTUP_ACCEPTANCE_CHILD";
-const LIVE_TRANSITION_TEST_NAME: &str = "memory_management_acceptance::laguna_centralized_memory_journey::should_preserve_output_across_resident_to_paged_live_ceiling_transition";
-const CONSTRAINED_STARTUP_TEST_NAME: &str = "memory_management_acceptance::laguna_centralized_memory_journey::should_generate_when_the_startup_ceiling_is_below_weight_files_on_disk";
+const LIVE_TRANSITION_TEST_NAME: &str = "model_ssd_streaming::laguna_paging_journey::should_preserve_laguna_output_across_resident_to_model_ssd_streaming_transition";
+const CONSTRAINED_STARTUP_TEST_NAME: &str = "model_ssd_streaming::laguna_paging_journey::should_stream_laguna_from_ssd_when_the_ceiling_is_below_weight_files";
 const LAGUNA_XS_PUBLIC_MODEL_ID: &str = "Laguna-XS-2.1-oQ8e";
 const ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 #[tokio::test]
 #[ignore = "loads configured Laguna XS and proves centralized live-ceiling demotion parity"]
-async fn should_preserve_output_across_resident_to_paged_live_ceiling_transition() {
+async fn should_preserve_laguna_output_across_resident_to_model_ssd_streaming_transition() {
     if std::env::var_os(LIVE_TRANSITION_CHILD_KEY).is_some() {
         run_real_laguna_memory_journey();
         return;
@@ -34,7 +34,7 @@ async fn should_preserve_output_across_resident_to_paged_live_ceiling_transition
 
 #[tokio::test]
 #[ignore = "loads configured Laguna XS below its weight-file payload and generates through paging"]
-async fn should_generate_when_the_startup_ceiling_is_below_weight_files_on_disk() {
+async fn should_stream_laguna_from_ssd_when_the_ceiling_is_below_weight_files() {
     if std::env::var_os(CONSTRAINED_STARTUP_CHILD_KEY).is_some() {
         run_constrained_startup_journey();
         return;

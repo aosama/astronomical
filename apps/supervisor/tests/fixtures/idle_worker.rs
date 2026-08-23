@@ -187,6 +187,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
             }
             WorkerCommand::UpdateMlxMemoryLimit {
                 effective_mlx_memory_ceiling_bytes,
+                configuration_generation,
             } => {
                 if effective_mlx_memory_ceiling_bytes == 30_000_000_000 {
                     continue;
@@ -209,8 +210,12 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         minimum_mlx_memory_ceiling_bytes: 1,
                         expert_memory_mode: astronomical_ipc_protocol::ExpertMemoryMode::Resident,
                         mlx_memory_snapshot: None,
+                        expert_residency: None,
                     })
                     .await?;
+                if let Some(runtime_configuration) = acknowledged_runtime_configuration.as_mut() {
+                    runtime_configuration.configuration_generation = configuration_generation;
+                }
             }
             WorkerCommand::ClearPromptCache { model_id } => {
                 let acknowledged_model_id =

@@ -136,7 +136,7 @@ async fn should_apply_a_memory_limit_immediately_when_worker_is_idle() {
 
     assert_eq!(
         worker_handle
-            .update_mlx_memory_limit(32_000_000_000)
+            .update_mlx_memory_limit(32_000_000_000, "memory-generation".to_owned())
             .await
             .expect("the idle memory limit should apply"),
         MlxMemoryLimitUpdateOutcome::Applied
@@ -180,7 +180,8 @@ async fn should_contain_a_worker_that_does_not_acknowledge_a_memory_limit_update
 
     let update_error = timeout(
         Duration::from_secs(2),
-        worker_handle.update_mlx_memory_limit(30_000_000_000),
+        worker_handle
+            .update_mlx_memory_limit(30_000_000_000, "timeout-memory-generation".to_owned()),
     )
     .await
     .expect("the supervisor should bound the acknowledgement wait")

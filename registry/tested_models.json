@@ -1,9 +1,9 @@
 [
   {
-    "model_id": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
-    "revision": "ce62c23d34b91d84f838e0b292d517dbe4b9b60f",
-    "tested_at": "2025-07-19",
-    "notes": "Original certified model. 5 shards, separate vision sidecar."
+    "model_id": "scottlowry/Ornith-1.5-35B-A3B-oQ6e-mtp",
+    "revision": "571c2bfc3550805d9b97fabec1351c149744d7a9",
+    "tested_at": "2026-08-23",
+    "notes": "Current sparse qualification fixture. Six indexed shards with vision and MTP metadata; model SSD-streaming and live-memory-ceiling journeys passed."
   },
   {
     "model_id": "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",

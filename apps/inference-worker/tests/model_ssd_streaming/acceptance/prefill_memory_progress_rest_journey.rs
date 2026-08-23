@@ -8,10 +8,9 @@
 //! with different active-memory bytes appear while the model processes
 //! prompt tokens from zero through at least 2,000.
 //!
-//! The model Qwen3.6-35B-A3B-Fable-Holo3.1-Qwopus-KAT-Coder-C-qx86-hi-mlx
-//! is a mixture-of-experts architecture. Its 2-bit quantized experts are
-//! paged from SSD under a 32 GB ceiling, so each prefill chunk brings new
-//! expert pages into MLX memory. That makes the active-memory attribution
+//! Ornith 1.5 35B A3B oQ6e MTP is a mixture-of-experts architecture.
+//! Its six-bit quantized experts are paged from SSD under a 32 GB ceiling.
+//! Each prefill chunk brings new expert pages into MLX memory, making attribution
 //! grow visibly chunk by chunk.
 //!
 //! Acceptance criteria:
@@ -36,7 +35,7 @@ use crate::common::real_model_rest_server::{
     JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 
-const MODEL_ID: &str = "Qwen3.6-35B-A3B-Fable-Holo3.1-Qwopus-KAT-Coder-C-qx86-hi-mlx";
+const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
 // This ceiling defines a reproducible acceptance cell only. Production code
 // must not hardwire it or assume this model always pages experts.
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 32_000_000_000;
@@ -47,11 +46,11 @@ const THINKING_BUDGET_TOKEN_COUNT: u32 = 128;
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 const MINIMUM_PROCESSED_TOKENS_FOR_PROGRESS: u64 = 2_000;
 const ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept MLX memory progress during prompt processing"]
-async fn should_observe_distinct_mlx_memory_values_during_prompt_processing() {
+async fn should_report_changing_bounded_mlx_memory_during_prefill() {
     timeout(JOURNEY_TIMEOUT, run_mlx_memory_progress_rest_journey())
         .await
         .expect("the MLX memory progress REST journey must finish within 115 seconds");
@@ -332,13 +331,11 @@ fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) 
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": false,
         "performance_attribution_enabled": true,
-        "mtp_enabled": false,
         "logging": {
             "level": "debug",
             "retained_files": 2,
         },
         "chunking": {
-
             "fixed_prompt_processing_chunk_size_tokens": 2_048,
         },
     });

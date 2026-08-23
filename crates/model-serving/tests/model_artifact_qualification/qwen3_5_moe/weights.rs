@@ -5,7 +5,7 @@ use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Weights};
 use astronomical_runtime_integration::MlxRuntime;
 
 #[tokio::test]
-#[ignore = "requires model_directories to discover Ornith-1.0-35B-OptiQ-4bit"]
+#[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 async fn should_bind_only_resident_language_tensors_for_automatic_sparse_expert_paging() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_ornith_model_artifact_directory();

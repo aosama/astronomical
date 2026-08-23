@@ -210,6 +210,8 @@ pub enum WorkerCommand {
     UpdateMlxMemoryLimit {
         /// Validated effective MLX ceiling in exact bytes.
         effective_mlx_memory_ceiling_bytes: u64,
+        /// Configuration generation that owns the accepted memory policy.
+        configuration_generation: String,
     },
     /// Requests the worker delete the persistent prompt-cache footprint on SSD.
     ///
@@ -256,6 +258,8 @@ pub enum WorkerEvent {
         minimum_mlx_memory_ceiling_bytes: u64,
         expert_memory_mode: ExpertMemoryMode,
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+        /// Sparse-expert ownership after the adjustment, when the model has experts.
+        expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
     /// Reports that an MLX memory-ceiling adjustment was rejected without mutation.
     MlxMemoryLimitRejected {

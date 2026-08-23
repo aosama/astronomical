@@ -70,13 +70,7 @@ pub(crate) fn publish_worker_expert_residency(
 ) {
     publish_expert_residency(
         health_snapshot,
-        ExpertResidencySnapshot {
-            total_layer_count: expert_residency.total_layer_count,
-            complete_layer_count: expert_residency.complete_layer_count,
-            complete_layer_payload_bytes: expert_residency.complete_layer_payload_bytes,
-            partial_layer_count: expert_residency.partial_layer_count,
-            partial_layer_payload_bytes: expert_residency.partial_layer_payload_bytes,
-        },
+        ExpertResidencySnapshot::from(expert_residency),
     );
 }
 
@@ -130,6 +124,7 @@ pub(crate) fn publish_mlx_memory_limit_changed(
     minimum_mlx_memory_ceiling_bytes: u64,
     expert_memory_mode: ExpertMemoryMode,
     mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    expert_residency: Option<WorkerExpertResidencySnapshot>,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes;
@@ -150,6 +145,9 @@ pub(crate) fn publish_mlx_memory_limit_changed(
             .as_ref()
             .map(|_| expert_memory_mode);
         worker_health_snapshot.latest_mlx_memory_snapshot = mlx_memory_snapshot;
+        if let Some(expert_residency) = expert_residency {
+            worker_health_snapshot.expert_residency = Some(expert_residency.into());
+        }
     }
 }
 

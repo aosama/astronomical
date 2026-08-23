@@ -23,6 +23,7 @@ pub enum MlxMemoryLimitUpdateOutcome {
 pub(super) async fn apply_mlx_memory_limit(
     worker_process: &mut WorkerProcess,
     effective_mlx_memory_ceiling_bytes: u64,
+    configuration_generation: String,
     memory_limit_update_timeout: Duration,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     is_ready: &mut bool,
@@ -32,7 +33,7 @@ pub(super) async fn apply_mlx_memory_limit(
 ) -> Result<MlxMemoryLimitUpdateOutcome, WorkerControlError> {
     let update_outcome = timeout(memory_limit_update_timeout, async {
         worker_process
-            .update_mlx_memory_limit(effective_mlx_memory_ceiling_bytes)
+            .update_mlx_memory_limit(effective_mlx_memory_ceiling_bytes, configuration_generation)
             .await?;
         loop {
             let worker_event = worker_process

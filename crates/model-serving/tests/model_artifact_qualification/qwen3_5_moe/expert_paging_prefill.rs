@@ -223,7 +223,7 @@ pub(crate) fn prepare_reproduced_prompt_token_ids() -> Vec<u32> {
         .expect("the Ornith tokenizer should load from validated model metadata");
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(9_001),
-        model: "Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID.to_owned(),
         messages: vec![ChatMessage::User {
             content: "so what folder are we in?".to_owned(),
             images: Vec::new(),

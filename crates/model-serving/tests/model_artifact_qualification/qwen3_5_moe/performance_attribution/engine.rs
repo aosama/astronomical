@@ -32,7 +32,7 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
 ) -> (Qwen3_5Engine, Vec<u32>) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
-        .expect("the Qwen3.6 OptiQ artifact should validate before benchmark loading");
+        .expect("the configured Ornith artifact should validate before benchmark loading");
     let end_of_sequence_token_ids = validated_artifact
         .config()
         .end_of_sequence_token_ids()

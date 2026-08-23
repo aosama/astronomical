@@ -242,7 +242,7 @@ fn representative_visual_request_with_optional_later_image(
             .prepare_chat(
                 &ChatGenerationCommand {
                     request_id,
-                    model: "Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+                    model: crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID.to_owned(),
                     messages,
                     tools: Vec::new(),
                     tool_choice: ChatToolChoice::None,

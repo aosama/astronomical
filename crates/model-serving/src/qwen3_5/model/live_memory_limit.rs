@@ -2,8 +2,8 @@
 //!
 //! Lowering first demotes a complete resident owner when necessary, then reclaims
 //! retained pages before MLX enforces the smaller limit. Raising lets MLX accept
-//! capacity before Rust publishes a larger read-through retention budget; it does
-//! not scan expert storage. A failed transition restores the pager's prior ceiling.
+//! capacity before Rust publishes a larger budget and atomically attempts complete
+//! residency. A failed raised transition restores both native and Rust ceilings.
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
@@ -70,13 +70,21 @@ impl Qwen3_5Model {
             )
         })?;
         let expert_statistics = self.expert_weight_memory_cache_statistics();
+        let complete_experts_are_resident = self.resident_expert_weights.is_some();
+        let complete_residency_required_headroom_bytes = if complete_experts_are_resident {
+            self.required_complete_expert_residency_headroom_bytes()
+                .map_err(InferenceEngineError::from)?
+        } else {
+            0
+        };
         let ceiling_change_decision = MemoryCeilingChangeRequirements {
             current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
             requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
             minimum_safe_ceiling_bytes: minimum_mlx_memory_ceiling_bytes,
             current_active_memory_bytes,
             retained_paged_expert_payload_bytes: expert_statistics.resident_payload_byte_count,
-            complete_experts_are_resident: self.resident_expert_weights.is_some(),
+            complete_experts_are_resident,
+            complete_residency_required_headroom_bytes,
         }
         .decide();
         if let MemoryCeilingChangeDecision::Reject { .. } = ceiling_change_decision {
@@ -153,14 +161,37 @@ impl Qwen3_5Model {
             ));
         }
         if !is_lowering_mlx_memory_ceiling {
-            // Once MLX accepts a larger ceiling, let Rust policy derive a
-            // larger retention target from fresh counters. This never prewarms
-            // pages; later router evidence repopulates capacity naturally.
-            self.update_expert_residency_for_live_mlx_memory_limit(
+            if let Err(policy_update_error) = self
+                .update_expert_residency_for_live_mlx_memory_limit(
+                    requested_mlx_memory_ceiling_bytes,
+                )
+            {
+                return Err(self.restore_failed_raised_memory_limit(
+                    current_mlx_memory_limits,
+                    previous_expert_paging_memory_ceiling_bytes,
+                    policy_update_error,
+                ));
+            }
+            let mut transition_performance_attribution = PerformanceAttribution::disabled();
+            let promotion_outcome = match self.try_promote_experts_to_resident(
+                Qwen3_5ExpertResidencyTransitionReason::CeilingRaise,
+                &mut transition_performance_attribution,
+            ) {
+                Ok(promotion_outcome) => promotion_outcome,
+                Err(promotion_error) => {
+                    return Err(self.restore_failed_raised_memory_limit(
+                        current_mlx_memory_limits,
+                        previous_expert_paging_memory_ceiling_bytes,
+                        InferenceEngineError::from(promotion_error),
+                    ));
+                }
+            };
+            tracing::info!(
                 requested_mlx_memory_ceiling_bytes,
-            )?;
-            // A larger ceiling publishes capacity only. Future mandatory reads
-            // populate it without a synchronous whole-model source scan.
+                ?promotion_outcome,
+                expert_memory_mode = ?self.expert_memory_mode(),
+                "completed expert residency work for raised MLX memory ceiling"
+            );
         }
         Ok((
             minimum_mlx_memory_ceiling_bytes,
@@ -241,5 +272,28 @@ impl Qwen3_5Model {
             self.update_expert_residency_for_live_mlx_memory_limit(previous_memory_ceiling_bytes)?;
         }
         Ok(())
+    }
+
+    fn restore_failed_raised_memory_limit(
+        &mut self,
+        previous_mlx_memory_limits: MlxMemoryLimits,
+        previous_expert_paging_memory_ceiling_bytes: Option<u64>,
+        transition_error: InferenceEngineError,
+    ) -> InferenceEngineError {
+        let policy_restore_result =
+            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes);
+        let runtime_restore_result = self
+            .runtime
+            .update_memory_limits(previous_mlx_memory_limits);
+        match (policy_restore_result, runtime_restore_result) {
+            (Ok(()), Ok(())) => transition_error,
+            (policy_restore_result, runtime_restore_result) => {
+                super::super::inference_execution::fatal_engine_error(format!(
+                    "raised MLX memory transition failed and rollback was incomplete: transition_error={transition_error}; policy_restore_error={:?}; runtime_restore_error={:?}",
+                    policy_restore_result.err(),
+                    runtime_restore_result.err(),
+                ))
+            }
+        }
     }
 }

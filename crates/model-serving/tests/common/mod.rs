@@ -116,6 +116,14 @@ const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
 #[allow(dead_code)]
 const MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Current large sparse artifact used by real-model qualification boundaries.
+#[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
+pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
+
+/// Larger sibling used when a qualification must exercise model replacement.
+#[allow(dead_code)] // Used only by the explicit MLX memory-contract boundary.
+pub(crate) const ORNITH_MODEL_SWAP_SOURCE_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ8e-mtp";
+
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) const DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES: usize = 512 * 1024 * 1024;
@@ -223,9 +231,7 @@ async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn configured_ornith_model_artifact_directory() -> PathBuf {
-    configured_model_artifact_directory_by_id(
-        astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-    )
+    configured_model_artifact_directory_by_id(ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID)
 }
 
 #[cfg(feature = "direct-mlx")]
