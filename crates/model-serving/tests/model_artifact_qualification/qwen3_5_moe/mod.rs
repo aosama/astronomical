@@ -161,7 +161,7 @@ fn configured_smallest_depth_one_mtp_model_artifact_directory() -> std::path::Pa
 }
 
 fn configured_depth_one_mtp_model_artifacts() -> Vec<(u64, String, std::path::PathBuf)> {
-    use astronomical_config::{AstronomicalConfig, discover_models};
+    use astronomical_config::{AstronomicalConfig, ModelCapabilities, discover_models};
     use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
 
     let astronomical_config = AstronomicalConfig::load_from_development_location()
@@ -174,8 +174,14 @@ fn configured_depth_one_mtp_model_artifacts() -> Vec<(u64, String, std::path::Pa
     discovered_models
         .into_iter()
         .filter_map(|discovered_model| {
+            let ModelCapabilities::Chat(chat_capabilities) = &discovered_model.capabilities else {
+                return None;
+            };
             let validated_artifact = Qwen3_5ArtifactValidator::new()
-                .validate(&discovered_model.model_directory, 20_480)
+                .validate(
+                    &discovered_model.model_directory,
+                    chat_capabilities.max_output_tokens,
+                )
                 .ok()?;
             (validated_artifact.config().feed_forward_architecture()
                 == Qwen3_5FeedForwardArchitecture::MixtureOfExperts
@@ -196,16 +202,29 @@ fn configured_depth_one_mtp_model_artifacts() -> Vec<(u64, String, std::path::Pa
 fn configured_speculative_prefill_draft_model_artifact(
     target_model_directory: &std::path::Path,
 ) -> (std::path::PathBuf, String) {
-    use astronomical_config::{AstronomicalConfig, discover_models};
+    use astronomical_config::{AstronomicalConfig, ModelCapabilities, discover_models};
     use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 
     let astronomical_config = AstronomicalConfig::load_from_development_location().expect(
         "the standard Astronomical configuration should load for SpecPrefill qualification",
     );
+    let discovered_models = discover_models(astronomical_config.model_directories())
+        .expect("configured model discovery should complete for SpecPrefill qualification")
+        .into_iter()
+        .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
+        .collect::<Vec<_>>();
+    let discovered_target_model = discovered_models
+        .iter()
+        .find(|discovered_model| discovered_model.model_directory == target_model_directory)
+        .expect("the SpecPrefill target directory should retain its discovered identity");
+    let ModelCapabilities::Chat(target_chat_capabilities) = &discovered_target_model.capabilities
+    else {
+        panic!("the SpecPrefill target should be a discovered chat model");
+    };
     let target_artifact = Qwen3_5ArtifactValidator::new()
         .validate(
             target_model_directory,
-            astronomical_config.max_output_tokens(),
+            target_chat_capabilities.max_output_tokens,
         )
         .expect("the configured SpecPrefill target should validate");
     let target_token_identifier_mapping_digest = Qwen3_5Tokenizer::token_identifier_mapping_digest(
@@ -216,17 +235,18 @@ fn configured_speculative_prefill_draft_model_artifact(
     .expect("the configured SpecPrefill target tokenizer mapping should digest");
     let maximum_draft_payload_bytes = (target_artifact.total_payload_bytes() / 10)
         .min(MAXIMUM_SPECULATIVE_PREFILL_DRAFT_PAYLOAD_BYTES);
-    let draft_model_candidates = discover_models(astronomical_config.model_directories())
-    .expect("configured model discovery should complete for SpecPrefill qualification")
+    let draft_model_candidates = discovered_models
     .into_iter()
-    .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
     .filter_map(|discovered_model| {
         if discovered_model.model_directory == target_model_directory {
             return None;
         }
+        let ModelCapabilities::Chat(draft_chat_capabilities) = &discovered_model.capabilities else {
+            return None;
+        };
         let draft_artifact = match Qwen3_5ArtifactValidator::new().validate(
                 &discovered_model.model_directory,
-                astronomical_config.max_output_tokens(),
+                draft_chat_capabilities.max_output_tokens,
             ) {
                 Ok(draft_artifact) => draft_artifact,
                 Err(artifact_validation_error) => {

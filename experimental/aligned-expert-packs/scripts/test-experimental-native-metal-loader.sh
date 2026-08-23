@@ -85,6 +85,7 @@ main() {
         -B "${NATIVE_BUILD_DIRECTORY}" \
         -DCMAKE_BUILD_TYPE=Release \
         -DASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS=ON \
+        -DASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS_TESTS=ON \
         "-DCMAKE_C_COMPILER_LAUNCHER=${compiler_launcher_path}" \
         "-DCMAKE_CXX_COMPILER_LAUNCHER=${compiler_launcher_path}"
     run_step build cmake \

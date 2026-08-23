@@ -57,6 +57,22 @@ int astronomical_metal_expert_loader_start(
     astronomical_metal_expert_loader_completion_callback completion_callback,
     astronomical_metal_expert_loader_release_callback release_callback);
 
+#ifdef ASTRONOMICAL_METAL_EXPERT_LOADER_TESTING
+int astronomical_metal_expert_loader_start_with_async_failure(
+    const char* source_file_path,
+    const astronomical_metal_expert_loader_output_tensor* output_tensors,
+    size_t output_tensor_count,
+    const astronomical_metal_expert_loader_load_range* load_ranges,
+    size_t load_range_count,
+    mlx_stream target_gpu_stream,
+    mlx_array* output_arrays,
+    astronomical_metal_expert_loader_handle** output_handle,
+    astronomical_metal_expert_loader_metrics* output_submission_metrics,
+    void* completion_callback_context,
+    astronomical_metal_expert_loader_completion_callback completion_callback,
+    astronomical_metal_expert_loader_release_callback release_callback);
+#endif
+
 int astronomical_metal_expert_loader_wait(
     astronomical_metal_expert_loader_handle* load_handle,
     astronomical_metal_expert_loader_metrics* output_metrics);
