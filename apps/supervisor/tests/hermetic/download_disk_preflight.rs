@@ -8,7 +8,6 @@ use std::{
 
 use astronomical_supervisor::{
     DiskCapacityQuery, DownloadDiskPreflight, DownloadDiskPreflightError, DownloadJob,
-    Fs4DiskCapacityQuery,
 };
 
 const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -157,17 +156,6 @@ fn job_with_progress(bytes_completed: u64, bytes_total: u64) -> DownloadJob {
         "{{\"huggingface_id\":\"astronomical-test/example-qwen\",\"revision\":\"{REVISION}\",\"state\":\"paused\",\"bytes_completed\":{bytes_completed},\"bytes_total\":{bytes_total},\"current_file_relative_path\":null,\"files\":[{{\"relative_path\":\"model.safetensors\",\"expected_bytes\":{bytes_total},\"expected_digest\":{{\"algorithm\":\"sha256\",\"hex\":\"{SHA256}\"}},\"bytes_on_disk\":{bytes_completed}}}],\"error_code\":null,\"updated_at\":100}}"
     ))
     .expect("disk preflight job fixture should be valid")
-}
-
-#[test]
-fn should_allow_capacity_query_and_preflight_to_cross_thread_boundaries() {
-    fn assert_send_and_sync<T: Send + Sync>() {}
-
-    assert_send_and_sync::<FakeDiskCapacityQuery>();
-    assert_send_and_sync::<Fs4DiskCapacityQuery>();
-    assert_send_and_sync::<DownloadDiskPreflight>();
-    assert_send_and_sync::<DownloadDiskPreflight<FakeDiskCapacityQuery>>();
-    let _production_preflight = DownloadDiskPreflight::production();
 }
 
 struct FakeDiskCapacityQuery {

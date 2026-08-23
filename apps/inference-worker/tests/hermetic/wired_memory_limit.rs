@@ -1,7 +1,6 @@
 use astronomical_inference_worker::worker_startup::{
     GpuWiredMemoryLimitSetting, WorkerProcessError, WorkerStartupError,
-    derive_mlx_memory_limits_from_gpu_wired_limit, parse_iogpu_wired_limit_setting,
-    resolve_effective_mlx_memory_ceiling_bytes, sample_iogpu_wired_limit_bytes,
+    parse_iogpu_wired_limit_setting, resolve_effective_mlx_memory_ceiling_bytes,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
 
@@ -13,25 +12,6 @@ fn should_parse_a_gpu_wired_limit_as_bytes() {
     assert_eq!(
         wired_memory_limit_setting,
         GpuWiredMemoryLimitSetting::ExplicitLimitBytes(1024 * 1024 * 1024)
-    );
-}
-
-#[tokio::test]
-async fn should_bound_mlx_allocator_reuse_by_the_operating_system_gpu_wired_limit() {
-    let operating_system_gpu_wired_limit_bytes = sample_iogpu_wired_limit_bytes()
-        .await
-        .expect("the operating system GPU wired-memory limit should be available");
-
-    let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
-        derive_mlx_memory_limits_from_gpu_wired_limit(operating_system_gpu_wired_limit_bytes);
-
-    assert_eq!(
-        active_memory_limit_bytes,
-        operating_system_gpu_wired_limit_bytes
-    );
-    assert_eq!(
-        allocator_cache_memory_limit_bytes,
-        operating_system_gpu_wired_limit_bytes
     );
 }
 

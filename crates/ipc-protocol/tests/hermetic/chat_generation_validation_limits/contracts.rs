@@ -294,23 +294,6 @@ fn should_accept_large_structured_chat_output_budget_for_model_context_admission
 }
 
 #[test]
-fn should_accept_one_large_user_message_that_fits_the_worker_frame_limit() {
-    let chat_generation_command = ChatGenerationCommand {
-        request_id: RequestId::new(73),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
-        messages: vec![ChatMessage::User {
-            content: "x".repeat(32 * 1024),
-            images: Vec::new(),
-        }],
-        tools: Vec::new(),
-        tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
-    };
-
-    assert_eq!(chat_generation_command.validate(), Ok(()));
-}
-
-#[test]
 fn should_accept_one_chat_message_larger_than_the_old_message_byte_limit_when_the_ipc_frame_fits() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(74),

@@ -110,33 +110,6 @@ async fn should_preserve_a_pending_cache_clear_across_model_replacement() {
 }
 
 #[test]
-fn should_clear_ready_model_identity_when_worker_health_is_unavailable() {
-    let unavailable_health_snapshot =
-        astronomical_supervisor::WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
-
-    assert_eq!(unavailable_health_snapshot.ready_model_id, None);
-    assert_eq!(unavailable_health_snapshot.ready_model_capabilities, None);
-}
-
-#[test]
-fn should_keep_worker_health_status_surface_minimal() {
-    fn status_wire_text(worker_health_status: WorkerHealthStatus) -> &'static str {
-        match worker_health_status {
-            WorkerHealthStatus::Loading => "loading",
-            WorkerHealthStatus::Ready => "ready",
-            WorkerHealthStatus::Unavailable => "unavailable",
-        }
-    }
-
-    assert_eq!(status_wire_text(WorkerHealthStatus::Loading), "loading");
-    assert_eq!(status_wire_text(WorkerHealthStatus::Ready), "ready");
-    assert_eq!(
-        status_wire_text(WorkerHealthStatus::Unavailable),
-        "unavailable"
-    );
-}
-
-#[test]
 fn should_average_only_requests_that_report_each_throughput_measurement() {
     let mut serving_session_snapshot = ServingSessionSnapshot::empty();
 

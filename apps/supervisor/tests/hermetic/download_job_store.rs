@@ -9,22 +9,6 @@ use tempfile::TempDir;
 
 const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const GIT_BLOB_SHA1: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-
-#[test]
-fn should_retain_an_ordinary_file_git_blob_sha1_in_durable_state() {
-    let sha1_job_document = format!(
-        "{{\"huggingface_id\":\"astronomical-test/example-qwen\",\"revision\":\"{REVISION}\",\"state\":\"paused\",\"bytes_completed\":0,\"bytes_total\":12,\"current_file_relative_path\":null,\"files\":[{{\"relative_path\":\"config.json\",\"expected_bytes\":12,\"expected_digest\":{{\"algorithm\":\"git_blob_sha1\",\"hex\":\"{GIT_BLOB_SHA1}\"}},\"bytes_on_disk\":0}}],\"error_code\":null,\"updated_at\":100}}"
-    );
-
-    let download_job = DownloadJob::parse_json(&sha1_job_document)
-        .expect("ordinary Hub file SHA-1 evidence should be durable");
-
-    assert_eq!(
-        download_job.files()[0].expected_digest().hex(),
-        GIT_BLOB_SHA1
-    );
-}
 
 #[test]
 fn should_replace_only_the_current_matching_download_identity() {

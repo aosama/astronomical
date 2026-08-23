@@ -355,26 +355,6 @@ pub enum GeneratedToken {
 }
 
 impl GeneratedToken {
-    /// Replaces mode metadata after request finalization changes expert residency.
-    #[must_use]
-    pub fn with_expert_memory_mode(
-        mut self,
-        final_expert_memory_mode: Option<ExpertMemoryMode>,
-    ) -> Self {
-        match &mut self {
-            Self::TokenId {
-                expert_memory_mode, ..
-            }
-            | Self::PrefillProgress {
-                expert_memory_mode, ..
-            } => *expert_memory_mode = final_expert_memory_mode,
-            Self::PromptProcessingPhaseStarted { .. }
-            | Self::GenerationPreparationStarted { .. }
-            | Self::EndOfSequence => {}
-        }
-        self
-    }
-
     /// Attaches final post-cleanup state to the terminal generated token.
     #[must_use]
     pub fn with_generation_finalization(

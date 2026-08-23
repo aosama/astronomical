@@ -93,7 +93,7 @@ fn initialize_tracing(
     let logging_config = user_config.logging()?;
     std::fs::create_dir_all(logging_config.directory()).map_err(DaemonError::CreateLogDirectory)?;
     let file_appender = tracing_appender::rolling::Builder::new()
-        .rotation(astronomical_supervisor::astronomical_log_rotation())
+        .rotation(tracing_appender::rolling::Rotation::HOURLY)
         .filename_prefix("supervisor")
         .filename_suffix("log")
         .max_log_files(logging_config.retained_files())

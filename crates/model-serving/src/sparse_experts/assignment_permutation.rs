@@ -40,9 +40,3 @@ pub fn invert_assignment_order(sorted_order: &[u32]) -> Result<Vec<u32>, SparseE
     }
     Ok(inverse_order)
 }
-
-/// Returns whether gathered matrix multiplication may pass `sorted_indices=true`.
-#[must_use]
-pub const fn gathered_indices_use_sorted_contract(assignments_were_sorted: bool) -> bool {
-    assignments_were_sorted
-}
