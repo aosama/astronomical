@@ -14,17 +14,28 @@ async fn should_complete_persistent_speculative_prefill_when_keep_percentage_is_
         let target_model_directory = crate::common::configured_ornith_model_artifact_directory();
         let astronomical_config = AstronomicalConfig::load_from_development_location()
             .expect("the standard Astronomical configuration should load");
-        let configured_speculative_prefill = astronomical_config
+        let target_model_id = astronomical_model_serving::ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID;
+        let discovered_target_model = crate::common::configured_discovered_model_by_id(
+            &astronomical_config,
+            target_model_id,
+        );
+        let target_chat_capabilities =
+            crate::common::discovered_chat_capabilities(&discovered_target_model);
+        let resolved_target_config = astronomical_config
+            .resolved_model_config(target_model_id, target_chat_capabilities.context_window)
+            .expect("the configured target model policy should resolve");
+        let configured_speculative_prefill = resolved_target_config
             .speculative_prefill()
             .expect("the configured SpecPrefill policy should resolve");
         let draft_model_id = configured_speculative_prefill
             .draft_model_id()
             .expect("the configured SpecPrefill policy should name a drafter")
             .to_owned();
-        let draft_model_directory = astronomical_config
-            .find_configured_model_directory_by_id(&draft_model_id)
-            .expect("configured drafter model discovery should complete")
-            .expect("the configured drafter should be available");
+        let draft_model_directory = crate::common::configured_discovered_model_by_id(
+            &astronomical_config,
+            &draft_model_id,
+        )
+        .model_directory;
         let representative_prompt = prepare_representative_prompt(&target_model_directory);
         let mlx_memory_limits =
             crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
