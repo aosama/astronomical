@@ -1,14 +1,6 @@
 // This validator owns the repository's pull-request-to-issue contract. Keeping
 // the policy pure makes every contributor-facing failure reproducible locally.
 
-const REQUIRED_ISSUE_SECTIONS = [
-    "Goal",
-    "Evidence",
-    "Scope",
-    "Constraints",
-    "Acceptance criteria",
-];
-
 function removeHtmlComments(markdown) {
     return markdown.replace(/<!--[\s\S]*?-->/g, "");
 }
@@ -47,39 +39,6 @@ function extractLinkedIssue(pullRequestBody) {
     };
 }
 
-function findIncompleteIssueSections(issueBody) {
-    const issueBodyWithoutComments = removeHtmlComments(String(issueBody ?? ""));
-    const sectionContentByNormalizedHeading = new Map();
-    let activeHeading = null;
-
-    for (const line of issueBodyWithoutComments.split(/\r?\n/)) {
-        const headingMatch = /^#{2,6}\s+(.+?)\s*#*\s*$/.exec(line.trim());
-        if (headingMatch !== null) {
-            activeHeading = headingMatch[1].trim().toLocaleLowerCase("en-US");
-            if (!sectionContentByNormalizedHeading.has(activeHeading)) {
-                sectionContentByNormalizedHeading.set(activeHeading, []);
-            }
-            continue;
-        }
-
-        if (activeHeading !== null) {
-            sectionContentByNormalizedHeading.get(activeHeading).push(line);
-        }
-    }
-
-    return REQUIRED_ISSUE_SECTIONS.filter((requiredHeading) => {
-        const sectionLines = sectionContentByNormalizedHeading.get(
-            requiredHeading.toLocaleLowerCase("en-US"),
-        );
-        if (sectionLines === undefined) {
-            return true;
-        }
-
-        const sectionContent = sectionLines.join("\n").trim();
-        return sectionContent.length === 0 || sectionContent === "_No response_";
-    });
-}
-
 async function validatePullRequestIssue({ pullRequestBody, loadIssue }) {
     const { relationship, issueNumber } = extractLinkedIssue(pullRequestBody);
 
@@ -96,17 +55,6 @@ async function validatePullRequestIssue({ pullRequestBody, loadIssue }) {
     if (linkedIssue.pull_request !== undefined) {
         throw new Error(`#${issueNumber} identifies a pull request, not an issue.`);
     }
-    if (linkedIssue.state !== "open") {
-        throw new Error(`Issue #${issueNumber} must remain open until this pull request merges.`);
-    }
-
-    const incompleteSections = findIncompleteIssueSections(linkedIssue.body);
-    if (incompleteSections.length > 0) {
-        throw new Error(
-            `Please complete these issue sections: ${incompleteSections.join(", ")}.`,
-        );
-    }
-
     return {
         issueNumber,
         relationship,

@@ -80,7 +80,7 @@ jobs:
                 status: "completed",
                 conclusion: "success",
                 output: {
-                  title: `Issue #${compliance.issueNumber} satisfies the contribution contract`,
+                  title: `Pull request links issue #${compliance.issueNumber}`,
                   summary: `${compliance.relationship} [#${compliance.issueNumber}](${compliance.issueUrl})`,
                 },
               });
@@ -94,7 +94,7 @@ jobs:
                 status: "completed",
                 conclusion: "failure",
                 output: {
-                  title: "Document the pull request in an open issue",
+                  title: "Link the pull request to an existing issue",
                   summary: error.message,
                 },
               });
