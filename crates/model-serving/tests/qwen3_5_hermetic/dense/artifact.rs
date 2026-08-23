@@ -1,6 +1,6 @@
 use astronomical_model_serving::{
-    MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex,
-    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names,
+    Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex, qwen3_5_language_tensor_profiles,
+    qwen3_5_mtp_tensor_names,
 };
 
 use crate::common::qwen3_5::certified_dense_qwen3_6_config;
@@ -27,7 +27,7 @@ fn should_classify_the_dense_qwen3_6_mtp_inventory_as_mtp_capable() {
         mtp_artifact_capability,
         Qwen3_5MtpArtifactCapability::MtpCapable {
             stored_mtp_layer_count: 1,
-            artifact_maximum_draft_depth: MtpDraftDepth::DEPTH_ONE,
+            artifact_maximum_draft_depth: None,
             artifact_default_draft_depth: None,
             mtp_tensor_count: 29,
         }

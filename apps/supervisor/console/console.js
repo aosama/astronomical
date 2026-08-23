@@ -377,9 +377,12 @@ function renderAboutEnhanced(data) {
         residencyElement.textContent = "Not loaded";
     }
     const mtpUnavailableReason = data.mtp_unavailable_reason;
+    const mtpDepthResolutionReason = data.mtp_depth_resolution_reason;
     const mtpReasonElement = document.getElementById("about-mtp-reason");
     if (mtpUnavailableReason) {
         mtpReasonElement.textContent = mtpUnavailableReason;
+    } else if (mtpDepthResolutionReason) {
+        mtpReasonElement.textContent = mtpDepthResolutionReason;
     } else {
         mtpReasonElement.textContent = "—";
     }
