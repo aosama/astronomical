@@ -1,7 +1,7 @@
 use std::io::Cursor;
 use std::time::Duration;
 
-use astronomical_config::{AstronomicalConfig, discover_models};
+use astronomical_config::{AstronomicalConfig, ModelCapabilities, discover_models};
 use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture, Qwen3_5ImageProcessor, Qwen3_5Model,
     ValidatedQwen3_5Artifact,
@@ -83,7 +83,6 @@ fn configured_dense_qwen3_5_vision_artifact()
 -> Option<(std::path::PathBuf, ValidatedQwen3_5Artifact)> {
     let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for model qualification");
-    let maximum_output_tokens = astronomical_config.max_output_tokens();
     let configured_model_directory_scans = discover_models(astronomical_config.model_directories())
         .expect("configured model-directory discovery should complete");
     let mut discovered_vision_models = configured_model_directory_scans
@@ -91,17 +90,26 @@ fn configured_dense_qwen3_5_vision_artifact()
         .flat_map(|configured_model_directory_scan| {
             configured_model_directory_scan.discovered_models
         })
-        .filter(|discovered_model| discovered_model.has_vision)
+        .filter(|discovered_model| {
+            matches!(
+                &discovered_model.capabilities,
+                ModelCapabilities::Chat(chat_capabilities) if chat_capabilities.supports_vision
+            )
+        })
         .collect::<Vec<_>>();
     discovered_vision_models.sort_by_key(|discovered_model| discovered_model.model_size_bytes);
 
     discovered_vision_models
         .into_iter()
         .find_map(|discovered_vision_model| {
+            let ModelCapabilities::Chat(chat_capabilities) = &discovered_vision_model.capabilities
+            else {
+                return None;
+            };
             let validated_artifact = Qwen3_5ArtifactValidator::new()
                 .validate(
                     &discovered_vision_model.model_directory,
-                    maximum_output_tokens,
+                    chat_capabilities.max_output_tokens,
                 )
                 .ok()?;
             (validated_artifact.config().feed_forward_architecture()
