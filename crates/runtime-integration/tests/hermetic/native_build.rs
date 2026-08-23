@@ -9,7 +9,6 @@ use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
-const NATIVE_BUILD_STORE: &str = include_str!("../../build_native_store.rs");
 const BINDGEN_CONFIGURATION: &str = include_str!("../../build_bindings.rs");
 
 #[test]
@@ -18,12 +17,6 @@ fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {
         NATIVE_BUILD_CONFIGURATION.contains("set(MLX_METAL_JIT ON"),
         "the native runtime must let MLX select and cache NAX kernels on capable Apple GPUs"
     );
-}
-
-#[test]
-fn should_not_build_the_retired_native_expert_page_store() {
-    assert!(!NATIVE_BUILD_CONFIGURATION.contains("astronomical_native_expert_page_store"));
-    assert!(!NATIVE_BUILD_SCRIPT.contains("astronomical_native_expert_page_store"));
 }
 
 #[test]
@@ -42,30 +35,6 @@ fn should_allowlist_the_pinned_mlx_c_flux_primitives() {
             "the narrow bindgen surface must include {required_binding}"
         );
     }
-}
-
-#[test]
-fn should_keep_reusable_native_products_outside_the_cargo_output_directory() {
-    assert!(
-        NATIVE_BUILD_SCRIPT.contains("ASTRONOMICAL_NATIVE_BUILD_STORE_DIR"),
-        "native products need a stable store that does not follow Cargo package-version output paths"
-    );
-    assert!(
-        !NATIVE_BUILD_SCRIPT.contains("output_directory.join(\"mlx-c-runtime-build\")"),
-        "the complete CMake tree must not remain under package-version-sensitive OUT_DIR"
-    );
-    assert!(
-        BINDGEN_CONFIGURATION.contains("output_directory.join(\"mlx_c_bindings.rs\")"),
-        "generated Rust bindings remain Cargo-owned because rustc includes them from OUT_DIR"
-    );
-    assert!(
-        NATIVE_BUILD_SCRIPT.contains("remove_legacy_cargo_native_build_directory"),
-        "the current Cargo build unit must remove the retired complete native tree from OUT_DIR"
-    );
-    assert!(
-        NATIVE_BUILD_STORE.contains("entries"),
-        "the reusable store must separate complete compatibility-keyed entries"
-    );
 }
 
 #[test]

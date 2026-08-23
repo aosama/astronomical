@@ -15,7 +15,7 @@ pub use crate::worker_startup_gpu_memory::{
     parse_iogpu_wired_limit_setting, resolve_effective_mlx_memory_ceiling_bytes,
     sample_iogpu_wired_limit_bytes,
 };
-pub use crate::worker_startup_logging::{astronomical_log_rotation, initialize_tracing};
+pub use crate::worker_startup_logging::initialize_tracing;
 
 /// Starts an idle worker that loads a supported model only after an explicit
 /// SwapModel command from the supervisor.

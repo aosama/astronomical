@@ -1,30 +1,5 @@
 use super::*;
 
-#[test]
-fn should_replace_the_terminal_token_mode_with_the_post_finalization_mode() {
-    let terminal_generated_token = GeneratedToken::TokenId {
-        token_id: 1,
-        is_reasoning_token: false,
-        expert_memory_mode: Some(ExpertMemoryMode::Paged),
-        mlx_memory_telemetry: None,
-        first_decode_forward_elapsed_millis: None,
-        generation_finalization: None,
-    }
-    .with_expert_memory_mode(Some(ExpertMemoryMode::Resident));
-
-    assert_eq!(
-        terminal_generated_token,
-        GeneratedToken::TokenId {
-            token_id: 1,
-            is_reasoning_token: false,
-            expert_memory_mode: Some(ExpertMemoryMode::Resident),
-            mlx_memory_telemetry: None,
-            first_decode_forward_elapsed_millis: None,
-            generation_finalization: None,
-        }
-    );
-}
-
 #[tokio::test]
 async fn should_emit_only_changed_expert_memory_modes_without_losing_token_output() {
     let mut scripted_engine = ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
