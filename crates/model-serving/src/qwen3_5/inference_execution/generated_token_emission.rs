@@ -17,9 +17,7 @@ impl Qwen3_5EngineState {
         active_request: &Qwen3_5EngineRequest,
         generated_token_id: u32,
     ) -> bool {
-        let emitted_token_id =
-            self.preview_thinking_budget_token(active_request, generated_token_id);
-        self.end_of_sequence_token_ids.contains(&emitted_token_id)
+        self.end_of_sequence_token_ids.contains(&generated_token_id)
             || active_request.generated_token_count.saturating_add(1)
                 >= active_request.maximum_output_tokens
     }
@@ -40,8 +38,7 @@ impl Qwen3_5EngineState {
             .record_counter(PerformanceCounter::GeneratedTokenCount, 1);
 
         let is_reasoning_token =
-            active_request.is_inside_thinking && generated_token_id != self.think_end_token_id;
-        let generated_token_id = self.apply_thinking_budget(active_request, generated_token_id)?;
+            active_request.observe_committed_thinking_token(generated_token_id)?;
 
         let is_terminal = self.end_of_sequence_token_ids.contains(&generated_token_id)
             || active_request.generated_token_count >= active_request.maximum_output_tokens;
@@ -88,53 +85,6 @@ impl Qwen3_5EngineState {
             generated_token,
             is_terminal,
         })
-    }
-
-    fn apply_thinking_budget(
-        &self,
-        active_request: &mut Qwen3_5EngineRequest,
-        generated_token_id: u32,
-    ) -> Result<u32, InferenceEngineError> {
-        // The next token may already have been computed from the model's actual
-        // chosen token, so the KV cache can have one token of drift after this
-        // override. Optional prediction avoids starting new verification windows when this
-        // boundary is imminent, preserving the existing target-only behavior.
-        if active_request.is_inside_thinking && generated_token_id != self.think_end_token_id {
-            if let Some(thinking_budget) = active_request.thinking_budget {
-                active_request.thinking_token_count = active_request
-                    .thinking_token_count
-                    .checked_add(1)
-                    .ok_or_else(|| fatal_engine_error("thinking-token counter overflowed"))?;
-                if active_request.thinking_token_count >= thinking_budget {
-                    active_request.is_inside_thinking = false;
-                    return Ok(self.think_end_token_id);
-                }
-            }
-            return Ok(generated_token_id);
-        }
-        if generated_token_id == self.think_end_token_id {
-            active_request.is_inside_thinking = false;
-        }
-        Ok(generated_token_id)
-    }
-
-    fn preview_thinking_budget_token(
-        &self,
-        active_request: &Qwen3_5EngineRequest,
-        generated_token_id: u32,
-    ) -> u32 {
-        if active_request.is_inside_thinking
-            && generated_token_id != self.think_end_token_id
-            && active_request
-                .thinking_budget
-                .is_some_and(|thinking_budget| {
-                    active_request.thinking_token_count.saturating_add(1) >= thinking_budget
-                })
-        {
-            self.think_end_token_id
-        } else {
-            generated_token_id
-        }
     }
 }
 

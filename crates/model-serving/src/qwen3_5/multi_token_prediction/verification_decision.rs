@@ -147,9 +147,7 @@ pub fn qwen3_5_mtp_effective_depth_and_reason_for_windows(
         maximum_position_count.saturating_sub(next_position_tokens as usize);
     let remaining_thinking_tokens = if is_inside_thinking {
         thinking_budget.map_or(u16::MAX, |budget| {
-            budget
-                .saturating_sub(thinking_token_count)
-                .saturating_sub(1)
+            budget.saturating_sub(thinking_token_count)
         })
     } else {
         u16::MAX

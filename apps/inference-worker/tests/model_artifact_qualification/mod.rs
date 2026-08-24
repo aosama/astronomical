@@ -21,4 +21,6 @@ mod persistent_prompt_cache_memory_rest_journey;
 #[cfg(feature = "model-artifact-qualification")]
 mod persistent_prompt_cache_rest_support;
 #[cfg(feature = "model-artifact-qualification")]
+mod smallest_configured_qwen3_5_hard_thinking_budget_openai_rest_e2e;
+#[cfg(feature = "model-artifact-qualification")]
 mod speculative_prefill_rest_journey;

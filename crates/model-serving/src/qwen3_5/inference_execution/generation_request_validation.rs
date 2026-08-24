@@ -7,6 +7,7 @@
 use crate::{InferenceEngineError, Qwen3_5InferenceRequest};
 
 use super::super::model::memory_admission::invalid_request_error;
+use super::super::text::minimum_bounded_output_token_count;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 
 impl Qwen3_5EngineState {
@@ -25,6 +26,27 @@ impl Qwen3_5EngineState {
                 "generation output-token budget must be positive",
             ));
         }
+        if let Some(thinking_budget) = inference_request.thinking_budget() {
+            let forced_transition_token_ids =
+                inference_request.forced_thinking_transition_token_ids();
+            if forced_transition_token_ids.last().copied() != Some(self.think_end_token_id) {
+                return Err(invalid_request_error(
+                    "thinking budget requires a model-owned transition ending with the certified thinking marker",
+                ));
+            }
+            let minimum_bounded_output_tokens = minimum_bounded_output_token_count(
+                thinking_budget,
+                forced_transition_token_ids.len(),
+            )
+            .ok_or_else(|| {
+                invalid_request_error("thinking-budget output reservation overflowed")
+            })?;
+            if usize::from(inference_request.max_output_tokens()) < minimum_bounded_output_tokens {
+                return Err(invalid_request_error(format!(
+                    "output-token budget must reserve {minimum_bounded_output_tokens} positions for the thinking allowance, forced transition, and final answer"
+                )));
+            }
+        }
         let ordinary_target_prefill_control_span_token_count =
             inference_request.ordinary_target_prefill_control_span_token_count();
         if ordinary_target_prefill_control_span_token_count
@@ -41,6 +63,16 @@ impl Qwen3_5EngineState {
         {
             return Err(fatal_engine_error(
                 "generation prompt contains a token outside the certified vocabulary",
+            ));
+        }
+        if inference_request
+            .forced_thinking_transition_token_ids()
+            .iter()
+            .chain(inference_request.natural_reasoning_end_token_ids())
+            .any(|token_id| *token_id >= self.vocabulary_size)
+        {
+            return Err(invalid_request_error(
+                "thinking-budget configuration contains a token outside the certified vocabulary",
             ));
         }
         let total_context_tokens = inference_request

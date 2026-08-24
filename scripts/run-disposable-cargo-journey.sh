@@ -15,6 +15,7 @@ print_journeys() {
         accept-model-ssd-streaming \
         qualify-model-artifacts \
         qualify-deployed-model-rest-liveness \
+        qualify-smallest-qwen3-5-hard-thinking-budget-rest \
         qualify-persistent-prompt-cache \
         test-model-ssd-streaming-support \
         test-model-ssd-streaming-attribution-support \
@@ -65,6 +66,10 @@ main() {
         qualify-deployed-model-rest-liveness)
             lane_name="deployed-rest-liveness"
             set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_keep_the_deployed_rest_surface_healthy_across_model_artifact_prompt_reuse -- --ignored --nocapture
+            ;;
+        qualify-smallest-qwen3-5-hard-thinking-budget-rest)
+            lane_name="smallest-qwen3-5-hard-thinking-budget-rest"
+            set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_use_the_smallest_configured_qwen3_5_model_to_commit_the_complete_hard_thinking_budget_transition_before_streaming_visible_answer_content_through_the_openai_chat_completions_rest_api -- --ignored --nocapture
             ;;
         qualify-persistent-prompt-cache)
             lane_name="persistent-prompt-cache-qualification"

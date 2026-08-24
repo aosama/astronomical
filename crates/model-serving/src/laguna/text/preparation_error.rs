@@ -33,6 +33,8 @@ pub enum LagunaPreparationError {
         requested_output_tokens: u16,
         maximum_output_tokens: u32,
     },
+    #[error("positive thinking budgets are not supported by Laguna generation")]
+    PositiveThinkingBudgetUnsupported,
     #[error("failed to initialize Laguna output parsing")]
     OutputParserInitialization(#[source] LagunaOutputParserError),
 }

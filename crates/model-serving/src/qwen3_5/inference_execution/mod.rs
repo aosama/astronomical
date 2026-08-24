@@ -62,9 +62,7 @@ use super::model::Qwen3_5Model;
 use super::{MtpDraftDepth, ValidatedQwen3_5Artifact};
 
 pub use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRuntimeState;
-pub use crate::qwen3_5::multi_token_prediction::{
-    qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_verification_may_cross_thinking_budget,
-};
+pub use crate::qwen3_5::multi_token_prediction::qwen3_5_depth_one_mtp_window_fits;
 pub use crate::qwen3_5::multi_token_prediction::{
     qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
 };
