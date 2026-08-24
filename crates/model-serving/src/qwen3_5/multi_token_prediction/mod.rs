@@ -35,6 +35,8 @@ mod verified_emission_queue;
 
 pub use artifact::{Qwen3_5MtpArtifactCapability, Qwen3_5MtpTargetOnlyReason};
 #[cfg(feature = "direct-mlx")]
+pub use decode::qwen3_5_depth_one_mtp_window_fits;
+#[cfg(feature = "direct-mlx")]
 pub(in crate::qwen3_5) use decode::{
     attempt_prediction_proposal_and_verification,
     disable_prediction_after_memory_admission_failure, effective_prediction_depth,
@@ -42,10 +44,6 @@ pub(in crate::qwen3_5) use decode::{
     forward_next_target_token_with_prediction_state,
     projected_verification_window_memory_growth_bytes, take_queued_prediction_token,
     verification_boundary_snapshot_bytes, verification_transient_array_bytes,
-};
-#[cfg(feature = "direct-mlx")]
-pub use decode::{
-    qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_verification_may_cross_thinking_budget,
 };
 pub use depth::{MtpDraftDepth, MtpDraftDepthError};
 #[cfg(feature = "direct-mlx")]

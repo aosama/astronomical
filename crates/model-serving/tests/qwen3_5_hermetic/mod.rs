@@ -27,6 +27,7 @@ mod sampling_seed;
 mod speculative_prefill;
 mod speculative_prefill_memory_admission;
 mod tensor_spec;
+mod thinking_budget;
 mod tokenizer;
 mod vision_config;
 pub(crate) mod vision_config_test_support;

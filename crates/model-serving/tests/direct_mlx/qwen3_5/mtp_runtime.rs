@@ -1,7 +1,7 @@
 use astronomical_model_serving::{
     MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5MtpRuntimeState,
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_runtime_configuration_after_load,
-    qwen3_5_mtp_runtime_state_after_load, qwen3_5_mtp_verification_may_cross_thinking_budget,
+    qwen3_5_mtp_runtime_state_after_load,
 };
 
 #[test]
@@ -160,42 +160,9 @@ fn should_keep_depth_one_as_the_automatic_default_on_a_silent_artifact() {
 }
 
 #[test]
-fn should_skip_depth_one_mtp_when_the_accepted_draft_could_reach_the_thinking_budget() {
-    assert!(qwen3_5_mtp_verification_may_cross_thinking_budget(
-        true,
-        8,
-        Some(10),
-        2,
-    ));
-}
-
-#[test]
 fn should_require_two_remaining_outputs_and_context_positions_for_depth_one_mtp() {
     assert!(!qwen3_5_depth_one_mtp_window_fits(9, 10, 99, 100));
     assert!(!qwen3_5_depth_one_mtp_window_fits(8, 10, 99, 100));
     assert!(!qwen3_5_depth_one_mtp_window_fits(9, 10, 98, 100));
     assert!(qwen3_5_depth_one_mtp_window_fits(8, 10, 98, 100));
-}
-
-#[test]
-fn should_allow_depth_one_mtp_when_both_possible_emissions_remain_below_the_thinking_budget() {
-    assert!(!qwen3_5_mtp_verification_may_cross_thinking_budget(
-        true,
-        7,
-        Some(10),
-        2,
-    ));
-}
-
-#[test]
-fn should_allow_mtp_outside_thinking_or_without_a_budget() {
-    assert!(!qwen3_5_mtp_verification_may_cross_thinking_budget(
-        false,
-        9,
-        Some(10),
-        2,
-    ));
-    assert!(!qwen3_5_mtp_verification_may_cross_thinking_budget(
-        true, 9, None, 2,
-    ));
 }

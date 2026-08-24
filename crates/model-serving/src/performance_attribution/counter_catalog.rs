@@ -11,6 +11,7 @@ pub enum PerformanceCounter {
     PromptTokenCount,
     RestoredPersistentPromptCacheTokenCount,
     GeneratedTokenCount,
+    ForcedThinkingTransitionTokenCount,
     PrefillChunckCount,
     PrefillCapacityRejectionCount,
     PrefillCapacityRetryCount,
@@ -99,6 +100,7 @@ impl PerformanceCounter {
         Self::PromptTokenCount,
         Self::RestoredPersistentPromptCacheTokenCount,
         Self::GeneratedTokenCount,
+        Self::ForcedThinkingTransitionTokenCount,
         Self::PrefillChunckCount,
         Self::PrefillCapacityRejectionCount,
         Self::PrefillCapacityRetryCount,
@@ -186,6 +188,7 @@ impl PerformanceCounter {
                 "restored_persistent_prompt_cache_token_count"
             }
             Self::GeneratedTokenCount => "generated_token_count",
+            Self::ForcedThinkingTransitionTokenCount => "forced_thinking_transition_token_count",
             Self::PrefillChunckCount => "prefill_chunck_count",
             Self::PrefillCapacityRejectionCount => "prefill_capacity_rejection_count",
             Self::PrefillCapacityRetryCount => "prefill_capacity_retry_count",

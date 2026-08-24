@@ -18,6 +18,8 @@ pub struct Qwen3_5InferenceRequest {
     sampling_strategy: Qwen3_5SamplingStrategy,
     generation_starts_inside_thinking_block: bool,
     thinking_budget: Option<u16>,
+    forced_thinking_transition_token_ids: Vec<u32>,
+    natural_reasoning_end_token_ids: Vec<u32>,
     performance_attribution: PerformanceAttribution,
 }
 
@@ -42,6 +44,8 @@ impl Qwen3_5InferenceRequest {
             sampling_strategy: Qwen3_5SamplingStrategy::Greedy,
             generation_starts_inside_thinking_block: true,
             thinking_budget: None,
+            forced_thinking_transition_token_ids: Vec::new(),
+            natural_reasoning_end_token_ids: Vec::new(),
             performance_attribution: PerformanceAttribution::disabled(),
         }
     }
@@ -98,6 +102,8 @@ impl Qwen3_5InferenceRequest {
             sampling_strategy,
             generation_starts_inside_thinking_block: true,
             thinking_budget: None,
+            forced_thinking_transition_token_ids: Vec::new(),
+            natural_reasoning_end_token_ids: Vec::new(),
             performance_attribution: PerformanceAttribution::disabled(),
         }
     }
@@ -150,10 +156,12 @@ impl Qwen3_5InferenceRequest {
     /// A disabled or zero-budget request starts in visible-text mode and has no
     /// active thinking-token budget.
     #[must_use]
-    pub const fn with_thinking_configuration(
+    pub fn with_thinking_configuration(
         mut self,
         enable_thinking: bool,
         thinking_budget: Option<u16>,
+        forced_thinking_transition_token_ids: Vec<u32>,
+        natural_reasoning_end_token_ids: Vec<u32>,
     ) -> Self {
         self.generation_starts_inside_thinking_block =
             enable_thinking && !matches!(thinking_budget, Some(0));
@@ -162,6 +170,12 @@ impl Qwen3_5InferenceRequest {
         } else {
             None
         };
+        self.forced_thinking_transition_token_ids = if self.thinking_budget.is_some() {
+            forced_thinking_transition_token_ids
+        } else {
+            Vec::new()
+        };
+        self.natural_reasoning_end_token_ids = natural_reasoning_end_token_ids;
         self
     }
 
@@ -188,6 +202,18 @@ impl Qwen3_5InferenceRequest {
     #[must_use]
     pub const fn thinking_budget(&self) -> Option<u16> {
         self.thinking_budget
+    }
+
+    /// Returns the model-owned sequence committed when the hard budget is exhausted.
+    #[must_use]
+    pub fn forced_thinking_transition_token_ids(&self) -> &[u32] {
+        &self.forced_thinking_transition_token_ids
+    }
+
+    /// Returns token identifiers that naturally or implicitly end reasoning.
+    #[must_use]
+    pub fn natural_reasoning_end_token_ids(&self) -> &[u32] {
+        &self.natural_reasoning_end_token_ids
     }
 
     /// Returns whether generated tokens initially continue a prompt-opened thinking block.

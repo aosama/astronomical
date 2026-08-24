@@ -8,6 +8,7 @@
 - Measure long-context parity after the runtime chat template is rendered, and pass the same thinking-mode setting to both the prompt renderer and output parser; counting only source text or disabling thinking in metadata produces unlike workloads.
 - Source-matched sanitize behavior is part of model arithmetic. Stock MLX-LM 0.31.3 double-shifts already-converted Qwen3.5 and Qwen3.6 normalization weights when MTP tensors are present, corrupting target-only output; apply the checkpoint producer's sanitize correction while keeping MTP construction disabled.
 - Use release builds for performance. Debug builds remain useful for correctness only.
+- In one-token-ahead decoding, inject budget-control tokens before the model forward and discard any successor predicted from the replaced token. Multi-token prediction may reach the reasoning allowance exactly but must not cross it; resume prediction only after the complete transition is committed to decoder state.
 
 ## Mixture-of-experts routing
 

@@ -216,12 +216,12 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
             temperature_thousandths: Some(0),
             top_p_thousandths: Some(950),
             seed: None,
-            thinking_budget: Some(256),
+            thinking_budget: Some(0),
         },
     };
 
     let engine_request = tokenizer
-        .prepare_chat(&chat_generation_command, true)
+        .prepare_chat(&chat_generation_command, false)
         .expect("the image chat command should prepare for Ornith vision prefill");
 
     assert_eq!(engine_request.request_id(), RequestId::new(801));

@@ -37,6 +37,19 @@ pub enum Qwen3_5TokenizerError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    #[error("failed to encode the model-owned thinking-budget transition")]
+    EncodeThinkingBudgetTransition {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    #[error(
+        "output-token budget {max_output_tokens} cannot fit the {thinking_budget}-token thinking allowance, {transition_token_count}-token transition, and a visible answer token"
+    )]
+    ThinkingBudgetOutputReservation {
+        max_output_tokens: u16,
+        thinking_budget: u16,
+        transition_token_count: usize,
+    },
     #[error("tokenizer did not preserve the system-and-tool control-span boundary")]
     ControlSpanTokenBoundaryUnavailable,
     #[error(

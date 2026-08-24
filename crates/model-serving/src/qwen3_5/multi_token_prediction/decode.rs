@@ -14,21 +14,6 @@ use super::{
     qwen3_5_mtp_verification_decision,
 };
 
-/// Returns whether a prediction window could cross the forced thinking boundary.
-#[doc(hidden)]
-#[must_use]
-pub fn qwen3_5_mtp_verification_may_cross_thinking_budget(
-    is_inside_thinking: bool,
-    thinking_token_count: u16,
-    thinking_budget: Option<u16>,
-    possible_emitted_token_count: u16,
-) -> bool {
-    is_inside_thinking
-        && thinking_budget.is_some_and(|thinking_budget| {
-            thinking_token_count.saturating_add(possible_emitted_token_count) >= thinking_budget
-        })
-}
-
 /// Preserves the phase-one depth-one contract for direct runtime callers.
 #[doc(hidden)]
 #[must_use]
