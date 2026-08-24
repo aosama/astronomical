@@ -4,34 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.15</title>
-            <pubDate>Sun, 23 Aug 2026 19:54:09 -0400</pubDate>
-            <sparkle:version>331</sparkle:version>
-            <sparkle:shortVersionString>0.2.15</sparkle:shortVersionString>
+            <title>0.2.16</title>
+            <pubDate>Mon, 24 Aug 2026 11:28:14 -0400</pubDate>
+            <sparkle:version>341</sparkle:version>
+            <sparkle:shortVersionString>0.2.16</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.15
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.16
 
-Astronomical 0.2.15 keeps live model-memory changes coherent across the complete serving lifecycle.
+Astronomical now enforces a Qwen3.5 thinking budget by committing the model-owned reasoning close before the visible answer.
 
 ## Improvements
 
-- Synchronizes accepted memory limits, worker configuration generations, and reported expert topology.
-- Safely promotes or demotes Qwen3.5 MoE expert residency when the live memory ceiling changes.
-- Preserves accepted allocator policy when a later request swaps to another model.
-- Adds bounded phase-and-layer attribution for repeated model-weight reads from SSD.
-- Strengthens qualification for live memory transitions, cached prefill/decode handoff, and reverse model swaps.
+- When a Qwen3.5 request reaches its thinking budget, Astronomical feeds the model a complete reasoning-to-answer transition instead of only rewriting the token shown to the client.
+- Visible answer text starts only after that transition is committed. A natural reasoning or tool-call exit still ends thinking without a forced close.
+- Requests whose output limit cannot fit the thinking allowance, the forced transition, and one answer token are rejected before generation.
+- Laguna rejects a positive thinking budget instead of accepting a limit it cannot enforce.
 
 ## Compatibility
 
-This patch release preserves existing Stable configuration, downloaded models, prompt-cache state, model precision, and API behavior.
+This release preserves existing Stable configuration, downloaded models, prompt-cache state, and model precision.
+
+The Chat Completions `thinking_budget` field is unchanged. Omitted and zero budgets keep their previous meaning. A positive budget on Qwen3.5 is now enforced in the model’s own generation. A positive budget on Laguna is now rejected.
 
 The macOS ARM64 distribution is signed with Apple Developer ID, notarized by Apple, stapled, and delivered through a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.15/Astronomical-0.2.15-macOS-arm64.dmg" length="15410032" type="application/octet-stream" sparkle:edSignature="3bLv8LfQ61VcNSfvjQ1JuUs6dzDjZQjHaVzbd+soB3Ifwmhqd0qkIM5jewOpBrz1bsL7B0cWMsJ4geef1kH9Ag=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.16/Astronomical-0.2.16-macOS-arm64.dmg" length="15417826" type="application/octet-stream" sparkle:edSignature="GXpfQl7fTqf/e7UqEzE8zeeYvGLvehQNN2WYMhg7nLhAzgr8pT0Nfk2O3M2nXdvWBRN8i7uXOVZgeiAvgBDnAA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: shMcw0ULsrR/XWP2TkHLT/doABocuWUBvQC697xzo9Ev1bBPnWm5BFQGMQrniZ1Ew2xPjHB/2vycQtv1vFC6AA==
-length: 2147
+edSignature: F9caIRvdFocqW5lqZVoyODpNeKR15YkxvvIKHsCkkoWEDcqvE++zkupr6Dkz8BsFTzMN1MGEgmJnqZUqgWJ8AQ==
+length: 2476
 -->
