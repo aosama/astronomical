@@ -195,6 +195,13 @@ impl LagunaGenerationProcessor {
                 maximum_output_tokens: self.maximum_output_tokens,
             });
         }
+        if chat_command
+            .settings
+            .thinking_budget
+            .is_some_and(|thinking_budget| thinking_budget > 0)
+        {
+            return Err(LagunaPreparationError::PositiveThinkingBudgetUnsupported);
+        }
         if chat_command.messages.iter().any(
             |message| matches!(message, ChatMessage::User { images, .. } if !images.is_empty()),
         ) {

@@ -474,6 +474,7 @@ expected_journeys = {
     "accept-model-ssd-streaming",
     "qualify-model-artifacts",
     "qualify-deployed-model-rest-liveness",
+    "qualify-smallest-qwen3-5-hard-thinking-budget-rest",
     "qualify-persistent-prompt-cache",
     "test-model-ssd-streaming-support",
     "test-model-ssd-streaming-attribution-support",

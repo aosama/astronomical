@@ -1,6 +1,7 @@
 use crate::{
     EngineGenerationStart, InferenceEngineError, PerformanceAttributionOutcome, PerformanceCounter,
     PersistentPromptCacheBlockKey, Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy,
+    Qwen3_5ThinkingBudgetState,
 };
 
 use super::super::model::memory_admission::invalid_request_error;
@@ -43,6 +44,26 @@ impl Qwen3_5EngineState {
         }
         let total_context_tokens =
             self.validate_generation_request_and_resolve_total_context(&inference_request)?;
+        let mut natural_reasoning_end_token_ids =
+            inference_request.natural_reasoning_end_token_ids().to_vec();
+        if !natural_reasoning_end_token_ids.contains(&self.think_end_token_id) {
+            // The certified marker remains authoritative for direct engine callers that do not
+            // pass tokenizer-derived implicit boundaries such as tool-call starts.
+            natural_reasoning_end_token_ids.push(self.think_end_token_id);
+        }
+        let thinking_budget_state = Qwen3_5ThinkingBudgetState::new(
+            inference_request.generation_starts_inside_thinking_block(),
+            inference_request.thinking_budget(),
+            inference_request
+                .forced_thinking_transition_token_ids()
+                .to_vec(),
+            natural_reasoning_end_token_ids,
+        )
+        .map_err(|source| {
+            invalid_request_error(format!(
+                "invalid Qwen3.5 thinking-budget configuration: {source}"
+            ))
+        })?;
         let ordinary_target_prefill_control_span_token_count =
             inference_request.ordinary_target_prefill_control_span_token_count();
         let model = self
@@ -429,9 +450,7 @@ impl Qwen3_5EngineState {
                 visual_embeddings,
                 consumed_visual_embedding_count: 0,
                 image_pad_token_id,
-                thinking_budget: inference_request.thinking_budget(),
-                thinking_token_count: 0,
-                is_inside_thinking: inference_request.generation_starts_inside_thinking_block(),
+                thinking_budget_state,
                 expert_weight_memory_cache_statistics_at_request_start,
                 performance_attribution,
                 optional_prediction_session,

@@ -27,6 +27,7 @@ use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey, Qwen3_5SamplingStrategy,
+    Qwen3_5ThinkingBudgetState,
 };
 
 use super::super::text::sampler::build_qwen3_5_sampled_token;
@@ -79,13 +80,7 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) consumed_visual_embedding_count: usize,
     /// Token ID used for image-pad placeholders in the input prompt.
     pub(super) image_pad_token_id: u32,
-    /// Maximum tokens the model may spend inside the thinking block.
-    /// `None` means no budget.
-    pub(super) thinking_budget: Option<u16>,
-    /// Count of tokens generated so far inside the current thinking block.
-    pub(super) thinking_token_count: u16,
-    /// Whether the model is currently inside a thinking block.
-    pub(super) is_inside_thinking: bool,
+    pub(super) thinking_budget_state: Qwen3_5ThinkingBudgetState,
     pub(super) expert_weight_memory_cache_statistics_at_request_start:
         ExpertWeightMemoryCacheStatistics,
     pub(super) performance_attribution: PerformanceAttribution,
@@ -355,15 +350,40 @@ impl Qwen3_5EngineRequest {
     }
 
     pub(crate) fn is_inside_thinking(&self) -> bool {
-        self.is_inside_thinking
+        self.thinking_budget_state.is_inside_thinking()
     }
 
     pub(crate) fn thinking_token_count(&self) -> u16 {
-        self.thinking_token_count
+        self.thinking_budget_state.thinking_token_count()
     }
 
     pub(crate) fn thinking_budget(&self) -> Option<u16> {
-        self.thinking_budget
+        self.thinking_budget_state.thinking_budget()
+    }
+
+    pub(super) fn next_forced_thinking_transition_token_id(
+        &mut self,
+    ) -> Result<Option<u32>, InferenceEngineError> {
+        self.thinking_budget_state
+            .next_forced_transition_token_id()
+            .map_err(|source| {
+                fatal_engine_error(format!("invalid Qwen3.5 thinking-budget state: {source}"))
+            })
+    }
+
+    pub(super) fn observe_committed_thinking_token(
+        &mut self,
+        committed_token_id: u32,
+    ) -> Result<bool, InferenceEngineError> {
+        self.thinking_budget_state
+            .observe_committed_token(committed_token_id)
+            .map_err(|source| {
+                fatal_engine_error(format!("invalid Qwen3.5 thinking-budget state: {source}"))
+            })
+    }
+
+    pub(super) fn is_forcing_thinking_transition(&self) -> bool {
+        self.thinking_budget_state.is_forcing_transition()
     }
 
     pub(crate) fn set_next_position_tokens(&mut self, next_position_tokens: u32) {

@@ -64,6 +64,7 @@ mod speculative_prefill_tool_sampled;
 mod speculative_prefill_visual_memory_lifecycle;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_visual_tool;
+mod thinking_budget;
 mod tokenizer;
 mod vision_model;
 mod weights;

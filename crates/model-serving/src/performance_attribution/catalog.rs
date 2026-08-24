@@ -66,6 +66,7 @@ pub enum PerformanceOperation {
     SpeculativePrefillSparseInputAssembly,
     SpeculativePrefillSparseTargetForward,
     TokenSamplingGraphConstruction,
+    ForcedThinkingTransitionTokenArrayConstruction,
     MtpHeadForwardGraphConstruction,
     MtpHeadStateEvaluationSynchronizationWait,
     MtpPromptHistoryInitializationSpan,
@@ -187,6 +188,7 @@ impl PerformanceOperation {
         Self::SpeculativePrefillSparseInputAssembly,
         Self::SpeculativePrefillSparseTargetForward,
         Self::TokenSamplingGraphConstruction,
+        Self::ForcedThinkingTransitionTokenArrayConstruction,
         Self::MtpHeadForwardGraphConstruction,
         Self::MtpHeadStateEvaluationSynchronizationWait,
         Self::MtpPromptHistoryInitializationSpan,
@@ -357,6 +359,9 @@ impl PerformanceOperation {
                 "speculative_prefill_sparse_target_forward"
             }
             Self::TokenSamplingGraphConstruction => "token_sampling_graph_construction",
+            Self::ForcedThinkingTransitionTokenArrayConstruction => {
+                "forced_thinking_transition_token_array_construction"
+            }
             Self::MtpHeadForwardGraphConstruction => "mtp_head_forward_graph_construction",
             Self::MtpHeadStateEvaluationSynchronizationWait => {
                 "mtp_head_state_evaluation_synchronization_wait"

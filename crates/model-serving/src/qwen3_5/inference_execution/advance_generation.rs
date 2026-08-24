@@ -114,6 +114,13 @@ impl Qwen3_5EngineState {
         }
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 
+        if active_request.is_forcing_thinking_transition()
+            && active_request.has_queued_prediction_tokens()
+        {
+            return Err(fatal_engine_error(
+                "MTP verification crossed a forced thinking-budget boundary",
+            ));
+        }
         if let Some(queued_prediction_token_id) = take_queued_prediction_token(active_request) {
             // The prediction path already computed the first observable token,
             // so no additional first decode forward is required at this boundary.
@@ -153,116 +160,146 @@ impl Qwen3_5EngineState {
             };
         }
 
+        let forced_thinking_transition_token_id =
+            active_request.next_forced_thinking_transition_token_id()?;
         let mut first_decode_forward_started_at = None;
-        let current_generated_token = match active_request.pending_generated_token.take() {
-            Some(pending_generated_token) => {
-                // Final prefill already produced this token; report a truthful
-                // zero rather than attributing later output handling to decode.
-                if active_request.generated_token_count == 0
-                    && active_request.first_decode_forward_elapsed_millis.is_none()
-                {
-                    active_request.first_decode_forward_elapsed_millis = Some(0);
-                }
-                pending_generated_token
-            }
-            None => {
-                let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
-                let sparse_experts_are_paged = self
-                    .model
-                    .as_ref()
-                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-                    .sparse_experts_are_paged();
-                let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
-                    1,
-                    active_request.has_optional_prediction_session(),
-                    sparse_experts_are_paged,
-                );
-                let (
-                    active_memory_bytes_before_growth,
-                    retained_expert_payload_bytes_before_growth,
-                ) = self.measure_adaptive_ram_growth_memory_admission(
-                    adaptive_ram_growth_context,
-                    &mut active_request.performance_attribution,
-                    &active_request.request_decoder_state,
-                    0,
-                    0,
-                )?;
-                self.save_speculative_prefill_target_prefix(active_request)?;
-                let model = self
-                    .model
-                    .as_ref()
-                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-                // This log is the first-token decode seam. After the restore
-                // above, `sparse_experts_are_paged` tells whether generation
-                // will use the complete owner or stream/split retained pages.
-                tracing::info!(
-                    request_id = request_id.value(),
-                    context_token_count = active_request.input_token_ids.len(),
-                    sparse_experts_are_paged,
-                    generation_residency_preparation_attempted =
-                        active_request.generation_residency_preparation_attempted,
-                    "starting first decode forward after prompt processing"
-                );
-                first_decode_forward_started_at = Some(Instant::now());
-                let first_generated_token = if let Some(prediction_token) =
-                    forward_initial_target_token_with_prediction_state(
-                        model,
-                        active_request,
-                        final_prompt_token_id,
-                    )? {
-                    prediction_token
-                } else {
-                    let final_prompt_logits = if model.sparse_experts_are_paged() {
-                        // Paged decode resolves deferred GPU missing-route bitmaps
-                        // on a synchronous completion root before the token is
-                        // observable.
+        let current_generated_token = if let Some(forced_thinking_transition_token_id) =
+            forced_thinking_transition_token_id
+        {
+            // The asynchronously selected successor was conditioned on the last
+            // committed reasoning token but was never itself forwarded. Replacing
+            // it here keeps the forced token and decoder history identical.
+            active_request.pending_generated_token = None;
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            let forced_generated_token = active_request
+                .performance_attribution
+                .measure_operation(
+                    PerformanceOperation::ForcedThinkingTransitionTokenArrayConstruction,
+                    |_performance_attribution| {
                         model
-                            .forward_chunk_with_performance_attribution(
-                                &[final_prompt_token_id],
-                                active_request.next_position_tokens,
-                                &mut active_request.request_decoder_state,
-                                &mut active_request.performance_attribution,
-                            )
-                            .map_err(InferenceEngineError::from)?
+                            .runtime()
+                            .array_from_u32(&[forced_thinking_transition_token_id], &[1, 1])
+                    },
+                )
+                .map_err(qwen3_5_runtime_error)?;
+            active_request.performance_attribution.record_counter(
+                crate::PerformanceCounter::ForcedThinkingTransitionTokenCount,
+                1,
+            );
+            forced_generated_token
+        } else {
+            match active_request.pending_generated_token.take() {
+                Some(pending_generated_token) => {
+                    // Final prefill already produced this token; report a truthful
+                    // zero rather than attributing later output handling to decode.
+                    if active_request.generated_token_count == 0
+                        && active_request.first_decode_forward_elapsed_millis.is_none()
+                    {
+                        active_request.first_decode_forward_elapsed_millis = Some(0);
+                    }
+                    pending_generated_token
+                }
+                None => {
+                    let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
+                    let sparse_experts_are_paged = self
+                        .model
+                        .as_ref()
+                        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                        .sparse_experts_are_paged();
+                    let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
+                        1,
+                        active_request.has_optional_prediction_session(),
+                        sparse_experts_are_paged,
+                    );
+                    let (
+                        active_memory_bytes_before_growth,
+                        retained_expert_payload_bytes_before_growth,
+                    ) = self.measure_adaptive_ram_growth_memory_admission(
+                        adaptive_ram_growth_context,
+                        &mut active_request.performance_attribution,
+                        &active_request.request_decoder_state,
+                        0,
+                        0,
+                    )?;
+                    self.save_speculative_prefill_target_prefix(active_request)?;
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
+                    // This log is the first-token decode seam. After the restore
+                    // above, `sparse_experts_are_paged` tells whether generation
+                    // will use the complete owner or stream/split retained pages.
+                    tracing::info!(
+                        request_id = request_id.value(),
+                        context_token_count = active_request.input_token_ids.len(),
+                        sparse_experts_are_paged,
+                        generation_residency_preparation_attempted =
+                            active_request.generation_residency_preparation_attempted,
+                        "starting first decode forward after prompt processing"
+                    );
+                    first_decode_forward_started_at = Some(Instant::now());
+                    let first_generated_token = if let Some(prediction_token) =
+                        forward_initial_target_token_with_prediction_state(
+                            model,
+                            active_request,
+                            final_prompt_token_id,
+                        )? {
+                        prediction_token
                     } else {
-                        model
-                            .build_forward_chunk_with_performance_attribution(
-                                &[final_prompt_token_id],
-                                active_request.next_position_tokens,
-                                &mut active_request.request_decoder_state,
-                                &mut active_request.performance_attribution,
-                            )
-                            .map_err(InferenceEngineError::from)?
-                    };
-                    active_request.advance_position(1)?;
-                    active_request.build_generated_token(model, &final_prompt_logits)?
-                };
-                if !model.sparse_experts_are_paged() {
-                    active_request
-                        .performance_attribution
-                        .measure_operation(
-                            PerformanceOperation::DecodeAsyncEvaluationSubmission,
-                            |_performance_attribution| {
-                                model.async_evaluate_generation(
-                                    &first_generated_token,
-                                    &active_request.request_decoder_state,
+                        let final_prompt_logits = if model.sparse_experts_are_paged() {
+                            // Paged decode resolves deferred GPU missing-route bitmaps
+                            // on a synchronous completion root before the token is
+                            // observable.
+                            model
+                                .forward_chunk_with_performance_attribution(
+                                    &[final_prompt_token_id],
+                                    active_request.next_position_tokens,
+                                    &mut active_request.request_decoder_state,
+                                    &mut active_request.performance_attribution,
                                 )
-                            },
-                        )
-                        .map_err(InferenceEngineError::from)?;
+                                .map_err(InferenceEngineError::from)?
+                        } else {
+                            model
+                                .build_forward_chunk_with_performance_attribution(
+                                    &[final_prompt_token_id],
+                                    active_request.next_position_tokens,
+                                    &mut active_request.request_decoder_state,
+                                    &mut active_request.performance_attribution,
+                                )
+                                .map_err(InferenceEngineError::from)?
+                        };
+                        active_request.advance_position(1)?;
+                        active_request.build_generated_token(model, &final_prompt_logits)?
+                    };
+                    if !model.sparse_experts_are_paged() {
+                        active_request
+                            .performance_attribution
+                            .measure_operation(
+                                PerformanceOperation::DecodeAsyncEvaluationSubmission,
+                                |_performance_attribution| {
+                                    model.async_evaluate_generation(
+                                        &first_generated_token,
+                                        &active_request.request_decoder_state,
+                                    )
+                                },
+                            )
+                            .map_err(InferenceEngineError::from)?;
+                    }
+                    record_completed_adaptive_ram_growth(
+                        &mut self.adaptive_ram_growth_guard,
+                        adaptive_ram_growth_context
+                            .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
+                        true,
+                        model,
+                        active_memory_bytes_before_growth,
+                        retained_expert_payload_bytes_before_growth,
+                        0,
+                        &mut active_request.performance_attribution,
+                    )?;
+                    first_generated_token
                 }
-                record_completed_adaptive_ram_growth(
-                    &mut self.adaptive_ram_growth_guard,
-                    adaptive_ram_growth_context
-                        .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
-                    true,
-                    model,
-                    active_memory_bytes_before_growth,
-                    retained_expert_payload_bytes_before_growth,
-                    0,
-                    &mut active_request.performance_attribution,
-                )?;
-                first_generated_token
             }
         };
 
@@ -300,13 +337,15 @@ impl Qwen3_5EngineState {
             ));
         }
 
-        if let Some(prediction_advance) = self.attempt_mtp_decode_window(
-            request_id,
-            active_request,
-            &current_generated_token,
-            current_generated_token_id,
-        )? {
-            return Ok(prediction_advance);
+        if forced_thinking_transition_token_id.is_none() {
+            if let Some(prediction_advance) = self.attempt_mtp_decode_window(
+                request_id,
+                active_request,
+                &current_generated_token,
+                current_generated_token_id,
+            )? {
+                return Ok(prediction_advance);
+            }
         }
 
         let sparse_experts_are_paged = self

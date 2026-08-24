@@ -216,7 +216,14 @@ async fn run_configured_cold_cache_summary_journey(
             .with_ordinary_target_prefill_control_span_token_count(
                 summary_prompt.ordinary_target_prefill_control_span_token_count,
             )
-            .with_thinking_configuration(true, Some(256))
+            .with_thinking_configuration(
+                true,
+                Some(256),
+                target_tokenizer
+                    .forced_thinking_transition_token_ids()
+                    .to_vec(),
+                target_tokenizer.natural_reasoning_end_token_ids().to_vec(),
+            )
             .with_performance_attribution(PerformanceAttribution::enabled()),
         )
         .await

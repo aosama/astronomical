@@ -12,9 +12,12 @@ use super::{
 };
 
 use super::sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
+use super::thinking_budget::minimum_bounded_output_token_count;
 use super::token_decoder::Qwen3_5TokenDecoder;
 use super::token_ids::{Qwen3_5TokenIds, discover_token_ids};
 use super::tokenizer_error::Qwen3_5TokenizerError;
+
+const THINKING_BUDGET_TRANSITION_TEXT: &str = "\n\nConsidering the limited time by the user, I have to give the solution based on the thinking directly now.\n";
 
 /// The validated pinned tokenizer used by Qwen3.5 prompt and output processing.
 #[derive(Clone, Debug)]
@@ -27,6 +30,8 @@ pub struct Qwen3_5Tokenizer {
     token_ids: Qwen3_5TokenIds,
     model_id: String,
     image_processor: Option<Qwen3_5ImageProcessor>,
+    forced_thinking_transition_token_ids: Vec<u32>,
+    natural_reasoning_end_token_ids: Vec<u32>,
 }
 
 impl Qwen3_5Tokenizer {
@@ -93,6 +98,16 @@ impl Qwen3_5Tokenizer {
         for (token_content, expected_token_id) in token_ids.validation_pairs() {
             validate_token_identity(&tokenizer, token_content, expected_token_id)?;
         }
+        let mut forced_thinking_transition_token_ids = tokenizer
+            .encode(THINKING_BUDGET_TRANSITION_TEXT, false)
+            .map_err(|source| Qwen3_5TokenizerError::EncodeThinkingBudgetTransition { source })?
+            .get_ids()
+            .to_vec();
+        forced_thinking_transition_token_ids.push(token_ids.think_end_token_id);
+        let natural_reasoning_end_token_ids = vec![
+            token_ids.think_end_token_id,
+            token_ids.tool_call_start_token_id,
+        ];
         Ok(Self {
             tokenizer: Arc::new(tokenizer),
             tokenizer_vocabulary_size,
@@ -102,6 +117,8 @@ impl Qwen3_5Tokenizer {
             token_ids,
             model_id: model_id.to_owned(),
             image_processor,
+            forced_thinking_transition_token_ids,
+            natural_reasoning_end_token_ids,
         })
     }
 
@@ -175,6 +192,18 @@ impl Qwen3_5Tokenizer {
     #[must_use]
     pub const fn think_end_token_id(&self) -> u32 {
         self.token_ids.think_end_token_id
+    }
+
+    /// Returns the complete model-owned sequence used to leave bounded reasoning.
+    #[must_use]
+    pub fn forced_thinking_transition_token_ids(&self) -> &[u32] {
+        &self.forced_thinking_transition_token_ids
+    }
+
+    /// Returns explicit and implicit token boundaries that end reasoning.
+    #[must_use]
+    pub fn natural_reasoning_end_token_ids(&self) -> &[u32] {
+        &self.natural_reasoning_end_token_ids
     }
 
     #[must_use]
@@ -274,6 +303,25 @@ impl Qwen3_5Tokenizer {
                 actual_model_id: chat_generation_command.model.clone(),
             });
         }
+        if let Some(thinking_budget) = chat_generation_command.settings.thinking_budget
+            && enable_thinking
+            && thinking_budget > 0
+        {
+            let minimum_bounded_output_tokens = minimum_bounded_output_token_count(
+                thinking_budget,
+                self.forced_thinking_transition_token_ids.len(),
+            )
+            .unwrap_or(usize::MAX);
+            if usize::from(chat_generation_command.settings.max_output_tokens)
+                < minimum_bounded_output_tokens
+            {
+                return Err(Qwen3_5TokenizerError::ThinkingBudgetOutputReservation {
+                    max_output_tokens: chat_generation_command.settings.max_output_tokens,
+                    thinking_budget,
+                    transition_token_count: self.forced_thinking_transition_token_ids.len(),
+                });
+            }
+        }
         let prepared_chat_images = performance_attribution.measure_operation(
             PerformanceOperation::ImagePreprocessing,
             |_performance_attribution| {
@@ -334,6 +382,8 @@ impl Qwen3_5Tokenizer {
         .with_thinking_configuration(
             enable_thinking,
             chat_generation_command.settings.thinking_budget,
+            self.forced_thinking_transition_token_ids.clone(),
+            self.natural_reasoning_end_token_ids.clone(),
         );
         if !prepared_chat_images.processed_visual_images.is_empty() {
             inference_request = inference_request
