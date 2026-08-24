@@ -289,15 +289,88 @@ fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
 
 #[test]
 fn should_preserve_a_positive_budget_for_generation_that_starts_inside_thinking() {
+    let forced_transition_token_ids = vec![50, 51, 52];
     let inference_request = astronomical_model_serving::Qwen3_5InferenceRequest::new(
         RequestId::new(702),
         vec![1, 2, 3],
-        8,
+        100,
     )
-    .with_thinking_configuration(true, Some(64));
+    .with_thinking_configuration(
+        true,
+        Some(64),
+        forced_transition_token_ids.clone(),
+        vec![52, 53],
+    );
 
     assert!(inference_request.generation_starts_inside_thinking_block());
     assert_eq!(inference_request.thinking_budget(), Some(64));
+    assert_eq!(
+        inference_request.forced_thinking_transition_token_ids(),
+        forced_transition_token_ids
+    );
+}
+
+#[test]
+fn should_prepare_a_model_owned_multitoken_transition_ending_at_the_thinking_marker() {
+    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
+        &ornith_tokenizer_json_bytes(248_056),
+        SYNTHETIC_MODEL_ID,
+        ORNITH_VOCABULARY_SIZE,
+        ORNITH_MAXIMUM_POSITION_COUNT,
+        certified_ornith_image_processor(),
+    )
+    .expect("the synthetic tokenizer should load");
+
+    let forced_transition_token_ids = tokenizer.forced_thinking_transition_token_ids();
+    assert!(forced_transition_token_ids.len() > 1);
+    assert_eq!(
+        forced_transition_token_ids.last().copied(),
+        Some(tokenizer.think_end_token_id())
+    );
+    assert!(
+        tokenizer
+            .natural_reasoning_end_token_ids()
+            .contains(&tokenizer.tool_call_start_token_id())
+    );
+}
+
+#[test]
+fn should_reject_a_thinking_budget_that_cannot_fit_its_transition_and_visible_answer() {
+    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
+        &ornith_tokenizer_json_bytes(248_056),
+        SYNTHETIC_MODEL_ID,
+        ORNITH_VOCABULARY_SIZE,
+        ORNITH_MAXIMUM_POSITION_COUNT,
+        certified_ornith_image_processor(),
+    )
+    .expect("the synthetic tokenizer should load");
+    let preparation_error = tokenizer
+        .prepare_chat(
+            &ChatGenerationCommand {
+                request_id: RequestId::new(4_004),
+                model: SYNTHETIC_MODEL_ID.to_owned(),
+                messages: vec![ChatMessage::User {
+                    content: ROMEO_AND_JULIET_SOURCE.chars().take(128).collect(),
+                    images: Vec::new(),
+                }],
+                tools: Vec::new(),
+                tool_choice: ChatToolChoice::None,
+                settings: ChatGenerationSettings {
+                    max_output_tokens: 2,
+                    temperature_thousandths: None,
+                    top_p_thousandths: None,
+                    seed: None,
+                    thinking_budget: Some(1),
+                },
+            },
+            true,
+        )
+        .expect_err("the request cannot reserve its complete model-owned transition");
+
+    assert!(matches!(
+        preparation_error,
+        Qwen3_5TokenizerError::ThinkingBudgetOutputReservation { .. }
+    ));
 }
 
 fn ornith_tokenizer_json_bytes(image_pad_token_id: u32) -> Vec<u8> {

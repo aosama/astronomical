@@ -94,7 +94,8 @@ fn should_clamp_depth_to_output_context_and_thinking_windows() {
         (7, 12, 20, 40, false, 0, None, Some(3)),
         (8, 12, 20, 40, false, 0, None, Some(3)),
         (7, 12, 37, 40, false, 0, None, Some(2)),
-        (7, 12, 20, 40, true, 6, Some(10), Some(2)),
+        (7, 12, 20, 40, true, 6, Some(10), Some(3)),
+        (7, 12, 20, 40, true, 9, Some(10), None),
         (11, 12, 20, 40, false, 0, None, None),
     ];
     for (
@@ -135,7 +136,7 @@ fn should_attribute_each_non_memory_depth_downgrade_to_its_limiting_window() {
             MtpDepthDowngradeReason::ContextWindow,
         ),
         (
-            (0, 12, 20, 40, true, 7, Some(10)),
+            (0, 12, 20, 40, true, 8, Some(10)),
             MtpDepthDowngradeReason::ThinkingWindow,
         ),
     ];

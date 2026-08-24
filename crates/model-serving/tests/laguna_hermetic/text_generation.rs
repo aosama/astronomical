@@ -173,12 +173,15 @@ fn should_apply_thinking_precedence_as_request_then_generation_config_then_templ
             .thinking_enabled()
     );
 
-    // A positive explicit request budget has the highest precedence and remains available.
-    let request_override = generation_false_processor
+    // Laguna must not advertise a positive hard limit until its decoder commits
+    // a family-owned forced transition into the model's own context.
+    let positive_budget_error = generation_false_processor
         .prepare_chat(&romeo_and_juliet_command(9_806, Some(256)))
-        .expect("an explicit thinking-on request should prepare");
-    assert!(request_override.thinking_enabled());
-    assert_eq!(request_override.thinking_budget(), Some(256));
+        .expect_err("an unenforced positive thinking budget should be rejected");
+    assert!(matches!(
+        positive_budget_error,
+        LagunaPreparationError::PositiveThinkingBudgetUnsupported
+    ));
 
     let mut template_default_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
     template_default_artifact.set_embedded_chat_template(template_with_defaults(true, false));
