@@ -57,7 +57,7 @@ async fn run_one_attribution_mode(performance_attribution_enabled: bool) {
             )
         }],
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "max_tokens": 1
     })
     .to_string();
@@ -109,13 +109,19 @@ fn write_configuration(home_directory: &Path, model_directory: &Path, attributio
     fs::write(
         state_directory.join("config.json"),
         serde_json::to_vec(&json!({
-            "model_directories": [model_directory],
-            "max_output_tokens": 8,
-            "persistent_prompt_cache_enabled": false,
-            "performance_attribution_enabled": attribution_enabled,
-            "mtp_enabled": false,
+            "$schema": "./astronomical-config.schema.json",
+            "schema_version": 1,
+            "runtime": {
+                "model_directories": [model_directory]
+            },
+            "prompt_cache": {"enabled": false, "maximum_size_gb": 50},
+            "models": {
+                (LAGUNA_XS_PUBLIC_MODEL_ID): {
+                    "generation_defaults": {"maximum_output_tokens": 8}
+                }
+            },
+            "diagnostics": {"performance_attribution_enabled": attribution_enabled},
             "chunking": {
-
                 "fixed_prompt_processing_chunk_size_tokens": 2048
             }
         }))

@@ -211,7 +211,7 @@ async fn run_daemon(
             hub_transport.clone(),
             hub_transport,
             discovery_refresh,
-            supervisor_attribution_log,
+            supervisor_attribution_log.clone(),
         ));
     library_download_coordinator
         .recover_startup_state()
@@ -224,6 +224,7 @@ async fn run_daemon(
         shutdown_controller,
         download_catalog,
         library_download_coordinator,
+        supervisor_attribution_log,
     );
 
     println!("astronomicald listening on http://{bound_supervisor_address}");

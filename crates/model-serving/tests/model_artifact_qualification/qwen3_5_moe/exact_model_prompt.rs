@@ -43,12 +43,14 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids_for_model(
             seed: None,
             thinking_budget: Some(256),
         },
+        qwen_thinking_channel_seed: None,
     };
     let rendered_prompt = Qwen3_5PromptRenderer::render(
         &chat_generation_command.messages,
         &chat_generation_command.tools,
         true,
         &[],
+        None,
     )
     .map_err(|source| ExactModelPromptError::operation("chat prompt rendering failed", source))?;
     let mut prepared_prompt_token_ids = tokenizer

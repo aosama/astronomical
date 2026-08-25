@@ -325,6 +325,7 @@ fn delayed_memory_model_policy(model_root: &std::path::Path) -> RuntimeModelPoli
                     prompt_cache_block_tokens: None,
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
+                mtp_enabled: true,
                 mtp_draft_depth: None,
                 speculative_prefill: None,
             },
@@ -349,6 +350,7 @@ fn delayed_memory_generation_command() -> ChatGenerationCommand {
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     }
 }
 

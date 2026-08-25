@@ -89,6 +89,7 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         configured_persistent_prompt_cache_enabled: None,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
+        experimental_qwen_thinking_channel_seed_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             PathBuf::from("/tmp/prompt-cache"),
             50_000_000_000,

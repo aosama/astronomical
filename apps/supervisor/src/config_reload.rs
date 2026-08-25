@@ -43,6 +43,8 @@ pub struct ResolvedRuntimeConfig {
     pub maximum_mlx_memory_bytes: Option<u64>,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
+    /// Whether REST requests may read the optional Qwen thinking-channel seed.
+    pub experimental_qwen_thinking_channel_seed_enabled: bool,
     /// Whether the worker may read and write the persistent prompt cache.
     pub persistent_prompt_cache_enabled: bool,
     /// Authored cache toggle before the enabled-by-default policy is applied.
@@ -170,6 +172,8 @@ impl ResolvedRuntimeConfigResolver {
             unmatched_model_config_ids,
             maximum_mlx_memory_bytes: user_config.maximum_mlx_memory_bytes()?,
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
+            experimental_qwen_thinking_channel_seed_enabled: user_config
+                .experimental_qwen_thinking_channel_seed_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
             configured_persistent_prompt_cache_enabled: user_config
                 .configured_persistent_prompt_cache_enabled(),
@@ -404,7 +408,15 @@ impl ConfigReloadDiff {
             in_place_reloaded_fields.push("maximum_mlx_memory_gb".to_owned());
         }
         if current.performance_attribution_enabled != candidate.performance_attribution_enabled {
-            worker_restart_reloaded_fields.push("performance_attribution_enabled".to_owned());
+            // Supervisor and worker attribution share one setting, while the supervisor writer is
+            // opened before the listener binds. An application restart keeps both owners aligned.
+            restart_required_fields.push("diagnostics.performance_attribution_enabled".to_owned());
+        }
+        if current.experimental_qwen_thinking_channel_seed_enabled
+            != candidate.experimental_qwen_thinking_channel_seed_enabled
+        {
+            worker_restart_reloaded_fields
+                .push("experimental_qwen_thinking_channel_seed_enabled".to_owned());
             worker_restart_required = true;
         }
         if current.persistent_prompt_cache_enabled != candidate.persistent_prompt_cache_enabled {

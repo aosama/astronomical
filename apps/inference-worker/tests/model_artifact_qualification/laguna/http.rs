@@ -56,7 +56,7 @@ async fn run_public_generation_journey(model_id: &str, model_directory: PathBuf)
                 "content": format!("Use the supplied Romeo and Juliet source. Name the two households.\n\n{source_excerpt}"),
             }],
             "stream": true,
-            "temperature": 0,
+        "temperature": 1,
             "max_tokens": 4,
         })
         .to_string(),
@@ -107,7 +107,7 @@ pub(super) fn opencode_shaped_chat_request_body(
         }],
         "tool_choice": "auto",
         "stream": true,
-        "temperature": 0,
+            "temperature": 1,
         "max_tokens": maximum_output_tokens,
     })
     .to_string()

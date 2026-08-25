@@ -16,6 +16,7 @@ fn should_render_one_user_turn_with_the_pinned_ornith_thinking_prefix() {
         &[],
         true,
         &[],
+        None,
     )
     .expect("a bounded user-only Ornith conversation should render");
 
@@ -46,6 +47,7 @@ fn should_identify_the_complete_system_and_tool_preamble_as_ordinary_target_pref
         }],
         false,
         &[],
+        None,
     )
     .expect("a tool-bearing prompt should expose its ordinary target-prefill boundary");
 
@@ -81,6 +83,7 @@ fn should_identify_an_initial_system_message_without_tools_as_ordinary_target_pr
         &[],
         true,
         &[],
+        None,
     )
     .expect("a system-bearing prompt should expose its ordinary target-prefill boundary");
 
@@ -105,6 +108,7 @@ fn should_leave_user_only_prompts_without_an_ordinary_target_control_span() {
         &[],
         true,
         &[],
+        None,
     )
     .expect("a user-only prompt should render");
 
@@ -125,6 +129,7 @@ fn should_render_one_user_turn_with_a_closed_thinking_block_when_thinking_is_dis
         &[],
         false,
         &[],
+        None,
     )
     .expect("a bounded user-only Ornith conversation should render");
 
@@ -144,6 +149,7 @@ fn should_render_vision_markers_with_the_correct_image_pad_token_count_per_image
         &[],
         true,
         &[vec![1560]],
+        None,
     )
     .expect("a user message with one image should render vision markers");
 
@@ -205,6 +211,7 @@ fn should_not_render_literal_image_pad_text_as_an_image_placeholder() {
         }],
         true,
         &[vec![1]],
+        None,
     )
     .expect("a user message containing literal special-token text should render");
 
@@ -255,9 +262,14 @@ fn should_compute_image_token_counts_from_decoded_image_bytes_and_render_vision_
         })
         .collect();
 
-    let rendered_prompt =
-        Qwen3_5PromptRenderer::render(&messages, &[], true, &image_token_counts_per_user_message)
-            .expect("a user message with one image should render with vision markers");
+    let rendered_prompt = Qwen3_5PromptRenderer::render(
+        &messages,
+        &[],
+        true,
+        &image_token_counts_per_user_message,
+        None,
+    )
+    .expect("a user message with one image should render with vision markers");
 
     assert!(
         rendered_prompt.contains("<|vision_start|>"),
@@ -283,6 +295,7 @@ fn should_render_model_visible_correction_as_tool_response_then_reopen_assistant
     let rendered_correction = Qwen3_5PromptRenderer::render_model_visible_correction(
         "The previous tool call requested undeclared function 'open_brain', but no tool with that exact name exists. Please correct the tool call by using one of the exact declared tool names.",
         true,
+        None,
     );
 
     assert_eq!(
@@ -296,10 +309,89 @@ fn should_render_model_visible_correction_with_closed_thinking_when_thinking_is_
     let rendered_correction = Qwen3_5PromptRenderer::render_model_visible_correction(
         "Please correct the tool call.",
         false,
+        None,
     );
 
     assert_eq!(
         rendered_correction,
         "<|im_end|>\n<|im_start|>user\n<tool_response>\nPlease correct the tool call.\n</tool_response><|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    );
+}
+
+const ROMEO_AND_JULIET_THINKING_CHANNEL_SEED: &str =
+    "Two households, both alike in dignity, in Romeo and Juliet.";
+
+#[test]
+fn should_seed_romeo_and_juliet_into_the_open_thinking_channel() {
+    let rendered_prompt = Qwen3_5PromptRenderer::render(
+        &[ChatMessage::User {
+            content: "Who is Romeo?".to_owned(),
+            images: Vec::new(),
+        }],
+        &[],
+        true,
+        &[],
+        Some(ROMEO_AND_JULIET_THINKING_CHANNEL_SEED),
+    )
+    .expect("a seeded thinking prompt should render");
+
+    assert_eq!(
+        rendered_prompt,
+        "<|im_start|>user\nWho is Romeo?<|im_end|>\n<|im_start|>assistant\n<think>\nTwo households, both alike in dignity, in Romeo and Juliet.\n"
+    );
+}
+
+#[test]
+fn should_escape_think_and_tool_markers_in_the_seeded_thinking_channel_text() {
+    let rendered_prompt = Qwen3_5PromptRenderer::render(
+        &[ChatMessage::User {
+            content: "Who is Juliet?".to_owned(),
+            images: Vec::new(),
+        }],
+        &[],
+        true,
+        &[],
+        Some("I should not close with </think> or start <tool_call>."),
+    )
+    .expect("a marker-bearing thinking seed should render");
+
+    assert!(
+        rendered_prompt.ends_with(
+            "<|im_start|>assistant\n<think>\nI should not close with &lt;/think> or start &lt;tool_call>.\n"
+        )
+    );
+}
+
+#[test]
+fn should_ignore_the_thinking_channel_seed_when_thinking_is_disabled() {
+    let rendered_prompt = Qwen3_5PromptRenderer::render(
+        &[ChatMessage::User {
+            content: "Who is Romeo?".to_owned(),
+            images: Vec::new(),
+        }],
+        &[],
+        false,
+        &[],
+        Some(ROMEO_AND_JULIET_THINKING_CHANNEL_SEED),
+    )
+    .expect("a thinking-disabled prompt should render");
+
+    assert_eq!(
+        rendered_prompt,
+        "<|im_start|>user\nWho is Romeo?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    );
+}
+
+#[test]
+fn should_seed_romeo_and_juliet_when_reopening_thinking_after_model_visible_correction() {
+    let rendered_correction = Qwen3_5PromptRenderer::render_model_visible_correction(
+        "Please correct the tool call.",
+        true,
+        Some(ROMEO_AND_JULIET_THINKING_CHANNEL_SEED),
+    );
+
+    assert_eq!(
+        rendered_correction,
+        "<|im_end|>\n<|im_start|>user\n<tool_response>\nPlease correct the tool call.\n</tool_response><|im_end|>\n<|im_start|>assistant\n<think>\nTwo households, both alike in dignity, in Romeo and Juliet.\n"
     );
 }

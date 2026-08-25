@@ -154,12 +154,13 @@ pub(super) fn configured_mtp_artifact_test_inputs(
                     seed: None,
                     thinking_budget: Some(256),
                 },
+                qwen_thinking_channel_seed: None,
             },
             false,
         )
         .expect("the configured MTP tokenizer should prepare the short qualification prompt");
     let injected_feedback_token_ids = tokenizer
-        .encode_model_visible_correction("Continue with the corrected context.", false)
+        .encode_model_visible_correction("Continue with the corrected context.", false, None)
         .expect("the configured MTP tokenizer should encode injected model feedback");
     ConfiguredMtpArtifactTestInputs {
         short_prompt_token_ids: short_prompt_request.input_token_ids().to_vec(),

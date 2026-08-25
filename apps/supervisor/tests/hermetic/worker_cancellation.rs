@@ -250,6 +250,7 @@ fn command_for_model(model_id: &str) -> ChatGenerationCommand {
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     }
 }
 

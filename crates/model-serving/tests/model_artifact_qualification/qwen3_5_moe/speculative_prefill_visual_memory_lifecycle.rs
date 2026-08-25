@@ -417,6 +417,7 @@ fn cache_deleted_visual_request(
                     seed: None,
                     thinking_budget: Some(256),
                 },
+                qwen_thinking_channel_seed: None,
             },
             false,
         )

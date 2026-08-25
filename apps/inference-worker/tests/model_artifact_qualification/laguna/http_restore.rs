@@ -50,7 +50,7 @@ async fn run_repeated_http_restore() {
             "content": format!("Use the supplied Romeo and Juliet source. Name the two households and the tragic ending.\n\n{source_excerpt}"),
         }],
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "max_tokens": 8,
     })
     .to_string();

@@ -119,6 +119,7 @@ fn repeated_source_material_for_minimum_tokens(
                     tools: declared_tools.to_vec(),
                     tool_choice: ChatToolChoice::Auto,
                     settings: process_pass_generation_settings(),
+                    qwen_thinking_channel_seed: None,
                 },
                 false,
             )
@@ -196,6 +197,7 @@ fn prepared_prompt_from_messages(
                 tools: declared_tools.to_vec(),
                 tool_choice: ChatToolChoice::Auto,
                 settings: process_pass_generation_settings(),
+                qwen_thinking_channel_seed: None,
             },
             false,
         )

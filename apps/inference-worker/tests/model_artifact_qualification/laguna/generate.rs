@@ -139,6 +139,7 @@ fn generate_from_reference_artifact() {
             seed: Some(106),
             thinking_budget: Some(0),
         },
+        qwen_thinking_channel_seed: None,
     };
     let prepared_generation = generation_processor
         .prepare_chat(&chat_command)

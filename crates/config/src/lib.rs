@@ -285,6 +285,18 @@ impl AstronomicalConfig {
             .unwrap_or(false)
     }
 
+    /// Returns whether the optional Qwen thinking-channel seed may be read.
+    ///
+    /// The experiment is opt-in so an existing `thinking.md` file cannot alter
+    /// model requests unless the user deliberately enables it in this instance.
+    #[must_use]
+    pub fn experimental_qwen_thinking_channel_seed_enabled(&self) -> bool {
+        self.user_config_file
+            .runtime
+            .experimental_qwen_thinking_channel_seed_enabled
+            .unwrap_or(false)
+    }
+
     /// Resolves inherited policy for one canonical discovered model identity.
     pub fn resolved_model_config(
         &self,

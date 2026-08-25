@@ -204,7 +204,7 @@ fn request_body(model_id: &str) -> String {
             compact_romeo_and_juliet_source()
         )}],
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "max_tokens": 2
     })
     .to_string()

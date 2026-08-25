@@ -33,6 +33,7 @@ impl UserConfigFile {
             runtime: RuntimeConfigFile {
                 model_directories: Vec::new(),
                 maximum_mlx_memory_gb: None,
+                experimental_qwen_thinking_channel_seed_enabled: None,
             },
             prompt_cache: None,
             chunking: None,
@@ -70,6 +71,8 @@ pub(crate) struct RuntimeConfigFile {
     pub(crate) model_directories: Vec<PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) maximum_mlx_memory_gb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_qwen_thinking_channel_seed_enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -302,6 +305,8 @@ fn is_valid_model_identity(model_id: &str) -> bool {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MtpConfigFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) draft_depth: Option<u8>,
 }

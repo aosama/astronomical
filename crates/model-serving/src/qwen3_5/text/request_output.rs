@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ChatToolDefinition;
+use astronomical_ipc_protocol::{ChatGenerationOutput, ChatToolDefinition};
 use thiserror::Error;
 
 use super::{
@@ -13,6 +13,8 @@ pub struct Qwen3_5RequestOutput {
     output_parser: Qwen3_5OutputParser,
     token_decoder: Qwen3_5TokenDecoder,
     enable_thinking: bool,
+    thinking_channel_seed: Option<String>,
+    should_emit_seeded_reasoning: bool,
 }
 
 impl Qwen3_5RequestOutput {
@@ -21,6 +23,7 @@ impl Qwen3_5RequestOutput {
         tokenizer: &Qwen3_5Tokenizer,
         declared_tools: &[ChatToolDefinition],
         enable_thinking: bool,
+        thinking_channel_seed: Option<&str>,
     ) -> Result<Self, Qwen3_5RequestOutputError> {
         let output_parser = if enable_thinking {
             Qwen3_5OutputParser::new_after_thinking_prefix(declared_tools)
@@ -28,10 +31,18 @@ impl Qwen3_5RequestOutput {
         } else {
             Qwen3_5OutputParser::new(declared_tools).map_err(Self::parser_initialization_error)?
         };
+        let normalized_thinking_channel_seed = thinking_channel_seed
+            .map(str::trim)
+            .filter(|trimmed_seed| !trimmed_seed.is_empty())
+            .map(str::to_owned);
+        let should_emit_seeded_reasoning =
+            enable_thinking && normalized_thinking_channel_seed.is_some();
         Ok(Self {
             output_parser,
             token_decoder: tokenizer.incremental_decoder(),
             enable_thinking,
+            thinking_channel_seed: normalized_thinking_channel_seed,
+            should_emit_seeded_reasoning,
         })
     }
 
@@ -39,6 +50,24 @@ impl Qwen3_5RequestOutput {
     #[must_use]
     pub const fn enable_thinking(&self) -> bool {
         self.enable_thinking
+    }
+
+    /// Returns the normalized seed retained for later correction-driven reasoning blocks.
+    #[must_use]
+    pub fn thinking_channel_seed(&self) -> Option<&str> {
+        self.thinking_channel_seed.as_deref()
+    }
+
+    /// Emits seeded text once as the first public reasoning fragment for this reasoning block.
+    #[must_use]
+    pub fn take_seeded_reasoning_output(&mut self) -> Option<ChatGenerationOutput> {
+        if !self.should_emit_seeded_reasoning {
+            return None;
+        }
+        self.should_emit_seeded_reasoning = false;
+        self.thinking_channel_seed
+            .clone()
+            .map(|text| ChatGenerationOutput::Reasoning { text })
     }
 
     /// Decodes and parses one generated model token at a stable engine boundary.
@@ -72,9 +101,11 @@ impl Qwen3_5RequestOutput {
         Ok(output_events)
     }
 
-    pub(crate) fn reset_after_model_visible_correction(&mut self, enable_thinking: bool) {
+    pub fn reset_after_model_visible_correction(&mut self, enable_thinking: bool) {
+        self.enable_thinking = enable_thinking;
         self.output_parser
             .reset_after_model_visible_correction(enable_thinking);
+        self.should_emit_seeded_reasoning = enable_thinking && self.thinking_channel_seed.is_some();
     }
 
     fn parser_error(&self, parser_error: Qwen3_5OutputParserError) -> Qwen3_5RequestOutputError {

@@ -242,7 +242,28 @@ fn should_restart_worker_when_any_per_model_execution_policy_changes() {
 }
 
 #[test]
-fn should_classify_performance_attribution_change_as_worker_restart() {
+fn should_restart_worker_when_per_model_mtp_enablement_changes() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    Arc::make_mut(&mut candidate.model_policy_catalog)
+        .get_mut("default")
+        .expect("sample policy should exist")
+        .worker_model_configuration
+        .autoregressive_mut()
+        .expect("sample policy should be autoregressive")
+        .mtp_enabled = false;
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields == &["model_policies".to_owned()]
+    ));
+}
+
+#[test]
+fn should_require_an_application_restart_when_performance_attribution_changes() {
     let mut current = sample_resolved_config();
     current.performance_attribution_enabled = false;
     let mut candidate = sample_resolved_config();
@@ -250,10 +271,30 @@ fn should_classify_performance_attribution_change_as_worker_restart() {
 
     let decision = ConfigReloadDiff::compare(&current, &candidate);
 
-    assert!(
-        matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. } if reloaded_fields == &["performance_attribution_enabled".to_owned()]),
-        "a performance attribution change must restart the worker, got {decision:?}"
-    );
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::RestApiRestartRequired {
+            ref restart_required_fields,
+            ..
+        } if restart_required_fields
+            == &["diagnostics.performance_attribution_enabled".to_owned()]
+    ));
+}
+
+#[test]
+fn should_restart_the_worker_to_acknowledge_the_experimental_thinking_seed_flag() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.experimental_qwen_thinking_channel_seed_enabled = true;
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields
+                == &["experimental_qwen_thinking_channel_seed_enabled".to_owned()]
+    ));
 }
 
 #[test]
@@ -342,6 +383,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         configured_persistent_prompt_cache_enabled: None,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
+        experimental_qwen_thinking_channel_seed_enabled: false,
         prompt_cache_config: PromptCacheConfig::new(
             PathBuf::from("/tmp/prompt-cache"),
             50_000_000_000,
@@ -383,6 +425,7 @@ fn sample_runtime_model_policy() -> RuntimeModelPolicy {
                     prompt_cache_block_tokens: None,
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
+                mtp_enabled: true,
                 mtp_draft_depth: None,
                 speculative_prefill: None,
             },

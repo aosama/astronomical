@@ -94,6 +94,7 @@ fn development_resolved_config() -> ResolvedRuntimeConfig {
         configured_persistent_prompt_cache_enabled: None,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
+        experimental_qwen_thinking_channel_seed_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             PathBuf::from("/fictional/prompt-cache"),
             50_000_000_000,
@@ -160,6 +161,7 @@ fn autoregressive_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
                     prompt_cache_block_tokens: None,
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
+                mtp_enabled: true,
                 mtp_draft_depth: None,
                 speculative_prefill_enabled: false,
                 speculative_prefill: None,

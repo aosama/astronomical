@@ -359,7 +359,7 @@ fn long_context_request_body(request_phase_name: &str) -> String {
         "tool_choice": "auto",
         "stream": true,
         "stream_options": {"include_usage": true},
-        "temperature": 0,
+        "temperature": 1,
         "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
         "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
     })
