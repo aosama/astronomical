@@ -27,6 +27,7 @@ pub struct ConfiguredSpeculativePrefillPolicy {
 pub struct RuntimeModelAccelerationAvailability {
     pub configured_speculative_prefill: Option<ConfiguredSpeculativePrefillPolicy>,
     pub speculative_prefill_unavailable_reason: Option<String>,
+    pub configured_mtp_enabled: Option<bool>,
 }
 
 /// One canonical requestable model's directory and fully resolved execution policy.

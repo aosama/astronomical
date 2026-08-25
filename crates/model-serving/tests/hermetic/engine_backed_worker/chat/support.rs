@@ -21,6 +21,7 @@ pub(crate) fn chat_command(request_number: u64, seed: u64) -> ChatGenerationComm
             seed: Some(seed),
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     }
 }
 
@@ -39,6 +40,7 @@ pub(crate) fn worker_model_configuration(model_id: &str) -> WorkerModelConfigura
             prompt_cache_block_tokens: None,
             prompt_cache_common_prefix_stride_blocks: 4,
         },
+        mtp_enabled: true,
         mtp_draft_depth: None,
         speculative_prefill: None,
     })

@@ -172,6 +172,7 @@ fn autoregressive_configuration() -> WorkerModelConfiguration {
             prompt_cache_block_tokens: None,
             prompt_cache_common_prefix_stride_blocks: 4,
         },
+        mtp_enabled: true,
         mtp_draft_depth: None,
         speculative_prefill: None,
     })

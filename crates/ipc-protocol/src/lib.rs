@@ -19,7 +19,7 @@ pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatImageInput, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    ChatToolDefinition,
+    ChatToolDefinition, MAX_QWEN_THINKING_CHANNEL_SEED_BYTES,
 };
 pub use chat_generation_validation::ChatGenerationValidationError;
 pub use image_generation::{

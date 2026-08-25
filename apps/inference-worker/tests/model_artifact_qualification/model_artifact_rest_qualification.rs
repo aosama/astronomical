@@ -406,7 +406,7 @@ pub(super) fn text_chat_request_body_for_model(model_id: &str) -> String {
             "content": "Reply with exactly ASTRONOMICAL_E2E_OK and nothing else.",
         }],
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "max_tokens": 32,
     })
     .to_string()
@@ -437,7 +437,7 @@ fn deployment_litmus_chat_request_body(model_id: &str, user_prompt: &str) -> Str
         }],
         "tools": production_shaped_tools,
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "max_tokens": DEPLOYMENT_LITMUS_MAX_OUTPUT_TOKENS,
     })
     .to_string()
@@ -475,7 +475,7 @@ pub(super) fn image_chat_request_body_for_model(model_id: &str) -> String {
             ],
         }],
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "max_tokens": 128,
     })
     .to_string()

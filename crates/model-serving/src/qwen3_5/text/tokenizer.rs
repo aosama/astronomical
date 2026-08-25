@@ -241,18 +241,6 @@ impl Qwen3_5Tokenizer {
     }
 
     /// Encodes server-generated feedback that is injected into the active model context.
-    pub fn encode_model_visible_correction(
-        &self,
-        correction_text: &str,
-        enable_thinking: bool,
-    ) -> Result<Vec<u32>, Qwen3_5TokenizerError> {
-        let rendered_correction = Qwen3_5PromptRenderer::render_model_visible_correction(
-            correction_text,
-            enable_thinking,
-        );
-        self.encode_prompt(&rendered_correction)
-    }
-
     /// Creates one bounded request-local monotonic UTF-8 decoder.
     #[must_use]
     pub fn incremental_decoder(&self) -> Qwen3_5TokenDecoder {
@@ -340,6 +328,9 @@ impl Qwen3_5Tokenizer {
                         &chat_generation_command.tools,
                         enable_thinking,
                         &prepared_chat_images.image_token_counts_per_user_message,
+                        chat_generation_command
+                            .qwen_thinking_channel_seed
+                            .as_deref(),
                     )
                 },
             )

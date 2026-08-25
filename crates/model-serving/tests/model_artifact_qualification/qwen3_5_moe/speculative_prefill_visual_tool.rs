@@ -319,6 +319,7 @@ fn prepare_visual_tool_prompt(
                         seed: None,
                         thinking_budget: Some(256),
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 false,
             )

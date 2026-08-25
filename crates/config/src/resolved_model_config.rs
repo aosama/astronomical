@@ -18,6 +18,7 @@ pub struct ResolvedModelConfig {
     chunking: ChunkingConfig,
     configured_chunking_fields: ConfiguredChunkingFields,
     speculative_prefill: Option<SpeculativePrefillConfig>,
+    configured_mtp_enabled: Option<bool>,
     mtp_draft_depth: Option<u8>,
 }
 
@@ -87,6 +88,9 @@ impl ResolvedModelConfig {
             chunking: ChunkingConfig::resolve(&effective_chunking)?,
             configured_chunking_fields: effective_chunking.configured_fields(),
             speculative_prefill,
+            configured_mtp_enabled: acceleration
+                .and_then(|acceleration| acceleration.mtp.as_ref())
+                .and_then(|mtp| mtp.enabled),
             mtp_draft_depth: acceleration
                 .and_then(|acceleration| acceleration.mtp.as_ref())
                 .and_then(|mtp| mtp.draft_depth),
@@ -144,6 +148,21 @@ impl ResolvedModelConfig {
     #[must_use]
     pub const fn speculative_prefill(&self) -> Option<&SpeculativePrefillConfig> {
         self.speculative_prefill.as_ref()
+    }
+
+    /// Returns the authored MTP enablement, or `None` when automatic compatible MTP applies.
+    #[must_use]
+    pub const fn configured_mtp_enabled(&self) -> Option<bool> {
+        self.configured_mtp_enabled
+    }
+
+    /// Returns whether this model may use compatible multi-token prediction.
+    #[must_use]
+    pub const fn mtp_enabled(&self) -> bool {
+        match self.configured_mtp_enabled {
+            Some(mtp_enabled) => mtp_enabled,
+            None => true,
+        }
     }
 
     /// Returns the configured proposal depth, or `None` for artifact policy.

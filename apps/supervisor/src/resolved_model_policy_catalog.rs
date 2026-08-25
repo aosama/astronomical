@@ -119,6 +119,7 @@ impl ResolvedModelPolicyCatalog {
                     })
             });
         let acceleration_availability = RuntimeModelAccelerationAvailability {
+            configured_mtp_enabled: resolved_model_config.configured_mtp_enabled(),
             configured_speculative_prefill: configured_speculative_prefill.map(|configuration| {
                 ConfiguredSpeculativePrefillPolicy {
                     draft_model_id: configuration
@@ -143,6 +144,7 @@ impl ResolvedModelPolicyCatalog {
                 // Worker policy carries model capability rather than a request default.
                 maximum_output_tokens: chat_capabilities.max_output_tokens,
                 chunking: worker_chunking_configuration(resolved_model_config.chunking()),
+                mtp_enabled: resolved_model_config.mtp_enabled(),
                 mtp_draft_depth: resolved_model_config.mtp_draft_depth(),
                 speculative_prefill,
             }),

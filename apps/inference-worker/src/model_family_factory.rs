@@ -115,6 +115,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, Fl
                             model_configuration.model_id,
                             model_configuration.maximum_context_tokens,
                             model_configuration.maximum_output_tokens,
+                            model_configuration.mtp_enabled,
                             model_configuration.mtp_draft_depth,
                             model_configuration
                                 .speculative_prefill

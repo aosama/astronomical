@@ -440,7 +440,7 @@ async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement
         )
         .await
         .expect("the application should return a status response");
-    let status_body = to_bytes(response.into_body(), 4 * 1024)
+    let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the status body should be readable");
     let status_document: serde_json::Value =

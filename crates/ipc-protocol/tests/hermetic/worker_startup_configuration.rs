@@ -64,6 +64,7 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                     prompt_cache_block_tokens: None,
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
+                mtp_enabled: true,
                 mtp_draft_depth: Some(2),
                 speculative_prefill: None,
             },
@@ -104,6 +105,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                 prompt_cache_block_tokens: None,
                 prompt_cache_common_prefix_stride_blocks: 4,
             },
+            mtp_enabled: true,
             mtp_draft_depth: Some(2),
             speculative_prefill: None,
         });
@@ -128,6 +130,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                     "prompt_cache_block_tokens": null,
                     "prompt_cache_common_prefix_stride_blocks": 4
                 },
+                "mtp_enabled": true,
                 "mtp_draft_depth": 2,
                 "speculative_prefill": null
             }

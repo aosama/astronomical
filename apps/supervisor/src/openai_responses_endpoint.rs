@@ -117,6 +117,12 @@ pub(crate) async fn create_response(
         settings_presence,
         &mut chat_generation_command.settings,
     );
+    chat_generation_command.qwen_thinking_channel_seed =
+        crate::load_configured_qwen_thinking_channel_seed(
+            &application_state,
+            &chat_generation_command.model,
+        )
+        .await;
     tracing::info!(
         request_id,
         model = %chat_generation_command.model,

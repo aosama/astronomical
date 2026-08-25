@@ -86,6 +86,11 @@
         "effective": null
       },
       "model_id": "fictional/image-model",
+      "mtp_enabled": {
+        "configured": null,
+        "default": true,
+        "effective": null
+      },
       "mtp_draft_depth": {
         "configured": null,
         "default": null,

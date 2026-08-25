@@ -84,6 +84,7 @@ fn should_keep_every_writable_path_beneath_an_explicit_test_state_directory() {
         instance_paths.logging_directory(),
         instance_paths.daemon_ownership_file_path(),
         instance_paths.instance_lock_file_path(),
+        instance_paths.qwen_thinking_channel_seed_file_path(),
     ] {
         assert!(writable_path.starts_with(test_state_directory.path()));
     }
@@ -236,4 +237,26 @@ fn should_reject_the_filesystem_root_as_a_user_home() {
         home_directory_error,
         AstronomicalConfigError::HomeDirectoryMustNotBeRoot
     ));
+}
+
+#[test]
+fn should_resolve_thinking_markdown_under_the_instance_state_directory() {
+    let fictional_home_directory = PathBuf::from("/Users/example");
+    let development_paths = AstronomicalInstancePaths::for_home_directory(
+        &fictional_home_directory,
+        AstronomicalRuntimeInstance::Development,
+    );
+    let stable_paths = AstronomicalInstancePaths::for_home_directory(
+        &fictional_home_directory,
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert_eq!(
+        development_paths.qwen_thinking_channel_seed_file_path(),
+        fictional_home_directory.join(".astronomical-dev/thinking.md")
+    );
+    assert_eq!(
+        stable_paths.qwen_thinking_channel_seed_file_path(),
+        fictional_home_directory.join(".astronomical/thinking.md")
+    );
 }

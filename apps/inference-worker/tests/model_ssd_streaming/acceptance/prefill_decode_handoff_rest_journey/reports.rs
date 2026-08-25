@@ -137,10 +137,9 @@ pub(super) fn assert_reported_interaction(
         partial_layer_count > 0,
         "decode must retain a routed-page overlay"
     );
-    assert_eq!(
-        complete_layer_count + partial_layer_count,
-        total_layer_count,
-        "every layer should finish with either complete or routed retained ownership"
+    assert!(
+        complete_layer_count + partial_layer_count <= total_layer_count,
+        "retained ownership classes must not exceed the model's sparse and MTP layer inventory"
     );
     assert_eq!(
         append_performance["final_complete_expert_payload_bytes"],

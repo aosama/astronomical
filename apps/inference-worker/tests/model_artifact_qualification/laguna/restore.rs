@@ -194,6 +194,7 @@ fn generate_once(
             seed: Some(105),
             thinking_budget: Some(0),
         },
+        qwen_thinking_channel_seed: None,
     };
     let prepared_generation = generation_processor
         .prepare_chat(&chat_command)
