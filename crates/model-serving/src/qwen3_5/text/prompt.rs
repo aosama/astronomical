@@ -2,6 +2,8 @@ use astronomical_ipc_protocol::{ChatAssistantToolCall, ChatMessage, ChatToolDefi
 use serde_json::Value;
 use thiserror::Error;
 
+use super::template_safe_content::append_template_safe_content;
+
 const IM_END: &str = "<|im_end|>";
 const IM_START: &str = "<|im_start|>";
 const THINK_END: &str = "</think>";
@@ -57,12 +59,14 @@ impl Qwen3_5PromptRenderer {
         tools: &[ChatToolDefinition],
         enable_thinking: bool,
         image_token_counts_per_user_message: &[Vec<usize>],
+        thinking_channel_seed: Option<&str>,
     ) -> Result<String, Qwen3_5PromptError> {
         Self::render_with_control_span(
             messages,
             tools,
             enable_thinking,
             image_token_counts_per_user_message,
+            thinking_channel_seed,
         )
         .map(Qwen3_5RenderedPrompt::into_string)
     }
@@ -74,6 +78,7 @@ impl Qwen3_5PromptRenderer {
         tools: &[ChatToolDefinition],
         enable_thinking: bool,
         image_token_counts_per_user_message: &[Vec<usize>],
+        thinking_channel_seed: Option<&str>,
     ) -> Result<Qwen3_5RenderedPrompt, Qwen3_5PromptError> {
         if messages.is_empty() {
             return Err(Qwen3_5PromptError::MissingMessages);
@@ -141,15 +146,11 @@ impl Qwen3_5PromptRenderer {
 
         rendered_prompt.push_str(IM_START);
         rendered_prompt.push_str("assistant\n");
-        if enable_thinking {
-            rendered_prompt.push_str(THINK_START);
-            rendered_prompt.push('\n');
-        } else {
-            rendered_prompt.push_str(THINK_START);
-            rendered_prompt.push_str("\n\n");
-            rendered_prompt.push_str(THINK_END);
-            rendered_prompt.push_str("\n\n");
-        }
+        super::thinking_channel_seed::append_open_thinking_block(
+            &mut rendered_prompt,
+            enable_thinking,
+            thinking_channel_seed,
+        );
         Ok(Qwen3_5RenderedPrompt {
             rendered_prompt,
             ordinary_target_prefill_control_span_byte_count,
@@ -158,7 +159,11 @@ impl Qwen3_5PromptRenderer {
 
     /// Renders server-generated feedback after a malformed model tool call, then reopens assistant generation.
     #[must_use]
-    pub fn render_model_visible_correction(correction_text: &str, enable_thinking: bool) -> String {
+    pub fn render_model_visible_correction(
+        correction_text: &str,
+        enable_thinking: bool,
+        thinking_channel_seed: Option<&str>,
+    ) -> String {
         let mut rendered_correction = String::new();
         rendered_correction.push_str(IM_END);
         rendered_correction.push('\n');
@@ -173,13 +178,11 @@ impl Qwen3_5PromptRenderer {
         rendered_correction.push('\n');
         rendered_correction.push_str(IM_START);
         rendered_correction.push_str("assistant\n");
-        rendered_correction.push_str(THINK_START);
-        rendered_correction.push('\n');
-        if !enable_thinking {
-            rendered_correction.push('\n');
-            rendered_correction.push_str(THINK_END);
-            rendered_correction.push_str("\n\n");
-        }
+        super::thinking_channel_seed::append_open_thinking_block(
+            &mut rendered_correction,
+            enable_thinking,
+            thinking_channel_seed,
+        );
         rendered_correction
     }
 }
@@ -399,37 +402,6 @@ fn append_chat_message(rendered_prompt: &mut String, role: &str, content: &str) 
     append_template_safe_content(rendered_prompt, content);
     rendered_prompt.push_str(IM_END);
     rendered_prompt.push('\n');
-}
-
-fn append_template_safe_content(rendered_prompt: &mut String, untrusted_content: &str) {
-    let mut remaining_content = untrusted_content;
-    while let Some(marker_offset) = remaining_content.find('<') {
-        rendered_prompt.push_str(&remaining_content[..marker_offset]);
-        let marker_suffix = &remaining_content[marker_offset + 1..];
-        if starts_reserved_template_marker(marker_suffix) {
-            rendered_prompt.push_str("&lt;");
-        } else {
-            rendered_prompt.push('<');
-        }
-        remaining_content = marker_suffix;
-    }
-    rendered_prompt.push_str(remaining_content);
-}
-
-fn starts_reserved_template_marker(marker_suffix: &str) -> bool {
-    marker_suffix.starts_with('|')
-        || marker_suffix.starts_with("think>")
-        || marker_suffix.starts_with("/think>")
-        || marker_suffix.starts_with("tool_call>")
-        || marker_suffix.starts_with("/tool_call>")
-        || marker_suffix.starts_with("tool_response>")
-        || marker_suffix.starts_with("/tool_response>")
-        || marker_suffix.starts_with("tools>")
-        || marker_suffix.starts_with("/tools>")
-        || marker_suffix.starts_with("function=")
-        || marker_suffix.starts_with("/function>")
-        || marker_suffix.starts_with("parameter=")
-        || marker_suffix.starts_with("/parameter>")
 }
 
 /// A typed error while reproducing the reviewed Qwen3.5 text template.

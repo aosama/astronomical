@@ -46,7 +46,7 @@ async fn run_cancellation_journey() {
             compact_romeo_and_juliet_source()
         )}],
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "max_tokens": 2,
     })
     .to_string();

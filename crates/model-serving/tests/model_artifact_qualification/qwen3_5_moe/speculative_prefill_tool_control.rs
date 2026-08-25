@@ -302,6 +302,7 @@ pub(super) fn prepare_representative_tool_prompt(
                         seed: None,
                         thinking_budget: Some(256),
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 false,
             )
@@ -374,7 +375,7 @@ pub(super) fn parse_tool_calls(
     declared_tools: &[ChatToolDefinition],
     generated_token_ids: &[u32],
 ) -> Vec<Qwen3_5ToolCall> {
-    let mut request_output = Qwen3_5RequestOutput::new(tokenizer, declared_tools, false)
+    let mut request_output = Qwen3_5RequestOutput::new(tokenizer, declared_tools, false, None)
         .expect("the tool output parser should initialize");
     let mut output_events = Vec::new();
     for generated_token_id in generated_token_ids {

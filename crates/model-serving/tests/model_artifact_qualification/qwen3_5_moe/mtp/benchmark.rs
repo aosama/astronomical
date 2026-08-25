@@ -298,6 +298,7 @@ fn prepare_benchmark_prompt_cases(model_directory: &Path) -> Vec<BenchmarkPrompt
                 seed: None,
                 thinking_budget: Some(256),
             },
+            qwen_thinking_channel_seed: None,
         };
         let inference_request = tokenizer
             .prepare_chat(&chat_generation_command, false)

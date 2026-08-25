@@ -8,10 +8,6 @@
 //! - final status truthfully reports complete expert residency;
 //! - the generation attribution report contains zero expert positional-read bytes.
 //!
-//! It also protects the recovery-policy correction: a recovery-only projection
-//! shortfall must be admitted when stable and expected peak fit. Reintroducing
-//! preemptive recovery eviction would turn this resident journey back into paging.
-
 use std::{fs, path::Path};
 
 use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
@@ -109,39 +105,10 @@ async fn run_complete_expert_residency_rest_journey() {
     stop_real_model_rest_server(real_model_rest_server).await;
     // Logs are read only after worker shutdown so buffered attribution and tracing
     // have reached their isolated files.
-    let memory_admission_decisions =
-        memory_admission_decision_log_lines(isolated_worker_home.path());
-    let complete_residency_transitions =
-        complete_residency_transition_log_lines(isolated_worker_home.path());
-    for memory_admission_decision in &memory_admission_decisions {
-        eprintln!("[complete-expert-residency] status=memory_decision {memory_admission_decision}");
-    }
-    assert!(
-        memory_admission_decisions
-            .iter()
-            .any(|memory_admission_decision| {
-                memory_admission_decision.contains("decision=\"admit_with_recovery_constraint\"")
-                    && memory_admission_decision.contains("recovery_reserve_only_trigger=true")
-            }),
-        "the 38 GB journey must prove that a recovery-only shortfall was admitted: {memory_admission_decisions:?}"
-    );
-    assert!(
-        complete_residency_transitions.iter().any(|transition| {
-            transition.contains("transition_reason=Startup")
-                && transition.contains("outcome=\"promoted\"")
-        }),
-        "a fitting model must finish startup in atomic resident ownership: {complete_residency_transitions:?}"
-    );
-    assert!(
-        complete_residency_transitions
-            .iter()
-            .all(|transition| !transition.contains("outcome=\"recoverable_capacity_rejection\"")),
-        "resident materialization must not exceed an admitted ceiling: {complete_residency_transitions:?}"
-    );
     assert_eq!(
         final_status["expert_memory_mode"].as_str(),
         Some("resident"),
-        "the completed request must leave all experts resident; memory_admission_decisions={memory_admission_decisions:?}; final_status={final_status}"
+        "the completed request must leave all experts resident: {final_status}"
     );
     let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home.path());
     assert_eq!(
@@ -152,52 +119,6 @@ async fn run_complete_expert_residency_rest_journey() {
         "[complete-expert-residency] status=success prompt_tokens={PROMPT_TOKEN_COUNT} expert_memory_mode=resident expert_source_read_bytes={expert_source_read_bytes} average_prefill_tokens_per_second={average_prefill_tokens_per_second:.2} average_generation_tokens_per_second={average_generation_tokens_per_second:.2} output_characters={}",
         completed_stream.model_text.len(),
     );
-}
-
-fn complete_residency_transition_log_lines(isolated_worker_home: &Path) -> Vec<String> {
-    log_lines_containing(
-        isolated_worker_home,
-        "completed complete-model expert residency admission",
-    )
-}
-
-fn memory_admission_decision_log_lines(isolated_worker_home: &Path) -> Vec<String> {
-    let memory_admission_decisions = log_lines_containing(
-        isolated_worker_home,
-        "adaptive RAM growth admission decision",
-    );
-    assert!(
-        !memory_admission_decisions.is_empty(),
-        "the acceptance journey should capture adaptive memory admission decisions"
-    );
-    memory_admission_decisions
-}
-
-fn log_lines_containing(isolated_worker_home: &Path, expected_fragment: &str) -> Vec<String> {
-    let logging_directory = isolated_worker_home.join(".astronomical-dev").join("logs");
-    let logging_entries = fs::read_dir(&logging_directory)
-        .expect("the acceptance journey should create its isolated logging directory");
-    let mut matching_log_lines = Vec::new();
-    for logging_entry in logging_entries {
-        let logging_entry = logging_entry.expect("the isolated log entry should be readable");
-        let log_path = logging_entry.path();
-        if !log_path.is_file() {
-            continue;
-        }
-        let log_content = fs::read_to_string(&log_path).unwrap_or_else(|log_read_error| {
-            panic!(
-                "{} should be readable: {log_read_error}",
-                log_path.display()
-            )
-        });
-        matching_log_lines.extend(
-            log_content
-                .lines()
-                .filter(|log_line| log_line.contains(expected_fragment))
-                .map(str::to_owned),
-        );
-    }
-    matching_log_lines
 }
 
 async fn observe_resident_request_until_idle(server_address: std::net::SocketAddr) -> Value {

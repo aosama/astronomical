@@ -1,6 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use astronomical_config::AstronomicalConfig;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition,
     RequestId,
@@ -8,6 +7,7 @@ use astronomical_ipc_protocol::{
 use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 use serde_json::{Value, json};
 
+use super::deployment_litmus_model::configured_deployment_litmus_model;
 use super::model_artifact_rest_qualification::{
     E2E_TIMEOUT, get_endpoint, launch_model_artifact_rest_server_for_model, post_chat_completion,
     stop_model_artifact_rest_server,
@@ -20,36 +20,14 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 #[ignore = "launches the production worker and public REST surface with configured SpecPrefill and persistent caching"]
 async fn should_complete_the_cold_tool_journey_through_real_config_worker_and_rest_boundaries() {
     tokio::time::timeout(E2E_TIMEOUT, async {
-        let development_home_directory = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .expect("HOME should resolve the Development Astronomical configuration");
-        let development_config =
-            AstronomicalConfig::load_from_development_home_directory(&development_home_directory)
-                .expect("the Development Astronomical configuration should load");
-        let target_model_id =
-            crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID.to_owned();
-        let target_model_context_window = crate::common::configured_discovered_models()
-            .into_iter()
-            .find(|model| model.model_id == target_model_id)
-            .and_then(|model| {
-                crate::common::chat_capabilities(&model)
-                    .map(|chat_capabilities| chat_capabilities.context_window)
-            })
-            .expect("the qualification target should be discovered as a chat model");
-        let configured_target_policy = development_config
-            .resolved_model_config(&target_model_id, target_model_context_window)
-            .expect("the Development target policy should resolve");
-        let configured_speculative_prefill = configured_target_policy
-            .speculative_prefill()
-            .expect("the Development target should configure a SpecPrefill drafter");
-        let draft_model_id = configured_speculative_prefill
-            .draft_model_id()
-            .expect("the qualification requires a configured SpecPrefill drafter")
-            .to_owned();
-        let target_model_directory =
-            crate::common::configured_model_artifact_directory_by_id(&target_model_id);
-        let draft_model_directory =
-            crate::common::configured_model_artifact_directory_by_id(&draft_model_id);
+        let target_model = configured_deployment_litmus_model();
+        let target_model_id = target_model.model_id;
+        let target_model_directory = target_model.model_directory;
+        // This journey qualifies orchestration rather than acceleration quality. Reusing the
+        // smallest artifact guarantees tokenizer compatibility and keeps two-model memory bounded
+        // on laptops where no separately packaged compatible drafter is installed.
+        let draft_model_id = target_model_id.clone();
+        let draft_model_directory = target_model_directory.clone();
         let isolated_worker_home = tempfile::tempdir()
             .expect("the public SpecPrefill journey should create an isolated worker home");
         write_enabled_speculative_prefill_config(
@@ -155,11 +133,16 @@ fn write_enabled_speculative_prefill_config(
     let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     std::fs::create_dir(&configuration_directory)
         .expect("the isolated Astronomical configuration directory should be created");
+    let model_directories = if target_model_directory == draft_model_directory {
+        vec![target_model_directory]
+    } else {
+        vec![target_model_directory, draft_model_directory]
+    };
     let configuration_document = json!({
         "$schema": "./astronomical-config.schema.json",
         "schema_version": 1,
         "runtime": {
-            "model_directories": [target_model_directory, draft_model_directory],
+            "model_directories": model_directories,
         },
         "prompt_cache": {
             "enabled": true,
@@ -258,6 +241,7 @@ fn cold_tool_request_body(target_model_id: &str, target_model_directory: &Path) 
                         seed: None,
                         thinking_budget: Some(256),
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 false,
             )
@@ -319,7 +303,7 @@ fn cold_tool_request_body(target_model_id: &str, target_model_directory: &Path) 
         }],
         "tool_choice": "auto",
         "stream": false,
-        "temperature": 0,
+        "temperature": 1,
         "thinking_budget": 0,
         "max_tokens": 256,
     })

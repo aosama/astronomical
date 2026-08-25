@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::supervisor_download_attribution::{
-    SupervisorDownloadMeasurementDetail, SupervisorDownloadOperationDetail, is_safe_relative_path,
+    SupervisorDownloadMeasurementDetail, SupervisorDownloadOperationDetail,
 };
 use crate::supervisor_performance_record::{
     SupervisorPerformanceAttributionRecord, SupervisorPerformanceOutcome, current_unix_epoch_millis,
@@ -21,7 +21,7 @@ const SUPERVISOR_PERFORMANCE_ATTRIBUTION_FILE_NAME: &str =
 
 type SupervisorPerformanceClock = dyn Fn() -> io::Result<u64> + Send + Sync;
 
-/// Supervisor operation names shared by current and future Library stages.
+/// Supervisor-owned operation names recorded by the common attribution log.
 #[derive(Clone, Copy, Debug)]
 pub enum SupervisorPerformanceOperation {
     LibraryCatalogLoad,
@@ -31,6 +31,7 @@ pub enum SupervisorPerformanceOperation {
     Verification,
     Publication,
     DiscoveryRefresh,
+    QwenThinkingChannelSeedLoad,
 }
 
 impl SupervisorPerformanceOperation {
@@ -43,6 +44,7 @@ impl SupervisorPerformanceOperation {
             Self::Verification => "verification",
             Self::Publication => "publication",
             Self::DiscoveryRefresh => "discovery_refresh",
+            Self::QwenThinkingChannelSeedLoad => "qwen_thinking_channel_seed_load",
         }
     }
 }
@@ -50,9 +52,9 @@ impl SupervisorPerformanceOperation {
 /// Explicit outcome and operation-specific metadata for one measured boundary.
 #[derive(Clone, Debug)]
 pub struct SupervisorPerformanceMeasurement {
-    outcome: SupervisorPerformanceOutcome,
-    catalog_entry_count: Option<usize>,
-    download_detail: Option<SupervisorDownloadMeasurementDetail>,
+    pub(crate) outcome: SupervisorPerformanceOutcome,
+    pub(crate) catalog_entry_count: Option<usize>,
+    pub(crate) download_detail: Option<SupervisorDownloadMeasurementDetail>,
 }
 
 impl SupervisorPerformanceMeasurement {
@@ -142,155 +144,12 @@ impl SupervisorPerformanceMeasurement {
         }
     }
 
-    pub fn with_disk_preflight(
-        mut self,
-        huggingface_id: impl Into<String>,
-        revision: impl Into<String>,
-        required_bytes: u64,
-        available_bytes: u64,
-    ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
-            huggingface_id,
-            revision,
-            SupervisorDownloadOperationDetail::DiskPreflight {
-                required_bytes,
-                available_bytes,
-            },
-        )?);
-        Ok(self)
-    }
-
-    pub fn with_manifest_fetch(
-        mut self,
-        huggingface_id: impl Into<String>,
-        revision: impl Into<String>,
-        manifest_file_count: usize,
-        manifest_total_bytes: u64,
-    ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
-            huggingface_id,
-            revision,
-            SupervisorDownloadOperationDetail::ManifestFetch {
-                manifest_file_count,
-                manifest_total_bytes,
-            },
-        )?);
-        Ok(self)
-    }
-
-    pub fn with_file_transfer(
-        mut self,
-        huggingface_id: impl Into<String>,
-        revision: impl Into<String>,
-        relative_file_path: impl Into<String>,
-        resume_offset_bytes: u64,
-        transferred_bytes: u64,
-    ) -> io::Result<Self> {
-        let relative_file_path = relative_file_path.into();
-        if !is_safe_relative_path(&relative_file_path) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "supervisor attribution requires a bounded safe relative file path",
-            ));
-        }
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
-            huggingface_id,
-            revision,
-            SupervisorDownloadOperationDetail::FileTransfer {
-                relative_file_path,
-                resume_offset_bytes,
-                transferred_bytes,
-            },
-        )?);
-        Ok(self)
-    }
-
-    pub fn with_verification(
-        mut self,
-        huggingface_id: impl Into<String>,
-        revision: impl Into<String>,
-        verified_file_count: usize,
-        verified_bytes: u64,
-    ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
-            huggingface_id,
-            revision,
-            SupervisorDownloadOperationDetail::Verification {
-                verified_file_count,
-                verified_bytes,
-            },
-        )?);
-        Ok(self)
-    }
-
-    pub fn with_publication(
-        mut self,
-        huggingface_id: impl Into<String>,
-        revision: impl Into<String>,
-    ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
-            huggingface_id,
-            revision,
-            SupervisorDownloadOperationDetail::Publication {},
-        )?);
-        Ok(self)
-    }
-
-    pub fn with_discovery_refresh(
-        mut self,
-        huggingface_id: impl Into<String>,
-        revision: impl Into<String>,
-    ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
-            huggingface_id,
-            revision,
-            SupervisorDownloadOperationDetail::DiscoveryRefresh {},
-        )?);
-        Ok(self)
-    }
-
     const fn with_outcome(outcome: SupervisorPerformanceOutcome) -> Self {
         Self {
             outcome,
             catalog_entry_count: None,
             download_detail: None,
         }
-    }
-
-    fn matches_operation(&self, operation: SupervisorPerformanceOperation) -> bool {
-        matches!(
-            (
-                operation,
-                self.download_detail
-                    .as_ref()
-                    .map(|detail| &detail.operation_detail)
-            ),
-            (SupervisorPerformanceOperation::LibraryCatalogLoad, None)
-                | (
-                    SupervisorPerformanceOperation::DiskPreflight,
-                    Some(SupervisorDownloadOperationDetail::DiskPreflight { .. })
-                )
-                | (
-                    SupervisorPerformanceOperation::ManifestFetch,
-                    Some(SupervisorDownloadOperationDetail::ManifestFetch { .. })
-                )
-                | (
-                    SupervisorPerformanceOperation::FileTransfer,
-                    Some(SupervisorDownloadOperationDetail::FileTransfer { .. })
-                )
-                | (
-                    SupervisorPerformanceOperation::Verification,
-                    Some(SupervisorDownloadOperationDetail::Verification { .. })
-                )
-                | (
-                    SupervisorPerformanceOperation::Publication,
-                    Some(SupervisorDownloadOperationDetail::Publication { .. })
-                )
-                | (
-                    SupervisorPerformanceOperation::DiscoveryRefresh,
-                    Some(SupervisorDownloadOperationDetail::DiscoveryRefresh { .. })
-                )
-        )
     }
 }
 
@@ -306,6 +165,12 @@ pub struct SupervisorPerformanceAttributionLog {
 }
 
 impl SupervisorPerformanceAttributionLog {
+    /// Creates a no-overhead log for tests and application variants without diagnostics.
+    #[must_use]
+    pub const fn disabled() -> Self {
+        Self { enabled_sink: None }
+    }
+
     pub fn open(log_directory: &Path, performance_attribution_enabled: bool) -> io::Result<Self> {
         if !performance_attribution_enabled {
             return Ok(Self { enabled_sink: None });
@@ -396,6 +261,53 @@ impl SupervisorPerformanceAttributionLog {
         )
         .await?;
         Ok(operation_output)
+    }
+
+    /// Measures request-path work without allowing diagnostic failures to alter its output.
+    pub async fn measure_async_operation_best_effort<OperationOutput, OperationFuture>(
+        &self,
+        operation: SupervisorPerformanceOperation,
+        measured_operation: impl FnOnce() -> OperationFuture,
+        describe_measurement: impl FnOnce(&OperationOutput) -> SupervisorPerformanceMeasurement,
+    ) -> OperationOutput
+    where
+        OperationFuture: Future<Output = OperationOutput>,
+    {
+        let Some(enabled_sink) = &self.enabled_sink else {
+            return measured_operation().await;
+        };
+        let started_at_unix_millis = match (enabled_sink.unix_epoch_millis)() {
+            Ok(started_at_unix_millis) => started_at_unix_millis,
+            Err(attribution_error) => {
+                tracing::warn!(
+                    operation = operation.as_str(),
+                    error = %attribution_error,
+                    "supervisor performance attribution could not start"
+                );
+                return measured_operation().await;
+            }
+        };
+        let started_at = Instant::now();
+        let operation_output = measured_operation().await;
+        let measurement = describe_measurement(&operation_output);
+        if let Err(attribution_error) = self
+            .record_async_measurement(
+                Arc::clone(enabled_sink),
+                operation,
+                started_at_unix_millis,
+                started_at,
+                measurement,
+            )
+            .await
+        {
+            // Optional diagnostics cannot become a hidden model-steering dependency.
+            tracing::warn!(
+                operation = operation.as_str(),
+                error = %attribution_error,
+                "supervisor performance attribution could not finish"
+            );
+        }
+        operation_output
     }
 
     /// Runs synchronous disk or filesystem work away from the asynchronous executor.

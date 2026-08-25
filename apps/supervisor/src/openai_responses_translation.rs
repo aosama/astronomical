@@ -79,6 +79,7 @@ pub(crate) fn translate_openai_responses_request_parts(
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     };
     chat_generation_command
         .validate()

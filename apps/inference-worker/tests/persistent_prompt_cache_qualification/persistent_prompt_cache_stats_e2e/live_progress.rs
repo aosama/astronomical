@@ -14,7 +14,7 @@ pub(super) async fn post_chat_completion_with_live_progress(
     let serialized_user_message =
         serde_json::to_string(user_message).expect("the user message should serialize into JSON");
     let request_body = format!(
-        r#"{{"model":"{MODEL_ID}","messages":[{{"role":"user","content":{serialized_user_message}}}],"stream":true,"temperature":0,"max_tokens":{maximum_output_tokens}}}"#
+        r#"{{"model":"{MODEL_ID}","messages":[{{"role":"user","content":{serialized_user_message}}}],"stream":true,"temperature":1,"max_tokens":{maximum_output_tokens}}}"#
     );
     let request_text = format!(
         "POST /v1/chat/completions HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{request_body}",

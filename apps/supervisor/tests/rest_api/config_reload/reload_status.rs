@@ -155,6 +155,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         configured_persistent_prompt_cache_enabled: None,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
+        experimental_qwen_thinking_channel_seed_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             config_home_directory
                 .join(".astronomical-dev")

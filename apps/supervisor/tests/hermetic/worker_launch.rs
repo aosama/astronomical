@@ -445,6 +445,7 @@ fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguratio
             prompt_cache_block_tokens: None,
             prompt_cache_common_prefix_stride_blocks: 4,
         },
+        mtp_enabled: true,
         mtp_draft_depth: None,
         speculative_prefill: None,
     })
@@ -467,5 +468,6 @@ fn chat_command(requested_model_id: String) -> ChatGenerationCommand {
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     }
 }

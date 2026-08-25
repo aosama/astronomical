@@ -12,6 +12,7 @@ mod hugging_face_hub;
 mod image_generation;
 mod model_load_timeout;
 mod persistent_prompt_cache_diagnostics;
+mod qwen_thinking_channel_seed;
 mod request_queue;
 mod supervisor_performance_attribution;
 mod worker_cancellation;

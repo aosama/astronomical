@@ -47,6 +47,7 @@ fn should_serialize_one_structured_chat_generation_command_without_rest_types() 
             seed: Some(7),
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     };
 
     assert_eq!(
@@ -116,6 +117,7 @@ fn should_round_trip_one_chat_command_with_a_user_message_image() {
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     };
 
     let serialized_json = serde_json::to_string(&chat_generation_command)
@@ -135,4 +137,55 @@ fn should_round_trip_one_chat_command_with_a_user_message_image() {
     assert_eq!(user_message.len(), 1);
     assert_eq!(user_message[0].mime_type, "image/png");
     assert_eq!(user_message[0].decoded_bytes, vec![0x89, 0x50, 0x4E, 0x47]);
+}
+
+#[test]
+fn should_round_trip_a_qwen_thinking_channel_seed() {
+    let chat_generation_command = chat_generation_command_with_seed(
+        "Two households, both alike in dignity, in Romeo and Juliet.".to_owned(),
+    );
+
+    let serialized_json = serde_json::to_string(&chat_generation_command)
+        .expect("a seeded chat command should serialize");
+    let deserialized_command: ChatGenerationCommand =
+        serde_json::from_str(&serialized_json).expect("a seeded chat command should round-trip");
+
+    assert_eq!(deserialized_command, chat_generation_command);
+    assert!(serialized_json.contains("qwen_thinking_channel_seed"));
+    assert!(
+        serialized_json.contains("Two households, both alike in dignity, in Romeo and Juliet.")
+    );
+}
+
+#[test]
+fn should_reject_a_qwen_thinking_channel_seed_that_exceeds_its_bounded_contract() {
+    let chat_generation_command = chat_generation_command_with_seed(
+        "R".repeat(astronomical_ipc_protocol::MAX_QWEN_THINKING_CHANNEL_SEED_BYTES + 1),
+    );
+
+    assert!(matches!(
+        chat_generation_command.validate(),
+        Err(astronomical_ipc_protocol::ChatGenerationValidationError::QwenThinkingChannelSeedTooLarge { .. })
+    ));
+}
+
+fn chat_generation_command_with_seed(qwen_thinking_channel_seed: String) -> ChatGenerationCommand {
+    ChatGenerationCommand {
+        request_id: RequestId::new(105),
+        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        messages: vec![ChatMessage::User {
+            content: "Who is Romeo?".to_owned(),
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 16,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+            seed: None,
+            thinking_budget: None,
+        },
+        qwen_thinking_channel_seed: Some(qwen_thinking_channel_seed),
+    }
 }

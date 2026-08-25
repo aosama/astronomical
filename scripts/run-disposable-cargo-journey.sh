@@ -14,8 +14,14 @@ print_journeys() {
     printf '%s\n' \
         accept-model-ssd-streaming \
         qualify-model-artifacts \
+        qualify-cache-disabled-generation \
+        qualify-cached-reverse-model-swap \
         qualify-deployed-model-rest-liveness \
+        qualify-laguna-family-model-swap \
+        qualify-laguna-attribution \
+        qualify-qwen3-5-thinking-seed-rest \
         qualify-smallest-qwen3-5-hard-thinking-budget-rest \
+        qualify-speculative-prefill-rest \
         qualify-persistent-prompt-cache \
         test-model-ssd-streaming-support \
         test-model-ssd-streaming-attribution-support \
@@ -54,26 +60,51 @@ main() {
     fi
 
     journey_name="$1"
+    ignored_suite_name=""
     case "$journey_name" in
         accept-model-ssd-streaming)
             lane_name="model-ssd-streaming-acceptance"
-            set -- cargo test -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance -- --ignored --nocapture --test-threads 1
+            ignored_suite_name="memory-management"
             ;;
         qualify-model-artifacts)
             lane_name="model-artifact-qualification"
-            set -- cargo test --no-fail-fast -p astronomical-model-serving -p astronomical-inference-worker --test model_artifact_qualification_tests --features astronomical-model-serving/direct-mlx,astronomical-inference-worker/model-artifact-qualification -- --ignored --nocapture --test-threads 1
+            ignored_suite_name="model-artifacts"
+            ;;
+        qualify-cache-disabled-generation)
+            lane_name="cache-disabled-generation"
+            set -- cargo test --release -p astronomical-model-serving --test persistent_prompt_cache_qualification_tests --features direct-mlx should_generate_without_prompt_cache_storage_contract_work_when_cache_is_disabled -- --ignored --nocapture
+            ;;
+        qualify-cached-reverse-model-swap)
+            lane_name="cached-reverse-model-swap"
+            set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_complete_cached_reverse_swap_without_hidden_model_page_ins -- --ignored --nocapture
             ;;
         qualify-deployed-model-rest-liveness)
             lane_name="deployed-rest-liveness"
             set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_keep_the_deployed_rest_surface_healthy_across_model_artifact_prompt_reuse -- --ignored --nocapture
             ;;
+        qualify-laguna-family-model-swap)
+            lane_name="laguna-family-model-swap"
+            set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_swap_qwen_then_laguna_xs_then_qwen_on_one_worker -- --ignored --nocapture
+            ;;
+        qualify-laguna-attribution)
+            lane_name="laguna-attribution"
+            set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_serve_a_laguna_xs_long_prompt_with_switchable_attribution -- --ignored --nocapture
+            ;;
+        qualify-qwen3-5-thinking-seed-rest)
+            lane_name="qwen3-5-thinking-seed-rest"
+            set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_seed_the_first_reasoning_output_across_both_streaming_rest_apis_with_a_real_qwen3_5_model -- --ignored --nocapture
+            ;;
         qualify-smallest-qwen3-5-hard-thinking-budget-rest)
             lane_name="smallest-qwen3-5-hard-thinking-budget-rest"
             set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_use_the_smallest_configured_qwen3_5_model_to_commit_the_complete_hard_thinking_budget_transition_before_streaming_visible_answer_content_through_the_openai_chat_completions_rest_api -- --ignored --nocapture
             ;;
+        qualify-speculative-prefill-rest)
+            lane_name="speculative-prefill-rest"
+            set -- cargo test --release -p astronomical-inference-worker --test model_artifact_qualification_tests --features model-artifact-qualification should_complete_the_cold_tool_journey_through_real_config_worker_and_rest_boundaries -- --ignored --nocapture
+            ;;
         qualify-persistent-prompt-cache)
             lane_name="persistent-prompt-cache-qualification"
-            set -- cargo test --no-fail-fast -p astronomical-model-serving -p astronomical-inference-worker --test persistent_prompt_cache_qualification_tests --features astronomical-model-serving/direct-mlx,astronomical-inference-worker/model-artifact-qualification -- --ignored --skip persistent_prompt_cache_qualification::cache_interaction_matrix::should_qualify_selected_pinned_ornith_cache_interaction_matrix_cell --nocapture --test-threads 1
+            ignored_suite_name="persistent-prompt-cache"
             ;;
         test-model-ssd-streaming-support)
             lane_name="model-ssd-streaming-support"
@@ -168,6 +199,11 @@ main() {
     esac
 
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    if [ -n "$ignored_suite_name" ]; then
+        exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+            --lane "$lane_name" -- \
+            "${repository_root}/scripts/run-ignored-qualification-suite.sh" "$ignored_suite_name"
+    fi
     exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
         --lane "$lane_name" -- \
         "${repository_root}/scripts/run-bounded-cargo-test.sh" "$@"

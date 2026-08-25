@@ -13,7 +13,7 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
           "runtime":{"model_directories":[],"maximum_mlx_memory_gb":16},
           "prompt_cache":{"enabled":false,"maximum_size_gb":20},
           "chunking":{"fixed_prompt_processing_chunk_size_tokens":2048,"full_attention_key_value_growth_tokens":256},
-          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096},"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":30,"minimum_prompt_tokens":8192},"mtp":{"draft_depth":2}}}},
+          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096},"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":30,"minimum_prompt_tokens":8192},"mtp":{"enabled":true,"draft_depth":2}}}},
           "diagnostics":{"performance_attribution_enabled":true,"log_level":"debug","retained_log_files":3}
         }"#,
     );
@@ -49,6 +49,8 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
         Some("organization/draft")
     );
     assert_eq!(model_config.mtp_draft_depth(), Some(2));
+    assert_eq!(model_config.configured_mtp_enabled(), Some(true));
+    assert!(model_config.mtp_enabled());
     assert_eq!(
         astronomical_config
             .maximum_mlx_memory_bytes()
@@ -116,6 +118,9 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
     );
     assert!(configured_model.speculative_prefill().is_none());
     assert_eq!(configured_model.mtp_draft_depth(), None);
+    assert_eq!(configured_model.configured_mtp_enabled(), None);
+    assert!(configured_model.mtp_enabled());
+    assert!(unconfigured_model.mtp_enabled());
     assert_eq!(unconfigured_model.maximum_output_tokens(), 20_480);
 }
 
@@ -191,6 +196,7 @@ fn should_reject_invalid_model_ranges_and_unknown_nested_fields() {
         r#"{"limits":{"maximum_context_tokens":0}}"#,
         r#"{"limits":{"maximum_context_tokens":1}}"#,
         r#"{"acceleration":{"mtp":{"draft_depth":4}}}"#,
+        r#"{"acceleration":{"mtp":{"enabled":"false"}}}"#,
         r#"{"acceleration":{"speculative_prefill":{"draft_model_id":"draft","keep_percentage":0}}}"#,
         r#"{"unknown":1}"#,
         r#"{"acceleration":{"unknown":1}}"#,
@@ -208,6 +214,39 @@ fn should_reject_invalid_model_ranges_and_unknown_nested_fields() {
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
             .expect_err("invalid strict model policy must fail");
     }
+}
+
+#[test]
+fn should_disable_mtp_for_one_model_without_changing_another() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "$schema":"./astronomical-config.schema.json",
+          "schema_version":1,
+          "runtime":{"model_directories":[]},
+          "models":{
+            "organization/disabled-mtp":{"acceleration":{"mtp":{"enabled":false,"draft_depth":3}}},
+            "organization/automatic-mtp":{}
+          }
+        }"#,
+    );
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("per-model MTP enablement should load");
+
+    let disabled_model = astronomical_config
+        .resolved_model_config("organization/disabled-mtp", 65_536)
+        .expect("disabled MTP policy should resolve");
+    let automatic_model = astronomical_config
+        .resolved_model_config("organization/automatic-mtp", 65_536)
+        .expect("automatic MTP policy should resolve");
+
+    assert_eq!(disabled_model.configured_mtp_enabled(), Some(false));
+    assert!(!disabled_model.mtp_enabled());
+    assert_eq!(disabled_model.mtp_draft_depth(), Some(3));
+    assert_eq!(automatic_model.configured_mtp_enabled(), None);
+    assert!(automatic_model.mtp_enabled());
 }
 
 #[test]

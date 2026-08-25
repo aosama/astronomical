@@ -61,6 +61,7 @@ fn rendered_prompt_token_count(tokenizer: &Tokenizer, content: &str) -> usize {
         &[],
         true,
         &[],
+        None,
     )
     .expect("the benchmark prompt should render");
     tokenizer

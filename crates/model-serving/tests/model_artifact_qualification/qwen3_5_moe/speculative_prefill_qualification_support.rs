@@ -81,6 +81,7 @@ fn prepare_romeo_and_juliet_summary_prompt(
                         seed: None,
                         thinking_budget,
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 enable_thinking,
             )
@@ -174,6 +175,7 @@ pub(super) fn prepare_representative_prompt(model_directory: &Path) -> Represent
                         seed: None,
                         thinking_budget: Some(256),
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 false,
             )

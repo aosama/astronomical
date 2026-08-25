@@ -140,9 +140,8 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
     let target_hidden_seed = prediction_request
         .take_target_hidden_states()
         .ok_or_else(|| fatal_engine_error("MTP proposal lost its target hidden seed"))?;
-    // Two retains of the pre-proposal predictor: commit replay restores this
-    // frontier then rebuilds only the accepted prefix, while rollback restores
-    // the same frontier when verification or commit fails.
+    // Two retained frontiers keep commit repair and operational rollback independent. Commit
+    // repair consumes its frontier only after a rejection leaves proposal state too far ahead.
     let predictor_commit_checkpoint = prediction_request
         .allocation_checkpoint()
         .map_err(qwen3_5_runtime_error)?;

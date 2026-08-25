@@ -24,7 +24,7 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
         "persistent_prompt_cache_enabled": false,
         "prompt_cache_max_size_gb": 20,
         "performance_attribution_enabled": true,
-        "mtp_enabled": true,
+        "mtp_enabled": false,
         "mtp_draft_depth": 2,
         "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": 4096,
@@ -93,6 +93,7 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
             .is_none()
     );
     assert_eq!(model_config.maximum_output_tokens(), 4_096);
+    assert!(!model_config.mtp_enabled());
     assert_eq!(model_config.mtp_draft_depth(), Some(2));
     assert_eq!(
         model_config

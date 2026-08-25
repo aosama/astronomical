@@ -297,6 +297,7 @@ async fn measure_worker_summarization(
                 seed: None,
                 thinking_budget: Some(256),
             },
+            qwen_thinking_channel_seed: None,
         })
         .await
         .expect("the worker should start the persistent prompt-cache warmup generation request");

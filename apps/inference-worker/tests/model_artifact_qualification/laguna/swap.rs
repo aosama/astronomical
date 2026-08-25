@@ -73,7 +73,7 @@ async fn run_family_swap_journey() {
                 )
             }],
             "stream": true,
-            "temperature": 0,
+            "temperature": 1,
             "max_tokens": 2,
         })
         .to_string();

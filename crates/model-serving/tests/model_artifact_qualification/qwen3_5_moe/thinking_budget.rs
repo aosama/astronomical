@@ -55,6 +55,7 @@ async fn should_condition_visible_answer_generation_on_the_complete_forced_trans
                         seed: None,
                         thinking_budget: Some(1),
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 true,
             )

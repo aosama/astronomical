@@ -122,6 +122,7 @@ fn mixed_reload_model_policy(model_root: &std::path::Path) -> RuntimeModelPolicy
                     prompt_cache_block_tokens: None,
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
+                mtp_enabled: true,
                 mtp_draft_depth: None,
                 speculative_prefill: None,
             },
@@ -165,5 +166,6 @@ fn mixed_reload_generation_command() -> ChatGenerationCommand {
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     }
 }

@@ -20,7 +20,8 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
             model_id: "ambiguous-model".to_owned(),
             configured_root_numbers: vec![1, 3],
         }];
-    let worker_model_configuration = worker_model_configuration();
+    let configured_worker_model_configuration = worker_model_configuration(false);
+    let effective_worker_model_configuration = worker_model_configuration(true);
     resolved_config.model_policy_catalog = Arc::new(HashMap::from([(
         crate::common::MODEL_ID.to_owned(),
         RuntimeModelPolicy {
@@ -49,9 +50,10 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
                     speculative_prefill_unavailable_reason: Some(
                         "configured drafter is not currently available".to_owned(),
                     ),
+                    configured_mtp_enabled: Some(false),
                     ..Default::default()
                 },
-            worker_model_configuration: worker_model_configuration.clone(),
+            worker_model_configuration: configured_worker_model_configuration,
         },
     )]));
     let mut executor = ScriptedExecutor::ready(Vec::new());
@@ -61,7 +63,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         configuration_generation: effective_generation.to_owned(),
         persistent_prompt_cache_enabled: true,
         prompt_cache_maximum_size_bytes: 50_000_000_000,
-        loaded_model: Some(worker_model_configuration.runtime_configuration()),
+        loaded_model: Some(effective_worker_model_configuration.runtime_configuration()),
     });
     executor.health_snapshot.mtp_depth_status = MtpDepthStatus {
         configured_draft_depth: Some(3),
@@ -117,6 +119,18 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     );
     assert!(!String::from_utf8_lossy(&status_bytes).contains("/fictional/private"));
     assert_eq!(
+        status_document["configuration"]["ready_model"]["mtp_enabled"]["default"],
+        true
+    );
+    assert_eq!(
+        status_document["configuration"]["ready_model"]["mtp_enabled"]["configured"],
+        false
+    );
+    assert_eq!(
+        status_document["configuration"]["ready_model"]["mtp_enabled"]["effective"],
+        true
+    );
+    assert_eq!(
         status_document["configuration"]["ready_model"]["mtp_draft_depth"]["effective"],
         1
     );
@@ -164,7 +178,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     assert!(!status_text.contains("prompt-cache"));
 }
 
-fn worker_model_configuration() -> WorkerModelConfiguration {
+fn worker_model_configuration(mtp_enabled: bool) -> WorkerModelConfiguration {
     WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
         model_id: crate::common::MODEL_ID.to_owned(),
         maximum_context_tokens: 16_384,
@@ -179,6 +193,7 @@ fn worker_model_configuration() -> WorkerModelConfiguration {
             prompt_cache_block_tokens: Some(128),
             prompt_cache_common_prefix_stride_blocks: 4,
         },
+        mtp_enabled,
         mtp_draft_depth: Some(3),
         speculative_prefill: None,
     })

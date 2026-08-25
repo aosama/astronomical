@@ -86,6 +86,11 @@
         "effective": null
       },
       "model_id": "fictional/autoregressive-model",
+      "mtp_enabled": {
+        "configured": null,
+        "default": true,
+        "effective": true
+      },
       "mtp_draft_depth": {
         "configured": null,
         "default": null,
@@ -196,6 +201,7 @@
         "maximum_context_tokens": 65536,
         "maximum_output_tokens": 8192,
         "model_id": "fictional/autoregressive-model",
+        "mtp_enabled": true,
         "mtp_draft_depth": null,
         "speculative_prefill": null,
         "speculative_prefill_enabled": false

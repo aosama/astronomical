@@ -36,6 +36,7 @@ pub(super) fn representative_long_generation_prompt_token_ids(
                         seed: None,
                         thinking_budget: Some(256),
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 false,
             )

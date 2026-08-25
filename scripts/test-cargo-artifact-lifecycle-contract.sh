@@ -465,6 +465,9 @@ assert "readonly COMPILE_TIMEOUT_SECONDS=600" in bounded_test_runner
 assert "readonly TEST_TIMEOUT_SECONDS=120" in bounded_test_runner
 journey_dispatcher = (repository_root / "scripts/run-disposable-cargo-journey.sh").read_text()
 assert "run-bounded-cargo-test.sh" in journey_dispatcher
+ignored_suite_runner = (repository_root / "scripts/run-ignored-qualification-suite.sh").read_text()
+assert "run-bounded-cargo-test.sh" in ignored_suite_runner
+assert "--ignored --list" in ignored_suite_runner
 assert "--foreground" in (repository_root / "scripts/test-direct-mlx.sh").read_text()
 assert "--foreground" in (
     repository_root / "scripts/qualify-qwen3-5-persistent-prompt-cache-interactions.sh"
@@ -473,8 +476,14 @@ assert "--foreground" in (
 expected_journeys = {
     "accept-model-ssd-streaming",
     "qualify-model-artifacts",
+    "qualify-cache-disabled-generation",
+    "qualify-cached-reverse-model-swap",
     "qualify-deployed-model-rest-liveness",
+    "qualify-laguna-attribution",
+    "qualify-laguna-family-model-swap",
+    "qualify-qwen3-5-thinking-seed-rest",
     "qualify-smallest-qwen3-5-hard-thinking-budget-rest",
+    "qualify-speculative-prefill-rest",
     "qualify-persistent-prompt-cache",
     "test-model-ssd-streaming-support",
     "test-model-ssd-streaming-attribution-support",

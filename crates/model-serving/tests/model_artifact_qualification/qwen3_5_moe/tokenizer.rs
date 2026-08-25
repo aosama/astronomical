@@ -163,6 +163,7 @@ fn should_prepare_a_validated_structured_chat_command_for_ornith_prefill() {
             seed: Some(7),
             thinking_budget: Some(256),
         },
+        qwen_thinking_channel_seed: None,
     };
 
     let engine_request = tokenizer
@@ -213,11 +214,12 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
             max_output_tokens: 8,
-            temperature_thousandths: Some(0),
+            temperature_thousandths: Some(1_000),
             top_p_thousandths: Some(950),
             seed: None,
             thinking_budget: Some(0),
         },
+        qwen_thinking_channel_seed: None,
     };
 
     let engine_request = tokenizer
@@ -246,7 +248,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
 #[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_decode_generated_tokens_into_separate_reasoning_and_text_events() {
     let tokenizer = load_tokenizer();
-    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false)
+    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false, None)
         .expect("a request without tools should create bounded output state");
     let mut output_events = Vec::new();
 
@@ -305,7 +307,7 @@ fn should_decode_generated_tokens_into_separate_reasoning_and_text_events() {
 #[ignore = "requires model_directories to discover the Ornith 1.5 qualification artifact"]
 fn should_flush_pending_byte_fallback_text_when_request_output_finishes() {
     let tokenizer = load_tokenizer();
-    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false)
+    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false, None)
         .expect("a request without tools should create bounded output state");
 
     // Byte-fallback token id 126 is the '~' character in the Qwen3.5 family.

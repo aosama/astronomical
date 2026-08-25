@@ -163,7 +163,10 @@ pub(crate) fn prepare_legacy_config_migration(
 fn discover_model_ids_required_for_migration(
     legacy_config: &LegacyConfigFile,
 ) -> Result<Vec<String>, AstronomicalConfigError> {
-    if legacy_config.max_output_tokens.is_none() && legacy_config.mtp_draft_depth.is_none() {
+    if legacy_config.max_output_tokens.is_none()
+        && legacy_config.mtp_draft_depth.is_none()
+        && legacy_config.mtp_enabled != Some(false)
+    {
         return Ok(Vec::new());
     }
     let directory_scans = discover_models(&legacy_config.model_directories).map_err(|source| {
@@ -180,7 +183,7 @@ fn discover_model_ids_required_for_migration(
         .collect();
     if discovered_model_ids.is_empty() {
         return Err(AstronomicalConfigError::LegacyMigration {
-            description: "global max_output_tokens or mtp_draft_depth requires at least one currently discovered model; repair model_directories and retry"
+            description: "global model policy requires at least one currently discovered model; repair model_directories and retry"
                 .to_owned(),
         });
     }
@@ -200,11 +203,11 @@ fn build_migrated_config(
                 ..Default::default()
             });
         }
-        if let Some(draft_depth) = legacy_config.mtp_draft_depth {
+        if legacy_config.mtp_draft_depth.is_some() || legacy_config.mtp_enabled == Some(false) {
             model_config.acceleration = Some(AccelerationConfigFile {
                 mtp: Some(MtpConfigFile {
-                    draft_depth: Some(draft_depth),
-                    ..Default::default()
+                    enabled: legacy_config.mtp_enabled.filter(|mtp_enabled| !mtp_enabled),
+                    draft_depth: legacy_config.mtp_draft_depth,
                 }),
                 ..Default::default()
             });
@@ -217,6 +220,7 @@ fn build_migrated_config(
         runtime: RuntimeConfigFile {
             model_directories: legacy_config.model_directories,
             maximum_mlx_memory_gb: legacy_config.maximum_mlx_memory_gb,
+            experimental_qwen_thinking_channel_seed_enabled: None,
         },
         prompt_cache: Some(PromptCacheConfigFile {
             enabled: legacy_config.persistent_prompt_cache_enabled,
@@ -282,12 +286,6 @@ fn validate_legacy_config(legacy_config: &LegacyConfigFile) -> Result<(), Astron
     if legacy_config.max_output_tokens == Some(0) {
         return Err(AstronomicalConfigError::LegacyMigration {
             description: "legacy max_output_tokens must be positive".to_owned(),
-        });
-    }
-    if legacy_config.mtp_enabled == Some(false) {
-        return Err(AstronomicalConfigError::LegacyMigration {
-            description: "legacy mtp_enabled=false cannot be represented because v1 uses compatible MTP automatically; remove the setting to migrate"
-                .to_owned(),
         });
     }
     if legacy_config

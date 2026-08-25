@@ -344,6 +344,7 @@ fn representative_prompt(model_directory: &Path) -> RepresentativePrompt {
             seed: None,
             thinking_budget: Some(256),
         },
+        qwen_thinking_channel_seed: None,
     };
     let prepared = tokenizer
         .prepare_chat(&command, false)

@@ -23,6 +23,7 @@ pub struct WorkerAutoregressiveModelConfiguration {
     /// Independent output capability; request defaults remain supervisor-owned.
     pub maximum_output_tokens: u32,
     pub chunking: WorkerChunkingConfiguration,
+    pub mtp_enabled: bool,
     pub mtp_draft_depth: Option<u8>,
     pub speculative_prefill: Option<WorkerSpeculativePrefillConfiguration>,
 }
@@ -37,6 +38,7 @@ pub struct WorkerLoadedAutoregressiveModelRuntimeConfiguration {
     /// Independent output capability, not the configured request default.
     pub maximum_output_tokens: u32,
     pub chunking: WorkerChunkingConfiguration,
+    pub mtp_enabled: bool,
     pub mtp_draft_depth: Option<u8>,
     pub speculative_prefill_enabled: bool,
     pub speculative_prefill: Option<WorkerSpeculativePrefillRuntimeConfiguration>,
@@ -125,6 +127,7 @@ impl WorkerModelConfiguration {
                         maximum_context_tokens: configuration.maximum_context_tokens,
                         maximum_output_tokens: configuration.maximum_output_tokens,
                         chunking: configuration.chunking.clone(),
+                        mtp_enabled: configuration.mtp_enabled,
                         mtp_draft_depth: configuration.mtp_draft_depth,
                         speculative_prefill_enabled: configuration.speculative_prefill.is_some(),
                         speculative_prefill: configuration.speculative_prefill.as_ref().and_then(
