@@ -35,6 +35,7 @@ async fn should_preserve_generation_and_full_path_free_model_configuration_in_ac
                         prompt_cache_block_tokens: Some(128),
                         prompt_cache_common_prefix_stride_blocks: 4,
                     },
+                    mtp_enabled: true,
                     mtp_draft_depth: Some(3),
                     speculative_prefill_enabled: true,
                     speculative_prefill: Some(WorkerSpeculativePrefillRuntimeConfiguration {

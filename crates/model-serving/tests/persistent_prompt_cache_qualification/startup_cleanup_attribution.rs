@@ -196,5 +196,6 @@ fn romeo_and_juliet_command(
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     }
 }

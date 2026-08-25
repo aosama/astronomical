@@ -53,6 +53,7 @@ struct ReadyModelConfigurationSummary {
     temperature: ConfigurationValue<f64>,
     top_p: ConfigurationValue<f64>,
     chunking: ChunkingConfigurationSummary,
+    mtp_enabled: ConfigurationValue<bool>,
     mtp_draft_depth: ConfigurationValue<u8>,
     speculative_prefill: SpeculativePrefillConfigurationSummary,
     speculative_prefill_unavailable_reason: Option<String>,
@@ -240,6 +241,12 @@ fn ready_model_summary(
             resolved_policy.and_then(|policy| policy.generation_defaults.top_p_thousandths),
         ),
         chunking: chunking_summary(configured_policy, effective_model),
+        mtp_enabled: ConfigurationValue {
+            configured: configured_policy
+                .and_then(|policy| policy.acceleration_availability.configured_mtp_enabled),
+            default: Some(true),
+            effective: effective_autoregressive_model.map(|model| model.mtp_enabled),
+        },
         mtp_draft_depth: ConfigurationValue {
             configured: configured_autoregressive_model.and_then(|model| model.mtp_draft_depth),
             default: None,

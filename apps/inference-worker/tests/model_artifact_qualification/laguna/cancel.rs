@@ -45,6 +45,7 @@ fn should_cancel_a_laguna_generate_and_remain_reusable() {
             seed: Some(106),
             thinking_budget: Some(0),
         },
+        qwen_thinking_channel_seed: None,
     };
     let prepared_generation = generation_processor
         .prepare_chat(&chat_command)

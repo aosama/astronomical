@@ -99,6 +99,93 @@ async fn should_record_deterministic_async_manifest_measurement() {
 }
 
 #[tokio::test]
+async fn should_record_qwen_thinking_seed_loading_without_download_metadata() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let written_bytes = Arc::new(Mutex::new(Vec::new()));
+        let clock_call_count = Arc::new(AtomicUsize::new(0));
+        let clock_call_count_for_clock = Arc::clone(&clock_call_count);
+        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+            SharedWriter::new(Arc::clone(&written_bytes)),
+            move || {
+                let clock_index = clock_call_count_for_clock.fetch_add(1, Ordering::SeqCst);
+                Ok([2_000, 2_005][clock_index])
+            },
+        );
+
+        attribution_log
+            .measure_async_operation(
+                SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
+                || async {},
+                |_| SupervisorPerformanceMeasurement::success(),
+            )
+            .await
+            .expect("Qwen seed loading attribution should be recorded");
+
+        let attribution_record = only_record(&written_bytes);
+        assert_eq!(
+            attribution_record["operation"],
+            "qwen_thinking_channel_seed_load"
+        );
+        assert_eq!(attribution_record["started_at_unix_millis"], 2_000);
+        assert_eq!(attribution_record["ended_at_unix_millis"], 2_005);
+        assert_eq!(attribution_record["outcome"], "success");
+    })
+    .await
+    .expect("Qwen seed attribution coverage must remain bounded");
+}
+
+#[tokio::test]
+async fn should_preserve_best_effort_operation_output_when_the_start_clock_fails() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let attribution_log =
+            SupervisorPerformanceAttributionLog::from_writer_and_clock(io::sink(), || {
+                Err(io::Error::other("intentional start clock failure"))
+            });
+
+        let operation_output = attribution_log
+            .measure_async_operation_best_effort(
+                SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
+                || async { "Romeo and Juliet" },
+                |_| SupervisorPerformanceMeasurement::success(),
+            )
+            .await;
+
+        assert_eq!(operation_output, "Romeo and Juliet");
+    })
+    .await
+    .expect("best-effort start-clock failure coverage must remain bounded");
+}
+
+#[tokio::test]
+async fn should_preserve_best_effort_operation_output_when_the_writer_fails() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let operation_completed = Arc::new(AtomicBool::new(false));
+        let operation_completed_for_operation = Arc::clone(&operation_completed);
+        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+            CompletionCheckingWriter {
+                operation_completed: Arc::clone(&operation_completed),
+            },
+            deterministic_clock(),
+        );
+
+        let operation_output = attribution_log
+            .measure_async_operation_best_effort(
+                SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
+                || async move {
+                    operation_completed_for_operation.store(true, Ordering::SeqCst);
+                    "Two households"
+                },
+                |_| SupervisorPerformanceMeasurement::success(),
+            )
+            .await;
+
+        assert_eq!(operation_output, "Two households");
+    })
+    .await
+    .expect("best-effort writer failure coverage must remain bounded");
+}
+
+#[tokio::test]
 async fn should_not_hold_the_writer_lock_while_an_async_operation_is_blocked() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let written_bytes = Arc::new(Mutex::new(Vec::new()));

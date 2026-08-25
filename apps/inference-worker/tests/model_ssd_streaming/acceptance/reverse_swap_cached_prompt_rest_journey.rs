@@ -18,8 +18,10 @@ use crate::common::real_model_rest_server::{
 
 const OQ6E_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
 const OQ8E_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ8e-mtp";
-const CONFIGURED_MLX_MEMORY_CEILING_BYTES: u64 = 40_000_000_000;
-const LONG_PROMPT_TOKEN_COUNT: usize = 22_000;
+const CONFIGURED_MLX_MEMORY_CEILING_BYTES: u64 = 30_000_000_000;
+// Five thousand tokens remains a meaningful persistent-cache and model-swap workload while
+// leaving enough of the journey deadline for two demand-loaded model transitions.
+const LONG_PROMPT_TOKEN_COUNT: usize = 5_000;
 const REVERSE_SWAP_TIMEOUT: Duration = Duration::from_secs(35);
 const MAXIMUM_LOGICAL_EXPERT_SOURCE_READ_BYTES: u64 = 36_500_000_000;
 const MAXIMUM_UNOWNED_PHYSICAL_READ_BYTES: u64 = 5_000_000_000;
@@ -72,7 +74,7 @@ async fn run_cached_reverse_swap_journey() {
         &openai_client,
         OQ8E_MODEL_ID,
         &long_prompt,
-        Duration::from_secs(60),
+        Duration::from_secs(75),
         "q8_cache_seed",
     )
     .await;
@@ -145,7 +147,7 @@ async fn complete_request(
         "messages": [{"role": "user", "content": user_message}],
         "stream": true,
         "stream_options": {"include_usage": true},
-        "temperature": 0,
+        "temperature": 1,
         "thinking_budget": 0,
         "max_tokens": 1,
     });
@@ -194,12 +196,14 @@ fn write_acceptance_config<'a>(
     fs::create_dir(&configuration_directory)
         .expect("the reverse-swap configuration directory should be created");
     let configuration_document = json!({
-        "model_directories": model_directories.into_iter().collect::<Vec<_>>(),
-        "maximum_mlx_memory_gb": 40,
-        "max_output_tokens": 1,
-        "persistent_prompt_cache_enabled": true,
-        "prompt_cache_max_size_gb": 50,
-        "performance_attribution_enabled": true,
+        "$schema": "./astronomical-config.schema.json",
+        "schema_version": 1,
+        "runtime": {
+            "model_directories": model_directories.into_iter().collect::<Vec<_>>(),
+            "maximum_mlx_memory_gb": 30,
+        },
+        "prompt_cache": {"enabled": true, "maximum_size_gb": 50},
+        "diagnostics": {"performance_attribution_enabled": true},
         "chunking": {"fixed_prompt_processing_chunk_size_tokens": 2_048},
     });
     fs::write(

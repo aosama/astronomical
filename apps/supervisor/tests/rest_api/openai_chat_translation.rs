@@ -111,6 +111,7 @@ fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
                 seed: None,
                 thinking_budget: None,
             },
+            qwen_thinking_channel_seed: None,
         }
     );
 }
@@ -270,6 +271,7 @@ fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dto
                 seed: Some(7),
                 thinking_budget: None,
             },
+            qwen_thinking_channel_seed: None,
         }
     );
 }

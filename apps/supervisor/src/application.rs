@@ -35,6 +35,7 @@ pub const MAX_OPENAI_CHAT_REQUEST_BODY_BYTES: usize = 32 * 1024 * 1024;
 // a daemon restart or multiple in-process Router constructions in tests.
 static NEXT_APPLICATION_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Clone)]
 pub(crate) struct ApplicationState {
     pub(crate) completion_id_namespace: Arc<str>,
     pub(crate) next_chat_request_id: Arc<AtomicU64>,
@@ -61,29 +62,10 @@ pub(crate) struct ApplicationState {
     /// Keeps a persisted live-memory update transactional until the worker
     /// either applies or rejects a value queued behind active generation.
     pub(crate) pending_memory_config_generation: Arc<AsyncMutex<Option<String>>>,
+    /// Switchable timing for supervisor-owned request-path operations.
+    pub(crate) supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog,
     /// Internal shutdown controller for `POST /v1/control/shutdown`.
     pub(crate) shutdown_controller: Option<crate::shutdown_control::ShutdownController>,
-}
-
-impl Clone for ApplicationState {
-    fn clone(&self) -> Self {
-        Self {
-            completion_id_namespace: Arc::clone(&self.completion_id_namespace),
-            next_chat_request_id: Arc::clone(&self.next_chat_request_id),
-            generation_executor: Arc::clone(&self.generation_executor),
-            worker_control: self.worker_control.clone(),
-            download_catalog: Arc::clone(&self.download_catalog),
-            library_download_coordinator: self.library_download_coordinator.clone(),
-            discovered_models: self.discovered_models.clone(),
-            reloadable_config: self.reloadable_config.clone(),
-            configured_config_snapshot: self.configured_config_snapshot.clone(),
-            configuration_validation_error: Arc::clone(&self.configuration_validation_error),
-            runtime_config_resolver: self.runtime_config_resolver.clone(),
-            configuration_transition_lock: Arc::clone(&self.configuration_transition_lock),
-            pending_memory_config_generation: Arc::clone(&self.pending_memory_config_generation),
-            shutdown_controller: self.shutdown_controller.clone(),
-        }
-    }
 }
 
 impl ApplicationState {
@@ -165,6 +147,7 @@ pub fn build_application_with_discovered_models(
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: None,
     };
 
@@ -190,6 +173,7 @@ pub fn build_application_with_download_catalog(
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: None,
     };
 
@@ -217,6 +201,7 @@ pub fn build_application_with_shutdown(
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: Some(shutdown_controller),
     };
 
@@ -263,6 +248,7 @@ pub fn build_development_application_with_reload(
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: None,
     };
 
@@ -428,6 +414,7 @@ pub fn build_application_with_full_control_and_download_catalog(
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: Some(shutdown_controller),
     };
 

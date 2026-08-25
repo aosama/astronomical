@@ -183,7 +183,7 @@ fn hard_thinking_budget_request_body(model_id: &str) -> String {
             ),
         }],
         "stream": true,
-        "temperature": 0,
+        "temperature": 1,
         "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
         "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
     })

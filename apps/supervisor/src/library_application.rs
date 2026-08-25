@@ -19,6 +19,7 @@ pub fn build_application_with_full_control_and_library_download(
     shutdown_controller: crate::shutdown_control::ShutdownController,
     download_catalog: Arc<DownloadCatalog>,
     library_download_coordinator: Arc<LibraryDownloadCoordinator>,
+    supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog,
 ) -> Router {
     let initial_models = reloadable_config
         .read()
@@ -43,6 +44,7 @@ pub fn build_application_with_full_control_and_library_download(
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        supervisor_attribution_log,
         shutdown_controller: Some(shutdown_controller),
     })
 }
@@ -76,6 +78,7 @@ pub fn build_application_with_library_download(
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
+        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: None,
     })
 }

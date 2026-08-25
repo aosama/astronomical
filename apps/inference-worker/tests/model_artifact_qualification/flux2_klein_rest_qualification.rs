@@ -547,7 +547,7 @@ async fn send_chat_litmus(rest_server: &FluxRestServer, model_id: &str, phase: &
                 "Use this Romeo and Juliet excerpt and name one household: {source_excerpt}"
             )}],
             "stream": true,
-            "temperature": 0,
+            "temperature": 1,
             "max_tokens": 8
         })
         .to_string(),

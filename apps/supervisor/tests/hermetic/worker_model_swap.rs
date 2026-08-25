@@ -440,6 +440,7 @@ fn runtime_model_policy(
                     prompt_cache_block_tokens: None,
                     prompt_cache_common_prefix_stride_blocks: 4,
                 },
+                mtp_enabled: true,
                 mtp_draft_depth: None,
                 speculative_prefill: None,
             },
@@ -495,5 +496,6 @@ pub(super) fn chat_command(model_id: &str, request_id: u64) -> ChatGenerationCom
             seed: None,
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     }
 }

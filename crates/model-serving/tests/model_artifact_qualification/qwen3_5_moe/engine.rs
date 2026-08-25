@@ -196,7 +196,7 @@ async fn should_report_live_and_finalized_memory_without_adaptive_ram_growth_gua
             .take(256)
             .collect::<String>();
         let injected_feedback_token_ids = tokenizer
-            .encode_model_visible_correction(&injected_feedback_text, false)
+            .encode_model_visible_correction(&injected_feedback_text, false, None)
             .expect("the Romeo and Juliet feedback should encode");
         let mlx_memory_limits = crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
         let attribution_directory = tempfile::tempdir()

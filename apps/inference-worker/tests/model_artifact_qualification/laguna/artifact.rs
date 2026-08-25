@@ -163,6 +163,7 @@ fn qualify_reference_artifact() {
             seed: Some(98),
             thinking_budget: None,
         },
+        qwen_thinking_channel_seed: None,
     };
     let prepared_generation = generation_processor
         .prepare_chat(&chat_command)

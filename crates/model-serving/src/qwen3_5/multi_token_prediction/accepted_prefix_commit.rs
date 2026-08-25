@@ -109,12 +109,13 @@ pub(crate) fn commit_accepted_mtp_prefix(
         active_request.clear_pending_generated_token();
     }
 
-    rebuild_confirmed_predictor_history(
+    commit_confirmed_predictor_history(
         model,
         active_request,
         current_generated_token,
         target_hidden_seed,
         predictor_checkpoint,
+        draft_token_ids.len(),
         &draft_token_ids[..accepted_count],
         &verification_output,
     )?;
@@ -131,12 +132,13 @@ pub(crate) fn commit_accepted_mtp_prefix(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rebuild_confirmed_predictor_history(
+fn commit_confirmed_predictor_history(
     model: &Qwen3_5Model,
     active_request: &mut Qwen3_5EngineRequest,
     current_generated_token: &MlxArray,
     target_hidden_seed: &MlxArray,
     predictor_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
+    proposed_draft_count: usize,
     accepted_draft_token_ids: &[u32],
     verification_output: &TargetVerificationOutput,
 ) -> Result<(), InferenceEngineError> {
@@ -146,25 +148,43 @@ fn rebuild_confirmed_predictor_history(
             active_request
                 .with_optional_prediction_session_and_performance_attribution(
                     |prediction_request, performance_attribution| {
-                        prediction_request
-                            .restore_allocation_checkpoint(predictor_checkpoint)
-                            .map_err(qwen3_5_runtime_error)?;
                         let mut replay_hidden_rows =
                             Vec::with_capacity(accepted_draft_token_ids.len() + 1);
-                        let mut replay_token_arrays =
+                        let mut replay_token_array_owners =
                             Vec::with_capacity(accepted_draft_token_ids.len());
-                        let current_output = model
-                            .build_mtp_draft_graph(
-                                target_hidden_seed,
-                                current_generated_token,
-                                prediction_request.request_state_mut(),
-                                performance_attribution,
-                            )
-                            .map_err(InferenceEngineError::from)?;
-                        let (_, current_post_normalized_hidden) = current_output.into_arrays();
-                        replay_hidden_rows.push(current_post_normalized_hidden);
-                        for (accepted_position, accepted_token_id) in
-                            accepted_draft_token_ids.iter().enumerate()
+                        let proposal_committed_draft_count =
+                            proposed_draft_count.checked_sub(1).ok_or_else(|| {
+                                fatal_engine_error("MTP proposal contained no drafts")
+                            })?;
+
+                        // The proposal chain has already committed current + every draft except
+                        // its final token. Reuse that exact prefix so depth-one MTP does not repeat
+                        // its head forward on every attempt; restore only when rejection leaves the
+                        // proposal state ahead of the accepted target frontier.
+                        let accepted_draft_replay_start = if accepted_draft_token_ids.len()
+                            >= proposal_committed_draft_count
+                        {
+                            proposal_committed_draft_count
+                        } else {
+                            prediction_request
+                                .restore_allocation_checkpoint(predictor_checkpoint)
+                                .map_err(qwen3_5_runtime_error)?;
+                            let current_output = model
+                                .build_mtp_draft_graph(
+                                    target_hidden_seed,
+                                    current_generated_token,
+                                    prediction_request.request_state_mut(),
+                                    performance_attribution,
+                                )
+                                .map_err(InferenceEngineError::from)?;
+                            let (_, current_post_normalized_hidden) = current_output.into_arrays();
+                            replay_hidden_rows.push(current_post_normalized_hidden);
+                            0
+                        };
+                        for (accepted_position, accepted_token_id) in accepted_draft_token_ids
+                            .iter()
+                            .enumerate()
+                            .skip(accepted_draft_replay_start)
                         {
                             let token_array = model
                                 .runtime()
@@ -188,20 +208,24 @@ fn rebuild_confirmed_predictor_history(
                                 )
                                 .map_err(InferenceEngineError::from)?;
                             let (_, replay_post_normalized_hidden) = replay_output.into_arrays();
-                            replay_token_arrays.push(token_array);
+                            // MLX graphs retain these token inputs lazily until the combined state
+                            // evaluation commits every repaired predictor row.
+                            replay_token_array_owners.push(token_array);
                             replay_hidden_rows.push(replay_post_normalized_hidden);
                         }
-                        let replay_roots = replay_hidden_rows.iter().collect::<Vec<_>>();
-                        model
-                            .evaluate_mtp_updated_state(
-                                prediction_request.request_state_mut(),
-                                &replay_roots,
-                                performance_attribution,
-                            )
-                            .map_err(InferenceEngineError::from)?;
+                        if !replay_hidden_rows.is_empty() {
+                            let replay_roots = replay_hidden_rows.iter().collect::<Vec<_>>();
+                            model
+                                .evaluate_mtp_updated_state(
+                                    prediction_request.request_state_mut(),
+                                    &replay_roots,
+                                    performance_attribution,
+                                )
+                                .map_err(InferenceEngineError::from)?;
+                        }
                         performance_attribution.record_counter(
                             crate::PerformanceCounter::MtpPredictorReplayTokenCount,
-                            u64::try_from(accepted_draft_token_ids.len() + 1).unwrap_or(u64::MAX),
+                            u64::try_from(replay_hidden_rows.len()).unwrap_or(u64::MAX),
                         );
                         Ok::<(), InferenceEngineError>(())
                     },

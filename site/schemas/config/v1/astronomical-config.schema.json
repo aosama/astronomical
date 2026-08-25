@@ -65,6 +65,12 @@
           "maximum": 18446744073,
           "description": "Optional MLX memory ceiling in decimal SI gigabytes; omission selects the machine maximum.",
           "x-astronomical-apply-mode": "live"
+        },
+        "experimental_qwen_thinking_channel_seed_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether Qwen requests may use the optional instance-state thinking.md seed.",
+          "x-astronomical-apply-mode": "worker-replacement"
         }
       }
     },
@@ -265,6 +271,11 @@
       "description": "Automatic multi-token prediction preference for the containing target model.",
       "additionalProperties": false,
       "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When false, this model stays target-only even if the artifact includes multi-token prediction tensors. Omission keeps automatic compatible multi-token prediction."
+        },
         "draft_depth": {
           "type": "integer",
           "minimum": 1,
@@ -283,7 +294,7 @@
           "type": "boolean",
           "default": false,
           "description": "Whether critical-path operations emit detailed performance attribution.",
-          "x-astronomical-apply-mode": "worker-replacement"
+          "x-astronomical-apply-mode": "application-restart"
         },
         "log_level": {
           "type": "string",

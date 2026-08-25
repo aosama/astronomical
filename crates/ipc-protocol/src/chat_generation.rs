@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::RequestId;
 
+/// Bounds request-local memory before template escaping can expand user-authored seed text.
+pub const MAX_QWEN_THINKING_CHANNEL_SEED_BYTES: usize = 1_000_000;
+
 /// One bounded structured chat-generation command for the local inference worker.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -18,6 +21,11 @@ pub struct ChatGenerationCommand {
     pub tool_choice: ChatToolChoice,
     /// Bounded sampling and output settings.
     pub settings: ChatGenerationSettings,
+    /// Optional reasoning text seeded after the Qwen3.5 `<think>` open.
+    ///
+    /// Laguna ignores this field. Absent or empty means ordinary thinking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qwen_thinking_channel_seed: Option<String>,
 }
 
 /// One chat message crossing the supervisor-to-worker trust boundary.

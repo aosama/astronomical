@@ -13,8 +13,9 @@ use astronomical_model_serving::{
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 use tokio::time::{Instant, sleep, timeout};
 
-const VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS: u32 = 8_192;
+const VISUAL_QUALIFICATION_PREFILL_CHUNK_TOKENS: u32 = 8_192;
 const VISUAL_QUALIFICATION_MINIMUM_PROMPT_TOKENS: usize = 8_256;
+const VISUAL_QUALIFICATION_SAMPLING_SEED: u64 = 9_100;
 const VISUAL_QUALIFICATION_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
@@ -68,17 +69,17 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
             .await
             .expect("the visual qualification should arm one prefill rejection");
     }
-    let (cold_token_id, cold_prefill_chunck_token_counts) =
+    let (cold_token_id, cold_prefill_chunk_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_100)).await;
     if force_prefill_retry {
         assert_eq!(
-            cold_prefill_chunck_token_counts.first().copied(),
-            Some(VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS / 2),
+            cold_prefill_chunk_token_counts.first().copied(),
+            Some(VISUAL_QUALIFICATION_PREFILL_CHUNK_TOKENS / 2),
             "the forced 8192-token rejection must retry from the restored checkpoint at half size"
         );
     } else {
         assert!(
-            cold_prefill_chunck_token_counts.contains(&VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS),
+            cold_prefill_chunk_token_counts.contains(&VISUAL_QUALIFICATION_PREFILL_CHUNK_TOKENS),
             "the visual request must complete one 8192-token forward"
         );
     }
@@ -90,10 +91,9 @@ async fn run_visual_prompt_cache_qualification(force_prefill_retry: bool) {
         .await
         .expect("the restored visual request should start");
     assert!(
-        restored_generation_start.cached_token_count()
-            >= VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS
+        restored_generation_start.cached_token_count() >= VISUAL_QUALIFICATION_PREFILL_CHUNK_TOKENS
     );
-    let (restored_token_id, _restored_prefill_chunck_token_counts) =
+    let (restored_token_id, _restored_prefill_chunk_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_101)).await;
     eprintln!(
         "[visual-prompt-cache-qualification] status=parity cold_token_id={cold_token_id} restored_token_id={restored_token_id} forced_retry={force_prefill_retry}"
@@ -139,7 +139,7 @@ async fn run_appended_visual_prompt_cache_qualification() {
         .expect("the restored appended-image request should start");
     assert_eq!(
         restored_generation_start.cached_token_count(),
-        VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS
+        VISUAL_QUALIFICATION_PREFILL_CHUNK_TOKENS
     );
     let (restored_appended_token_id, _) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_202)).await;
@@ -163,7 +163,7 @@ async fn load_visual_qualification_engine(
         crate::common::sample_machine_model_artifact_qualification_mlx_memory_limits().await;
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.prompt_cache_block_tokens =
-        Some(VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS);
+        Some(VISUAL_QUALIFICATION_PREFILL_CHUNK_TOKENS);
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
@@ -174,7 +174,7 @@ async fn load_visual_qualification_engine(
             10_000_000_000,
         )),
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            VISUAL_QUALIFICATION_PREFILL_CHUNCK_TOKENS,
+            VISUAL_QUALIFICATION_PREFILL_CHUNK_TOKENS,
         )
         .expect("the visual qualification prefill size should be valid"),
         tokenizer.think_end_token_id(),
@@ -248,11 +248,12 @@ fn representative_visual_request_with_optional_later_image(
                     tool_choice: ChatToolChoice::None,
                     settings: ChatGenerationSettings {
                         max_output_tokens: 1,
-                        temperature_thousandths: Some(0),
+                        temperature_thousandths: Some(1_000),
                         top_p_thousandths: None,
-                        seed: None,
+                        seed: Some(VISUAL_QUALIFICATION_SAMPLING_SEED),
                         thinking_budget: Some(256),
                     },
+                    qwen_thinking_channel_seed: None,
                 },
                 false,
             )
@@ -268,7 +269,7 @@ async fn generate_one_token(
     qwen3_5_engine: &mut Qwen3_5Engine,
     request_id: RequestId,
 ) -> (u32, Vec<u32>) {
-    let mut completed_prefill_chunck_token_counts = Vec::new();
+    let mut completed_prefill_chunk_token_counts = Vec::new();
     loop {
         match qwen3_5_engine
             .decode_next_token(request_id)
@@ -276,7 +277,7 @@ async fn generate_one_token(
             .expect("the visual request should advance")
         {
             GeneratedToken::TokenId { token_id, .. } => {
-                return (token_id, completed_prefill_chunck_token_counts);
+                return (token_id, completed_prefill_chunk_token_counts);
             }
             GeneratedToken::PrefillProgress {
                 completed_prefill_chunk_tokens,
@@ -292,7 +293,7 @@ async fn generate_one_token(
                         .as_ref()
                         .map(|telemetry| telemetry.peak_memory_bytes),
                 );
-                completed_prefill_chunck_token_counts.push(completed_prefill_chunk_tokens);
+                completed_prefill_chunk_token_counts.push(completed_prefill_chunk_tokens);
             }
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::GenerationPreparationStarted { .. } => {}
