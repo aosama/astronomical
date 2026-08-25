@@ -4,35 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.16</title>
-            <pubDate>Mon, 24 Aug 2026 11:28:14 -0400</pubDate>
-            <sparkle:version>341</sparkle:version>
-            <sparkle:shortVersionString>0.2.16</sparkle:shortVersionString>
+            <title>0.2.17</title>
+            <pubDate>Tue, 25 Aug 2026 06:52:18 -0400</pubDate>
+            <sparkle:version>347</sparkle:version>
+            <sparkle:shortVersionString>0.2.17</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.16
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.17
 
-Astronomical now enforces a Qwen3.5 thinking budget by committing the model-owned reasoning close before the visible answer.
+Astronomical now lets users disable automatic Qwen multi-token prediction per model and, when they opt in, seed Qwen reasoning from instance-state `thinking.md`.
 
 ## Improvements
 
-- When a Qwen3.5 request reaches its thinking budget, Astronomical feeds the model a complete reasoning-to-answer transition instead of only rewriting the token shown to the client.
-- Visible answer text starts only after that transition is committed. A natural reasoning or tool-call exit still ends thinking without a forced close.
-- Requests whose output limit cannot fit the thinking allowance, the forced transition, and one answer token are rejected before generation.
-- Laguna rejects a positive thinking budget instead of accepting a limit it cannot enforce.
+- Compatible Qwen multi-token prediction remains automatic unless a model sets `acceleration.mtp.enabled` to false, which keeps that model target-only.
+- Status reports configured, default, and effective multi-token prediction policy after a worker applies the change.
+- Qwen thinking-channel seeding remains default-off. When enabled, Qwen requests may read a bounded instance-state `thinking.md` file, escape reserved prompt markers, and emit the authored seed first in reasoning output on Chat Completions and Responses.
+- Missing, empty, unreadable, oversized, or non-Qwen requests do not change generation. Seed content is bounded to 1,000,000 bytes.
+- Accepted multi-token prefixes retain predictor state. Model weights, quantization, and numerical precision are unchanged.
 
 ## Compatibility
 
 This release preserves existing Stable configuration, downloaded models, prompt-cache state, and model precision.
 
-The Chat Completions `thinking_budget` field is unchanged. Omitted and zero budgets keep their previous meaning. A positive budget on Qwen3.5 is now enforced in the model’s own generation. A positive budget on Laguna is now rejected.
+Omitted MTP configuration keeps automatic compatible multi-token prediction. Thinking-channel seeding remains disabled unless the user enables the experimental runtime flag and authors `thinking.md`.
 
 The macOS ARM64 distribution is signed with Apple Developer ID, notarized by Apple, stapled, and delivered through a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.16/Astronomical-0.2.16-macOS-arm64.dmg" length="15417826" type="application/octet-stream" sparkle:edSignature="GXpfQl7fTqf/e7UqEzE8zeeYvGLvehQNN2WYMhg7nLhAzgr8pT0Nfk2O3M2nXdvWBRN8i7uXOVZgeiAvgBDnAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.17/Astronomical-0.2.17-macOS-arm64.dmg" length="15465565" type="application/octet-stream" sparkle:edSignature="feSGKexyoes6D+nW9z4+br2i1Xbza1oNG88mMu5fkSSGiI4DGPdySPNvGDBhhAAKiNCEHh5sHvi6q2SvSq19Dw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: F9caIRvdFocqW5lqZVoyODpNeKR15YkxvvIKHsCkkoWEDcqvE++zkupr6Dkz8BsFTzMN1MGEgmJnqZUqgWJ8AQ==
-length: 2476
+edSignature: wV9fnnn3Lnp7krXrVTZL+r7Jf4fmJEpvO8msWCcWsnAz+ZJRMyfJmKBZR3pjrZf+1mYxaDpCZsRl1YvmuaP0Cg==
+length: 2690
 -->
