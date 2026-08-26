@@ -75,6 +75,7 @@ impl LagunaInferenceExecution {
             })?
             .with_graph_submission_layer_intervals(
                 pending_startup.prefill_graph_submission_layer_interval,
+                pending_startup.experimental_ssd_paging_prefill_graph_submission_layer_interval,
                 pending_startup.experimental_ssd_paging_generation_graph_submission_layer_interval,
             );
         if !pending_startup.paging_plan.sparse_layers().is_empty() {

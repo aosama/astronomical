@@ -6,21 +6,62 @@ use crate::{
     ExpertLayerGeometry, ExpertLayerResidencyTarget, ExpertResidencyPhase, MlxRamBudgetPhase,
     PerformanceAttribution, PerformanceCounter, PerformanceOperation, RetainedExpertPageClass,
     RetainedExpertReclamation, plan_phase_aware_expert_residency,
+    publish_request_stable_residency_plan,
+    retained_complete_layer_ceiling_after_prefill_budget_refresh,
+    should_enact_planned_expert_release,
 };
 
 impl Qwen3_5Model {
-    /// Applies the last-chunk or ordinary demand multiplier for later recordings.
-    pub(crate) fn set_expert_demand_assignment_weight(&self, assignment_weight: u64) {
-        if let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() {
-            retained_expert_layers
-                .borrow_mut()
-                .set_demand_assignment_weight(assignment_weight);
+    /// Clears demand evidence after one topology plan consumes it.
+    pub(crate) fn clear_expert_demand_for_residency(&self) {
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
+            retained_experts.borrow_mut().clear_expert_demand();
         }
     }
 
     /// Clears an optional optimization target so execution safely streams misses.
     pub(crate) fn clear_phase_aware_expert_residency_plan(&self) {
         *self.active_expert_residency_plan.borrow_mut() = None;
+        *self.request_expert_residency.borrow_mut() = None;
+    }
+
+    /// Drops enough pinned complete layers that a Prefill capacity failure cannot re-promote them.
+    pub(crate) fn shrink_request_expert_residency_after_reclamation(
+        &self,
+        released_complete_payload_bytes: u64,
+    ) {
+        if released_complete_payload_bytes == 0 {
+            return;
+        }
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
+            return;
+        };
+        let Ok(layer_geometries) = expert_pager
+            .layer_plans()
+            .iter()
+            .enumerate()
+            .map(|(layer_index, layer_plan)| {
+                Ok(ExpertLayerGeometry {
+                    layer_index,
+                    complete_layer_payload_bytes: layer_plan
+                        .complete_expert_payload_byte_count()?,
+                    expert_payload_bytes: layer_plan.expert_payload_byte_count()?,
+                    expert_capacity: layer_plan.expert_capacity,
+                    experts_per_token: usize::try_from(self.config.experts_per_token())
+                        .unwrap_or(usize::MAX),
+                })
+            })
+            .collect::<Result<Vec<_>, crate::ExpertManifestError>>()
+        else {
+            return;
+        };
+        let Some(current_residency) = self.request_expert_residency.borrow().clone() else {
+            return;
+        };
+        *self.request_expert_residency.borrow_mut() = Some(
+            current_residency
+                .shrink_after_capacity_failure(released_complete_payload_bytes, &layer_geometries),
+        );
     }
 
     /// Refreshes the no-I/O target after memory policy has established a phase budget.
@@ -64,11 +105,22 @@ impl Qwen3_5Model {
             }
             ExpertResidencyPhase::Idle => MlxRamBudgetPhase::Idle,
         };
-        let retained_expert_ceiling_bytes = self
-            .mlx_ram_budget
-            .borrow()
-            .plan(budget_phase, context_token_count, 0)
-            .retained_expert_budget_bytes;
+        let budget_snapshot =
+            self.mlx_ram_budget
+                .borrow()
+                .plan(budget_phase, context_token_count, 0);
+        let retained_expert_ceiling_bytes = budget_snapshot.retained_expert_budget_bytes;
+        tracing::info!(
+            ?phase,
+            context_token_count,
+            mlx_active_memory_ceiling_bytes = budget_snapshot.mlx_active_memory_ceiling_bytes,
+            model_core_payload_bytes = budget_snapshot.model_core_payload_bytes,
+            context_window_reserve_bytes = budget_snapshot.context_window_reserve_bytes,
+            activation_headroom_bytes = budget_snapshot.activation_headroom_bytes,
+            complete_layer_stream_slot_bytes = budget_snapshot.complete_layer_stream_slot_bytes,
+            retained_expert_ceiling_bytes,
+            "composed Prefill/Decode leftover expert budget"
+        );
         let layer_geometries = expert_pager
             .layer_plans()
             .iter()
@@ -86,24 +138,56 @@ impl Qwen3_5Model {
             })
             .collect::<Result<Vec<_>, crate::ExpertManifestError>>()
             .map_err(ExpertPagingError::from)?;
-        let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() else {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
             return Err(ExpertPagingError::InvalidPagingPlan {
                 description: "paged Qwen model lost retained expert ownership".to_owned(),
             }
             .into());
         };
-        let budget_reclamation = retained_expert_layers
+        let expert_capacity = layer_geometries
+            .first()
+            .map(|geometry| geometry.expert_capacity)
+            .unwrap_or(0);
+        let current_complete_layer_payload_bytes = retained_experts
+            .borrow()
+            .topology_snapshot(expert_capacity)
+            .iter()
+            .filter(|residency| residency.class == RetainedExpertPageClass::StableCompleteLayer)
+            .map(|residency| residency.payload_bytes)
+            .fold(0_u64, u64::saturating_add);
+        // Prefill leftover can shrink after a chunk because learned context
+        // reserve grew. Planning and cache eviction against that smaller number
+        // discards a complete layer this request already paid to read. Floor at
+        // current complete payload so only a real capacity failure may shrink.
+        let retained_page_ceiling_bytes = if phase == ExpertResidencyPhase::Prefill {
+            retained_complete_layer_ceiling_after_prefill_budget_refresh(
+                retained_expert_ceiling_bytes,
+                current_complete_layer_payload_bytes,
+            )
+        } else {
+            retained_expert_ceiling_bytes
+        };
+        let budget_reclamation = retained_experts
             .borrow_mut()
-            .update_maximum_resident_payload_bytes(retained_expert_ceiling_bytes);
+            .update_maximum_resident_payload_bytes(retained_page_ceiling_bytes);
         record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
-        let current_residencies = retained_expert_layers.borrow().topology_snapshot();
+        let current_residencies = retained_experts.borrow().topology_snapshot(expert_capacity);
+        let current_residency_payload_bytes: u64 =
+            current_residencies.iter().map(|r| r.payload_bytes).sum();
+        tracing::info!(
+            current_residency_count = current_residencies.len(),
+            current_residency_payload_bytes,
+            leftover_expert_budget_bytes = retained_expert_ceiling_bytes,
+            retained_page_ceiling_bytes,
+            "topology snapshot before residency planning"
+        );
         let residency_plan = performance_attribution
             .measure_operation(
                 PerformanceOperation::PhaseAwareExpertResidencyPlanning,
                 |_performance_attribution| {
                     plan_phase_aware_expert_residency(
                         phase,
-                        retained_expert_ceiling_bytes,
+                        retained_page_ceiling_bytes,
                         &layer_geometries,
                         &current_residencies,
                     )
@@ -112,6 +196,15 @@ impl Qwen3_5Model {
             .map_err(|plan_error| ExpertPagingError::InvalidPagingPlan {
                 description: plan_error.to_string(),
             })?;
+        let (next_request_residency, residency_plan) = publish_request_stable_residency_plan(
+            phase,
+            self.request_expert_residency.borrow().as_ref(),
+            residency_plan,
+            &current_residencies,
+            budget_reclamation.released_complete_payload_bytes,
+            &layer_geometries,
+        );
+        *self.request_expert_residency.borrow_mut() = next_request_residency;
         if phase == ExpertResidencyPhase::GenerationPreparation {
             performance_attribution.record_counter(
                 PerformanceCounter::ExpertResidencyPlanCompleteLayerCount,
@@ -181,14 +274,10 @@ impl Qwen3_5Model {
         // routed reservations real before any later mandatory route page commits.
         for current_residency in &current_residencies {
             let target = residency_plan.layer_targets[current_residency.layer_index];
-            if !matches!(
-                target,
-                ExpertLayerResidencyTarget::ReleasePartial
-                    | ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-            ) {
+            if !should_enact_planned_expert_release(phase, target) {
                 continue;
             }
-            if retained_expert_layers
+            if retained_experts
                 .borrow_mut()
                 .remove_layer(current_residency.layer_index)
             {
@@ -208,19 +297,31 @@ impl Qwen3_5Model {
                 );
             }
         }
+        let pinned_complete_layer_count = self
+            .request_expert_residency
+            .borrow()
+            .as_ref()
+            .map(|request_residency| request_residency.pinned_complete_layer_indexes().len())
+            .unwrap_or(0);
+        let streamed_layer_count = residency_plan
+            .layer_targets
+            .iter()
+            .filter(|target| matches!(target, ExpertLayerResidencyTarget::StreamOperationLocal))
+            .count();
         tracing::info!(
             ?phase,
             retained_expert_ceiling_bytes,
             complete_layer_target_count = residency_plan.complete_layer_targets.len(),
+            pinned_complete_layer_count,
+            streamed_layer_count,
+            released_complete_payload_bytes = budget_reclamation.released_complete_payload_bytes,
+            released_partial_payload_bytes = budget_reclamation.released_partial_payload_bytes,
             reserved_routed_overlay_bytes = residency_plan.reserved_routed_overlay_bytes,
             expected_preserved_bytes = residency_plan.expected_preserved_bytes,
             maximum_new_retained_bytes = residency_plan.maximum_new_retained_bytes,
             low_budget_partial_mode = residency_plan.is_low_budget_partial_mode,
             "published phase-aware expert residency plan"
         );
-        if phase == ExpertResidencyPhase::GenerationPreparation {
-            retained_expert_layers.borrow_mut().clear_expert_demand();
-        }
         *self.active_expert_residency_plan.borrow_mut() = Some(residency_plan);
         Ok(())
     }

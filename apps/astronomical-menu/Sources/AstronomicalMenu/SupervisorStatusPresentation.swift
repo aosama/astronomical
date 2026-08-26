@@ -76,10 +76,7 @@ extension SupervisorStatusDocument {
   }
 
   var modelFootprintTitle: String {
-    if expertMemoryMode == "resident"
-      || (expertMemoryMode == "hybrid"
-        && expertResidency?.retainsEveryLayerCompletely == true)
-    {
+    if expertMemoryMode == "resident" {
       return "Fully in memory"
     }
     if readyModelIdentifier != nil && expertMemoryMode == nil { return "Fully in memory" }

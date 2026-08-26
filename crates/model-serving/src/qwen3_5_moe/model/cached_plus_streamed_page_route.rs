@@ -1,21 +1,22 @@
-//! Compact Machine Learning framework for Apple silicon arrays for one split expert route.
+//! Compact Machine Learning framework for Apple silicon arrays for one cached-plus-streamed expert route.
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
 
 use crate::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
 
-const BUILD_SPLIT_PAGE_ROUTE_OPERATION: &str = "build Qwen3.5-MoE split expert page route";
+const BUILD_CACHED_PLUS_STREAMED_PAGE_ROUTE_OPERATION: &str =
+    "build Qwen3.5-MoE cached-plus-streamed expert page route";
 const REMAP_EXPERT_PAGE_SLOTS_OPERATION: &str = "remap Qwen3.5-MoE expert page slots";
 
-/// Assignment arrays consumed by retained-page and missing-page expert projections.
-pub struct Qwen3_5MoESplitPageRoute {
+/// Assignment arrays for one cached-plus-streamed expert route: retained-page plus missing-page projections.
+pub struct Qwen3_5MoECachedPlusStreamedPageRoute {
     pub retained_page_slot_indices: MlxArray,
     pub retained_scores: MlxArray,
     pub missing_page_slot_indices: MlxArray,
     pub missing_scores: MlxArray,
 }
 
-impl Qwen3_5MoESplitPageRoute {
+impl Qwen3_5MoECachedPlusStreamedPageRoute {
     /// Builds disjoint compact arrays without copying selected route values to the host.
     pub fn build(
         runtime: &MlxRuntime,
@@ -25,8 +26,11 @@ impl Qwen3_5MoESplitPageRoute {
         retained_page_manifest: &QuantizedExpertPageManifest,
         missing_page_manifest: &QuantizedExpertPageManifest,
     ) -> Result<Self, MlxRuntimeError> {
-        let assignment_count =
-            validate_split_page_route(selected_indices, selected_scores, route_partition)?;
+        let assignment_count = validate_cached_plus_streamed_page_route(
+            selected_indices,
+            selected_scores,
+            route_partition,
+        )?;
         let retained_assignment_positions =
             assignment_position_array(runtime, &route_partition.retained_assignment_positions)?;
         let missing_assignment_positions =
@@ -100,7 +104,7 @@ pub(super) fn qwen3_5_moe_remap_expert_page_slots(
     runtime.take_axis(&page_slots, selected_indices, 0)
 }
 
-fn validate_split_page_route(
+fn validate_cached_plus_streamed_page_route(
     selected_indices: &MlxArray,
     selected_scores: &MlxArray,
     route_partition: &ExpertPageRoutePartition,
@@ -114,7 +118,7 @@ fn validate_split_page_route(
             + route_partition.missing_assignment_positions.len()
             != assignment_count
     {
-        return Err(split_page_route_error(
+        return Err(cached_plus_streamed_page_route_error(
             "selected indices, scores, and non-empty route sides must cover the same assignments",
         ));
     }
@@ -128,12 +132,12 @@ fn validate_split_page_route(
         .chain(&route_partition.missing_assignment_positions)
     {
         let Some(is_covered) = is_assignment_position_covered.get_mut(*assignment_position) else {
-            return Err(split_page_route_error(
+            return Err(cached_plus_streamed_page_route_error(
                 "a route assignment position exceeds the selected assignment count",
             ));
         };
         if *is_covered {
-            return Err(split_page_route_error(
+            return Err(cached_plus_streamed_page_route_error(
                 "a route assignment position appears more than once",
             ));
         }
@@ -143,13 +147,14 @@ fn validate_split_page_route(
         .iter()
         .any(|is_covered| !is_covered)
     {
-        return Err(split_page_route_error(
-            "the split route does not cover every selected assignment",
+        return Err(cached_plus_streamed_page_route_error(
+            "the cached-plus-streamed route does not cover every selected assignment",
         ));
     }
 
-    i32::try_from(assignment_count)
-        .map_err(|_| split_page_route_error("expert assignment count exceeds the MLX shape range"))
+    i32::try_from(assignment_count).map_err(|_| {
+        cached_plus_streamed_page_route_error("expert assignment count exceeds the MLX shape range")
+    })
 }
 
 fn assignment_position_array(
@@ -160,19 +165,22 @@ fn assignment_position_array(
         .iter()
         .copied()
         .map(|assignment_position| {
-            u32::try_from(assignment_position)
-                .map_err(|_| split_page_route_error("expert assignment position exceeds u32"))
+            u32::try_from(assignment_position).map_err(|_| {
+                cached_plus_streamed_page_route_error("expert assignment position exceeds u32")
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
     let compact_assignment_count = i32::try_from(assignment_positions.len()).map_err(|_| {
-        split_page_route_error("compact assignment count exceeds the MLX shape range")
+        cached_plus_streamed_page_route_error(
+            "compact assignment count exceeds the MLX shape range",
+        )
     })?;
     runtime.array_from_u32(&assignment_positions, &[compact_assignment_count])
 }
 
-fn split_page_route_error(description: &str) -> MlxRuntimeError {
+fn cached_plus_streamed_page_route_error(description: &str) -> MlxRuntimeError {
     MlxRuntimeError::RuntimeOperation {
-        operation: BUILD_SPLIT_PAGE_ROUTE_OPERATION,
+        operation: BUILD_CACHED_PLUS_STREAMED_PAGE_ROUTE_OPERATION,
         description: description.to_owned(),
     }
 }

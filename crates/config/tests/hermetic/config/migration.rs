@@ -99,7 +99,7 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
         model_config
             .chunking()
             .fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
-        Some(1_024)
+        1_024
     );
     assert_eq!(
         model_config.chunking().prompt_cache_block_tokens(),

@@ -20,7 +20,7 @@ fn should_process_fixed_chunks_and_an_exact_terminal_remainder() {
 
 #[test]
 fn should_use_the_ssd_streaming_fixed_size_only_while_experts_are_paged() {
-    let chunk_sizer = LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, Some(256))
+    let chunk_sizer = LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 256)
         .expect("the resident and SSD-streaming fixed sizes should construct");
 
     assert_eq!(
@@ -39,12 +39,19 @@ fn should_reject_invalid_resident_and_ssd_streaming_chunk_sizes() {
         LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(0).is_err()
     );
     assert!(
-        LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, Some(0))
+        LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 0)
             .is_err()
     );
-    assert!(
-        LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, Some(4_096))
-            .is_err()
+    let larger_paged_chunk_sizer =
+        LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 4_096)
+            .expect("a larger paged chunk should construct");
+    assert_eq!(
+        larger_paged_chunk_sizer.next_prompt_processing_chunk_end(0, 9_000, true),
+        4_096
+    );
+    assert_eq!(
+        larger_paged_chunk_sizer.next_prompt_processing_chunk_end(0, 9_000, false),
+        2_048
     );
 }
 
@@ -61,5 +68,25 @@ fn should_halve_a_capacity_constrained_chunk_without_falling_below_one_token() {
     assert_eq!(
         LagunaPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(1),
         None
+    );
+}
+
+#[test]
+fn should_fold_a_short_paged_remainder_instead_of_paying_a_second_leftover_stream() {
+    let chunk_sizer =
+        LagunaPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 2_048)
+            .expect("the resident and SSD-streaming fixed sizes should construct");
+
+    assert_eq!(
+        chunk_sizer.next_prompt_processing_chunk_end(0, 4_401, true),
+        2_048
+    );
+    assert_eq!(
+        chunk_sizer.next_prompt_processing_chunk_end(2_048, 4_401, true),
+        4_401
+    );
+    assert_eq!(
+        chunk_sizer.next_prompt_processing_chunk_end(2_048, 4_401, false),
+        4_096
     );
 }

@@ -74,7 +74,11 @@ fn should_preserve_existing_complete_layers_before_selecting_new_targets() {
         plan.layer_targets[1],
         ExpertLayerResidencyTarget::PreserveComplete
     );
-    assert_eq!(plan.reserved_routed_overlay_bytes, 40);
+    assert_eq!(
+        plan.layer_targets[0],
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
+    );
+    assert_eq!(plan.reserved_routed_overlay_bytes, 0);
 }
 
 #[test]
@@ -88,7 +92,11 @@ fn should_reserve_one_model_derived_routed_page_for_each_incomplete_layer() {
     .expect("complete foundation and routed floors should fit");
 
     assert_eq!(plan.complete_layer_targets, vec![0]);
-    assert_eq!(plan.reserved_routed_overlay_bytes, 40);
+    assert_eq!(
+        plan.layer_targets[1],
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
+    );
+    assert_eq!(plan.reserved_routed_overlay_bytes, 0);
 }
 
 #[test]
@@ -126,16 +134,14 @@ fn should_use_low_budget_partial_mode_when_routed_floors_do_not_fit() {
     )
     .expect("one fitting page should survive low-budget mode");
 
-    assert!(plan.is_low_budget_partial_mode);
     assert_eq!(
         plan.layer_targets,
         vec![
-            ExpertLayerResidencyTarget::StreamOperationLocal,
+            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
             ExpertLayerResidencyTarget::PreservePartial,
-            ExpertLayerResidencyTarget::StreamOperationLocal,
+            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
         ]
     );
-    assert_eq!(plan.maximum_new_retained_bytes, 0);
 }
 
 #[test]

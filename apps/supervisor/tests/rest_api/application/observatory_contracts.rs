@@ -266,17 +266,15 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
     health_snapshot.activity = WorkerActivity::GenerationPreparation;
     health_snapshot.expert_residency = Some(ExpertResidencySnapshot {
         total_layer_count: 40,
-        complete_layer_count: 24,
-        complete_layer_payload_bytes: 12_000_000_000,
-        partial_layer_count: 8,
-        partial_layer_payload_bytes: 1_000_000_000,
+        resident_expert_count: 32,
+        resident_expert_payload_bytes: 13_000_000_000,
     });
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::GenerationPreparation {
         request_started_at,
         preparation_started_at,
         total_layer_count: 40,
-        complete_layer_count: 24,
-        partial_layer_count: 8,
+        resident_expert_count: 32,
+        resident_expert_payload_bytes: 13_000_000_000,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
     let response = application
@@ -302,12 +300,12 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
     assert_eq!(status_document["progress"]["processed_tokens"], 0);
     assert_eq!(status_document["progress"]["total_tokens"], 1);
     assert_eq!(
-        status_document["expert_residency"]["complete_layer_count"],
-        24
+        status_document["expert_residency"]["resident_expert_count"],
+        32
     );
     assert_eq!(
-        status_document["expert_residency"]["partial_layer_count"],
-        8
+        status_document["expert_residency"]["resident_expert_payload_bytes"],
+        13_000_000_000_u64
     );
 }
 

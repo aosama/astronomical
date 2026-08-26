@@ -27,11 +27,11 @@ fn should_project_complete_residency_as_replacement() {
 #[test]
 fn should_reserve_activation_headroom_before_complete_residency() {
     assert_eq!(
-        required_complete_residency_activation_headroom_bytes(36_000_000_000, 0),
-        3_600_000_000
+        required_complete_residency_activation_headroom_bytes(900_000_000, 0),
+        900_000_000
     );
     assert_eq!(
-        required_complete_residency_activation_headroom_bytes(36_000_000_000, 5_000_000_000),
+        required_complete_residency_activation_headroom_bytes(900_000_000, 5_000_000_000),
         5_000_000_000
     );
     assert!(complete_residency_exceeds_ceiling_with_activation_headroom(

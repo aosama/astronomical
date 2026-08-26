@@ -16,10 +16,8 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     completed_prefill_chunk_tokens: 2_048,
                     expert_residency_telemetry: Some(ExpertResidencyTelemetry {
                         total_layer_count: 40,
-                        complete_layer_count: 6,
-                        complete_layer_payload_bytes: 2_852_126_720,
-                        partial_layer_count: 34,
-                        partial_layer_payload_bytes: 523_239_424,
+                        resident_expert_count: 40,
+                        resident_expert_payload_bytes: 3_375_366_144,
                     }),
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         11_000,
@@ -153,10 +151,8 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 expert_residency,
                 Some(WorkerExpertResidencySnapshot {
                     total_layer_count: 40,
-                    complete_layer_count: 6,
-                    complete_layer_payload_bytes: 2_852_126_720,
-                    partial_layer_count: 34,
-                    partial_layer_payload_bytes: 523_239_424,
+                    resident_expert_count: 40,
+                    resident_expert_payload_bytes: 3_375_366_144,
                 })
             );
             assert_eq!(

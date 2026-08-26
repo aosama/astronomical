@@ -209,7 +209,7 @@ impl Qwen3_5EngineState {
             .ok_or(Qwen3_5ExecutionError::InvalidInput {
                 description: "speculative-prefill drafter restore lost its boundary key",
             })?;
-        let persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
+        let mut persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheRecurrentSnapshotRead,
                 |performance_attribution| {
@@ -229,8 +229,8 @@ impl Qwen3_5EngineState {
         // snapshot rebuilds non-attention state at exactly the same boundary.
         draft_request_decoder_state.restore_from_persistent_prompt_cache_blocks(
             draft_model.runtime(),
-            &persistent_prompt_cache_kv_block_tensors,
-            &persistent_prompt_cache_recurrent_snapshot_tensors,
+            &mut persistent_prompt_cache_kv_block_tensors,
+            &mut persistent_prompt_cache_recurrent_snapshot_tensors,
         )?;
         draft_request_decoder_state
             .materialize_restored_persistent_prompt_cache_state(draft_model.runtime())?;

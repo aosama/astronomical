@@ -19,7 +19,8 @@ use prefill_execution_context::{
     Qwen3_5PrefillExecutionContext, SPECULATIVE_PREFILL_TARGET_ONLY_PREFIX_CONTEXT_FLAG,
 };
 use speculative_prefill_chunck_policy::{
-    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_speculative_prefill_chunck_mode,
+    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_prompt_prefill_end_exclusive,
+    qwen3_5_speculative_prefill_chunck_mode,
 };
 use speculative_prefill_control_span::{
     qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
@@ -358,6 +359,12 @@ fn should_use_terminal_mtp_capture_for_an_active_terminal_chunck() {
         qwen3_5_speculative_prefill_chunck_mode(true, 5, 5),
         Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture,
     );
+}
+
+#[test]
+fn should_reserve_the_last_prompt_token_only_when_optional_prediction_is_active() {
+    assert_eq!(qwen3_5_prompt_prefill_end_exclusive(1_024, true), 1_023);
+    assert_eq!(qwen3_5_prompt_prefill_end_exclusive(1_024, false), 1_024);
 }
 
 #[test]

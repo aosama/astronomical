@@ -175,10 +175,11 @@ struct WorkerSpeculativePrefillRuntimeConfiguration: Codable, Equatable {
 
 struct WorkerChunkingConfiguration: Codable, Equatable {
   let fixedPromptProcessingChunkSizeTokens: UInt32
-  let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32?
+  let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32
   let fullAttentionKeyValueGrowthTokens: UInt32
   let speculativePrefillDraftForwardTokens: UInt32
   let prefillGraphSubmissionLayerInterval: UInt32
+  let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32
   let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32
   let promptCacheBlockTokens: UInt32?
   let promptCacheCommonPrefixStrideBlocks: UInt32
@@ -189,6 +190,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case fullAttentionKeyValueGrowthTokens = "full_attention_key_value_growth_tokens"
     case speculativePrefillDraftForwardTokens = "speculative_prefill_draft_forward_tokens"
     case prefillGraphSubmissionLayerInterval = "prefill_graph_submission_layer_interval"
+    case experimentalSsdPagingPrefillGraphSubmissionLayerInterval = "experimental_ssd_paging_prefill_graph_submission_layer_interval"
     case experimentalSsdPagingGenerationGraphSubmissionLayerInterval = "experimental_ssd_paging_generation_graph_submission_layer_interval"
     case promptCacheBlockTokens = "prompt_cache_block_tokens"
     case promptCacheCommonPrefixStrideBlocks = "prompt_cache_common_prefix_stride_blocks"
@@ -199,7 +201,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     fixedPromptProcessingChunkSizeTokens = try container.decode(
       UInt32.self, forKey: .fixedPromptProcessingChunkSizeTokens)
-    fixedSsdStreamingPromptProcessingChunkSizeTokens = try container.decodeValueOrOmission(
+    fixedSsdStreamingPromptProcessingChunkSizeTokens = try container.decode(
       UInt32.self, forKey: .fixedSsdStreamingPromptProcessingChunkSizeTokens)
     fullAttentionKeyValueGrowthTokens = try container.decode(
       UInt32.self, forKey: .fullAttentionKeyValueGrowthTokens)
@@ -207,6 +209,8 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       UInt32.self, forKey: .speculativePrefillDraftForwardTokens)
     prefillGraphSubmissionLayerInterval = try container.decode(
       UInt32.self, forKey: .prefillGraphSubmissionLayerInterval)
+    experimentalSsdPagingPrefillGraphSubmissionLayerInterval = try container.decode(
+      UInt32.self, forKey: .experimentalSsdPagingPrefillGraphSubmissionLayerInterval)
     experimentalSsdPagingGenerationGraphSubmissionLayerInterval = try container.decode(
       UInt32.self,
       forKey: .experimentalSsdPagingGenerationGraphSubmissionLayerInterval)

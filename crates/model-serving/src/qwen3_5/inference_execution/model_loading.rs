@@ -87,6 +87,8 @@ impl Qwen3_5EngineState {
                 self.chunking.full_attention_key_value_growth_tokens,
                 self.chunking.prefill_graph_submission_layer_interval,
                 self.chunking
+                    .experimental_ssd_paging_prefill_graph_submission_layer_interval,
+                self.chunking
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
                 self.chunking.speculative_prefill_draft_forward_tokens,
             )

@@ -1,14 +1,13 @@
 use std::path::PathBuf;
 
-use crate::expert_paging::{
-    ExpertLayerGeometry, QuantizationMode, QuantizedExpertPageManifest, SafetensorsDtype,
-};
+use crate::expert_paging::{QuantizationMode, QuantizedExpertPageManifest, SafetensorsDtype};
 use crate::laguna::artifacts::{
     LagunaCanonicalTensorDescriptor, LagunaExpertProjection, LagunaLayerTensorRole,
     LagunaTensorComponent, LagunaTensorContract, LagunaTensorId, LagunaTensorStorageEncoding,
     ValidatedLagunaArtifact,
 };
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetContract};
+use crate::memory::ExpertLayerGeometry;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::error::LagunaPagingError;

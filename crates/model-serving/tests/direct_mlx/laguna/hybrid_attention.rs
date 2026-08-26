@@ -323,7 +323,7 @@ async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_o
         bind_tiny_weights(&runtime, &lazy_tape_contract),
     )
     .expect("the comparison model should construct")
-    .with_graph_submission_layer_intervals(0, 0);
+    .with_graph_submission_layer_intervals(0, 0, 0);
     let mut lazy_tape_decoder_state = LagunaDecoderState::empty(lazy_tape_model.contract())
         .expect("the comparison decoder state should allocate");
     let mut lazy_tape_attribution = PerformanceAttribution::enabled();

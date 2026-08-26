@@ -166,10 +166,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             WorkerEvent::GenerationPreparationStarted {
                                 request_id,
                                 total_layer_count: 40,
-                                complete_layer_count: 25,
-                                complete_layer_payload_bytes: 22_649_241_600,
-                                partial_layer_count: 15,
-                                partial_layer_payload_bytes: 424_673_280,
+                                resident_expert_count: 40,
+                                resident_expert_payload_bytes: 23_073_914_880,
                             };
                         event_writer
                             .send_event(&generation_preparation_event)

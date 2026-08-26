@@ -20,15 +20,15 @@ use super::automatic_residency_support::{
     initialize_automatic_residency_tracing, serve_romeo_and_juliet_request,
 };
 
-/// Qualification ceiling: static oQ8e experts fit, activation headroom does not.
-const STATIC_FIT_WITHOUT_HEADROOM_CEILING_BYTES: usize = 40_000_000_000;
+/// Qualification ceiling: static oQ6e experts fit, activation headroom does not.
+const STATIC_FIT_WITHOUT_HEADROOM_CEILING_BYTES: usize = 29_000_000_000;
 
-/// Large sparse checkpoint whose complete experts nearly fill a 40 GB ceiling.
+/// Large sparse checkpoint whose complete experts nearly fill that ceiling.
 const LARGE_SPARSE_HEADROOM_REGRESSION_MODEL_ID: &str =
-    crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID;
+    crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 
 #[tokio::test]
-#[ignore = "loads Ornith 1.5 oQ8e under a static-fit 40 GB ceiling and proves activation headroom prevents complete residency"]
+#[ignore = "loads Ornith 1.5 oQ6e under a static-fit 29 GB ceiling and proves activation headroom prevents complete residency"]
 async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activation_headroom_does_not()
  {
     timeout(Duration::from_secs(120), async {
@@ -68,8 +68,8 @@ async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activa
                 .expert_memory_mode_for_tests()
                 .await
                 .expect("the loaded model should expose its expert mode"),
-            Some(ExpertMemoryMode::Paged),
-            "startup admission must keep the model paged under the static-fit ceiling"
+            Some(ExpertMemoryMode::Resident),
+            "startup admission must seat complete experts when one-layer headroom fits"
         );
 
         let complete_expert_payload_bytes = qwen3_5_engine
@@ -86,7 +86,10 @@ async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activa
             )
             .expect("static complete-residency projection should succeed");
         let required_activation_headroom_bytes =
-            required_complete_residency_activation_headroom_bytes(complete_expert_payload_bytes, 0);
+            required_complete_residency_activation_headroom_bytes(
+                complete_expert_payload_bytes / 40,
+                0,
+            );
         let stable_memory_ceiling_bytes =
             u64::try_from(STATIC_FIT_WITHOUT_HEADROOM_CEILING_BYTES)
                 .expect("the static-fit ceiling should fit u64");
@@ -99,12 +102,12 @@ async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activa
             "this qualification requires the static complete payload to fit the ceiling: projected={projected_resident_active_memory_bytes}, ceiling={stable_memory_ceiling_bytes}"
         );
         assert!(
-            complete_residency_exceeds_ceiling_with_activation_headroom(
+            !complete_residency_exceeds_ceiling_with_activation_headroom(
                 projected_resident_active_memory_bytes,
                 stable_memory_ceiling_bytes,
                 required_activation_headroom_bytes,
             ),
-            "activation headroom must reject complete residency for this ceiling"
+            "one-layer activation headroom must allow complete residency when static experts fit"
         );
 
         let native_cache_statistics_before_request = qwen3_5_engine
@@ -133,9 +136,9 @@ async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activa
         assert!(
             matches!(
                 generation_finalization.expert_memory_mode(),
-                Some(ExpertMemoryMode::Paged | ExpertMemoryMode::Hybrid)
+                Some(ExpertMemoryMode::Resident)
             ),
-            "request finalization must not promote complete residency without activation headroom"
+            "request finalization must keep complete residency when the ceiling seats the model"
         );
         assert!(
             matches!(
@@ -143,9 +146,9 @@ async fn should_keep_large_sparse_model_paged_when_static_experts_fit_but_activa
                     .expert_memory_mode_for_tests()
                     .await
                     .expect("the model should still expose its expert mode after the request"),
-                Some(ExpertMemoryMode::Paged | ExpertMemoryMode::Hybrid)
+                Some(ExpertMemoryMode::Resident)
             ),
-            "the engine must remain paged or hybrid after the first Romeo and Juliet request"
+            "the engine must remain resident after the first Romeo and Juliet request"
         );
         assert!(
             native_cache_statistics_after_request.disk_page_load_count

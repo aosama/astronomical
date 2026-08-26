@@ -224,9 +224,9 @@ impl Qwen3_5Model {
             .map_err(InferenceEngineError::from)?;
         }
         if self.resident_expert_weights.is_none()
-            && let Some(retained_expert_layers) = self.retained_expert_layers.as_ref()
+            && let Some(retained_experts) = self.retained_experts.as_ref()
         {
-            retained_expert_layers
+            retained_experts
                 .borrow_mut()
                 .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);
         }

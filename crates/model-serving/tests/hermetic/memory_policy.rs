@@ -174,6 +174,7 @@ fn should_authorize_only_one_retry_after_required_experts_were_reclaimed() {
         retained_expert_payload_bytes_after_reclamation: 100,
         active_memory_ceiling_bytes: 1_000,
         has_already_retried_after_reclamation: false,
+        sparse_experts_are_paged: false,
     };
 
     assert_eq!(

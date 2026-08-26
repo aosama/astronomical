@@ -3,8 +3,8 @@ use astronomical_experimental_aligned_expert_packs::AlignedExpertPackPreparer;
 #[test]
 #[ignore = "inspects an installed research model without creating aligned expert packs"]
 fn should_inspect_the_downloaded_model_before_explicit_pack_preparation() {
-    let model_directory = super::configured_model_directory_by_id(super::ORNITH_OQ8_MODEL_ID)
-        .expect("the uniform Ornith 8-bit checkpoint should be installed");
+    let model_directory = super::configured_model_directory_by_id(super::ORNITH_OQ6_MODEL_ID)
+        .expect("the Ornith 6-bit checkpoint should be installed");
     let preparer = AlignedExpertPackPreparer::for_model_directory(&model_directory)
         .expect("the downloaded model should support aligned expert-pack preparation");
 

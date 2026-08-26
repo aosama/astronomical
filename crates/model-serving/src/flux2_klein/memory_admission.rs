@@ -132,6 +132,7 @@ impl Flux2KleinMemoryAdmission {
                 complete_expert_payload_bytes: 0,
                 largest_complete_expert_layer_bytes: 0,
                 largest_routed_expert_page_bytes: 0,
+                sequence_state_bytes_per_token: 0,
             },
             0,
         )

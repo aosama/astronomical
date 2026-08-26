@@ -18,8 +18,6 @@ mod expert_storage_data_plane_measurement;
 const ALIGNED_EXPERT_PACK_TEST_TIMEOUT: Duration = Duration::from_secs(120);
 const ORNITH_OQ6_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
 const ORNITH_OQ6_PROVIDER_MODEL_ID: &str = "scottlowry/Ornith-1.5-35B-A3B-oQ6e-mtp";
-const ORNITH_OQ8_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ8e-mtp";
-const ORNITH_OQ8_PROVIDER_MODEL_ID: &str = "scottlowry/Ornith-1.5-35B-A3B-oQ8e-mtp";
 static DIRECT_MLX_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {

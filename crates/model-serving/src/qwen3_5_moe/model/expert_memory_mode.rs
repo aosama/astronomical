@@ -4,49 +4,37 @@ use crate::ExpertResidencyTelemetry;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
-    /// Returns complete and partial retained layer counts for phase telemetry.
+    /// Returns retained-expert count and payload for status and IPC.
     #[must_use]
-    pub(crate) fn retained_expert_layer_counts(&self) -> (usize, usize, usize) {
-        if let Some(resident_expert_weights) = self.resident_expert_weights.as_ref() {
-            let complete_layer_count = resident_expert_weights.layer_count();
-            return (complete_layer_count, complete_layer_count, 0);
-        }
+    pub(crate) fn expert_residency_telemetry(&self) -> ExpertResidencyTelemetry {
         let total_layer_count = self
             .expert_pager
             .as_ref()
             .map_or(0, |expert_pager| expert_pager.layer_count());
-        let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() else {
-            return (total_layer_count, 0, 0);
-        };
-        let retained_expert_layers = retained_expert_layers.borrow();
-        let mut complete_layer_count = 0_usize;
-        let mut partial_layer_count = 0_usize;
-        for layer_index in 0..total_layer_count {
-            let Some(retained_layer) = retained_expert_layers.retained_layer(layer_index) else {
-                continue;
+        if let Some(resident_expert_weights) = self.resident_expert_weights.as_ref() {
+            let resident_expert_count = self
+                .expert_pager
+                .as_ref()
+                .map_or(resident_expert_weights.layer_count(), |expert_pager| {
+                    expert_pager.complete_expert_entry_count()
+                });
+            let resident_expert_payload_bytes =
+                self.expert_pager.as_ref().map_or(0, |expert_pager| {
+                    expert_pager
+                        .complete_expert_payload_byte_count()
+                        .unwrap_or(0)
+                });
+            return ExpertResidencyTelemetry {
+                total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),
+                resident_expert_count: u32::try_from(resident_expert_count).unwrap_or(u32::MAX),
+                resident_expert_payload_bytes,
             };
-            if retained_layer.manifest.contains_all_experts() {
-                complete_layer_count = complete_layer_count.saturating_add(1);
-            } else {
-                partial_layer_count = partial_layer_count.saturating_add(1);
-            }
         }
-        (total_layer_count, complete_layer_count, partial_layer_count)
-    }
-
-    /// Returns the current concrete complete/partial ownership and payload bytes.
-    #[must_use]
-    pub(crate) fn expert_residency_telemetry(&self) -> ExpertResidencyTelemetry {
-        let (total_layer_count, _, _) = self.retained_expert_layer_counts();
         let expert_statistics = self.expert_weight_memory_cache_statistics();
         ExpertResidencyTelemetry {
             total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),
-            complete_layer_count: u32::try_from(expert_statistics.complete_layer_count)
-                .unwrap_or(u32::MAX),
-            complete_layer_payload_bytes: expert_statistics.complete_layer_payload_byte_count,
-            partial_layer_count: u32::try_from(expert_statistics.partial_layer_count)
-                .unwrap_or(u32::MAX),
-            partial_layer_payload_bytes: expert_statistics.partial_layer_payload_byte_count,
+            resident_expert_count: u32::try_from(expert_statistics.entry_count).unwrap_or(u32::MAX),
+            resident_expert_payload_bytes: expert_statistics.resident_payload_byte_count,
         }
     }
 
@@ -57,10 +45,10 @@ impl Qwen3_5Model {
             return ExpertMemoryMode::Resident;
         }
         if self
-            .retained_expert_layers
+            .retained_experts
             .as_ref()
-            .is_some_and(|retained_layers| {
-                retained_layers
+            .is_some_and(|retained_experts| {
+                retained_experts
                     .borrow()
                     .statistics()
                     .resident_payload_byte_count

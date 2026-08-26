@@ -27,10 +27,11 @@ async fn should_preserve_generation_and_full_path_free_model_configuration_in_ac
                     maximum_output_tokens: 4_096,
                     chunking: WorkerChunkingConfiguration {
                         fixed_prompt_processing_chunk_size_tokens: 2_048,
-                        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Some(256),
+                        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
                         full_attention_key_value_growth_tokens: 256,
                         speculative_prefill_draft_forward_tokens: 1_024,
-                        prefill_graph_submission_layer_interval: 1,
+                        prefill_graph_submission_layer_interval: 0,
+                        experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
                         experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
                         prompt_cache_block_tokens: Some(128),
                         prompt_cache_common_prefix_stride_blocks: 4,

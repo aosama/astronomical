@@ -30,22 +30,24 @@ impl Qwen3_5MultiTokenPredictionRequest {
         has_precomputed_visual_embeddings: bool,
         has_processed_visual_images: bool,
         persistent_prompt_cache_is_available: bool,
+        sparse_experts_are_paged: bool,
         prompt_token_count: usize,
         restored_prompt_token_count: u32,
         full_attention_kv_state_growth_tokens: i32,
         requested_depth: Option<MtpDraftDepth>,
     ) -> Result<Option<Self>, MlxRuntimeError> {
-        let is_eligible = mtp_enabled
-            && mtp_runtime_is_active
-            && model_has_mtp_weights
-            && sampling_is_greedy
-            && !has_precomputed_visual_embeddings
-            && !has_processed_visual_images
-            && !persistent_prompt_cache_is_available
-            && usize::try_from(restored_prompt_token_count).is_ok_and(|restored_token_count| {
-                restored_token_count < prompt_token_count.saturating_sub(1)
-            })
-            && prompt_token_count > 1;
+        let is_eligible = super::qwen3_5_mtp_request_is_eligible(
+            mtp_enabled,
+            mtp_runtime_is_active,
+            model_has_mtp_weights,
+            sampling_is_greedy,
+            has_precomputed_visual_embeddings,
+            has_processed_visual_images,
+            persistent_prompt_cache_is_available,
+            sparse_experts_are_paged,
+            prompt_token_count,
+            restored_prompt_token_count,
+        );
         if !is_eligible {
             return Ok(None);
         }
@@ -181,6 +183,7 @@ pub(crate) fn create_optional_prediction_session(
     has_precomputed_visual_embeddings: bool,
     has_processed_visual_images: bool,
     persistent_prompt_cache_is_available: bool,
+    sparse_experts_are_paged: bool,
     prompt_token_count: usize,
     restored_prompt_token_count: u32,
     full_attention_kv_state_growth_tokens: i32,
@@ -194,6 +197,7 @@ pub(crate) fn create_optional_prediction_session(
         has_precomputed_visual_embeddings,
         has_processed_visual_images,
         persistent_prompt_cache_is_available,
+        sparse_experts_are_paged,
         prompt_token_count,
         restored_prompt_token_count,
         full_attention_kv_state_growth_tokens,
