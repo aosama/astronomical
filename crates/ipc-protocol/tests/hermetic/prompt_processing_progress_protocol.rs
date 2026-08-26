@@ -28,10 +28,8 @@ async fn should_round_trip_prefill_progress_event() {
         }),
         expert_residency: Some(WorkerExpertResidencySnapshot {
             total_layer_count: 40,
-            complete_layer_count: 6,
-            complete_layer_payload_bytes: 2_852_126_720,
-            partial_layer_count: 34,
-            partial_layer_payload_bytes: 523_239_424,
+            resident_expert_count: 40,
+            resident_expert_payload_bytes: 3_375_366_144,
         }),
         speculative_prefill_draft_memory_snapshot: Some(WorkerMlxMemorySnapshot {
             source: MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,

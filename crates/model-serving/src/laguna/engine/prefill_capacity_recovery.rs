@@ -84,6 +84,7 @@ pub(super) fn recover_laguna_prefill_capacity(
         failure_evidence.allowed_active_memory_bytes,
         fixed_forward_workspace_bytes,
     );
+    let sparse_experts_are_paged = !model.native_routed_experts_are_resident();
     if model.native_routed_experts_are_resident() {
         model
             .demote_native_routed_experts(runtime, performance_attribution)
@@ -120,6 +121,7 @@ pub(super) fn recover_laguna_prefill_capacity(
         .unwrap_or(usize::MAX),
         active_memory_ceiling_bytes: failure_evidence.allowed_active_memory_bytes,
         has_already_retried_after_reclamation,
+        sparse_experts_are_paged,
     }
     .decide();
     let should_retry = matches!(recovery_decision, ForwardRecoveryDecision::Retry { .. });

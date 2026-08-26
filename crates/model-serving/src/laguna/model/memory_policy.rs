@@ -3,8 +3,9 @@
 use astronomical_ipc_protocol::ExpertMemoryMode;
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::expert_paging::{ExpertResidencyPhase, RetainedExpertReclamation};
+use crate::expert_paging::RetainedExpertReclamation;
 use crate::laguna::normalization::LagunaFeedForwardDescriptor;
+use crate::memory::ExpertResidencyPhase;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::{AllocationAdmissionDecision, MlxAllocationBudget, MlxAllocationBudgetError};
 

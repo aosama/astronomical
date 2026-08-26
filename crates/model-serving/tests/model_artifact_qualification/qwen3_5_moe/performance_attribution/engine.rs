@@ -19,7 +19,7 @@ pub(crate) fn create_attributed_engine(
         performance_attribution_log_path,
         mlx_memory_limits,
         fixed_prompt_processing_chunk_size_tokens,
-        None,
+        fixed_prompt_processing_chunk_size_tokens,
     )
 }
 
@@ -28,7 +28,7 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     performance_attribution_log_path: &Path,
     mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
     fixed_prompt_processing_chunk_size_tokens: u32,
-    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
+    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
 ) -> (Qwen3_5Engine, Vec<u32>) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)

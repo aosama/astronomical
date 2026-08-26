@@ -237,13 +237,14 @@ fn prepare_laguna_startup(
             complete_expert_payload_bytes,
             largest_complete_expert_layer_bytes,
             largest_routed_expert_page_bytes,
+            sequence_state_bytes_per_token: 0,
         },
     )
     .map_err(|_| LagunaStartupError::RuntimeInitialization)?;
     let can_bind_routed_experts =
         routed_experts_use_direct_or_stacked_assembly(validated_artifact.tensor_contract());
     let activation_headroom_bytes = crate::required_complete_residency_activation_headroom_bytes(
-        complete_expert_payload_bytes,
+        largest_complete_expert_layer_bytes,
         0,
     );
     let mandatory_page_and_transient_reserve_bytes = largest_complete_expert_layer_bytes
@@ -315,6 +316,11 @@ fn prepare_laguna_startup(
         .chunking
         .as_ref()
         .map(|chunking| chunking.prefill_graph_submission_layer_interval)
+        .unwrap_or(0);
+    let experimental_ssd_paging_prefill_graph_submission_layer_interval = serving_settings
+        .chunking
+        .as_ref()
+        .map(|chunking| chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval)
         .unwrap_or(1);
     let experimental_ssd_paging_generation_graph_submission_layer_interval = serving_settings
         .chunking
@@ -351,6 +357,7 @@ fn prepare_laguna_startup(
         configured_prompt_cache_block_token_count,
         prompt_cache_common_prefix_stride_blocks,
         prefill_graph_submission_layer_interval,
+        experimental_ssd_paging_prefill_graph_submission_layer_interval,
         experimental_ssd_paging_generation_graph_submission_layer_interval,
         model_loading_performance_attribution: performance_attribution,
         performance_attribution_log,

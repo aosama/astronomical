@@ -75,6 +75,8 @@ pub struct MlxRamBudgetModelGeometry {
     pub largest_complete_expert_layer_bytes: u64,
     /// Largest exact top-K page used by one-token decode.
     pub largest_routed_expert_page_bytes: u64,
+    /// Persistent decoder-state bytes added by one more prompt token.
+    pub sequence_state_bytes_per_token: u64,
 }
 
 /// One composed RAM split for a planned operation.
@@ -210,12 +212,18 @@ impl MlxRamBudget {
 
     /// Context-window reserve for `context_token_count` tokens.
     ///
-    /// Before measurements: bootstrap constant (1 GB SI).
-    /// After measurements: conservative high-water by token bucket.
+    /// Before measurements: the larger of the 1 GB SI bootstrap and the
+    /// geometry-projected sequence-state payload.
+    /// After measurements: conservative high-water by token bucket, plus a
+    /// geometry projection for any tokens beyond the highest measured bucket.
     #[must_use]
     pub fn context_window_reserve_bytes(&self, context_token_count: u64) -> u64 {
+        let projected_sequence_state_bytes =
+            context_token_count.saturating_mul(self.model_geometry.sequence_state_bytes_per_token);
         if !self.has_context_window_measurement {
-            return self.bootstrap_context_window_reserve_bytes;
+            return self
+                .bootstrap_context_window_reserve_bytes
+                .max(projected_sequence_state_bytes);
         }
         let token_bucket = context_token_bucket(context_token_count);
         // Prefer the highest evidence at or below the requested bucket. Context
@@ -241,18 +249,40 @@ impl MlxRamBudget {
         } else {
             larger_bucket_floor_bytes
         };
-        learned_context_window_reserve_bytes.max(self.bootstrap_context_window_reserve_bytes)
+        let measured_or_bootstrap_reserve_bytes =
+            learned_context_window_reserve_bytes.max(self.bootstrap_context_window_reserve_bytes);
+        let highest_measured_token_bucket = self
+            .measured_context_window_high_water_by_token_bucket
+            .keys()
+            .next_back()
+            .copied()
+            .unwrap_or(0);
+        let highest_measured_token_count =
+            highest_measured_token_bucket.saturating_add(1) * CONTEXT_TOKEN_BUCKET_WIDTH;
+        if context_token_count > highest_measured_token_count {
+            let unmeasured_token_count =
+                context_token_count.saturating_sub(highest_measured_token_count);
+            return measured_or_bootstrap_reserve_bytes.saturating_add(
+                unmeasured_token_count
+                    .saturating_mul(self.model_geometry.sequence_state_bytes_per_token),
+            );
+        }
+        measured_or_bootstrap_reserve_bytes.max(projected_sequence_state_bytes)
     }
 
     #[must_use]
     pub fn activation_headroom_bytes(&self, phase: MlxRamBudgetPhase) -> u64 {
         match phase {
             MlxRamBudgetPhase::Prefill => {
-                // Keep the geometry-derived startup floor after learning. A
-                // cheaper completed chunk must not let retained pages expand
-                // into the operating interval needed by a later large chunk.
+                // One complete layer is enough to stream a single page. A
+                // seated 38.6 GB model under a 40 GB ceiling still needs room
+                // for a multi-token prefill working set; three layers is the
+                // measured first-chunk overshoot on that shape. Keep the
+                // learned high-water when it is larger.
                 required_complete_residency_activation_headroom_bytes(
-                    self.model_geometry.complete_expert_payload_bytes,
+                    self.model_geometry
+                        .largest_complete_expert_layer_bytes
+                        .saturating_mul(3),
                     self.prefill_activation_headroom_bytes,
                 )
             }
@@ -261,7 +291,7 @@ impl MlxRamBudget {
                     self.decode_activation_headroom_bytes
                 } else if self.has_prefill_activation_measurement {
                     required_complete_residency_activation_headroom_bytes(
-                        self.model_geometry.complete_expert_payload_bytes,
+                        self.model_geometry.largest_complete_expert_layer_bytes,
                         self.prefill_activation_headroom_bytes,
                     )
                 } else {
@@ -270,7 +300,7 @@ impl MlxRamBudget {
                     // evidence preventing warm fill from occupying transient
                     // space that the first token immediately needs back.
                     required_complete_residency_activation_headroom_bytes(
-                        self.model_geometry.complete_expert_payload_bytes,
+                        self.model_geometry.largest_complete_expert_layer_bytes,
                         0,
                     )
                 }

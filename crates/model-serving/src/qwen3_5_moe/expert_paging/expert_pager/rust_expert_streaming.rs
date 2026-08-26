@@ -1,14 +1,8 @@
-//! Rust-led bounded expert layer streaming.
+//! Rust-led bounded expert streaming from SSD.
 //!
-//! This is the complete storage-to-page orchestration boundary:
-//!
-//! `validated layer plan -> exact selected IDs -> bounded manifest -> memory
-//! admission -> lazy MLX arrays -> typed Qwen expert weights`.
-//!
-//! It intentionally serves two execution shapes through one exact mechanism:
-//! multi-token prefill passes every expert ID and receives a complete temporary
-//! layer, while one-token decode passes only router-selected top-K IDs. Neither
-//! shape changes quantization, expert order, or source precision.
+//! Storage-to-weights boundary:
+//! selected expert IDs -> bounded manifest -> memory admission -> lazy MLX arrays.
+//! Prefill and decode both pass only the expert IDs this forward routed.
 
 use crate::{
     AllocationAdmissionDecision, PerformanceAttribution, PerformanceCounter, PerformanceOperation,
@@ -29,9 +23,8 @@ pub(crate) struct Qwen3_5ExpertStreamingRequestShape {
 }
 
 impl Qwen3_5ExpertPager {
-    /// Loads one exact page selected by Rust. Multi-token callers pass all expert
-    /// identifiers and therefore stream one complete layer; decode passes top-K.
-    pub(crate) fn load_rust_streamed_expert_layer(
+    /// Loads the exact expert IDs selected by Rust for this forward.
+    pub(crate) fn load_rust_streamed_experts(
         &self,
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,

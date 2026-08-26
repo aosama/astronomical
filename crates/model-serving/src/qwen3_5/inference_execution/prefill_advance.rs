@@ -22,8 +22,8 @@ use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use crate::{
     ExpertResidencyPhase, GeneratedToken, InferenceEngineError, PerformanceCounter,
-    PerformanceOperation, last_prefill_chunk_demand_weight,
-    persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
+    PerformanceOperation, persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
+    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
 };
 
 use super::super::model::memory_admission::invalid_request_error;
@@ -31,7 +31,8 @@ use super::completed_forward_memory::collect_completed_forward_memory_snapshot;
 use super::prompt_prefill_errors::PromptPrefillChunckAttemptError;
 use super::{
     Qwen3_5EngineState, Qwen3_5PromptProcessingChunkSizer, fatal_engine_error,
-    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary, qwen3_5_runtime_error,
+    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    qwen3_5_prompt_prefill_end_exclusive, qwen3_5_runtime_error,
     qwen3_5_speculative_prefill_sparse_target_is_active,
     speculative_prefill::SpeculativePrefillSelectionPreparation,
 };
@@ -42,10 +43,15 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
-        // The final prompt token is reserved as the generation seed and is
-        // forwarded by generation startup. Prefill stops immediately before it.
+        // Target-only prefill consumes every prompt token and samples first
+        // output from the last chunk. Optional prediction reserves the last
+        // prompt token for generation kickoff so predictor history can shift.
         let final_prompt_index = active_request.input_token_ids.len() - 1;
-        if active_request.prefill_cursor >= final_prompt_index {
+        let prefill_end_exclusive = qwen3_5_prompt_prefill_end_exclusive(
+            active_request.input_token_ids.len(),
+            active_request.has_optional_prediction_session(),
+        );
+        if active_request.prefill_cursor >= prefill_end_exclusive {
             return Ok(None);
         }
         if qwen3_5_speculative_prefill_sparse_target_is_active(
@@ -103,26 +109,38 @@ impl Qwen3_5EngineState {
             .prompt_processing_chunk_sizer
             .next_prompt_processing_chunk_end_with_maximum_executable_capacity(
                 active_request.prefill_cursor,
-                final_prompt_index,
+                prefill_end_exclusive,
                 sparse_experts_are_paged,
                 active_request
                     .maximum_successful_prefill_chunck_tokens()
                     .unwrap_or(usize::MAX),
             );
-        // First clamp: never combine the dense control prefix and sparse selected
-        // conversation body in one call. They have different execution contracts.
-        let requested_prefill_chunck_end =
+        // The control-span boundary separates dense system-prompt prefill from
+        // sparse speculative-prefill conversation selection. When speculative
+        // prefill is disabled, both spans use the same paged execution contract
+        // and the boundary only fractures the chunk — producing a tiny stub like
+        // 351 tokens that adds a full forward overhead for almost no progress.
+        // Skip the control-span clamp when speculative prefill is off.
+        let requested_prefill_chunck_end = if active_request.should_use_speculative_prefill {
             qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
                 prefill_start,
                 configured_prompt_processing_chunk_end,
                 active_request.ordinary_target_prefill_control_span_token_count,
             )
-            .ok_or_else(|| fatal_engine_error("prompt-processing chunk did not advance"))?;
+            .ok_or_else(|| fatal_engine_error("prompt-processing chunk did not advance"))?
+        } else {
+            configured_prompt_processing_chunk_end
+        };
         // The control-span clamp guarantees this chunk is wholly dense or wholly
         // sparse; execute_prompt_prefill_chunck never receives a mixed contract.
         // Required publication is synchronous, so do not let one forward cross
         // multiple durable boundaries. A successful forward produces one exact
         // checkpoint, publishes it, and only then advances the request cursor.
+        // One-boundary-per-forward keeps publication workspace exact when a
+        // small cache block would otherwise sit inside a 2,048-token chunk many
+        // times. When the configured chunk crosses at most one durable boundary,
+        // clamping only splits a later complete-layer SSD stream (1,792 then a
+        // 561-token stub) without reducing publication count.
         let requested_prefill_chunck_end = if self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
             && !active_request.has_optional_prediction_session()
@@ -140,11 +158,22 @@ impl Qwen3_5EngineState {
                         .block_token_count()
                 })
                 .unwrap_or(0);
-            persistent_prompt_cache_boundary_clamped_prefill_chunck_end(
-                prefill_start,
-                requested_prefill_chunck_end,
-                persistent_prompt_cache_block_token_count,
-            )
+            let crossed_cache_boundary_count =
+                persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
+                    prefill_start,
+                    requested_prefill_chunck_end,
+                    persistent_prompt_cache_block_token_count,
+                )
+                .len();
+            if crossed_cache_boundary_count <= 1 {
+                requested_prefill_chunck_end
+            } else {
+                persistent_prompt_cache_boundary_clamped_prefill_chunck_end(
+                    prefill_start,
+                    requested_prefill_chunck_end,
+                    persistent_prompt_cache_block_token_count,
+                )
+            }
         } else {
             requested_prefill_chunck_end
         };
@@ -152,26 +181,16 @@ impl Qwen3_5EngineState {
         // recovery restores the checkpoint before retrying or halving this size.
         let forward_chunk_started_at = Instant::now();
         let requested_prefill_chunck_token_count = requested_prefill_chunck_end - prefill_start;
-        let mut attempted_prefill_chunck_token_count =
-            active_request.clamped_prefill_chunck_token_count(requested_prefill_chunck_token_count);
+        let mut attempted_prefill_chunck_token_count = active_request
+            .clamped_prefill_chunck_token_count(
+                requested_prefill_chunck_token_count,
+                prefill_end_exclusive.saturating_sub(prefill_start),
+            );
         let mut has_retried_current_prefill_chunck_after_reclamation = false;
         let mut has_observed_prefill_capacity_constraint = false;
         let (prefill_end, prompt_prefill_chunck_outcome) = loop {
-            // Decode continues from the prompt tail, so the last successful
-            // attempt records routed assignments with a density-matching weight.
-            let last_chunk_ends_prompt = prefill_start
-                .saturating_add(attempted_prefill_chunck_token_count)
-                >= final_prompt_index;
-            let demand_assignment_weight = if last_chunk_ends_prompt {
-                last_prefill_chunk_demand_weight(
-                    u64::try_from(prefill_start).unwrap_or(u64::MAX),
-                    u64::try_from(attempted_prefill_chunck_token_count).unwrap_or(u64::MAX),
-                )
-            } else {
-                1
-            };
             if let Some(model) = self.model.as_ref() {
-                model.set_expert_demand_assignment_weight(demand_assignment_weight);
+                model.clear_expert_demand_for_residency();
             }
             let prefill_end = prefill_start
                 .checked_add(attempted_prefill_chunck_token_count)

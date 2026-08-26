@@ -25,6 +25,16 @@ impl Qwen3_5EngineState {
         current_generated_token: &MlxArray,
         current_generated_token_id: u32,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
+        // Session creation already refuses SSD-paged sparse experts. Keep this
+        // decode-time gate so a later demotion cannot open a two-row verify
+        // against an incomplete expert set.
+        if self
+            .model
+            .as_ref()
+            .is_some_and(|model| model.sparse_experts_are_paged())
+        {
+            return Ok(None);
+        }
         let (window_clamped_depth, window_downgrade_reason) =
             effective_prediction_depth(active_request, self.maximum_position_count);
         if let Some(window_downgrade_reason) = window_downgrade_reason {

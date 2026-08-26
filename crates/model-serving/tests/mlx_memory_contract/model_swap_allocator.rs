@@ -28,7 +28,7 @@ const SAY_HI_PROMPT_TOKEN_IDS: [u32; 15] = [
 ];
 
 #[tokio::test]
-#[ignore = "loads the configured Ornith 1.5 oQ8e artifact, then hot-swaps to the oQ6e artifact"]
+#[ignore = "loads the configured Ornith 1.5 oQ6e artifact, drops it, then reloads oQ6e"]
 async fn should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_model() {
     timeout(MODEL_SWAP_TEST_TIMEOUT, run_model_swap_allocator_contract())
         .await

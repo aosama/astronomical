@@ -107,16 +107,49 @@ pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathB
         astronomical_config::AstronomicalConfig::load_from_development_location().expect(
             "the Development Astronomical configuration should load for model qualification",
         );
-    astronomical_config
-        .find_configured_model_directory_by_id(model_id)
-        .unwrap_or_else(|discovery_error| {
-            panic!(
-                "model_directories discovery should complete for model ID {model_id}: {discovery_error}"
-            )
-        })
-        .unwrap_or_else(|| {
-            panic!(
-                "the Development Astronomical configuration model_directories should discover model ID {model_id}"
-            )
-        })
+    match astronomical_config.find_configured_model_directory_by_id(model_id) {
+        Ok(Some(model_directory)) => model_directory,
+        Ok(None) => panic!(
+            "the Development Astronomical configuration model_directories should discover model ID {model_id}"
+        ),
+        Err(_) => first_configured_model_directory_by_id(&astronomical_config, model_id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "the Development Astronomical configuration model_directories should discover model ID {model_id}"
+                )
+            }),
+    }
+}
+
+/// First matching artifact when two configured roots contain the same model ID.
+///
+/// Qualification copies that one path into an isolated worker home, so a
+/// duplicate across Hugging Face and OMLX trees must not block the journey.
+fn first_configured_model_directory_by_id(
+    astronomical_config: &astronomical_config::AstronomicalConfig,
+    model_id: &str,
+) -> Option<PathBuf> {
+    for model_root in astronomical_config.model_directories() {
+        if !model_root.is_dir() {
+            continue;
+        }
+        let direct_child = model_root.join(model_id);
+        if direct_child.is_dir() {
+            return Some(direct_child);
+        }
+        let Ok(root_entries) = fs::read_dir(model_root) else {
+            continue;
+        };
+        for root_entry in root_entries.flatten() {
+            let organization_directory = root_entry.path();
+            if !organization_directory.is_dir() {
+                continue;
+            }
+            let named_model_directory = organization_directory.join(model_id);
+            if named_model_directory.is_dir() {
+                return Some(named_model_directory);
+            }
+        }
+    }
+    None
 }

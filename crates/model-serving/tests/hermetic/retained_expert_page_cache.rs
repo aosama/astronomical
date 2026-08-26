@@ -1,7 +1,6 @@
 use astronomical_model_serving::{
-    ExpertWeightPage, RetainedExpertLayerCache, RetainedExpertLayerCommitDelta,
-    RetainedExpertLayerCommitError, RetainedExpertLayerCommitOutcome,
-    last_prefill_chunk_demand_weight,
+    ExpertWeightPage, RetainedExpertLayerCommitDelta, RetainedExpertLayerCommitError,
+    RetainedExpertLayerCommitOutcome, RetainedExpertPageCache, last_prefill_chunk_demand_weight,
 };
 
 #[derive(Debug)]
@@ -16,7 +15,7 @@ impl ExpertWeightPage for FakeExpertPage {
 }
 
 fn commit_partial_page(
-    retained_pages: &mut RetainedExpertLayerCache<FakeExpertPage>,
+    retained_pages: &mut RetainedExpertPageCache<FakeExpertPage>,
     layer_index: usize,
     expert_ids: &[usize],
     payload_bytes: u64,
@@ -33,7 +32,7 @@ fn commit_partial_page(
 }
 
 fn commit_complete_page(
-    retained_pages: &mut RetainedExpertLayerCache<FakeExpertPage>,
+    retained_pages: &mut RetainedExpertPageCache<FakeExpertPage>,
     layer_index: usize,
     payload_bytes: u64,
 ) -> RetainedExpertLayerCommitOutcome {
@@ -45,7 +44,7 @@ fn commit_complete_page(
 
 #[test]
 fn should_commit_complete_and_partial_pages_with_explicit_classes() {
-    let mut retained_pages = RetainedExpertLayerCache::new(2);
+    let mut retained_pages = RetainedExpertPageCache::new(2);
     retained_pages.update_maximum_resident_payload_bytes(60);
 
     assert!(matches!(
@@ -66,7 +65,7 @@ fn should_commit_complete_and_partial_pages_with_explicit_classes() {
 
 #[test]
 fn should_reject_a_commit_above_the_ceiling_while_preserving_the_previous_owner() {
-    let mut retained_pages = RetainedExpertLayerCache::new(1);
+    let mut retained_pages = RetainedExpertPageCache::new(1);
     retained_pages.update_maximum_resident_payload_bytes(30);
     assert!(matches!(
         commit_partial_page(&mut retained_pages, 0, &[0, 1], 20),
@@ -83,7 +82,7 @@ fn should_reject_a_commit_above_the_ceiling_while_preserving_the_previous_owner(
 
 #[test]
 fn should_replace_a_partial_owner_with_a_complete_mandatory_read() {
-    let mut retained_pages = RetainedExpertLayerCache::new(1);
+    let mut retained_pages = RetainedExpertPageCache::new(1);
     retained_pages.update_maximum_resident_payload_bytes(40);
     commit_partial_page(&mut retained_pages, 0, &[0, 2], 20);
 
@@ -104,7 +103,7 @@ fn should_replace_a_partial_owner_with_a_complete_mandatory_read() {
 
 #[test]
 fn should_preserve_a_useful_partial_owner_when_a_proposed_route_set_differs() {
-    let mut retained_pages = RetainedExpertLayerCache::new(1);
+    let mut retained_pages = RetainedExpertPageCache::new(1);
     retained_pages.update_maximum_resident_payload_bytes(40);
     commit_partial_page(&mut retained_pages, 0, &[0, 1], 20);
 
@@ -113,14 +112,31 @@ fn should_preserve_a_useful_partial_owner_when_a_proposed_route_set_differs() {
         RetainedExpertLayerCommitOutcome::PreservedExisting
     );
     assert_eq!(
-        retained_pages.topology_snapshot()[0].retained_expert_ids,
+        retained_pages.topology_snapshot(0)[0].retained_expert_ids,
         vec![0, 1]
     );
 }
 
 #[test]
+fn should_replace_a_partial_owner_with_a_strict_superset_routed_page() {
+    let mut retained_pages = RetainedExpertPageCache::new(1);
+    retained_pages.update_maximum_resident_payload_bytes(40);
+    commit_partial_page(&mut retained_pages, 0, &[0, 1], 20);
+
+    assert!(matches!(
+        commit_partial_page(&mut retained_pages, 0, &[0, 1, 2], 30),
+        RetainedExpertLayerCommitOutcome::Committed(_)
+    ));
+    assert_eq!(
+        retained_pages.topology_snapshot(0)[0].retained_expert_ids,
+        vec![0, 1, 2]
+    );
+    assert_eq!(retained_pages.statistics().resident_payload_byte_count, 30);
+}
+
+#[test]
 fn should_reclaim_multiple_partial_pages_before_one_complete_page() {
-    let mut retained_pages = RetainedExpertLayerCache::new(3);
+    let mut retained_pages = RetainedExpertPageCache::new(3);
     retained_pages.update_maximum_resident_payload_bytes(80);
     commit_complete_page(&mut retained_pages, 0, 40);
     commit_partial_page(&mut retained_pages, 1, &[0, 1], 20);
@@ -138,7 +154,7 @@ fn should_reclaim_multiple_partial_pages_before_one_complete_page() {
 
 #[test]
 fn should_resume_a_request_pressure_cap_without_loading_any_page() {
-    let mut retained_pages = RetainedExpertLayerCache::new(2);
+    let mut retained_pages = RetainedExpertPageCache::new(2);
     retained_pages.update_maximum_resident_payload_bytes(80);
     commit_complete_page(&mut retained_pages, 0, 40);
     commit_complete_page(&mut retained_pages, 1, 40);
@@ -152,7 +168,7 @@ fn should_resume_a_request_pressure_cap_without_loading_any_page() {
 
 #[test]
 fn should_apply_an_absolute_forward_pressure_cap_and_allow_safe_growth_to_it() {
-    let mut retained_pages = RetainedExpertLayerCache::new(3);
+    let mut retained_pages = RetainedExpertPageCache::new(3);
     retained_pages.update_maximum_resident_payload_bytes(120);
     commit_complete_page(&mut retained_pages, 0, 40);
     commit_complete_page(&mut retained_pages, 1, 40);
@@ -172,7 +188,7 @@ fn should_apply_an_absolute_forward_pressure_cap_and_allow_safe_growth_to_it() {
 
 #[test]
 fn should_apply_a_lower_normal_ceiling_with_partial_first_reclamation() {
-    let mut retained_pages = RetainedExpertLayerCache::new(3);
+    let mut retained_pages = RetainedExpertPageCache::new(3);
     retained_pages.update_maximum_resident_payload_bytes(80);
     commit_complete_page(&mut retained_pages, 0, 40);
     commit_partial_page(&mut retained_pages, 1, &[0, 1], 20);
@@ -191,20 +207,20 @@ fn should_apply_a_lower_normal_ceiling_with_partial_first_reclamation() {
 
 #[test]
 fn should_ignore_invalid_route_identifiers_without_corrupting_demand() {
-    let mut retained_pages = RetainedExpertLayerCache::<FakeExpertPage>::new(1);
+    let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(1);
     retained_pages.update_maximum_resident_payload_bytes(10);
     retained_pages.record_expert_demand(0, 2, &[1, 9, 1]);
     commit_partial_page(&mut retained_pages, 0, &[1], 10);
 
     assert_eq!(
-        retained_pages.topology_snapshot()[0].covered_weighted_demand,
+        retained_pages.topology_snapshot(0)[0].covered_weighted_demand,
         2
     );
 }
 
 #[test]
 fn should_start_a_fresh_demand_window_after_topology_planning() {
-    let mut retained_pages = RetainedExpertLayerCache::<FakeExpertPage>::new(1);
+    let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(1);
     retained_pages.update_maximum_resident_payload_bytes(20);
     retained_pages.record_expert_demand(0, 2, &[1, 1, 1]);
     retained_pages.clear_expert_demand();
@@ -212,7 +228,7 @@ fn should_start_a_fresh_demand_window_after_topology_planning() {
     commit_partial_page(&mut retained_pages, 0, &[0, 1], 20);
 
     assert_eq!(
-        retained_pages.topology_snapshot()[0].covered_weighted_demand,
+        retained_pages.topology_snapshot(0)[0].covered_weighted_demand,
         1
     );
 }
@@ -228,7 +244,7 @@ fn should_scale_last_prefill_chunk_demand_by_earlier_token_density() {
 
 #[test]
 fn should_prefer_last_chunk_routes_when_weighted_demand_exceeds_earlier_frequency() {
-    let mut retained_pages = RetainedExpertLayerCache::<FakeExpertPage>::new(2);
+    let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(2);
     retained_pages.update_maximum_resident_payload_bytes(20);
     retained_pages.set_demand_assignment_weight(1);
     retained_pages.record_expert_demand(0, 2, &[0, 0, 0, 0, 0]);
@@ -238,14 +254,14 @@ fn should_prefer_last_chunk_routes_when_weighted_demand_exceeds_earlier_frequenc
     commit_partial_page(&mut retained_pages, 1, &[1], 10);
 
     // Five earlier routes lose to three last-chunk routes counted twice.
-    let topology = retained_pages.topology_snapshot();
+    let topology = retained_pages.topology_snapshot(0);
     assert_eq!(topology[0].covered_weighted_demand, 5);
     assert_eq!(topology[1].covered_weighted_demand, 6);
 }
 
 #[test]
 fn should_keep_raw_frequency_ranking_when_last_chunk_weight_is_one() {
-    let mut retained_pages = RetainedExpertLayerCache::<FakeExpertPage>::new(2);
+    let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(2);
     retained_pages.update_maximum_resident_payload_bytes(20);
     retained_pages.set_demand_assignment_weight(1);
     retained_pages.record_expert_demand(0, 2, &[0, 0, 0, 0, 0]);
@@ -253,14 +269,14 @@ fn should_keep_raw_frequency_ranking_when_last_chunk_weight_is_one() {
     commit_partial_page(&mut retained_pages, 0, &[0], 10);
     commit_partial_page(&mut retained_pages, 1, &[1], 10);
 
-    let topology = retained_pages.topology_snapshot();
+    let topology = retained_pages.topology_snapshot(0);
     assert_eq!(topology[0].covered_weighted_demand, 5);
     assert_eq!(topology[1].covered_weighted_demand, 3);
 }
 
 #[test]
 fn should_treat_a_zero_demand_weight_as_one_assignment() {
-    let mut retained_pages = RetainedExpertLayerCache::<FakeExpertPage>::new(2);
+    let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(2);
     retained_pages.update_maximum_resident_payload_bytes(20);
     retained_pages.set_demand_assignment_weight(0);
     retained_pages.record_expert_demand(0, 2, &[0]);
@@ -269,14 +285,14 @@ fn should_treat_a_zero_demand_weight_as_one_assignment() {
     commit_partial_page(&mut retained_pages, 1, &[1], 10);
 
     // A zero weight must not discard assignments; two routes still beat one.
-    let topology = retained_pages.topology_snapshot();
+    let topology = retained_pages.topology_snapshot(0);
     assert_eq!(topology[0].covered_weighted_demand, 1);
     assert_eq!(topology[1].covered_weighted_demand, 2);
 }
 
 #[test]
 fn should_reject_zero_or_overflowing_payload_accounting_without_mutating_ownership() {
-    let mut retained_pages = RetainedExpertLayerCache::<FakeExpertPage>::new(3);
+    let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(3);
     retained_pages.update_maximum_resident_payload_bytes(u64::MAX);
 
     assert!(!retained_pages.can_commit_materialized_page(0, 0));

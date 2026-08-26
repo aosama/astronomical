@@ -3,24 +3,16 @@
 #[cfg(feature = "direct-mlx")]
 mod bounded_expert_reader;
 mod expert_cache_statistics;
-mod paged_decode_layer_disposition;
-mod phase_aware_expert_residency;
 pub mod quantized_expert_manifest;
 pub mod quantized_expert_validation;
-mod retained_expert_layer_cache;
+mod retained_expert_page_cache;
 pub mod safetensors_header;
 mod source_manifests;
 
 pub use expert_cache_statistics::ExpertWeightMemoryCacheStatistics;
-pub use paged_decode_layer_disposition::PagedDecodeLayerDisposition;
-pub use phase_aware_expert_residency::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError,
-    RetainedExpertPageClass, plan_phase_aware_expert_residency,
-};
-pub use retained_expert_layer_cache::{
-    RetainedExpertLayerCache, RetainedExpertLayerCommit, RetainedExpertLayerCommitDelta,
-    RetainedExpertLayerCommitError, RetainedExpertLayerCommitOutcome, RetainedExpertReclamation,
+pub use retained_expert_page_cache::{
+    RetainedExpertLayerCommit, RetainedExpertLayerCommitDelta, RetainedExpertLayerCommitError,
+    RetainedExpertLayerCommitOutcome, RetainedExpertPageCache, RetainedExpertReclamation,
     last_prefill_chunk_demand_weight,
 };
 

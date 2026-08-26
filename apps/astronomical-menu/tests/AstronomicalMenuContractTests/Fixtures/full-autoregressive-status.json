@@ -45,8 +45,8 @@
         },
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
           "configured": null,
-          "default": null,
-          "effective": null
+          "default": 2048,
+          "effective": 2048
         },
         "full_attention_key_value_growth_tokens": {
           "configured": null,
@@ -55,8 +55,8 @@
         },
         "prefill_graph_submission_layer_interval": {
           "configured": null,
-          "default": 1,
-          "effective": 1
+          "default": 0,
+          "effective": 0
         },
         "prompt_cache_block_tokens": {
           "configured": null,
@@ -73,6 +73,11 @@
           "configured": null,
           "default": 2048,
           "effective": 2048
+        },
+        "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
+          "configured": null,
+          "default": 1,
+          "effective": 1
         }
       },
       "maximum_context_tokens": {
@@ -88,7 +93,7 @@
       "model_id": "fictional/autoregressive-model",
       "mtp_enabled": {
         "configured": null,
-        "default": true,
+        "default": false,
         "effective": true
       },
       "mtp_draft_depth": {
@@ -193,10 +198,12 @@
           "experimental_ssd_paging_generation_graph_submission_layer_interval": 3,
           "fixed_prompt_processing_chunk_size_tokens": 2048,
           "full_attention_key_value_growth_tokens": 256,
-          "prefill_graph_submission_layer_interval": 1,
+          "prefill_graph_submission_layer_interval": 0,
+          "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
           "prompt_cache_block_tokens": null,
           "prompt_cache_common_prefix_stride_blocks": 4,
-          "speculative_prefill_draft_forward_tokens": 2048
+          "speculative_prefill_draft_forward_tokens": 2048,
+          "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048
         },
         "maximum_context_tokens": 65536,
         "maximum_output_tokens": 8192,

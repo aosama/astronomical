@@ -1,10 +1,25 @@
-//! Pure phase-aware planning for retained complete layers and routed overlays.
+//! Family-neutral expert residency policy: plan, keep, release, and stream.
 //!
-//! This module owns no arrays and performs no I/O. It turns validated model
-//! geometry, current ownership, and one composed byte ceiling into a deterministic
-//! target that the model owner may enact only from execution-required reads.
+//! This module owns no arrays and performs no I/O. Execution families ask it
+//! which experts to keep after a mandatory read, whether a planned release may
+//! run in the current phase, and whether weight-stationary prefill is legal.
+//! They must not invent a second answer to those questions.
+//!
+//! Prefill uses `RequestExpertResidency`. Generation discards that contract.
 
+mod page_commit;
+mod release;
+mod request_plan;
 mod validation;
+
+pub use page_commit::{
+    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
+};
+pub use release::should_enact_planned_expert_release;
+pub use request_plan::{
+    RequestExpertLayerRole, RequestExpertResidency, publish_request_stable_residency_plan,
+    retained_complete_layer_ceiling_after_prefill_budget_refresh,
+};
 
 use thiserror::Error;
 
@@ -94,8 +109,16 @@ pub enum PhaseAwareExpertResidencyPlanError {
         "layer {layer_index} retained expert identifiers are empty, unsorted, duplicated, or out of range"
     )]
     InvalidRetainedExpertIds { layer_index: usize },
-    #[error("layer {layer_index} retained payload does not match its expert identifiers")]
-    InconsistentCurrentPayload { layer_index: usize },
+    #[error(
+        "layer {layer_index} retained payload {payload_bytes} does not match geometry {geometry_expert_payload_bytes} * {retained_count} = {expected_payload_bytes}"
+    )]
+    InconsistentCurrentPayload {
+        layer_index: usize,
+        payload_bytes: u64,
+        geometry_expert_payload_bytes: u64,
+        retained_count: usize,
+        expected_payload_bytes: u64,
+    },
     #[error("current retained payload exceeds the composed ceiling")]
     CurrentResidencyExceedsCeiling,
     #[error("planned retained payload exceeds the composed ceiling")]
@@ -116,6 +139,19 @@ pub fn plan_phase_aware_expert_residency(
         layer_geometries,
         current_residencies,
     )?;
+    // Generation must keep the experts prefill already paid to read. Seating
+    // complete layers here would evict those pages and stream every decode token.
+    if matches!(
+        phase,
+        ExpertResidencyPhase::GenerationPreparation | ExpertResidencyPhase::Decode
+    ) {
+        return preserve_existing_expert_pages_for_generation(
+            phase,
+            retained_expert_ceiling_bytes,
+            layer_geometries,
+            &current_by_layer,
+        );
+    }
     let complete_model_payload_bytes = checked_sum(
         layer_geometries
             .iter()
@@ -185,6 +221,72 @@ fn complete_model_plan(
         reserved_routed_overlay_bytes: 0,
         expected_preserved_bytes: preserved_bytes,
         maximum_new_retained_bytes: complete_model_payload_bytes.saturating_sub(preserved_bytes),
+        deterministic_release_order: release_order(current_by_layer),
+        is_low_budget_partial_mode: false,
+    })
+}
+
+fn preserve_existing_expert_pages_for_generation(
+    phase: ExpertResidencyPhase,
+    ceiling_bytes: u64,
+    geometries: &[ExpertLayerGeometry],
+    current_by_layer: &[Option<&CurrentExpertLayerResidency>],
+) -> Result<PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError> {
+    let mut candidate_layers = current_by_layer
+        .iter()
+        .enumerate()
+        .filter_map(|(layer_index, residency)| residency.map(|residency| (layer_index, residency)))
+        .collect::<Vec<_>>();
+    candidate_layers.sort_unstable_by(|left, right| compare_preservation_priority(*left, *right));
+    let mut selected = vec![false; geometries.len()];
+    let mut preserved_bytes = 0_u64;
+    for (layer_index, residency) in candidate_layers {
+        if residency.payload_bytes <= ceiling_bytes.saturating_sub(preserved_bytes) {
+            selected[layer_index] = true;
+            preserved_bytes = preserved_bytes
+                .checked_add(residency.payload_bytes)
+                .ok_or(PhaseAwareExpertResidencyPlanError::ByteCountOverflow)?;
+        }
+    }
+    let layer_targets = current_by_layer
+        .iter()
+        .enumerate()
+        .map(
+            |(layer_index, residency)| match (residency, selected[layer_index]) {
+                (Some(residency), true)
+                    if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
+                {
+                    ExpertLayerResidencyTarget::PreserveComplete
+                }
+                (Some(_), true) => ExpertLayerResidencyTarget::PreservePartial,
+                (Some(residency), false)
+                    if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
+                {
+                    ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
+                }
+                (Some(_), false) => ExpertLayerResidencyTarget::ReleasePartial,
+                (None, _) => ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+            },
+        )
+        .collect();
+    Ok(PhaseAwareExpertResidencyPlan {
+        phase,
+        retained_expert_ceiling_bytes: ceiling_bytes,
+        complete_layer_targets: selected
+            .iter()
+            .enumerate()
+            .filter_map(|(layer_index, is_selected)| {
+                (*is_selected
+                    && current_by_layer[layer_index].is_some_and(|residency| {
+                        residency.class == RetainedExpertPageClass::StableCompleteLayer
+                    }))
+                .then_some(layer_index)
+            })
+            .collect(),
+        layer_targets,
+        reserved_routed_overlay_bytes: 0,
+        expected_preserved_bytes: preserved_bytes,
+        maximum_new_retained_bytes: ceiling_bytes.saturating_sub(preserved_bytes),
         deterministic_release_order: release_order(current_by_layer),
         is_low_budget_partial_mode: false,
     })

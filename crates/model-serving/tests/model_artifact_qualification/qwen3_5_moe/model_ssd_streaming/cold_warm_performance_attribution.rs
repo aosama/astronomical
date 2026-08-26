@@ -15,7 +15,7 @@ use super::super::performance_attribution::{
 };
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(120);
-const MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ8e-mtp";
+const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 
 #[tokio::test]
 #[ignore = "loads the configured Ornith model for automatic cold and warm attribution"]
@@ -74,8 +74,8 @@ async fn run_model_ssd_streaming_attribution_benchmark() {
         Some(ExpertMemoryMode::Resident) => {}
         Some(ExpertMemoryMode::Hybrid) => {
             assert!(
-                expert_statistics.complete_layer_count > 0,
-                "hybrid readiness must install complete layers before the first generate"
+                expert_statistics.entry_count > 0,
+                "hybrid readiness must retain experts before the first generate"
             );
         }
         other_mode => {

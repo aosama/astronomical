@@ -98,10 +98,8 @@ impl Qwen3_5EngineState {
             return Ok(ActiveRequestAdvance::Continue(
                 crate::GeneratedToken::GenerationPreparationStarted {
                     total_layer_count: expert_residency.total_layer_count,
-                    complete_layer_count: expert_residency.complete_layer_count,
-                    complete_layer_payload_bytes: expert_residency.complete_layer_payload_bytes,
-                    partial_layer_count: expert_residency.partial_layer_count,
-                    partial_layer_payload_bytes: expert_residency.partial_layer_payload_bytes,
+                    resident_expert_count: expert_residency.resident_expert_count,
+                    resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
                 },
             ));
         }
@@ -305,6 +303,11 @@ impl Qwen3_5EngineState {
 
         let current_generated_token_id =
             synchronize_generated_token_id(active_request, &current_generated_token)?;
+        if let Some(model) = self.model.as_ref() {
+            model
+                .flush_pending_expert_slot_inserts()
+                .map_err(InferenceEngineError::from)?;
+        }
         if let Some(first_decode_forward_started_at) = first_decode_forward_started_at {
             active_request.first_decode_forward_elapsed_millis = Some(
                 u64::try_from(first_decode_forward_started_at.elapsed().as_millis())

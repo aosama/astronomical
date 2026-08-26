@@ -203,14 +203,10 @@ pub(super) fn handle_worker_event(
                 publish_expert_memory_mode(health_snapshot, expert_memory_mode);
             }
             if let Some(expert_residency) = expert_residency {
-                chat_request.final_complete_expert_layer_count =
-                    Some(expert_residency.complete_layer_count);
-                chat_request.final_complete_expert_payload_bytes =
-                    Some(expert_residency.complete_layer_payload_bytes);
-                chat_request.final_partial_expert_layer_count =
-                    Some(expert_residency.partial_layer_count);
-                chat_request.final_partial_expert_payload_bytes =
-                    Some(expert_residency.partial_layer_payload_bytes);
+                chat_request.final_resident_expert_count =
+                    Some(expert_residency.resident_expert_count);
+                chat_request.final_resident_expert_payload_bytes =
+                    Some(expert_residency.resident_expert_payload_bytes);
                 crate::worker_health::publish_worker_expert_residency(
                     health_snapshot,
                     expert_residency,
@@ -234,19 +230,15 @@ pub(super) fn handle_worker_event(
         WorkerEvent::GenerationPreparationStarted {
             request_id,
             total_layer_count,
-            complete_layer_count,
-            complete_layer_payload_bytes,
-            partial_layer_count,
-            partial_layer_payload_bytes,
+            resident_expert_count,
+            resident_expert_payload_bytes,
         } => {
             handle_generation_preparation_started(
                 request_id,
                 ExpertResidencySnapshot {
                     total_layer_count,
-                    complete_layer_count,
-                    complete_layer_payload_bytes,
-                    partial_layer_count,
-                    partial_layer_payload_bytes,
+                    resident_expert_count,
+                    resident_expert_payload_bytes,
                 },
                 health_snapshot,
                 active_chat_request_mut(active_request)?,

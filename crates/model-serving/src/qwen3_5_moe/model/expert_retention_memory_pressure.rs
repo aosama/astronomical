@@ -8,7 +8,7 @@
 //! not "throw experts away forever". It is "freeze the retained-page ceiling
 //! at a smaller number until the remaining prompt chunks finish".
 //!
-//! That freeze lives in `RetainedExpertLayerCache` as
+//! That freeze lives in `RetainedExpertPageCache` as
 //! `request_pressure_maximum_resident_payload_bytes`. The long-lived normal
 //! maximum is stored beside it so this file can later remove the freeze
 //! without guessing the machine budget again.
@@ -51,20 +51,29 @@ impl Qwen3_5Model {
                 current_retained_expert_payload_bytes,
                 admitted_forward_reserve_bytes,
             );
-        let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() else {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
             return false;
         };
-        let released_retained_experts = retained_expert_layers
+        let released_retained_experts = retained_experts
             .borrow_mut()
             .limit_for_request_pressure_to_maximum(retained_expert_budget_bytes);
-        tracing::info!(
-            current_active_memory_bytes,
-            current_retained_expert_payload_bytes,
-            admitted_forward_reserve_bytes,
-            retained_expert_budget_bytes,
-            released_retained_experts,
-            "constrained retained experts to the exact admitted-forward budget"
-        );
+        if released_retained_experts {
+            tracing::info!(
+                current_active_memory_bytes,
+                current_retained_expert_payload_bytes,
+                admitted_forward_reserve_bytes,
+                retained_expert_budget_bytes,
+                "released retained experts to the exact admitted-forward budget"
+            );
+        } else {
+            tracing::debug!(
+                current_active_memory_bytes,
+                current_retained_expert_payload_bytes,
+                admitted_forward_reserve_bytes,
+                retained_expert_budget_bytes,
+                "admitted-forward expert budget still covers current retention"
+            );
+        }
         released_retained_experts
     }
 
@@ -74,14 +83,12 @@ impl Qwen3_5Model {
         &self,
         retained_expert_payload_reclamation_target_bytes: usize,
     ) -> Result<bool, crate::qwen3_5::model::Qwen3_5ExecutionError> {
-        let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() else {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
             return Ok(false);
         };
-        Ok(retained_expert_layers
-            .borrow_mut()
-            .limit_for_request_pressure(
-                u64::try_from(retained_expert_payload_reclamation_target_bytes).unwrap_or(u64::MAX),
-            ))
+        Ok(retained_experts.borrow_mut().limit_for_request_pressure(
+            u64::try_from(retained_expert_payload_reclamation_target_bytes).unwrap_or(u64::MAX),
+        ))
     }
 
     /// Removes the temporary request-pressure ceiling.
@@ -93,10 +100,10 @@ impl Qwen3_5Model {
         if self.resident_expert_weights.is_some() {
             return false;
         }
-        self.retained_expert_layers
+        self.retained_experts
             .as_ref()
-            .is_some_and(|retained_expert_layers| {
-                retained_expert_layers
+            .is_some_and(|retained_experts| {
+                retained_experts
                     .borrow_mut()
                     .resume_after_request_pressure()
             })

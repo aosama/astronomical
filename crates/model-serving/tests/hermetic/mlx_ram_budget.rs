@@ -9,7 +9,14 @@ fn fable_class_geometry() -> MlxRamBudgetModelGeometry {
         complete_expert_payload_bytes: 36_238_786_560,
         largest_complete_expert_layer_bytes: 905_969_664,
         largest_routed_expert_page_bytes: 28_311_552,
+        sequence_state_bytes_per_token: 0,
     }
+}
+
+fn unmeasured_prefill_activation_headroom_bytes(geometry: MlxRamBudgetModelGeometry) -> u64 {
+    geometry
+        .largest_complete_expert_layer_bytes
+        .saturating_mul(3)
 }
 
 #[test]
@@ -29,7 +36,7 @@ fn should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements()
     assert!(!mlx_ram_budget.has_context_window_measurement());
     assert_eq!(
         mlx_ram_budget.activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
-        3_623_878_656,
+        unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()),
     );
 }
 
@@ -46,12 +53,21 @@ fn should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners() {
     //   - context_window_reserve
     //   - activation_headroom
     //   - complete_layer_stream_slot
+    let expected_activation_headroom_bytes =
+        unmeasured_prefill_activation_headroom_bytes(fable_class_geometry());
     assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
-    assert_eq!(planned_budget.activation_headroom_bytes, 3_623_878_656);
+    assert_eq!(
+        planned_budget.activation_headroom_bytes,
+        expected_activation_headroom_bytes
+    );
     assert_eq!(planned_budget.complete_layer_stream_slot_bytes, 905_969_664);
     assert_eq!(
         planned_budget.retained_expert_budget_bytes,
-        39_000_000_000 - 2_360_000_000 - 1_000_000_000 - 3_623_878_656 - 905_969_664
+        39_000_000_000
+            - 2_360_000_000
+            - 1_000_000_000
+            - expected_activation_headroom_bytes
+            - 905_969_664
     );
 }
 
@@ -83,7 +99,10 @@ fn should_raise_context_window_reserve_from_measurements_and_never_under_shoot()
     assert!(context_window_reserve_for_4096 >= 1_500_000_000);
 
     let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 4_096, 0);
-    assert_eq!(planned_budget.activation_headroom_bytes, 3_623_878_656);
+    assert_eq!(
+        planned_budget.activation_headroom_bytes,
+        unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()).max(700_000_000)
+    );
     // Experts must not be budgeted into the learned context-window / activation reserve.
     let fixed_non_expert_bytes = planned_budget.model_core_payload_bytes
         + planned_budget.context_window_reserve_bytes
@@ -112,7 +131,10 @@ fn should_not_charge_transient_workspace_as_both_context_and_activation() {
     let planned_budget = mlx_ram_budget.plan(MlxRamBudgetPhase::Prefill, 7_000, 0);
 
     assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
-    assert_eq!(planned_budget.activation_headroom_bytes, 3_623_878_656);
+    assert_eq!(
+        planned_budget.activation_headroom_bytes,
+        unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()).max(2_000_000_000)
+    );
 }
 
 #[test]
@@ -149,7 +171,7 @@ fn should_protect_the_first_decode_with_prefill_activation_evidence() {
 
     // Before decode has its own evidence, retaining experts into prefill-proven
     // transient space would force immediate reclamation on the first token.
-    assert_eq!(first_decode_plan.activation_headroom_bytes, 3_623_878_656);
+    assert_eq!(first_decode_plan.activation_headroom_bytes, 1_900_000_000);
 }
 
 #[test]
@@ -200,6 +222,32 @@ fn should_limit_retained_experts_to_leave_the_exact_admitted_prefill_reserve() {
             .saturating_add(retained_expert_budget_bytes)
             .saturating_add(admitted_forward_reserve_bytes),
         38_000_000_000,
+    );
+}
+
+#[test]
+fn should_project_unmeasured_suffix_tokens_on_top_of_learned_context_reserve() {
+    let mut geometry = fable_class_geometry();
+    geometry.sequence_state_bytes_per_token = 20_000;
+    let mut mlx_ram_budget =
+        MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MlxRamBudgetPhase::Prefill,
+        context_token_count: 10_000,
+        measured_context_and_activation_bytes: 400_000_000,
+        observed_activation_headroom_bytes: 100_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+
+    let reserved_for_measured_bucket = mlx_ram_budget.context_window_reserve_bytes(10_000);
+    let reserved_for_unmeasured_suffix = mlx_ram_budget.context_window_reserve_bytes(26_000);
+
+    assert_eq!(reserved_for_measured_bucket, 1_000_000_000);
+    let highest_measured_token_count = (10_000 / 1_024 + 1) * 1_024;
+    assert_eq!(
+        reserved_for_unmeasured_suffix,
+        reserved_for_measured_bucket
+            .saturating_add((26_000 - highest_measured_token_count) * 20_000)
     );
 }
 

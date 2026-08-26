@@ -5,12 +5,11 @@ use astronomical_runtime_integration::{MlxArray, MlxCompiledSwiGlu, MlxMetalKern
 
 use crate::ExpertResidencyTelemetry;
 use crate::MlxAllocationBudget;
-use crate::expert_paging::{
-    ExpertResidencyPhase, ExpertWeightMemoryCacheStatistics, PhaseAwareExpertResidencyPlan,
-};
+use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
 use crate::laguna::artifacts::LagunaGlobalTensorRole;
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetContract};
 use crate::laguna::paging::LagunaExpertPagingPlan;
+use crate::memory::{ExpertResidencyPhase, PhaseAwareExpertResidencyPlan};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::sparse_experts::sorted_expert_weighted_sum_kernel;
 
@@ -31,6 +30,7 @@ pub struct LagunaModel {
     pub(super) residency: LagunaExpertResidencyState,
     pub(super) expert_allocation_budget: Option<MlxAllocationBudget>,
     prefill_graph_submission_layer_interval: u32,
+    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 }
 
@@ -64,7 +64,8 @@ impl LagunaModel {
             expert_allocation_budget: None,
             // Production chunking defaults to one decoder layer so macOS can
             // retire each completed group before the next layer is encoded.
-            prefill_graph_submission_layer_interval: 1,
+            prefill_graph_submission_layer_interval: 0,
+            experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
         })
     }
@@ -74,9 +75,12 @@ impl LagunaModel {
     pub fn with_graph_submission_layer_intervals(
         mut self,
         prefill_graph_submission_layer_interval: u32,
+        experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
         experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     ) -> Self {
         self.prefill_graph_submission_layer_interval = prefill_graph_submission_layer_interval;
+        self.experimental_ssd_paging_prefill_graph_submission_layer_interval =
+            experimental_ssd_paging_prefill_graph_submission_layer_interval;
         self.experimental_ssd_paging_generation_graph_submission_layer_interval =
             experimental_ssd_paging_generation_graph_submission_layer_interval;
         self
@@ -320,6 +324,7 @@ impl LagunaModel {
             token_count_from_hidden_states(&hidden_states)?,
             !matches!(self.expert_memory_mode(), ExpertMemoryMode::Resident),
             self.prefill_graph_submission_layer_interval,
+            self.experimental_ssd_paging_prefill_graph_submission_layer_interval,
             self.experimental_ssd_paging_generation_graph_submission_layer_interval,
         ))
         .unwrap_or(0);

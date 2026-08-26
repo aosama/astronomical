@@ -18,10 +18,8 @@ pub use contract::{
     RetainedExpertLayerCommitOutcome, RetainedExpertReclamation,
 };
 
-use super::{
-    CurrentExpertLayerResidency, ExpertWeightMemoryCacheStatistics, ExpertWeightPage,
-    RetainedExpertPageClass,
-};
+use super::{ExpertWeightMemoryCacheStatistics, ExpertWeightPage};
+use crate::memory::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 #[derive(Debug)]
 struct RetainedExpertLayerEntry<ExpertPage> {
     page: ExpertPage,
@@ -32,7 +30,7 @@ struct RetainedExpertLayerEntry<ExpertPage> {
 
 /// Keeps one deterministic retained expert page per layer within one byte ceiling.
 #[derive(Debug)]
-pub struct RetainedExpertLayerCache<ExpertPage> {
+pub struct RetainedExpertPageCache<ExpertPage> {
     /// One stable slot per decoder layer. `None` means execution must stream it.
     retained_layers: Vec<Option<RetainedExpertLayerEntry<ExpertPage>>>,
     /// Cumulative routed demand used to choose a useful page for every layer.
@@ -57,7 +55,7 @@ pub struct RetainedExpertLayerCache<ExpertPage> {
     partial_layer_eviction_count: u64,
 }
 
-impl<ExpertPage> RetainedExpertLayerCache<ExpertPage>
+impl<ExpertPage> RetainedExpertPageCache<ExpertPage>
 where
     ExpertPage: ExpertWeightPage,
 {
@@ -84,6 +82,30 @@ where
             .get(layer_index)?
             .as_ref()
             .map(|entry| &entry.page)
+    }
+
+    pub fn retained_layer_mut(&mut self, layer_index: usize) -> Option<&mut ExpertPage> {
+        self.retained_layers
+            .get_mut(layer_index)?
+            .as_mut()
+            .map(|entry| &mut entry.page)
+    }
+
+    /// Re-reads the page after an in-place overlay grow.
+    pub fn sync_page_payload_bytes(&mut self, layer_index: usize) {
+        let Some(entry) = self
+            .retained_layers
+            .get_mut(layer_index)
+            .and_then(|layer_slot| layer_slot.as_mut())
+        else {
+            return;
+        };
+        let updated_payload_bytes = entry.page.resident_payload_byte_count();
+        self.resident_payload_bytes = self
+            .resident_payload_bytes
+            .saturating_sub(entry.payload_bytes)
+            .saturating_add(updated_payload_bytes);
+        entry.payload_bytes = updated_payload_bytes;
     }
 
     /// Repeats exact projected-byte accounting before a caller transfers ownership.
@@ -176,13 +198,18 @@ where
         if expert_page.resident_payload_byte_count() == 0 {
             return Err(RetainedExpertLayerCommitError::ZeroPayload { layer_index });
         }
-        if self.retained_layers[layer_index].is_some() {
-            // Existing complete and partial pages remain useful. Split execution
-            // streams only route misses, so replacing either page would add I/O.
-            return Ok(RetainedExpertLayerCommit {
-                outcome: RetainedExpertLayerCommitOutcome::PreservedExisting,
-                uncommitted_page: Some(expert_page),
-            });
+        if let Some(existing_entry) = self.retained_layers[layer_index].as_ref() {
+            if existing_entry.class == RetainedExpertPageClass::StableCompleteLayer
+                || !routed_expert_ids_are_strict_superset(&existing_entry.expert_ids, &expert_ids)
+            {
+                // Keep the owner unless the caller already merged a strictly
+                // larger expert set. Replacing with a disjoint miss page would
+                // drop the experts the next token still needs.
+                return Ok(RetainedExpertLayerCommit {
+                    outcome: RetainedExpertLayerCommitOutcome::PreservedExisting,
+                    uncommitted_page: Some(expert_page),
+                });
+            }
         }
         self.commit_entry(
             layer_index,
@@ -319,7 +346,7 @@ where
 
     /// Returns planner-ready ownership metadata without exposing page arrays.
     #[must_use]
-    pub fn topology_snapshot(&self) -> Vec<CurrentExpertLayerResidency> {
+    pub fn topology_snapshot(&self, _expert_capacity: usize) -> Vec<CurrentExpertLayerResidency> {
         self.retained_layers
             .iter()
             .enumerate()
@@ -397,6 +424,15 @@ where
     }
 
     #[must_use]
+    pub fn resident_expert_count(&self) -> usize {
+        self.retained_layers
+            .iter()
+            .flatten()
+            .map(|entry| entry.expert_ids.len())
+            .sum()
+    }
+
+    #[must_use]
     pub fn statistics(&self) -> ExpertWeightMemoryCacheStatistics {
         let complete_layer_count = self
             .retained_layers
@@ -451,6 +487,20 @@ where
                 .unwrap_or(u64::MAX),
         )
     }
+}
+
+fn routed_expert_ids_are_strict_superset(
+    existing_expert_ids: &[usize],
+    proposed_expert_ids: &[usize],
+) -> bool {
+    if proposed_expert_ids.len() <= existing_expert_ids.len() {
+        return false;
+    }
+    existing_expert_ids.iter().all(|existing_expert_id| {
+        proposed_expert_ids
+            .binary_search(existing_expert_id)
+            .is_ok()
+    })
 }
 
 /// Scales last-chunk assignments so their token density matches earlier prefill.

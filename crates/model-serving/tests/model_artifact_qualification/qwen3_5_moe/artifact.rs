@@ -273,15 +273,15 @@ async fn should_load_and_decode_affine_six_bit_qwen3_5_moe_through_bounded_exper
 }
 
 #[test]
-#[ignore = "requires model_directories to discover the Ornith 1.5 oQ8e artifact"]
-fn should_validate_the_ornith_1_5_35b_a3b_eight_bit_artifact() {
-    const EXPECTED_MODEL_ID: &str = crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID;
+#[ignore = "requires model_directories to discover the Ornith 1.5 oQ6e artifact"]
+fn should_validate_the_ornith_1_5_35b_a3b_six_bit_artifact() {
+    const EXPECTED_MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 
-    let model_directory = super::ornith_1_5_35b_a3b_eight_bit_model_directory();
+    let model_directory = super::ornith_1_5_35b_a3b_six_bit_model_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the complete Ornith 1.5 35B A3B eight-bit artifact should validate");
+        .expect("the complete Ornith 1.5 35B A3B six-bit artifact should validate");
 
     // Structural validity: positive shard count, positive payload, architecture from config.
     assert!(validated_artifact.shard_count() > 0);
@@ -290,7 +290,7 @@ fn should_validate_the_ornith_1_5_35b_a3b_eight_bit_artifact() {
     assert!(validated_artifact.config().layer_count() > 0);
     assert!(validated_artifact.config().expert_count() > 0);
     assert!(validated_artifact.config().experts_per_token() > 0);
-    assert_eq!(validated_artifact.config().default_quantization_bits(), 8);
+    assert_eq!(validated_artifact.config().default_quantization_bits(), 6);
     // Group size must be a valid MLX affine group size.
     assert!(
         [32u32, 64, 128].contains(

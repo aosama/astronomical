@@ -41,7 +41,11 @@ print_journeys() {
         measure-model-ssd-streaming-complete-expert-residency \
         measure-model-ssd-streaming-live-memory-ceiling-round-trip \
         measure-model-ssd-streaming-decode-expert-retention \
-        measure-model-ssd-streaming-prefill-decode-handoff \
+        measure-model-ssd-streaming-cached-suffix-streaming-prefill \
+        measure-model-ssd-streaming-high-ram-cached-suffix-prefill \
+        measure-model-ssd-streaming-near-disk-oq6e-cached-suffix-prefill \
+        measure-model-ssd-streaming-oq6e-tight-ceiling-prefill \
+        measure-model-ssd-streaming-oq6e-long-conversation \
         measure-model-ssd-streaming-prefill-memory-progress \
         measure-model-ssd-streaming-laguna-paging \
         measure-experimental-aligned-expert-packs-ornith-generation \
@@ -167,9 +171,26 @@ main() {
             lane_name="model-ssd-streaming-decode-expert-retention"
             set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_reuse_retained_decode_experts_while_staying_within_the_mlx_memory_ceiling -- --ignored --nocapture
             ;;
-        measure-model-ssd-streaming-prefill-decode-handoff)
-            lane_name="model-ssd-streaming-prefill-decode-handoff"
+        measure-model-ssd-streaming-cached-suffix-streaming-prefill)
+            lane_name="model-ssd-streaming-cached-suffix-streaming-prefill"
             set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_complete_cold_and_cached_append_requests_with_consistent_prefill_decode_residency -- --ignored --nocapture
+            ;;
+        measure-model-ssd-streaming-high-ram-cached-suffix-prefill)
+            lane_name="model-ssd-streaming-high-ram-cached-suffix-prefill"
+            set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_keep_high_ram_tool_prefixed_cached_suffix_prefill_responsive -- --ignored --nocapture
+            ;;
+        measure-model-ssd-streaming-near-disk-oq6e-cached-suffix-prefill)
+            lane_name="model-ssd-streaming-near-disk-oq6e-cached-suffix-prefill"
+            set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_keep_near_disk_oq6e_cached_suffix_prefill_responsive -- --ignored --nocapture
+            ;;
+        measure-model-ssd-streaming-oq6e-tight-ceiling-prefill)
+            lane_name="model-ssd-streaming-oq6e-tight-ceiling-prefill"
+            set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_recover_from_prefill_oom_without_stalling_on_oq6e -- --ignored --nocapture
+            ;;
+        measure-model-ssd-streaming-oq6e-long-conversation)
+            lane_name="model-ssd-streaming-oq6e-long-conversation"
+            export TEST_TIMEOUT_SECONDS=1200
+            set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_measure_oq6e_long_conversation_at_half_disk_ram -- --ignored --nocapture
             ;;
         measure-model-ssd-streaming-prefill-memory-progress)
             lane_name="model-ssd-streaming-prefill-memory-progress"

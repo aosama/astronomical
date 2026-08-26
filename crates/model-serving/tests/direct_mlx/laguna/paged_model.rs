@@ -159,9 +159,8 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Paged);
     let prefill_telemetry = model.expert_residency_telemetry();
     assert_eq!(prefill_telemetry.total_layer_count, 1);
-    assert_eq!(prefill_telemetry.complete_layer_count, 1);
-    assert!(prefill_telemetry.complete_layer_payload_bytes > 0);
-    assert_eq!(prefill_telemetry.partial_layer_count, 0);
+    assert!(prefill_telemetry.resident_expert_count > 0);
+    assert!(prefill_telemetry.resident_expert_payload_bytes > 0);
     let prefill_statistics = model.expert_weight_memory_cache_statistics();
     assert_eq!(prefill_statistics.disk_page_load_count, 2);
     assert_eq!(prefill_statistics.disk_batch_load_count, 1);
@@ -208,12 +207,11 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
         .expect("paged decode should execute");
     assert_eq!(decode_logits.shape(), vec![1, 1, 8]);
     let decode_telemetry = model.expert_residency_telemetry();
-    assert_eq!(decode_telemetry.complete_layer_count, 0);
-    assert_eq!(decode_telemetry.partial_layer_count, 1);
-    assert!(decode_telemetry.partial_layer_payload_bytes > 0);
+    assert!(decode_telemetry.resident_expert_count > 0);
+    assert!(decode_telemetry.resident_expert_payload_bytes > 0);
     assert!(
-        decode_telemetry.partial_layer_payload_bytes
-            < prefill_telemetry.complete_layer_payload_bytes
+        decode_telemetry.resident_expert_payload_bytes
+            < prefill_telemetry.resident_expert_payload_bytes
     );
     assert_eq!(
         model
@@ -293,8 +291,8 @@ async fn should_keep_a_fully_bound_model_resident_even_with_a_paging_plan() {
     assert_eq!(prompt_logits.shape(), vec![1, 1, 8]);
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Resident);
     let telemetry = model.expert_residency_telemetry();
-    assert_eq!(telemetry.complete_layer_count, 1);
-    assert_eq!(telemetry.partial_layer_count, 0);
+    assert!(telemetry.resident_expert_count > 0);
+    assert!(telemetry.resident_expert_payload_bytes > 0);
     assert_eq!(
         model
             .expert_weight_memory_cache_statistics()
@@ -344,8 +342,8 @@ async fn should_retain_a_complete_layer_when_the_ceiling_fits_and_reuse_it() {
         .expect("first prefill should stream and commit");
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Resident);
     let first_telemetry = model.expert_residency_telemetry();
-    assert_eq!(first_telemetry.complete_layer_count, 1);
-    assert!(first_telemetry.complete_layer_payload_bytes > 0);
+    assert!(first_telemetry.resident_expert_count > 0);
+    assert!(first_telemetry.resident_expert_payload_bytes > 0);
     assert_eq!(
         model
             .expert_weight_memory_cache_statistics()
@@ -424,7 +422,7 @@ async fn should_evict_a_retained_layer_when_the_ceiling_drops_to_zero() {
         .set_retained_expert_ceiling(0)
         .expect("a zero ceiling should reclaim retained experts");
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Paged);
-    assert_eq!(model.expert_residency_telemetry().complete_layer_count, 0);
+    assert_eq!(model.expert_residency_telemetry().resident_expert_count, 0);
 
     model
         .forward(
@@ -496,9 +494,8 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
         .expect("decode should stream and retain the routed page");
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Hybrid);
     let decode_telemetry = model.expert_residency_telemetry();
-    assert_eq!(decode_telemetry.complete_layer_count, 0);
-    assert_eq!(decode_telemetry.partial_layer_count, 1);
-    assert!(decode_telemetry.partial_layer_payload_bytes > 0);
+    assert!(decode_telemetry.resident_expert_count > 0);
+    assert!(decode_telemetry.resident_expert_payload_bytes > 0);
     assert_eq!(
         model
             .expert_weight_memory_cache_statistics()

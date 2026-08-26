@@ -36,7 +36,18 @@ impl UserConfigFile {
                 experimental_qwen_thinking_channel_seed_enabled: None,
             },
             prompt_cache: None,
-            chunking: None,
+            chunking: Some(ChunkingConfigFile {
+                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Some(
+                    crate::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+                ),
+                prefill_graph_submission_layer_interval: Some(
+                    crate::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                ),
+                experimental_ssd_paging_prefill_graph_submission_layer_interval: Some(
+                    crate::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                ),
+                ..ChunkingConfigFile::default()
+            }),
             models: BTreeMap::new(),
             diagnostics: None,
         }

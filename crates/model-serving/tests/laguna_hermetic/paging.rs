@@ -3,7 +3,8 @@ use astronomical_model_serving::{
     LagunaExpertPagingPlan, LagunaExpertProjection, LagunaFeedForwardDescriptor,
     LagunaLayerTensorRole, LagunaPagingError, LagunaTargetNormalizer, LagunaTensorComponent,
     LagunaTensorId, PerformanceAttribution, PerformanceOperation,
-    laguna_sliding_prefill_transient_token_count, rotating_prefill_transient_token_count,
+    laguna_sliding_prefill_transient_token_count,
+    required_complete_residency_activation_headroom_bytes, rotating_prefill_transient_token_count,
 };
 
 use serde_json::json;
@@ -296,13 +297,18 @@ fn should_translate_laguna_geometry_into_phase_aware_residency_and_sliding_trans
         )
         .expect("a fitting complete payload should plan complete residency");
     assert_eq!(residency_plan.complete_layer_targets, vec![0]);
+    let required_activation_headroom_bytes = required_complete_residency_activation_headroom_bytes(
+        requirements.complete_prefill_page_bytes(),
+        0,
+    );
     assert!(matches!(
         plan.complete_residency_decision(
             0,
             0,
-            requirements.complete_expert_payload_bytes()
-                + requirements.complete_expert_payload_bytes() / 10
-                + 1,
+            requirements
+                .complete_expert_payload_bytes()
+                .saturating_add(required_activation_headroom_bytes)
+                .saturating_add(1),
             0,
         )
         .expect("centralized residency decision"),

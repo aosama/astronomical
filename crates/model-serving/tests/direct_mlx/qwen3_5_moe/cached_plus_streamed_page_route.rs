@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use astronomical_model_serving::{
-    ExpertPageRoutePartition, QuantizedExpertPageManifest, Qwen3_5MoESplitPageRoute,
+    ExpertPageRoutePartition, QuantizedExpertPageManifest, Qwen3_5MoECachedPlusStreamedPageRoute,
 };
 use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
@@ -10,21 +10,21 @@ use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
 
-const SPLIT_PAGE_ROUTE_TEST_TIMEOUT: Duration = Duration::from_secs(30);
+const CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[tokio::test]
 async fn should_preserve_weighted_expert_output_across_compact_retained_and_missing_routes() {
     timeout(
-        SPLIT_PAGE_ROUTE_TEST_TIMEOUT,
-        verify_compact_split_page_route_parity(),
+        CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT,
+        verify_compact_cached_plus_streamed_page_route_parity(),
     )
     .await
-    .expect("the split-page direct MLX contract must finish within 30 seconds");
+    .expect("the cached-plus-streamed direct MLX contract must finish within 30 seconds");
 }
 
 #[tokio::test]
-async fn should_reject_a_split_route_with_an_empty_assignment_side() {
-    timeout(SPLIT_PAGE_ROUTE_TEST_TIMEOUT, async {
+async fn should_reject_a_cached_plus_streamed_route_with_an_empty_assignment_side() {
+    timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = direct_mlx_runtime();
         let retained_page_manifest = page_manifest(&[1, 3], &[u32::MAX, 0, u32::MAX, 1]);
@@ -36,7 +36,7 @@ async fn should_reject_a_split_route_with_an_empty_assignment_side() {
             .expect("selected expert scores should be valid");
         let route_partition = retained_page_manifest.partition_route_assignments(&[3, 1]);
 
-        let route_error = Qwen3_5MoESplitPageRoute::build(
+        let route_error = Qwen3_5MoECachedPlusStreamedPageRoute::build(
             &runtime,
             &selected_indices,
             &selected_scores,
@@ -57,8 +57,8 @@ async fn should_reject_a_split_route_with_an_empty_assignment_side() {
 }
 
 #[tokio::test]
-async fn should_reject_an_expert_absent_from_its_declared_split_page() {
-    timeout(SPLIT_PAGE_ROUTE_TEST_TIMEOUT, async {
+async fn should_reject_an_expert_absent_from_its_declared_cached_plus_streamed_page() {
+    timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = direct_mlx_runtime();
         let retained_page_manifest = page_manifest(&[1], &[u32::MAX, 0, u32::MAX, u32::MAX]);
@@ -76,7 +76,7 @@ async fn should_reject_an_expert_absent_from_its_declared_split_page() {
             missing_expert_ids: vec![3],
         };
 
-        let route_error = Qwen3_5MoESplitPageRoute::build(
+        let route_error = Qwen3_5MoECachedPlusStreamedPageRoute::build(
             &runtime,
             &selected_indices,
             &selected_scores,
@@ -96,7 +96,7 @@ async fn should_reject_an_expert_absent_from_its_declared_split_page() {
     .expect("the absent-expert contract must finish within 30 seconds");
 }
 
-async fn verify_compact_split_page_route_parity() {
+async fn verify_compact_cached_plus_streamed_page_route_parity() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = direct_mlx_runtime();
 
@@ -111,8 +111,8 @@ async fn verify_compact_split_page_route_parity() {
         .array_from_f32(&[0.1, 0.2, 0.3, 0.4], &[1, 1, 4])
         .expect("the selected expert scores should be valid");
 
-    eprintln!("[split-page-route] status=progress phase=build_compact_route_arrays");
-    let split_page_route = Qwen3_5MoESplitPageRoute::build(
+    eprintln!("[cached-plus-streamed-page-route] status=progress phase=build_compact_route_arrays");
+    let cached_plus_streamed_page_route = Qwen3_5MoECachedPlusStreamedPageRoute::build(
         &runtime,
         &selected_indices,
         &selected_scores,
@@ -120,35 +120,53 @@ async fn verify_compact_split_page_route_parity() {
         &retained_page_manifest,
         &missing_page_manifest,
     )
-    .expect("the retained and missing assignments should build one compact split route");
+    .expect(
+        "the retained and missing assignments should build one compact cached-plus-streamed route",
+    );
 
-    assert_eq!(split_page_route.retained_page_slot_indices.shape(), vec![2]);
-    assert_eq!(split_page_route.retained_scores.shape(), vec![2]);
-    assert_eq!(split_page_route.missing_page_slot_indices.shape(), vec![2]);
-    assert_eq!(split_page_route.missing_scores.shape(), vec![2]);
     assert_eq!(
-        split_page_route
+        cached_plus_streamed_page_route
+            .retained_page_slot_indices
+            .shape(),
+        vec![2]
+    );
+    assert_eq!(
+        cached_plus_streamed_page_route.retained_scores.shape(),
+        vec![2]
+    );
+    assert_eq!(
+        cached_plus_streamed_page_route
+            .missing_page_slot_indices
+            .shape(),
+        vec![2]
+    );
+    assert_eq!(
+        cached_plus_streamed_page_route.missing_scores.shape(),
+        vec![2]
+    );
+    assert_eq!(
+        cached_plus_streamed_page_route
             .retained_page_slot_indices
             .to_vec_u32()
             .expect("retained page slots should evaluate"),
         vec![1, 0]
     );
     assert_eq!(
-        split_page_route
+        cached_plus_streamed_page_route
             .missing_page_slot_indices
             .to_vec_u32()
             .expect("missing page slots should evaluate"),
         vec![0, 1]
     );
     assert_f32_close(
-        &split_page_route
+        &cached_plus_streamed_page_route
             .retained_scores
             .to_vec_f32()
             .expect("retained scores should evaluate"),
         &[0.1, 0.3],
     );
     assert_f32_close(
-        &split_page_route
+        &cached_plus_streamed_page_route
             .missing_scores
             .to_vec_f32()
             .expect("missing scores should evaluate"),
@@ -164,16 +182,16 @@ async fn verify_compact_split_page_route_parity() {
     let retained_weighted_output = weighted_page_output(
         &runtime,
         &retained_page_expert_outputs,
-        &split_page_route.retained_page_slot_indices,
-        &split_page_route.retained_scores,
+        &cached_plus_streamed_page_route.retained_page_slot_indices,
+        &cached_plus_streamed_page_route.retained_scores,
     );
     let missing_weighted_output = weighted_page_output(
         &runtime,
         &missing_page_expert_outputs,
-        &split_page_route.missing_page_slot_indices,
-        &split_page_route.missing_scores,
+        &cached_plus_streamed_page_route.missing_page_slot_indices,
+        &cached_plus_streamed_page_route.missing_scores,
     );
-    let split_weighted_output = runtime
+    let cached_plus_streamed_weighted_output = runtime
         .add(&retained_weighted_output, &missing_weighted_output)
         .expect("retained and missing weighted outputs should combine");
 
@@ -188,24 +206,27 @@ async fn verify_compact_split_page_route_parity() {
         .expect("selected scores should flatten");
     let selected_global_outputs = runtime
         .take_axis(&global_expert_outputs, &flattened_selected_indices, 0)
-        .expect("the unsplit route should gather global expert outputs");
-    let unsplit_weighted_assignments = runtime
+        .expect("the combined route should gather global expert outputs");
+    let combined_weighted_assignments = runtime
         .multiply(&selected_global_outputs, &flattened_selected_scores)
-        .expect("the unsplit route should weight every assignment once");
-    let unsplit_weighted_output = runtime
-        .sum_axis(&unsplit_weighted_assignments, 0, false)
-        .expect("the unsplit route should sum weighted assignments");
+        .expect("the combined route should weight every assignment once");
+    let combined_weighted_output = runtime
+        .sum_axis(&combined_weighted_assignments, 0, false)
+        .expect("the combined route should sum weighted assignments");
 
-    let actual_split_output = split_weighted_output
+    let actual_cached_plus_streamed_output = cached_plus_streamed_weighted_output
         .to_vec_f32()
-        .expect("the split weighted output should evaluate");
-    let expected_unsplit_output = unsplit_weighted_output
+        .expect("the cached-plus-streamed weighted output should evaluate");
+    let expected_combined_output = combined_weighted_output
         .to_vec_f32()
-        .expect("the unsplit weighted output should evaluate");
+        .expect("the combined weighted output should evaluate");
     eprintln!(
-        "[split-page-route] status=success split_output={actual_split_output:?} unsplit_output={expected_unsplit_output:?}"
+        "[cached-plus-streamed-page-route] status=success cached_plus_streamed_output={actual_cached_plus_streamed_output:?} combined_output={expected_combined_output:?}"
     );
-    assert_f32_close(&actual_split_output, &expected_unsplit_output);
+    assert_f32_close(
+        &actual_cached_plus_streamed_output,
+        &expected_combined_output,
+    );
 }
 
 fn direct_mlx_runtime() -> MlxRuntime {
@@ -214,9 +235,9 @@ fn direct_mlx_runtime() -> MlxRuntime {
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
             DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
         )
-        .expect("the split-page route memory limits should be valid"),
+        .expect("the cached-plus-streamed route memory limits should be valid"),
     )
-    .expect("the direct MLX runtime should initialize for a split-page route contract")
+    .expect("the direct MLX runtime should initialize for a cached-plus-streamed route contract")
 }
 
 fn page_manifest(

@@ -189,7 +189,14 @@ impl Qwen3_5EngineRequest {
     pub(super) fn clamped_prefill_chunck_token_count(
         &self,
         requested_prefill_chunck_token_count: usize,
+        remaining_prompt_token_count: usize,
     ) -> usize {
+        // A folded paged stub is the rest of the prompt and may exceed the last
+        // proven size by less than one configured chunk. Capacity recovery still
+        // halves if that forward cannot fit.
+        if requested_prefill_chunck_token_count >= remaining_prompt_token_count {
+            return remaining_prompt_token_count;
+        }
         self.maximum_successful_prefill_chunck_tokens.map_or(
             requested_prefill_chunck_token_count,
             |maximum_successful_prefill_chunck_tokens| {

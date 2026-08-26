@@ -81,19 +81,15 @@ pub(super) fn assert_resident_status(status_document: &Value, expected_ceiling_b
     assert_eq!(status_document["expert_memory_mode"], "resident");
     let expert_residency = &status_document["expert_residency"];
     let total_layer_count = required_u64(expert_residency, "total_layer_count");
-    let complete_layer_count = required_u64(expert_residency, "complete_layer_count");
-    let complete_payload_bytes = required_u64(expert_residency, "complete_layer_payload_bytes");
+    let resident_expert_count = required_u64(expert_residency, "resident_expert_count");
+    let resident_expert_payload_bytes =
+        required_u64(expert_residency, "resident_expert_payload_bytes");
     assert!(total_layer_count > 0);
-    assert_eq!(complete_layer_count, total_layer_count);
-    assert!(complete_payload_bytes > 0);
-    assert_eq!(required_u64(expert_residency, "partial_layer_count"), 0);
-    assert_eq!(
-        required_u64(expert_residency, "partial_layer_payload_bytes"),
-        0
-    );
+    assert!(resident_expert_count > 0);
+    assert!(resident_expert_payload_bytes > 0);
     assert_eq!(
         memory_bytes(status_document, "expert_payload_bytes"),
-        complete_payload_bytes
+        resident_expert_payload_bytes
     );
 }
 
@@ -101,11 +97,10 @@ pub(super) fn assert_streaming_status(status_document: &Value, expected_ceiling_
     assert_common_idle_status(status_document, expected_ceiling_bytes);
     assert_nonresident_topology(status_document);
     let expert_residency = &status_document["expert_residency"];
-    let complete_layer_count = required_u64(expert_residency, "complete_layer_count");
-    let partial_layer_count = required_u64(expert_residency, "partial_layer_count");
+    let resident_expert_count = required_u64(expert_residency, "resident_expert_count");
     assert!(
-        complete_layer_count > 0 || partial_layer_count > 0,
-        "a completed streaming request should retain structurally visible expert topology: {expert_residency}"
+        resident_expert_count > 0,
+        "a completed streaming request should retain routed experts: {expert_residency}"
     );
 }
 
@@ -124,12 +119,11 @@ fn assert_nonresident_topology(status_document: &Value) {
     ));
     let expert_residency = &status_document["expert_residency"];
     let total_layer_count = required_u64(expert_residency, "total_layer_count");
-    let complete_layer_count = required_u64(expert_residency, "complete_layer_count");
-    let partial_layer_count = required_u64(expert_residency, "partial_layer_count");
     assert!(total_layer_count > 0);
     assert!(
-        complete_layer_count < total_layer_count || partial_layer_count > 0,
-        "streaming mode must not publish complete contiguous ownership: {expert_residency}"
+        expert_residency.get("complete_layer_count").is_none()
+            && expert_residency.get("partial_layer_count").is_none(),
+        "status must not publish complete/partial layer ownership: {expert_residency}"
     );
 }
 

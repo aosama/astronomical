@@ -254,10 +254,8 @@ impl EngineGenerationStart {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ExpertResidencyTelemetry {
     pub total_layer_count: u32,
-    pub complete_layer_count: u32,
-    pub complete_layer_payload_bytes: u64,
-    pub partial_layer_count: u32,
-    pub partial_layer_payload_bytes: u64,
+    pub resident_expert_count: u32,
+    pub resident_expert_payload_bytes: u64,
 }
 
 /// Final engine state available after a generation ends or is cancelled.
@@ -329,7 +327,7 @@ pub enum GeneratedToken {
         /// Selected `prefill_chunck_tokens` used for this completed prompt-processing chunk.
         completed_prefill_chunk_tokens: u32,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
-        /// Current complete/partial retained ownership after this chunk.
+        /// Current retained-expert ownership after this chunk.
         expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
         /// Active MLX telemetry captured during request-scoped draft scoring.
         speculative_prefill_draft_memory_telemetry: Option<MlxMemoryTelemetry>,
@@ -345,10 +343,8 @@ pub enum GeneratedToken {
     /// Prefill is complete and the engine is reconciling expert ownership before decode.
     GenerationPreparationStarted {
         total_layer_count: u32,
-        complete_layer_count: u32,
-        complete_layer_payload_bytes: u64,
-        partial_layer_count: u32,
-        partial_layer_payload_bytes: u64,
+        resident_expert_count: u32,
+        resident_expert_payload_bytes: u64,
     },
     /// Engine-side end-of-sequence without an explicit token ID.
     EndOfSequence,

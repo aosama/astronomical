@@ -110,7 +110,8 @@
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
           "type": "integer",
           "minimum": 1,
-          "description": "Optional smaller prompt chunk while sparse experts stream from SSD; it cannot exceed the ordinary chunk.",
+          "default": 2048,
+          "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Persistent-cache publication may still clamp each forward to the next durable block boundary.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "full_attention_key_value_growth_tokens": {
@@ -131,8 +132,15 @@
         "prefill_graph_submission_layer_interval": {
           "type": "integer",
           "minimum": 0,
+          "default": 0,
+          "description": "Decoder-layer interval between multi-token prefill graph submissions while sparse experts are fully resident; zero keeps one lazy tape per chunk.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
+          "type": "integer",
+          "minimum": 0,
           "default": 1,
-          "description": "Decoder-layer interval between multi-token prefill graph submissions; zero disables intermediate submission.",
+          "description": "Experimental decoder-layer interval between multi-token prefill graph submissions while sparse experts stream from SSD; zero keeps one lazy tape per chunk.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_ssd_paging_generation_graph_submission_layer_interval": {
@@ -268,13 +276,13 @@
     },
     "mtp": {
       "type": "object",
-      "description": "Automatic multi-token prediction preference for the containing target model.",
+      "description": "Optional multi-token prediction preference for the containing target model.",
       "additionalProperties": false,
       "properties": {
         "enabled": {
           "type": "boolean",
-          "default": true,
-          "description": "When false, this model stays target-only even if the artifact includes multi-token prediction tensors. Omission keeps automatic compatible multi-token prediction."
+          "default": false,
+          "description": "When true, this model may use compatible multi-token prediction tensors. Omission stays target-only so decode does not regress until the user opts in."
         },
         "draft_depth": {
           "type": "integer",

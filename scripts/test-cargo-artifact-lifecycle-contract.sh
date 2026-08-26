@@ -462,7 +462,7 @@ assert all(isinstance(alias_command, list) for alias_command in aliases.values()
 
 bounded_test_runner = (repository_root / "scripts/run-bounded-cargo-test.sh").read_text()
 assert "readonly COMPILE_TIMEOUT_SECONDS=600" in bounded_test_runner
-assert "readonly TEST_TIMEOUT_SECONDS=120" in bounded_test_runner
+assert "readonly DEFAULT_TEST_TIMEOUT_SECONDS=120" in bounded_test_runner
 journey_dispatcher = (repository_root / "scripts/run-disposable-cargo-journey.sh").read_text()
 assert "run-bounded-cargo-test.sh" in journey_dispatcher
 ignored_suite_runner = (repository_root / "scripts/run-ignored-qualification-suite.sh").read_text()
@@ -503,7 +503,11 @@ expected_journeys = {
     "measure-model-ssd-streaming-complete-expert-residency",
     "measure-model-ssd-streaming-live-memory-ceiling-round-trip",
     "measure-model-ssd-streaming-decode-expert-retention",
-    "measure-model-ssd-streaming-prefill-decode-handoff",
+    "measure-model-ssd-streaming-cached-suffix-streaming-prefill",
+    "measure-model-ssd-streaming-high-ram-cached-suffix-prefill",
+    "measure-model-ssd-streaming-near-disk-oq6e-cached-suffix-prefill",
+    "measure-model-ssd-streaming-oq6e-tight-ceiling-prefill",
+    "measure-model-ssd-streaming-oq6e-long-conversation",
     "measure-model-ssd-streaming-prefill-memory-progress",
     "measure-model-ssd-streaming-laguna-paging",
     "measure-experimental-aligned-expert-packs-ornith-generation",

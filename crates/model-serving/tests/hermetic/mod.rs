@@ -5,9 +5,9 @@ mod attention;
 mod decoder_cache;
 mod engine_backed_worker;
 mod expert_memory_admission;
+mod expert_residency_policy;
 mod memory_policy;
 mod mlx_ram_budget;
-mod paged_decode_layer_disposition;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_materialization;
 mod performance_attribution;
@@ -19,6 +19,6 @@ mod qwen3_5_execution_error;
 mod qwen_prompt_processing_chunk_sizer;
 mod raw_safetensors_inventory;
 mod required_files;
-mod retained_expert_layer_cache;
+mod retained_expert_page_cache;
 mod sparse_experts;
 mod tensor_inventory;
