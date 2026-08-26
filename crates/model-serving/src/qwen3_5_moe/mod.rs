@@ -11,7 +11,8 @@ pub use crate::expert_paging::build_source_manifests;
 #[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use expert_paging::Qwen3_5RetainedExpertLayer;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use expert_paging::RetainedExpertCache;
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
 #[cfg(feature = "direct-mlx")]
@@ -29,10 +30,10 @@ pub(crate) use model::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{
-    Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5MoESplitPageRoute, qwen3_5_moe_combine_experts,
-    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
-    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
-    qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    Qwen3_5MoECachedPlusStreamedPageRoute, Qwen3_5MoEPagedPrefillExecutionMode,
+    qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,
+    qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
+    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
 
 /// Model identity constants retained for sparse-artifact test fixtures.

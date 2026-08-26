@@ -32,7 +32,8 @@ fn should_resolve_reload_config_from_the_config_file() {
                 "fixed_prompt_processing_chunk_size_tokens": 4096,
                 "full_attention_key_value_growth_tokens": 192,
                 "speculative_prefill_draft_forward_tokens": 1536,
-                "prefill_graph_submission_layer_interval": 1,
+                "prefill_graph_submission_layer_interval": 0,
+                "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
                 "experimental_ssd_paging_generation_graph_submission_layer_interval": 6,
                 "prompt_cache_block_tokens": 768,
                 "prompt_cache_common_prefix_stride_blocks": 8

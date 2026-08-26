@@ -16,6 +16,8 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) prefill_graph_submission_layer_interval: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: Option<u32>,
     #[serde(
         default,
@@ -35,6 +37,7 @@ pub struct ConfiguredChunkingFields {
     pub full_attention_key_value_growth_tokens: bool,
     pub speculative_prefill_draft_forward_tokens: bool,
     pub prefill_graph_submission_layer_interval: bool,
+    pub experimental_ssd_paging_prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
     pub prompt_cache_block_tokens: bool,
     pub prompt_cache_common_prefix_stride_blocks: bool,
@@ -67,6 +70,9 @@ impl ChunkingConfigFile {
             prefill_graph_submission_layer_interval: self
                 .prefill_graph_submission_layer_interval
                 .is_some(),
+            experimental_ssd_paging_prefill_graph_submission_layer_interval: self
+                .experimental_ssd_paging_prefill_graph_submission_layer_interval
+                .is_some(),
             experimental_ssd_paging_generation_graph_submission_layer_interval: self
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .is_some(),
@@ -97,6 +103,9 @@ impl ChunkingConfigFile {
             prefill_graph_submission_layer_interval: model
                 .prefill_graph_submission_layer_interval
                 .or(global.prefill_graph_submission_layer_interval),
+            experimental_ssd_paging_prefill_graph_submission_layer_interval: model
+                .experimental_ssd_paging_prefill_graph_submission_layer_interval
+                .or(global.experimental_ssd_paging_prefill_graph_submission_layer_interval),
             experimental_ssd_paging_generation_graph_submission_layer_interval: model
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .or(global.experimental_ssd_paging_generation_graph_submission_layer_interval),
@@ -112,9 +121,13 @@ impl ChunkingConfigFile {
 
 pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
+/// Independent SSD-paged prompt chunk. Owned separately from the resident chunk.
+pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 pub const DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS: u32 = 2_048;
+pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
-pub const DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
+/// Resident multi-token prefill keeps one lazy tape unless the user raises this.
+pub const DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
 pub const DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
 
 /// Resolved user-visible boundaries that partition model-serving work.
@@ -125,10 +138,11 @@ pub const DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChunkingConfig {
     fixed_prompt_processing_chunk_size_tokens: u32,
-    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
+    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     full_attention_key_value_growth_tokens: u32,
     speculative_prefill_draft_forward_tokens: u32,
     prefill_graph_submission_layer_interval: u32,
+    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     prompt_cache_block_tokens: Option<u32>,
     prompt_cache_common_prefix_stride_blocks: u32,
@@ -147,7 +161,8 @@ impl ChunkingConfig {
                 .fixed_prompt_processing_chunk_size_tokens
                 .unwrap_or(DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS),
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: configured
-                .fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+                .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+                .unwrap_or(DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS),
             full_attention_key_value_growth_tokens: configured
                 .full_attention_key_value_growth_tokens
                 .unwrap_or(DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS),
@@ -157,6 +172,9 @@ impl ChunkingConfig {
             prefill_graph_submission_layer_interval: configured
                 .prefill_graph_submission_layer_interval
                 .unwrap_or(DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
+            experimental_ssd_paging_prefill_graph_submission_layer_interval: configured
+                .experimental_ssd_paging_prefill_graph_submission_layer_interval
+                .unwrap_or(DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
             experimental_ssd_paging_generation_graph_submission_layer_interval: configured
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .unwrap_or(
@@ -197,21 +215,11 @@ impl ChunkingConfig {
                 });
             }
         }
-        if let Some(ssd_streaming_chunk_size_tokens) =
-            self.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-        {
-            if ssd_streaming_chunk_size_tokens == 0 {
-                return Err(AstronomicalConfigError::InvalidChunkingValue {
-                    field_name: "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
-                    description: "must be positive",
-                });
-            }
-            if ssd_streaming_chunk_size_tokens > self.fixed_prompt_processing_chunk_size_tokens {
-                return Err(AstronomicalConfigError::InvalidChunkingValue {
-                    field_name: "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
-                    description: "must not exceed chunking.fixed_prompt_processing_chunk_size_tokens",
-                });
-            }
+        if self.fixed_ssd_streaming_prompt_processing_chunk_size_tokens == 0 {
+            return Err(AstronomicalConfigError::InvalidChunkingValue {
+                field_name: "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
+                description: "must be positive",
+            });
         }
         if self.prompt_cache_block_tokens == Some(0) {
             return Err(AstronomicalConfigError::InvalidChunkingValue {
@@ -237,7 +245,7 @@ impl ChunkingConfig {
     }
 
     #[must_use]
-    pub const fn fixed_ssd_streaming_prompt_processing_chunk_size_tokens(&self) -> Option<u32> {
+    pub const fn fixed_ssd_streaming_prompt_processing_chunk_size_tokens(&self) -> u32 {
         self.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
     }
 
@@ -254,6 +262,11 @@ impl ChunkingConfig {
     #[must_use]
     pub const fn prefill_graph_submission_layer_interval(&self) -> u32 {
         self.prefill_graph_submission_layer_interval
+    }
+
+    #[must_use]
+    pub const fn experimental_ssd_paging_prefill_graph_submission_layer_interval(&self) -> u32 {
+        self.experimental_ssd_paging_prefill_graph_submission_layer_interval
     }
 
     #[must_use]
@@ -277,12 +290,15 @@ impl Default for ChunkingConfig {
         Self {
             fixed_prompt_processing_chunk_size_tokens:
                 DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens:
+                DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
             full_attention_key_value_growth_tokens: DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
             speculative_prefill_draft_forward_tokens:
                 DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
             prefill_graph_submission_layer_interval:
                 DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            experimental_ssd_paging_prefill_graph_submission_layer_interval:
+                DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
             experimental_ssd_paging_generation_graph_submission_layer_interval:
                 DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
             prompt_cache_block_tokens: None,

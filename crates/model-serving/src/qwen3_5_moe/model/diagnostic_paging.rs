@@ -27,17 +27,16 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let sorted_unique_expert_ids = self.copy_sorted_unique_expert_ids(selected_indices)?;
-        let (streamed_expert_weights, page_manifest) = expert_pager
-            .load_rust_streamed_expert_layer(
-                &self.runtime,
-                layer_index,
-                &sorted_unique_expert_ids,
-                Qwen3_5ExpertStreamingRequestShape {
-                    route_token_count,
-                    routed_expert_count: sorted_unique_expert_ids.len(),
-                },
-                performance_attribution,
-            )?;
+        let (streamed_expert_weights, page_manifest) = expert_pager.load_rust_streamed_experts(
+            &self.runtime,
+            layer_index,
+            &sorted_unique_expert_ids,
+            Qwen3_5ExpertStreamingRequestShape {
+                route_token_count,
+                routed_expert_count: sorted_unique_expert_ids.len(),
+            },
+            performance_attribution,
+        )?;
         self.forward_moe_paged_with_performance_attribution(
             hidden_states,
             mixture_of_experts_weights,
@@ -97,7 +96,7 @@ impl Qwen3_5Model {
                 &[1, token_index + 1, expert_count_per_token],
                 &[1, 1, 1],
             )?;
-            token_moe_outputs.push(self.forward_moe_with_layer_store_paging(
+            token_moe_outputs.push(self.forward_moe_with_expert_store_paging(
                 &token_hidden_states,
                 mixture_of_experts_weights,
                 expert_pager,

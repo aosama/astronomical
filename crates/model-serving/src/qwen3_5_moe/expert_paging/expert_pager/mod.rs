@@ -1,8 +1,8 @@
 //! Rust-owned Qwen expert streaming and resident-promotion source metadata.
 
-mod rust_layer_streaming;
+mod rust_expert_streaming;
 
-pub(crate) use rust_layer_streaming::Qwen3_5ExpertStreamingRequestShape;
+pub(crate) use rust_expert_streaming::Qwen3_5ExpertStreamingRequestShape;
 
 use std::fs::File;
 use std::path::PathBuf;
@@ -11,8 +11,7 @@ use astronomical_runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
 use crate::expert_paging::{
-    ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
-    SafetensorsHeaderError,
+    ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, SafetensorsHeaderError,
 };
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::{MlxAllocationBudget, MlxAllocationBudgetError};
@@ -69,20 +68,6 @@ pub struct Qwen3_5PagedExpertWeights {
     pub(crate) down_projection: Qwen3_5AffineWeights,
 }
 
-impl Qwen3_5PagedExpertWeights {
-    pub(crate) fn append_array_references<'weights>(
-        &'weights self,
-        expert_weight_arrays: &mut Vec<&'weights astronomical_runtime_integration::MlxArray>,
-    ) {
-        self.gate_projection
-            .append_array_references(expert_weight_arrays);
-        self.up_projection
-            .append_array_references(expert_weight_arrays);
-        self.down_projection
-            .append_array_references(expert_weight_arrays);
-    }
-}
-
 impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
     fn resident_payload_byte_count(&self) -> u64 {
         affine_payload_byte_count(&self.gate_projection)
@@ -97,25 +82,6 @@ fn affine_payload_byte_count(affine_weights: &Qwen3_5AffineWeights) -> u64 {
     arrays.into_iter().fold(0u64, |payload_bytes, array| {
         payload_bytes.saturating_add(u64::try_from(array.byte_count()).unwrap_or(u64::MAX))
     })
-}
-
-/// One complete Rust-loaded layer retained between requests.
-#[derive(Debug)]
-pub(crate) struct Qwen3_5RetainedExpertLayer {
-    pub(crate) weights: Qwen3_5PagedExpertWeights,
-    pub(crate) manifest: QuantizedExpertPageManifest,
-}
-
-impl Qwen3_5RetainedExpertLayer {
-    pub(crate) fn contains_every_expert(&self, selected_expert_ids: &[usize]) -> bool {
-        self.manifest.contains_every_expert(selected_expert_ids)
-    }
-}
-
-impl ExpertWeightPage for Qwen3_5RetainedExpertLayer {
-    fn resident_payload_byte_count(&self) -> u64 {
-        self.weights.resident_payload_byte_count()
-    }
 }
 
 impl Qwen3_5ExpertPager {

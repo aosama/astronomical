@@ -72,8 +72,8 @@ impl ExpertDataPlaneScenario {
 async fn should_measure_one_layer_generation_expert_data_plane() {
     require_aligned_expert_pack_completion(run_expert_data_plane_measurements(
         ExpertDataPlaneModel {
-            configured_model_directory_name: super::ORNITH_OQ8_MODEL_ID,
-            model_id: super::ORNITH_OQ8_PROVIDER_MODEL_ID,
+            configured_model_directory_name: super::ORNITH_OQ6_MODEL_ID,
+            model_id: super::ORNITH_OQ6_PROVIDER_MODEL_ID,
         },
         &[ExpertDataPlaneScenario::generation()],
     ))
@@ -85,8 +85,8 @@ async fn should_measure_one_layer_generation_expert_data_plane() {
 async fn should_measure_one_layer_prompt_processing_expert_data_plane() {
     require_aligned_expert_pack_completion(run_expert_data_plane_measurements(
         ExpertDataPlaneModel {
-            configured_model_directory_name: super::ORNITH_OQ8_MODEL_ID,
-            model_id: super::ORNITH_OQ8_PROVIDER_MODEL_ID,
+            configured_model_directory_name: super::ORNITH_OQ6_MODEL_ID,
+            model_id: super::ORNITH_OQ6_PROVIDER_MODEL_ID,
         },
         &[ExpertDataPlaneScenario::prompt_processing()],
     ))

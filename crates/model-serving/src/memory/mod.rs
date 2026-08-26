@@ -4,6 +4,7 @@ mod ceiling_change;
 mod context_admission;
 mod decision;
 mod expert_memory_admission;
+mod expert_residency;
 mod forward_recovery;
 #[cfg(feature = "direct-mlx")]
 mod live_allocation_budget;
@@ -35,6 +36,15 @@ pub use expert_memory_admission::{
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes,
     should_retry_fixed_forward_after_expert_reclamation,
+};
+pub use expert_residency::{
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
+    ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError,
+    RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
+    plan_phase_aware_expert_residency, publish_request_stable_residency_plan,
+    retained_complete_layer_ceiling_after_prefill_budget_refresh,
+    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
+    should_enact_planned_expert_release,
 };
 pub use forward_recovery::{
     ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements,

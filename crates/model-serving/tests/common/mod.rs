@@ -29,10 +29,11 @@ pub(crate) fn standard_worker_chunking_configuration()
 -> astronomical_ipc_protocol::WorkerChunkingConfiguration {
     astronomical_ipc_protocol::WorkerChunkingConfiguration {
         fixed_prompt_processing_chunk_size_tokens: 2_048,
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: None,
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
         full_attention_key_value_growth_tokens: 256,
         speculative_prefill_draft_forward_tokens: 2_048,
-        prefill_graph_submission_layer_interval: 1,
+        prefill_graph_submission_layer_interval: 0,
+        experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
         prompt_cache_block_tokens: None,
         prompt_cache_common_prefix_stride_blocks: 4,
@@ -61,7 +62,7 @@ pub(crate) fn disabled_worker_speculative_prefill_configuration()
 #[allow(dead_code)]
 pub(crate) fn standard_qwen3_5_model_chunking_configuration()
 -> astronomical_model_serving::Qwen3_5ModelChunkingConfiguration {
-    astronomical_model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 3, 2_048)
+    astronomical_model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 1, 3, 2_048)
         .expect("the standard test model chunking configuration should be valid")
 }
 
@@ -120,9 +121,10 @@ const MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT: Duration = Duration::from_
 #[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
 pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
 
-/// Larger sibling used when a qualification must exercise model replacement.
+/// Same Ornith 1.5 oQ6e artifact used when a qualification drops and reloads.
 #[allow(dead_code)] // Used only by the explicit MLX memory-contract boundary.
-pub(crate) const ORNITH_MODEL_SWAP_SOURCE_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ8e-mtp";
+pub(crate) const ORNITH_MODEL_SWAP_SOURCE_MODEL_ID: &str =
+    ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]

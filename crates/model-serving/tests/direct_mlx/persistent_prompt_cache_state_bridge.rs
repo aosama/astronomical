@@ -111,15 +111,16 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
     let second_kv_block_tensors = tiny_persistent_prompt_cache_kv_block_tensors(&runtime, 20.0);
     let recurrent_snapshot_tensors =
         tiny_persistent_prompt_cache_recurrent_snapshot_tensors(&runtime, 30.0);
-    let kv_block_tensors = vec![first_kv_block_tensors, second_kv_block_tensors];
+    let mut kv_block_tensors = vec![first_kv_block_tensors, second_kv_block_tensors];
+    let mut recurrent_snapshot_tensors = recurrent_snapshot_tensors;
 
     let mut restored_request_decoder_state =
         crate::common::standard_request_decoder_state(&certified_ornith_config());
     restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
-            &kv_block_tensors,
-            &recurrent_snapshot_tensors,
+            &mut kv_block_tensors,
+            &mut recurrent_snapshot_tensors,
         )
         .expect("split prompt-cache tensors should restore as one request decoder state");
 
@@ -226,10 +227,10 @@ async fn should_round_trip_compact_sparse_target_decoder_state_without_dense_rec
 async fn should_materialize_restored_split_persistent_prompt_cache_state_before_first_prefill() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();
-    let kv_block_tensors = vec![tiny_persistent_prompt_cache_kv_block_tensors(
+    let mut kv_block_tensors = vec![tiny_persistent_prompt_cache_kv_block_tensors(
         &runtime, 10.0,
     )];
-    let recurrent_snapshot_tensors =
+    let mut recurrent_snapshot_tensors =
         tiny_persistent_prompt_cache_recurrent_snapshot_tensors(&runtime, 30.0);
 
     let mut restored_request_decoder_state =
@@ -237,8 +238,8 @@ async fn should_materialize_restored_split_persistent_prompt_cache_state_before_
     restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
-            &kv_block_tensors,
-            &recurrent_snapshot_tensors,
+            &mut kv_block_tensors,
+            &mut recurrent_snapshot_tensors,
         )
         .expect("split prompt-cache tensors should restore as one request decoder state");
 
@@ -258,11 +259,13 @@ async fn should_reject_a_kv_block_tensor_map_missing_a_required_tensor() {
 
     let mut restored_request_decoder_state =
         crate::common::standard_request_decoder_state(&certified_ornith_config());
+    let mut kv_block_tensor_maps = [kv_block_tensors];
+    let mut recurrent_snapshot_tensors = recurrent_snapshot_tensors;
     let restore_result = restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
-            &[kv_block_tensors],
-            &recurrent_snapshot_tensors,
+            &mut kv_block_tensor_maps,
+            &mut recurrent_snapshot_tensors,
         );
 
     assert!(restore_result.is_err());
@@ -272,7 +275,7 @@ async fn should_reject_a_kv_block_tensor_map_missing_a_required_tensor() {
 async fn should_reject_a_recurrent_snapshot_tensor_map_missing_a_required_tensor() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();
-    let kv_block_tensors = vec![tiny_persistent_prompt_cache_kv_block_tensors(
+    let mut kv_block_tensors = vec![tiny_persistent_prompt_cache_kv_block_tensors(
         &runtime, 10.0,
     )];
     let mut recurrent_snapshot_tensors =
@@ -284,8 +287,8 @@ async fn should_reject_a_recurrent_snapshot_tensor_map_missing_a_required_tensor
     let restore_result = restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
-            &kv_block_tensors,
-            &recurrent_snapshot_tensors,
+            &mut kv_block_tensors,
+            &mut recurrent_snapshot_tensors,
         );
 
     assert!(restore_result.is_err());

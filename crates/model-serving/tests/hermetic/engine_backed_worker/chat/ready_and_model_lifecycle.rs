@@ -186,10 +186,8 @@ async fn should_reuse_the_live_memory_limit_and_configuration_generation_for_the
             effective_mlx_memory_ceiling_bytes: 40_000_000_000,
             expert_residency: Some(WorkerExpertResidencySnapshot {
                 total_layer_count: 2,
-                complete_layer_count: 2,
-                complete_layer_payload_bytes: 8_000,
-                partial_layer_count: 0,
-                partial_layer_payload_bytes: 0,
+                resident_expert_count: 2,
+                resident_expert_payload_bytes: 8_000,
             }),
             ..
         }

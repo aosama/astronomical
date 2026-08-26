@@ -41,6 +41,7 @@ pub(in crate::laguna) struct LagunaPendingStartup {
     pub(in crate::laguna) configured_prompt_cache_block_token_count: Option<usize>,
     pub(in crate::laguna) prompt_cache_common_prefix_stride_blocks: u32,
     pub(in crate::laguna) prefill_graph_submission_layer_interval: u32,
+    pub(in crate::laguna) experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     pub(in crate::laguna) experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     pub(in crate::laguna) model_loading_performance_attribution: PerformanceAttribution,
     pub(in crate::laguna) performance_attribution_log: PerformanceAttributionLog,

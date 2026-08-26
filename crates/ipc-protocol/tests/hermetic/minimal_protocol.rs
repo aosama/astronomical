@@ -114,10 +114,8 @@ async fn should_round_trip_generation_preparation_topology() {
     let worker_event = WorkerEvent::GenerationPreparationStarted {
         request_id: RequestId::new(72),
         total_layer_count: 40,
-        complete_layer_count: 24,
-        complete_layer_payload_bytes: 21_743_271_936,
-        partial_layer_count: 8,
-        partial_layer_payload_bytes: 226_492_416,
+        resident_expert_count: 32,
+        resident_expert_payload_bytes: 21_969_764_352,
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
@@ -195,10 +193,8 @@ async fn should_round_trip_changed_and_rejected_memory_limit_events() {
             mlx_memory_snapshot: None,
             expert_residency: Some(WorkerExpertResidencySnapshot {
                 total_layer_count: 24,
-                complete_layer_count: 0,
-                complete_layer_payload_bytes: 0,
-                partial_layer_count: 2,
-                partial_layer_payload_bytes: 4_000,
+                resident_expert_count: 2,
+                resident_expert_payload_bytes: 4_000,
             }),
         },
         WorkerEvent::MlxMemoryLimitRejected {

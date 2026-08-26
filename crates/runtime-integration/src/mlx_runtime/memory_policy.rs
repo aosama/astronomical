@@ -94,23 +94,24 @@ impl MlxRuntime {
         self.clear_allocator_cache()
     }
 
-    /// Drains the GPU stream, then clears the allocator cache only when it is large.
+    /// Clears the allocator cache only when it is large enough to justify IOGPU work.
     ///
-    /// Prefill must still retire the chunk tape. It should not talk to IOGPU
-    /// for a few leftover megabytes after every chunk.
+    /// Prefill already retires the chunk tape through `evaluate_arrays`. A stream
+    /// drain after every chunk was a second full GPU wait and showed up as lost
+    /// prompt tokens per second versus OMLX, which evals once and moves on.
     pub fn synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(
         &self,
         reclaim_threshold_bytes: usize,
     ) -> Result<(), MlxRuntimeError> {
-        self.synchronize_gpu_stream()?;
         let memory_snapshot = self.memory_snapshot()?;
-        if allocator_cache_exceeds_reclaim_threshold(
+        if !allocator_cache_exceeds_reclaim_threshold(
             memory_snapshot.allocator_cache_memory_bytes(),
             reclaim_threshold_bytes,
         ) {
-            self.clear_allocator_cache()?;
+            return Ok(());
         }
-        Ok(())
+        self.synchronize_gpu_stream()?;
+        self.clear_allocator_cache()
     }
 }
 

@@ -86,14 +86,13 @@ impl Qwen3_5EngineState {
                 "continued decode with operation-local expert streaming after optional residency planning failed"
             );
         }
-        let (total_layer_count, complete_layer_count, partial_layer_count) =
-            model.retained_expert_layer_counts();
+        let expert_residency = model.expert_residency_telemetry();
         tracing::info!(
             request_id = request_id.value(),
             context_token_count,
-            total_layer_count,
-            complete_layer_count,
-            partial_layer_count,
+            total_layer_count = expert_residency.total_layer_count,
+            resident_expert_count = expert_residency.resident_expert_count,
+            resident_expert_payload_bytes = expert_residency.resident_expert_payload_bytes,
             "generation preparation preserved expert topology without eager source reads"
         );
         Ok(())

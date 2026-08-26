@@ -117,33 +117,66 @@ impl RequestDecoderStateStack {
 
     /// Restores the live request decoder state from split persistent prompt-cache tensors.
     ///
-    /// Full-attention KV tensors are concatenated once per layer and role.
-    /// Linear layers restore the newest complete recurrent snapshot.
+    /// Each KV block is absorbed and materialized before the next block is
+    /// required. Holding every loaded block until one terminal concatenation
+    /// would pin a full-prefix source copy beside the seated model.
     pub fn restore_from_persistent_prompt_cache_blocks(
         &mut self,
         runtime: &MlxRuntime,
-        persistent_prompt_cache_kv_block_tensors: &[HashMap<String, MlxArray>],
-        persistent_prompt_cache_recurrent_snapshot_tensors: &HashMap<String, MlxArray>,
+        persistent_prompt_cache_kv_block_tensors: &mut [HashMap<String, MlxArray>],
+        persistent_prompt_cache_recurrent_snapshot_tensors: &mut HashMap<String, MlxArray>,
     ) -> Result<(), PersistentPromptCacheStateBridgeError> {
         if persistent_prompt_cache_kv_block_tensors.is_empty() {
             return Ok(());
         }
+        for kv_block_tensors in persistent_prompt_cache_kv_block_tensors.iter_mut() {
+            self.absorb_persistent_prompt_cache_kv_block(runtime, kv_block_tensors)?;
+        }
+        self.absorb_persistent_prompt_cache_recurrent_snapshot(
+            runtime,
+            persistent_prompt_cache_recurrent_snapshot_tensors,
+        )
+    }
 
+    /// Absorbs one sequence-state block, then materializes the growing dest.
+    pub fn absorb_persistent_prompt_cache_kv_block(
+        &mut self,
+        runtime: &MlxRuntime,
+        persistent_prompt_cache_kv_block_tensors: &mut HashMap<String, MlxArray>,
+    ) -> Result<(), PersistentPromptCacheStateBridgeError> {
         for layer_index in 0..self.layer_count() {
             match self.layer_mut(layer_index) {
                 Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
-                    let restored_keys = restore_full_attention_blocks(
-                        runtime,
-                        layer_index,
-                        "keys",
+                    let incoming_keys = take_named_block_tensor(
                         persistent_prompt_cache_kv_block_tensors,
-                    )?;
-                    let restored_values = restore_full_attention_blocks(
-                        runtime,
                         layer_index,
-                        "values",
-                        persistent_prompt_cache_kv_block_tensors,
+                        format!("layer_{layer_index}_attention.keys"),
                     )?;
+                    let incoming_values = take_named_block_tensor(
+                        persistent_prompt_cache_kv_block_tensors,
+                        layer_index,
+                        format!("layer_{layer_index}_attention.values"),
+                    )?;
+                    let (restored_keys, restored_values) =
+                        match (attention.keys_state(), attention.values_state()) {
+                            (Some(existing_keys), Some(existing_values)) => (
+                                concatenate_full_attention_extension(
+                                    runtime,
+                                    layer_index,
+                                    "keys",
+                                    existing_keys,
+                                    &incoming_keys,
+                                )?,
+                                concatenate_full_attention_extension(
+                                    runtime,
+                                    layer_index,
+                                    "values",
+                                    existing_values,
+                                    &incoming_values,
+                                )?,
+                            ),
+                            _ => (incoming_keys, incoming_values),
+                        };
                     attention
                         .restore_from_blocks(restored_keys, restored_values)
                         .map_err(|source| {
@@ -152,36 +185,62 @@ impl RequestDecoderStateStack {
                                 source,
                             }
                         })?;
+                    materialize_restored_layer_tensors(
+                        runtime,
+                        layer_index,
+                        attention.keys_state(),
+                        attention.values_state(),
+                        "keys",
+                        "values",
+                    )?;
                 }
+                Some(DecoderCacheState::Composite { .. }) => {}
+                None => {
+                    return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
+                        layer_index,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Installs the newest complete recurrent snapshot after KV blocks are live.
+    pub fn absorb_persistent_prompt_cache_recurrent_snapshot(
+        &mut self,
+        runtime: &MlxRuntime,
+        persistent_prompt_cache_recurrent_snapshot_tensors: &mut HashMap<String, MlxArray>,
+    ) -> Result<(), PersistentPromptCacheStateBridgeError> {
+        for layer_index in 0..self.layer_count() {
+            match self.layer_mut(layer_index) {
+                Some(DecoderCacheState::AppendOnlyAttention { .. }) => {}
                 Some(DecoderCacheState::Composite {
                     convolution,
                     recurrent,
                 }) => {
                     let convolution_tensor_name = format!("layer_{layer_index}_linear.convolution");
-                    let loaded_convolution = persistent_prompt_cache_recurrent_snapshot_tensors
-                        .get(&convolution_tensor_name)
-                        .ok_or(PersistentPromptCacheStateBridgeError::MissingBlockTensor {
-                            layer_index,
-                            tensor_name: convolution_tensor_name.clone(),
-                        })?;
+                    let loaded_convolution = take_named_block_tensor(
+                        persistent_prompt_cache_recurrent_snapshot_tensors,
+                        layer_index,
+                        convolution_tensor_name,
+                    )?;
                     let recurrent_tensor_name =
                         format!("layer_{layer_index}_linear.gated_delta_recurrent");
-                    let loaded_recurrent = persistent_prompt_cache_recurrent_snapshot_tensors
-                        .get(&recurrent_tensor_name)
-                        .ok_or(PersistentPromptCacheStateBridgeError::MissingBlockTensor {
-                            layer_index,
-                            tensor_name: recurrent_tensor_name.clone(),
-                        })?;
-                    convolution.restore_from_snapshot(retain_block_tensor(
+                    let loaded_recurrent = take_named_block_tensor(
+                        persistent_prompt_cache_recurrent_snapshot_tensors,
                         layer_index,
-                        &convolution_tensor_name,
-                        loaded_convolution,
-                    )?);
-                    recurrent.restore_from_snapshot(retain_block_tensor(
+                        recurrent_tensor_name,
+                    )?;
+                    convolution.restore_from_snapshot(loaded_convolution);
+                    recurrent.restore_from_snapshot(loaded_recurrent);
+                    materialize_restored_layer_tensors(
+                        runtime,
                         layer_index,
-                        &recurrent_tensor_name,
-                        loaded_recurrent,
-                    )?);
+                        convolution.state(),
+                        recurrent.state(),
+                        "convolution",
+                        "recurrent",
+                    )?;
                 }
                 None => {
                     return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
@@ -249,42 +308,29 @@ impl RequestDecoderStateStack {
     }
 }
 
-fn restore_full_attention_blocks(
+fn take_named_block_tensor(
+    block_tensors: &mut HashMap<String, MlxArray>,
+    layer_index: usize,
+    tensor_name: String,
+) -> Result<MlxArray, PersistentPromptCacheStateBridgeError> {
+    block_tensors.remove(&tensor_name).ok_or(
+        PersistentPromptCacheStateBridgeError::MissingBlockTensor {
+            layer_index,
+            tensor_name,
+        },
+    )
+}
+
+fn concatenate_full_attention_extension(
     runtime: &MlxRuntime,
     layer_index: usize,
     tensor_role: &'static str,
-    persistent_prompt_cache_block_tensors: &[HashMap<String, MlxArray>],
+    existing_tensor: &MlxArray,
+    incoming_tensor: &MlxArray,
 ) -> Result<MlxArray, PersistentPromptCacheStateBridgeError> {
-    let tensor_name = match tensor_role {
-        "keys" => format!("layer_{layer_index}_attention.keys"),
-        "values" => format!("layer_{layer_index}_attention.values"),
-        _ => {
-            return Err(
-                PersistentPromptCacheStateBridgeError::UnknownAttentionTensorRole {
-                    layer_index,
-                    tensor_role,
-                },
-            );
-        }
-    };
-    let mut full_attention_tensors =
-        Vec::with_capacity(persistent_prompt_cache_block_tensors.len());
-    for block_tensors in persistent_prompt_cache_block_tensors {
-        let block_tensor = block_tensors.get(&tensor_name).ok_or(
-            PersistentPromptCacheStateBridgeError::MissingBlockTensor {
-                layer_index,
-                tensor_name: tensor_name.clone(),
-            },
-        )?;
-        full_attention_tensors.push(block_tensor);
-    }
-
-    if let [single_block_tensor] = full_attention_tensors.as_slice() {
-        return retain_block_tensor(layer_index, &tensor_name, single_block_tensor);
-    }
-
+    let tensor_name = format!("layer_{layer_index}_attention.{tensor_role}");
     runtime
-        .concatenate_axis(&full_attention_tensors, 2)
+        .concatenate_axis(&[existing_tensor, incoming_tensor], 2)
         .map_err(
             |source| PersistentPromptCacheStateBridgeError::ConcatenateBlockTensors {
                 layer_index,
@@ -292,6 +338,29 @@ fn restore_full_attention_blocks(
                 source,
             },
         )
+}
+
+fn materialize_restored_layer_tensors(
+    runtime: &MlxRuntime,
+    layer_index: usize,
+    first_tensor: Option<&MlxArray>,
+    second_tensor: Option<&MlxArray>,
+    first_tensor_role: &'static str,
+    second_tensor_role: &'static str,
+) -> Result<(), PersistentPromptCacheStateBridgeError> {
+    let first_tensor =
+        first_tensor.ok_or(PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+            layer_index,
+            tensor_role: first_tensor_role,
+        })?;
+    let second_tensor =
+        second_tensor.ok_or(PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+            layer_index,
+            tensor_role: second_tensor_role,
+        })?;
+    runtime
+        .evaluate_arrays(&[first_tensor, second_tensor])
+        .map_err(PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState)
 }
 
 fn validate_persistent_prompt_cache_block_range(

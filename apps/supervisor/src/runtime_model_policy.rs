@@ -76,6 +76,8 @@ pub(crate) fn worker_chunking_configuration(
         speculative_prefill_draft_forward_tokens: chunking
             .speculative_prefill_draft_forward_tokens(),
         prefill_graph_submission_layer_interval: chunking.prefill_graph_submission_layer_interval(),
+        experimental_ssd_paging_prefill_graph_submission_layer_interval: chunking
+            .experimental_ssd_paging_prefill_graph_submission_layer_interval(),
         experimental_ssd_paging_generation_graph_submission_layer_interval: chunking
             .experimental_ssd_paging_generation_graph_submission_layer_interval(),
         prompt_cache_block_tokens: chunking.prompt_cache_block_tokens(),

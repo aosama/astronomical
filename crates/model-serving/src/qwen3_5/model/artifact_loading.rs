@@ -9,10 +9,7 @@ use astronomical_runtime_integration::{
 };
 
 use crate::artifact_validation::TensorDeclarationOrigin;
-use crate::expert_paging::RetainedExpertLayerCache;
-use crate::qwen3_5_moe::{
-    Qwen3_5ExpertPager, Qwen3_5RetainedExpertLayer, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
-};
+use crate::qwen3_5_moe::{Qwen3_5ExpertPager, qwen3_5_moe_sorted_expert_weighted_sum_kernel};
 use crate::{
     MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
 };
@@ -201,7 +198,7 @@ impl Qwen3_5Model {
                 Ok((weights, vision_model, mtp_weights))
             },
         )?;
-        let (expert_pager, retained_expert_layers, sorted_expert_weighted_sum_kernel) =
+        let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) =
             match config.feed_forward_architecture() {
                 Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
                 Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
@@ -253,13 +250,12 @@ impl Qwen3_5Model {
                     )?;
                     let sorted_expert_weighted_sum_kernel =
                         qwen3_5_moe_sorted_expert_weighted_sum_kernel()?;
-                    let retained_expert_layers =
-                        RefCell::new(RetainedExpertLayerCache::<Qwen3_5RetainedExpertLayer>::new(
-                            expert_pager.layer_count(),
-                        ));
+                    let retained_experts = RefCell::new(
+                        crate::qwen3_5_moe::RetainedExpertCache::new(expert_pager.layer_count()),
+                    );
                     (
                         Some(expert_pager),
-                        Some(retained_expert_layers),
+                        Some(retained_experts),
                         Some(sorted_expert_weighted_sum_kernel),
                     )
                 }
@@ -349,6 +345,12 @@ impl Qwen3_5Model {
                 complete_expert_payload_bytes,
                 largest_complete_expert_layer_bytes,
                 largest_routed_expert_page_bytes,
+                sequence_state_bytes_per_token: u64::try_from(
+                    decoder_cache_layout
+                        .sequence_state_payload_byte_count_per_token()
+                        .unwrap_or(0),
+                )
+                .unwrap_or(0),
             },
         )
         .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
@@ -365,9 +367,10 @@ impl Qwen3_5Model {
             // Publication occurs only after core materialization and a fresh idle
             // memory sample in the engine loading path.
             resident_expert_weights: None,
-            retained_expert_layers,
+            retained_experts,
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
             active_expert_residency_plan: RefCell::new(None),
+            request_expert_residency: RefCell::new(None),
 
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,

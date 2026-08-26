@@ -277,8 +277,8 @@ async fn should_run_dense_then_sparse_prefill_and_decode_with_attribution() {
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Resident);
     let telemetry = model.expert_residency_telemetry();
     assert_eq!(telemetry.total_layer_count, 1);
-    assert_eq!(telemetry.complete_layer_count, 1);
-    assert_eq!(telemetry.partial_layer_count, 0);
+    assert!(telemetry.resident_expert_count > 0);
+    assert!(telemetry.resident_expert_payload_bytes > 0);
     assert_eq!(
         model
             .expert_weight_memory_cache_statistics()

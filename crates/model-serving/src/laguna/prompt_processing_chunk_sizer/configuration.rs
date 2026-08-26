@@ -20,6 +20,4 @@ pub enum LagunaPromptProcessingChunkSizerError {
     ExceedsPlatformRange,
     #[error("prompt-processing chunk size must be positive")]
     MustBePositive,
-    #[error("SSD-streaming prompt-processing chunk size must not exceed the resident chunk size")]
-    SsdStreamingExceedsResidentChunkSize,
 }

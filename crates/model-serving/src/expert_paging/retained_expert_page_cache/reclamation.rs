@@ -1,12 +1,62 @@
 //! Deterministic partial-first reclamation for retained expert ownership.
 
-use super::{RetainedExpertLayerCache, RetainedExpertLayerEntry, RetainedExpertReclamation};
-use crate::{ExpertWeightPage, RetainedExpertPageClass};
+use super::{RetainedExpertLayerEntry, RetainedExpertPageCache, RetainedExpertReclamation};
+use crate::expert_paging::ExpertWeightPage;
+use crate::memory::RetainedExpertPageClass;
 
-impl<ExpertPage> RetainedExpertLayerCache<ExpertPage>
+impl<ExpertPage> RetainedExpertPageCache<ExpertPage>
 where
     ExpertPage: ExpertWeightPage,
 {
+    /// Drops the least-used retained page so a just-routed expert set can stay.
+    pub fn evict_least_used_retained_page(&mut self) -> bool {
+        self.evict_least_used_retained_page_except(usize::MAX)
+    }
+
+    /// Evicts elsewhere so the layer we are growing is not the one we drop.
+    pub fn evict_least_used_retained_page_except(&mut self, protected_layer_index: usize) -> bool {
+        if let Some(layer_index) = self
+            .retained_layers
+            .iter()
+            .enumerate()
+            .filter_map(|(layer_index, retained_entry)| {
+                let retained_entry = retained_entry.as_ref()?;
+                (layer_index != protected_layer_index
+                    && retained_entry.class == RetainedExpertPageClass::ElasticRoutedExperts)
+                    .then_some(layer_index)
+            })
+            .min_by(|left_layer_index, right_layer_index| {
+                let Some(left_entry) = self.retained_layers[*left_layer_index].as_ref() else {
+                    return std::cmp::Ordering::Equal;
+                };
+                let Some(right_entry) = self.retained_layers[*right_layer_index].as_ref() else {
+                    return std::cmp::Ordering::Equal;
+                };
+                let left_demand = self.covered_demand(*left_layer_index, left_entry);
+                let right_demand = self.covered_demand(*right_layer_index, right_entry);
+                let left_score = u128::from(left_demand) * u128::from(right_entry.payload_bytes);
+                let right_score = u128::from(right_demand) * u128::from(left_entry.payload_bytes);
+                left_score
+                    .cmp(&right_score)
+                    .then_with(|| left_layer_index.cmp(right_layer_index))
+            })
+        {
+            return self.remove_layer(layer_index);
+        }
+        for layer_index in (0..self.retained_layers.len()).rev() {
+            if layer_index == protected_layer_index {
+                continue;
+            }
+            if self.retained_layers[layer_index]
+                .as_ref()
+                .is_some_and(|entry| entry.class == RetainedExpertPageClass::StableCompleteLayer)
+            {
+                return self.remove_layer(layer_index);
+            }
+        }
+        false
+    }
+
     /// Releases elastic pages before stable complete layers for an exact deficit.
     pub fn reclaim_for_request_pressure(
         &mut self,

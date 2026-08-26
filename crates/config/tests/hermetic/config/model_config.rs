@@ -119,8 +119,8 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
     assert!(configured_model.speculative_prefill().is_none());
     assert_eq!(configured_model.mtp_draft_depth(), None);
     assert_eq!(configured_model.configured_mtp_enabled(), None);
-    assert!(configured_model.mtp_enabled());
-    assert!(unconfigured_model.mtp_enabled());
+    assert!(!configured_model.mtp_enabled());
+    assert!(!unconfigured_model.mtp_enabled());
     assert_eq!(unconfigured_model.maximum_output_tokens(), 20_480);
 }
 
@@ -217,7 +217,7 @@ fn should_reject_invalid_model_ranges_and_unknown_nested_fields() {
 }
 
 #[test]
-fn should_disable_mtp_for_one_model_without_changing_another() {
+fn should_keep_mtp_off_until_a_model_opts_in() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -226,8 +226,8 @@ fn should_disable_mtp_for_one_model_without_changing_another() {
           "schema_version":1,
           "runtime":{"model_directories":[]},
           "models":{
-            "organization/disabled-mtp":{"acceleration":{"mtp":{"enabled":false,"draft_depth":3}}},
-            "organization/automatic-mtp":{}
+            "organization/opted-in-mtp":{"acceleration":{"mtp":{"enabled":true,"draft_depth":3}}},
+            "organization/default-mtp":{}
           }
         }"#,
     );
@@ -235,18 +235,18 @@ fn should_disable_mtp_for_one_model_without_changing_another() {
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
             .expect("per-model MTP enablement should load");
 
-    let disabled_model = astronomical_config
-        .resolved_model_config("organization/disabled-mtp", 65_536)
-        .expect("disabled MTP policy should resolve");
-    let automatic_model = astronomical_config
-        .resolved_model_config("organization/automatic-mtp", 65_536)
-        .expect("automatic MTP policy should resolve");
+    let opted_in_model = astronomical_config
+        .resolved_model_config("organization/opted-in-mtp", 65_536)
+        .expect("opted-in MTP policy should resolve");
+    let default_model = astronomical_config
+        .resolved_model_config("organization/default-mtp", 65_536)
+        .expect("omitted MTP policy should resolve");
 
-    assert_eq!(disabled_model.configured_mtp_enabled(), Some(false));
-    assert!(!disabled_model.mtp_enabled());
-    assert_eq!(disabled_model.mtp_draft_depth(), Some(3));
-    assert_eq!(automatic_model.configured_mtp_enabled(), None);
-    assert!(automatic_model.mtp_enabled());
+    assert_eq!(opted_in_model.configured_mtp_enabled(), Some(true));
+    assert!(opted_in_model.mtp_enabled());
+    assert_eq!(opted_in_model.mtp_draft_depth(), Some(3));
+    assert_eq!(default_model.configured_mtp_enabled(), None);
+    assert!(!default_model.mtp_enabled());
 }
 
 #[test]

@@ -70,6 +70,7 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        model.clear_phase_aware_expert_residency_plan();
         let decoder_cache_layout = model.decoder_cache_layout().clone();
         let model_has_optional_prediction_head = model.mtp_weights();
         let expert_weight_memory_cache_statistics_at_request_start =
@@ -389,6 +390,10 @@ impl Qwen3_5EngineState {
                 } else {
                     Vec::new()
                 };
+            let sparse_experts_are_paged = self
+                .model
+                .as_ref()
+                .is_some_and(|loaded_model| loaded_model.sparse_experts_are_paged());
             let optional_prediction_session = create_optional_prediction_session(
                 self.mtp_enabled,
                 self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active,
@@ -397,6 +402,7 @@ impl Qwen3_5EngineState {
                 has_precomputed_visual_embeddings,
                 has_processed_visual_images,
                 persistent_prompt_cache_is_available,
+                sparse_experts_are_paged,
                 prompt_token_ids.len(),
                 persistent_prompt_cache_token_count,
                 self.full_attention_kv_state_growth_tokens,
@@ -407,6 +413,17 @@ impl Qwen3_5EngineState {
                     .map_err(|_| fatal_engine_error("loaded MTP depth is outside 1 through 3"))?,
             )
             .map_err(qwen3_5_runtime_error)?;
+            tracing::info!(
+                request_id = inference_request.request_id().value(),
+                mtp_runtime_state = ?self.mtp_runtime_state,
+                mtp_enabled = self.mtp_enabled,
+                sparse_experts_are_paged,
+                persistent_prompt_cache_is_available,
+                sampling_is_greedy =
+                    matches!(sampling_strategy, Qwen3_5SamplingStrategy::Greedy),
+                optional_prediction_session_is_active = optional_prediction_session.is_some(),
+                "resolved optional multi-token prediction request session"
+            );
             performance_attribution.record_counter(
                 PerformanceCounter::PromptTokenCount,
                 u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),

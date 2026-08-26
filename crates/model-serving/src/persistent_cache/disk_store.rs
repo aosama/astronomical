@@ -199,6 +199,28 @@ impl PersistentPromptCacheDiskStore {
             .speculative_prefill_selection_count()
     }
 
+    /// Returns the tracked on-disk size of one sequence-state block file.
+    #[must_use]
+    pub fn sequence_state_block_file_size_bytes(&self, block_hash: &[u8; 32]) -> Option<u64> {
+        self.lock_tracked_files()
+            .file(
+                PersistentPromptCacheFileKind::SequenceStateBlock,
+                block_hash,
+            )
+            .map(|tracked_file| tracked_file.file_size_bytes)
+    }
+
+    /// Returns the tracked on-disk size of one recurrent-boundary snapshot file.
+    #[must_use]
+    pub fn recurrent_snapshot_file_size_bytes(&self, block_hash: &[u8; 32]) -> Option<u64> {
+        self.lock_tracked_files()
+            .file(
+                PersistentPromptCacheFileKind::BoundaryStateSnapshot,
+                block_hash,
+            )
+            .map(|tracked_file| tracked_file.file_size_bytes)
+    }
+
     pub fn has_kv_block(&self, block_hash: &[u8; 32]) -> bool {
         self.tracked_file_still_exists(
             PersistentPromptCacheFileKind::SequenceStateBlock,

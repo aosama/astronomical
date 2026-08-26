@@ -26,7 +26,7 @@ const DETERMINISTIC_PROMPT_TOKEN_ID: u32 = 198;
 const IMAGE_PAD_TOKEN_ID: u32 = 248_069;
 
 #[tokio::test]
-#[ignore = "loads Ornith-1.5-35B-A3B-oQ8e-mtp and proves long-context growth evicts retained experts"]
+#[ignore = "loads Ornith-1.5-35B-A3B-oQ6e-mtp and proves long-context growth evicts retained experts"]
 async fn should_serve_fifty_thousand_input_tokens_by_automatically_reclaiming_expert_residency() {
     timeout(
         ENDURANCE_TEST_TIMEOUT,
@@ -37,7 +37,7 @@ async fn should_serve_fifty_thousand_input_tokens_by_automatically_reclaiming_ex
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith-1.5-35B-A3B-oQ8e-mtp and samples a realistic 70K-input/1K-output request"]
+#[ignore = "loads Ornith-1.5-35B-A3B-oQ6e-mtp and samples a realistic 70K-input/1K-output request"]
 async fn should_preserve_automatic_expert_residency_during_seventy_thousand_input_token_generation()
 {
     timeout(
@@ -50,10 +50,10 @@ async fn should_preserve_automatic_expert_residency_during_seventy_thousand_inpu
 
 async fn run_automatic_residency_endurance_regression() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = super::ornith_1_5_35b_a3b_eight_bit_model_directory();
+    let model_directory = super::ornith_1_5_35b_a3b_six_bit_model_directory();
     assert!(
         model_directory.is_dir(),
-        "the Ornith-1.5-35B-A3B-oQ8e-mtp checkpoint must be available for endurance testing"
+        "the Ornith-1.5-35B-A3B-oQ6e-mtp checkpoint must be available for endurance testing"
     );
     let (mut qwen3_5_engine, _temporary_log_directory, performance_attribution_log_path) =
         create_automatic_residency_endurance_engine(&model_directory).await;
@@ -104,15 +104,15 @@ async fn run_automatic_residency_endurance_regression() {
 
 async fn run_sustained_paged_mode_endurance_regression() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = super::ornith_1_5_35b_a3b_eight_bit_model_directory();
+    let model_directory = super::ornith_1_5_35b_a3b_six_bit_model_directory();
     assert!(
         model_directory.is_dir(),
-        "the Ornith-1.5-35B-A3B-oQ8e-mtp checkpoint must be available for endurance testing"
+        "the Ornith-1.5-35B-A3B-oQ6e-mtp checkpoint must be available for endurance testing"
     );
     let sustained_endurance_prompt_token_ids = super::expert_paging_prefill_performance::
         prepare_reproduced_long_prompt_token_ids_for_model(
             &model_directory,
-            crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID,
+            crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID,
             SUSTAINED_ENDURANCE_INPUT_TOKEN_COUNT,
             SUSTAINED_ENDURANCE_REQUESTED_OUTPUT_TOKEN_COUNT,
         )
@@ -174,7 +174,7 @@ async fn create_automatic_residency_endurance_engine(
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, u32::from(ENDURANCE_MAXIMUM_OUTPUT_TOKENS))
-        .expect("the Ornith eight-bit artifact should validate before endurance testing");
+        .expect("the Ornith six-bit artifact should validate before endurance testing");
     let performance_attribution_log =
         PerformanceAttributionLog::open(&performance_attribution_log_path, true)
             .expect("the endurance test should open its attribution log");

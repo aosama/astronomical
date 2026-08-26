@@ -47,11 +47,40 @@ impl Qwen3_5Model {
         // or any fully resident model, this single wait owns the entire
         // multi-layer multi-token tape, including first-use Metal compile and
         // any memory-pressure thrash.
+        let eval_started_at = std::time::Instant::now();
         performance_attribution.measure_operation(
             PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
             |_performance_attribution| self.runtime.evaluate_arrays(&completion_roots),
         )?;
+        let eval_elapsed = eval_started_at.elapsed();
+        if eval_elapsed > std::time::Duration::from_millis(500) {
+            tracing::info!(
+                eval_elapsed_millis = eval_elapsed.as_millis(),
+                completion_root_count = completion_roots.len(),
+                "slow evaluate_arrays for paged forward"
+            );
+        }
+        let flush_started_at = std::time::Instant::now();
+        self.flush_pending_expert_slot_inserts()?;
+        let flush_elapsed = flush_started_at.elapsed();
+        if flush_elapsed > std::time::Duration::from_millis(100) {
+            tracing::info!(
+                flush_elapsed_millis = flush_elapsed.as_millis(),
+                "slow flush_pending_expert_slot_inserts after eval"
+            );
+        }
         self.paged_forward_missing_route_collector.clear();
         Ok(PagedRouteValidationOutcome::CompleteHit)
+    }
+
+    /// Writes queued miss experts into the slot table after GPU evaluation so
+    /// `slice_update` can donate instead of copying a live gather buffer.
+    pub(crate) fn flush_pending_expert_slot_inserts(&self) -> Result<(), Qwen3_5ExecutionError> {
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
+            retained_experts
+                .borrow_mut()
+                .flush_pending_inserts(&self.runtime)?;
+        }
+        Ok(())
     }
 }

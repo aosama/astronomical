@@ -52,10 +52,8 @@ pub struct GenerationPerformanceRecord {
     pub first_decode_forward_elapsed_millis: Option<u64>,
     /// Source bytes read solely during preparation; zero proves no eager warm scan.
     pub generation_preparation_expert_source_read_byte_count: u64,
-    pub final_complete_expert_layer_count: Option<u32>,
-    pub final_complete_expert_payload_bytes: Option<u64>,
-    pub final_partial_expert_layer_count: Option<u32>,
-    pub final_partial_expert_payload_bytes: Option<u64>,
+    pub final_resident_expert_count: Option<u32>,
+    pub final_resident_expert_payload_bytes: Option<u64>,
     /// Prefill throughput: `(prompt_token_count - cached_token_count) / (prefill_elapsed_millis / 1000)`.
     /// `None` when the entire prompt was cached (0 ms prefill).
     pub prefill_tok_per_second: Option<f64>,

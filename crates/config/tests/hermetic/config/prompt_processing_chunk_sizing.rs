@@ -15,7 +15,16 @@ fn should_default_to_fixed_2048_prompt_processing_chunks() {
     assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 2_048);
     assert_eq!(
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
-        None
+        2_048
+    );
+    let persisted_config = serde_json::from_str::<serde_json::Value>(
+        &std::fs::read_to_string(temp_home.path().join(".astronomical/config.json"))
+            .expect("the filled config should be readable"),
+    )
+    .expect("the filled config should be JSON");
+    assert_eq!(
+        persisted_config["chunking"]["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
+        2_048
     );
 }
 
@@ -35,7 +44,7 @@ fn should_accept_fixed_resident_and_ssd_streaming_chunk_sizes() {
     assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 4_096);
     assert_eq!(
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
-        Some(256)
+        256
     );
 }
 
@@ -56,14 +65,22 @@ fn should_reject_zero_fixed_chunk_sizes() {
 }
 
 #[test]
-fn should_reject_an_ssd_streaming_chunk_larger_than_the_resident_chunk() {
+fn should_accept_an_ssd_streaming_chunk_larger_than_the_resident_chunk() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
         r#"{"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048,"fixed_ssd_streaming_prompt_processing_chunk_size_tokens":4096}}"#,
     );
 
-    assert!(AstronomicalConfig::load_from_home_directory(temp_home.path()).is_err());
+    let chunking = AstronomicalConfig::load_from_home_directory(temp_home.path())
+        .expect("a larger paged chunk should load")
+        .chunking()
+        .expect("chunking should resolve");
+    assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 2_048);
+    assert_eq!(
+        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
+        4_096
+    );
 }
 
 #[test]

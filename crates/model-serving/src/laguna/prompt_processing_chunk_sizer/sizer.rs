@@ -7,7 +7,7 @@ use super::configuration::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LagunaPromptProcessingChunkSizer {
     fixed_prompt_processing_chunk_size_tokens: usize,
-    ssd_streaming_prompt_processing_chunk_size_tokens: Option<usize>,
+    ssd_streaming_prompt_processing_chunk_size_tokens: usize,
 }
 
 impl LagunaPromptProcessingChunkSizer {
@@ -16,32 +16,23 @@ impl LagunaPromptProcessingChunkSizer {
     ) -> Result<Self, LagunaPromptProcessingChunkSizerError> {
         Self::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
             fixed_prompt_processing_chunk_size_tokens,
-            None,
+            fixed_prompt_processing_chunk_size_tokens,
         )
     }
 
-    /// Allows paged experts to use less prompt work than fully resident experts.
+    /// Paged experts use a separate chunk so complete-layer SSD reads can be amortized.
     pub fn for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
         fixed_prompt_processing_chunk_size_tokens: u32,
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     ) -> Result<Self, LagunaPromptProcessingChunkSizerError> {
         let fixed_prompt_processing_chunk_size_tokens =
             prompt_processing_chunk_size_tokens_from_u32(
                 fixed_prompt_processing_chunk_size_tokens,
             )?;
         let ssd_streaming_prompt_processing_chunk_size_tokens =
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-                .map(prompt_processing_chunk_size_tokens_from_u32)
-                .transpose()?;
-        if ssd_streaming_prompt_processing_chunk_size_tokens.is_some_and(
-            |ssd_streaming_chunk_size_tokens| {
-                ssd_streaming_chunk_size_tokens > fixed_prompt_processing_chunk_size_tokens
-            },
-        ) {
-            return Err(
-                LagunaPromptProcessingChunkSizerError::SsdStreamingExceedsResidentChunkSize,
-            );
-        }
+            prompt_processing_chunk_size_tokens_from_u32(
+                fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+            )?;
         Ok(Self {
             fixed_prompt_processing_chunk_size_tokens,
             ssd_streaming_prompt_processing_chunk_size_tokens,
@@ -57,10 +48,16 @@ impl LagunaPromptProcessingChunkSizer {
     ) -> usize {
         let configured_chunk_size_tokens = if sparse_experts_are_paged {
             self.ssd_streaming_prompt_processing_chunk_size_tokens
-                .unwrap_or(self.fixed_prompt_processing_chunk_size_tokens)
         } else {
             self.fixed_prompt_processing_chunk_size_tokens
         };
+        if sparse_experts_are_paged {
+            return paged_chunk_end_after_folding_short_remainder(
+                chunk_start_token_position,
+                final_prompt_end_token_position_exclusive,
+                configured_chunk_size_tokens,
+            );
+        }
         chunk_start_token_position
             .saturating_add(configured_chunk_size_tokens)
             .min(final_prompt_end_token_position_exclusive)
@@ -81,5 +78,26 @@ impl LagunaPromptProcessingChunkSizer {
     #[must_use]
     pub const fn maximum_prompt_processing_chunk_size_tokens(&self) -> usize {
         self.fixed_prompt_processing_chunk_size_tokens
+    }
+}
+
+/// Each paged prefill forward streams every unseated complete MoE layer.
+/// Fold a trailing stub smaller than one configured chunk into this forward so
+/// that stub does not pay a second leftover-layer SSD sweep.
+fn paged_chunk_end_after_folding_short_remainder(
+    chunk_start_token_position: usize,
+    final_prompt_end_token_position_exclusive: usize,
+    executable_chunk_size_tokens: usize,
+) -> usize {
+    let remaining_prompt_token_count =
+        final_prompt_end_token_position_exclusive.saturating_sub(chunk_start_token_position);
+    if remaining_prompt_token_count <= executable_chunk_size_tokens {
+        return chunk_start_token_position.saturating_add(remaining_prompt_token_count);
+    }
+    let remainder_after_full_chunk = remaining_prompt_token_count - executable_chunk_size_tokens;
+    if remainder_after_full_chunk < executable_chunk_size_tokens {
+        chunk_start_token_position.saturating_add(remaining_prompt_token_count)
+    } else {
+        chunk_start_token_position.saturating_add(executable_chunk_size_tokens)
     }
 }

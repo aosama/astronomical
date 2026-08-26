@@ -296,17 +296,17 @@ final class StatusPresentationContractTests: XCTestCase {
       SupervisorStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_residency":{"total_layer_count":40,"complete_layer_count":40,"complete_layer_payload_bytes":19595788288,"partial_layer_count":0,"partial_layer_payload_bytes":0}}
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"resident","expert_residency":{"total_layer_count":40,"resident_expert_count":10240,"resident_expert_payload_bytes":19595788288}}
         """.utf8)
     )
 
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Fully in memory")
   }
 
-  func test_should_keep_streaming_visible_when_any_expert_layer_is_incomplete() throws {
+  func test_should_keep_streaming_visible_when_experts_are_paged() throws {
     let incompleteResidencyCases = [
-      #"{"total_layer_count":40,"complete_layer_count":39,"complete_layer_payload_bytes":19000000000,"partial_layer_count":1,"partial_layer_payload_bytes":200000000}"#,
-      #"{"total_layer_count":40,"complete_layer_count":39,"complete_layer_payload_bytes":19000000000,"partial_layer_count":0,"partial_layer_payload_bytes":0}"#,
+      #"{"total_layer_count":40,"resident_expert_count":8000,"resident_expert_payload_bytes":19200000000}"#,
+      #"{"total_layer_count":40,"resident_expert_count":0,"resident_expert_payload_bytes":0}"#,
     ]
 
     for expertResidencyJSON in incompleteResidencyCases {
@@ -329,7 +329,7 @@ final class StatusPresentationContractTests: XCTestCase {
       SupervisorStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"paged","expert_residency":{"total_layer_count":40,"complete_layer_count":40,"complete_layer_payload_bytes":19595788288,"partial_layer_count":0,"partial_layer_payload_bytes":0}}
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"paged","expert_residency":{"total_layer_count":40,"resident_expert_count":0,"resident_expert_payload_bytes":0}}
         """.utf8)
     )
 

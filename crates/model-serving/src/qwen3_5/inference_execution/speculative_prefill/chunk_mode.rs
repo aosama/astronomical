@@ -1,9 +1,10 @@
 //! Classifies ordinary, sparse, and optional-history prompt chunks.
 //!
-//! This module contains no model or MLX state. It captures one subtle boundary:
-//! prompt processing stops before the final prompt token because generation
-//! startup forwards that token exactly once. Optional prediction history may
-//! therefore be initialized only by the chunk that reaches that reserved token.
+//! This module contains no model or MLX state. Target-only prefill consumes every
+//! prompt token and samples the first output from the last chunk. Optional
+//! prediction keeps the last prompt token for generation kickoff so predictor
+//! history can shift onto it; only the chunk that reaches that reserved token
+//! may initialize private history.
 
 /// Prompt-processing mode selected for one attempted Qwen3.5 chunk.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,9 +30,24 @@ pub enum Qwen3_5SpeculativePrefillChunckMode {
 
 /// Selects whether one prompt chunk may initialize private additional history.
 ///
-/// The final prompt token remains reserved for generation startup, so a
-/// terminal prefill chunk ends at `final_prompt_index` rather than at the
-/// input token vector's length.
+/// Exclusive end of target prefill for this request.
+///
+/// Optional prediction reserves the last prompt token for generation kickoff.
+/// Target-only prefill consumes every prompt token.
+#[must_use]
+pub const fn qwen3_5_prompt_prefill_end_exclusive(
+    prompt_token_count: usize,
+    has_optional_prediction_session: bool,
+) -> usize {
+    if has_optional_prediction_session {
+        prompt_token_count.saturating_sub(1)
+    } else {
+        prompt_token_count
+    }
+}
+
+/// The optional-prediction terminal chunk ends at `final_prompt_index` because
+/// that request reserves the last prompt token for generation kickoff.
 #[must_use]
 pub const fn qwen3_5_speculative_prefill_chunck_mode(
     has_optional_prediction_session: bool,

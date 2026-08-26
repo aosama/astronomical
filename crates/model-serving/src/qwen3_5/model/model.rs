@@ -6,14 +6,14 @@ use astronomical_runtime_integration::{
 
 use std::cell::RefCell;
 
-use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, RetainedExpertLayerCache};
+use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
 use crate::qwen3_5_moe::{
     PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
-    Qwen3_5ResidentExpertWeights, Qwen3_5RetainedExpertLayer,
+    Qwen3_5ResidentExpertWeights, RetainedExpertCache,
 };
 use crate::{
     DecoderCacheLayout, DecoderCacheState, MlxRamBudget, PerformanceAttribution,
-    PhaseAwareExpertResidencyPlan,
+    PhaseAwareExpertResidencyPlan, RequestExpertResidency,
 };
 
 use super::decoder_layer_weights::{Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeights};
@@ -39,13 +39,14 @@ pub struct Qwen3_5Model {
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
-    /// Complete Rust-loaded layers retained within the paged-mode RAM ceiling.
-    pub(crate) retained_expert_layers:
-        Option<RefCell<RetainedExpertLayerCache<Qwen3_5RetainedExpertLayer>>>,
+    /// Individual routed experts retained within the paged-mode RAM ceiling.
+    pub(crate) retained_experts: Option<RefCell<RetainedExpertCache>>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
     /// Pure target published at load and refreshed before mandatory expert reads.
     pub(crate) active_expert_residency_plan: RefCell<Option<PhaseAwareExpertResidencyPlan>>,
+    /// Prefill pin/stream contract for the active request. Generation clears it.
+    pub(crate) request_expert_residency: RefCell<Option<RequestExpertResidency>>,
 
     pub(crate) gated_delta_kernel: MlxMetalKernel,
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
@@ -110,9 +111,9 @@ impl Qwen3_5Model {
                 partial_layer_eviction_count: 0,
             };
         }
-        self.retained_expert_layers.as_ref().map_or_else(
+        self.retained_experts.as_ref().map_or_else(
             ExpertWeightMemoryCacheStatistics::default,
-            |retained_expert_layers| retained_expert_layers.borrow().statistics(),
+            |retained_experts| retained_experts.borrow().statistics(),
         )
     }
 

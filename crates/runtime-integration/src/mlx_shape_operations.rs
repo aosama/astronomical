@@ -81,6 +81,35 @@ impl MlxRuntime {
         })
     }
 
+    /// Adds `updates` into a copy of `input` at `indices` along one axis.
+    ///
+    /// Compact mixture-of-experts split reduction lands several assignment rows
+    /// on the same token. `put_along_axis` overwrites; this keeps every routed
+    /// expert's contribution. MLX requires `updates.ndim() == input.ndim() +
+    /// indices.ndim()`. For destination `[token_rows, hidden]`, pass indices
+    /// `[assignment_count]` and updates `[assignment_count, 1, hidden]`.
+    pub fn scatter_add(
+        &self,
+        input: &MlxArray,
+        indices: &MlxArray,
+        updates: &MlxArray,
+        axis: i32,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        self.output_array("scatter-add values into an MLX array", |output, stream| {
+            // SAFETY: Inputs and stream are live and output is uniquely writable.
+            unsafe {
+                raw::mlx_scatter_add_single(
+                    output,
+                    input.raw(),
+                    indices.raw(),
+                    updates.raw(),
+                    axis,
+                    stream,
+                )
+            }
+        })
+    }
+
     /// Slices an array with one static start, stop, and stride per axis.
     pub fn slice(
         &self,

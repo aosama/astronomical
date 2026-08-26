@@ -337,19 +337,15 @@ where
             }
             GeneratedToken::GenerationPreparationStarted {
                 total_layer_count,
-                complete_layer_count,
-                complete_layer_payload_bytes,
-                partial_layer_count,
-                partial_layer_payload_bytes,
+                resident_expert_count,
+                resident_expert_payload_bytes,
             } => {
                 event_writer
                     .send_event(&WorkerEvent::GenerationPreparationStarted {
                         request_id: active_generation.request_id,
                         total_layer_count,
-                        complete_layer_count,
-                        complete_layer_payload_bytes,
-                        partial_layer_count,
-                        partial_layer_payload_bytes,
+                        resident_expert_count,
+                        resident_expert_payload_bytes,
                     })
                     .await?;
                 Ok(Some(active_generation))
