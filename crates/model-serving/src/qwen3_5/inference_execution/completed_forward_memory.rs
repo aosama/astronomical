@@ -166,10 +166,10 @@ fn record_composed_ram_budget_measurement(
         u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
         0,
     );
-    model.retained_expert_layers.as_ref().map_or_else(
+    model.retained_experts.as_ref().map_or_else(
         RetainedExpertReclamation::default,
-        |retained_expert_layers| {
-            retained_expert_layers
+        |retained_experts| {
+            retained_experts
                 .borrow_mut()
                 .update_maximum_resident_payload_bytes(
                     retained_expert_budget.retained_expert_budget_bytes,

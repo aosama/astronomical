@@ -40,18 +40,18 @@ pub fn projected_active_memory_after_complete_expert_replacement(
 /// Complete residency only budgets static expert and non-expert payload. Serving
 /// still needs temporary activations, key-value growth, and workspace memory.
 /// Prefer the observed transient high-water from completed forwards; otherwise
-/// reserve one tenth of the complete expert payload as a startup floor so the
-/// first request is not admitted into a ceiling it cannot serve from.
+/// reserve one complete layer. A tenth of the whole expert payload withheld
+/// several gigabytes and forced SSD streaming when the user had already given
+/// enough RAM to seat the model.
 #[must_use]
 pub const fn required_complete_residency_activation_headroom_bytes(
-    complete_expert_payload_bytes: u64,
+    startup_activation_floor_bytes: u64,
     observed_transient_high_water_bytes: u64,
 ) -> u64 {
-    let startup_floor_headroom_bytes = complete_expert_payload_bytes / 10;
-    if observed_transient_high_water_bytes > startup_floor_headroom_bytes {
+    if observed_transient_high_water_bytes > startup_activation_floor_bytes {
         observed_transient_high_water_bytes
     } else {
-        startup_floor_headroom_bytes
+        startup_activation_floor_bytes
     }
 }
 

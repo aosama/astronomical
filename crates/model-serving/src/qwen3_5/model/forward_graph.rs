@@ -98,6 +98,41 @@ impl Qwen3_5Model {
             .final_logits)
     }
 
+    /// Builds decoder-state prefill without the vocabulary head.
+    ///
+    /// Intermediate chunks only need cache tensors. OMLX evals cache state and
+    /// never runs `lm_head` until sampling. Building then dropping logits was
+    /// host-side waste on every 2,048-token chunk.
+    pub(super) fn build_prefill_decoder_state_graph(
+        &self,
+        token_indices: &MlxArray,
+        token_count: i32,
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
+        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        drop(
+            self.build_target_forward_graph_from_token_indices_with_attention_capture(
+                token_indices,
+                token_count,
+                starting_position_tokens,
+                None,
+                request_decoder_state,
+                None,
+                boundary_checkpoint_collector,
+                paged_prefill_execution_mode,
+                performance_attribution,
+                false,
+                false,
+            )?,
+        );
+        Ok(())
+    }
+
     pub(super) fn build_target_forward_graph(
         &self,
         token_ids: &[u32],
@@ -165,6 +200,7 @@ impl Qwen3_5Model {
             paged_prefill_execution_mode,
             performance_attribution,
             false,
+            true,
         )
     }
 
@@ -192,6 +228,7 @@ impl Qwen3_5Model {
             paged_prefill_execution_mode,
             performance_attribution,
             should_retain_all_position_logits,
+            true,
         )
     }
 
@@ -209,6 +246,7 @@ impl Qwen3_5Model {
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
         should_retain_all_position_logits: bool,
+        should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         let hidden_states = self.embedding_lookup(token_indices)?;
         self.build_target_forward_graph_from_embeddings_with_attention_capture(
@@ -222,6 +260,7 @@ impl Qwen3_5Model {
             paged_prefill_execution_mode,
             performance_attribution,
             should_retain_all_position_logits,
+            should_materialize_vocabulary_logits,
         )
     }
 
@@ -275,6 +314,7 @@ impl Qwen3_5Model {
             paged_prefill_execution_mode,
             performance_attribution,
             should_retain_all_position_logits,
+            true,
         )
     }
 
@@ -292,9 +332,8 @@ impl Qwen3_5Model {
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
         should_retain_all_position_logits: bool,
+        should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        // Rust-led streaming owns exactly one layer-local page at each decoder
-        // step. It needs no forward-wide native residency plan or C++ slot lease.
         // Each forward owns one deferred missing-route collection. Clear any
         // leftover roots from a cancelled or failed previous attempt.
         self.clear_paged_forward_missing_route_roots();
@@ -311,6 +350,8 @@ impl Qwen3_5Model {
             token_count,
             self.sparse_experts_are_paged(),
             self.chunking.prefill_graph_submission_layer_interval,
+            self.chunking
+                .experimental_ssd_paging_prefill_graph_submission_layer_interval,
             self.chunking
                 .experimental_ssd_paging_generation_graph_submission_layer_interval,
         ))
@@ -359,8 +400,20 @@ impl Qwen3_5Model {
                     |_performance_attribution| self.runtime.async_eval_arrays(&[&hidden_states]),
                 )?;
             }
+            // Do not start a second complete-layer host read here. The positional
+            // reader is synchronous on this thread, so a prefetch stalls GPU
+            // submission and holds an unbudgeted extra complete layer.
         }
 
+        if !should_materialize_vocabulary_logits {
+            return Ok(Qwen3_5TargetForwardOutput {
+                final_logits: hidden_states
+                    .retain()
+                    .map_err(Qwen3_5ExecutionError::from)?,
+                all_position_logits: None,
+                pre_final_normalization_hidden_states: hidden_states,
+            });
+        }
         let (final_logits, all_position_logits) = performance_attribution.measure_operation(
             PerformanceOperation::FinalLogitsGraphConstruction,
             |_performance_attribution| {

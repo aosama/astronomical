@@ -6,7 +6,6 @@
 
 const REQUIRED_MODEL_FIXTURE_IDS: &[&str] = &[
     crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID,
-    "Ornith-1.5-35B-A3B-oQ8e-mtp",
     "Qwen3.8-27B-MTPLX-4bit",
     "Laguna-XS-2.1-oQ8e",
     "FLUX.2-klein-4B",

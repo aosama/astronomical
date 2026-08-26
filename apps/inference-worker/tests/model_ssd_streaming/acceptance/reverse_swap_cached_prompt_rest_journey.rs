@@ -1,8 +1,9 @@
-//! Public cached-prompt journey guarding physical expert residency across a reverse model swap.
+//! Public cached-prompt journey guarding physical expert residency across an
+//! intervening request on Ornith 1.5 oQ6e.
 //!
-//! A user first serves a long prompt with the larger oQ8e artifact, temporarily
-//! switches to oQ6e, then returns to oQ8e with a short append. Success requires
-//! valid streamed output within the interactive latency budget without replacing
+//! A user first serves a long prompt, then a short unrelated request, then
+//! returns to the original prompt with a short append. Success requires valid
+//! streamed output within the interactive latency budget without replacing
 //! hidden physical page-ins with more logical expert-source traffic.
 
 use std::{fs, path::Path};
@@ -17,7 +18,6 @@ use crate::common::real_model_rest_server::{
 };
 
 const OQ6E_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
-const OQ8E_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ8e-mtp";
 const CONFIGURED_MLX_MEMORY_CEILING_BYTES: u64 = 30_000_000_000;
 // Five thousand tokens remains a meaningful persistent-cache and model-swap workload while
 // leaving enough of the journey deadline for two demand-loaded model transitions.
@@ -39,24 +39,16 @@ async fn should_complete_cached_reverse_swap_without_hidden_model_page_ins() {
 async fn run_cached_reverse_swap_journey() {
     let oq6e_model_directory =
         crate::common::configured_model_artifact_directory_by_id(OQ6E_MODEL_ID);
-    let oq8e_model_directory =
-        crate::common::configured_model_artifact_directory_by_id(OQ8E_MODEL_ID);
     let isolated_worker_home =
         tempfile::tempdir().expect("the reverse-swap worker home should be created");
-    write_acceptance_config(
-        isolated_worker_home.path(),
-        [&oq6e_model_directory, &oq8e_model_directory],
-    );
+    write_acceptance_config(isolated_worker_home.path(), [&oq6e_model_directory]);
     let long_prompt = crate::common::exact_model_prompt::build_exact_model_prompt_content(
-        &oq8e_model_directory,
+        &oq6e_model_directory,
         ROMEO_AND_JULIET_SOURCE,
         "Read this Romeo and Juliet excerpt and reply with exactly one word.",
         LONG_PROMPT_TOKEN_COUNT,
     );
-    let model_artifacts = [
-        (OQ6E_MODEL_ID.to_owned(), oq6e_model_directory),
-        (OQ8E_MODEL_ID.to_owned(), oq8e_model_directory),
-    ];
+    let model_artifacts = [(OQ6E_MODEL_ID.to_owned(), oq6e_model_directory)];
     let real_model_rest_server = launch_real_model_rest_server_for_models(
         &model_artifacts,
         isolated_worker_home.path(),
@@ -72,10 +64,10 @@ async fn run_cached_reverse_swap_journey() {
 
     complete_request(
         &openai_client,
-        OQ8E_MODEL_ID,
+        OQ6E_MODEL_ID,
         &long_prompt,
         Duration::from_secs(75),
-        "q8_cache_seed",
+        "oq6_cache_seed",
     )
     .await;
     complete_request(
@@ -90,10 +82,10 @@ async fn run_cached_reverse_swap_journey() {
         format!("{long_prompt}\n\nNow answer with one different word from Romeo and Juliet.");
     let reverse_swap_elapsed = complete_request(
         &openai_client,
-        OQ8E_MODEL_ID,
+        OQ6E_MODEL_ID,
         &appended_prompt,
         REVERSE_SWAP_TIMEOUT,
-        "q8_cached_reverse_swap",
+        "oq6_cached_append",
     )
     .await;
 

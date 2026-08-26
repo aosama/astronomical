@@ -8,7 +8,7 @@
 //!   the rest.
 //! - Paged mode: expert weights live on disk. A layer either streams for one
 //!   operation or keeps a smaller demand-selected page in
-//!   `retained_expert_layers`.
+//!   `retained_experts`.
 //!
 //! # Safe orders
 //!
@@ -105,7 +105,7 @@ impl Qwen3_5Model {
 
     fn complete_expert_residency_headroom(
         &self,
-        complete_expert_payload_bytes: u64,
+        _complete_expert_payload_bytes: u64,
     ) -> Result<CompleteExpertResidencyHeadroom, Qwen3_5ExecutionError> {
         let Some(expert_pager) = self.expert_pager.as_ref() else {
             return Ok(CompleteExpertResidencyHeadroom {
@@ -119,7 +119,7 @@ impl Qwen3_5Model {
             expert_pager.observed_transient_high_water_bytes();
         let required_activation_headroom_bytes =
             required_complete_residency_activation_headroom_bytes(
-                complete_expert_payload_bytes,
+                expert_pager.maximum_expert_page_bytes(),
                 observed_transient_high_water_bytes.max(
                     self.mlx_ram_budget
                         .borrow()
@@ -186,15 +186,15 @@ impl Qwen3_5Model {
         // leaves the model truthfully and safely in paged mode.
         let candidate_resident_expert_weights_result = (|| {
             // Idle promotion replaces any complete layers retained by paged mode.
-            let retained_streamed_expert_payload_bytes = self
-                .retained_expert_layers
-                .as_ref()
-                .map_or(0, |retained_expert_layers| {
-                    retained_expert_layers
-                        .borrow()
-                        .statistics()
-                        .resident_payload_byte_count
-                });
+            let retained_streamed_expert_payload_bytes =
+                self.retained_experts
+                    .as_ref()
+                    .map_or(0, |retained_experts| {
+                        retained_experts
+                            .borrow()
+                            .statistics()
+                            .resident_payload_byte_count
+                    });
 
             // Sample after stream synchronization. Sampling
             // earlier could include unfinished request work or race a later page
@@ -295,8 +295,8 @@ impl Qwen3_5Model {
             self.runtime
                 .synchronize_gpu_stream_and_clear_allocator_cache()?;
 
-            if let Some(retained_expert_layers) = self.retained_expert_layers.as_ref() {
-                retained_expert_layers.borrow_mut().release_all();
+            if let Some(retained_experts) = self.retained_experts.as_ref() {
+                retained_experts.borrow_mut().release_all();
             }
 
             // Build every resident layer into a candidate owner. Publication is

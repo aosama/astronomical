@@ -402,10 +402,8 @@ pub(super) fn worker_expert_residency_snapshot(
 ) -> astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
     astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
         total_layer_count: expert_residency.total_layer_count,
-        complete_layer_count: expert_residency.complete_layer_count,
-        complete_layer_payload_bytes: expert_residency.complete_layer_payload_bytes,
-        partial_layer_count: expert_residency.partial_layer_count,
-        partial_layer_payload_bytes: expert_residency.partial_layer_payload_bytes,
+        resident_expert_count: expert_residency.resident_expert_count,
+        resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
     }
 }
 

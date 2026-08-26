@@ -95,8 +95,8 @@ pub enum ActiveRequestProgress {
         request_started_at: Instant,
         preparation_started_at: Instant,
         total_layer_count: u32,
-        complete_layer_count: u32,
-        partial_layer_count: u32,
+        resident_expert_count: u32,
+        resident_expert_payload_bytes: u64,
     },
     /// Accumulated generation progress for the active request.
     Generation {
@@ -113,24 +113,20 @@ pub enum ActiveRequestProgress {
     },
 }
 
-/// Latest worker-reported complete-versus-partial sparse-expert topology.
+/// Latest worker-reported retained-expert topology.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExpertResidencySnapshot {
     pub total_layer_count: u32,
-    pub complete_layer_count: u32,
-    pub complete_layer_payload_bytes: u64,
-    pub partial_layer_count: u32,
-    pub partial_layer_payload_bytes: u64,
+    pub resident_expert_count: u32,
+    pub resident_expert_payload_bytes: u64,
 }
 
 impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
     fn from(expert_residency: WorkerExpertResidencySnapshot) -> Self {
         Self {
             total_layer_count: expert_residency.total_layer_count,
-            complete_layer_count: expert_residency.complete_layer_count,
-            complete_layer_payload_bytes: expert_residency.complete_layer_payload_bytes,
-            partial_layer_count: expert_residency.partial_layer_count,
-            partial_layer_payload_bytes: expert_residency.partial_layer_payload_bytes,
+            resident_expert_count: expert_residency.resident_expert_count,
+            resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
         }
     }
 }

@@ -48,9 +48,9 @@ pub struct WorkerPromptWorkReuse {
 pub enum ExpertMemoryMode {
     /// Every target and optional MTP layer has complete sparse experts resident.
     Resident,
-    /// Some complete layers or routed pages are retained while misses still page.
+    /// Some routed experts are retained while misses still page.
     Hybrid,
-    /// No sparse expert payload is retained; every layer pages operation-locally.
+    /// No sparse expert payload is retained; every miss pages from storage.
     Paged,
 }
 
@@ -58,10 +58,8 @@ pub enum ExpertMemoryMode {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerExpertResidencySnapshot {
     pub total_layer_count: u32,
-    pub complete_layer_count: u32,
-    pub complete_layer_payload_bytes: u64,
-    pub partial_layer_count: u32,
-    pub partial_layer_payload_bytes: u64,
+    pub resident_expert_count: u32,
+    pub resident_expert_payload_bytes: u64,
 }
 
 /// Runtime execution state of native multi-token prediction (MTP).
@@ -349,7 +347,7 @@ pub enum WorkerEvent {
         completed_prefill_chunk_tokens: Option<u32>,
         /// Present with completed chunks; worker-owned MLX allocator observation.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
-        /// Current complete/partial ownership after this prompt-processing boundary.
+        /// Current retained-expert ownership after this prompt-processing boundary.
         expert_residency: Option<WorkerExpertResidencySnapshot>,
         /// Snapshot captured while the request-scoped SpecPrefill drafter was scoring.
         speculative_prefill_draft_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
@@ -358,10 +356,8 @@ pub enum WorkerEvent {
     GenerationPreparationStarted {
         request_id: RequestId,
         total_layer_count: u32,
-        complete_layer_count: u32,
-        complete_layer_payload_bytes: u64,
-        partial_layer_count: u32,
-        partial_layer_payload_bytes: u64,
+        resident_expert_count: u32,
+        resident_expert_payload_bytes: u64,
     },
     /// Reports generated-token progress that has not necessarily produced public output yet.
     GenerationProgress {

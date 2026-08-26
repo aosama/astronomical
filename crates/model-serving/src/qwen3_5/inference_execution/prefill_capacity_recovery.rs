@@ -87,6 +87,9 @@ impl Qwen3_5EngineState {
         let retained_payload_after_reclamation = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
+        model.shrink_request_expert_residency_after_reclamation(
+            retained_payload_before_reclamation.saturating_sub(retained_payload_after_reclamation),
+        );
 
         if active_request.should_use_speculative_prefill {
             active_request.performance_attribution.record_counter(
@@ -95,11 +98,13 @@ impl Qwen3_5EngineState {
                     .saturating_sub(retained_payload_after_reclamation),
             );
         }
+        let sparse_experts_are_paged = model.sparse_experts_are_paged();
         let should_retry_same_prefill_chunck = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,
             expert_reclamation_target_bytes,
+            sparse_experts_are_paged,
         );
         tracing::warn!(
             request_id = request_id.value(),
@@ -184,11 +189,16 @@ impl Qwen3_5EngineState {
         let retained_payload_after_reclamation = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
+        model.shrink_request_expert_residency_after_reclamation(
+            retained_payload_before_reclamation.saturating_sub(retained_payload_after_reclamation),
+        );
+        let sparse_experts_are_paged = model.sparse_experts_are_paged();
         let should_retry_same_prefill_chunck = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,
             expert_reclamation_target_bytes,
+            sparse_experts_are_paged,
         );
         tracing::warn!(
             request_id = request_id.value(),

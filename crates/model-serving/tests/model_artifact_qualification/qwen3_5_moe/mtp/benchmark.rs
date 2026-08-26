@@ -87,7 +87,10 @@ async fn run_representative_mtp_release_gate() {
     let mlx_memory_limits =
         crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
 
-    eprintln!("[mtp-release] status=start phase=target_only_before_engine_load ETA_seconds=115");
+    eprintln!(
+        "[mtp-release] status=start model={} phase=target_only_before_engine_load ETA_seconds=115",
+        model_directory.display()
+    );
     let target_only_before_measurements = run_engine_benchmark_cases(
         &model_directory,
         false,
@@ -180,10 +183,6 @@ async fn run_representative_mtp_release_gate() {
                 },
             );
         assert_eq!(
-            first_mismatched_token, None,
-            "active MTP must preserve the target-only greedy sequence",
-        );
-        assert_eq!(
             mtp_measurement.generated_token_ids.len(),
             usize::from(BENCHMARK_OUTPUT_TOKEN_COUNT),
             "{} should exercise the complete representative output budget",
@@ -239,6 +238,10 @@ async fn run_representative_mtp_release_gate() {
             first_mismatched_token.is_none(),
             target_only_measurement.generated_token_id_fingerprint(),
             mtp_measurement.generated_token_id_fingerprint(),
+        );
+        assert_eq!(
+            first_mismatched_token, None,
+            "active MTP must preserve the target-only greedy sequence",
         );
     }
     let minimum_paired_throughput_ratio = paired_throughput_ratios

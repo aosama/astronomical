@@ -43,6 +43,8 @@ pub enum PerformanceCounter {
     MandatoryPrefillExpertSourcePayloadBytes,
     MandatoryDecodeExpertSourcePayloadBytes,
     AvoidedCompleteLayerExpertSourcePayloadBytes,
+    CompleteLayerPrefetchUsefulPayloadBytes,
+    CompleteLayerPrefetchWastedPayloadBytes,
     RetainedRouteAssignmentHitCount,
     RetainedRouteAssignmentMissCount,
     ExpertResidencyCommitRejectionCount,
@@ -132,6 +134,8 @@ impl PerformanceCounter {
         Self::MandatoryPrefillExpertSourcePayloadBytes,
         Self::MandatoryDecodeExpertSourcePayloadBytes,
         Self::AvoidedCompleteLayerExpertSourcePayloadBytes,
+        Self::CompleteLayerPrefetchUsefulPayloadBytes,
+        Self::CompleteLayerPrefetchWastedPayloadBytes,
         Self::RetainedRouteAssignmentHitCount,
         Self::RetainedRouteAssignmentMissCount,
         Self::ExpertResidencyCommitRejectionCount,
@@ -259,6 +263,12 @@ impl PerformanceCounter {
             }
             Self::AvoidedCompleteLayerExpertSourcePayloadBytes => {
                 "avoided_complete_layer_expert_source_payload_bytes"
+            }
+            Self::CompleteLayerPrefetchUsefulPayloadBytes => {
+                "complete_layer_prefetch_useful_payload_bytes"
+            }
+            Self::CompleteLayerPrefetchWastedPayloadBytes => {
+                "complete_layer_prefetch_wasted_payload_bytes"
             }
             Self::RetainedRouteAssignmentHitCount => "retained_route_assignment_hit_count",
             Self::RetainedRouteAssignmentMissCount => "retained_route_assignment_miss_count",

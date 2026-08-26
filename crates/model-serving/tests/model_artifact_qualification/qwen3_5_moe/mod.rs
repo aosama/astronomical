@@ -31,7 +31,7 @@ mod model_ssd_streaming;
 #[cfg(feature = "direct-mlx")]
 mod mtp;
 #[cfg(feature = "direct-mlx")]
-mod ornith_1_5_35b_a3b_eight_bit_expert_paging;
+mod ornith_1_5_35b_a3b_six_bit_expert_paging;
 #[cfg(feature = "direct-mlx")]
 mod paged_mode_endurance;
 #[cfg(feature = "direct-mlx")]
@@ -127,9 +127,9 @@ fn select_smallest_compatible_speculative_prefill_draft_model(
         })
 }
 
-fn ornith_1_5_35b_a3b_eight_bit_model_directory() -> std::path::PathBuf {
+fn ornith_1_5_35b_a3b_six_bit_model_directory() -> std::path::PathBuf {
     crate::common::configured_model_artifact_directory_by_id(
-        crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID,
+        crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID,
     )
 }
 

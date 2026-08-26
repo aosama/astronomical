@@ -8,24 +8,24 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerChunkingConfiguration {
-    /// Fixed prompt work while sparse experts are fully resident, and the paging fallback.
+    /// Fixed prompt work while sparse experts are fully resident.
     pub fixed_prompt_processing_chunk_size_tokens: u32,
-    /// Optional smaller prompt work while sparse experts stream from storage.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
+    /// Fixed prompt work while sparse experts stream from storage.
+    pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     /// Capacity added when append-only attention state outgrows its current slab.
     pub full_attention_key_value_growth_tokens: u32,
     /// Maximum token rows evaluated by one speculative-prefill drafter forward.
     pub speculative_prefill_draft_forward_tokens: u32,
-    /// Decoder-layer interval between multi-token prefill command buffers.
-    ///
-    /// Zero keeps one complete prefill chunk as one lazy MLX graph. A positive
-    /// value gives macOS a scheduling boundary without splitting layer kernels.
+    /// Decoder-layer interval between multi-token prefill command buffers while
+    /// sparse experts are fully resident. Zero keeps one lazy tape per chunk.
     pub prefill_graph_submission_layer_interval: u32,
+    /// Decoder-layer interval between multi-token prefill command buffers while
+    /// sparse experts stream from SSD. Zero keeps one lazy tape per chunk.
+    pub experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     /// Experimental decoder-layer interval for one-token solid-state-drive paging.
     ///
-    /// Zero disables intermediate generation submission. A positive value is
-    /// ignored while experts are fully memory resident.
+    /// Zero disables intermediate generation submission. Ignored while experts
+    /// are fully memory resident.
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     /// Exact persistent-cache block length, or `None` for model-derived sizing.
     pub prompt_cache_block_tokens: Option<u32>,
@@ -35,24 +35,27 @@ pub struct WorkerChunkingConfiguration {
 
 /// Returns the command-buffer submission interval for one forward.
 ///
-/// Multi-token prefill uses its configured interval regardless of expert storage.
-/// One-token generation keeps intermediate submission specific to SSD paging,
-/// where detaching streamed expert pages justifies the extra launch boundaries.
+/// Resident multi-token prefill uses `prefill_graph_submission_layer_interval`
+/// (default zero: one lazy tape). Resident one-token generation stays at zero.
+/// SSD-paged prefill and decode use the experimental_ssd_paging_* intervals.
 #[must_use]
 pub const fn graph_submission_layer_interval(
     token_count: i32,
     sparse_experts_are_paged: bool,
     prefill_graph_submission_layer_interval: u32,
+    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 ) -> u32 {
-    if token_count == 1 {
-        if sparse_experts_are_paged {
-            experimental_ssd_paging_generation_graph_submission_layer_interval
-        } else {
-            0
+    if !sparse_experts_are_paged {
+        if token_count == 1 {
+            return 0;
         }
+        return prefill_graph_submission_layer_interval;
+    }
+    if token_count == 1 {
+        experimental_ssd_paging_generation_graph_submission_layer_interval
     } else {
-        prefill_graph_submission_layer_interval
+        experimental_ssd_paging_prefill_graph_submission_layer_interval
     }
 }
 
@@ -68,6 +71,7 @@ impl WorkerChunkingConfiguration {
             token_count,
             sparse_experts_are_paged,
             self.prefill_graph_submission_layer_interval,
+            self.experimental_ssd_paging_prefill_graph_submission_layer_interval,
             self.experimental_ssd_paging_generation_graph_submission_layer_interval,
         )
     }

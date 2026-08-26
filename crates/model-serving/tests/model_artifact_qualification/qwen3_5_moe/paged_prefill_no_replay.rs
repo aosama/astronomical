@@ -1,4 +1,4 @@
-//! Real Ornith oQ8e acceptance journey for fixed-chunk whole-layer paged prefill.
+//! Real Ornith oQ6e acceptance journey for fixed-chunk whole-layer paged prefill.
 
 use std::time::{Duration, Instant};
 
@@ -13,8 +13,8 @@ use super::performance_attribution::{
 };
 use super::speculative_prefill_qualification_support::prepare_romeo_and_juliet_three_paragraph_summary_prompt;
 
-const MODEL_ID: &str = crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID;
-const MEMORY_CEILING_BYTES: usize = 39_000_000_000;
+const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
+const MEMORY_CEILING_BYTES: usize = 20_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 4_096;
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 const OUTPUT_TOKEN_COUNT: u16 = 1;
@@ -22,7 +22,7 @@ const REQUEST_ID: RequestId = RequestId::new(96_204);
 const PRODUCT_PERFORMANCE_BUDGET: Duration = Duration::from_secs(60);
 
 #[tokio::test]
-#[ignore = "loads Ornith 1.5 oQ8e under 39 GB and proves two fixed 2048-token prefill chunks finish under 60 seconds without whole-forward replay"]
+#[ignore = "loads Ornith 1.5 oQ6e under 20 GB and proves two fixed 2048-token prefill chunks finish under 60 seconds without whole-forward replay"]
 async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_replay() {
     timeout(Duration::from_secs(120), async {
         super::automatic_residency_support::initialize_automatic_residency_tracing();
@@ -31,7 +31,7 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
             crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, u32::from(OUTPUT_TOKEN_COUNT))
-            .expect("the configured Ornith oQ8e artifact should validate");
+            .expect("the configured Ornith oQ6e artifact should validate");
         let sparse_layer_count = u64::from(validated_artifact.config().layer_count());
         let prompt = prepare_romeo_and_juliet_three_paragraph_summary_prompt(
             &model_directory,

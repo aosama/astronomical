@@ -184,20 +184,35 @@ impl Qwen3_5Model {
             .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?;
         let maximum_paged_route_replay_attempts = 1;
         for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
-            drop(self.build_forward_graph(
+            let graph_started_at = std::time::Instant::now();
+            self.build_prefill_decoder_state_graph(
                 &token_indices,
                 token_ids.len() as i32,
                 starting_position_tokens,
                 request_decoder_state,
+                None,
                 Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                 performance_attribution,
-            )?);
+            )?;
+            let graph_elapsed = graph_started_at.elapsed();
+            let eval_started_at = std::time::Instant::now();
             match self.evaluate_decoder_state_for_paged_route_resolution(
                 request_decoder_state,
                 None,
                 performance_attribution,
             )? {
-                PagedRouteValidationOutcome::CompleteHit => return Ok(()),
+                PagedRouteValidationOutcome::CompleteHit => {
+                    let eval_elapsed = eval_started_at.elapsed();
+                    if graph_elapsed + eval_elapsed > std::time::Duration::from_secs(5) {
+                        tracing::info!(
+                            token_count = token_ids.len(),
+                            graph_elapsed_millis = graph_elapsed.as_millis(),
+                            eval_elapsed_millis = eval_elapsed.as_millis(),
+                            "slow prefill chunk"
+                        );
+                    }
+                    return Ok(());
+                }
             }
         }
         Err(Qwen3_5ExecutionError::InvalidInput {
@@ -222,14 +237,26 @@ impl Qwen3_5Model {
                     self.decoder_cache_layout.boundary_tensor_count(),
                     checkpoint_interval_token_count,
                 )?;
-            drop(self.build_target_forward_graph(
-                token_ids,
+            let signed_token_ids = token_ids
+                .iter()
+                .map(|token_id| {
+                    i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                        description: "token ID exceeds the MLX int32 range",
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let token_indices = self
+                .runtime
+                .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?;
+            self.build_prefill_decoder_state_graph(
+                &token_indices,
+                token_ids.len() as i32,
                 starting_position_tokens,
                 request_decoder_state,
                 Some(&mut boundary_checkpoint_collector),
                 Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                 performance_attribution,
-            )?);
+            )?;
             match self.evaluate_decoder_state_for_paged_route_resolution(
                 request_decoder_state,
                 Some(&boundary_checkpoint_collector),

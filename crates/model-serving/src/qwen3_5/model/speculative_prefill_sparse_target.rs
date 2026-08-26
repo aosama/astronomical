@@ -53,6 +53,7 @@ impl Qwen3_5Model {
                 Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                 performance_attribution,
                 false,
+                true,
             )?;
         self.evaluate_forward_state(target_forward_output.final_logits(), request_decoder_state)
     }
@@ -107,6 +108,7 @@ impl Qwen3_5Model {
                 Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                 performance_attribution,
                 false,
+                true,
             )?;
         self.evaluate_forward_state(target_forward_output.final_logits(), request_decoder_state)?;
         Ok(consumed_visual_embedding_count)

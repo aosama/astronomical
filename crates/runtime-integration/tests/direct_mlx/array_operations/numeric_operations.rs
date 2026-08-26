@@ -245,6 +245,31 @@ fn should_put_selected_values_and_copy_uint32_indices_contiguously() {
 }
 
 #[test]
+fn should_scatter_add_duplicate_row_indices_instead_of_overwriting() {
+    let runtime = runtime();
+    let destination = runtime
+        .zeros(&[3, 2], MlxDtype::Float32)
+        .expect("the scatter destination should be valid");
+    let token_indices = runtime
+        .array_from_u32(&[0, 0, 2], &[3])
+        .expect("the token indices should be valid");
+    let assignment_updates = runtime
+        .array_from_f32(&[1.0, 10.0, 2.0, 20.0, 3.0, 30.0], &[3, 1, 2])
+        .expect("the assignment updates should be valid");
+
+    let accumulated_rows = runtime
+        .scatter_add(&destination, &token_indices, &assignment_updates, 0)
+        .expect("scatter-add should build a valid graph");
+
+    assert_eq!(
+        accumulated_rows
+            .to_vec_f32()
+            .expect("the accumulated rows should evaluate as float32"),
+        vec![3.0, 30.0, 0.0, 0.0, 3.0, 30.0],
+    );
+}
+
+#[test]
 fn should_return_contiguous_top_values_along_one_axis() {
     let runtime = runtime();
     let routing_scores = runtime

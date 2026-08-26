@@ -198,10 +198,8 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         worker_health_snapshot.expert_residency.map(|expert_residency| {
             serde_json::json!({
                 "total_layer_count": expert_residency.total_layer_count,
-                "complete_layer_count": expert_residency.complete_layer_count,
-                "complete_layer_payload_bytes": expert_residency.complete_layer_payload_bytes,
-                "partial_layer_count": expert_residency.partial_layer_count,
-                "partial_layer_payload_bytes": expert_residency.partial_layer_payload_bytes,
+                "resident_expert_count": expert_residency.resident_expert_count,
+                "resident_expert_payload_bytes": expert_residency.resident_expert_payload_bytes,
             })
         })
     );
@@ -287,8 +285,8 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                 request_started_at,
                 preparation_started_at,
                 total_layer_count,
-                complete_layer_count,
-                partial_layer_count,
+                resident_expert_count,
+                resident_expert_payload_bytes,
             } => {
                 status_json["progress"] = serde_json::json!({
                     "phase": "generation_preparation",
@@ -297,8 +295,8 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
                     "elapsed_ms": u64::try_from(preparation_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
                     "request_elapsed_ms": u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
                     "total_layer_count": total_layer_count,
-                    "complete_layer_count": complete_layer_count,
-                    "partial_layer_count": partial_layer_count,
+                    "resident_expert_count": resident_expert_count,
+                    "resident_expert_payload_bytes": resident_expert_payload_bytes,
                 });
             }
             ActiveRequestProgress::ImageGeneration {

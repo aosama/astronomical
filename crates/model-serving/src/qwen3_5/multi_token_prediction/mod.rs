@@ -22,6 +22,7 @@ mod moe_tensor_spec;
 mod prefill;
 #[cfg(feature = "direct-mlx")]
 mod proposal_chain;
+mod request_eligibility;
 #[cfg(feature = "direct-mlx")]
 mod request_state;
 #[cfg(feature = "direct-mlx")]
@@ -66,6 +67,7 @@ pub(in crate::qwen3_5) use prefill::{
     execute_terminal_optional_history_capture_with_performance_attribution,
     record_prompt_history_initialization_fallback, record_terminal_history_token_count,
 };
+pub use request_eligibility::qwen3_5_mtp_request_is_eligible;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use request_state::{
     MultiTokenPredictionRequestAllocationCheckpoint, Qwen3_5MultiTokenPredictionRequest,

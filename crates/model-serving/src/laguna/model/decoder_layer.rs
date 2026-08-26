@@ -2,7 +2,6 @@
 
 use astronomical_runtime_integration::{MlxArray, MlxMetalKernel, MlxRuntime};
 
-use crate::expert_paging::ExpertResidencyPhase;
 use crate::laguna::artifacts::LagunaLayerTensorRole;
 use crate::laguna::moe::{
     execute_paged_mixture_on_page, forward_paged_mixture_of_experts,
@@ -10,6 +9,7 @@ use crate::laguna::moe::{
     route_laguna_layer_experts, unique_routed_expert_ids,
 };
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaLayerDescriptor};
+use crate::memory::ExpertResidencyPhase;
 use crate::performance_attribution::PerformanceAttribution;
 
 use super::attention::{LagunaAttentionMaskCache, forward_attention};

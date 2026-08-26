@@ -1,9 +1,9 @@
 //! Production REST acceptance journeys and their resident comparison controls.
 
+mod cached_suffix_streaming_prefill_rest_journey;
 mod complete_expert_residency_rest_journey;
 mod laguna_paging_journey;
 mod live_memory_ceiling_expert_residency_round_trip_rest_journey;
-mod prefill_decode_handoff_rest_journey;
 mod prefill_memory_progress_rest_journey;
 mod reverse_swap_cached_prompt_rest_journey;
 mod ssd_paging_decode_expert_reuse_journey;

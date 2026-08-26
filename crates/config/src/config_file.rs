@@ -28,9 +28,14 @@ pub(crate) fn read_user_config_file(
     };
     let config_json = parse_json_rejecting_duplicates(&config_file_path, &config_file_bytes)?;
     if config_json.get("schema_version").is_none() {
-        return migrate_legacy_config(&config_file_path, &config_file_bytes, config_json);
+        let mut migrated_user_config =
+            migrate_legacy_config(&config_file_path, &config_file_bytes, config_json)?;
+        persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config)?;
+        return Ok(migrated_user_config);
     }
-    parse_and_validate_v1(&config_file_path, config_json)
+    let mut user_config_file = parse_and_validate_v1(&config_file_path, config_json)?;
+    persist_mandatory_chunking_fields(&config_file_path, &mut user_config_file)?;
+    Ok(user_config_file)
 }
 
 pub(crate) fn parse_and_validate_v1(
@@ -46,6 +51,51 @@ pub(crate) fn parse_and_validate_v1(
         })?;
     validate_user_config_file(&user_config_file)?;
     Ok(user_config_file)
+}
+
+fn persist_mandatory_chunking_fields(
+    config_file_path: &Path,
+    user_config_file: &mut UserConfigFile,
+) -> Result<(), AstronomicalConfigError> {
+    let chunking = user_config_file
+        .chunking
+        .get_or_insert_with(Default::default);
+    let mut should_persist = false;
+    if chunking
+        .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+        .is_none()
+    {
+        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens =
+            Some(crate::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS);
+        should_persist = true;
+    }
+    if chunking
+        .experimental_ssd_paging_prefill_graph_submission_layer_interval
+        .is_none()
+    {
+        // The former prefill_graph_submission_layer_interval owned SSD-paged
+        // prefill; resident submission was hardcoded to zero. Split the value
+        // once so later resident edits cannot change paging, and vice versa.
+        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval =
+            Some(chunking.prefill_graph_submission_layer_interval.unwrap_or(
+                crate::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            ));
+        chunking.prefill_graph_submission_layer_interval =
+            Some(crate::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL);
+        should_persist = true;
+    }
+    if !should_persist {
+        return Ok(());
+    }
+    write_adjacent_schema(config_file_path)?;
+    validate_user_config_file(user_config_file)?;
+    let persisted_config_bytes = serde_json::to_vec_pretty(user_config_file).map_err(|source| {
+        AstronomicalConfigError::SerializeConfigFile {
+            config_file_path: config_file_path.to_owned(),
+            source,
+        }
+    })?;
+    write_config_file_bytes_atomically(config_file_path, &persisted_config_bytes)
 }
 
 pub(crate) fn validate_user_config_file(

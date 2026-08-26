@@ -16,7 +16,6 @@ use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
     PersistentPromptCacheDiskStore, PersistentPromptCachePrefixLookup,
-    persistent_context_restore_workspace_bytes,
 };
 
 use super::super::RequestDecoderStateStack;
@@ -122,19 +121,49 @@ impl Qwen3_5EngineState {
             });
         }
 
-        // Reconstruction temporarily owns loaded block arrays and concatenated
-        // live decoder state at the same time. Admission reserves that overlap
-        // before the first MLX-backed file is loaded.
-        let persistent_prompt_cache_restore_temporary_workspace_bytes =
-            persistent_context_restore_workspace_bytes(
-                self.context_memory_reservation_bytes_per_token,
-                restored_token_count,
-            )
-            .ok_or_else(|| {
-                fatal_engine_error(
-                    "persistent prompt-cache restore workspace reservation overflowed",
+        let persistent_prompt_cache_block_token_count =
+            persistent_prompt_cache.model_contract.block_token_count();
+        let complete_block_count = restored_token_count / persistent_prompt_cache_block_token_count;
+        let mut restored_persistent_prompt_cache_block_keys =
+            Vec::with_capacity(complete_block_count);
+        let mut last_restored_persistent_prompt_cache_block_key = None;
+        let mut persistent_prompt_cache_restore_temporary_workspace_bytes = 0_usize;
+        for block_index in 0..complete_block_count {
+            let block_start = block_index * persistent_prompt_cache_block_token_count;
+            let block_end = block_start + persistent_prompt_cache_block_token_count;
+            let persistent_prompt_cache_block_key = restored_persistent_prompt_cache_block_key(
+                prompt_token_ids,
+                block_start,
+                block_end,
+                block_index,
+                block_causal_inputs,
+                last_restored_persistent_prompt_cache_block_key.as_ref(),
+                &persistent_prompt_cache.model_contract,
+            )?;
+            let sequence_state_block_file_size_bytes = persistent_prompt_cache
+                .sequence_state_block_file_size_bytes(
+                    &persistent_prompt_cache_block_key.block_hash(),
                 )
-            })?;
+                .unwrap_or(0);
+            persistent_prompt_cache_restore_temporary_workspace_bytes =
+                persistent_prompt_cache_restore_temporary_workspace_bytes.saturating_add(
+                    usize::try_from(sequence_state_block_file_size_bytes).unwrap_or(usize::MAX),
+                );
+            last_restored_persistent_prompt_cache_block_key =
+                Some(persistent_prompt_cache_block_key.clone());
+            restored_persistent_prompt_cache_block_keys.push(persistent_prompt_cache_block_key);
+        }
+        if let Some(recurrent_snapshot_block_key) =
+            last_restored_persistent_prompt_cache_block_key.as_ref()
+        {
+            let recurrent_snapshot_file_size_bytes = persistent_prompt_cache
+                .recurrent_snapshot_file_size_bytes(&recurrent_snapshot_block_key.block_hash())
+                .unwrap_or(0);
+            persistent_prompt_cache_restore_temporary_workspace_bytes =
+                persistent_prompt_cache_restore_temporary_workspace_bytes.saturating_add(
+                    usize::try_from(recurrent_snapshot_file_size_bytes).unwrap_or(usize::MAX),
+                );
+        }
         let additional_maximum_expert_page_reservation_bytes =
             self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
         let target_expert_payload_bytes_reclaimed_before_restore = self
@@ -149,30 +178,15 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
 
-        let mut last_restored_persistent_prompt_cache_block_key = lookup_result
-            .last_restored_persistent_prompt_cache_block_key()
-            .cloned();
-        let persistent_prompt_cache_block_token_count =
-            persistent_prompt_cache.model_contract.block_token_count();
-        let complete_block_count = restored_token_count / persistent_prompt_cache_block_token_count;
-        // Load every matched block before mutating request state. If a later
-        // disk read fails, this function returns an error and the caller drops
-        // the entire attempt instead of running with a partially restored
-        // chain of recurrent and attention state.
-        let mut persistent_prompt_cache_kv_block_tensors = Vec::with_capacity(complete_block_count);
-        for block_index in 0..complete_block_count {
-            let block_start = block_index * persistent_prompt_cache_block_token_count;
-            let block_end = block_start + persistent_prompt_cache_block_token_count;
-            let persistent_prompt_cache_block_key = restored_persistent_prompt_cache_block_key(
-                prompt_token_ids,
-                block_start,
-                block_end,
-                block_index,
-                block_causal_inputs,
-                last_restored_persistent_prompt_cache_block_key.as_ref(),
-                &persistent_prompt_cache.model_contract,
-            )?;
-            let loaded_kv_block_tensors = performance_attribution
+        // Lookup already proved every block exists. Load and absorb one block at
+        // a time so a later read failure can drop this attempt without pinning
+        // the complete prefix beside seated experts.
+        for (block_index, persistent_prompt_cache_block_key) in
+            restored_persistent_prompt_cache_block_keys
+                .into_iter()
+                .enumerate()
+        {
+            let mut loaded_kv_block_tensors = performance_attribution
                 .measure_operation(
                     PerformanceOperation::PersistentPromptCacheKvBlockRead,
                     |performance_attribution| {
@@ -195,7 +209,23 @@ impl Qwen3_5EngineState {
                          but load returned None",
                     )
                 })?;
-            persistent_prompt_cache_kv_block_tensors.push(loaded_kv_block_tensors);
+            performance_attribution
+                .measure_operation(
+                    PerformanceOperation::PersistentPromptCacheStateReconstruction,
+                    |_performance_attribution| {
+                        request_decoder_state.absorb_persistent_prompt_cache_kv_block(
+                            model.runtime(),
+                            &mut loaded_kv_block_tensors,
+                        )
+                    },
+                )
+                .map_err(|persistent_prompt_cache_error| {
+                    fatal_engine_error(format!(
+                        "failed to absorb persistent prompt-cache KV block {block_index}: \
+                         {persistent_prompt_cache_error}"
+                    ))
+                })?;
+            drop(loaded_kv_block_tensors);
             last_restored_persistent_prompt_cache_block_key =
                 Some(persistent_prompt_cache_block_key);
         }
@@ -206,7 +236,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| {
                 fatal_engine_error("persistent prompt-cache restore lost snapshot key")
             })?;
-        let persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
+        let mut persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheRecurrentSnapshotRead,
                 |performance_attribution| {
@@ -229,17 +259,13 @@ impl Qwen3_5EngineState {
                      but load returned None",
                 )
             })?;
-        // Request decoder state owns the model-specific reconstruction rules. The disk
-        // package owns file concerns only; it must not decide how a Qwen3.5
-        // attention or recurrent tensor becomes live model state.
         performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheStateReconstruction,
                 |_performance_attribution| {
-                    request_decoder_state.restore_from_persistent_prompt_cache_blocks(
+                    request_decoder_state.absorb_persistent_prompt_cache_recurrent_snapshot(
                         model.runtime(),
-                        &persistent_prompt_cache_kv_block_tensors,
-                        &persistent_prompt_cache_recurrent_snapshot_tensors,
+                        &mut persistent_prompt_cache_recurrent_snapshot_tensors,
                     )
                 },
             )
@@ -249,6 +275,7 @@ impl Qwen3_5EngineState {
                      persistent prompt-cache blocks: {persistent_prompt_cache_error}"
                 ))
             })?;
+        drop(persistent_prompt_cache_recurrent_snapshot_tensors);
         performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheStateMaterializationSynchronizationWait,
@@ -263,11 +290,6 @@ impl Qwen3_5EngineState {
                      persistent prompt-cache blocks: {persistent_prompt_cache_error}"
                 ))
             })?;
-        // Drop file-loaded owners before allocator cleanup. Live request state has
-        // already materialized independent arrays, so retaining these handles
-        // would inflate active memory throughout generation.
-        drop(persistent_prompt_cache_kv_block_tensors);
-        drop(persistent_prompt_cache_recurrent_snapshot_tensors);
         performance_attribution
             .measure_operation(
                 PerformanceOperation::MlxAllocatorCacheCleanup,

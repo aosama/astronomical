@@ -46,13 +46,18 @@ impl ForwardRecoveryPolicy {
         retained_expert_payload_bytes_before_reclamation: u64,
         retained_expert_payload_bytes_after_reclamation: u64,
         required_reclamation_bytes: usize,
+        sparse_experts_are_paged: bool,
     ) -> bool {
-        should_retry_fixed_forward_after_expert_reclamation(
-            has_already_retried_after_reclamation,
-            retained_expert_payload_bytes_before_reclamation,
-            retained_expert_payload_bytes_after_reclamation,
-            required_reclamation_bytes,
-        )
+        // A paged retry re-reads the layer just freed to satisfy the ceiling,
+        // promotes it again, and hits the same boundary after a long SSD stall.
+        // Shrink the chunk instead of repeating that loop.
+        !sparse_experts_are_paged
+            && should_retry_fixed_forward_after_expert_reclamation(
+                has_already_retried_after_reclamation,
+                retained_expert_payload_bytes_before_reclamation,
+                retained_expert_payload_bytes_after_reclamation,
+                required_reclamation_bytes,
+            )
     }
 }
 
@@ -75,6 +80,8 @@ pub struct ForwardRecoveryRequirements {
     pub active_memory_ceiling_bytes: usize,
     /// Prevents a capacity failure from entering an unbounded retry loop.
     pub has_already_retried_after_reclamation: bool,
+    /// Paged experts must not retry the same chunk after reclaiming a layer.
+    pub sparse_experts_are_paged: bool,
 }
 
 impl ForwardRecoveryRequirements {
@@ -98,6 +105,7 @@ impl ForwardRecoveryRequirements {
                 .unwrap_or(u64::MAX),
             u64::try_from(self.retained_expert_payload_bytes_after_reclamation).unwrap_or(u64::MAX),
             required_reclamation_bytes,
+            self.sparse_experts_are_paged,
         );
         if should_retry {
             ForwardRecoveryDecision::Retry {

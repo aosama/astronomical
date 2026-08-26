@@ -1,10 +1,7 @@
 use crate::attention::rotating_prefill_transient_token_count;
-use crate::expert_paging::{
-    CurrentExpertLayerResidency, ExpertResidencyPhase, PhaseAwareExpertResidencyPlan,
-    plan_phase_aware_expert_residency,
-};
 use crate::memory::{
-    CompleteResidencyDecision, CompleteResidencyRequirements,
+    CompleteResidencyDecision, CompleteResidencyRequirements, CurrentExpertLayerResidency,
+    ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, plan_phase_aware_expert_residency,
     required_complete_residency_activation_headroom_bytes,
 };
 
@@ -113,19 +110,24 @@ impl LagunaExpertPagingPlan {
         active_memory_ceiling_bytes: u64,
         observed_transient_high_water_bytes: u64,
     ) -> Result<CompleteResidencyDecision, LagunaPagingError> {
+        let mut largest_complete_expert_layer_bytes = 0_u64;
         let complete_expert_payload_bytes =
             self.sparse_layers()
                 .iter()
                 .try_fold(0_u64, |total_payload_bytes, sparse_layer| {
+                    let complete_layer_payload_bytes =
+                        sparse_layer.complete_layer_payload_byte_count()?;
+                    largest_complete_expert_layer_bytes =
+                        largest_complete_expert_layer_bytes.max(complete_layer_payload_bytes);
                     total_payload_bytes
-                        .checked_add(sparse_layer.complete_layer_payload_byte_count()?)
+                        .checked_add(complete_layer_payload_bytes)
                         .ok_or(LagunaPagingError::ExpertPayloadOverflow {
                             layer_index: sparse_layer.decoder_layer_index(),
                         })
                 })?;
         let required_activation_headroom_bytes =
             required_complete_residency_activation_headroom_bytes(
-                complete_expert_payload_bytes,
+                largest_complete_expert_layer_bytes,
                 observed_transient_high_water_bytes,
             );
         Ok(CompleteResidencyRequirements {

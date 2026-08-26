@@ -24,9 +24,10 @@ use crate::qwen3_5::model::adaptive_ram_growth_logging::{
 use crate::qwen3_5::model::memory_admission::invalid_request_error;
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthPhase, InferenceEngineError, PerformanceAttribution,
-    PerformanceAttributionOutcome, PerformanceCounter, PerformanceOperation,
-    combined_persistent_growth_bytes,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthPhase, InferenceEngineError, MlxRamBudgetPhase,
+    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceCounter,
+    PerformanceOperation, combined_persistent_growth_bytes,
+    persistent_context_restore_workspace_bytes,
 };
 use astronomical_ipc_protocol::RequestId;
 
@@ -106,10 +107,57 @@ impl Qwen3_5EngineState {
         };
         let additional_maximum_expert_page_reservation_bytes =
             self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
+        // Cache restore temporarily owns source tensors beside live decoder
+        // state. Charge that overlap plus learned prefill activations here so a
+        // seated model is demoted before restore, not killed mid-restore.
+        let restore_overlap_workspace_bytes = if can_use_persistent_prompt_cache {
+            persistent_context_restore_workspace_bytes(
+                self.context_memory_reservation_bytes_per_token,
+                total_context_tokens,
+            )
+            .ok_or_else(|| invalid_request_error("prompt-cache restore workspace overflowed"))?
+        } else {
+            0
+        };
+        let (prefill_activation_workspace_bytes, complete_layer_scratch_bytes) = {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            let ram_budget = model.mlx_ram_budget();
+            let prefill_activation_workspace_bytes =
+                usize::try_from(ram_budget.activation_headroom_bytes(MlxRamBudgetPhase::Prefill))
+                    .map_err(|_| {
+                    invalid_request_error("prefill activation workspace exceeds the platform range")
+                })?;
+            let complete_layer_scratch_bytes = usize::try_from(
+                ram_budget
+                    .model_geometry()
+                    .largest_complete_expert_layer_bytes,
+            )
+            .map_err(|_| {
+                invalid_request_error(
+                    "complete-layer scratch reservation exceeds the platform range",
+                )
+            })?;
+            (
+                prefill_activation_workspace_bytes,
+                complete_layer_scratch_bytes,
+            )
+        };
+        let temporary_workspace_reservation_bytes = direct_publication_workspace_bytes
+            .checked_add(restore_overlap_workspace_bytes)
+            .and_then(|workspace_bytes| {
+                workspace_bytes.checked_add(prefill_activation_workspace_bytes)
+            })
+            .and_then(|workspace_bytes| workspace_bytes.checked_add(complete_layer_scratch_bytes))
+            .ok_or_else(|| {
+                invalid_request_error("generation context workspace reservation overflowed")
+            })?;
         let target_expert_payload_bytes_reclaimed_during_context_admission = self
             .validate_context_memory_admission_with_resident_expert_demotion(
                 total_context_tokens,
-                direct_publication_workspace_bytes,
+                temporary_workspace_reservation_bytes,
                 additional_maximum_expert_page_reservation_bytes,
                 performance_attribution,
             )?;

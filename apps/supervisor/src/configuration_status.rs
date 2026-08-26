@@ -74,6 +74,7 @@ struct ChunkingConfigurationSummary {
     full_attention_key_value_growth_tokens: ConfigurationValue<u32>,
     speculative_prefill_draft_forward_tokens: ConfigurationValue<u32>,
     prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
+    experimental_ssd_paging_prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
     experimental_ssd_paging_generation_graph_submission_layer_interval: ConfigurationValue<u32>,
     prompt_cache_block_tokens: NullableConfigurationValue<u32>,
     prompt_cache_common_prefix_stride_blocks: ConfigurationValue<u32>,
@@ -244,7 +245,7 @@ fn ready_model_summary(
         mtp_enabled: ConfigurationValue {
             configured: configured_policy
                 .and_then(|policy| policy.acceleration_availability.configured_mtp_enabled),
-            default: Some(true),
+            default: Some(false),
             effective: effective_autoregressive_model.map(|model| model.mtp_enabled),
         },
         mtp_draft_depth: ConfigurationValue {
@@ -297,15 +298,16 @@ fn chunking_summary(
             configured: configured_fields
                 .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
                 .then(|| {
-                    configured_chunking.and_then(|chunking| {
+                    configured_chunking.map(|chunking| {
                         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
                     })
                 })
                 .flatten(),
-            default: None,
-            effective: effective_chunking.and_then(|chunking| {
-                chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-            }),
+            default: Some(
+                astronomical_config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+            ),
+            effective: effective_chunking
+                .map(|chunking| chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens),
         },
         full_attention_key_value_growth_tokens: ConfigurationValue {
             configured: configured_fields
@@ -344,6 +346,22 @@ fn chunking_summary(
             default: Some(astronomical_config::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
             effective: effective_chunking
                 .map(|chunking| chunking.prefill_graph_submission_layer_interval),
+        },
+        experimental_ssd_paging_prefill_graph_submission_layer_interval: ConfigurationValue {
+            configured: configured_fields
+                .experimental_ssd_paging_prefill_graph_submission_layer_interval
+                .then(|| {
+                    configured_chunking.map(|chunking| {
+                        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval
+                    })
+                })
+                .flatten(),
+            default: Some(
+                astronomical_config::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            ),
+            effective: effective_chunking.map(|chunking| {
+                chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval
+            }),
         },
         experimental_ssd_paging_generation_graph_submission_layer_interval: ConfigurationValue {
             configured: configured_fields

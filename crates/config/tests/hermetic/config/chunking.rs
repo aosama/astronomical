@@ -1,5 +1,14 @@
 use super::*;
 
+fn persisted_chunking_object(home_directory: &std::path::Path) -> serde_json::Value {
+    let persisted_config: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(home_directory.join(".astronomical/config.json"))
+            .expect("the rewritten config should be readable"),
+    )
+    .expect("the rewritten config should be JSON");
+    persisted_config["chunking"].clone()
+}
+
 #[test]
 fn should_resolve_every_user_configured_chunking_boundary() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
@@ -27,7 +36,11 @@ fn should_resolve_every_user_configured_chunking_boundary() {
 
     assert_eq!(chunking.full_attention_key_value_growth_tokens(), 192);
     assert_eq!(chunking.speculative_prefill_draft_forward_tokens(), 1_536);
-    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 2);
+    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
+    assert_eq!(
+        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
+        2
+    );
     assert_eq!(
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         0
@@ -35,6 +48,16 @@ fn should_resolve_every_user_configured_chunking_boundary() {
     assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 1_024);
     assert_eq!(chunking.prompt_cache_block_tokens(), Some(1_024));
     assert_eq!(chunking.prompt_cache_common_prefix_stride_blocks(), 6);
+
+    let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
+    assert_eq!(
+        persisted_chunking["prefill_graph_submission_layer_interval"],
+        0
+    );
+    assert_eq!(
+        persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
+        2
+    );
 }
 
 #[test]
@@ -54,9 +77,80 @@ fn should_default_omitted_graph_submission_intervals() {
         .chunking()
         .expect("chunking configuration should resolve");
 
-    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 1);
+    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
+    assert_eq!(
+        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
+        1
+    );
     assert_eq!(
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
+        3
+    );
+}
+
+#[test]
+fn should_keep_resident_and_ssd_prefill_graph_intervals_independent() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "chunking": {
+            "prefill_graph_submission_layer_interval": 0,
+            "experimental_ssd_paging_prefill_graph_submission_layer_interval": 2,
+            "experimental_ssd_paging_generation_graph_submission_layer_interval": 3
+          }
+        }"#,
+    );
+
+    let chunking = AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+        .expect("independent graph intervals should load")
+        .chunking()
+        .expect("chunking should resolve");
+
+    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
+    assert_eq!(
+        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
+        2
+    );
+    assert_eq!(
+        chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
+        3
+    );
+}
+
+#[test]
+fn should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "chunking": {
+            "fixed_prompt_processing_chunk_size_tokens": 2048,
+            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048,
+            "prefill_graph_submission_layer_interval": 1,
+            "experimental_ssd_paging_generation_graph_submission_layer_interval": 3
+          }
+        }"#,
+    );
+
+    AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+        .expect("the legacy single prefill interval should load");
+
+    let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
+    assert_eq!(
+        persisted_chunking["prefill_graph_submission_layer_interval"],
+        0
+    );
+    assert_eq!(
+        persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
+        1
+    );
+    assert_eq!(
+        persisted_chunking["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
+        2_048
+    );
+    assert_eq!(
+        persisted_chunking["experimental_ssd_paging_generation_graph_submission_layer_interval"],
         3
     );
 }
@@ -132,10 +226,7 @@ fn should_reject_full_attention_growth_that_cannot_cross_the_mlx_dimension_bound
 
 #[test]
 fn should_reject_retired_graph_submission_layer_interval_fields() {
-    for retired_field_name in [
-        "experimental_ssd_paging_prefill_graph_submission_layer_interval",
-        "generation_graph_submission_layer_interval",
-    ] {
+    for retired_field_name in ["generation_graph_submission_layer_interval"] {
         let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
         write_config(
             temporary_home_directory.path(),

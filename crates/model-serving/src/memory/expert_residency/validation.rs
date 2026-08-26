@@ -122,6 +122,10 @@ fn validate_current_residency(
         return Err(
             PhaseAwareExpertResidencyPlanError::InconsistentCurrentPayload {
                 layer_index: residency.layer_index,
+                payload_bytes: residency.payload_bytes,
+                geometry_expert_payload_bytes: geometry.expert_payload_bytes,
+                retained_count: residency.retained_expert_ids.len(),
+                expected_payload_bytes,
             },
         );
     }

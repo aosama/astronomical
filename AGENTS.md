@@ -8,7 +8,7 @@
 
 - NEVER pipe long-running commands through | tail -30, | head, or any filter that buffers output and hides live progress from the user. The user must be able to observe progress as it happens.
 
-- All and any tests must have a built in timeout with a maximum of 120 seconds.
+- All and any tests must have a built in timeout with a maximum of 120 seconds. Exceptions can be made for tests that deal with performance endurance tests and/or reproducing OOM issues.
 
 - Astronomical is expected to adapt to any laptop, any RAM size, any GPU wired memory limit. Do not hardwire or optimize the codebase just for this laptop that we are developing in.
 
@@ -69,3 +69,13 @@
 - The fixture of Romeo and Juliet MUST be used and the source test input for LLMs, there should not be radnom text or tokens used for testing.
 
 - Assert model normalization and execution with structural validity checks derived from config (layer count matches, hidden size matches, shard count is positive, total bytes equals sum of shard sizes, affine profiles contain valid bits and group sizes, end tokens are present). Do not assert golden-master constants like exact byte counts, exact shard counts, or exact affine profile sets that couple tests to one specific quantization artifact — those change with every packaging variant and should not block swapping the reference model.
+
+## Principles to Follow While Testing SSD Model Streaming
+
+- It is a good practice while testing SSD model streaming to allocate RAM that is 50% of the model size on disk. This would be more realistic towards what RAM end users are likely to have available.
+- Tests that use a real model duing SSD streaming should produce measurements for throughput covering (a) tokens per second during prefill/prompt processing (b) tokens per second during token generation.
+
+## Memory Management Codebase
+
+- The package under <repo-root>/crates/model-serving/src/memory must be where all memory management code is located. Including but not limited to policies, decisions, streaming and any other memory related calculations.
+- You are encourage to discover this package and understand how memory management works.

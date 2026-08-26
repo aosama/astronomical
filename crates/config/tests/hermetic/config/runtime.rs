@@ -36,7 +36,7 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
     );
     assert_eq!(
         generated_config.as_object().map(serde_json::Map::len),
-        Some(3)
+        Some(4)
     );
     assert_eq!(generated_schema, checked_in_schema);
     assert_eq!(
@@ -85,7 +85,7 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
     );
     assert_eq!(
         checked_in_schema_json["$defs"]["mtp"]["properties"]["enabled"]["default"],
-        true
+        false
     );
     assert_eq!(
         checked_in_schema_json["$defs"]["mtp"]["x-astronomical-apply-mode"],
@@ -97,6 +97,18 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
         None
     );
     assert_eq!(astronomical_config.chunking().unwrap(), Default::default());
+    assert_eq!(
+        generated_config["chunking"]["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
+        2_048
+    );
+    assert_eq!(
+        generated_config["chunking"]["prefill_graph_submission_layer_interval"],
+        0
+    );
+    assert_eq!(
+        generated_config["chunking"]["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
+        1
+    );
     assert!(astronomical_config.persistent_prompt_cache_enabled());
     assert!(!astronomical_config.performance_attribution_enabled());
     assert!(!astronomical_config.experimental_qwen_thinking_channel_seed_enabled());

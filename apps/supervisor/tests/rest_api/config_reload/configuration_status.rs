@@ -120,7 +120,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     assert!(!String::from_utf8_lossy(&status_bytes).contains("/fictional/private"));
     assert_eq!(
         status_document["configuration"]["ready_model"]["mtp_enabled"]["default"],
-        true
+        false
     );
     assert_eq!(
         status_document["configuration"]["ready_model"]["mtp_enabled"]["configured"],
@@ -185,10 +185,11 @@ fn worker_model_configuration(mtp_enabled: bool) -> WorkerModelConfiguration {
         maximum_output_tokens: 4_096,
         chunking: WorkerChunkingConfiguration {
             fixed_prompt_processing_chunk_size_tokens: 2_048,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Some(256),
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
             full_attention_key_value_growth_tokens: 256,
             speculative_prefill_draft_forward_tokens: 1_024,
-            prefill_graph_submission_layer_interval: 1,
+            prefill_graph_submission_layer_interval: 0,
+            experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
             prompt_cache_block_tokens: Some(128),
             prompt_cache_common_prefix_stride_blocks: 4,

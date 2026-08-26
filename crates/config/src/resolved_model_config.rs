@@ -150,18 +150,20 @@ impl ResolvedModelConfig {
         self.speculative_prefill.as_ref()
     }
 
-    /// Returns the authored MTP enablement, or `None` when automatic compatible MTP applies.
+    /// Returns the authored MTP enablement, or `None` when the model has not opted in.
     #[must_use]
     pub const fn configured_mtp_enabled(&self) -> Option<bool> {
         self.configured_mtp_enabled
     }
 
     /// Returns whether this model may use compatible multi-token prediction.
+    ///
+    /// Omission stays off. A model must set `acceleration.mtp.enabled` to true.
     #[must_use]
     pub const fn mtp_enabled(&self) -> bool {
         match self.configured_mtp_enabled {
             Some(mtp_enabled) => mtp_enabled,
-            None => true,
+            None => false,
         }
     }
 

@@ -45,7 +45,7 @@
         },
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
           "configured": null,
-          "default": null,
+          "default": 2048,
           "effective": null
         },
         "full_attention_key_value_growth_tokens": {
@@ -55,7 +55,7 @@
         },
         "prefill_graph_submission_layer_interval": {
           "configured": null,
-          "default": 1,
+          "default": 0,
           "effective": null
         },
         "prompt_cache_block_tokens": {
@@ -73,6 +73,11 @@
           "configured": null,
           "default": 2048,
           "effective": null
+        },
+        "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
+          "configured": null,
+          "default": 1,
+          "effective": null
         }
       },
       "maximum_context_tokens": {
@@ -88,7 +93,7 @@
       "model_id": "fictional/image-model",
       "mtp_enabled": {
         "configured": null,
-        "default": true,
+        "default": false,
         "effective": null
       },
       "mtp_draft_depth": {
