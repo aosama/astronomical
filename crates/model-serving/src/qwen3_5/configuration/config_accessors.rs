@@ -35,13 +35,27 @@ impl Qwen3_5Config {
     }
 
     /// Returns the quantization profile for a specific module, falling back to the
-    /// default profile if the module is not found in the explicit overrides.
+    /// `mtplx_mtp_quantization` global default for MTP modules, then the model-wide
+    /// default profile if the module is not found in any override map.
     #[must_use]
     pub fn quantization_profile_for_module(&self, module_name: &str) -> OptiQQuantizationProfile {
         self.mtp_quantized_module_profiles
             .get(module_name)
             .copied()
             .or_else(|| self.quantized_module_profiles.get(module_name).copied())
+            .or_else(|| {
+                // MTP modules without a per-module override get the global
+                // mtplx_mtp_quantization fallback when declared.
+                if module_name.starts_with("language_model.mtp.") {
+                    self.mtxplx_mtp_quantization_fallback
+                        .map(|fallback| OptiQQuantizationProfile {
+                            bits: fallback.bits,
+                            group_size: fallback.group_size,
+                        })
+                } else {
+                    None
+                }
+            })
             .unwrap_or(OptiQQuantizationProfile {
                 bits: self.default_quantization_bits,
                 group_size: self.default_quantization_group_size,

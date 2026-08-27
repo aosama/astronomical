@@ -17,10 +17,11 @@ pub use artifacts::{
     MAXIMUM_MTPLX_RUNTIME_BYTES, Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError,
     Qwen3_5ArtifactValidator, Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract,
     Qwen3_5MtpContractError, Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
-    Qwen3_5MtpSidecarValidationOutcome, Qwen3_5MtpTargetOnlyReason, Qwen3_5ShardIndex,
-    ValidatedQwen3_5Artifact, qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names,
-    qwen3_5_mtp_tensor_profiles, qwen3_5_resident_language_tensor_profiles,
-    validate_qwen3_5_mtp_sidecar_for_tests,
+    Qwen3_5MtpSidecarValidationError, Qwen3_5MtpSidecarValidationOutcome,
+    Qwen3_5MtpTargetOnlyReason, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
+    qwen3_5_language_tensor_profiles, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
+    qwen3_5_resident_language_tensor_profiles, validate_qwen3_5_mtp_sidecar_for_tests,
+    validate_qwen3_5_mtp_sidecar_result_for_tests,
 };
 pub use configuration::{
     ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,

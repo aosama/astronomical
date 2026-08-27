@@ -6,7 +6,7 @@ use crate::qwen3_5::{Qwen3_5Config, Qwen3_5MtpContract, Qwen3_5ShardIndex};
 use super::{MtpDraftDepth, tensor_namespace::qwen3_5_mtp_tensor_names};
 
 /// Bounded artifact reason that keeps optional MTP target-only.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Qwen3_5MtpTargetOnlyReason {
     NoTensorInventory,
     UnsupportedStoredLayerCount,
@@ -15,6 +15,9 @@ pub enum Qwen3_5MtpTargetOnlyReason {
     SidecarUnavailable,
     CanonicalTensorCollision,
     TensorValidationFailed,
+    /// The declared MTP sidecar could not be validated; the contained diagnostic is the
+    /// human-readable cause (missing tensor, dtype/shape mismatch, target collision).
+    SidecarValidationFailed(String),
     ContractMalformed,
     ContractRuntimeDocumentTooLarge,
     ContractFieldDisagreement,
@@ -39,6 +42,7 @@ impl fmt::Display for Qwen3_5MtpTargetOnlyReason {
                 formatter.write_str("MTP tensors have conflicting canonical ownership")
             }
             Self::TensorValidationFailed => formatter.write_str("MTP tensor validation failed"),
+            Self::SidecarValidationFailed(diagnostic) => formatter.write_str(diagnostic),
             Self::ContractMalformed => formatter.write_str("optional MTP contract is malformed"),
             Self::ContractRuntimeDocumentTooLarge => {
                 formatter.write_str("optional MTP runtime metadata exceeds 64 KB")
@@ -140,9 +144,9 @@ impl Qwen3_5MtpArtifactCapability {
     }
 
     #[must_use]
-    pub const fn target_only_reason(&self) -> Option<Qwen3_5MtpTargetOnlyReason> {
+    pub fn target_only_reason(&self) -> Option<Qwen3_5MtpTargetOnlyReason> {
         match self {
-            Self::TargetOnly { reason } => Some(*reason),
+            Self::TargetOnly { reason } => Some(reason.clone()),
             Self::MtpCapable { .. } => None,
         }
     }
