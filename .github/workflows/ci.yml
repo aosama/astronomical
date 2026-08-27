@@ -51,7 +51,9 @@ jobs:
       # reusable cache for newly merged native inputs.
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     # Restore, verification, and publication all remain inside the cost boundary.
-    timeout-minutes: 10
+    # Allow sufficient headroom for cache saves after a step-level compile timeout;
+    # worst-case cold compile (~425s) + overhead (~185s) + cache saves (~30s) ≈ 640s.
+    timeout-minutes: 15
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
@@ -250,7 +252,7 @@ jobs:
         run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
         run: cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
-        timeout-minutes: 7
+        timeout-minutes: 12
       - name: Classify native build result
         id: native-build-result
         shell: bash
@@ -279,11 +281,11 @@ jobs:
 
       - name: Start cargo-downloads-cache save timer
         id: cargo-downloads-cache-save-start
-        if: success() && steps.cargo-downloads-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.cargo-downloads-cache.outputs.cache-hit != 'true' }}
         run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Save cargo-downloads-cache
         id: cargo-downloads-cache-save
-        if: success() && steps.cargo-downloads-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.cargo-downloads-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -303,11 +305,11 @@ jobs:
 
       - name: Start native-archives-cache save timer
         id: native-archives-cache-save-start
-        if: success() && steps.native-archives-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.native-archives-cache.outputs.cache-hit != 'true' }}
         run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Save native-archives-cache
         id: native-archives-cache-save
-        if: success() && steps.native-archives-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.native-archives-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -325,11 +327,11 @@ jobs:
 
       - name: Start native-build-cache save timer
         id: native-build-cache-save-start
-        if: success() && steps.native-build-result.outputs.was_built == 'true'
+        if: ${{ !cancelled() && steps.native-build-result.outputs.was_built == 'true' }}
         run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Save native-build-cache
         id: native-build-cache-save
-        if: success() && steps.native-build-result.outputs.was_built == 'true'
+        if: ${{ !cancelled() && steps.native-build-result.outputs.was_built == 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -347,11 +349,11 @@ jobs:
 
       - name: Start sccache-cache save timer
         id: sccache-cache-save-start
-        if: success() && steps.sccache-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.sccache-cache.outputs.cache-hit != 'true' }}
         run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Save sccache-cache
         id: sccache-cache-save
-        if: success() && steps.sccache-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.sccache-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -369,11 +371,11 @@ jobs:
 
       - name: Start swiftpm-cache save timer
         id: swiftpm-cache-save-start
-        if: success() && steps.swiftpm-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.swiftpm-cache.outputs.cache-hit != 'true' }}
         run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Save swiftpm-cache
         id: swiftpm-cache-save
-        if: success() && steps.swiftpm-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.swiftpm-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
