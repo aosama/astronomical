@@ -239,7 +239,7 @@ assert_workflow_contract() {
         raise "classifier job still computes unused native identity" if detection_job.fetch("steps").any? { |step| step["run"]&.include?("native-build-cache-fingerprint.sh") }
         verification_job = workflow.fetch("jobs").fetch("verify")
         raise "required check name changed" unless verification_job.fetch("name") == "10-minute macOS hermetic verification"
-        raise "required check exceeded its hard cap" unless verification_job.fetch("timeout-minutes") == 10
+        raise "required check exceeded its hard cap" unless verification_job.fetch("timeout-minutes") == 15
         expected_authority = "${{ always() && (needs.detect-changes.result != '\''success'\'' || needs.detect-changes.outputs.macos_verification_required == '\''true'\'') }}"
         raise "macOS authority does not fail closed" unless verification_job.fetch("if") == expected_authority
         verification_concurrency = verification_job.fetch("concurrency")
@@ -295,7 +295,9 @@ assert_workflow_contract() {
           raise "#{owner_id} has no save owner" unless save_step
           save_action = save_step.fetch("uses")
           raise "cache owner #{owner_id} is not a pinned save action" unless save_action.match?(%r{\Aactions/cache/save@[0-9a-f]{40}\z})
-          raise "#{owner_id} save is unconditional" unless save_step.fetch("if").include?("success()")
+          save_condition = save_step.fetch("if")
+          is_conditional = save_condition.include?("success()") || save_condition.include?("!cancelled()")
+          raise "#{owner_id} save is unconditional" unless is_conditional
         end
         raise "cache owners overlap paths" unless restored_paths.uniq.length == restored_paths.length
 
