@@ -266,6 +266,7 @@ pub use qwen3_5::{
     Qwen3_5TargetVerificationProjectionDispatch, Qwen3_5VisionModel, Qwen3_5VisionWeights,
     Qwen3_5Weights, RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
     RequestDecoderStateStackCheckpoint, VerifiedEmissionQueue, VerifiedTargetFrontier,
+    four_row_split_k_quantized_linear_kernel,
     persistent_prompt_cache_publication_advances_parent_chain,
     qwen3_5_aggregate_speculative_prefill_attention_weights, qwen3_5_apply_top_p_mask,
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_full_attention_step,

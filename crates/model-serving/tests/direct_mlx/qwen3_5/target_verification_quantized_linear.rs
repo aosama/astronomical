@@ -1,6 +1,6 @@
 use astronomical_model_serving::{
-    Qwen3_5TargetVerificationProjectionDispatch, qwen3_5_target_verification_quantized_linear,
-    target_verification_quantized_linear_kernel,
+    Qwen3_5TargetVerificationProjectionDispatch, four_row_split_k_quantized_linear_kernel,
+    qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
 };
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
 
@@ -24,6 +24,8 @@ async fn should_match_repeated_one_token_projection_across_supported_geometries(
     let runtime = test_runtime();
     let target_verification_kernel = target_verification_quantized_linear_kernel()
         .expect("the target-verification kernel should initialize");
+    let four_row_split_k_kernel = four_row_split_k_quantized_linear_kernel()
+        .expect("the four-row split-K kernel should initialize");
     let supported_geometries = [
         ProjectionGeometry {
             token_count: 2,
@@ -41,14 +43,6 @@ async fn should_match_repeated_one_token_projection_across_supported_geometries(
             quantization_bits: 5,
             quantization_group_size: 64,
         },
-        ProjectionGeometry {
-            token_count: 4,
-            input_dimension: 512,
-            output_dimension: 24,
-            activation_dtype: MlxDtype::BFloat16,
-            quantization_bits: 4,
-            quantization_group_size: 128,
-        },
     ];
 
     for projection_geometry in supported_geometries {
@@ -56,6 +50,7 @@ async fn should_match_repeated_one_token_projection_across_supported_geometries(
         let optimized_projection = qwen3_5_target_verification_quantized_linear(
             &runtime,
             &target_verification_kernel,
+            &four_row_split_k_kernel,
             &projection_inputs.activations,
             &projection_inputs.packed_weight,
             &projection_inputs.quantization_scales,
@@ -90,11 +85,78 @@ async fn should_match_repeated_one_token_projection_across_supported_geometries(
 }
 
 #[tokio::test]
+async fn should_keep_four_row_split_k_argmax_aligned_with_token_local_projection() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let target_verification_kernel = target_verification_quantized_linear_kernel()
+        .expect("the target-verification kernel should initialize");
+    let four_row_split_k_kernel = four_row_split_k_quantized_linear_kernel()
+        .expect("the four-row split-K kernel should initialize");
+    let projection_geometry = ProjectionGeometry {
+        token_count: 4,
+        input_dimension: 512,
+        output_dimension: 24,
+        activation_dtype: MlxDtype::BFloat16,
+        quantization_bits: 4,
+        quantization_group_size: 64,
+    };
+    let projection_inputs = projection_inputs(&runtime, projection_geometry);
+    let four_row_projection = qwen3_5_target_verification_quantized_linear(
+        &runtime,
+        &target_verification_kernel,
+        &four_row_split_k_kernel,
+        &projection_inputs.activations,
+        &projection_inputs.packed_weight,
+        &projection_inputs.quantization_scales,
+        &projection_inputs.quantization_biases,
+        projection_geometry.quantization_group_size,
+        projection_geometry.quantization_bits,
+    )
+    .expect("four-row 4-bit geometry should project");
+    assert_eq!(
+        four_row_projection.dispatch(),
+        Qwen3_5TargetVerificationProjectionDispatch::FourRowSplitK
+    );
+    let token_local_projection =
+        repeated_one_token_projection(&runtime, &projection_inputs, projection_geometry);
+    let four_row_values = float32_values(
+        &runtime,
+        &four_row_projection.into_projected_activations(),
+        "four-row projection",
+    );
+    let token_local_values =
+        float32_values(&runtime, &token_local_projection, "token-local projection");
+    assert_eq!(four_row_values.len(), token_local_values.len());
+    let output_dimension = projection_geometry.output_dimension as usize;
+    for token_position_index in 0..projection_geometry.token_count as usize {
+        let row_start = token_position_index * output_dimension;
+        let row_end = row_start + output_dimension;
+        let four_row_argmax = argmax(&four_row_values[row_start..row_end]);
+        let token_local_argmax = argmax(&token_local_values[row_start..row_end]);
+        assert_eq!(
+            four_row_argmax, token_local_argmax,
+            "four-row split-K must preserve token-local argmax at token {token_position_index}"
+        );
+    }
+}
+
+fn argmax(row_values: &[f32]) -> usize {
+    row_values
+        .iter()
+        .enumerate()
+        .max_by(|left, right| left.1.total_cmp(right.1))
+        .map(|(row_index, _)| row_index)
+        .expect("a projection row should contain values")
+}
+
+#[tokio::test]
 async fn should_use_token_local_mlx_for_each_unsupported_dispatch_geometry() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
     let target_verification_kernel = target_verification_quantized_linear_kernel()
         .expect("the target-verification kernel should initialize");
+    let four_row_split_k_kernel = four_row_split_k_quantized_linear_kernel()
+        .expect("the four-row split-K kernel should initialize");
     let unsupported_geometries = [
         ProjectionGeometry {
             token_count: 3,
@@ -135,6 +197,7 @@ async fn should_use_token_local_mlx_for_each_unsupported_dispatch_geometry() {
         let fallback_projection = qwen3_5_target_verification_quantized_linear(
             &runtime,
             &target_verification_kernel,
+            &four_row_split_k_kernel,
             &projection_inputs.activations,
             &projection_inputs.packed_weight,
             &projection_inputs.quantization_scales,

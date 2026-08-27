@@ -52,6 +52,7 @@ pub struct Qwen3_5Model {
     pub(crate) gated_delta_checkpoint_kernel: MlxMetalKernel,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub(crate) target_verification_quantized_linear_kernel: MlxMetalKernel,
+    pub(crate) target_verification_four_row_quantized_linear_kernel: MlxMetalKernel,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
     pub(crate) chunking: Qwen3_5ModelChunkingConfiguration,

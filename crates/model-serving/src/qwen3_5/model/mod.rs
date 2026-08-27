@@ -51,6 +51,8 @@ mod speculative_prefill_sparse_target;
 #[cfg(feature = "direct-mlx")]
 mod speculative_prefill_visual_forward;
 #[cfg(feature = "direct-mlx")]
+mod target_verification_four_row_quantized_linear;
+#[cfg(feature = "direct-mlx")]
 mod target_verification_quantized_linear;
 #[cfg(feature = "direct-mlx")]
 mod tensor_slicing;
@@ -92,6 +94,9 @@ pub(crate) use speculative_prefill::{
 pub use speculative_prefill_attention_capture::qwen3_5_aggregate_speculative_prefill_attention_weights;
 #[cfg(feature = "direct-mlx")]
 pub use speculative_prefill_selection::qwen3_5_select_speculative_prefill_token_positions_on_gpu;
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel;
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use target_verification_quantized_linear::{

@@ -182,6 +182,7 @@ for (int row = 0; row < RESULTS_PER_SIMDGROUP; ++row) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Qwen3_5TargetVerificationProjectionDispatch {
     OptimizedMetal,
+    FourRowSplitK,
     TokenLocalMlxFallback,
 }
 
@@ -232,6 +233,7 @@ pub fn target_verification_quantized_linear_kernel() -> Result<MlxMetalKernel, M
 pub fn qwen3_5_target_verification_quantized_linear(
     runtime: &MlxRuntime,
     target_verification_kernel: &MlxMetalKernel,
+    four_row_split_k_kernel: &MlxMetalKernel,
     activations: &MlxArray,
     packed_weight: &MlxArray,
     quantization_scales: &MlxArray,
@@ -252,6 +254,28 @@ pub fn qwen3_5_target_verification_quantized_linear(
     )?;
     let output_dimension = packed_weight_shape[0];
     let input_dimension = activation_shape[2];
+    if super::target_verification_four_row_quantized_linear::four_row_split_k_is_eligible(
+        activations,
+        quantization_bits,
+        quantization_group_size,
+        input_dimension,
+        output_dimension,
+    ) {
+        let projected_activations =
+            super::target_verification_four_row_quantized_linear::project_four_row_split_k(
+                runtime,
+                four_row_split_k_kernel,
+                activations,
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                quantization_group_size,
+            )?;
+        return Ok(Qwen3_5TargetVerificationProjection {
+            projected_activations,
+            dispatch: Qwen3_5TargetVerificationProjectionDispatch::FourRowSplitK,
+        });
+    }
     if target_verification_uses_optimized_dispatch(
         activations,
         quantization_scales,
@@ -477,6 +501,7 @@ impl Qwen3_5Model {
         Ok(qwen3_5_target_verification_quantized_linear(
             &self.runtime,
             &self.target_verification_quantized_linear_kernel,
+            &self.target_verification_four_row_quantized_linear_kernel,
             activations,
             packed_weight,
             quantization_scales,
