@@ -53,31 +53,78 @@ impl ValidatedSafetensorsSource {
         source_id: TensorSourceId,
         required_file: ValidatedRequiredFile,
     ) -> Result<Self, ArtifactValidationError> {
+        tracing::debug!(
+            file_name = required_file.file_name(),
+            size_bytes = required_file.size_bytes(),
+            "ValidatedSafetensorsSource::parse start"
+        );
         let bounded_header = read_bounded_safetensors_json_header(
             required_file.file(),
             required_file.size_bytes(),
             MAXIMUM_SAFETENSORS_HEADER_BYTES,
-        )
-        .map_err(|error| map_header_error(error, required_file.file_name()))?;
+        );
+        if bounded_header.is_err() {
+            tracing::debug!(
+                file_name = required_file.file_name(),
+                "read_bounded_safetensors_json_header returned error"
+            );
+            let error = bounded_header.unwrap_err();
+            return Err(map_header_error(error, required_file.file_name()));
+        }
+        let bounded_header = bounded_header.unwrap();
+        tracing::debug!(
+            file_name = required_file.file_name(),
+            "read_bounded_safetensors_json_header succeeded"
+        );
         if let Some(metadata_json_value) = bounded_header.metadata_json_value {
-            serde_json::from_value::<BTreeMap<String, String>>(metadata_json_value).map_err(
-                |source| ArtifactValidationError::InvalidSafetensorsHeader {
-                    file_name: required_file.file_name().to_owned(),
-                    source,
-                },
-            )?;
+            // The safetensors spec allows metadata to be a JSON string that is
+            // parsed into a BTreeMap<String, String> at the top level.  OptiQ
+            // sidecars embed richer metadata (quantization bits, group sizes,
+            // policies) that do not conform to the flat-string schema, so we
+            // treat a parse failure as non-fatal — the sidecar is still valid
+            // as long as its tensor entries parse successfully.
+            if let Err(source) =
+                serde_json::from_value::<BTreeMap<String, String>>(metadata_json_value.clone())
+            {
+                tracing::debug!(
+                    file_name = required_file.file_name(),
+                    error = %source,
+                    "optional sidecar metadata does not conform to flat-string schema; continuing"
+                );
+            }
+        } else {
+            tracing::debug!(
+                file_name = required_file.file_name(),
+                "no metadata in header (skipping)"
+            );
         }
         let mut tensor_metadata_by_stored_name = BTreeMap::new();
         for (stored_name, tensor_json_value) in bounded_header.tensor_json_values {
             let tensor_metadata = serde_json::from_value::<SafetensorsTensorView>(
                 tensor_json_value,
             )
-            .map_err(|source| ArtifactValidationError::InvalidSafetensorsHeader {
-                file_name: required_file.file_name().to_owned(),
-                source,
+            .map_err(|source| {
+                tracing::debug!(
+                    file_name = required_file.file_name(),
+                    tensor = stored_name,
+                    "tensor metadata parse failed"
+                );
+                ArtifactValidationError::InvalidSafetensorsHeader {
+                    file_name: required_file.file_name().to_owned(),
+                    source,
+                }
             })?;
             tensor_metadata_by_stored_name.insert(stored_name, tensor_metadata);
         }
+        tracing::debug!(
+            file_name = required_file.file_name(),
+            tensor_count = tensor_metadata_by_stored_name.len(),
+            "tensor metadata parsed successfully"
+        );
+        tracing::debug!(
+            file_name = required_file.file_name(),
+            "starting validate_physical_metadata"
+        );
         let payload_bytes = validate_physical_metadata(
             &tensor_metadata_by_stored_name,
             bounded_header.data_section_start_bytes,
@@ -106,6 +153,11 @@ impl ValidatedSafetensorsSource {
 
     pub(crate) fn stored_tensor_names(&self) -> impl Iterator<Item = &String> {
         self.tensor_metadata_by_stored_name.keys()
+    }
+
+    /// Retained header view for one stored tensor, used for structured validation diagnostics.
+    pub(crate) fn stored_tensor_view(&self, stored_name: &str) -> Option<&SafetensorsTensorView> {
+        self.tensor_metadata_by_stored_name.get(stored_name)
     }
 
     /// Validates canonical profiles against physical names without reparsing the header.
@@ -236,6 +288,13 @@ fn validate_physical_metadata(
     file_size_bytes: u64,
     file_name: &str,
 ) -> Result<u64, ArtifactValidationError> {
+    tracing::debug!(
+        file_name = file_name,
+        tensor_count = tensors.len(),
+        data_section_start_bytes,
+        file_size_bytes,
+        "validate_physical_metadata start"
+    );
     let mut ordered_tensors = tensors.iter().collect::<Vec<_>>();
     ordered_tensors.sort_by_key(|(_, metadata)| metadata.data_start_offset());
     let mut expected_payload_offset = 0_u64;
@@ -297,6 +356,11 @@ fn validate_physical_metadata(
             actual_payload_bytes,
         });
     }
+    tracing::debug!(
+        file_name = file_name,
+        actual_payload_bytes,
+        "validate_physical_metadata succeeded"
+    );
     Ok(actual_payload_bytes)
 }
 

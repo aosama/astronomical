@@ -111,6 +111,10 @@ impl Qwen3_5ArtifactValidator {
         let mut canonical_tensor_names =
             Qwen3_5ShardIndex::extract_language_tensor_names_from_json(&shard_index_bytes)?;
         let sidecar_declaration = config.sidecar_mtp_file().and_then(|relative_path| {
+            tracing::debug!(
+                declared_sidecar = relative_path,
+                "attempting to parse MTP sidecar declaration"
+            );
             Qwen3_5MtpSidecarDeclaration::parse(relative_path)
                 .inspect_err(|_| {
                     tracing::debug!(
@@ -121,8 +125,10 @@ impl Qwen3_5ArtifactValidator {
         });
         let sidecar_candidate = sidecar_declaration.as_ref().and_then(|declaration| {
             Qwen3_5MtpSidecarCandidate::open(model_directory, declaration)
-                .inspect_err(|_| {
+                .inspect_err(|error| {
                     tracing::debug!(
+                        sidecar_path = declaration.relative_path(),
+                        error = %error,
                         "optional MTP sidecar source is unavailable; serving target-only"
                     )
                 })
@@ -153,7 +159,21 @@ impl Qwen3_5ArtifactValidator {
             .as_ref()
             .map(qwen3_5_vision_tensor_profiles)
             .unwrap_or_default();
-        let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&config);
+        let mut mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&config);
+        // Packed switch_mlp profiles describe the resident MTP expert layout.
+        // A sidecar that stores per-expert 2D tensors omits those names; drop the
+        // packed profiles so validation does not require a layout the sidecar
+        // does not use. Extra sidecar tensors remain accepted.
+        if let Some(candidate) = sidecar_candidate.as_ref() {
+            let sidecar_canonical_names = candidate
+                .canonical_names()
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            mtp_tensor_profiles.retain(|profile| {
+                !profile.name.contains(".mlp.switch_mlp.")
+                    || sidecar_canonical_names.contains(&profile.name)
+            });
+        }
         let embedded_mtp_names = shard_index
             .mtp_tensor_name_to_shard_file_name()
             .keys()
@@ -165,6 +185,7 @@ impl Qwen3_5ArtifactValidator {
                 .any(|name| embedded_mtp_names.contains(name))
         });
         let had_sidecar_candidate = sidecar_candidate.is_some();
+        let mut sidecar_validation_diagnostic: Option<String> = None;
         let validated_mtp_sidecar = if has_sidecar_collision {
             tracing::debug!(
                 "optional MTP canonical tensor collision detected; serving target-only"
@@ -172,14 +193,17 @@ impl Qwen3_5ArtifactValidator {
             None
         } else {
             sidecar_candidate.and_then(|candidate| {
-                candidate
-                    .validate(&mtp_tensor_profiles, &embedded_mtp_names)
-                    .inspect_err(|_| {
+                match candidate.validate(&mtp_tensor_profiles, &embedded_mtp_names) {
+                    Ok(validated) => Some(validated),
+                    Err(error) => {
+                        sidecar_validation_diagnostic = Some(error.to_string());
                         tracing::debug!(
+                            error = %error,
                             "optional MTP sidecar inventory failed validation; serving target-only"
-                        )
-                    })
-                    .ok()
+                        );
+                        None
+                    }
+                }
             })
         };
         let has_invalid_declared_sidecar = config.sidecar_mtp_file().is_some()
@@ -210,7 +234,10 @@ impl Qwen3_5ArtifactValidator {
             )
         } else if has_invalid_declared_sidecar {
             Qwen3_5MtpArtifactCapability::target_only(
-                Qwen3_5MtpTargetOnlyReason::TensorValidationFailed,
+                Qwen3_5MtpTargetOnlyReason::SidecarValidationFailed(
+                    sidecar_validation_diagnostic
+                        .unwrap_or_else(|| "declared MTP sidecar failed validation".to_owned()),
+                ),
             )
         } else if let Err(contract_error) = mtp_contract.as_ref() {
             Qwen3_5MtpArtifactCapability::target_only(contract_error.into())

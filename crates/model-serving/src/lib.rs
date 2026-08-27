@@ -232,13 +232,13 @@ pub use qwen3_5::{
     Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,
     Qwen3_5InferenceRequest, Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract,
     Qwen3_5MtpContractError, Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
-    Qwen3_5MtpSidecarValidationOutcome, Qwen3_5MtpTargetOnlyReason, Qwen3_5OutputEvent,
-    Qwen3_5OutputParser, Qwen3_5OutputParserError, Qwen3_5ProcessedImage, Qwen3_5PromptError,
-    Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt, Qwen3_5RequestOutput, Qwen3_5RequestOutputError,
-    Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy, Qwen3_5ShardIndex, Qwen3_5ThinkingBudgetError,
-    Qwen3_5ThinkingBudgetState, Qwen3_5TokenDecoder, Qwen3_5TokenIds, Qwen3_5Tokenizer,
-    Qwen3_5TokenizerError, Qwen3_5ToolCall, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
-    Qwen3_5VisionInputPlanError, Qwen3_5VisualEmbeddingRequiredImage,
+    Qwen3_5MtpSidecarValidationError, Qwen3_5MtpSidecarValidationOutcome,
+    Qwen3_5MtpTargetOnlyReason, Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserError,
+    Qwen3_5ProcessedImage, Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt,
+    Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy,
+    Qwen3_5ShardIndex, Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState, Qwen3_5TokenDecoder,
+    Qwen3_5TokenIds, Qwen3_5Tokenizer, Qwen3_5TokenizerError, Qwen3_5ToolCall, Qwen3_5VisionConfig,
+    Qwen3_5VisionInputPlan, Qwen3_5VisionInputPlanError, Qwen3_5VisualEmbeddingRequiredImage,
     Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
     Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
     ValidatedQwen3_5Artifact, discover_sampler_config, discover_token_ids,
@@ -251,6 +251,7 @@ pub use qwen3_5::{
     qwen3_5_resident_language_tensor_profiles, qwen3_5_vision_tensor_profiles,
     resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
     validate_context_token_count, validate_qwen3_5_mtp_sidecar_for_tests,
+    validate_qwen3_5_mtp_sidecar_result_for_tests,
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{

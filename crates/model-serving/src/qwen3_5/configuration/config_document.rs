@@ -22,6 +22,18 @@ pub(super) struct MlxLmExtraTensors {
     pub(super) mtp_file: Option<String>,
 }
 
+/// Global MTP quantization parameters declared in the top-level config.
+/// Provides default bit width and group size for MTP modules that lack
+/// per-module overrides in the `quantization` dict. Absent when the
+/// model does not declare quantized MTP.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct MtplxMtpQuantization {
+    #[serde(default)]
+    pub(super) bits: u32,
+    #[serde(default)]
+    pub(super) group_size: u32,
+}
+
 /// Private wire schema retained only while validating one model config document.
 #[derive(Debug, Deserialize)]
 pub(super) struct Qwen3_5ConfigDocument {
@@ -43,6 +55,17 @@ pub(super) struct Qwen3_5ConfigDocument {
     /// Absent when models store all tensors in the shard index.
     #[serde(default)]
     pub(super) mlx_lm_extra_tensors: Option<MlxLmExtraTensors>,
+
+    /// Top-level MTP sidecar path declared directly in config.json.
+    /// Provides a fallback when `mlx_lm_extra_tensors` is absent.
+    #[serde(default, rename = "mtp_file")]
+    pub(super) mtp_file: Option<String>,
+
+    /// Global MTP quantization parameters for prequantized MTP sidecars.
+    /// E.g. `{"bits": 4, "group_size": 64, "mode": "affine", "prequantized": true}`.
+    /// Absent when the model does not declare quantized MTP.
+    #[serde(default, rename = "mtplx_mtp_quantization")]
+    pub(super) mtxplx_mtp_quantization: Option<MtplxMtpQuantization>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

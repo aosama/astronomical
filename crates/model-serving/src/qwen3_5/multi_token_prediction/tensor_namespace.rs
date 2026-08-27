@@ -1,11 +1,12 @@
 use std::collections::BTreeSet;
 
-use crate::qwen3_5::artifacts::tensor_spec::append_qwen3_5_quantized_affine_tensor_profiles;
 use crate::{TensorDtype, TensorProfile};
 
 use super::dense_tensor_spec::append_qwen3_5_dense_mtp_tensor_profiles;
-use super::moe_tensor_spec::append_qwen3_5_moe_mtp_tensor_profiles;
-use crate::qwen3_5::artifacts::tensor_spec::qwen3_5_tensor_profile;
+use super::moe_tensor_spec::{
+    append_qwen3_5_moe_mtp_tensor_profiles, append_qwen3_5_mtp_affine_tensor_profiles,
+    qwen3_5_tensor_profile,
+};
 use crate::qwen3_5::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 
 /// Returns the config-resolved one-layer Qwen MTP namespace supported by the executor.
@@ -42,11 +43,18 @@ pub fn qwen3_5_mtp_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<Tensor
             vec![hidden_size],
         ));
     }
-    mtp_tensor_profiles.push(qwen3_5_tensor_profile(
-        format!("{mtp_prefix}.fc.weight"),
-        TensorDtype::ModelFloat,
-        vec![hidden_size, hidden_size * 2],
-    ));
+    // The MTP fusion projection (fc) may be quantized or unquantized
+    // depending on the artifact's affine profile. It goes through the
+    // quantization-aware profile generator so that packed U32 weights,
+    // scales, and biases are included when quantized, or a single BF16
+    // weight when native.
+    append_qwen3_5_mtp_affine_tensor_profiles(
+        &mut mtp_tensor_profiles,
+        &format!("{mtp_prefix}.fc"),
+        &[hidden_size],
+        hidden_size * 2,
+        qwen3_5_config,
+    );
 
     let mtp_layer_prefix = format!("{mtp_prefix}.layers.0");
     mtp_tensor_profiles.push(qwen3_5_tensor_profile(
@@ -97,21 +105,4 @@ pub fn qwen3_5_mtp_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<Tensor
         }
     }
     mtp_tensor_profiles
-}
-
-pub(crate) fn append_qwen3_5_mtp_affine_tensor_profiles(
-    mtp_tensor_profiles: &mut Vec<TensorProfile>,
-    module_name: &str,
-    leading_dimensions: &[usize],
-    input_dimension: usize,
-    qwen3_5_config: &Qwen3_5Config,
-) {
-    let quantization_profile = qwen3_5_config.quantization_profile_for_module(module_name);
-    append_qwen3_5_quantized_affine_tensor_profiles(
-        mtp_tensor_profiles,
-        module_name,
-        leading_dimensions,
-        input_dimension,
-        quantization_profile,
-    );
 }

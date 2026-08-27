@@ -25,7 +25,8 @@ pub use mtp_contract::{MAXIMUM_MTPLX_RUNTIME_BYTES, Qwen3_5MtpContract, Qwen3_5M
 pub use shard_index::{MAXIMUM_INDEX_BYTES, Qwen3_5ArtifactError, Qwen3_5ShardIndex};
 pub use sidecar_declaration::{
     Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
-    Qwen3_5MtpSidecarValidationOutcome, validate_qwen3_5_mtp_sidecar_for_tests,
+    Qwen3_5MtpSidecarValidationError, Qwen3_5MtpSidecarValidationOutcome,
+    validate_qwen3_5_mtp_sidecar_for_tests, validate_qwen3_5_mtp_sidecar_result_for_tests,
 };
 pub use tensor_spec::{
     qwen3_5_language_tensor_profiles, qwen3_5_resident_language_tensor_profiles,

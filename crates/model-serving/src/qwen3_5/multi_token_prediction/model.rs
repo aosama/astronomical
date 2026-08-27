@@ -7,7 +7,9 @@ use crate::qwen3_5::model::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
     Qwen3_5DecoderLayerWeights,
 };
-use crate::qwen3_5::model::weights::{take_full_attention_weights, take_tensor};
+use crate::qwen3_5::model::weights::{
+    take_full_attention_weights, take_quantized_affine_weights, take_tensor,
+};
 use crate::qwen3_5::model::weights_validation::{
     validate_bound_tensor, validate_quantized_tensor_bits,
 };
@@ -102,12 +104,11 @@ impl Qwen3_5MtpWeights {
             &mut bound_mtp_tensors,
             "language_model.mtp.pre_fc_norm_hidden.weight".to_owned(),
         )?;
-        let fusion_projection = Qwen3_5AffineWeights::NativeBfloat16 {
-            weight: take_tensor(
-                &mut bound_mtp_tensors,
-                "language_model.mtp.fc.weight".to_owned(),
-            )?,
-        };
+        let fusion_projection = take_quantized_affine_weights(
+            &mut bound_mtp_tensors,
+            qwen3_5_config,
+            "language_model.mtp.fc",
+        )?;
         let decoder_layer_weights = Qwen3_5DecoderLayerWeights {
             input_normalization_weight: take_tensor(
                 &mut bound_mtp_tensors,
