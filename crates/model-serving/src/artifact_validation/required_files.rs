@@ -85,7 +85,18 @@ pub(crate) fn validate_required_file(
 ) -> Result<ValidatedRequiredFile, ArtifactValidationError> {
     validate_required_file_relative_path(&required_file_profile.file_name)?;
     let required_file_path = model_directory.join(&required_file_profile.file_name);
+    tracing::debug!(
+        model_directory = %model_directory.display(),
+        required_file_name = %required_file_profile.file_name,
+        resolved_path = %required_file_path.display(),
+        "validating required file"
+    );
     let file_metadata = fs::symlink_metadata(&required_file_path).map_err(|source| {
+        tracing::debug!(
+            file = %required_file_path.display(),
+            error = %source,
+            "symlink_metadata failed"
+        );
         ArtifactValidationError::InspectRequiredFile {
             file_name: required_file_profile.file_name.clone(),
             source,
@@ -113,9 +124,20 @@ pub(crate) fn validate_required_file(
     };
 
     // Open the resolved blob itself with O_NOFOLLOW. If the final path changes
-    // to a symlink after validation, the kernel rejects it instead of following it.
+    // after validation, the kernel rejects it instead of following it.
+    tracing::debug!(
+        open_path = %required_file_open_path.display(),
+        is_file = file_metadata.file_type().is_file(),
+        is_symlink = file_metadata.file_type().is_symlink(),
+        "attempting to open file"
+    );
     let file =
         open_read_only_without_following_symlinks(&required_file_open_path).map_err(|source| {
+            tracing::debug!(
+                file_name = %required_file_profile.file_name,
+                io_error = %source,
+                "validate_required_file open failed"
+            );
             ArtifactValidationError::InspectRequiredFile {
                 file_name: required_file_profile.file_name.clone(),
                 source,

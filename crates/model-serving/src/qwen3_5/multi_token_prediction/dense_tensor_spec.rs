@@ -1,7 +1,7 @@
 use crate::artifact_validation::TensorProfile;
 use crate::qwen3_5::Qwen3_5Config;
 
-use super::tensor_namespace::append_qwen3_5_mtp_affine_tensor_profiles;
+use super::moe_tensor_spec::append_qwen3_5_mtp_affine_tensor_profiles;
 
 pub(crate) fn append_qwen3_5_dense_mtp_tensor_profiles(
     mtp_tensor_profiles: &mut Vec<TensorProfile>,

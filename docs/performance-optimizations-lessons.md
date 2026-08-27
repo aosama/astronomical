@@ -515,3 +515,7 @@ When a model worker closes its protocol stream during startup, forwarding child 
 - Keep high-frequency user-interface progress in process memory. Do not atomically rewrite and synchronize durable job metadata for each small payload increment; filesystem barriers serialize the network hot path. Persist at file completion, pause, failure, verification, and publication boundaries, then reconcile interrupted progress from synchronized staged-file lengths.
 - Smooth displayed transfer rate across several observations. A one-second sample can land between content-delivery-network bursts and overstate a large model's remaining time even when sustained throughput is healthy.
 - Attribute manifest fetch, each file transfer, verification, atomic publication, and discovery refresh separately. End-to-end download time alone cannot distinguish network, hashing, filesystem, and discovery costs.
+
+## MTP sidecar expert-storage format vs layer-plan builder (2026-08-27)
+
+MTP is resident-only. The expert pager must not include an MTP sparse layer, and SSD-paged sparse-expert serving stays target-only even when a valid MTP sidecar is present. Quantized MTP sidecars may store per-expert 2D tensors (`mtp.layers.0.mlp.experts.N.*`) instead of the 3D-packed `switch_mlp` layout the layer-plan builder expects; that storage difference is another reason not to page MTP experts, not a reason to extend SSD streaming to MTP.

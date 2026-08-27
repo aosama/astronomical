@@ -231,6 +231,10 @@ impl Qwen3_5Model {
                             )
                         })
                         .collect::<HashMap<_, _>>();
+                    let mtp_has_packed_sparse_experts =
+                        tensor_name_to_shard_file_name.keys().any(|tensor_name| {
+                            tensor_name.contains("language_model.mtp.layers.0.mlp.switch_mlp.")
+                        });
                     let expert_pager = performance_attribution.measure_operation(
                         PerformanceOperation::ExpertPagerPlanConstruction,
                         |_performance_attribution| {
@@ -244,7 +248,10 @@ impl Qwen3_5Model {
                                 // paging budget. Reading the runtime policy here lets reloads
                                 // apply on every machine without copying a stale wired limit.
                                 runtime.memory_limits().active_memory_limit_bytes(),
-                                mtp_weights.is_some(),
+                                // Packed resident MTP reuses the pager plan for switch_mlp
+                                // tensors. SSD-paged requests stay target-only. Sidecars
+                                // that store per-expert 2D tensors never enter the pager.
+                                mtp_weights.is_some() && mtp_has_packed_sparse_experts,
                             )
                         },
                     )?;
