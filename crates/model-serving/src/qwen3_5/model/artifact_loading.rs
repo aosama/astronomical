@@ -300,6 +300,8 @@ impl Qwen3_5Model {
             super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?;
         let target_verification_quantized_linear_kernel =
             super::target_verification_quantized_linear::target_verification_quantized_linear_kernel()?;
+        let target_verification_four_row_quantized_linear_kernel =
+            super::target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel()?;
         let compiled_swiglu = MlxCompiledSwiGlu::new()?;
         let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
         // Qwen3.5 config validation accepts BF16 activations only. Construct
@@ -383,6 +385,7 @@ impl Qwen3_5Model {
             gated_delta_checkpoint_kernel,
             sorted_expert_weighted_sum_kernel,
             target_verification_quantized_linear_kernel,
+            target_verification_four_row_quantized_linear_kernel,
             compiled_swiglu,
             compiled_elementwise_graphs,
             chunking,
