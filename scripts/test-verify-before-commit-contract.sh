@@ -74,6 +74,7 @@ create_fake_repository_scripts() {
     sandbox_scripts_directory="$1"
     for script_name in \
         generate-rust-dependency-notices.sh \
+        test-rust-dependency-notices-contract.sh \
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
         test-cargo-artifact-lifecycle-contract.sh \
@@ -214,7 +215,7 @@ main() {
         print_error "Rust compilation did not retain its separate timeout"
         exit 1
     }
-    [ "$(grep -c '^120s|' "$timeout_log")" -eq 15 ] || {
+    [ "$(grep -c '^120s|' "$timeout_log")" -eq 16 ] || {
         print_error "verification did not bound every non-compilation step to 120 seconds"
         exit 1
     }
@@ -226,6 +227,7 @@ main() {
     grep -Fx -- '--test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js' "$node_log" >/dev/null
     for expected_script_name in \
         generate-rust-dependency-notices.sh \
+        test-rust-dependency-notices-contract.sh \
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
         test-cargo-artifact-lifecycle-contract.sh \

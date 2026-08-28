@@ -241,15 +241,28 @@ jobs:
         run: |
           started_at_seconds="$(date +%s)"
           printf '[verification-tools] status=start\n'
-          if command -v cargo-about >/dev/null 2>&1 && command -v sccache >/dev/null 2>&1; then
-            printf '[verification-tools] status=already-installed elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
+          required_cargo_about_version="$(tr -d '[:space:]' < third-party/cargo-about-version)"
+          cargo_about_matches_pin=false
+          if command -v cargo-about >/dev/null 2>&1; then
+            installed_cargo_about_version="$(cargo-about --version)"
+            if [ "$installed_cargo_about_version" = "cargo-about ${required_cargo_about_version}" ]; then
+              cargo_about_matches_pin=true
+            fi
+          fi
+          if [ "$cargo_about_matches_pin" = true ] && command -v sccache >/dev/null 2>&1; then
+            printf '[verification-tools] status=already-installed elapsed_seconds=%s cargo_about=%s\n' "$(( $(date +%s) - started_at_seconds ))" "$required_cargo_about_version"
             exit 0
           fi
           case "$(brew tap)" in
             *aws/tap*) brew untap aws/tap ;;
           esac
           brew install cargo-about sccache
-          printf '[verification-tools] status=success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
+          installed_cargo_about_version="$(cargo-about --version)"
+          if [ "$installed_cargo_about_version" != "cargo-about ${required_cargo_about_version}" ]; then
+            printf '%s\n' "Error: Homebrew cargo-about is ${installed_cargo_about_version}; Astronomical requires cargo-about ${required_cargo_about_version}" >&2
+            exit 1
+          fi
+          printf '[verification-tools] status=success elapsed_seconds=%s cargo_about=%s\n' "$(( $(date +%s) - started_at_seconds ))" "$required_cargo_about_version"
       - name: Verify Rust dependency notices
         run: scripts/generate-rust-dependency-notices.sh --check
         timeout-minutes: 2
