@@ -234,7 +234,12 @@ fn canonicalize_module_name(
             actual_value: bounded_text_label(artifact_module_name),
         });
     }
-    Ok(canonical_module_name.to_owned())
+    let canonical_module_name = if canonical_module_name.ends_with(".mlp.gate") {
+        format!("{canonical_module_name}.proj")
+    } else {
+        canonical_module_name.to_owned()
+    };
+    Ok(canonical_module_name)
 }
 
 fn value_label(field_value: &Value) -> String {

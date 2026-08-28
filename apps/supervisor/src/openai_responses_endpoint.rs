@@ -130,6 +130,9 @@ pub(crate) async fn create_response(
         tool_count = chat_generation_command.tools.len(),
         stream = should_stream_response,
         request_body_bytes = request_body_bytes.len(),
+        request_supplied_temperature = settings_presence.temperature,
+        temperature_thousandths =
+            chat_generation_command.settings.temperature_thousandths,
         "accepted REST Responses request"
     );
     let model_id = chat_generation_command.model.clone();

@@ -12,6 +12,13 @@ pub struct LagunaSamplerConfig {
 }
 
 impl LagunaSamplerConfig {
+    /// Truncation used when `generation_config.json` omits `top_k`.
+    ///
+    /// Poolside's Laguna eval and published Transformers recipe certify `top_k = 20`.
+    /// MLX affine packages often drop that field; sampling still applies this default
+    /// rather than drawing from the full vocabulary.
+    pub const DEFAULT_SAMPLING_TOP_K: u16 = 20;
+
     #[allow(clippy::too_many_arguments)]
     pub(super) const fn new(
         uses_sampling: bool,
@@ -63,6 +70,15 @@ impl LagunaSamplerConfig {
     #[must_use]
     pub const fn top_k(&self) -> Option<u16> {
         self.top_k
+    }
+
+    /// Returns the top-k that GPU sampling will execute.
+    #[must_use]
+    pub const fn sampling_top_k(&self) -> u16 {
+        match self.top_k {
+            Some(top_k) => top_k,
+            None => Self::DEFAULT_SAMPLING_TOP_K,
+        }
     }
 
     /// Returns repetition penalty in thousandths, where 1000 is neutral.

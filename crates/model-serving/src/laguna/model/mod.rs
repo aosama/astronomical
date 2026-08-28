@@ -35,6 +35,8 @@ mod rope_application;
 #[cfg(feature = "direct-mlx")]
 mod router_correction_bias;
 #[cfg(feature = "direct-mlx")]
+mod token_sampling;
+#[cfg(feature = "direct-mlx")]
 mod weights;
 
 pub use cache_layout::laguna_decoder_cache_layout;

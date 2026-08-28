@@ -133,6 +133,19 @@ impl LagunaGenerationProcessor {
             chat_command.settings.top_p_thousandths,
             chat_command.settings.seed,
         );
+        tracing::info!(
+            request_id = chat_command.request_id.value(),
+            model = %chat_command.model,
+            request_supplied_temperature =
+                chat_command.settings.temperature_thousandths.is_some(),
+            artifact_temperature_thousandths =
+                self.descriptor.sampler_config().temperature_thousandths(),
+            effective_temperature_thousandths = sampler_config.temperature_thousandths(),
+            effective_top_k = sampler_config.top_k(),
+            effective_top_p_thousandths = sampler_config.top_p_thousandths(),
+            uses_sampling = sampler_config.uses_sampling(),
+            "resolved effective generation sampling"
+        );
         let request_output = performance_attribution
             .measure_operation(
                 PerformanceOperation::GenerationOutputDecoderInitialization,

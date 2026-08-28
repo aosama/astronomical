@@ -3,8 +3,8 @@ use astronomical_ipc_protocol::{
     ChatToolDefinition,
 };
 use astronomical_model_serving::{
-    LagunaGenerationProcessor, LagunaOutputEvent, LagunaOutputParserError, LagunaPreparationError,
-    LagunaPromptRenderer, LagunaTokenizer, ModelGenerationProcessor,
+    LagunaGenerationProcessor, LagunaOutputEvent, LagunaPreparationError, LagunaPromptRenderer,
+    LagunaSamplerConfig, LagunaTokenizer, ModelGenerationProcessor,
 };
 use serde_json::json;
 
@@ -202,6 +202,30 @@ fn should_apply_thinking_precedence_as_request_then_generation_config_then_templ
 }
 
 #[test]
+fn should_keep_artifact_temperature_when_the_request_omits_it() {
+    let prepared_generation = processor(SyntheticLagunaTextArtifact::extra_small_inline())
+        .prepare_chat(&romeo_and_juliet_command(9_807, None))
+        .expect("omitted request temperature should prepare");
+
+    assert_eq!(
+        prepared_generation
+            .sampler_config()
+            .temperature_thousandths(),
+        1_000
+    );
+    assert_eq!(prepared_generation.sampler_config().top_k(), None);
+    assert_eq!(
+        prepared_generation.sampler_config().sampling_top_k(),
+        LagunaSamplerConfig::DEFAULT_SAMPLING_TOP_K
+    );
+    assert_eq!(
+        prepared_generation.sampler_config().top_p_thousandths(),
+        1_000
+    );
+    assert!(prepared_generation.sampler_config().uses_sampling());
+}
+
+#[test]
 fn should_resolve_generation_sampling_and_explicit_request_overrides() {
     let processor = processor(SyntheticLagunaTextArtifact::small_included());
     let mut chat_command = romeo_and_juliet_command(9_808, None);
@@ -277,7 +301,7 @@ fn should_apply_explicit_request_sampling_precedence_over_a_greedy_artifact_defa
 }
 
 #[test]
-fn should_hide_tools_and_reject_generated_calls_when_tool_choice_is_none() {
+fn should_hide_tools_from_the_prompt_when_tool_choice_is_none() {
     let processor = processor(SyntheticLagunaTextArtifact::extra_small_inline());
     let mut chat_command = romeo_and_juliet_command(9_822, Some(0));
     chat_command.tool_choice = ChatToolChoice::None;
@@ -307,17 +331,20 @@ fn should_hide_tools_and_reject_generated_calls_when_tool_choice_is_none() {
     let mut output_parser = prepared_generation
         .new_output_parser()
         .expect("the no-tools request should construct an empty request-local parser");
-    let parser_error = output_parser
+    let output_events = output_parser
         .push_fragment(
             "<tool_call>find_character<arg_key>name</arg_key><arg_value>Romeo</arg_value></tool_call>",
         )
-        .expect_err("a generated call hidden by tool_choice none must be undeclared");
+        .expect("tool_choice none still forwards well-formed calls to the client");
 
-    assert!(matches!(
-        parser_error,
-        LagunaOutputParserError::UndeclaredFunction { function_name }
-            if function_name == "find_character"
-    ));
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: r#"{"name":"Romeo"}"#.to_owned(),
+        }]
+    );
 }
 
 #[test]

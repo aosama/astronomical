@@ -159,13 +159,19 @@ fn parse_token_ids(
 
 pub(super) fn parse_configured_tokens(
     tokenizer_config_fields: &Map<String, Value>,
+    tokenizer_tokens: &BTreeMap<u32, String>,
 ) -> Result<BTreeMap<u32, String>, LagunaTextArtifactError> {
-    let decoder_fields = tokenizer_config_fields
-        .get("added_tokens_decoder")
-        .and_then(Value::as_object)
-        .ok_or_else(|| LagunaTextArtifactError::InvalidField {
-            field_name: "added_tokens_decoder".to_owned(),
-        })?;
+    // mlx-vlm tokenizer_config.json is backend metadata and omits the
+    // Transformers decoder map. Special tokens still live in tokenizer.json.
+    let Some(decoder_value) = tokenizer_config_fields.get("added_tokens_decoder") else {
+        return Ok(tokenizer_tokens.clone());
+    };
+    let decoder_fields =
+        decoder_value
+            .as_object()
+            .ok_or_else(|| LagunaTextArtifactError::InvalidField {
+                field_name: "added_tokens_decoder".to_owned(),
+            })?;
     let mut configured_tokens = BTreeMap::new();
     for (token_id_text, token_descriptor) in decoder_fields {
         let token_id =

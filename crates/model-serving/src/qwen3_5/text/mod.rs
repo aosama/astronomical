@@ -7,7 +7,7 @@ mod request_output;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod sampler;
 mod sampler_config;
-pub(crate) mod sampling_seed;
+
 mod template_safe_content;
 mod thinking_budget;
 mod thinking_channel_seed;
@@ -17,6 +17,7 @@ mod tokenizer;
 mod tokenizer_error;
 mod tool_schema;
 
+pub use crate::sampling_seed::resolve_sampling_seed;
 pub use inference_request::{Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy};
 pub use output_parser::{Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5ToolCall};
 pub use output_parser_error::Qwen3_5OutputParserError;
@@ -29,7 +30,6 @@ pub use request_output::{Qwen3_5RequestOutput, Qwen3_5RequestOutputError};
 #[cfg(feature = "direct-mlx")]
 pub use sampler::qwen3_5_apply_top_p_mask;
 pub use sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
-pub use sampling_seed::resolve_sampling_seed;
 #[cfg(feature = "direct-mlx")]
 pub(in crate::qwen3_5) use thinking_budget::minimum_bounded_output_token_count;
 pub use thinking_budget::{Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState};

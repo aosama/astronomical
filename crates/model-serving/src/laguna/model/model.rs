@@ -421,7 +421,7 @@ fn last_token_hidden_states(
         .map_err(LagunaExecutionError::from)
 }
 
-fn last_token_vocabulary_logits(
+pub(in crate::laguna) fn last_token_vocabulary_logits(
     runtime: &MlxRuntime,
     logits: &MlxArray,
 ) -> Result<MlxArray, LagunaExecutionError> {

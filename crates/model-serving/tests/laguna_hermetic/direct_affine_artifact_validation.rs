@@ -403,6 +403,63 @@ fn should_reject_mixed_expert_component_packaging() {
     ));
 }
 
+#[test]
+fn should_resolve_an_explicit_router_affine_override_to_the_router_module() {
+    for override_name in [
+        "model.layers.0.mlp.gate.proj",
+        "model.layers.0.mlp.gate",
+        "language_model.model.layers.0.mlp.gate.proj",
+    ] {
+        let model_directory =
+            tempfile::tempdir().expect("the test should create a model directory");
+        let mut fixture = SyntheticLagunaArtifact::direct_affine_sparse_stacked(4, 32);
+        fixture.remove_tensor_completely("model.layers.0.mlp.gate.weight");
+        fixture.add_tensor(
+            FIRST_SHARD_FILE_NAME,
+            SyntheticTensor {
+                name: "model.layers.0.mlp.gate.proj.weight".to_owned(),
+                dtype: "U32",
+                shape: vec![2, 32],
+            },
+        );
+        fixture.add_tensor(
+            FIRST_SHARD_FILE_NAME,
+            SyntheticTensor {
+                name: "model.layers.0.mlp.gate.proj.scales".to_owned(),
+                dtype: "F32",
+                shape: vec![2, 4],
+            },
+        );
+        fixture.add_tensor(
+            FIRST_SHARD_FILE_NAME,
+            SyntheticTensor {
+                name: "model.layers.0.mlp.gate.proj.biases".to_owned(),
+                dtype: "F32",
+                shape: vec![2, 4],
+            },
+        );
+        fixture.config["quantization"][override_name] = serde_json::json!({
+            "bits": 8,
+            "group_size": 32,
+            "mode": "affine"
+        });
+        fixture.write(model_directory.path());
+
+        let validated_artifact = LagunaArtifactValidator::new()
+            .validate(model_directory.path())
+            .expect("an explicit router override should resolve to the router module");
+        let router_weight = descriptor(
+            &validated_artifact,
+            layer_component_id(LagunaLayerTensorRole::Router, LagunaTensorComponent::Weight),
+        );
+        assert_eq!(
+            router_weight.canonical_module_name(),
+            Some("model.layers.0.mlp.gate.proj")
+        );
+        assert_affine_profile(router_weight.storage_encoding(), 8, 32);
+    }
+}
+
 fn descriptor(
     artifact: &astronomical_model_serving::ValidatedLagunaArtifact,
     tensor_id: LagunaTensorId,

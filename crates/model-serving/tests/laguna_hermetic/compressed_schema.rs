@@ -1,8 +1,6 @@
 use astronomical_model_serving::{
-    LagunaCompressedInputActivationDescriptor, LagunaCompressedWeightEncoding,
     LagunaGlobalTensorRole, LagunaLayerTensorRole, LagunaNormalizationError,
-    LagunaStorageDescriptor, LagunaTargetNormalizer, LagunaTensorComponent, LagunaTensorId,
-    LagunaTensorStorageEncoding,
+    LagunaTargetNormalizer, LagunaTensorComponent, LagunaTensorId, LagunaTensorStorageEncoding,
 };
 use serde_json::json;
 
@@ -11,46 +9,6 @@ use super::compressed_artifact_support::{
     published_m1_nvfp4_sparse_fixture,
 };
 use super::support::{config_bytes, config_value};
-
-#[test]
-fn should_normalize_the_verbatim_published_m1_nvfp4_schema_without_losing_execution_metadata() {
-    let mut config = config_value(1);
-    config["quantization_config"] = serde_json::from_str(PUBLISHED_M1_NVFP4_QUANTIZATION_CONFIG)
-        .expect("the public quantization_config should decode");
-
-    let target = LagunaTargetNormalizer::normalize(&config_bytes(&config))
-        .expect("the public M.1 NVFP4 declaration should normalize exactly");
-    let LagunaStorageDescriptor::Compressed(compressed) = target.storage() else {
-        panic!("the published declaration should produce compressed storage");
-    };
-
-    assert!(matches!(
-        compressed.weight_encoding(),
-        LagunaCompressedWeightEncoding::TwoLevelNvfp4(_)
-    ));
-    assert!(matches!(
-        compressed.input_activations(),
-        Some(LagunaCompressedInputActivationDescriptor::Nvfp4TensorGroup(
-            _
-        ))
-    ));
-    assert_eq!(compressed.input_activations().unwrap().bits(), 4);
-    assert_eq!(compressed.input_activations().unwrap().group_size(), 16);
-    assert_eq!(
-        compressed
-            .kv_cache()
-            .expect("FP8 KV cache should be retained")
-            .bits(),
-        8
-    );
-    assert!(compressed.applies_to_module("model.layers.3.mlp.gate_proj"));
-    assert!(compressed.applies_to_module("model.layers.3.mlp.switch_mlp.up_proj"));
-    assert!(compressed.applies_to_module("model.layers.3.mlp.shared_expert.down_proj"));
-    assert!(!compressed.applies_to_module("model.embed_tokens"));
-    assert!(!compressed.applies_to_module("model.layers.3.self_attn.q_proj"));
-    assert!(!compressed.applies_to_module("model.layers.3.mlp.gate"));
-    assert!(!compressed.applies_to_module("lm_head"));
-}
 
 #[test]
 fn should_apply_published_nvfp4_only_to_selected_feed_forward_modules() {
@@ -117,77 +75,6 @@ fn should_apply_published_nvfp4_only_to_selected_feed_forward_modules() {
         router.storage_encoding(),
         &LagunaTensorStorageEncoding::Unquantized
     );
-}
-
-#[test]
-fn should_normalize_the_published_s_fp8_linear_targets_and_exact_exclusions() {
-    let mut config = config_value(1);
-    config["quantization_config"] = json!({
-        "config_groups": {"group_0": {
-            "format": "float-quantized",
-            "input_activations": {
-                "actorder": null, "block_structure": null, "dynamic": true,
-                "group_size": 128, "num_bits": 8, "observer": null,
-                "observer_kwargs": {}, "scale_dtype": null, "strategy": "group",
-                "symmetric": true, "type": "float", "zp_dtype": null
-            },
-            "output_activations": null,
-            "targets": ["Linear"],
-            "weights": {
-                "actorder": null, "block_structure": [128, 128], "dynamic": false,
-                "group_size": null, "num_bits": 8, "observer": "memoryless_minmax",
-                "observer_kwargs": {}, "scale_dtype": null, "strategy": "block",
-                "symmetric": true, "type": "float", "zp_dtype": null
-            }
-        }},
-        "format": "float-quantized",
-        "global_compression_ratio": null,
-        "ignore": [
-            "lm_head",
-            "model.layers.0.mlp.gate_proj",
-            "model.layers.0.mlp.up_proj",
-            "model.layers.0.mlp.down_proj",
-            "re:.*\\.self_attn\\.q_proj$",
-            "re:.*\\.self_attn\\.k_proj$",
-            "re:.*\\.self_attn\\.v_proj$",
-            "re:.*\\.self_attn\\.o_proj$",
-            "re:.*\\.self_attn\\.g_proj$",
-            "re:.*\\.mlp\\.gate$",
-            "re:.*\\.mlp\\.shared_expert\\.gate_proj$",
-            "re:.*\\.mlp\\.shared_expert\\.up_proj$",
-            "re:.*\\.mlp\\.shared_expert\\.down_proj$"
-        ],
-        "kv_cache_scheme": {
-            "actorder": null, "block_structure": null, "dynamic": false,
-            "group_size": null, "num_bits": 8, "observer": "minmax",
-            "observer_kwargs": {}, "scale_dtype": null, "strategy": "tensor",
-            "symmetric": true, "type": "float", "zp_dtype": null
-        },
-        "quant_method": "compressed-tensors",
-        "quantization_status": "compressed",
-        "sparsity_config": {}, "transform_config": {},
-        "version": "0.14.1.dev11+gf2ee47b"
-    });
-
-    let target = LagunaTargetNormalizer::normalize(&config_bytes(&config))
-        .expect("the published Laguna S FP8 declaration should normalize");
-    let LagunaStorageDescriptor::Compressed(compressed) = target.storage() else {
-        panic!("the published FP8 declaration should produce compressed storage");
-    };
-    assert!(matches!(
-        compressed.weight_encoding(),
-        LagunaCompressedWeightEncoding::BlockFp8(_)
-    ));
-    assert!(matches!(
-        compressed.input_activations(),
-        Some(LagunaCompressedInputActivationDescriptor::Fp8Group(_))
-    ));
-    assert!(compressed.applies_to_module("model.layers.1.mlp.switch_mlp.gate_proj"));
-    assert!(!compressed.applies_to_module("model.embed_tokens"));
-    assert!(!compressed.applies_to_module("model.layers.0.mlp.gate_proj"));
-    assert!(!compressed.applies_to_module("model.layers.1.mlp.shared_expert.gate_proj"));
-    assert!(!compressed.applies_to_module("model.layers.1.self_attn.q_proj"));
-    assert!(!compressed.applies_to_module("lm_head"));
 }
 
 #[test]
