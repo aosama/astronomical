@@ -96,16 +96,22 @@ impl LagunaOutputParser {
                 // name still reaches the harness instead of aborting generation.
                 return Ok(self.salvage_unclosed_tool_call());
             }
-            return Err(LagunaOutputParserError::FragmentTooLarge {
-                maximum_bytes: MAXIMUM_FRAGMENT_BYTES,
-            });
+            let mut output_events = self.flush_pending_as_visible_delta();
+            if let Some(fragment_event) =
+                self.visible_delta_for_current_state(decoded_fragment.to_owned())
+            {
+                output_events.push(fragment_event);
+            }
+            return Ok(output_events);
         }
         self.pending_output.push_str(decoded_fragment);
-        if let Err(parser_error) = self.validate_pending_bound() {
+        if self.validate_pending_bound().is_err() {
             if self.state == LagunaOutputParserState::ToolCall {
                 return Ok(self.salvage_unclosed_tool_call());
             }
-            return Err(parser_error);
+            let mut output_events = self.flush_pending_as_visible_delta();
+            while self.advance(&mut output_events)? {}
+            return Ok(output_events);
         }
         let mut output_events = Vec::new();
         while self.advance(&mut output_events)? {}
@@ -116,19 +122,7 @@ impl LagunaOutputParser {
     pub fn finish(&mut self) -> Result<Vec<LagunaOutputEvent>, LagunaOutputParserError> {
         match self.state {
             LagunaOutputParserState::ToolCall => Ok(self.salvage_unclosed_tool_call()),
-            LagunaOutputParserState::Text => {
-                if is_prefix_of_any_marker(
-                    &self.pending_output,
-                    &[THINK_START_MARKER, TOOL_CALL_START_MARKER],
-                ) {
-                    return Err(LagunaOutputParserError::IncompleteControlMarker);
-                }
-                let remaining_text = std::mem::take(&mut self.pending_output);
-                Ok((!remaining_text.is_empty())
-                    .then_some(LagunaOutputEvent::TextDelta(remaining_text))
-                    .into_iter()
-                    .collect())
-            }
+            LagunaOutputParserState::Text => Ok(self.flush_pending_as_visible_delta()),
             LagunaOutputParserState::Reasoning => {
                 let remaining_reasoning = std::mem::take(&mut self.pending_output);
                 Ok((!remaining_reasoning.is_empty())
@@ -323,6 +317,25 @@ impl LagunaOutputParser {
         self.pending_output.drain(..byte_count).collect()
     }
 
+    fn flush_pending_as_visible_delta(&mut self) -> Vec<LagunaOutputEvent> {
+        if self.pending_output.is_empty() {
+            return Vec::new();
+        }
+        let pending_output = std::mem::take(&mut self.pending_output);
+        self.visible_delta_for_current_state(pending_output)
+            .into_iter()
+            .collect()
+    }
+
+    fn visible_delta_for_current_state(&self, text: String) -> Option<LagunaOutputEvent> {
+        match self.state {
+            LagunaOutputParserState::Text | LagunaOutputParserState::ToolCall => {
+                Some(LagunaOutputEvent::TextDelta(text))
+            }
+            LagunaOutputParserState::Reasoning => Some(LagunaOutputEvent::ReasoningDelta(text)),
+        }
+    }
+
     pub(crate) const fn state_for_diagnostics(&self) -> &'static str {
         match self.state {
             LagunaOutputParserState::Text => "text",
@@ -464,8 +477,4 @@ fn longest_suffix_matching_marker_prefix(text: &str, markers: &[&str]) -> usize 
         }
     }
     0
-}
-
-fn is_prefix_of_any_marker(text: &str, markers: &[&str]) -> bool {
-    !text.is_empty() && markers.iter().any(|marker| marker.starts_with(text))
 }

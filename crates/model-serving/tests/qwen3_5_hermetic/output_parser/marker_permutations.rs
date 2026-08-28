@@ -91,37 +91,42 @@ fn should_forward_unclosed_qwen_envelopes_when_generation_finishes() {
 }
 
 #[test]
-fn should_treat_missing_qwen_tool_call_open_as_visible_text_not_a_tool_call() {
-    for visible_text_case in missing_tool_call_open_cases() {
-        let mut output_parser = literary_output_parser();
-        let output_events = output_parser
-            .push_fragment(&visible_text_case.qwen_fragment)
-            .unwrap_or_else(|parser_error| {
-                panic!(
-                    "missing-open defect {} should stream as text: {parser_error}; fragment={}",
-                    visible_text_case.marker_defect, visible_text_case.qwen_fragment
-                )
-            });
-        assert!(
-            !output_events
-                .iter()
-                .any(|output_event| matches!(output_event, Qwen3_5OutputEvent::ToolCall(_))),
-            "missing-open defect {} emitted a tool call: {output_events:?}",
-            visible_text_case.marker_defect
-        );
-        assert!(
-            output_events.iter().any(|output_event| matches!(
-                output_event,
-                Qwen3_5OutputEvent::TextDelta(text)
-                    if text.contains(DECLARED_CHARACTER_FUNCTION)
-                        || text.contains(UNDECLARED_FUNCTION_NAME)
-                        || text.contains("parameter")
-                        || text.contains("function=")
-            )),
-            "missing-open defect {} did not stream the model text: {output_events:?}",
-            visible_text_case.marker_defect
-        );
-    }
+fn should_recover_tool_calls_that_omit_the_envelope_open() {
+    // The model sometimes writes Qwen function tags without the surrounding
+    // envelope. The call must still reach the harness, and any slop before the
+    // function open streams as visible text.
+    let mut declared_open = literary_output_parser();
+    let declared_events = declared_open
+        .push_fragment(&format!(
+            "<function={DECLARED_CHARACTER_FUNCTION}><parameter=name>Romeo</parameter></function>{TOOL_CALL_END}"
+        ))
+        .expect("a bare declared function must not abort generation");
+    assert_eq!(
+        declared_events,
+        vec![Qwen3_5OutputEvent::ToolCall(Qwen3_5ToolCall {
+            index: 0,
+            function_name: DECLARED_CHARACTER_FUNCTION.to_owned(),
+            arguments_json: ROMEO_ARGUMENTS_JSON.to_owned(),
+        })]
+    );
+
+    let mut undeclared_open = literary_output_parser();
+    let undeclared_events = undeclared_open
+        .push_fragment(&format!(
+            "tool_call><function={UNDECLARED_FUNCTION_NAME}><parameter=name>Romeo</parameter></function>{TOOL_CALL_END}"
+        ))
+        .expect("slop before a bare function must stream as text");
+    assert_eq!(
+        undeclared_events,
+        vec![
+            Qwen3_5OutputEvent::TextDelta("tool_call>".to_owned()),
+            Qwen3_5OutputEvent::ToolCall(Qwen3_5ToolCall {
+                index: 0,
+                function_name: UNDECLARED_FUNCTION_NAME.to_owned(),
+                arguments_json: ROMEO_ARGUMENTS_JSON.to_owned(),
+            }),
+        ]
+    );
 }
 
 fn closed_envelope_cases() -> Vec<MarkerDefectCase> {
@@ -220,25 +225,6 @@ fn unclosed_envelope_cases() -> Vec<UnclosedEnvelopeCase> {
         UnclosedEnvelopeCase {
             marker_defect: "nameless unclosed arguments",
             qwen_fragment: format!("{TOOL_CALL_START}<parameter=name>Romeo</parameter>"),
-            expectation: ClosedEnvelopeExpectation::VisibleText,
-        },
-    ]
-}
-
-fn missing_tool_call_open_cases() -> Vec<UnclosedEnvelopeCase> {
-    vec![
-        UnclosedEnvelopeCase {
-            marker_defect: "missing tool_call open entirely",
-            qwen_fragment: format!(
-                "<function=find_character><parameter=name>Romeo</parameter></function>{TOOL_CALL_END}"
-            ),
-            expectation: ClosedEnvelopeExpectation::VisibleText,
-        },
-        UnclosedEnvelopeCase {
-            marker_defect: "missing < on tool_call open",
-            qwen_fragment: format!(
-                "tool_call><function=inspect_verse><parameter=name>Romeo</parameter></function>{TOOL_CALL_END}"
-            ),
             expectation: ClosedEnvelopeExpectation::VisibleText,
         },
     ]

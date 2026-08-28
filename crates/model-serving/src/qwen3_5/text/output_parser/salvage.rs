@@ -4,12 +4,21 @@
 //! output drops a usable function name the coding client could reject or retry.
 
 use super::super::output_parser_error::Qwen3_5OutputParserError;
-use super::{Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserState};
+use super::{
+    BARE_FUNCTION_START_MARKER, FUNCTION_END_MARKER, INVOKE_END_MARKER, INVOKE_START_MARKER,
+    Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserState, TOOL_CALL_END_MARKER,
+    ToolCallEntryKind,
+};
 
 impl Qwen3_5OutputParser {
     pub(super) fn salvage_unclosed_tool_call(&mut self) -> Vec<Qwen3_5OutputEvent> {
-        let tool_call_body = std::mem::take(&mut self.pending_output);
+        let entry = match self.state {
+            Qwen3_5OutputParserState::ToolCall(entry) => entry,
+            _ => ToolCallEntryKind::Envelope,
+        };
+        let remaining_body = std::mem::take(&mut self.pending_output);
         self.state = Qwen3_5OutputParserState::Text;
+        let tool_call_body = reconstruct_tool_call_body(entry, &remaining_body);
         match self.fail_open_closed_tool_call(&tool_call_body) {
             Some(salvaged_event) => {
                 vec![self.emit_tool_call_or_visible_text(salvaged_event, tool_call_body)]
@@ -72,4 +81,33 @@ fn bounded_fail_open_log_body(tool_call_body: &str) -> &str {
     let maximum_log_bytes = 256.min(tool_call_body.len());
     let bound = tool_call_body.floor_char_boundary(maximum_log_bytes);
     &tool_call_body[..bound]
+}
+
+pub(super) fn reconstruct_tool_call_body(entry: ToolCallEntryKind, remaining_body: &str) -> String {
+    match entry {
+        ToolCallEntryKind::Envelope => remaining_body.to_owned(),
+        ToolCallEntryKind::BareFunction => {
+            let mut reconstructed =
+                String::with_capacity(BARE_FUNCTION_START_MARKER.len() + remaining_body.len());
+            reconstructed.push_str(BARE_FUNCTION_START_MARKER);
+            reconstructed.push_str(remaining_body);
+            reconstructed
+        }
+        ToolCallEntryKind::InvokeTag => {
+            let mut reconstructed =
+                String::with_capacity(INVOKE_START_MARKER.len() + remaining_body.len());
+            reconstructed.push_str(INVOKE_START_MARKER);
+            reconstructed.push_str(remaining_body);
+            reconstructed
+        }
+    }
+}
+
+pub(super) fn tool_call_end_markers(entry: ToolCallEntryKind) -> &'static [&'static str] {
+    match entry {
+        ToolCallEntryKind::Envelope => &[TOOL_CALL_END_MARKER],
+        ToolCallEntryKind::BareFunction | ToolCallEntryKind::InvokeTag => {
+            &[TOOL_CALL_END_MARKER, FUNCTION_END_MARKER, INVOKE_END_MARKER]
+        }
+    }
 }
