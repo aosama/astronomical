@@ -256,11 +256,23 @@ jobs:
           case "$(brew tap)" in
             *aws/tap*) brew untap aws/tap ;;
           esac
-          brew install cargo-about sccache
-          installed_cargo_about_version="$(cargo-about --version)"
-          if [ "$installed_cargo_about_version" != "cargo-about ${required_cargo_about_version}" ]; then
-            printf '%s\n' "Error: Homebrew cargo-about is ${installed_cargo_about_version}; Astronomical requires cargo-about ${required_cargo_about_version}" >&2
-            exit 1
+          if ! command -v sccache >/dev/null 2>&1; then
+            brew install sccache
+          fi
+          if [ "$cargo_about_matches_pin" != true ]; then
+            export PATH="${HOME}/.cargo/bin:${PATH}"
+            command -v cargo >/dev/null 2>&1 || {
+              printf '%s\n' 'Error: cargo is required to install the pinned cargo-about' >&2
+              exit 1
+            }
+            cargo install cargo-about --version "$required_cargo_about_version" --locked --force
+            printf '%s\n' "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="${HOME}/.cargo/bin:${PATH}"
+            installed_cargo_about_version="$(cargo-about --version)"
+            if [ "$installed_cargo_about_version" != "cargo-about ${required_cargo_about_version}" ]; then
+              printf '%s\n' "Error: installed cargo-about is ${installed_cargo_about_version}; Astronomical requires cargo-about ${required_cargo_about_version}" >&2
+              exit 1
+            fi
           fi
           printf '[verification-tools] status=success elapsed_seconds=%s cargo_about=%s\n' "$(( $(date +%s) - started_at_seconds ))" "$required_cargo_about_version"
       - name: Verify Rust dependency notices
