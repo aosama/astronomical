@@ -4,35 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.19</title>
-            <pubDate>Fri, 28 Aug 2026 00:13:50 -0400</pubDate>
-            <sparkle:version>359</sparkle:version>
-            <sparkle:shortVersionString>0.2.19</sparkle:shortVersionString>
+            <title>0.2.20</title>
+            <pubDate>Fri, 28 Aug 2026 01:50:57 -0400</pubDate>
+            <sparkle:version>362</sparkle:version>
+            <sparkle:shortVersionString>0.2.20</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.19
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.20
 
-Astronomical now loads published MLX affine Laguna artifacts, samples Laguna tokens, and forwards closed tool calls so coding harnesses can retry.
+This Stable patch keeps a shipped app working after macOS or a cache cleaner deletes `~/Library/Caches`.
 
-## Improvements
+## Changes since 0.2.19
 
-- Published MLX affine Laguna artifacts that already appear in Library load and generate instead of failing the model swap with a generic validation error.
-- Laguna decode follows the resolved sampling policy. When a Laguna artifact omits `top_k`, generation executes top_k 20.
-- Closed tool-call envelopes from Laguna and Qwen3.5 reach the client so a coding harness can reject an unknown name or sloppy arguments and the model can retry. Unclosed envelopes and resource bounds still fail the request.
-- Optional multi-token prediction accepts quantized affine MTP sidecars for resident serving. SSD-paged sparse experts stay target-only. MTP remains off unless `acceleration.mtp.enabled` is true.
-- 4-bit dense MTP target verification uses a four-row kernel so deeper draft windows keep their speedup.
-- Model weights, quantization, and numerical precision are unchanged.
+- The MLX AOT metallib is packaged inside the app bundle. Startup no longer depends on the purgeable native-build cache.
+- Disk-image creation and Stable install validation fail if that metallib is missing, so a drag-to-Applications copy cannot omit the kernels.
 
 ## Compatibility
 
-This release preserves existing Stable configuration, downloaded models, prompt-cache state, and model precision. No configuration migration is required.
+- macOS 26.0 or newer on Apple Silicon.
+- Application state from 0.2.19 and earlier is preserved. No configuration migration is required.
 
-The macOS ARM64 distribution is signed with Apple Developer ID, notarized by Apple, stapled, and delivered through a signed Sparkle update feed.
+This release is Developer ID signed, notarized, and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.19/Astronomical-0.2.19-macOS-arm64.dmg" length="15510643" type="application/octet-stream" sparkle:edSignature="qmhSIm0HXgDNiSI3vaMMa0yCr00yTa1LZTQaiatVtAmBsgs2sAJT3DAZaldEmz5OZ8BkRct33y8oMPzOjmBEAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.20/Astronomical-0.2.20-macOS-arm64.dmg" length="15732906" type="application/octet-stream" sparkle:edSignature="7bYa2zmVfXk8yyKRn3hULyPqVLmeiltJH5DUuJSN/mk3Zd8iBcNrmUfDsaLEoqNxz7GnZNvWAR/jKPRgRgyoBg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: g9N4Vn9ajEvd7w0eEq/n+PRfJboGD8PhDo8UZHnHJXyBrblIx4pPYvofT6V8ehV+hbCrLHbYzJUDikY29NYTBw==
-length: 2608
+edSignature: Eud7Z3vXbh3TWbDrgJVnU5VwyEQifMhrVXyVQvNXn24oCjw6Gsjf1j4rIGDPztAtP0PkvenD79EQpXRhEcHWDA==
+length: 1904
 -->
