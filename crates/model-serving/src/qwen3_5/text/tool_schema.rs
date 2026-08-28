@@ -41,31 +41,82 @@ impl DeclaredTool {
 
 pub(super) fn parse_tool_parameters(
     parameter_content: &str,
-    declared_tool: &DeclaredTool,
+    declared_tool: Option<&DeclaredTool>,
 ) -> Result<Map<String, Value>, Qwen3_5OutputParserError> {
     let mut remaining_parameters = parameter_content.trim();
     let mut parsed_arguments = Map::new();
     while !remaining_parameters.is_empty() {
-        let parameter_with_name = remaining_parameters
-            .strip_prefix("<parameter=")
-            .ok_or(Qwen3_5OutputParserError::MalformedToolParameter)?;
-        let parameter_name_end = parameter_with_name
-            .find('>')
-            .ok_or(Qwen3_5OutputParserError::ToolParameterMissingNameEnd)?;
-        let parameter_name = &parameter_with_name[..parameter_name_end];
+        remaining_parameters = remaining_parameters.trim();
+        let Some(parameter_with_name) = strip_qwen_parameter_open(remaining_parameters) else {
+            match next_parameter_open_offset(remaining_parameters) {
+                Some(parameter_open_offset) => {
+                    remaining_parameters = &remaining_parameters[parameter_open_offset..];
+                    continue;
+                }
+                None => break,
+            }
+        };
+        let Some(parameter_name_end) = parameter_with_name.find('>') else {
+            remaining_parameters = skip_unclosed_parameter_name(parameter_with_name);
+            continue;
+        };
+        let parameter_name = parameter_with_name[..parameter_name_end].trim();
+        if parameter_name.is_empty() {
+            remaining_parameters = &parameter_with_name[parameter_name_end + 1..];
+            continue;
+        }
         let parameter_with_value = &parameter_with_name[parameter_name_end + 1..];
-        let parameter_end = parameter_with_value
-            .find("</parameter>")
-            .ok_or(Qwen3_5OutputParserError::ToolParameterMissingEnd)?;
-        let parameter_value = trim_one_boundary_newline(&parameter_with_value[..parameter_end]);
-        let parsed_parameter_value = match declared_tool.parameter_schemas.get(parameter_name) {
+        let (parameter_value, after_parameter) = split_parameter_value(parameter_with_value);
+        let parsed_parameter_value = match declared_tool
+            .and_then(|declared_tool| declared_tool.parameter_schemas.get(parameter_name))
+        {
             Some(parameter_schema) => parse_parameter_value(parameter_value, parameter_schema),
             None => parse_untyped_parameter_value(parameter_value),
         };
         parsed_arguments.insert(parameter_name.to_owned(), parsed_parameter_value);
-        remaining_parameters = parameter_with_value[parameter_end + "</parameter>".len()..].trim();
+        remaining_parameters = after_parameter.trim();
     }
     Ok(parsed_arguments)
+}
+
+fn strip_qwen_parameter_open(parameter_content: &str) -> Option<&str> {
+    parameter_content
+        .strip_prefix("<parameter=")
+        .or_else(|| parameter_content.strip_prefix("parameter="))
+}
+
+fn next_parameter_open_offset(parameter_content: &str) -> Option<usize> {
+    let canonical_offset = parameter_content.find("<parameter=");
+    let salvaged_offset = parameter_content.find("parameter=");
+    match (canonical_offset, salvaged_offset) {
+        (Some(canonical), Some(salvaged)) if salvaged == canonical + 1 => Some(canonical),
+        (Some(canonical), Some(salvaged)) => Some(canonical.min(salvaged)),
+        (Some(canonical), None) => Some(canonical),
+        (None, Some(salvaged)) => Some(salvaged),
+        (None, None) => None,
+    }
+}
+
+fn skip_unclosed_parameter_name(parameter_with_name: &str) -> &str {
+    if let Some(parameter_end) = parameter_with_name.find("</parameter>") {
+        return &parameter_with_name[parameter_end + "</parameter>".len()..];
+    }
+    match next_parameter_open_offset(parameter_with_name) {
+        Some(next_parameter_offset) if next_parameter_offset > 0 => {
+            &parameter_with_name[next_parameter_offset..]
+        }
+        _ => "",
+    }
+}
+
+fn split_parameter_value(parameter_with_value: &str) -> (&str, &str) {
+    match parameter_with_value.find("</parameter>") {
+        Some(parameter_end) => (
+            trim_one_boundary_newline(&parameter_with_value[..parameter_end]),
+            &parameter_with_value[parameter_end + "</parameter>".len()..],
+        ),
+        None => (trim_one_boundary_newline(parameter_with_value), ""),
+    }
 }
 
 fn parse_parameter_schemas(

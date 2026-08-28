@@ -322,15 +322,26 @@ fn storage_encoding_for_module(
     };
     match storage {
         LagunaStorageDescriptor::DirectAffine(affine) => {
+            // Router linears may stay native while the rest of the body is affine.
+            if module_name.ends_with(".mlp.gate.proj")
+                && !affine.module_overrides().contains_key(module_name)
+            {
+                return LagunaTensorStorageEncoding::Unquantized;
+            }
             LagunaTensorStorageEncoding::DirectAffine {
                 profile: affine.profile_for_module(module_name),
             }
         }
         LagunaStorageDescriptor::NativeNvfp4(profile) => {
-            LagunaTensorStorageEncoding::NativeNvfp4 { profile: *profile }
+            if module_name.ends_with(".mlp.gate.proj") {
+                LagunaTensorStorageEncoding::Unquantized
+            } else {
+                LagunaTensorStorageEncoding::NativeNvfp4 { profile: *profile }
+            }
         }
         LagunaStorageDescriptor::Compressed(compressed)
-            if compressed.applies_to_module(module_name) =>
+            if !module_name.ends_with(".mlp.gate.proj")
+                && compressed.applies_to_module(module_name) =>
         {
             match compressed.weight_encoding() {
                 LagunaCompressedWeightEncoding::SymmetricPackedAffine(profile) => {
@@ -389,11 +400,11 @@ fn canonical_layer_module_name(layer_index: usize, role: LagunaLayerTensorRole) 
         LagunaLayerTensorRole::RoutedExpert(projection) => {
             projection_suffix("mlp.switch_mlp", projection)
         }
+        LagunaLayerTensorRole::Router => "mlp.gate.proj".to_owned(),
         LagunaLayerTensorRole::InputNormalization
         | LagunaLayerTensorRole::PostAttentionNormalization
         | LagunaLayerTensorRole::AttentionQueryNormalization
         | LagunaLayerTensorRole::AttentionKeyNormalization
-        | LagunaLayerTensorRole::Router
         | LagunaLayerTensorRole::RouterCorrectionBias
         | LagunaLayerTensorRole::SharedExpertGate => return None,
     };

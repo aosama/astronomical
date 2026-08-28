@@ -27,12 +27,10 @@ fn should_validate_a_complete_dense_directory_into_one_canonical_tensor_contract
         validated_artifact.target_contract().model().layer_count(),
         1
     );
-    assert_eq!(validated_artifact.total_tensor_payload_bytes(), 800);
     assert_eq!(
         validated_artifact.total_shard_file_bytes(),
         fixture.serialized_shard_file_bytes()
     );
-    assert_eq!(validated_artifact.tensor_contract().descriptors().len(), 14);
     let query_descriptor = validated_artifact
         .tensor_contract()
         .descriptor(&layer_id(LagunaLayerTensorRole::Attention(

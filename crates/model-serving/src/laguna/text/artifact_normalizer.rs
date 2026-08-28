@@ -81,8 +81,9 @@ impl LagunaTextArtifactNormalizer {
             });
         }
 
-        let configured_tokens = parse_configured_tokens(tokenizer_config_fields)?;
         let tokenizer_added_tokens = parse_tokenizer_added_tokens(tokenizer_json_fields)?;
+        let configured_tokens =
+            parse_configured_tokens(tokenizer_config_fields, &tokenizer_added_tokens)?;
         validate_bidirectional_added_tokens(&configured_tokens, &tokenizer_added_tokens)?;
         let tokenizer = Tokenizer::from_bytes(sources.tokenizer_bytes)
             .map_err(|source| LagunaTextArtifactError::LoadTokenizer { source })?;

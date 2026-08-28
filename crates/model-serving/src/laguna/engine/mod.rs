@@ -11,6 +11,7 @@ mod memory_admission;
 pub(in crate::laguna) mod prefill;
 mod prefill_capacity_recovery;
 pub(in crate::laguna) mod prompt_cache;
+mod token_sampling;
 
 use crate::MlxInferenceEngine;
 

@@ -1,11 +1,12 @@
 use astronomical_ipc_protocol::ChatToolDefinition;
 use astronomical_model_serving::{LagunaOutputEvent, LagunaOutputParser, LagunaOutputParserError};
 
-use super::text_support::{SyntheticLagunaTextArtifact, declared_literary_tools};
+use super::super::text_support::SyntheticLagunaTextArtifact;
+use super::support::{assert_bounded_error, literary_output_parser_starting_in_reasoning};
 
 #[test]
 fn should_start_in_reasoning_for_a_prompt_owned_opening_think_marker() {
-    let mut output_parser = output_parser(true);
+    let mut output_parser = literary_output_parser_starting_in_reasoning(true);
 
     let output_events = output_parser
         .push_fragment("Compare their motives</think>The contrast is decisive.")
@@ -22,7 +23,7 @@ fn should_start_in_reasoning_for_a_prompt_owned_opening_think_marker() {
 
 #[test]
 fn should_parse_reasoning_text_and_tool_markers_fragmented_at_every_boundary() {
-    let mut output_parser = output_parser(true);
+    let mut output_parser = literary_output_parser_starting_in_reasoning(true);
 
     assert_eq!(
         output_parser
@@ -64,7 +65,7 @@ fn should_parse_reasoning_text_and_tool_markers_fragmented_at_every_boundary() {
 
 #[test]
 fn should_emit_multiple_poolside_tool_calls_in_source_order() {
-    let mut output_parser = output_parser(false);
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -143,7 +144,7 @@ fn should_accept_opencode_array_object_union_and_untyped_tool_parameters() {
 }
 
 #[test]
-fn should_reject_a_malformed_declared_array_argument_after_parser_initialization() {
+fn should_forward_a_declared_array_argument_that_is_not_json() {
     let descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
     let declared_tools = [ChatToolDefinition {
         name: "todowrite".to_owned(),
@@ -155,37 +156,145 @@ fn should_reject_a_malformed_declared_array_argument_after_parser_initialization
     let mut output_parser = LagunaOutputParser::new(&descriptor, &declared_tools, false)
         .expect("a declared array should initialize parser state");
 
-    let parser_error = output_parser
+    let output_events = output_parser
         .push_fragment(
             "<tool_call>todowrite<arg_key>todos</arg_key><arg_value>not-json</arg_value></tool_call>",
         )
-        .expect_err("a generated array argument must contain a JSON array");
+        .expect("a closed envelope must reach the harness even when an array value is not JSON");
 
-    assert!(matches!(
-        parser_error,
-        LagunaOutputParserError::InvalidToolArgumentValue
-    ));
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "todowrite".to_owned(),
+            arguments_json: r#"{"todos":"not-json"}"#.to_owned(),
+        }]
+    );
 }
 
 #[test]
-fn should_reject_an_undeclared_poolside_function() {
-    let mut output_parser = output_parser(false);
+fn should_forward_javascript_object_literals_on_a_declared_array_argument() {
+    let descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
+    let declared_tools = [ChatToolDefinition {
+        name: "annotate_scene".to_owned(),
+        description: None,
+        parameters_json: r#"{"type":"object","properties":{"quotes":{"type":"array"},"scene":{"type":"string"}},"required":["quotes"]}"#.to_owned(),
+    }];
+    let mut output_parser = LagunaOutputParser::new(&descriptor, &declared_tools, false)
+        .expect("a declared array-plus-string schema should initialize parser state");
 
-    let parser_error = output_parser
+    let output_events = output_parser
+        .push_fragment(
+            "<tool_call>annotate_scene<arg_key>quotes</arg_key><arg_value>{\n    speaker: \"Romeo\",\n    line: \"O Juliet\",\n  },\n]</arg_value><arg_key>scene</arg_key><arg_value>balcony</arg_value></tool_call>",
+        )
+        .expect("a closed envelope must reach the harness even when array text is a JavaScript literal");
+
+    let [
+        LagunaOutputEvent::ToolCall {
+            function_name,
+            arguments_json,
+            ..
+        },
+    ] = output_events.as_slice()
+    else {
+        panic!("expected one tool call, got {output_events:?}");
+    };
+    assert_eq!(function_name, "annotate_scene");
+    let arguments_value = serde_json::from_str::<serde_json::Value>(arguments_json)
+        .expect("fail-open arguments should be JSON");
+    assert_eq!(arguments_value["scene"], "balcony");
+    assert!(arguments_value["quotes"].as_str().is_some());
+}
+
+#[test]
+fn should_keep_a_json_array_argument_as_an_array_when_object_keys_repeat() {
+    let descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
+    let declared_tools = [ChatToolDefinition {
+        name: "annotate_scene".to_owned(),
+        description: None,
+        parameters_json:
+            r#"{"type":"object","properties":{"quotes":{"type":"array"}},"required":["quotes"]}"#
+                .to_owned(),
+    }];
+    let mut output_parser = LagunaOutputParser::new(&descriptor, &declared_tools, false)
+        .expect("a declared array schema should initialize parser state");
+
+    let output_events = output_parser
+        .push_fragment(
+            r#"<tool_call>annotate_scene<arg_key>quotes</arg_key><arg_value>[{"line":"O Romeo","line":"O Juliet"}]</arg_value></tool_call>"#,
+        )
+        .expect("duplicate JSON keys must not stringify a structured array away from the harness");
+
+    let [LagunaOutputEvent::ToolCall { arguments_json, .. }] = output_events.as_slice() else {
+        panic!("expected one tool call, got {output_events:?}");
+    };
+    let arguments_value = serde_json::from_str::<serde_json::Value>(arguments_json)
+        .expect("fail-open arguments should be JSON");
+    assert!(arguments_value["quotes"].is_array());
+    assert_eq!(arguments_value["quotes"][0]["line"], "O Juliet");
+}
+
+#[test]
+fn should_forward_an_undeclared_poolside_function_to_the_client() {
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+
+    let output_events = output_parser
         .push_fragment("<tool_call>invent_ending</tool_call>")
-        .expect_err("generated functions must match one declared tool exactly");
+        .expect("a well-formed undeclared function should reach the tool client");
 
-    assert!(matches!(
-        &parser_error,
-        LagunaOutputParserError::UndeclaredFunction { function_name }
-            if function_name == "invent_ending"
-    ));
-    assert_bounded_error(&parser_error);
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "invent_ending".to_owned(),
+            arguments_json: "{}".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn should_recover_a_poolside_call_that_dropped_the_opening_argument_bracket() {
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+
+    let output_events = output_parser
+        .push_fragment(
+            "<tool_call>read\narg_key>path</arg_key><arg_value>balcony.md</arg_value></tool_call>",
+        )
+        .expect("a closed tool_call with a usable name must reach the harness");
+
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "read".to_owned(),
+            arguments_json: r#"{"path":"balcony.md"}"#.to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn should_forward_a_closed_tool_call_when_argument_markers_cannot_be_salvaged() {
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+
+    let output_events = output_parser
+        .push_fragment(
+            "<tool_call>read\n<_key>argument-key</arg_key><arg_value>path</arg_value></tool_call>",
+        )
+        .expect("unsalvageable argument slop must not abort a named tool_call");
+
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "read".to_owned(),
+            arguments_json: "{}".to_owned(),
+        }]
+    );
 }
 
 #[test]
 fn should_preserve_a_bounded_undeclared_poolside_tool_argument_for_client_validation() {
-    let mut output_parser = output_parser(false);
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -207,69 +316,71 @@ fn should_preserve_a_bounded_undeclared_poolside_tool_argument_for_client_valida
 }
 
 #[test]
-fn should_still_require_declared_arguments_when_extra_metadata_is_present() {
-    let mut output_parser = output_parser(false);
+fn should_forward_a_declared_call_when_a_required_argument_is_missing() {
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
 
-    let parser_error = output_parser
+    let output_events = output_parser
         .push_fragment(
             "<tool_call>find_character\
              <arg_key>description</arg_key><arg_value>Locate the character</arg_value>\
              </tool_call>",
         )
-        .expect_err("extra metadata must not satisfy a missing required argument");
+        .expect("a closed envelope must reach the harness even without required arguments");
 
-    assert!(matches!(
-        &parser_error,
-        LagunaOutputParserError::MissingRequiredToolArgument {
-            function_name,
-            argument_name,
-        } if function_name == "find_character" && argument_name == "name"
-    ));
-    assert_bounded_error(&parser_error);
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: r#"{"description":"Locate the character"}"#.to_owned(),
+        }]
+    );
 }
 
 #[test]
-fn should_reject_a_duplicate_poolside_tool_argument() {
-    let mut output_parser = output_parser(false);
+fn should_forward_a_duplicate_poolside_tool_argument_with_the_last_value() {
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
 
-    let parser_error = output_parser
+    let output_events = output_parser
         .push_fragment(
             "<tool_call>find_character\
              <arg_key>name</arg_key><arg_value>Romeo</arg_value>\
              <arg_key>name</arg_key><arg_value>Juliet</arg_value>\
              </tool_call>",
         )
-        .expect_err("duplicate argument names must not silently overwrite user-visible calls");
+        .expect("a closed envelope must reach the harness even with duplicate argument names");
 
-    assert!(matches!(
-        &parser_error,
-        LagunaOutputParserError::DuplicateToolArgument { argument_name }
-            if argument_name == "name"
-    ));
-    assert_bounded_error(&parser_error);
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: r#"{"name":"Juliet"}"#.to_owned(),
+        }]
+    );
 }
 
 #[test]
-fn should_reject_a_closed_tool_call_missing_its_required_argument() {
-    let mut output_parser = output_parser(false);
+fn should_forward_a_closed_tool_call_missing_its_required_argument() {
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
 
-    let parser_error = output_parser
+    let output_events = output_parser
         .push_fragment("<tool_call>find_character</tool_call>")
-        .expect_err("a syntactically closed call remains incomplete without required arguments");
+        .expect("a closed envelope must reach the harness even without required arguments");
 
-    assert!(matches!(
-        &parser_error,
-        LagunaOutputParserError::MissingRequiredToolArgument {
-            function_name,
-            argument_name,
-        } if function_name == "find_character" && argument_name == "name"
-    ));
-    assert_bounded_error(&parser_error);
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: "{}".to_owned(),
+        }]
+    );
 }
 
 #[test]
 fn should_reject_an_incomplete_poolside_tool_call_when_generation_finishes() {
-    let mut output_parser = output_parser(false);
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
     assert!(
         output_parser
             .push_fragment("<tool_call>find_character<arg_key>name</arg_key><arg_value>Romeo")
@@ -289,27 +400,30 @@ fn should_reject_an_incomplete_poolside_tool_call_when_generation_finishes() {
 }
 
 #[test]
-fn should_reject_nested_poolside_tool_argument_markers() {
-    let mut output_parser = output_parser(false);
+fn should_forward_a_closed_call_when_argument_markers_are_nested() {
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
 
-    let parser_error = output_parser
+    let output_events = output_parser
         .push_fragment(
             "<tool_call>find_character\
              <arg_key>name<arg_key>nested</arg_key></arg_key>\
              <arg_value>Romeo</arg_value></tool_call>",
         )
-        .expect_err("Poolside arguments are flat key/value pairs, not nested marker trees");
+        .expect("a closed envelope must reach the harness even when argument markers are nested");
 
-    assert!(matches!(
-        &parser_error,
-        LagunaOutputParserError::NestedToolArgumentMarker
-    ));
-    assert_bounded_error(&parser_error);
+    assert_eq!(
+        output_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: "{}".to_owned(),
+        }]
+    );
 }
 
 #[test]
 fn should_reject_oversized_tool_arguments_without_echoing_the_payload() {
-    let mut output_parser = output_parser(false);
+    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
     output_parser
         .push_fragment("<tool_call>find_character<arg_key>name</arg_key><arg_value>")
         .expect("the parser should enter argument-value state");
@@ -337,7 +451,7 @@ fn should_reject_oversized_tool_arguments_without_echoing_the_payload() {
 
 #[test]
 fn should_finish_streamed_reasoning_without_requiring_a_model_owned_closing_marker() {
-    let mut output_parser = output_parser(true);
+    let mut output_parser = literary_output_parser_starting_in_reasoning(true);
 
     assert_eq!(
         output_parser
@@ -353,19 +467,4 @@ fn should_finish_streamed_reasoning_without_requiring_a_model_owned_closing_mark
             .expect("budget exhaustion inside reasoning preserves prior reasoning behavior")
             .is_empty()
     );
-}
-
-fn output_parser(generation_starts_in_reasoning: bool) -> LagunaOutputParser {
-    let text_descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
-    LagunaOutputParser::new(
-        &text_descriptor,
-        &declared_literary_tools(),
-        generation_starts_in_reasoning,
-    )
-    .expect("the supported poolside_v1 descriptor and declared tools should construct a parser")
-}
-
-fn assert_bounded_error(parser_error: &LagunaOutputParserError) {
-    // Public malformed-output diagnostics must remain safe even when generated content is huge.
-    assert!(parser_error.to_string().len() <= 256);
 }

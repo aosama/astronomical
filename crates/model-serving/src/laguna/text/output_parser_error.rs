@@ -30,8 +30,6 @@ pub enum LagunaOutputParserError {
     UnsupportedDeclaredToolArgumentType { argument_name: String },
     #[error("declared Laguna required arguments for '{function_name}' are invalid")]
     InvalidRequiredToolArguments { function_name: String },
-    #[error("Laguna output selected undeclared function '{function_name}'")]
-    UndeclaredFunction { function_name: String },
     #[error("Laguna tool call repeated argument '{argument_name}'")]
     DuplicateToolArgument { argument_name: String },
     #[error("Laguna function '{function_name}' omitted required argument '{argument_name}'")]
@@ -79,7 +77,6 @@ impl LagunaOutputParserError {
                 "unsupported_declared_tool_argument_type"
             }
             Self::InvalidRequiredToolArguments { .. } => "invalid_required_tool_arguments",
-            Self::UndeclaredFunction { .. } => "undeclared_function",
             Self::DuplicateToolArgument { .. } => "duplicate_tool_argument",
             Self::MissingRequiredToolArgument { .. } => "missing_required_tool_argument",
             Self::IncompleteToolCall => "incomplete_tool_call",
@@ -92,5 +89,17 @@ impl LagunaOutputParserError {
             Self::IncompleteControlMarker => "incomplete_control_marker",
             Self::TooManyToolCalls => "too_many_tool_calls",
         }
+    }
+
+    /// Resource bounds stay fatal after `</tool_call>`. Every other closed-envelope failure is forwarded.
+    #[must_use]
+    pub(crate) const fn closed_envelope_must_remain_fatal(&self) -> bool {
+        matches!(
+            self,
+            Self::FragmentTooLarge { .. }
+                | Self::PendingOutputTooLarge { .. }
+                | Self::ToolArgumentsTooLarge { .. }
+                | Self::TooManyToolCalls
+        )
     }
 }

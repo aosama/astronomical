@@ -293,6 +293,44 @@ fn should_reject_unsafe_incomplete_or_zero_payload_laguna_indexes() {
 }
 
 #[test]
+fn should_keep_advertising_a_laguna_conversion_without_torch_dtype() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("Laguna-Conversion");
+    write_executable_laguna_artifact(&model_directory);
+    fs::write(
+        model_directory.join("config.json"),
+        r#"{"model_type":"laguna","max_position_embeddings":65536,"quantization":{"bits":6,"group_size":64,"mode":"affine"}}"#,
+    )
+    .expect("the conversion config should be written");
+
+    assert_eq!(
+        discover_configured_models(&temporary_directory)[0]
+            .discovered_models
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn should_not_advertise_compressed_tensors_laguna_storage() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("Laguna-Compressed");
+    write_executable_laguna_artifact(&model_directory);
+    fs::write(
+        model_directory.join("config.json"),
+        r#"{"model_type":"laguna","max_position_embeddings":65536,"quantization_config":{"quant_method":"compressed-tensors","format":"float-quantized"}}"#,
+    )
+    .expect("the compressed-tensors config should be written");
+
+    assert!(
+        discover_configured_models(&temporary_directory)[0]
+            .discovered_models
+            .is_empty(),
+        "compressed-tensors Laguna checkpoints are not executable MLX affine artifacts"
+    );
+}
+
+#[test]
 fn should_reject_nonimmutable_revision_and_zero_context() {
     let mutable_revision_home = tempfile::tempdir().expect("temporary directory should be created");
     let mutable_revision_directory = mutable_revision_home.path().join("Mutable-Revision");

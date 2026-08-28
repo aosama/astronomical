@@ -105,6 +105,23 @@ impl LagunaDeclaredTool {
         }
         Ok(parsed_arguments)
     }
+
+    /// Serializes generated arguments when the function is not in the request tool list.
+    ///
+    /// The client owns whether that name is callable. Schema required-fields must not
+    /// abort a well-formed Poolside envelope the way a declared tool would.
+    pub(super) fn parse_passthrough_arguments(
+        raw_arguments: Vec<(String, String)>,
+    ) -> Result<Map<String, Value>, LagunaOutputParserError> {
+        let mut parsed_arguments = Map::new();
+        for (argument_name, raw_argument_value) in raw_arguments {
+            parsed_arguments.insert(
+                argument_name,
+                parse_json_value_or_string(&raw_argument_value),
+            );
+        }
+        Ok(parsed_arguments)
+    }
 }
 
 fn parse_parameter_types(
@@ -240,6 +257,15 @@ fn parse_required_parameters(
         }
     }
     Ok(required_parameters)
+}
+
+fn parse_json_value_or_string(raw_argument_value: &str) -> Value {
+    if let Ok(strict_value) = serde_json::from_str::<DuplicateAwareJsonValue>(raw_argument_value) {
+        return strict_value.0;
+    }
+    // Fail-open reconstruction prefers last-key-wins JSON over stringifying a structured payload.
+    serde_json::from_str::<Value>(raw_argument_value)
+        .unwrap_or_else(|_| Value::String(raw_argument_value.to_owned()))
 }
 
 fn parse_scalar_argument(

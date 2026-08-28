@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::{RequestId, WorkerEvent, WorkerPromptWorkReuse};
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::artifact_validation::ValidatedWeightsFile;
 use crate::laguna::{
@@ -118,18 +118,6 @@ impl LagunaInferenceExecution {
     pub fn inject_two_prefill_capacity_failures_for_test(&mut self) {
         self.prefill_failure_injection.arm_two_failures();
     }
-
-    fn sample_next_token_id(
-        runtime: &MlxRuntime,
-        logits: &MlxArray,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<u32, InferenceEngineError> {
-        LagunaModel::greedy_token_id(runtime, logits, performance_attribution).map_err(
-            |sampling_error| InferenceEngineError::Fatal {
-                reason: format!("Laguna greedy sampling failed: {sampling_error:?}"),
-            },
-        )
-    }
 }
 
 impl MlxInferenceExecution for LagunaInferenceExecution {
@@ -147,6 +135,7 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             return Err(InferenceEngineError::EngineBusy);
         }
         let request_id = inference_request.request_id();
+        let sampling_strategy = inference_request.sampling_strategy().clone();
         let prompt_token_ids = inference_request.prompt_token_ids().to_vec();
         let remaining_output_tokens = inference_request.maximum_output_tokens();
         if prompt_token_ids.is_empty() {
@@ -194,6 +183,9 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 reason: "the Laguna model is not loaded".to_owned(),
             });
         };
+        let random_state =
+            super::token_sampling::random_state_for_strategy(runtime, &sampling_strategy)?;
+        super::token_sampling::log_executed_sampling(request_id.value(), &sampling_strategy);
         let prompt_context_token_count = u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX);
         let mut decoder_state = LagunaDecoderState::empty(model.contract()).map_err(|_| {
             InferenceEngineError::Fatal {
@@ -258,6 +250,8 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                 drafter_eligible_token_count: 0,
                 drafter_restored_token_count: 0,
             },
+            sampling_strategy,
+            random_state,
         });
         Ok(EngineGenerationStart::with_expert_memory_mode(
             restored_prompt_prefix_token_count,
@@ -320,9 +314,11 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                     reason: "Laguna prompt processing produced no logits".to_owned(),
                 },
             )?;
-            let first_generated_token_id = Self::sample_next_token_id(
+            let first_generated_token_id = super::token_sampling::select_next_token_id(
                 runtime,
                 &prompt_logits,
+                &active_request.sampling_strategy,
+                &mut active_request.random_state,
                 &mut active_request.performance_attribution,
             )?;
             active_request.next_input_token_ids = vec![first_generated_token_id];
@@ -366,8 +362,13 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                             reason: "Laguna token generation failed".to_owned(),
                         }
                     })?;
-                let next_token_id =
-                    Self::sample_next_token_id(runtime, &decode_logits, performance_attribution)?;
+                let next_token_id = super::token_sampling::select_next_token_id(
+                    runtime,
+                    &decode_logits,
+                    &active_request.sampling_strategy,
+                    &mut active_request.random_state,
+                    performance_attribution,
+                )?;
                 complete_laguna_forward_memory_observation(
                     runtime,
                     model,

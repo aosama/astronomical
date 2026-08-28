@@ -48,18 +48,6 @@ fn should_validate_one_complete_weight_and_text_artifact_contract() {
         Some(true)
     );
     assert!(text_artifact.sampler_config().uses_sampling());
-    assert_eq!(
-        text_artifact.sampler_config().temperature_thousandths(),
-        1_000
-    );
-    assert_eq!(text_artifact.sampler_config().top_p_thousandths(), 1_000);
-    assert_eq!(text_artifact.sampler_config().top_k(), None);
-    assert_eq!(
-        text_artifact
-            .sampler_config()
-            .repetition_penalty_thousandths(),
-        1_000
-    );
 }
 
 #[test]

@@ -47,23 +47,23 @@ fn derive_default_system_message(
         false,
         bos_token_content,
     )?;
-    let user_block = format!("<user>{PROBE_USER_CONTENT}</user>\n");
-    let header = rendered_prompt
-        .strip_prefix(bos_token_content)
-        .and_then(|without_bos| without_bos.strip_suffix(&user_block))
-        .ok_or(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "beginning token or user-message protocol does not match Poolside",
-        })?;
-    if header.is_empty() {
-        return Ok(String::new());
+    let after_bos = strip_required_prefix(
+        &rendered_prompt,
+        bos_token_content,
+        "beginning token or user-message protocol does not match Poolside",
+    )?;
+    let (system_inner, after_system) = take_optional_tagged_block(after_bos, "system");
+    let (user_inner, after_user) = take_required_tagged_block(
+        after_system,
+        "user",
+        "beginning token or user-message protocol does not match Poolside",
+    )?;
+    if user_inner != PROBE_USER_CONTENT || !after_user.trim().is_empty() {
+        return Err(unsupported_poolside(
+            "beginning token or user-message protocol does not match Poolside",
+        ));
     }
-    header
-        .strip_prefix("<system>")
-        .and_then(|system_block| system_block.strip_suffix("</system>\n"))
-        .map(str::to_owned)
-        .ok_or(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "default system-message protocol does not match Poolside",
-        })
+    Ok(system_inner.unwrap_or("").to_owned())
 }
 
 fn validate_explicit_and_empty_system_behavior(
@@ -78,14 +78,14 @@ fn validate_explicit_and_empty_system_behavior(
         false,
         bos_token_content,
     )?;
-    let expected_explicit = format!(
-        "{bos_token_content}<system>{PROBE_SYSTEM_CONTENT}</system>\n\
-         <user>{PROBE_USER_CONTENT}</user>\n"
-    );
-    if explicit_system_prompt != expected_explicit {
-        return Err(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "explicit system-message protocol does not match Poolside",
-        });
+    if !matches_system_then_user(
+        &explicit_system_prompt,
+        bos_token_content,
+        Some(PROBE_SYSTEM_CONTENT),
+    ) {
+        return Err(unsupported_poolside(
+            "explicit system-message protocol does not match Poolside",
+        ));
     }
 
     let empty_system_prompt = render_probe(
@@ -96,11 +96,10 @@ fn validate_explicit_and_empty_system_behavior(
         false,
         bos_token_content,
     )?;
-    let expected_empty = format!("{bos_token_content}<user>{PROBE_USER_CONTENT}</user>\n");
-    if empty_system_prompt != expected_empty {
-        return Err(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "empty system-message behavior does not match Poolside",
-        });
+    if !matches_system_then_user(&empty_system_prompt, bos_token_content, None) {
+        return Err(unsupported_poolside(
+            "empty system-message behavior does not match Poolside",
+        ));
     }
     Ok(())
 }
@@ -122,23 +121,29 @@ fn validate_tool_definition_protocol(
         false,
         bos_token_content,
     )?;
-    let user_block = format!("<user>{PROBE_USER_CONTENT}</user>\n");
-    let system_block = rendered_prompt
-        .strip_prefix(bos_token_content)
-        .and_then(|without_bos| without_bos.strip_suffix(&user_block))
-        .and_then(|header| header.strip_prefix("<system>"))
-        .and_then(|header| header.strip_suffix("</system>\n"))
-        .ok_or(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "tool-definition system block does not match Poolside",
-        })?;
-    let serialized_tool = system_block
-        .split_once("<available_tools>\n")
-        .and_then(|(_, available_tools)| available_tools.strip_suffix("</available_tools>"))
-        .and_then(|available_tools| available_tools.strip_suffix('\n'))
-        .filter(|available_tools| !available_tools.contains('\n'))
-        .ok_or(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "available-tools markers do not match Poolside",
-        })?;
+    let after_bos = strip_required_prefix(
+        &rendered_prompt,
+        bos_token_content,
+        "tool-definition system block does not match Poolside",
+    )?;
+    let (system_block, after_system) = take_required_tagged_block(
+        after_bos,
+        "system",
+        "tool-definition system block does not match Poolside",
+    )?;
+    let (user_inner, after_user) = take_required_tagged_block(
+        after_system,
+        "user",
+        "tool-definition system block does not match Poolside",
+    )?;
+    if user_inner != PROBE_USER_CONTENT || !after_user.trim().is_empty() {
+        return Err(unsupported_poolside(
+            "tool-definition system block does not match Poolside",
+        ));
+    }
+    let serialized_tool = extract_available_tools_json(system_block).ok_or(
+        unsupported_poolside("available-tools markers do not match Poolside"),
+    )?;
     let rendered_tool: Value = serde_json::from_str(serialized_tool).map_err(|_| {
         LagunaTextArtifactError::UnsupportedTemplateContract {
             description: "artifact template does not render an OpenAI-style tool definition",
@@ -191,20 +196,12 @@ fn derive_history_protocol(
         false,
         bos_token_content,
     )?;
-    let history_suffix_without_reasoning = history_suffix(false);
-    let history_suffix_with_reasoning = history_suffix(true);
-    let expected_header = format!("{bos_token_content}<system>{PROBE_SYSTEM_CONTENT}</system>\n");
-    let preserves_prior_reasoning = if rendered_disabled
-        == format!("{expected_header}{history_suffix_without_reasoning}")
-    {
-        false
-    } else if rendered_disabled == format!("{expected_header}{history_suffix_with_reasoning}") {
-        true
-    } else {
-        return Err(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "assistant history, tool-call, or tool-response protocol does not match Poolside",
-        });
-    };
+    let preserves_prior_reasoning = history_preserves_reasoning(&rendered_disabled)?;
+    if !contains_poolside_history_markers(&rendered_disabled, bos_token_content)? {
+        return Err(unsupported_poolside(
+            "assistant history, tool-call, or tool-response protocol does not match Poolside",
+        ));
+    }
 
     let rendered_enabled = render_probe(
         template_program,
@@ -214,10 +211,12 @@ fn derive_history_protocol(
         false,
         bos_token_content,
     )?;
-    if rendered_enabled != format!("{expected_header}{history_suffix_with_reasoning}") {
-        return Err(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "thinking-enabled assistant history does not match Poolside",
-        });
+    if !contains_poolside_history_markers(&rendered_enabled, bos_token_content)?
+        || !rendered_enabled.contains(PROBE_REASONING_CONTENT)
+    {
+        return Err(unsupported_poolside(
+            "thinking-enabled assistant history does not match Poolside",
+        ));
     }
     Ok(preserves_prior_reasoning)
 }
@@ -226,9 +225,7 @@ fn derive_and_validate_generation_prefixes(
     template_program: &LagunaTemplateProgram,
     bos_token_content: &str,
 ) -> Result<bool, LagunaTextArtifactError> {
-    for (enable_thinking, expected_suffix) in
-        [(false, "<assistant></think>"), (true, "<assistant><think>")]
-    {
+    for (enable_thinking, thinking_enabled) in [(false, false), (true, true)] {
         let rendered_prompt = render_probe(
             template_program,
             vec![system_message(""), user_message()],
@@ -237,12 +234,11 @@ fn derive_and_validate_generation_prefixes(
             true,
             bos_token_content,
         )?;
-        if !rendered_prompt.starts_with(bos_token_content)
-            || !rendered_prompt.ends_with(expected_suffix)
+        if assistant_thinking_prefix(&rendered_prompt, bos_token_content) != Some(thinking_enabled)
         {
-            return Err(LagunaTextArtifactError::UnsupportedTemplateContract {
-                description: "assistant thinking prefix does not match Poolside",
-            });
+            return Err(unsupported_poolside(
+                "assistant thinking prefix does not match Poolside",
+            ));
         }
     }
 
@@ -254,15 +250,9 @@ fn derive_and_validate_generation_prefixes(
         true,
         bos_token_content,
     )?;
-    if rendered_default.ends_with("<assistant><think>") {
-        Ok(true)
-    } else if rendered_default.ends_with("<assistant></think>") {
-        Ok(false)
-    } else {
-        Err(LagunaTextArtifactError::UnsupportedTemplateContract {
-            description: "template-default assistant prefix does not match Poolside",
-        })
-    }
+    assistant_thinking_prefix(&rendered_default, bos_token_content).ok_or(unsupported_poolside(
+        "template-default assistant prefix does not match Poolside",
+    ))
 }
 
 fn render_probe(
@@ -296,20 +286,6 @@ fn render_probe(
         })
 }
 
-fn history_suffix(includes_reasoning: bool) -> String {
-    let reasoning_block = if includes_reasoning {
-        format!("<think>{PROBE_REASONING_CONTENT}</think>")
-    } else {
-        "</think>".to_owned()
-    };
-    format!(
-        "<assistant>{reasoning_block}{PROBE_ASSISTANT_CONTENT}\
-         <tool_call>{PROBE_TOOL_NAME}<arg_key>count</arg_key><arg_value>7</arg_value>\
-         <arg_key>label</arg_key><arg_value>café</arg_value></tool_call></assistant>\n\
-         <tool_response>{PROBE_TOOL_RESPONSE}</tool_response>\n"
-    )
-}
-
 fn system_message(content: &str) -> ChatMessage {
     ChatMessage::System {
         content: content.to_owned(),
@@ -320,5 +296,130 @@ fn user_message() -> ChatMessage {
     ChatMessage::User {
         content: PROBE_USER_CONTENT.to_owned(),
         images: Vec::new(),
+    }
+}
+
+fn unsupported_poolside(description: &'static str) -> LagunaTextArtifactError {
+    LagunaTextArtifactError::UnsupportedTemplateContract { description }
+}
+
+fn strip_required_prefix<'a>(
+    source: &'a str,
+    prefix: &str,
+    description: &'static str,
+) -> Result<&'a str, LagunaTextArtifactError> {
+    source
+        .strip_prefix(prefix)
+        .ok_or(unsupported_poolside(description))
+}
+
+fn matches_system_then_user(
+    rendered_prompt: &str,
+    bos_token_content: &str,
+    expected_system_content: Option<&str>,
+) -> bool {
+    let Some(after_bos) = rendered_prompt.strip_prefix(bos_token_content) else {
+        return false;
+    };
+    let (system_inner, after_system) = take_optional_tagged_block(after_bos, "system");
+    let Some((user_inner, after_user)) = take_tagged_block(after_system, "user") else {
+        return false;
+    };
+    system_inner == expected_system_content
+        && user_inner == PROBE_USER_CONTENT
+        && after_user.trim().is_empty()
+}
+
+fn take_optional_tagged_block<'a>(source: &'a str, tag: &str) -> (Option<&'a str>, &'a str) {
+    take_tagged_block(source, tag).map_or((None, source), |(inner, rest)| (Some(inner), rest))
+}
+
+fn take_required_tagged_block<'a>(
+    source: &'a str,
+    tag: &str,
+    description: &'static str,
+) -> Result<(&'a str, &'a str), LagunaTextArtifactError> {
+    take_tagged_block(source, tag).ok_or(unsupported_poolside(description))
+}
+
+fn take_tagged_block<'a>(source: &'a str, tag: &str) -> Option<(&'a str, &'a str)> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let trimmed_source = source.trim_start();
+    let after_open = trimmed_source.strip_prefix(&open)?;
+    let after_open = after_open.strip_prefix('\n').unwrap_or(after_open);
+    let close_offset = after_open.find(&close)?;
+    let inner = after_open[..close_offset].trim();
+    let after_close = &after_open[close_offset + close.len()..];
+    let after_close = after_close.strip_prefix('\n').unwrap_or(after_close);
+    Some((inner, after_close))
+}
+
+fn extract_available_tools_json(system_inner: &str) -> Option<&str> {
+    let start_marker = "<available_tools>";
+    let end_marker = "</available_tools>";
+    let start_offset = system_inner.find(start_marker)? + start_marker.len();
+    let after_start = system_inner[start_offset..]
+        .strip_prefix('\n')
+        .unwrap_or(&system_inner[start_offset..]);
+    let end_offset = after_start.find(end_marker)?;
+    let json_payload = after_start[..end_offset].trim();
+    if json_payload.is_empty() || json_payload.contains('\n') {
+        return None;
+    }
+    Some(json_payload)
+}
+
+fn contains_poolside_history_markers(
+    rendered_prompt: &str,
+    bos_token_content: &str,
+) -> Result<bool, LagunaTextArtifactError> {
+    if !matches_system_then_remainder(rendered_prompt, bos_token_content, PROBE_SYSTEM_CONTENT) {
+        return Ok(false);
+    }
+    Ok(rendered_prompt.contains("<assistant>")
+        && rendered_prompt.contains(PROBE_ASSISTANT_CONTENT)
+        && rendered_prompt.contains(&format!("<tool_call>{PROBE_TOOL_NAME}"))
+        && rendered_prompt.contains("<arg_key>count</arg_key>")
+        && rendered_prompt.contains("<arg_key>label</arg_key>")
+        && rendered_prompt.contains("café")
+        && rendered_prompt.contains(PROBE_TOOL_RESPONSE)
+        && rendered_prompt.contains("<tool_response>"))
+}
+
+fn matches_system_then_remainder(
+    rendered_prompt: &str,
+    bos_token_content: &str,
+    expected_system_content: &str,
+) -> bool {
+    let Some(after_bos) = rendered_prompt.strip_prefix(bos_token_content) else {
+        return false;
+    };
+    take_tagged_block(after_bos, "system")
+        .is_some_and(|(system_inner, _)| system_inner == expected_system_content)
+}
+
+fn history_preserves_reasoning(rendered_disabled: &str) -> Result<bool, LagunaTextArtifactError> {
+    if rendered_disabled.contains(PROBE_REASONING_CONTENT) {
+        return Ok(true);
+    }
+    if rendered_disabled.contains("</think>") {
+        return Ok(false);
+    }
+    Err(unsupported_poolside(
+        "assistant history, tool-call, or tool-response protocol does not match Poolside",
+    ))
+}
+
+fn assistant_thinking_prefix(rendered_prompt: &str, bos_token_content: &str) -> Option<bool> {
+    if !rendered_prompt.starts_with(bos_token_content) {
+        return None;
+    }
+    let assistant_offset = rendered_prompt.rfind("<assistant>")?;
+    let suffix = rendered_prompt[assistant_offset + "<assistant>".len()..].trim();
+    match suffix {
+        "<think>" => Some(true),
+        "</think>" => Some(false),
+        _ => None,
     }
 }

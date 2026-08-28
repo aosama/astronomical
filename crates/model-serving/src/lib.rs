@@ -7,6 +7,8 @@ mod deepseek_v4;
 mod engine_backed_worker;
 mod expert_paging;
 mod flux2_klein;
+#[cfg(feature = "direct-mlx")]
+mod gpu_token_sampling;
 mod image_generation_engine;
 mod inference_engine;
 mod laguna;
@@ -18,6 +20,7 @@ mod persistent_cache;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod safetensors;
+mod sampling_seed;
 mod sparse_experts;
 mod strict_json;
 

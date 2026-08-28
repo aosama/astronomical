@@ -179,6 +179,7 @@ impl LagunaCompressedStorageDescriptor {
                 .target_scopes
                 .contains(&LagunaCompressedModuleScope::AllLinear)
                 && canonical_module_name != "model.embed_tokens"
+                && !is_router_module(canonical_module_name)
             || module_scope(canonical_module_name)
                 .is_some_and(|scope| self.target_scopes.contains(&scope));
         is_targeted && !self.is_ignored(canonical_module_name)
@@ -189,6 +190,11 @@ impl LagunaCompressedStorageDescriptor {
             .iter()
             .any(|scope| scope.matches(canonical_module_name))
     }
+}
+
+fn is_router_module(canonical_module_name: &str) -> bool {
+    canonical_module_name.ends_with(".mlp.gate")
+        || canonical_module_name.ends_with(".mlp.gate.proj")
 }
 
 fn module_scope(canonical_module_name: &str) -> Option<LagunaCompressedModuleScope> {
@@ -229,7 +235,7 @@ impl LagunaCompressedIgnoreScope {
             Self::AttentionGate => {
                 suffix == Some("g_proj") && canonical_module_name.contains(".self_attn.")
             }
-            Self::Router => canonical_module_name.ends_with(".mlp.gate"),
+            Self::Router => is_router_module(canonical_module_name),
             Self::SharedExpert => canonical_module_name.contains(".mlp.shared_expert."),
             Self::DenseFeedForward {
                 layer_index,

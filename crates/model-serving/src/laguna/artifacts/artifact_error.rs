@@ -8,6 +8,8 @@ use crate::laguna::{LagunaNormalizationError, LagunaTextArtifactError};
 
 use super::tensor_name_error::LagunaTensorNameNormalizationError;
 
+const MAXIMUM_PUBLIC_MODEL_LOAD_FAILURE_REASON_CHARACTERS: usize = 512;
+
 /// A bounded structural failure in the Laguna-owned shard index.
 #[derive(Debug, Error)]
 pub enum LagunaShardIndexError {
@@ -165,4 +167,47 @@ pub enum LagunaArtifactValidationError {
         actual_block_row_extent: usize,
         actual_block_column_extent: usize,
     },
+}
+
+impl LagunaArtifactValidationError {
+    /// Field-level load reason without local paths or native dumps.
+    #[must_use]
+    pub fn public_failure_reason(&self) -> String {
+        let unbounded_public_reason = match self {
+            Self::Configuration(LagunaNormalizationError::UnsupportedStorageEncoding {
+                encoding,
+            }) => format!("Laguna artifact uses unsupported storage encoding '{encoding}'"),
+            Self::Configuration(normalization_error) => {
+                format!("Laguna configuration normalization failed: {normalization_error}")
+            }
+            Self::TextArtifact(text_artifact_error) => {
+                format!("Laguna text artifact normalization failed: {text_artifact_error}")
+            }
+            Self::TensorNames(tensor_name_error) => {
+                format!("Laguna tensor-name normalization failed: {tensor_name_error}")
+            }
+            Self::ShardIndex(shard_index_error) => {
+                format!("Laguna shard-index validation failed: {shard_index_error}")
+            }
+            Self::Artifact(_) => "Laguna artifact validation failed".to_owned(),
+            other => other.to_string(),
+        };
+        bound_public_model_load_failure_reason(unbounded_public_reason)
+    }
+}
+
+fn bound_public_model_load_failure_reason(unbounded_public_reason: String) -> String {
+    let mut character_indices = unbounded_public_reason.char_indices();
+    let Some((truncation_start_byte_index, _)) =
+        character_indices.nth(MAXIMUM_PUBLIC_MODEL_LOAD_FAILURE_REASON_CHARACTERS - 1)
+    else {
+        return unbounded_public_reason;
+    };
+    if character_indices.next().is_none() {
+        return unbounded_public_reason;
+    }
+    format!(
+        "{}…",
+        &unbounded_public_reason[..truncation_start_byte_index]
+    )
 }

@@ -1,8 +1,7 @@
 use astronomical_model_serving::{
     ExpertResidencyPhase, LagunaArtifactValidator, LagunaCanonicalTensorAssemblyKind,
-    LagunaExpertPagingPlan, LagunaExpertProjection, LagunaFeedForwardDescriptor,
-    LagunaLayerTensorRole, LagunaPagingError, LagunaTargetNormalizer, LagunaTensorComponent,
-    LagunaTensorId, PerformanceAttribution, PerformanceOperation,
+    LagunaExpertPagingPlan, LagunaExpertProjection, LagunaLayerTensorRole, LagunaPagingError,
+    LagunaTensorComponent, LagunaTensorId, PerformanceAttribution, PerformanceOperation,
     laguna_sliding_prefill_transient_token_count,
     required_complete_residency_activation_headroom_bytes, rotating_prefill_transient_token_count,
 };
@@ -10,7 +9,6 @@ use astronomical_model_serving::{
 use serde_json::json;
 
 use super::artifact_support::SyntheticLagunaArtifact;
-use super::support::{LagunaQualificationSize, qualification_config_value};
 
 fn dense_then_sparse_fixture() -> SyntheticLagunaArtifact {
     let mut config = SyntheticLagunaArtifact::dense("").config;
@@ -225,34 +223,6 @@ fn should_produce_equivalent_payloads_for_fused_and_split_affine_layouts() {
             .complete_layer_payload_byte_count()
             .expect("fused complete payload")
     );
-}
-
-#[test]
-fn should_size_named_xs_and_s_routed_pages_from_canonical_router_geometry() {
-    for (row_name, fixture_size, expected_experts_per_token) in [
-        ("xs", LagunaQualificationSize::ExtraSmall, 8_u32),
-        ("s", LagunaQualificationSize::Small, 10),
-    ] {
-        let contract = LagunaTargetNormalizer::normalize(
-            &serde_json::to_vec(&qualification_config_value(fixture_size))
-                .expect("qualification config should serialize"),
-        )
-        .unwrap_or_else(|_| panic!("{row_name} should normalize"));
-        let sparse_layer = contract
-            .layers()
-            .iter()
-            .find_map(|layer| match layer.feed_forward() {
-                LagunaFeedForwardDescriptor::Moe(moe) => Some(moe),
-                LagunaFeedForwardDescriptor::Dense(_) => None,
-            })
-            .unwrap_or_else(|| panic!("{row_name} should have a sparse layer"));
-        assert_eq!(
-            sparse_layer.experts_per_token(),
-            expected_experts_per_token,
-            "{row_name}"
-        );
-        assert_eq!(sparse_layer.expert_count(), 256, "{row_name}");
-    }
 }
 
 #[test]

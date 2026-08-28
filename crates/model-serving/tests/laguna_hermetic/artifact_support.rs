@@ -493,6 +493,7 @@ fn is_direct_affine_module(canonical_module_name: &str) -> bool {
         || canonical_module_name == "lm_head"
         || canonical_module_name.contains(".self_attn.") && canonical_module_name.ends_with("_proj")
         || canonical_module_name.contains(".mlp.") && canonical_module_name.ends_with("_proj")
+        || canonical_module_name.ends_with(".mlp.gate.proj")
 }
 
 fn safetensors_bytes(tensors: &[SyntheticTensor]) -> Vec<u8> {

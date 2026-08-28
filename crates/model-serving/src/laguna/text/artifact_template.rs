@@ -219,6 +219,8 @@ fn normalize_hugging_face_syntax(template_source: &str) -> String {
     template_source
         .replace("{%- generation -%}", "{%- if true -%}")
         .replace("{%- endgeneration -%}", "{%- endif -%}")
+        .replace("{% generation %}", "{% if true %}")
+        .replace("{% endgeneration %}", "{% endif %}")
         // MiniJinja JSON is already Unicode-preserving and does not accept this Python keyword.
         .replace("tojson(ensure_ascii=False)", "tojson")
 }

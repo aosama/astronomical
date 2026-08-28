@@ -117,12 +117,6 @@ pub enum Qwen3_5OutputParserError {
     /// A tool call omitted the `>` ending its function name.
     #[error("Qwen3.5 tool call omitted the function-name terminator")]
     ToolCallMissingFunctionNameEnd,
-    /// A tool call named a function not declared by the request.
-    #[error("Qwen3.5 tool call selected undeclared function '{function_name}'")]
-    UndeclaredFunction {
-        /// Undeclared function name.
-        function_name: String,
-    },
     /// A tool call omitted its function closing marker.
     #[error("Qwen3.5 tool call omitted the function closing marker")]
     ToolCallMissingFunctionEnd,
@@ -209,7 +203,6 @@ impl Qwen3_5OutputParserError {
             Self::UnclosedToolCall => "unclosed_tool_call",
             Self::ToolCallMissingFunction => "tool_call_missing_function",
             Self::ToolCallMissingFunctionNameEnd => "tool_call_missing_function_name_end",
-            Self::UndeclaredFunction { .. } => "undeclared_function",
             Self::ToolCallMissingFunctionEnd => "tool_call_missing_function_end",
             Self::MalformedToolParameter => "malformed_tool_parameter",
             Self::ToolParameterMissingNameEnd => "tool_parameter_missing_name_end",
@@ -227,5 +220,16 @@ impl Qwen3_5OutputParserError {
             Self::UnsupportedToolParameterType { .. } => "unsupported_tool_parameter_type",
             Self::SerializeToolArguments(_) => "serialize_tool_arguments",
         }
+    }
+
+    /// Resource bounds stay fatal after `</tool_call>`. Every other closed-envelope failure is forwarded.
+    #[must_use]
+    pub(crate) const fn closed_envelope_must_remain_fatal(&self) -> bool {
+        matches!(
+            self,
+            Self::FragmentTooLarge { .. }
+                | Self::PendingOutputTooLarge { .. }
+                | Self::TooManyToolCalls { .. }
+        )
     }
 }

@@ -292,14 +292,60 @@ fn validate_execution_flags(
 fn normalize_execution_dtype(
     document: &LagunaConfigurationDocument,
 ) -> Result<LagunaExecutionDtype, LagunaNormalizationError> {
-    match document.required_string("torch_dtype")? {
-        "float16" | "float16_t" | "fp16" => Ok(LagunaExecutionDtype::Float16),
-        "bfloat16" | "bf16" => Ok(LagunaExecutionDtype::Bfloat16),
-        "float32" | "fp32" => Ok(LagunaExecutionDtype::Float32),
+    let torch_dtype_value = document.field("torch_dtype");
+    let dtype_alias_value = document.field("dtype");
+    if let (Some(torch_dtype_value), Some(dtype_alias_value)) =
+        (torch_dtype_value, dtype_alias_value)
+    {
+        let torch_dtype_name = string_field(torch_dtype_value, "torch_dtype")?;
+        let dtype_alias_name = string_field(dtype_alias_value, "dtype")?;
+        if canonical_execution_dtype_name(torch_dtype_name)
+            != canonical_execution_dtype_name(dtype_alias_name)
+        {
+            return Err(LagunaNormalizationError::ConflictingEnvelopeField {
+                field_name: "torch_dtype".to_owned(),
+            });
+        }
+    }
+    let Some((selected_field_name, selected_value)) = torch_dtype_value
+        .map(|field_value| ("torch_dtype", field_value))
+        .or_else(|| dtype_alias_value.map(|field_value| ("dtype", field_value)))
+    else {
+        // Published MLX conversions omit Transformers torch_dtype. Their
+        // activations and affine scales are bfloat16, so that is the default.
+        return Ok(LagunaExecutionDtype::Bfloat16);
+    };
+    match canonical_execution_dtype_name(string_field(selected_value, selected_field_name)?)
+        .as_str()
+    {
+        "float16" => Ok(LagunaExecutionDtype::Float16),
+        "bfloat16" => Ok(LagunaExecutionDtype::Bfloat16),
+        "float32" => Ok(LagunaExecutionDtype::Float32),
         unsupported_dtype => Err(LagunaNormalizationError::UnsupportedValue {
-            field_name: "torch_dtype".to_owned(),
+            field_name: selected_field_name.to_owned(),
             actual_value: bounded_text_label(unsupported_dtype),
         }),
+    }
+}
+
+fn string_field<'a>(
+    field_value: &'a Value,
+    field_name: &str,
+) -> Result<&'a str, LagunaNormalizationError> {
+    field_value
+        .as_str()
+        .ok_or_else(|| LagunaNormalizationError::UnsupportedValue {
+            field_name: field_name.to_owned(),
+            actual_value: bounded_value_label(field_value),
+        })
+}
+
+fn canonical_execution_dtype_name(raw_dtype_name: &str) -> String {
+    match raw_dtype_name {
+        "bf16" | "bfloat16" => "bfloat16".to_owned(),
+        "fp16" | "float16_t" | "float16" => "float16".to_owned(),
+        "fp32" | "float32" => "float32".to_owned(),
+        other => other.to_owned(),
     }
 }
 

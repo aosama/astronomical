@@ -46,6 +46,9 @@ pub(super) fn discover_model_metadata(
     if config_document.model_type != "laguna" {
         return None;
     }
+    if !has_executable_laguna_storage(&config_document) {
+        return None;
+    }
     let context_window = config_document
         .text_config
         .as_ref()
@@ -292,13 +295,40 @@ fn is_immutable_revision(revision: &str) -> bool {
     revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+fn has_executable_laguna_storage(config_document: &LagunaConfigDocument) -> bool {
+    // compressed-tensors is a Transformers GPU packaging, not an executable
+    // MLX affine or native-floating Laguna artifact.
+    for quantization_hint in [
+        config_document.quantization.as_ref(),
+        config_document.quantization_config.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if quantization_hint.quant_method.as_deref() == Some("compressed-tensors") {
+            return false;
+        }
+    }
+    true
+}
+
 #[derive(Deserialize)]
 struct LagunaConfigDocument {
     model_type: String,
     #[serde(default)]
     text_config: Option<LagunaLanguageFields>,
+    #[serde(default)]
+    quantization: Option<LagunaQuantizationHint>,
+    #[serde(default)]
+    quantization_config: Option<LagunaQuantizationHint>,
     #[serde(flatten)]
     language_fields: LagunaLanguageFields,
+}
+
+#[derive(Deserialize)]
+struct LagunaQuantizationHint {
+    #[serde(default)]
+    quant_method: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
