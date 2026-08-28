@@ -76,15 +76,15 @@ fn should_include_the_image_processing_reason_in_an_invalid_request_failure() {
 
 #[test]
 fn should_map_a_parser_error_as_malformed_output() {
-    let parser_error = Qwen3_5OutputParserError::UnclosedToolCall;
+    let parser_error = Qwen3_5OutputParserError::IncompleteControlMarker;
     let malformed_output_diagnostic = MalformedModelOutputDiagnostic {
-        diagnostic_code: "unclosed_tool_call",
-        parser_error: "Qwen3.5-MoE tool call did not close".to_owned(),
+        diagnostic_code: "incomplete_control_marker",
+        parser_error: "Qwen3.5 output ended in a partial control marker".to_owned(),
         generated_token_ids: vec![101, 202],
         pending_token_ids: vec![202],
-        decoded_output_text: "<tool_call>".to_owned(),
-        parser_state: "tool_call",
-        parser_pending_output_text: "<function=read>".to_owned(),
+        decoded_output_text: "<".to_owned(),
+        parser_state: "text",
+        parser_pending_output_text: "<".to_owned(),
     };
     let request_output_error = Qwen3_5RequestOutputError::Parser {
         source: parser_error,

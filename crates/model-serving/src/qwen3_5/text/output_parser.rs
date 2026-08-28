@@ -1,3 +1,9 @@
+//! Incremental Qwen3.5 output parser for reasoning, text, and tool calls.
+//!
+//! Dense and mixture-of-experts share this parser. Tool-call defects fail open so a
+//! coding client can reject or retry. Incomplete text control markers remain fatal
+//! because they are not yet a tool call.
+
 use std::collections::BTreeMap;
 
 use astronomical_ipc_protocol::ChatToolDefinition;
@@ -6,9 +12,10 @@ use serde_json::Value;
 use super::output_parser_error::Qwen3_5OutputParserError;
 use super::tool_schema::{DeclaredTool, parse_tool_parameters};
 
+mod salvage;
+
 const MAX_OUTPUT_FRAGMENT_BYTES: usize = 16 * 1024;
 const MAX_MARKER_SCAN_PENDING_OUTPUT_BYTES: usize = 128 * 1024;
-const MAX_TOOL_CALL_COUNT: u16 = u16::MAX;
 const THINK_END_MARKER: &str = "</think>";
 const THINK_START_MARKER: &str = "<think>";
 const TOOL_CALL_END_MARKER: &str = "</tool_call>";
@@ -92,19 +99,32 @@ impl Qwen3_5OutputParser {
         decoded_fragment: &str,
     ) -> Result<Vec<Qwen3_5OutputEvent>, Qwen3_5OutputParserError> {
         if decoded_fragment.len() > MAX_OUTPUT_FRAGMENT_BYTES {
+            if self.state == Qwen3_5OutputParserState::ToolCall {
+                // The fragment cannot be buffered. Salvage the pending call so a usable
+                // name still reaches the harness instead of aborting generation.
+                return Ok(self.salvage_unclosed_tool_call());
+            }
             return Err(Qwen3_5OutputParserError::FragmentTooLarge {
                 actual_fragment_bytes: decoded_fragment.len(),
                 maximum_fragment_bytes: MAX_OUTPUT_FRAGMENT_BYTES,
             });
         }
-        let pending_output_bytes = self
+        let pending_output_bytes = match self
             .pending_output
             .len()
             .checked_add(decoded_fragment.len())
-            .ok_or(Qwen3_5OutputParserError::PendingOutputTooLarge {
-                actual_pending_bytes: usize::MAX,
-                maximum_pending_bytes: MAX_MARKER_SCAN_PENDING_OUTPUT_BYTES,
-            })?;
+        {
+            Some(pending_output_bytes) => pending_output_bytes,
+            None => {
+                if self.state == Qwen3_5OutputParserState::ToolCall {
+                    return Ok(self.salvage_unclosed_tool_call());
+                }
+                return Err(Qwen3_5OutputParserError::PendingOutputTooLarge {
+                    actual_pending_bytes: usize::MAX,
+                    maximum_pending_bytes: MAX_MARKER_SCAN_PENDING_OUTPUT_BYTES,
+                });
+            }
+        };
         if self.state.requires_marker_scan_pending_output_cap()
             && pending_output_bytes > MAX_MARKER_SCAN_PENDING_OUTPUT_BYTES
         {
@@ -120,7 +140,7 @@ impl Qwen3_5OutputParser {
         Ok(output_events)
     }
 
-    /// Completes the stream, rejecting unfinished tool calls or control markers.
+    /// Completes the stream. Unclosed tool calls salvage because aborting drops a usable name.
     pub fn finish(&mut self) -> Result<Vec<Qwen3_5OutputEvent>, Qwen3_5OutputParserError> {
         match self.state {
             Qwen3_5OutputParserState::Text => {
@@ -141,7 +161,7 @@ impl Qwen3_5OutputParser {
                 let final_reasoning = std::mem::take(&mut self.pending_output);
                 Ok(vec![Qwen3_5OutputEvent::ReasoningDelta(final_reasoning)])
             }
-            Qwen3_5OutputParserState::ToolCall => Err(Qwen3_5OutputParserError::UnclosedToolCall),
+            Qwen3_5OutputParserState::ToolCall => Ok(self.salvage_unclosed_tool_call()),
             Qwen3_5OutputParserState::SuppressedLateReasoning => {
                 self.pending_output.clear();
                 Ok(Vec::new())
@@ -269,29 +289,24 @@ impl Qwen3_5OutputParser {
         };
         let tool_call_body = self.take_pending_prefix(marker_index);
         self.take_pending_prefix(TOOL_CALL_END_MARKER.len());
-        // Closed envelopes fail open: the harness owns retries. Only resource bounds stay fatal.
+        // Closed envelopes fail open: the harness owns retries.
         match self.parse_tool_call(&tool_call_body) {
             Ok(tool_call) => {
-                output_events.push(Qwen3_5OutputEvent::ToolCall(tool_call));
-                self.record_completed_tool_call()?;
-            }
-            Err(parser_error) if parser_error.closed_envelope_must_remain_fatal() => {
-                return Err(parser_error);
+                output_events.push(self.emit_tool_call_or_visible_text(
+                    Qwen3_5OutputEvent::ToolCall(tool_call),
+                    tool_call_body,
+                ));
             }
             Err(parser_error) => {
                 let fail_open_event = self.fail_open_closed_tool_call(&tool_call_body);
-                log_fail_open_closed_tool_call(
+                salvage::log_fail_open_closed_tool_call(
                     &parser_error,
                     &tool_call_body,
                     fail_open_event.as_ref(),
                 );
                 if let Some(fail_open_event) = fail_open_event {
-                    let emitted_tool_call =
-                        matches!(fail_open_event, Qwen3_5OutputEvent::ToolCall(_));
-                    output_events.push(fail_open_event);
-                    if emitted_tool_call {
-                        self.record_completed_tool_call()?;
-                    }
+                    output_events
+                        .push(self.emit_tool_call_or_visible_text(fail_open_event, tool_call_body));
                 }
             }
         }
@@ -303,11 +318,6 @@ impl Qwen3_5OutputParser {
         &self,
         tool_call_body: &str,
     ) -> Result<Qwen3_5ToolCall, Qwen3_5OutputParserError> {
-        if self.completed_tool_call_count == MAX_TOOL_CALL_COUNT {
-            return Err(Qwen3_5OutputParserError::TooManyToolCalls {
-                maximum_tool_call_count: MAX_TOOL_CALL_COUNT,
-            });
-        }
         let (function_name, parameter_content) =
             split_qwen_function_envelope(tool_call_body.trim())?;
         // Unknown names and sloppy-but-closed XML are forwarded so the harness
@@ -334,6 +344,8 @@ impl Qwen3_5OutputParser {
             }
             return Some(Qwen3_5OutputEvent::TextDelta(tool_call_body.to_owned()));
         };
+        // Declared-schema rejection would still abort. Passthrough lets the harness
+        // return invalid-argument or unknown-tool instead of killing the stream.
         let parsed_arguments = parse_tool_parameters(&parameter_content, None).unwrap_or_default();
         let arguments_json = serde_json::to_string(&Value::Object(parsed_arguments))
             .unwrap_or_else(|_| "{}".to_owned());
@@ -342,15 +354,6 @@ impl Qwen3_5OutputParser {
             function_name,
             arguments_json,
         }))
-    }
-
-    fn record_completed_tool_call(&mut self) -> Result<(), Qwen3_5OutputParserError> {
-        self.completed_tool_call_count = self.completed_tool_call_count.checked_add(1).ok_or(
-            Qwen3_5OutputParserError::TooManyToolCalls {
-                maximum_tool_call_count: MAX_TOOL_CALL_COUNT,
-            },
-        )?;
-        Ok(())
     }
 
     fn take_pending_prefix(&mut self, byte_count: usize) -> String {
@@ -400,28 +403,6 @@ impl Qwen3_5OutputParserState {
             Self::Text | Self::Reasoning | Self::SuppressedLateReasoning
         )
     }
-}
-
-fn log_fail_open_closed_tool_call(
-    parser_error: &Qwen3_5OutputParserError,
-    tool_call_body: &str,
-    fail_open_event: Option<&Qwen3_5OutputEvent>,
-) {
-    let (function_name, forwarded_arguments_json) = match fail_open_event {
-        Some(Qwen3_5OutputEvent::ToolCall(tool_call)) => (
-            tool_call.function_name.as_str(),
-            tool_call.arguments_json.as_str(),
-        ),
-        _ => ("", ""),
-    };
-    tracing::warn!(
-        diagnostic_code = parser_error.diagnostic_code(),
-        parser_error = %parser_error,
-        function_name,
-        forwarded_arguments_json,
-        closed_tool_call_body = tool_call_body,
-        "fail-open closed Qwen3.5 tool call"
-    );
 }
 
 fn split_qwen_function_envelope(

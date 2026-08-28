@@ -37,8 +37,6 @@ pub enum LagunaOutputParserError {
         function_name: String,
         argument_name: String,
     },
-    #[error("Laguna output ended with an incomplete tool call")]
-    IncompleteToolCall,
     #[error("Laguna tool call contains a nested argument marker")]
     NestedToolArgumentMarker,
     #[error("Laguna tool arguments exceed the {maximum_bytes}-byte limit")]
@@ -56,8 +54,6 @@ pub enum LagunaOutputParserError {
     SerializeToolArguments(#[source] serde_json::Error),
     #[error("Laguna output ended in a partial control marker")]
     IncompleteControlMarker,
-    #[error("Laguna output contains too many tool calls")]
-    TooManyToolCalls,
 }
 
 impl LagunaOutputParserError {
@@ -79,7 +75,6 @@ impl LagunaOutputParserError {
             Self::InvalidRequiredToolArguments { .. } => "invalid_required_tool_arguments",
             Self::DuplicateToolArgument { .. } => "duplicate_tool_argument",
             Self::MissingRequiredToolArgument { .. } => "missing_required_tool_argument",
-            Self::IncompleteToolCall => "incomplete_tool_call",
             Self::NestedToolArgumentMarker => "nested_tool_argument_marker",
             Self::ToolArgumentsTooLarge { .. } => "tool_arguments_too_large",
             Self::MalformedToolCall => "malformed_tool_call",
@@ -87,19 +82,6 @@ impl LagunaOutputParserError {
             Self::StructuredToolArgumentUnsupported => "structured_tool_argument_unsupported",
             Self::SerializeToolArguments(_) => "serialize_tool_arguments",
             Self::IncompleteControlMarker => "incomplete_control_marker",
-            Self::TooManyToolCalls => "too_many_tool_calls",
         }
-    }
-
-    /// Resource bounds stay fatal after `</tool_call>`. Every other closed-envelope failure is forwarded.
-    #[must_use]
-    pub(crate) const fn closed_envelope_must_remain_fatal(&self) -> bool {
-        matches!(
-            self,
-            Self::FragmentTooLarge { .. }
-                | Self::PendingOutputTooLarge { .. }
-                | Self::ToolArgumentsTooLarge { .. }
-                | Self::TooManyToolCalls
-        )
     }
 }
