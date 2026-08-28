@@ -36,6 +36,7 @@ mod mlx_descriptor_file_reader;
 mod mlx_elementwise_math_operations;
 #[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
+mod mlx_metallib_path;
 #[cfg(feature = "mlx")]
 mod mlx_normalization_operations;
 #[cfg(feature = "mlx")]
@@ -89,6 +90,7 @@ pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
 pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
 #[cfg(feature = "mlx")]
 pub use mlx_metal_kernel::{MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
+pub use mlx_metallib_path::resolve_mlx_metallib_path;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 pub use mlx_runtime::{

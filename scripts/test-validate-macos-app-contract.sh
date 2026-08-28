@@ -27,11 +27,12 @@ create_fixture_app() {
     mkdir -p \
         "${fixture_app_bundle}/Contents/Frameworks/Sparkle.framework" \
         "${fixture_app_bundle}/Contents/MacOS" \
-        "${fixture_app_bundle}/Contents/Resources"
+        "${fixture_app_bundle}/Contents/Resources/share/mlx"
     printf '%s\n' fixture > "${fixture_app_bundle}/Contents/Info.plist"
     for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES SPARKLE_LICENSE Astronomical.icns; do
         printf '%s\n' fixture > "${fixture_app_bundle}/Contents/Resources/${packaged_resource}"
     done
+    printf '%s\n' fixture > "${fixture_app_bundle}/Contents/Resources/share/mlx/mlx.metallib"
 
     cat > "${fixture_app_bundle}/Contents/MacOS/astronomicald" <<'DAEMON'
 #!/usr/bin/env sh
@@ -248,6 +249,19 @@ main() {
         exit 1
     }
     printf '%s\n' '[app-validator-test] case=missing-model-argument status=success'
+
+    printf '%s\n' '[app-validator-test] case=missing-metallib status=start'
+    rm -f "${fixture_app_bundle}/Contents/Resources/share/mlx/mlx.metallib"
+    if run_validator "${SANDBOX_DIRECTORY}/missing-metallib.log"; then
+        print_error "validator accepted a bundle without mlx.metallib"
+        exit 1
+    fi
+    grep -F "required bundled MLX AOT metallib is unavailable" \
+        "${SANDBOX_DIRECTORY}/missing-metallib.log" >/dev/null || {
+        print_error "validator did not report the missing mlx.metallib"
+        exit 1
+    }
+    printf '%s\n' '[app-validator-test] case=missing-metallib status=success'
 }
 
 main "$@"
