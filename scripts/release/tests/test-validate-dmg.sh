@@ -60,10 +60,13 @@ if [ "${1:-}" = "attach" ]; then
         if [ "$1" = "-mountpoint" ]; then mount_point="$2"; break; fi
         shift
     done
-    mkdir -p "${mount_point:?}/Astronomical.app" "${mount_point}/.background"
+    mkdir -p "${mount_point:?}/Astronomical.app/Contents/Resources/share/mlx" "${mount_point}/.background"
     ln -s /Applications "${mount_point}/Applications"
     printf '%s\n' layout > "${mount_point}/.DS_Store"
     printf '%s\n' background > "${mount_point}/.background/background.png"
+    if [ "${FAKE_OMIT_METALLIB:-false}" != "true" ]; then
+        printf '%s\n' fixture > "${mount_point}/Astronomical.app/Contents/Resources/share/mlx/mlx.metallib"
+    fi
 fi
 HDIUTIL
     chmod +x "${fake_bin}/xcrun" "${fake_bin}/hdiutil"
@@ -81,6 +84,22 @@ HDIUTIL
         exit 1
     }
     printf '%s\n' '[dmg-validator-test] case=complete-installation-journey status=success'
+
+    printf '%s\n' '[dmg-validator-test] case=missing-metallib-is-rejected status=start'
+    : > "$validation_log"
+    if FAKE_OMIT_METALLIB=true FAKE_DMG_VALIDATION_LOG="$validation_log" PATH="${fake_bin}:${PATH}" \
+        timeout "$SUBJECT_TIMEOUT_SECONDS" \
+        "${repository_root}/scripts/release/validate-dmg.sh" --dmg "$fixture_dmg" \
+        > "${SANDBOX_DIRECTORY}/missing-metallib.log" 2>&1; then
+        print_error "validator accepted a DMG without mlx.metallib"
+        exit 1
+    fi
+    grep -F "DMG Astronomical.app is missing mlx.metallib" \
+        "${SANDBOX_DIRECTORY}/missing-metallib.log" >/dev/null || {
+        print_error "validator did not report the missing mlx.metallib"
+        exit 1
+    }
+    printf '%s\n' '[dmg-validator-test] case=missing-metallib-is-rejected status=success'
 
     printf '%s\n' '[dmg-validator-test] case=rejected-ticket-prevents-mount status=start'
     : > "$validation_log"

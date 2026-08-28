@@ -51,6 +51,11 @@ parse_arguments() {
         esac
     done
     [ -d "$APP_BUNDLE" ] || { print_error "--app-bundle must name an application bundle"; exit 2; }
+    bundled_metallib="${APP_BUNDLE}/Contents/Resources/share/mlx/mlx.metallib"
+    if [ -L "$bundled_metallib" ] || [ ! -s "$bundled_metallib" ]; then
+        print_error "required bundled MLX AOT metallib is unavailable"
+        exit 1
+    fi
     [ -n "$OUTPUT_DMG" ] || { print_error "--output is required"; exit 2; }
     [ ! -e "$OUTPUT_DMG" ] || { print_error "output already exists: ${OUTPUT_DMG}"; exit 1; }
     [ ! -e "/Volumes/Astronomical" ] || {

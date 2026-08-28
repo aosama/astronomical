@@ -53,6 +53,11 @@ main() {
         esac
     done
     [ -d "$APP_BUNDLE" ] || { print_error "--app-bundle must name an application bundle"; exit 2; }
+    bundled_metallib="${APP_BUNDLE}/Contents/Resources/share/mlx/mlx.metallib"
+    if [ -L "$bundled_metallib" ] || [ ! -s "$bundled_metallib" ]; then
+        print_error "required bundled MLX AOT metallib is unavailable"
+        exit 1
+    fi
     case "$EXPECTED_TEAM_ID" in
         ???????*) ;;
         *) print_error "--team-id is required"; exit 2 ;;

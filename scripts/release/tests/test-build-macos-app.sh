@@ -53,6 +53,14 @@ assert_bundle_exists() {
         print_error "Sparkle license is unavailable in ${expected_app_bundle}"
         exit 1
     }
+    [ -s "${expected_app_bundle}/Contents/Resources/share/mlx/mlx.metallib" ] || {
+        print_error "packaged mlx.metallib is unavailable in ${expected_app_bundle}"
+        exit 1
+    }
+    [ "$(cat "${expected_app_bundle}/Contents/Resources/share/mlx/mlx.metallib")" = "fixture-metallib" ] || {
+        print_error "packaged mlx.metallib is not the certified source copy in ${expected_app_bundle}"
+        exit 1
+    }
     [ -d "${expected_app_bundle}/Contents/Frameworks/Sparkle.framework" ] || {
         print_error "packaged Sparkle framework is unavailable in ${expected_app_bundle}"
         exit 1
@@ -257,6 +265,27 @@ CODESIGN
 
     cargo_lane_root="${SANDBOX_DIRECTORY}/cargo-lanes"
     mkdir -p "$cargo_lane_root"
+    fixture_metallib="${SANDBOX_DIRECTORY}/mlx.metallib"
+    printf '%s\n' 'fixture-metallib' > "$fixture_metallib"
+
+    printf '%s\n' '[app-builder-test] case=missing-metallib-source-is-rejected status=start'
+    if (CDPATH='' cd -- "$sandbox_repository" && \
+        FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/missing-metallib-codesign.log" \
+            FAKE_CARGO_TARGET_RECORD="${SANDBOX_DIRECTORY}/missing-metallib-cargo-target" \
+            ASTRONOMICAL_CARGO_LANE_ROOT="$cargo_lane_root" \
+            ASTRONOMICAL_MLX_METALLIB_PATH="${SANDBOX_DIRECTORY}/absent.metallib" \
+            PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
+            "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel development \
+            > "${SANDBOX_DIRECTORY}/missing-metallib.log" 2>&1); then
+        print_error "builder accepted a missing mlx.metallib source"
+        exit 1
+    fi
+    grep -F "required MLX AOT metallib is unavailable" \
+        "${SANDBOX_DIRECTORY}/missing-metallib.log" >/dev/null || {
+        print_error "builder did not report the missing mlx.metallib source"
+        exit 1
+    }
+    printf '%s\n' '[app-builder-test] case=missing-metallib-source-is-rejected status=success'
 
     printf '%s\n' '[app-builder-test] case=development-output-is-noindex status=start'
     development_cargo_target_record="${SANDBOX_DIRECTORY}/development-cargo-target"
@@ -264,6 +293,7 @@ CODESIGN
         FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/development-codesign.log" \
             FAKE_CARGO_TARGET_RECORD="$development_cargo_target_record" \
             ASTRONOMICAL_CARGO_LANE_ROOT="$cargo_lane_root" \
+            ASTRONOMICAL_MLX_METALLIB_PATH="$fixture_metallib" \
             PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
             "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel development)
     development_app_bundle="${sandbox_repository}/target/astronomical-macos-development.noindex/Astronomical Development.app"
@@ -285,6 +315,7 @@ CODESIGN
         FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/stable-codesign.log" \
             FAKE_CARGO_TARGET_RECORD="$stable_cargo_target_record" \
             ASTRONOMICAL_CARGO_LANE_ROOT="$cargo_lane_root" \
+            ASTRONOMICAL_MLX_METALLIB_PATH="$fixture_metallib" \
             PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
             "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel stable \
                 --signing-identity "Developer ID Application: Example (ABCDE12345)")

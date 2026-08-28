@@ -217,6 +217,11 @@ main() {
             exit 1
         }
     done
+    bundled_metallib_path="${APP_BUNDLE_PATH}/Contents/Resources/share/mlx/mlx.metallib"
+    if [ -L "$bundled_metallib_path" ] || [ ! -s "$bundled_metallib_path" ]; then
+        print_error "required bundled MLX AOT metallib is unavailable"
+        exit 1
+    fi
 
     start_step "bundle-identity-and-signature"
     application_channel="$(read_plist_value AstronomicalChannel)"
