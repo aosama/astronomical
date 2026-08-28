@@ -37,7 +37,7 @@ impl LagunaStartupError {
     #[must_use]
     pub fn public_model_load_failure_reason(&self) -> String {
         match self {
-            Self::ArtifactValidation(_) => "Laguna artifact validation failed".to_owned(),
+            Self::ArtifactValidation(validation_error) => validation_error.public_failure_reason(),
             Self::ImmutableRevisionRequired => {
                 "Laguna artifact requires one immutable revision".to_owned()
             }

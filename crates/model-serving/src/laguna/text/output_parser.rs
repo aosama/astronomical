@@ -16,6 +16,7 @@ const ARGUMENT_VALUE_START_MARKER: &str = "<arg_value>";
 const ARGUMENT_VALUE_END_MARKER: &str = "</arg_value>";
 const MAXIMUM_FRAGMENT_BYTES: usize = 64 * 1024;
 const MAXIMUM_PENDING_TEXT_BYTES: usize = 256 * 1024;
+const EMPTY_JSON_OBJECT: &str = "{}";
 
 /// One architecture-neutral event parsed from Poolside output syntax.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -211,12 +212,32 @@ impl LagunaOutputParser {
         };
         let tool_call_body = self.take_pending_prefix(end_marker_offset);
         self.take_pending_prefix(TOOL_CALL_END_MARKER.len());
-        let output_event = self.parse_tool_call(&tool_call_body)?;
-        output_events.push(output_event);
-        self.completed_tool_call_count = self
-            .completed_tool_call_count
-            .checked_add(1)
-            .ok_or(LagunaOutputParserError::TooManyToolCalls)?;
+        // Closed envelopes fail open: the harness owns retries. Only resource bounds stay fatal.
+        match self.parse_tool_call(&tool_call_body) {
+            Ok(output_event) => {
+                output_events.push(output_event);
+                self.record_completed_tool_call()?;
+            }
+            Err(parser_error) if parser_error.closed_envelope_must_remain_fatal() => {
+                return Err(parser_error);
+            }
+            Err(parser_error) => {
+                let fail_open_event = self.fail_open_closed_tool_call(&tool_call_body);
+                log_fail_open_closed_tool_call(
+                    &parser_error,
+                    &tool_call_body,
+                    fail_open_event.as_ref(),
+                );
+                if let Some(fail_open_event) = fail_open_event {
+                    let emitted_tool_call =
+                        matches!(fail_open_event, LagunaOutputEvent::ToolCall { .. });
+                    output_events.push(fail_open_event);
+                    if emitted_tool_call {
+                        self.record_completed_tool_call()?;
+                    }
+                }
+            }
+        }
         self.state = LagunaOutputParserState::Text;
         Ok(true)
     }
@@ -225,20 +246,17 @@ impl LagunaOutputParser {
         &self,
         tool_call_body: &str,
     ) -> Result<LagunaOutputEvent, LagunaOutputParserError> {
-        let first_argument_offset = tool_call_body
-            .find(ARGUMENT_KEY_START_MARKER)
-            .unwrap_or(tool_call_body.len());
-        let function_name = tool_call_body[..first_argument_offset].trim();
-        if function_name.is_empty() || function_name.contains('<') {
+        let function_name = poolside_function_name(tool_call_body);
+        if function_name.is_empty() {
             return Err(LagunaOutputParserError::MalformedToolCall);
         }
-        let declared_tool = self.declared_tools.get(function_name).ok_or_else(|| {
-            LagunaOutputParserError::UndeclaredFunction {
-                function_name: bounded_text(function_name),
-            }
-        })?;
-        let raw_arguments = parse_argument_pairs(&tool_call_body[first_argument_offset..])?;
-        let parsed_arguments = declared_tool.parse_arguments(function_name, raw_arguments)?;
+        // Closed tool_call blocks with a usable name must reach the harness even when
+        // 6-bit output drops the opening '<' on arg_key. Unclosed blocks still fail.
+        let raw_arguments = parse_argument_pairs(poolside_argument_region(tool_call_body))?;
+        let parsed_arguments = match self.declared_tools.get(function_name) {
+            Some(declared_tool) => declared_tool.parse_arguments(function_name, raw_arguments)?,
+            None => LagunaDeclaredTool::parse_passthrough_arguments(raw_arguments)?,
+        };
         let arguments_json = serde_json::to_string(&Value::Object(parsed_arguments))
             .map_err(LagunaOutputParserError::SerializeToolArguments)?;
         Ok(LagunaOutputEvent::ToolCall {
@@ -246,6 +264,35 @@ impl LagunaOutputParser {
             function_name: function_name.to_owned(),
             arguments_json,
         })
+    }
+
+    fn fail_open_closed_tool_call(&self, tool_call_body: &str) -> Option<LagunaOutputEvent> {
+        let function_name = poolside_function_name(tool_call_body);
+        if function_name.is_empty() {
+            if tool_call_body.is_empty() {
+                return None;
+            }
+            return Some(LagunaOutputEvent::TextDelta(tool_call_body.to_owned()));
+        }
+        let raw_arguments =
+            parse_argument_pairs(poolside_argument_region(tool_call_body)).unwrap_or_default();
+        let parsed_arguments =
+            LagunaDeclaredTool::parse_passthrough_arguments(raw_arguments).unwrap_or_default();
+        let arguments_json = serde_json::to_string(&Value::Object(parsed_arguments))
+            .unwrap_or_else(|_| EMPTY_JSON_OBJECT.to_owned());
+        Some(LagunaOutputEvent::ToolCall {
+            index: self.completed_tool_call_count,
+            function_name: function_name.to_owned(),
+            arguments_json,
+        })
+    }
+
+    fn record_completed_tool_call(&mut self) -> Result<(), LagunaOutputParserError> {
+        self.completed_tool_call_count = self
+            .completed_tool_call_count
+            .checked_add(1)
+            .ok_or(LagunaOutputParserError::TooManyToolCalls)?;
+        Ok(())
     }
 
     fn validate_pending_bound(&self) -> Result<(), LagunaOutputParserError> {
@@ -311,29 +358,96 @@ enum LagunaOutputParserState {
     ToolCall,
 }
 
+fn log_fail_open_closed_tool_call(
+    parser_error: &LagunaOutputParserError,
+    tool_call_body: &str,
+    fail_open_event: Option<&LagunaOutputEvent>,
+) {
+    let (function_name, forwarded_arguments_json) = match fail_open_event {
+        Some(LagunaOutputEvent::ToolCall {
+            function_name,
+            arguments_json,
+            ..
+        }) => (function_name.as_str(), arguments_json.as_str()),
+        _ => ("", ""),
+    };
+    tracing::warn!(
+        diagnostic_code = parser_error.diagnostic_code(),
+        parser_error = %parser_error,
+        function_name,
+        forwarded_arguments_json,
+        closed_tool_call_body = tool_call_body,
+        "fail-open closed Laguna tool call"
+    );
+}
+
+fn poolside_function_name(tool_call_body: &str) -> &str {
+    // Pretty-printed envelopes put the name on a later line; skip blanks so those still reach the harness.
+    let first_nonempty_line = tool_call_body
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    first_nonempty_line
+        .split('<')
+        .next()
+        .unwrap_or(first_nonempty_line)
+        .split("arg_key>")
+        .next()
+        .unwrap_or(first_nonempty_line)
+        .trim()
+}
+
+fn poolside_argument_region(tool_call_body: &str) -> &str {
+    if let Some(canonical_offset) = tool_call_body.find(ARGUMENT_KEY_START_MARKER) {
+        return &tool_call_body[canonical_offset..];
+    }
+    if let Some(sloppy_offset) = tool_call_body.find("arg_key>") {
+        return &tool_call_body[sloppy_offset..];
+    }
+    ""
+}
+
+fn strip_argument_key_open(argument_content: &str) -> Option<&str> {
+    argument_content
+        .strip_prefix(ARGUMENT_KEY_START_MARKER)
+        .or_else(|| argument_content.strip_prefix("arg_key>"))
+}
+
+fn strip_argument_value_open(argument_content: &str) -> Option<&str> {
+    argument_content
+        .strip_prefix(ARGUMENT_VALUE_START_MARKER)
+        .or_else(|| argument_content.strip_prefix("arg_value>"))
+}
+
 fn parse_argument_pairs(
     argument_content: &str,
 ) -> Result<Vec<(String, String)>, LagunaOutputParserError> {
     let mut remaining_content = argument_content;
     let mut raw_arguments = Vec::new();
-    while !remaining_content.is_empty() {
-        let key_content = remaining_content
-            .strip_prefix(ARGUMENT_KEY_START_MARKER)
-            .ok_or(LagunaOutputParserError::MalformedToolCall)?;
-        let key_end_offset = key_content
-            .find(ARGUMENT_KEY_END_MARKER)
-            .ok_or(LagunaOutputParserError::MalformedToolCall)?;
+    loop {
+        remaining_content = remaining_content.trim_start();
+        if remaining_content.is_empty() {
+            break;
+        }
+        let Some(key_content) = strip_argument_key_open(remaining_content) else {
+            break;
+        };
+        let Some(key_end_offset) = key_content.find(ARGUMENT_KEY_END_MARKER) else {
+            break;
+        };
         let argument_name = &key_content[..key_end_offset];
         if contains_argument_marker(argument_name) {
             return Err(LagunaOutputParserError::NestedToolArgumentMarker);
         }
-        let value_with_marker = &key_content[key_end_offset + ARGUMENT_KEY_END_MARKER.len()..];
-        let value_content = value_with_marker
-            .strip_prefix(ARGUMENT_VALUE_START_MARKER)
-            .ok_or(LagunaOutputParserError::MalformedToolCall)?;
-        let value_end_offset = value_content
-            .find(ARGUMENT_VALUE_END_MARKER)
-            .ok_or(LagunaOutputParserError::MalformedToolCall)?;
+        let value_with_marker =
+            key_content[key_end_offset + ARGUMENT_KEY_END_MARKER.len()..].trim_start();
+        let Some(value_content) = strip_argument_value_open(value_with_marker) else {
+            break;
+        };
+        let Some(value_end_offset) = value_content.find(ARGUMENT_VALUE_END_MARKER) else {
+            break;
+        };
         let argument_value = &value_content[..value_end_offset];
         if contains_argument_marker(argument_value) {
             return Err(LagunaOutputParserError::NestedToolArgumentMarker);

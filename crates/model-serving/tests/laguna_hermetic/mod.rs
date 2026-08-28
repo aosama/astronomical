@@ -17,6 +17,8 @@ mod optional_artifacts;
 mod paging;
 mod prompt_cache_topology;
 mod prompt_processing_chunk_sizer;
+mod public_load_failure;
+mod published_packaging;
 mod rope;
 mod routing;
 mod storage;

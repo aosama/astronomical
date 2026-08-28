@@ -204,6 +204,9 @@ pub(crate) async fn create_chat_completion(
         message_count = ?request_info_diagnostic_snapshot.message_count,
         last_user_message_character_count = ?request_info_diagnostic_snapshot.last_user_message_character_count,
         last_user_message_sha256 = ?request_info_diagnostic_snapshot.last_user_message_sha256,
+        request_supplied_temperature = settings_presence.temperature,
+        temperature_thousandths =
+            chat_generation_command.settings.temperature_thousandths,
         "accepted REST chat completion request"
     );
     let model_id = chat_generation_command.model.clone();

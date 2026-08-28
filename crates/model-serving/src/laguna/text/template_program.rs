@@ -72,6 +72,31 @@ pub(super) enum LagunaTemplateProgramError {
     OutputNotUtf8(std::string::FromUtf8Error),
 }
 
+fn python_string_strip(
+    value: &Value,
+    arguments: &[Value],
+    strip_start: bool,
+) -> Result<Value, Error> {
+    let string_value = value
+        .as_str()
+        .ok_or_else(|| Error::from(ErrorKind::UnknownMethod))?;
+    if arguments.is_empty() {
+        let stripped = if strip_start {
+            string_value.trim_start()
+        } else {
+            string_value.trim_end()
+        };
+        return Ok(Value::from(stripped));
+    }
+    let (characters,): (&str,) = from_args(arguments)?;
+    let stripped = if strip_start {
+        string_value.trim_start_matches(|character| characters.contains(character))
+    } else {
+        string_value.trim_end_matches(|character| characters.contains(character))
+    };
+    Ok(Value::from(stripped))
+}
+
 fn python_compatible_method(
     state: &minijinja::State<'_, '_>,
     value: &Value,
@@ -87,12 +112,29 @@ fn python_compatible_method(
                 .map(Value::from)
                 .ok_or_else(|| Error::from(ErrorKind::UnknownMethod))
         }
-        (ValueKind::String, "rstrip") => {
-            let _: () = from_args(arguments)?;
+        (ValueKind::String, "rstrip") => python_string_strip(value, arguments, false),
+        (ValueKind::String, "lstrip") => python_string_strip(value, arguments, true),
+        (ValueKind::String, "startswith") => {
+            let (prefix,): (&str,) = from_args(arguments)?;
             value
                 .as_str()
-                .map(str::trim_end)
-                .map(Value::from)
+                .map(|string_value| Value::from(string_value.starts_with(prefix)))
+                .ok_or_else(|| Error::from(ErrorKind::UnknownMethod))
+        }
+        (ValueKind::String, "endswith") => {
+            let (suffix,): (&str,) = from_args(arguments)?;
+            value
+                .as_str()
+                .map(|string_value| Value::from(string_value.ends_with(suffix)))
+                .ok_or_else(|| Error::from(ErrorKind::UnknownMethod))
+        }
+        (ValueKind::String, "split") => {
+            let (separator,): (&str,) = from_args(arguments)?;
+            value
+                .as_str()
+                .map(|string_value| {
+                    Value::from_iter(string_value.split(separator).map(Value::from))
+                })
                 .ok_or_else(|| Error::from(ErrorKind::UnknownMethod))
         }
         (ValueKind::Map, "items") => {

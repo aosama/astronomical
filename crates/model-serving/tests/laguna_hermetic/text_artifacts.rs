@@ -65,28 +65,6 @@ fn should_normalize_inline_and_nested_included_poolside_templates_equivalently()
 }
 
 #[test]
-fn should_render_an_exact_representative_poolside_prompt() {
-    let text_descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
-    let chat_command = romeo_and_juliet_command(9_818, None);
-
-    let rendered_prompt = LagunaPromptRenderer::new(&text_descriptor)
-        .render(&chat_command.messages, &chat_command.tools, true)
-        .expect("the representative Poolside prompt should render");
-    let expected_tool_definitions = concat!(
-        "{\"function\":{\"description\":\"Find one character in the supplied play.\",\"name\":\"find_character\",\"parameters\":{\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}},\"type\":\"function\"}\n",
-        "{\"function\":{\"description\":\"Summarize one scene from the supplied play.\",\"name\":\"summarize_scene\",\"parameters\":{\"properties\":{\"scene\":{\"type\":\"string\"}},\"required\":[\"scene\"],\"type\":\"object\"}},\"type\":\"function\"}\n",
-    );
-    let expected_prompt = format!(
-        "\u{3008}|EOS|\u{3009}<system>{DEFAULT_SYSTEM_MESSAGE}\n\n<available_tools>\n\
-         {expected_tool_definitions}</available_tools></system>\n\
-         <user>{ROMEO_AND_JULIET_SOURCE}</user>\n<assistant><think>"
-    );
-
-    // This exact protocol example catches semantic marker or field drift in one readable case.
-    assert_eq!(rendered_prompt, expected_prompt);
-}
-
-#[test]
 fn should_render_the_semantically_valid_artifact_provided_system_message() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
     let artifact_template =

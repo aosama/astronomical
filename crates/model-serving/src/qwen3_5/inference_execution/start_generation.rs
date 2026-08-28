@@ -7,7 +7,6 @@ use crate::{
 use super::super::model::memory_admission::invalid_request_error;
 use super::super::resolve_sampling_seed;
 use super::super::text::sampler::{random_state_for_seed, validate_sampled_strategy};
-use super::super::text::sampling_seed::current_time_millis_since_unix_epoch;
 use super::super::{RequestDecoderStateStack, plan_qwen3_5_visual_embedding_suffix};
 use super::engine_request::Qwen3_5EngineRequest;
 use super::persistent_prompt_cache_visual_identity::{
@@ -22,6 +21,7 @@ use super::{
     },
 };
 use crate::qwen3_5::multi_token_prediction::{MtpDraftDepth, create_optional_prediction_session};
+use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 impl Qwen3_5EngineState {
     pub(super) fn start_generation(
@@ -413,14 +413,22 @@ impl Qwen3_5EngineState {
                     .map_err(|_| fatal_engine_error("loaded MTP depth is outside 1 through 3"))?,
             )
             .map_err(qwen3_5_runtime_error)?;
+            let sampling_is_greedy = matches!(sampling_strategy, Qwen3_5SamplingStrategy::Greedy);
+            let effective_temperature_thousandths = match sampling_strategy {
+                Qwen3_5SamplingStrategy::Greedy => 0,
+                Qwen3_5SamplingStrategy::TopKTopP {
+                    temperature_thousandths,
+                    ..
+                } => temperature_thousandths,
+            };
             tracing::info!(
                 request_id = inference_request.request_id().value(),
                 mtp_runtime_state = ?self.mtp_runtime_state,
                 mtp_enabled = self.mtp_enabled,
                 sparse_experts_are_paged,
                 persistent_prompt_cache_is_available,
-                sampling_is_greedy =
-                    matches!(sampling_strategy, Qwen3_5SamplingStrategy::Greedy),
+                sampling_is_greedy,
+                effective_temperature_thousandths,
                 optional_prediction_session_is_active = optional_prediction_session.is_some(),
                 "resolved optional multi-token prediction request session"
             );

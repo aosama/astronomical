@@ -21,7 +21,7 @@ pub enum Qwen3_5OutputEvent {
     ReasoningDelta(String),
     /// Normal assistant response content with control markers removed.
     TextDelta(String),
-    /// One fully validated function call.
+    /// One complete function call, including well-formed names the request did not declare.
     ToolCall(Qwen3_5ToolCall),
     /// A correction that must be injected back into the model context, not streamed to the client.
     ModelVisibleCorrection { correction_text: String },
@@ -32,7 +32,7 @@ pub enum Qwen3_5OutputEvent {
 pub struct Qwen3_5ToolCall {
     /// The zero-based output order of this function call.
     pub index: u16,
-    /// The selected declared function name.
+    /// The selected function name.
     pub function_name: String,
     /// Canonical JSON object arguments for the selected function.
     pub arguments_json: String,
@@ -269,37 +269,34 @@ impl Qwen3_5OutputParser {
         };
         let tool_call_body = self.take_pending_prefix(marker_index);
         self.take_pending_prefix(TOOL_CALL_END_MARKER.len());
+        // Closed envelopes fail open: the harness owns retries. Only resource bounds stay fatal.
         match self.parse_tool_call(&tool_call_body) {
             Ok(tool_call) => {
                 output_events.push(Qwen3_5OutputEvent::ToolCall(tool_call));
-                self.completed_tool_call_count = self
-                    .completed_tool_call_count
-                    .checked_add(1)
-                    .ok_or(Qwen3_5OutputParserError::TooManyToolCalls {
-                        maximum_tool_call_count: MAX_TOOL_CALL_COUNT,
-                    })?;
+                self.record_completed_tool_call()?;
             }
-            Err(Qwen3_5OutputParserError::UndeclaredFunction { function_name }) => {
-                output_events.push(Qwen3_5OutputEvent::ModelVisibleCorrection {
-                    correction_text: self.build_undeclared_function_correction_text(&function_name),
-                });
+            Err(parser_error) if parser_error.closed_envelope_must_remain_fatal() => {
+                return Err(parser_error);
             }
-            Err(parser_error) => return Err(parser_error),
+            Err(parser_error) => {
+                let fail_open_event = self.fail_open_closed_tool_call(&tool_call_body);
+                log_fail_open_closed_tool_call(
+                    &parser_error,
+                    &tool_call_body,
+                    fail_open_event.as_ref(),
+                );
+                if let Some(fail_open_event) = fail_open_event {
+                    let emitted_tool_call =
+                        matches!(fail_open_event, Qwen3_5OutputEvent::ToolCall(_));
+                    output_events.push(fail_open_event);
+                    if emitted_tool_call {
+                        self.record_completed_tool_call()?;
+                    }
+                }
+            }
         }
         self.state = Qwen3_5OutputParserState::Text;
         Ok(true)
-    }
-
-    fn build_undeclared_function_correction_text(&self, undeclared_function_name: &str) -> String {
-        if self.declared_tools.is_empty() {
-            return format!(
-                "The previous tool call requested undeclared function '{undeclared_function_name}', but this request declared no tools. Please correct the tool call by answering without a tool call."
-            );
-        }
-
-        format!(
-            "The previous tool call requested undeclared function '{undeclared_function_name}', but no tool with that exact name exists. Please correct the tool call by using one of the exact declared tool names."
-        )
     }
 
     fn parse_tool_call(
@@ -311,25 +308,14 @@ impl Qwen3_5OutputParser {
                 maximum_tool_call_count: MAX_TOOL_CALL_COUNT,
             });
         }
-        let tool_call_body = tool_call_body.trim();
-        let function_content = tool_call_body
-            .strip_prefix("<function=")
-            .ok_or(Qwen3_5OutputParserError::ToolCallMissingFunction)?;
-        let function_name_end = function_content
-            .find('>')
-            .ok_or(Qwen3_5OutputParserError::ToolCallMissingFunctionNameEnd)?;
-        let function_name = &function_content[..function_name_end];
-        let declared_tool = self.declared_tools.get(function_name).ok_or_else(|| {
-            Qwen3_5OutputParserError::UndeclaredFunction {
-                function_name: function_name.to_owned(),
-            }
-        })?;
-        let parameter_content = function_content[function_name_end + 1..]
-            .trim()
-            .strip_suffix("</function>")
-            .ok_or(Qwen3_5OutputParserError::ToolCallMissingFunctionEnd)?
-            .trim();
-        let parsed_arguments = parse_tool_parameters(parameter_content, declared_tool)?;
+        let (function_name, parameter_content) =
+            split_qwen_function_envelope(tool_call_body.trim())?;
+        // Unknown names and sloppy-but-closed XML are forwarded so the harness
+        // can return "no such tool" and the model can retry.
+        let parsed_arguments = parse_tool_parameters(
+            &parameter_content,
+            self.declared_tools.get(function_name.as_str()),
+        )?;
         let arguments_json = serde_json::to_string(&Value::Object(parsed_arguments))
             .map_err(Qwen3_5OutputParserError::SerializeToolArguments)?;
         Ok(Qwen3_5ToolCall {
@@ -337,6 +323,34 @@ impl Qwen3_5OutputParser {
             function_name: function_name.to_owned(),
             arguments_json,
         })
+    }
+
+    fn fail_open_closed_tool_call(&self, tool_call_body: &str) -> Option<Qwen3_5OutputEvent> {
+        let Ok((function_name, parameter_content)) =
+            split_qwen_function_envelope(tool_call_body.trim())
+        else {
+            if tool_call_body.is_empty() {
+                return None;
+            }
+            return Some(Qwen3_5OutputEvent::TextDelta(tool_call_body.to_owned()));
+        };
+        let parsed_arguments = parse_tool_parameters(&parameter_content, None).unwrap_or_default();
+        let arguments_json = serde_json::to_string(&Value::Object(parsed_arguments))
+            .unwrap_or_else(|_| "{}".to_owned());
+        Some(Qwen3_5OutputEvent::ToolCall(Qwen3_5ToolCall {
+            index: self.completed_tool_call_count,
+            function_name,
+            arguments_json,
+        }))
+    }
+
+    fn record_completed_tool_call(&mut self) -> Result<(), Qwen3_5OutputParserError> {
+        self.completed_tool_call_count = self.completed_tool_call_count.checked_add(1).ok_or(
+            Qwen3_5OutputParserError::TooManyToolCalls {
+                maximum_tool_call_count: MAX_TOOL_CALL_COUNT,
+            },
+        )?;
+        Ok(())
     }
 
     fn take_pending_prefix(&mut self, byte_count: usize) -> String {
@@ -386,6 +400,58 @@ impl Qwen3_5OutputParserState {
             Self::Text | Self::Reasoning | Self::SuppressedLateReasoning
         )
     }
+}
+
+fn log_fail_open_closed_tool_call(
+    parser_error: &Qwen3_5OutputParserError,
+    tool_call_body: &str,
+    fail_open_event: Option<&Qwen3_5OutputEvent>,
+) {
+    let (function_name, forwarded_arguments_json) = match fail_open_event {
+        Some(Qwen3_5OutputEvent::ToolCall(tool_call)) => (
+            tool_call.function_name.as_str(),
+            tool_call.arguments_json.as_str(),
+        ),
+        _ => ("", ""),
+    };
+    tracing::warn!(
+        diagnostic_code = parser_error.diagnostic_code(),
+        parser_error = %parser_error,
+        function_name,
+        forwarded_arguments_json,
+        closed_tool_call_body = tool_call_body,
+        "fail-open closed Qwen3.5 tool call"
+    );
+}
+
+fn split_qwen_function_envelope(
+    tool_call_body: &str,
+) -> Result<(String, String), Qwen3_5OutputParserError> {
+    // Closed envelopes still reach the harness when the model drops `<` or `</function>`.
+    let after_function_open = strip_qwen_function_open(tool_call_body)
+        .ok_or(Qwen3_5OutputParserError::ToolCallMissingFunction)?;
+    let function_name_end = after_function_open
+        .find(|character: char| character == '>' || character == '<' || character.is_whitespace())
+        .unwrap_or(after_function_open.len());
+    let function_name = after_function_open[..function_name_end].trim();
+    if function_name.is_empty() {
+        return Err(Qwen3_5OutputParserError::ToolCallMissingFunction);
+    }
+    let after_function_name = after_function_open[function_name_end..]
+        .trim_start_matches('>')
+        .trim();
+    let parameter_content = after_function_name
+        .strip_suffix("</function>")
+        .unwrap_or(after_function_name)
+        .trim()
+        .to_owned();
+    Ok((function_name.to_owned(), parameter_content))
+}
+
+fn strip_qwen_function_open(tool_call_body: &str) -> Option<&str> {
+    tool_call_body
+        .strip_prefix("<function=")
+        .or_else(|| tool_call_body.strip_prefix("function="))
 }
 
 fn earliest_marker<'a>(text: &str, markers: &'a [&'a str]) -> Option<(usize, &'a str)> {

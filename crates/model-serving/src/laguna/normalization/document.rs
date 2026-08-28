@@ -234,6 +234,7 @@ fn is_inherited_root_metadata(field_name: &str) -> bool {
         "model_type"
             | "architectures"
             | "torch_dtype"
+            | "dtype"
             | "qkv_bias"
             | "hidden_act"
             | "rope_style"
@@ -249,6 +250,7 @@ fn is_normalized_field(field_name: &str) -> bool {
         "model_type"
             | "architectures"
             | "torch_dtype"
+            | "dtype"
             | "vocab_size"
             | "hidden_size"
             | "intermediate_size"
@@ -337,9 +339,9 @@ fn canonical_alias_string(field_name: &str, source_value: &str) -> String {
         ("layer_types", "sliding_attention") => "sliding".to_owned(),
         ("mlp_layer_types", "moe") => "sparse".to_owned(),
         ("gating" | "gating_types", "false") => "none".to_owned(),
-        ("torch_dtype", "bf16") => "bfloat16".to_owned(),
-        ("torch_dtype", "fp16" | "float16_t") => "float16".to_owned(),
-        ("torch_dtype", "fp32") => "float32".to_owned(),
+        ("torch_dtype" | "dtype", "bf16") => "bfloat16".to_owned(),
+        ("torch_dtype" | "dtype", "fp16" | "float16_t") => "float16".to_owned(),
+        ("torch_dtype" | "dtype", "fp32") => "float32".to_owned(),
         _ => underscored_value,
     }
 }
