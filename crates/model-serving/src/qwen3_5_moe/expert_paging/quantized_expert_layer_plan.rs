@@ -16,7 +16,7 @@ use crate::expert_paging::quantized_expert_validation::validate_quantization_con
 use crate::expert_paging::safetensors_header::{
     SafetensorsDtype, SafetensorsHeader, TensorHeaderEntry,
 };
-use crate::qwen3_5::Qwen3_5Config;
+use crate::qwen3_5::{OptiQQuantizationProfile, Qwen3_5Config};
 
 /// The three MoE projection names in an expert's SwitchMLP block.
 const PROJECTION_NAMES: &[&str] = &["gate_proj", "up_proj", "down_proj"];
@@ -34,7 +34,6 @@ pub fn build_quantized_expert_layer_plan(
     weight_map: &HashMap<String, String>,
     layer_prefix: &str,
     qwen3_5_config: &Qwen3_5Config,
-    quantization_mode: QuantizationMode,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
     build_quantized_expert_layer_plan_with_stored_names(
         model_dir,
@@ -42,7 +41,6 @@ pub fn build_quantized_expert_layer_plan(
         &HashMap::new(),
         layer_prefix,
         qwen3_5_config,
-        quantization_mode,
     )
 }
 
@@ -52,7 +50,6 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names(
     stored_tensor_name_by_canonical_name: &HashMap<String, String>,
     layer_prefix: &str,
     qwen3_5_config: &Qwen3_5Config,
-    quantization_mode: QuantizationMode,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
     let mut header_cache = HashMap::new();
     build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
@@ -61,7 +58,6 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names(
         stored_tensor_name_by_canonical_name,
         layer_prefix,
         qwen3_5_config,
-        quantization_mode,
         &mut header_cache,
     )
 }
@@ -76,34 +72,21 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
     stored_tensor_name_by_canonical_name: &HashMap<String, String>,
     layer_prefix: &str,
     qwen3_5_config: &Qwen3_5Config,
-    quantization_mode: QuantizationMode,
     header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
     let mut tensor_sources = Vec::new();
+    let mut projection_quantization_modes = Vec::new();
 
     for projection_name in PROJECTION_NAMES {
         let projection_module_name = format!("{layer_prefix}.switch_mlp.{projection_name}");
         let projection_quantization_profile =
             qwen3_5_config.quantization_profile_for_module(&projection_module_name);
-        let (quantization_bits, quantization_group_size, parameter_names): (i32, i32, &[&str]) =
-            match quantization_mode {
-                QuantizationMode::Affine => {
-                    let quantization_bits = i32::try_from(projection_quantization_profile.bits)
-                        .map_err(|_| ExpertManifestError::InvalidBits)?;
-                    let quantization_group_size =
-                        i32::try_from(projection_quantization_profile.group_size)
-                            .map_err(|_| ExpertManifestError::InvalidGroupSize)?;
-                    validate_quantization_contract(
-                        quantization_bits,
-                        quantization_group_size,
-                        quantization_mode,
-                    )?;
-                    (quantization_bits, quantization_group_size, PARAMETER_NAMES)
-                }
-                QuantizationMode::NativeBfloat16 => (0, 0, &["weight"]),
-            };
+        // Storage is a module fact. A model-wide affine document does not make a
+        // native expert projection into zero-bit affine.
+        let projection_storage = projection_storage_contract(projection_quantization_profile)?;
+        projection_quantization_modes.push(projection_storage.quantization_mode);
         let mut projection_sources: HashMap<&str, Option<QuantizedTensorSource>> = HashMap::new();
-        for parameter_name in parameter_names {
+        for parameter_name in projection_storage.parameter_names {
             let tensor_name =
                 format!("{layer_prefix}.switch_mlp.{projection_name}.{parameter_name}");
             let source_file_name = weight_map.get(&tensor_name).ok_or_else(|| {
@@ -132,8 +115,8 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
                 &tensor_name,
                 projection_name,
                 parameter_name,
-                quantization_bits,
-                quantization_group_size,
+                projection_storage.quantization_bits,
+                projection_storage.quantization_group_size,
                 tensor_entry,
                 &source_file,
                 header.total_file_size_bytes,
@@ -147,7 +130,7 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
             .ok_or_else(|| ExpertManifestError::MissingShardTensor {
                 tensor_name: format!("{layer_prefix}.switch_mlp.{projection_name}.weight"),
             })?;
-        match quantization_mode {
+        match projection_storage.quantization_mode {
             QuantizationMode::Affine => {
                 let scales_source = projection_sources
                     .get("scales")
@@ -166,13 +149,13 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
                     weight_source,
                     scales_source,
                     biases_source,
-                    quantization_bits,
-                    quantization_group_size,
+                    projection_storage.quantization_bits,
+                    projection_storage.quantization_group_size,
                 )?;
             }
             QuantizationMode::NativeBfloat16 => {}
         }
-        for parameter_name in parameter_names {
+        for parameter_name in projection_storage.parameter_names {
             let tensor_name =
                 format!("{layer_prefix}.switch_mlp.{projection_name}.{parameter_name}");
             let tensor_source = projection_sources
@@ -195,6 +178,7 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
             found_capacities: Vec::new(),
         },
     )?;
+    let quantization_mode = layer_quantization_mode(&projection_quantization_modes);
     Ok(QuantizedExpertLayerPlan {
         layer_prefix: layer_prefix.to_owned(),
         tensor_sources,
@@ -213,6 +197,52 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
         },
         quantization_mode,
     })
+}
+
+struct ProjectionStorageContract {
+    quantization_bits: i32,
+    quantization_group_size: i32,
+    parameter_names: &'static [&'static str],
+    quantization_mode: QuantizationMode,
+}
+
+fn projection_storage_contract(
+    projection_quantization_profile: OptiQQuantizationProfile,
+) -> Result<ProjectionStorageContract, ExpertManifestError> {
+    if projection_quantization_profile.is_unquantized() {
+        return Ok(ProjectionStorageContract {
+            quantization_bits: 0,
+            quantization_group_size: 0,
+            parameter_names: &["weight"],
+            quantization_mode: QuantizationMode::NativeBfloat16,
+        });
+    }
+    let quantization_bits = i32::try_from(projection_quantization_profile.bits)
+        .map_err(|_| ExpertManifestError::InvalidBits)?;
+    let quantization_group_size = i32::try_from(projection_quantization_profile.group_size)
+        .map_err(|_| ExpertManifestError::InvalidGroupSize)?;
+    validate_quantization_contract(
+        quantization_bits,
+        quantization_group_size,
+        QuantizationMode::Affine,
+    )?;
+    Ok(ProjectionStorageContract {
+        quantization_bits,
+        quantization_group_size,
+        parameter_names: PARAMETER_NAMES,
+        quantization_mode: QuantizationMode::Affine,
+    })
+}
+
+fn layer_quantization_mode(projection_quantization_modes: &[QuantizationMode]) -> QuantizationMode {
+    if projection_quantization_modes
+        .iter()
+        .all(|quantization_mode| *quantization_mode == QuantizationMode::NativeBfloat16)
+    {
+        QuantizationMode::NativeBfloat16
+    } else {
+        QuantizationMode::Affine
+    }
 }
 
 // Keeping tensor metadata explicit makes startup validation failures easier to trace.

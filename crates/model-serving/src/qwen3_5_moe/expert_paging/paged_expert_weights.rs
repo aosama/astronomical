@@ -39,18 +39,21 @@ fn take_projection(
 ) -> Result<Qwen3_5AffineWeights, ExpertPagingError> {
     let weight_name = format!("{projection_name}.weight");
     let weight = take_tensor(loaded_tensors, &weight_name)?;
-    if layer_plan.quantization_mode == QuantizationMode::NativeBfloat16 {
-        // Native layers have no affine side tensors. Looking for scales or biases
-        // here would reject a valid source representation.
+    if layer_plan.quantization_mode_for_projection(projection_name)
+        == QuantizationMode::NativeBfloat16
+    {
+        // Native projections have no affine side tensors. Looking for scales or
+        // biases here would reject a valid mixed OptiQ source representation.
         return Ok(Qwen3_5AffineWeights::NativeBfloat16 { weight });
     }
     // The weight's validated source profile is authoritative for bit width and
     // group size. Never infer these values from filenames or model identity.
-    let profile = layer_plan
+    let weight_source = layer_plan
         .tensor_sources
         .iter()
-        .find(|source| {
-            source.projection_name == projection_name && source.parameter_name == "weight"
+        .find(|tensor_source| {
+            tensor_source.projection_name == projection_name
+                && tensor_source.parameter_name == "weight"
         })
         .ok_or_else(|| ExpertPagingError::Runtime {
             description: format!("layer plan is missing {projection_name} quantization metadata"),
@@ -59,8 +62,8 @@ fn take_projection(
         packed_weight: weight,
         quantization_scales: take_tensor(loaded_tensors, &format!("{projection_name}.scales"))?,
         quantization_biases: take_tensor(loaded_tensors, &format!("{projection_name}.biases"))?,
-        quantization_bits: profile.quantization_bits,
-        quantization_group_size: profile.quantization_group_size,
+        quantization_bits: weight_source.quantization_bits,
+        quantization_group_size: weight_source.quantization_group_size,
     })
 }
 
