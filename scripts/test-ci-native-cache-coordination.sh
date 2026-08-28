@@ -307,7 +307,7 @@ assert_workflow_contract() {
         raise "native key omits full identity" unless native_configuration.fetch("key").include?("NATIVE_BUILD_IDENTITY")
 
         sccache_restore = steps.find { |step| step["id"] == "sccache-cache" }
-        raise "sccache key is not rolling by source" unless sccache_restore.fetch("with").fetch("key").include?("github.sha")
+        raise "sccache key is not stable by dependency graph" unless sccache_restore.fetch("with").fetch("key").include?("Cargo.lock")
         swift_restore = steps.find { |step| step["id"] == "swiftpm-cache" }
         raise "Swift state is coupled to Rust" if swift_restore.fetch("with").fetch("key").include?("Cargo")
         raise "Swift cache omits toolchain compatibility" unless swift_restore.fetch("with").fetch("key").include?("SWIFT_TOOLCHAIN_IDENTITY")
@@ -386,11 +386,11 @@ main() {
     assert_change_scope "$change_scope_fixture_root" pull_request \
         "$static_scope_sha" "$rust_scope_sha" true false true
     assert_change_scope "$change_scope_fixture_root" push \
-        "$static_scope_sha" "$rust_scope_sha" true false false
+        "$static_scope_sha" "$rust_scope_sha" true false true
     assert_change_scope "$change_scope_fixture_root" pull_request \
         "$rust_scope_sha" "$renamed_code_scope_sha" true false true
     assert_change_scope "$change_scope_fixture_root" push \
-        "$rust_scope_sha" "$renamed_code_scope_sha" true false false
+        "$rust_scope_sha" "$renamed_code_scope_sha" true false true
     assert_change_scope "$change_scope_fixture_root" push \
         "$renamed_code_scope_sha" "$native_scope_sha" true true true
     assert_change_scope "$change_scope_fixture_root" push \

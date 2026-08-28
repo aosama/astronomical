@@ -163,7 +163,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
-          key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+          # Key on native build identity alone so the same identity restores
+          # across runs and PR refs instead of missing on every new run_id.
+          key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
           restore-keys: |
             astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-
       - name: Report native-build-cache restoration
@@ -173,7 +175,7 @@ jobs:
           CACHE_STEP_OUTCOME: ${{ steps.native-build-cache.outcome }}
           CACHE_HIT: ${{ steps.native-build-cache.outputs.cache-hit }}
           CACHE_MATCHED_KEY: ${{ steps.native-build-cache.outputs.cache-matched-key }}
-          CACHE_PRIMARY_KEY: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+          CACHE_PRIMARY_KEY: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
           CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.native-build-cache-start.outputs.started_at }}
         run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
 
@@ -186,7 +188,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/Library/Caches/Astronomical/sccache
-          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          # Key on Cargo.lock (not github.sha) so the same dependency graph
+          # restores across commits instead of missing on every new SHA.
+          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-
@@ -197,7 +201,7 @@ jobs:
           CACHE_STEP_OUTCOME: ${{ steps.sccache-cache.outcome }}
           CACHE_HIT: ${{ steps.sccache-cache.outputs.cache-hit }}
           CACHE_MATCHED_KEY: ${{ steps.sccache-cache.outputs.cache-matched-key }}
-          CACHE_PRIMARY_KEY: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          CACHE_PRIMARY_KEY: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}
           CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.sccache-cache-start.outputs.started_at }}
         run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
 
@@ -369,14 +373,14 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
-          key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+          key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
       - name: Report native-build-cache save
         if: always() && steps.native-build-cache-save-start.outcome == 'success'
         env:
           CACHE_OWNER: native-build
           CACHE_OPERATION: save
           CACHE_STEP_OUTCOME: ${{ steps.native-build-cache-save.outcome }}
-          CACHE_PRIMARY_KEY: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ github.run_id }}
+          CACHE_PRIMARY_KEY: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
           CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.native-build-cache-save-start.outputs.started_at }}
         run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
 
@@ -391,14 +395,14 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/Library/Caches/Astronomical/sccache
-          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}
       - name: Report sccache-cache save
         if: always() && steps.sccache-cache-save-start.outcome == 'success'
         env:
           CACHE_OWNER: sccache
           CACHE_OPERATION: save
           CACHE_STEP_OUTCOME: ${{ steps.sccache-cache-save.outcome }}
-          CACHE_PRIMARY_KEY: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          CACHE_PRIMARY_KEY: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ env.NATIVE_BUILD_IDENTITY }}-${{ hashFiles('Cargo.lock') }}
           CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.sccache-cache-save-start.outputs.started_at }}
         run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
 

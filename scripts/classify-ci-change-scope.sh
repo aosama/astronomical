@@ -133,8 +133,11 @@ classify_native_input_changes() {
 
 resolve_macos_verification_authority() {
     case "$EVENT_NAME" in
+        # PRs and push events (PR merges) both gate on code_changed so that
+        # default-branch pushes save native-build and sccache caches for future
+        # PRs to restore.  Static-only changes (docs, site) still skip.
         pull_request) macos_verification_required="$code_changed" ;;
-        push) macos_verification_required="$native_inputs_changed" ;;
+        push) macos_verification_required="$code_changed" ;;
         *)
             print_error "unsupported CI event: ${EVENT_NAME}"
             exit 2
