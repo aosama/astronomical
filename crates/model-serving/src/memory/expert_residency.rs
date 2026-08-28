@@ -139,12 +139,16 @@ pub fn plan_phase_aware_expert_residency(
         layer_geometries,
         current_residencies,
     )?;
-    // Generation must keep the experts prefill already paid to read. Seating
-    // complete layers here would evict those pages and stream every decode token.
+    // Generation must keep experts prefill already paid to read. Seating new
+    // complete layers over those pages would evict them. After an atomic
+    // complete-owner demote the topology is empty: leftover budget must still
+    // seat complete layers, or generate runs with zero expert RAM while tens of
+    // gigabytes of leftover sit unused.
     if matches!(
         phase,
         ExpertResidencyPhase::GenerationPreparation | ExpertResidencyPhase::Decode
-    ) {
+    ) && !current_residencies.is_empty()
+    {
         return preserve_existing_expert_pages_for_generation(
             phase,
             retained_expert_ceiling_bytes,

@@ -7,6 +7,7 @@ pub(crate) mod engine_request;
 pub(in crate::qwen3_5) mod generated_token_emission;
 mod generation_finalization;
 mod generation_request_validation;
+mod initial_context_memory_admission;
 mod inject_input_tokens;
 pub(in crate::qwen3_5) mod memory_admission;
 mod memory_limit;

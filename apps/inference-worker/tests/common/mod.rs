@@ -80,8 +80,11 @@ pub(crate) fn chat_capabilities(
     }
 }
 
-#[cfg(feature = "model-artifact-qualification")]
-#[allow(dead_code)] // Used only by model-artifact qualification test binaries.
+#[cfg(any(
+    feature = "model-artifact-qualification",
+    feature = "memory-management-acceptance"
+))]
+#[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
 pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::DiscoveredModel> {
     let astronomical_config =
         astronomical_config::AstronomicalConfig::load_from_development_location().expect(

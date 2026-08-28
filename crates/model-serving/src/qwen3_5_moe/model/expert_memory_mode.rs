@@ -1,6 +1,7 @@
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
 use crate::ExpertResidencyTelemetry;
+use crate::classify_expert_memory_mode;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
@@ -41,24 +42,20 @@ impl Qwen3_5Model {
     /// Returns whether complete sparse experts are installed or demand-paged.
     #[must_use]
     pub fn expert_memory_mode(&self) -> ExpertMemoryMode {
-        if self.resident_expert_weights.is_some() || self.expert_pager.is_none() {
-            return ExpertMemoryMode::Resident;
-        }
-        if self
-            .retained_experts
-            .as_ref()
-            .is_some_and(|retained_experts| {
-                retained_experts
-                    .borrow()
-                    .statistics()
-                    .resident_payload_byte_count
-                    > 0
-            })
-        {
-            ExpertMemoryMode::Hybrid
-        } else {
-            ExpertMemoryMode::Paged
-        }
+        let retained_paged_expert_payload_bytes =
+            self.retained_experts
+                .as_ref()
+                .map_or(0, |retained_experts| {
+                    retained_experts
+                        .borrow()
+                        .statistics()
+                        .resident_payload_byte_count
+                });
+        classify_expert_memory_mode(
+            self.resident_expert_weights.is_some(),
+            self.expert_pager.is_some(),
+            retained_paged_expert_payload_bytes,
+        )
     }
 
     /// Returns whether sparse-expert pages remain necessary for the next forward.

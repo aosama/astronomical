@@ -71,7 +71,7 @@ fn should_seat_complete_layers_on_mandatory_prefill_reads() {
         true,
         Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead),
     ));
-    assert!(!should_commit_mandatory_complete_layer(
+    assert!(should_commit_mandatory_complete_layer(
         1,
         true,
         Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead),

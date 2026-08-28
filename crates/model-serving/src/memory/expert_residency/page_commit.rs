@@ -1,15 +1,17 @@
 //! Whether just-read experts may stay in the retained cache.
 
-/// Prefill seats a complete layer after a mandatory read when the leftover
-/// expert budget can hold it. Decode does not promote complete layers here.
+/// Seat a complete layer after a mandatory read when the plan asked for it.
+///
+/// Prefill does this for multi-token chunks. Decode must do it too after an
+/// atomic complete-owner demote, or leftover budget never becomes resident RAM
+/// and every generate token streams from SSD.
 #[must_use]
 pub const fn should_commit_mandatory_complete_layer(
-    route_token_count: i32,
+    _route_token_count: i32,
     production_default_paging: bool,
     residency_target: Option<super::ExpertLayerResidencyTarget>,
 ) -> bool {
     production_default_paging
-        && route_token_count > 1
         && matches!(
             residency_target,
             Some(super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead)

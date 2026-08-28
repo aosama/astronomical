@@ -30,9 +30,9 @@
 //! fit decision must happen first, while the retained pages still have an owner.
 //!
 //! There is no sticky "stay paged" flag. Startup may install the atomic complete
-//! owner when it fits; request pressure may demote it. Once paging is active,
-//! phase-aware read-through retention preserves complete and routed layer pages
-//! without whole-model promotion during generation preparation or finalization.
+//! owner when it fits; request pressure may demote it. During a request, phase-aware
+//! read-through retention preserves complete and routed layer pages. After request
+//! workspace is released, complete residency is restored when the leftover ceiling admits it.
 
 use astronomical_runtime_integration::MlxRuntimeError;
 
@@ -40,9 +40,8 @@ use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5ResidentExpertWeights;
 use crate::qwen3_5_moe::expert_residency::maximum_resident_gate_up_fusion_transient_payload_bytes;
 use crate::{
-    CompleteResidencyDecision, CompleteResidencyRequirements, MlxRamBudgetPhase,
-    PerformanceAttribution, PerformanceOperation,
-    required_complete_residency_activation_headroom_bytes,
+    CompleteResidencyDecision, CompleteResidencyRequirements, PerformanceAttribution,
+    PerformanceOperation, required_complete_residency_activation_headroom_bytes,
 };
 
 /// Why the owner thread asked for a whole-model expert residency change.
@@ -64,6 +63,10 @@ pub(crate) enum Qwen3_5ExpertResidencyTransitionReason {
     CeilingLower,
     /// Draft-model loading needs the target to yield or reclaim expert RAM.
     SpeculativePrefillDraftLoading,
+    /// The request released its workspace; restore complete residency if it fits.
+    RequestCompletion,
+    /// Prefill finished; restore complete residency if generate still fits.
+    DecodeHandoff,
 }
 
 /// Nonfatal outcomes from an optional complete-model promotion attempt.
@@ -117,23 +120,21 @@ impl Qwen3_5Model {
         };
         let observed_transient_high_water_bytes =
             expert_pager.observed_transient_high_water_bytes();
-        let required_activation_headroom_bytes =
-            required_complete_residency_activation_headroom_bytes(
-                expert_pager.maximum_expert_page_bytes(),
-                observed_transient_high_water_bytes.max(
-                    self.mlx_ram_budget
-                        .borrow()
-                        .activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
-                ),
-            );
         let gate_up_fusion_transient_payload_bytes =
             maximum_resident_gate_up_fusion_transient_payload_bytes(expert_pager.layer_plans())?;
+        // Promotion replaces paged pages with complete weights. Prefill's
+        // three-layer weight heuristic is not extra RAM on top of that payload;
+        // only fusion transients and measured decode working set coexist with it.
+        let required_activation_headroom_bytes =
+            required_complete_residency_activation_headroom_bytes(
+                gate_up_fusion_transient_payload_bytes,
+                observed_transient_high_water_bytes,
+            );
         Ok(CompleteExpertResidencyHeadroom {
             observed_transient_high_water_bytes,
             required_activation_headroom_bytes,
             gate_up_fusion_transient_payload_bytes,
-            required_residency_headroom_bytes: required_activation_headroom_bytes
-                .max(gate_up_fusion_transient_payload_bytes),
+            required_residency_headroom_bytes: required_activation_headroom_bytes,
         })
     }
 

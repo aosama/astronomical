@@ -13,7 +13,7 @@ mod support;
 use std::fs;
 
 use async_openai::{Client, config::OpenAIConfig};
-use serde_json::{Value, json};
+use serde_json::json;
 use tokio::time::{Duration, timeout};
 
 use crate::common::real_model_rest_server::{
