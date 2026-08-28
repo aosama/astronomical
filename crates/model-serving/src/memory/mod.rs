@@ -2,8 +2,12 @@ mod adaptive_ram_growth_guard;
 mod allocation_admission;
 mod ceiling_change;
 mod context_admission;
+#[cfg(feature = "direct-mlx")]
+mod context_admission_logging;
 mod decision;
+mod decode_complete_layer_seating;
 mod expert_memory_admission;
+mod expert_ownership_mode;
 mod expert_residency;
 mod forward_recovery;
 #[cfg(feature = "direct-mlx")]
@@ -25,9 +29,17 @@ pub use adaptive_ram_growth_guard::{
 pub use ceiling_change::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
 pub use context_admission::{
     ContextAdmissionRequirements, combined_persistent_growth_bytes,
-    persistent_context_restore_workspace_bytes, safe_minimum_active_memory_ceiling_bytes,
+    persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
+    safe_minimum_active_memory_ceiling_bytes,
+    seated_complete_expert_request_peak_active_memory_bytes,
+    seated_complete_expert_request_temporary_workspace_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use context_admission_logging::{
+    log_context_admission_projection, log_generation_context_workspace_reservation,
 };
 pub use decision::{MemoryAdmissionDecision, MemoryBoundary};
+pub use decode_complete_layer_seating::complete_layer_indexes_required_before_decode;
 pub use expert_memory_admission::{
     ExpertMemoryAdmissionError, ExpertRetentionReclamationPlan,
     complete_residency_exceeds_ceiling_with_activation_headroom,
@@ -37,6 +49,7 @@ pub use expert_memory_admission::{
     required_complete_residency_activation_headroom_bytes,
     should_retry_fixed_forward_after_expert_reclamation,
 };
+pub use expert_ownership_mode::classify_expert_memory_mode;
 pub use expert_residency::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError,

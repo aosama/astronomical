@@ -501,6 +501,7 @@ expected_journeys = {
     "measure-model-ssd-streaming-attribution",
     "measure-model-ssd-streaming-opencode-long-context-reuse",
     "measure-model-ssd-streaming-complete-expert-residency",
+    "measure-model-ssd-streaming-leftover-complete-layer-seating",
     "measure-model-ssd-streaming-live-memory-ceiling-round-trip",
     "measure-model-ssd-streaming-decode-expert-retention",
     "measure-model-ssd-streaming-cached-suffix-streaming-prefill",

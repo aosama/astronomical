@@ -45,7 +45,7 @@ pub(crate) fn validate_context_memory_admission(
     .unwrap_or(usize::MAX);
     let expert_weight_memory_cache_statistics_before_reclamation =
         model.expert_weight_memory_cache_statistics();
-    let context_admission_decision = ContextAdmissionRequirements {
+    let context_admission_requirements = ContextAdmissionRequirements {
         current_active_memory_bytes: initial_memory_snapshot.active_memory_bytes(),
         context_growth_bytes: context_reservation_bytes,
         expert_page_reservation_bytes: maximum_expert_page_reservation_bytes,
@@ -56,8 +56,14 @@ pub(crate) fn validate_context_memory_admission(
         .unwrap_or(usize::MAX),
         active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
         complete_experts_are_resident: model.resident_expert_weights.is_some(),
-    }
-    .decide();
+    };
+    crate::memory::log_context_admission_projection(
+        "context_admission_after_owner_check",
+        context_token_count_requiring_reservation,
+        context_memory_reservation_bytes_per_token,
+        context_admission_requirements,
+    );
+    let context_admission_decision = context_admission_requirements.decide();
     let context_reclamation_target_bytes = match context_admission_decision {
         MemoryAdmissionDecision::Admit => return Ok(()),
         MemoryAdmissionDecision::Reclaim { required_bytes } => {
@@ -200,22 +206,28 @@ pub(crate) fn context_memory_admission_fits_without_expert_reclamation(
         temporary_workspace_reservation_bytes,
         additional_maximum_expert_page_reservation_bytes,
     )?;
+    let context_admission_requirements = ContextAdmissionRequirements {
+        current_active_memory_bytes: projection.memory_snapshot.active_memory_bytes(),
+        context_growth_bytes: projection.context_reservation_bytes,
+        expert_page_reservation_bytes: projection.maximum_expert_page_reservation_bytes,
+        temporary_workspace_bytes: temporary_workspace_reservation_bytes,
+        retained_expert_payload_bytes: usize::try_from(
+            model
+                .expert_weight_memory_cache_statistics()
+                .resident_payload_byte_count,
+        )
+        .unwrap_or(usize::MAX),
+        active_memory_ceiling_bytes: projection.configured_mlx_memory_limit_bytes,
+        complete_experts_are_resident: model.resident_expert_weights.is_some(),
+    };
+    crate::memory::log_context_admission_projection(
+        "resident_fit_without_reclamation",
+        context_token_count_requiring_reservation,
+        context_memory_reservation_bytes_per_token,
+        context_admission_requirements,
+    );
     Ok(matches!(
-        ContextAdmissionRequirements {
-            current_active_memory_bytes: projection.memory_snapshot.active_memory_bytes(),
-            context_growth_bytes: projection.context_reservation_bytes,
-            expert_page_reservation_bytes: projection.maximum_expert_page_reservation_bytes,
-            temporary_workspace_bytes: temporary_workspace_reservation_bytes,
-            retained_expert_payload_bytes: usize::try_from(
-                model
-                    .expert_weight_memory_cache_statistics()
-                    .resident_payload_byte_count,
-            )
-            .unwrap_or(usize::MAX),
-            active_memory_ceiling_bytes: projection.configured_mlx_memory_limit_bytes,
-            complete_experts_are_resident: model.resident_expert_weights.is_some(),
-        }
-        .decide(),
+        context_admission_requirements.decide(),
         MemoryAdmissionDecision::Admit
     ))
 }
