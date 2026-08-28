@@ -7,7 +7,7 @@ set -eu
 
 readonly COMPILE_TIMEOUT_SECONDS=600
 readonly TEST_TIMEOUT_SECONDS=120
-readonly TOTAL_STEP_COUNT=16
+readonly TOTAL_STEP_COUNT=17
 
 COMPLETED_STEP_COUNT=0
 
@@ -99,6 +99,7 @@ main() {
         "$CARGO_BUILD_JOBS" "$(date '+%Y-%m-%dT%H:%M:%S%z')"
 
     run_step rust-dependency-notices "$TEST_TIMEOUT_SECONDS" scripts/generate-rust-dependency-notices.sh --check
+    run_step rust-dependency-notices-contract "$TEST_TIMEOUT_SECONDS" scripts/test-rust-dependency-notices-contract.sh
     run_step commit-release-isolation "$TEST_TIMEOUT_SECONDS" scripts/test-commit-release-isolation.sh
     run_step ci-native-cache-contract "$TEST_TIMEOUT_SECONDS" scripts/test-ci-native-cache-coordination.sh
     run_step cargo-artifact-lifecycle-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-lifecycle-contract.sh
