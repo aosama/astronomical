@@ -245,8 +245,7 @@ assert_workflow_contract() {
         verification_concurrency = verification_job.fetch("concurrency")
         expected_group = "macos-hermetic-${{ github.event_name }}-${{ github.ref }}"
         raise "macOS concurrency is not event-and-ref scoped" unless verification_concurrency.fetch("group") == expected_group
-        expected_cancellation = "${{ github.event_name == '\''pull_request'\'' }}"
-        raise "default-branch publication can be cancelled" unless verification_concurrency.fetch("cancel-in-progress") == expected_cancellation
+        raise "required macOS verification must not cancel in-flight runs" unless verification_concurrency.fetch("cancel-in-progress") == false
         steps = verification_job.fetch("steps")
         classification_guard = steps.find { |step| step["name"] == "Require successful change classification" }
         raise "classification failure guard is missing" unless classification_guard

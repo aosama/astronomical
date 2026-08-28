@@ -42,14 +42,14 @@ jobs:
   verify:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
+    # This name is the Protect-main required-check identity, not a duration.
     name: 10-minute macOS hermetic verification
     runs-on: macos-26
     concurrency:
       group: macos-hermetic-${{ github.event_name }}-${{ github.ref }}
-      # New pull-request revisions supersede stale verification. Default-branch
-      # publishers must finish so a lightweight merge cannot discard the only
-      # reusable cache for newly merged native inputs.
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      # Never cancel an in-flight required check. A cancelled run with this job
+      # name blocks merge even when a later run on the same SHA is green.
+      cancel-in-progress: false
     # Restore, verification, and publication all remain inside the cost boundary.
     # Allow sufficient headroom for cache saves after a step-level compile timeout;
     # worst-case cold compile (~425s) + overhead (~185s) + cache saves (~30s) ≈ 640s.
@@ -102,6 +102,7 @@ jobs:
             printf 'ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE=%s\n' "$native_build_status_file"
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
+            # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
           } >> "$GITHUB_ENV"
           printf 'identity=%s\n' "$native_build_identity" >> "$GITHUB_OUTPUT"
           printf '[native-build-identity] status=complete identity=%s elapsed_seconds=%s\n' \
@@ -234,9 +235,16 @@ jobs:
         run: node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js
         timeout-minutes: 2
       - name: Install verification tools
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
         run: |
           started_at_seconds="$(date +%s)"
           printf '[verification-tools] status=start\n'
+          if command -v cargo-about >/dev/null 2>&1 && command -v sccache >/dev/null 2>&1; then
+            printf '[verification-tools] status=already-installed elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
+            exit 0
+          fi
           case "$(brew tap)" in
             *aws/tap*) brew untap aws/tap ;;
           esac
