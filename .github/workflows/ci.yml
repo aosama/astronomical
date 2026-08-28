@@ -265,7 +265,7 @@ jobs:
               printf '%s\n' 'Error: cargo is required to install the pinned cargo-about' >&2
               exit 1
             }
-            cargo install cargo-about --version "$required_cargo_about_version" --locked --force
+            cargo install cargo-about --version "$required_cargo_about_version" --locked --force --features cli
             printf '%s\n' "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
             export PATH="${HOME}/.cargo/bin:${PATH}"
             installed_cargo_about_version="$(cargo-about --version)"
