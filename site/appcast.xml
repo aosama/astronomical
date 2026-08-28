@@ -4,32 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.20</title>
-            <pubDate>Fri, 28 Aug 2026 01:50:57 -0400</pubDate>
-            <sparkle:version>362</sparkle:version>
-            <sparkle:shortVersionString>0.2.20</sparkle:shortVersionString>
+            <title>0.2.21</title>
+            <pubDate>Fri, 28 Aug 2026 15:44:32 -0400</pubDate>
+            <sparkle:version>368</sparkle:version>
+            <sparkle:shortVersionString>0.2.21</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.20
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.21
 
-This Stable patch keeps a shipped app working after macOS or a cache cleaner deletes `~/Library/Caches`.
+Stable macOS release for Apple Silicon.
 
-## Changes since 0.2.19
+## Changes
 
-- The MLX AOT metallib is packaged inside the app bundle. Startup no longer depends on the purgeable native-build cache.
-- Disk-image creation and Stable install validation fail if that metallib is missing, so a drag-to-Applications copy cannot omit the kernels.
+- Sparse models that fit the configured MLX ceiling stay fully in RAM. After a squeeze, leftover RAM that can hold complete expert layers remains in use during generation.
+- Unclosed tool-call envelopes are salvaged instead of aborting the stream.
+- Mixed native and affine OptiQ Qwen expert layers load for serving.
 
 ## Compatibility
 
-- macOS 26.0 or newer on Apple Silicon.
-- Application state from 0.2.19 and earlier is preserved. No configuration migration is required.
+Requires macOS 26.0 or later on Apple Silicon. Existing configuration, prompt cache, and Library models are preserved. Model precision is unchanged.
 
-This release is Developer ID signed, notarized, and delivered through the signed Sparkle update feed.
+This build is Developer ID signed, notarized, and distributed as a digest-bound disk image with a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.20/Astronomical-0.2.20-macOS-arm64.dmg" length="15732906" type="application/octet-stream" sparkle:edSignature="7bYa2zmVfXk8yyKRn3hULyPqVLmeiltJH5DUuJSN/mk3Zd8iBcNrmUfDsaLEoqNxz7GnZNvWAR/jKPRgRgyoBg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.21/Astronomical-0.2.21-macOS-arm64.dmg" length="15744774" type="application/octet-stream" sparkle:edSignature="HIxIXjIIdQci7mlzjjVp3sFGHgN6jQ/5kBtomUUwCBWvjwtZfMw5suqLuNoD446Hemdy5Nlb2xQtt2W3jNMFBw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Eud7Z3vXbh3TWbDrgJVnU5VwyEQifMhrVXyVQvNXn24oCjw6Gsjf1j4rIGDPztAtP0PkvenD79EQpXRhEcHWDA==
-length: 1904
+edSignature: sq8YmPSBzcZKhDusszBC86FTfyYMTZ6NE/zBmAbckZ8Hvqd1XAb9i9FhiBbguk5Nri/XCFdTntNlZOBBKxf3DQ==
+length: 1915
 -->
