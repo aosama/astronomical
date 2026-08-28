@@ -63,6 +63,11 @@ main() {
         -mountpoint "$MOUNT_POINT" "$DMG_PATH"
     IS_MOUNTED="true"
     [ -d "${MOUNT_POINT}/Astronomical.app" ] || { print_error "DMG does not contain Astronomical.app"; exit 1; }
+    bundled_metallib="${MOUNT_POINT}/Astronomical.app/Contents/Resources/share/mlx/mlx.metallib"
+    if [ -L "$bundled_metallib" ] || [ ! -s "$bundled_metallib" ]; then
+        print_error "DMG Astronomical.app is missing mlx.metallib"
+        exit 1
+    fi
     [ -L "${MOUNT_POINT}/Applications" ] || { print_error "DMG does not contain an Applications link"; exit 1; }
     [ "$(readlink "${MOUNT_POINT}/Applications")" = "/Applications" ] || {
         print_error "DMG Applications link does not target /Applications"

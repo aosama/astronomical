@@ -19,7 +19,12 @@ const MLX_METALLIB_PATH_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_MLX_METALLIB_
 const EXPECTED_METALLIB_SHA256_HEX: &str = env!("ASTRONOMICAL_MLX_METALLIB_SHA256");
 const EXPECTED_METALLIB_SIZE_BYTES_TEXT: &str = env!("ASTRONOMICAL_MLX_METALLIB_SIZE_BYTES");
 
-/// Returns the build-produced AOT metallib used when packaging does not override it.
+/// Returns the native-store metallib produced at compile time.
+///
+/// Unpackaged `cargo run` falls back to this path when the executable is not
+/// inside an app bundle. Shipped apps must load the copy packaged under
+/// `Contents/Resources/share/mlx/mlx.metallib` because `~/Library/Caches` is
+/// purgeable.
 #[must_use]
 pub fn compiled_metallib_path() -> &'static Path {
     Path::new(env!("ASTRONOMICAL_MLX_METALLIB_PATH"))
@@ -87,14 +92,17 @@ pub fn validate_metallib_path(metallib_path: impl AsRef<Path>) -> Result<(), Mlx
 }
 
 pub(crate) fn configured_metallib_path() -> Result<PathBuf, MlxRuntimeError> {
-    let metallib_path = env::var_os(MLX_METALLIB_PATH_ENVIRONMENT_VARIABLE)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| compiled_metallib_path().to_path_buf());
-    if !metallib_path.is_absolute() {
-        return Err(MlxRuntimeError::InvalidMetallibPath {
-            description: format!("path must be absolute: {metallib_path:?}"),
-        });
-    }
+    let environment_override_path =
+        env::var_os(MLX_METALLIB_PATH_ENVIRONMENT_VARIABLE).map(PathBuf::from);
+    let current_executable_path =
+        env::current_exe().map_err(|source| MlxRuntimeError::InvalidMetallibPath {
+            description: format!("cannot resolve the current executable path: {source}"),
+        })?;
+    let metallib_path = crate::mlx_metallib_path::resolve_mlx_metallib_path(
+        environment_override_path,
+        &current_executable_path,
+        Some(compiled_metallib_path()),
+    )?;
     validate_metallib_path(&metallib_path)?;
     Ok(metallib_path)
 }

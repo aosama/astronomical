@@ -27,7 +27,7 @@ cleanup() {
 trap cleanup 0
 
 main() {
-    for required_command in hdiutil mktemp readlink timeout; do
+    for required_command in ditto hdiutil mktemp readlink timeout; do
         command -v "$required_command" >/dev/null 2>&1 || {
             print_error "required command is unavailable: ${required_command}"
             exit 2
@@ -38,11 +38,30 @@ main() {
     fixture_app="${SANDBOX_DIRECTORY}/Astronomical.app"
     output_dmg="${SANDBOX_DIRECTORY}/Astronomical.dmg"
     MOUNT_POINT="${SANDBOX_DIRECTORY}/mounted"
-    mkdir -p "${fixture_app}/Contents/MacOS" "$MOUNT_POINT"
+    mkdir -p "${fixture_app}/Contents/MacOS" \
+        "${fixture_app}/Contents/Resources/share/mlx" \
+        "$MOUNT_POINT"
     printf '%s\n' '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundlePackageType</key><string>APPL</string></dict></plist>' \
         > "${fixture_app}/Contents/Info.plist"
     printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > "${fixture_app}/Contents/MacOS/fixture"
     chmod +x "${fixture_app}/Contents/MacOS/fixture"
+    printf '%s\n' 'certified-metallib' > "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
+
+    printf '%s\n' '[dmg-test] case=missing-metallib-is-rejected status=start'
+    rm -f "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
+    if timeout "$SUBJECT_TIMEOUT_SECONDS" "${repository_root}/scripts/release/create-dmg.sh" \
+        --app-bundle "$fixture_app" --output "${SANDBOX_DIRECTORY}/missing-metallib.dmg" \
+        > "${SANDBOX_DIRECTORY}/missing-metallib.log" 2>&1; then
+        print_error "DMG builder accepted an app without mlx.metallib"
+        exit 1
+    fi
+    grep -F "required bundled MLX AOT metallib is unavailable" \
+        "${SANDBOX_DIRECTORY}/missing-metallib.log" >/dev/null || {
+        print_error "DMG builder did not report the missing mlx.metallib"
+        exit 1
+    }
+    printf '%s\n' 'certified-metallib' > "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
+    printf '%s\n' '[dmg-test] case=missing-metallib-is-rejected status=success'
 
     printf '%s\n' '[dmg-test] case=drag-to-applications-journey status=start'
     timeout "$SUBJECT_TIMEOUT_SECONDS" "${repository_root}/scripts/release/create-dmg.sh" \
@@ -66,6 +85,21 @@ main() {
     }
     [ -e "${MOUNT_POINT}/.fseventsd/no_log" ] || {
         print_error "DMG permits unnecessary file-system event logging"
+        exit 1
+    }
+    [ -s "${MOUNT_POINT}/Astronomical.app/Contents/Resources/share/mlx/mlx.metallib" ] || {
+        print_error "DMG omitted mlx.metallib from Astronomical.app"
+        exit 1
+    }
+    [ "$(cat "${MOUNT_POINT}/Astronomical.app/Contents/Resources/share/mlx/mlx.metallib")" = "certified-metallib" ] || {
+        print_error "DMG did not preserve the packaged mlx.metallib bytes"
+        exit 1
+    }
+    dragged_app="${SANDBOX_DIRECTORY}/Applications/Astronomical.app"
+    mkdir -p "${SANDBOX_DIRECTORY}/Applications"
+    ditto "${MOUNT_POINT}/Astronomical.app" "$dragged_app"
+    [ -s "${dragged_app}/Contents/Resources/share/mlx/mlx.metallib" ] || {
+        print_error "drag-to-Applications omitted mlx.metallib"
         exit 1
     }
     hdiutil detach "$MOUNT_POINT" >/dev/null

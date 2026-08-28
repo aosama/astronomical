@@ -83,13 +83,15 @@ main() {
     source_app_bundle="${SANDBOX_DIRECTORY}/candidate/Astronomical.app"
     fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
     movement_count_file="${SANDBOX_DIRECTORY}/movement-count"
-    mkdir -p "${source_app_bundle}/Contents/MacOS" "${source_app_bundle}/Contents/Resources" \
+    mkdir -p "${source_app_bundle}/Contents/MacOS" \
+        "${source_app_bundle}/Contents/Resources/share/mlx" \
         "$fake_command_directory"
     printf '%s\n' "plist-fixture" > "${source_app_bundle}/Contents/Info.plist"
     printf '%s\n' "new-stable-build" > "${source_app_bundle}/new-build-marker"
     for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES Astronomical.icns; do
         printf '%s\n' "fixture" > "${source_app_bundle}/Contents/Resources/${packaged_resource}"
     done
+    printf '%s\n' "fixture" > "${source_app_bundle}/Contents/Resources/share/mlx/mlx.metallib"
     cat > "${source_app_bundle}/Contents/MacOS/astronomicald" <<'DAEMON'
 #!/usr/bin/env sh
 printf '%s\n' 'astronomicald 0.2.0 (build 107, abcdef123456)'
@@ -178,6 +180,20 @@ MOVE
     cp "${source_app_bundle}/Contents/MacOS/astronomical-menu" \
         "${source_app_bundle}/Contents/MacOS/astronomical-inference-worker"
     printf '%s\n' '[stable-installer-test] case=missing-worker-is-rejected status=success'
+
+    printf '%s\n' '[stable-installer-test] case=missing-metallib-is-rejected status=start'
+    rm -f "${source_app_bundle}/Contents/Resources/share/mlx/mlx.metallib"
+    if run_installer "none" "${SANDBOX_DIRECTORY}/missing-metallib.log"; then
+        print_error "installer unexpectedly accepted a bundle without mlx.metallib"
+        exit 1
+    fi
+    grep -F "required bundled MLX AOT metallib is unavailable" \
+        "${SANDBOX_DIRECTORY}/missing-metallib.log" >/dev/null || {
+            print_error "missing metallib rejection did not identify mlx.metallib"
+            exit 1
+        }
+    printf '%s\n' "fixture" > "${source_app_bundle}/Contents/Resources/share/mlx/mlx.metallib"
+    printf '%s\n' '[stable-installer-test] case=missing-metallib-is-rejected status=success'
 
     printf '%s\n' '[stable-installer-test] case=missing-version-is-rejected status=start'
     FAKE_APPLICATION_VERSION=""

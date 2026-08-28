@@ -18,9 +18,11 @@ create_fixture_app() {
     app_bundle="$1"
     sparkle_version="${app_bundle}/Contents/Frameworks/Sparkle.framework/Versions/B"
     mkdir -p "${app_bundle}/Contents/MacOS" \
+        "${app_bundle}/Contents/Resources/share/mlx" \
         "${sparkle_version}/Updater.app" \
         "${sparkle_version}/XPCServices/Downloader.xpc" \
         "${sparkle_version}/XPCServices/Installer.xpc"
+    printf '%s\n' fixture > "${app_bundle}/Contents/Resources/share/mlx/mlx.metallib"
     printf '%s\n' fixture > "${sparkle_version}/Autoupdate"
     for executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
         printf '%s\n' fixture > "${app_bundle}/Contents/MacOS/${executable_name}"
@@ -53,6 +55,17 @@ CODESIGN
         "${repository_root}/scripts/release/validate-distribution-app.sh" \
         --app-bundle "$fixture_app" --team-id ABCDE12345
     printf '%s\n' '[distribution-validator-test] case=valid-developer-id-bundle status=success'
+
+    printf '%s\n' '[distribution-validator-test] case=missing-metallib-is-rejected status=start'
+    rm -f "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
+    if PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
+        "${repository_root}/scripts/release/validate-distribution-app.sh" \
+        --app-bundle "$fixture_app" --team-id ABCDE12345 >/dev/null 2>&1; then
+        printf '%s\n' 'Error: validator accepted a bundle without mlx.metallib' >&2
+        exit 1
+    fi
+    printf '%s\n' fixture > "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
+    printf '%s\n' '[distribution-validator-test] case=missing-metallib-is-rejected status=success'
 
     printf '%s\n' '[distribution-validator-test] case=wrong-team-is-rejected status=start'
     if FAKE_TEAM_ID=WRONGTEAM PATH="${fake_bin}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \

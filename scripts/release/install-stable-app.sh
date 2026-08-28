@@ -124,6 +124,11 @@ main() {
             exit 1
         }
     done
+    bundled_metallib_path="${SOURCE_APP_BUNDLE}/Contents/Resources/share/mlx/mlx.metallib"
+    if [ -L "$bundled_metallib_path" ] || [ ! -s "$bundled_metallib_path" ]; then
+        print_error "required bundled MLX AOT metallib is unavailable"
+        exit 1
+    fi
     codesign --verify --deep --strict "$SOURCE_APP_BUNDLE"
     daemon_version_output="$("${SOURCE_APP_BUNDLE}/Contents/MacOS/astronomicald" --version)"
     case "$daemon_version_output" in
