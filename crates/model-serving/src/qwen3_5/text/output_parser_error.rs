@@ -23,12 +23,6 @@ pub enum Qwen3_5OutputParserError {
         /// Fixed accepted maximum.
         maximum_pending_bytes: usize,
     },
-    /// A model response emitted too many function calls.
-    #[error("Qwen3.5 output exceeded the {maximum_tool_call_count}-tool-call limit")]
-    TooManyToolCalls {
-        /// Fixed accepted maximum.
-        maximum_tool_call_count: u16,
-    },
     /// The same tool name appeared more than once in the declared request tools.
     #[error("declared tool '{function_name}' appeared more than once")]
     DuplicateDeclaredTool {
@@ -108,9 +102,6 @@ pub enum Qwen3_5OutputParserError {
     /// The stream ended before a reasoning block closed.
     #[error("Qwen3.5 reasoning block did not close")]
     UnclosedReasoning,
-    /// The stream ended before a tool call closed.
-    #[error("Qwen3.5 tool call did not close")]
-    UnclosedToolCall,
     /// A tool call omitted its required function block.
     #[error("Qwen3.5 tool call omitted a function block")]
     ToolCallMissingFunction,
@@ -186,7 +177,6 @@ impl Qwen3_5OutputParserError {
         match self {
             Self::FragmentTooLarge { .. } => "fragment_too_large",
             Self::PendingOutputTooLarge { .. } => "pending_output_too_large",
-            Self::TooManyToolCalls { .. } => "too_many_tool_calls",
             Self::DuplicateDeclaredTool { .. } => "duplicate_declared_tool",
             Self::InvalidDeclaredToolSchema { .. } => "invalid_declared_tool_schema",
             Self::DeclaredToolSchemaMustBeObject { .. } => "declared_tool_schema_must_be_object",
@@ -200,7 +190,6 @@ impl Qwen3_5OutputParserError {
             Self::InvalidRequiredToolParameters { .. } => "invalid_required_tool_parameters",
             Self::IncompleteControlMarker => "incomplete_control_marker",
             Self::UnclosedReasoning => "unclosed_reasoning",
-            Self::UnclosedToolCall => "unclosed_tool_call",
             Self::ToolCallMissingFunction => "tool_call_missing_function",
             Self::ToolCallMissingFunctionNameEnd => "tool_call_missing_function_name_end",
             Self::ToolCallMissingFunctionEnd => "tool_call_missing_function_end",
@@ -220,16 +209,5 @@ impl Qwen3_5OutputParserError {
             Self::UnsupportedToolParameterType { .. } => "unsupported_tool_parameter_type",
             Self::SerializeToolArguments(_) => "serialize_tool_arguments",
         }
-    }
-
-    /// Resource bounds stay fatal after `</tool_call>`. Every other closed-envelope failure is forwarded.
-    #[must_use]
-    pub(crate) const fn closed_envelope_must_remain_fatal(&self) -> bool {
-        matches!(
-            self,
-            Self::FragmentTooLarge { .. }
-                | Self::PendingOutputTooLarge { .. }
-                | Self::TooManyToolCalls { .. }
-        )
     }
 }
