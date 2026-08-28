@@ -4,19 +4,23 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.18</title>
-            <pubDate>Thu, 27 Aug 2026 07:41:49 -0400</pubDate>
-            <sparkle:version>353</sparkle:version>
-            <sparkle:shortVersionString>0.2.18</sparkle:shortVersionString>
+            <title>0.2.19</title>
+            <pubDate>Fri, 28 Aug 2026 00:13:50 -0400</pubDate>
+            <sparkle:version>359</sparkle:version>
+            <sparkle:shortVersionString>0.2.19</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.18
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.19
 
-Astronomical now keeps fully seated expert layers resident when the prefill leftover budget tightens.
+Astronomical now loads published MLX affine Laguna artifacts, samples Laguna tokens, and forwards closed tool calls so coding harnesses can retry.
 
 ## Improvements
 
-- Complete expert layers that are already seated in memory remain seated when the prefill leftover budget tightens. Previously, a tightening leftover budget could evict fully resident expert layers mid-prefill and force re-paging, which slowed prompt processing on memory-constrained machines.
+- Published MLX affine Laguna artifacts that already appear in Library load and generate instead of failing the model swap with a generic validation error.
+- Laguna decode follows the resolved sampling policy. When a Laguna artifact omits `top_k`, generation executes top_k 20.
+- Closed tool-call envelopes from Laguna and Qwen3.5 reach the client so a coding harness can reject an unknown name or sloppy arguments and the model can retry. Unclosed envelopes and resource bounds still fail the request.
+- Optional multi-token prediction accepts quantized affine MTP sidecars for resident serving. SSD-paged sparse experts stay target-only. MTP remains off unless `acceleration.mtp.enabled` is true.
+- 4-bit dense MTP target verification uses a four-row kernel so deeper draft windows keep their speedup.
 - Model weights, quantization, and numerical precision are unchanged.
 
 ## Compatibility
@@ -25,10 +29,10 @@ This release preserves existing Stable configuration, downloaded models, prompt-
 
 The macOS ARM64 distribution is signed with Apple Developer ID, notarized by Apple, stapled, and delivered through a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.18/Astronomical-0.2.18-macOS-arm64.dmg" length="15482537" type="application/octet-stream" sparkle:edSignature="dFaH3L8kqPSdcANHi0DAEy75Jay89a3RHGmOGVLgiavU6rzJ389WCNB5Yoa3vaz8rcOIU/dp4leUZLAgQiBsDQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.19/Astronomical-0.2.19-macOS-arm64.dmg" length="15510643" type="application/octet-stream" sparkle:edSignature="qmhSIm0HXgDNiSI3vaMMa0yCr00yTa1LZTQaiatVtAmBsgs2sAJT3DAZaldEmz5OZ8BkRct33y8oMPzOjmBEAA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: YBX+YvZtBqRdlVM31xyZ6/2sMByB/Jq9scigrKUBM/6X0NyEZw65fv8FmPTmBhCEFJ9TOWKfD8RU0J1HlkoEAA==
-length: 2053
+edSignature: g9N4Vn9ajEvd7w0eEq/n+PRfJboGD8PhDo8UZHnHJXyBrblIx4pPYvofT6V8ehV+hbCrLHbYzJUDikY29NYTBw==
+length: 2608
 -->
