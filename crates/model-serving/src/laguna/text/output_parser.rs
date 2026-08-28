@@ -1,3 +1,8 @@
+//! Incremental Poolside output parser for Laguna reasoning, text, and tool calls.
+//!
+//! Tool-call defects fail open so a coding client can reject or retry. Incomplete
+//! text control markers remain fatal because they are not yet a tool call.
+
 use std::collections::BTreeMap;
 
 use astronomical_ipc_protocol::ChatToolDefinition;
@@ -5,6 +10,8 @@ use serde_json::Value;
 
 use super::tool_contract::{LagunaDeclaredTool, bounded_text};
 use super::{LagunaOutputParserError, LagunaTextArtifactDescriptor};
+
+mod salvage;
 
 const THINK_START_MARKER: &str = "<think>";
 const THINK_END_MARKER: &str = "</think>";
@@ -84,21 +91,31 @@ impl LagunaOutputParser {
         decoded_fragment: &str,
     ) -> Result<Vec<LagunaOutputEvent>, LagunaOutputParserError> {
         if decoded_fragment.len() > MAXIMUM_FRAGMENT_BYTES {
+            if self.state == LagunaOutputParserState::ToolCall {
+                // The fragment cannot be buffered. Salvage the pending call so a usable
+                // name still reaches the harness instead of aborting generation.
+                return Ok(self.salvage_unclosed_tool_call());
+            }
             return Err(LagunaOutputParserError::FragmentTooLarge {
                 maximum_bytes: MAXIMUM_FRAGMENT_BYTES,
             });
         }
         self.pending_output.push_str(decoded_fragment);
-        self.validate_pending_bound()?;
+        if let Err(parser_error) = self.validate_pending_bound() {
+            if self.state == LagunaOutputParserState::ToolCall {
+                return Ok(self.salvage_unclosed_tool_call());
+            }
+            return Err(parser_error);
+        }
         let mut output_events = Vec::new();
         while self.advance(&mut output_events)? {}
         Ok(output_events)
     }
 
-    /// Flushes ordinary text and reasoning while rejecting incomplete control syntax.
+    /// Completes the stream. Unclosed tool calls salvage because aborting drops a usable name.
     pub fn finish(&mut self) -> Result<Vec<LagunaOutputEvent>, LagunaOutputParserError> {
         match self.state {
-            LagunaOutputParserState::ToolCall => Err(LagunaOutputParserError::IncompleteToolCall),
+            LagunaOutputParserState::ToolCall => Ok(self.salvage_unclosed_tool_call()),
             LagunaOutputParserState::Text => {
                 if is_prefix_of_any_marker(
                     &self.pending_output,
@@ -206,35 +223,31 @@ impl LagunaOutputParser {
         &mut self,
         output_events: &mut Vec<LagunaOutputEvent>,
     ) -> Result<bool, LagunaOutputParserError> {
-        self.validate_open_argument_size()?;
+        if self.open_tool_argument_exceeds_bound() {
+            output_events.extend(self.salvage_unclosed_tool_call());
+            return Ok(true);
+        }
         let Some(end_marker_offset) = self.pending_output.find(TOOL_CALL_END_MARKER) else {
             return Ok(false);
         };
         let tool_call_body = self.take_pending_prefix(end_marker_offset);
         self.take_pending_prefix(TOOL_CALL_END_MARKER.len());
-        // Closed envelopes fail open: the harness owns retries. Only resource bounds stay fatal.
+        // Closed envelopes fail open: the harness owns retries.
         match self.parse_tool_call(&tool_call_body) {
             Ok(output_event) => {
-                output_events.push(output_event);
-                self.record_completed_tool_call()?;
-            }
-            Err(parser_error) if parser_error.closed_envelope_must_remain_fatal() => {
-                return Err(parser_error);
+                output_events
+                    .push(self.emit_tool_call_or_visible_text(output_event, tool_call_body));
             }
             Err(parser_error) => {
                 let fail_open_event = self.fail_open_closed_tool_call(&tool_call_body);
-                log_fail_open_closed_tool_call(
+                salvage::log_fail_open_closed_tool_call(
                     &parser_error,
                     &tool_call_body,
                     fail_open_event.as_ref(),
                 );
                 if let Some(fail_open_event) = fail_open_event {
-                    let emitted_tool_call =
-                        matches!(fail_open_event, LagunaOutputEvent::ToolCall { .. });
-                    output_events.push(fail_open_event);
-                    if emitted_tool_call {
-                        self.record_completed_tool_call()?;
-                    }
+                    output_events
+                        .push(self.emit_tool_call_or_visible_text(fail_open_event, tool_call_body));
                 }
             }
         }
@@ -251,7 +264,7 @@ impl LagunaOutputParser {
             return Err(LagunaOutputParserError::MalformedToolCall);
         }
         // Closed tool_call blocks with a usable name must reach the harness even when
-        // 6-bit output drops the opening '<' on arg_key. Unclosed blocks still fail.
+        // 6-bit output drops the opening '<' on arg_key.
         let raw_arguments = parse_argument_pairs(poolside_argument_region(tool_call_body))?;
         let parsed_arguments = match self.declared_tools.get(function_name) {
             Some(declared_tool) => declared_tool.parse_arguments(function_name, raw_arguments)?,
@@ -274,6 +287,8 @@ impl LagunaOutputParser {
             }
             return Some(LagunaOutputEvent::TextDelta(tool_call_body.to_owned()));
         }
+        // Declared-schema rejection would still abort. Passthrough lets the harness
+        // return invalid-argument or unknown-tool instead of killing the stream.
         let raw_arguments =
             parse_argument_pairs(poolside_argument_region(tool_call_body)).unwrap_or_default();
         let parsed_arguments =
@@ -285,14 +300,6 @@ impl LagunaOutputParser {
             function_name: function_name.to_owned(),
             arguments_json,
         })
-    }
-
-    fn record_completed_tool_call(&mut self) -> Result<(), LagunaOutputParserError> {
-        self.completed_tool_call_count = self
-            .completed_tool_call_count
-            .checked_add(1)
-            .ok_or(LagunaOutputParserError::TooManyToolCalls)?;
-        Ok(())
     }
 
     fn validate_pending_bound(&self) -> Result<(), LagunaOutputParserError> {
@@ -307,28 +314,6 @@ impl LagunaOutputParser {
         if self.pending_output.len() > maximum_pending_bytes {
             return Err(LagunaOutputParserError::PendingOutputTooLarge {
                 maximum_bytes: maximum_pending_bytes,
-            });
-        }
-        Ok(())
-    }
-
-    fn validate_open_argument_size(&self) -> Result<(), LagunaOutputParserError> {
-        let Some(value_start_offset) = self.pending_output.rfind(ARGUMENT_VALUE_START_MARKER)
-        else {
-            return Ok(());
-        };
-        let value_content_offset = value_start_offset + ARGUMENT_VALUE_START_MARKER.len();
-        if self.pending_output[value_content_offset..].contains(ARGUMENT_VALUE_END_MARKER) {
-            return Ok(());
-        }
-        let actual_bytes = self
-            .pending_output
-            .len()
-            .saturating_sub(value_content_offset);
-        if actual_bytes > Self::MAXIMUM_TOOL_ARGUMENT_BYTES {
-            return Err(LagunaOutputParserError::ToolArgumentsTooLarge {
-                actual_bytes,
-                maximum_bytes: Self::MAXIMUM_TOOL_ARGUMENT_BYTES,
             });
         }
         Ok(())
@@ -356,29 +341,6 @@ enum LagunaOutputParserState {
     Text,
     Reasoning,
     ToolCall,
-}
-
-fn log_fail_open_closed_tool_call(
-    parser_error: &LagunaOutputParserError,
-    tool_call_body: &str,
-    fail_open_event: Option<&LagunaOutputEvent>,
-) {
-    let (function_name, forwarded_arguments_json) = match fail_open_event {
-        Some(LagunaOutputEvent::ToolCall {
-            function_name,
-            arguments_json,
-            ..
-        }) => (function_name.as_str(), arguments_json.as_str()),
-        _ => ("", ""),
-    };
-    tracing::warn!(
-        diagnostic_code = parser_error.diagnostic_code(),
-        parser_error = %parser_error,
-        function_name,
-        forwarded_arguments_json,
-        closed_tool_call_body = tool_call_body,
-        "fail-open closed Laguna tool call"
-    );
 }
 
 fn poolside_function_name(tool_call_body: &str) -> &str {

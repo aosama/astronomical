@@ -1,8 +1,8 @@
 use astronomical_ipc_protocol::ChatToolDefinition;
-use astronomical_model_serving::{LagunaOutputEvent, LagunaOutputParser, LagunaOutputParserError};
+use astronomical_model_serving::{LagunaOutputEvent, LagunaOutputParser};
 
 use super::super::text_support::SyntheticLagunaTextArtifact;
-use super::support::{assert_bounded_error, literary_output_parser_starting_in_reasoning};
+use super::support::literary_output_parser_starting_in_reasoning;
 
 #[test]
 fn should_start_in_reasoning_for_a_prompt_owned_opening_think_marker() {
@@ -379,7 +379,7 @@ fn should_forward_a_closed_tool_call_missing_its_required_argument() {
 }
 
 #[test]
-fn should_reject_an_incomplete_poolside_tool_call_when_generation_finishes() {
+fn should_forward_an_unclosed_poolside_tool_call_when_generation_finishes() {
     let mut output_parser = literary_output_parser_starting_in_reasoning(false);
     assert!(
         output_parser
@@ -388,15 +388,18 @@ fn should_reject_an_incomplete_poolside_tool_call_when_generation_finishes() {
             .is_empty()
     );
 
-    let parser_error = output_parser
+    let finish_events = output_parser
         .finish()
-        .expect_err("generation cannot complete with an open tool argument");
+        .expect("an unclosed tool call must reach the harness when generation ends");
 
-    assert!(matches!(
-        &parser_error,
-        LagunaOutputParserError::IncompleteToolCall
-    ));
-    assert_bounded_error(&parser_error);
+    assert_eq!(
+        finish_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: "{}".to_owned(),
+        }]
+    );
 }
 
 #[test]
@@ -422,31 +425,43 @@ fn should_forward_a_closed_call_when_argument_markers_are_nested() {
 }
 
 #[test]
-fn should_reject_oversized_tool_arguments_without_echoing_the_payload() {
+fn should_salvage_an_oversized_tool_argument_without_aborting_generation() {
     let mut output_parser = literary_output_parser_starting_in_reasoning(false);
     output_parser
         .push_fragment("<tool_call>find_character<arg_key>name</arg_key><arg_value>")
         .expect("the parser should enter argument-value state");
     let oversized_argument = "R".repeat(LagunaOutputParser::MAXIMUM_TOOL_ARGUMENT_BYTES + 1);
-    let mut parser_error = None;
+    let mut salvaged_events = None;
 
     // Small fragments prove the aggregate argument bound rather than a per-fragment guard.
     for argument_fragment_bytes in oversized_argument.as_bytes().chunks(4 * 1_024) {
         let argument_fragment = std::str::from_utf8(argument_fragment_bytes)
             .expect("the generated ASCII argument fixture should remain UTF-8");
-        if let Err(observed_parser_error) = output_parser.push_fragment(argument_fragment) {
-            parser_error = Some(observed_parser_error);
+        let output_events = output_parser.push_fragment(argument_fragment).expect(
+            "crossing the tool-argument bound must salvage the call instead of aborting generation",
+        );
+        if !output_events.is_empty() {
+            salvaged_events = Some(output_events);
             break;
         }
     }
-    let parser_error = parser_error.expect("the aggregate tool argument must hit its byte bound");
+    let salvaged_events = salvaged_events
+        .expect("the aggregate tool argument must salvage once it hits its byte bound");
 
-    assert!(matches!(
-        &parser_error,
-        LagunaOutputParserError::ToolArgumentsTooLarge { .. }
-    ));
-    assert_bounded_error(&parser_error);
-    assert!(!parser_error.to_string().contains(&"R".repeat(512)));
+    assert_eq!(
+        salvaged_events,
+        vec![LagunaOutputEvent::ToolCall {
+            index: 0,
+            function_name: "find_character".to_owned(),
+            arguments_json: "{}".to_owned(),
+        }]
+    );
+    assert!(
+        output_parser
+            .finish()
+            .expect("salvage should leave the parser able to complete the request")
+            .is_empty()
+    );
 }
 
 #[test]

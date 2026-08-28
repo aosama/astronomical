@@ -1,8 +1,9 @@
 //! Permutation coverage for Poolside tool-call marker defects.
 //!
-//! Product contract: a *closed* `<tool_call>…</tool_call>` fails open. One catch-all
-//! at the closing marker forwards a usable name to the harness. Unclosed envelopes
-//! stay incomplete. Empty names stream as text instead of aborting generation.
+//! Product contract: a closed `<tool_call>…</tool_call>` fails open. Unclosed envelopes
+//! stay pending while tokens can still arrive, then salvage at generation end.
+//! Resource bounds cap memory and salvage; they never abort the stream.
+//! Empty names stream as text instead of aborting generation.
 
 use astronomical_model_serving::{LagunaOutputEvent, LagunaOutputParserError};
 
@@ -45,7 +46,7 @@ fn should_honor_the_fail_open_contract_for_every_closed_marker_defect() {
 }
 
 #[test]
-fn should_keep_unclosed_envelopes_incomplete_instead_of_inventing_a_tool_call() {
+fn should_forward_unclosed_envelopes_when_generation_finishes() {
     for unclosed_envelope_case in unclosed_envelope_cases() {
         let mut output_parser = literary_output_parser();
         let push_outcome = output_parser
@@ -63,18 +64,17 @@ fn should_keep_unclosed_envelopes_incomplete_instead_of_inventing_a_tool_call() 
             "unclosed defect {} emitted a tool call during push: {push_outcome:?}",
             unclosed_envelope_case.marker_defect
         );
-        let finish_error = output_parser.finish().expect_err(&format!(
-            "unclosed defect {} must stay incomplete at finish; fragment={}",
-            unclosed_envelope_case.marker_defect, unclosed_envelope_case.poolside_fragment
-        ));
-        assert!(
-            matches!(
-                finish_error,
-                LagunaOutputParserError::IncompleteToolCall
-                    | LagunaOutputParserError::IncompleteControlMarker
-            ),
-            "unclosed defect {} finished with {finish_error}",
-            unclosed_envelope_case.marker_defect
+        let finish_events = output_parser.finish().unwrap_or_else(|parser_error| {
+            panic!(
+                "unclosed defect {} must not abort generation: {parser_error}; fragment={}",
+                unclosed_envelope_case.marker_defect, unclosed_envelope_case.poolside_fragment
+            )
+        });
+        assert_unclosed_finish_outcome(
+            unclosed_envelope_case.marker_defect,
+            unclosed_envelope_case.poolside_fragment,
+            finish_events,
+            unclosed_envelope_case.expectation,
         );
     }
 }
@@ -189,6 +189,7 @@ struct MarkerDefectCase {
 struct UnclosedEnvelopeCase {
     marker_defect: &'static str,
     poolside_fragment: &'static str,
+    expectation: ClosedEnvelopeExpectation,
 }
 
 fn closed_envelope_cases() -> Vec<MarkerDefectCase> {
@@ -346,22 +347,32 @@ fn unclosed_envelope_cases() -> Vec<UnclosedEnvelopeCase> {
         UnclosedEnvelopeCase {
             marker_defect: "missing tool_call close",
             poolside_fragment: "<tool_call>find_character<arg_key>name</arg_key><arg_value>Romeo</arg_value>",
+            expectation: tool_call(DECLARED_FUNCTION_NAME, ROMEO_ARGUMENTS_JSON),
         },
         UnclosedEnvelopeCase {
             marker_defect: "missing < on tool_call close",
             poolside_fragment: "<tool_call>find_character<arg_key>name</arg_key><arg_value>Romeo</arg_value>/tool_call>",
+            expectation: tool_call(DECLARED_FUNCTION_NAME, ROMEO_ARGUMENTS_JSON),
         },
         UnclosedEnvelopeCase {
             marker_defect: "missing > on tool_call close",
             poolside_fragment: "<tool_call>find_character<arg_key>name</arg_key><arg_value>Romeo</arg_value></tool_call",
+            expectation: tool_call(DECLARED_FUNCTION_NAME, ROMEO_ARGUMENTS_JSON),
         },
         UnclosedEnvelopeCase {
             marker_defect: "truncated tool_call close",
             poolside_fragment: "<tool_call>inspect_verse<arg_key>name</arg_key><arg_value>Romeo</arg_value></tool_c",
+            expectation: tool_call(UNDECLARED_FUNCTION_NAME, ROMEO_ARGUMENTS_JSON),
         },
         UnclosedEnvelopeCase {
             marker_defect: "unclosed undeclared call",
             poolside_fragment: "<tool_call>inspect_verse",
+            expectation: tool_call(UNDECLARED_FUNCTION_NAME, EMPTY_ARGUMENTS_JSON),
+        },
+        UnclosedEnvelopeCase {
+            marker_defect: "nameless unclosed arguments",
+            poolside_fragment: "<tool_call><arg_key>name</arg_key><arg_value>Romeo</arg_value>",
+            expectation: ClosedEnvelopeExpectation::VisibleText,
         },
     ]
 }
@@ -371,14 +382,17 @@ fn missing_tool_call_open_cases() -> Vec<UnclosedEnvelopeCase> {
         UnclosedEnvelopeCase {
             marker_defect: "missing tool_call open entirely",
             poolside_fragment: "find_character<arg_key>name</arg_key><arg_value>Romeo</arg_value></tool_call>",
+            expectation: ClosedEnvelopeExpectation::VisibleText,
         },
         UnclosedEnvelopeCase {
             marker_defect: "missing < on tool_call open",
             poolside_fragment: "tool_call>inspect_verse<arg_key>name</arg_key><arg_value>Romeo</arg_value></tool_call>",
+            expectation: ClosedEnvelopeExpectation::VisibleText,
         },
         UnclosedEnvelopeCase {
             marker_defect: "missing > on tool_call open",
             poolside_fragment: "<tool_call find_character<arg_key>name</arg_key><arg_value>Romeo</arg_value></tool_call>",
+            expectation: ClosedEnvelopeExpectation::VisibleText,
         },
     ]
 }
@@ -390,6 +404,38 @@ fn tool_call(
     ClosedEnvelopeExpectation::ToolCall {
         function_name,
         arguments_json,
+    }
+}
+
+fn assert_unclosed_finish_outcome(
+    marker_defect: &str,
+    poolside_fragment: &str,
+    finish_events: Vec<LagunaOutputEvent>,
+    expectation: ClosedEnvelopeExpectation,
+) {
+    match expectation {
+        ClosedEnvelopeExpectation::VisibleText => {
+            assert!(
+                !finish_events
+                    .iter()
+                    .any(|output_event| matches!(output_event, LagunaOutputEvent::ToolCall { .. })),
+                "defect={marker_defect}; fragment={poolside_fragment} emitted a tool call: {finish_events:?}"
+            );
+            assert!(
+                finish_events.iter().any(|output_event| {
+                    matches!(output_event, LagunaOutputEvent::TextDelta(text) if !text.is_empty())
+                }),
+                "defect={marker_defect}; fragment={poolside_fragment} dropped nameless tool-call text: {finish_events:?}"
+            );
+        }
+        tool_call_expectation => {
+            assert_closed_envelope_outcome(
+                marker_defect,
+                poolside_fragment,
+                Ok(finish_events),
+                tool_call_expectation,
+            );
+        }
     }
 }
 
