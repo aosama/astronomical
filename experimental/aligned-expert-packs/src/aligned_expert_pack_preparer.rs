@@ -10,8 +10,8 @@ use std::{
 use thiserror::Error;
 
 use astronomical_model_serving::{
-    ExpertManifestError, ModelWeightStorage, QuantizationMode, QuantizedExpertLayerPlan,
-    Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, build_quantized_expert_layer_plan,
+    ExpertManifestError, QuantizedExpertLayerPlan, Qwen3_5ArtifactValidationError,
+    Qwen3_5ArtifactValidator, build_quantized_expert_layer_plan,
 };
 
 use crate::aligned_expert_pack::{
@@ -107,10 +107,6 @@ impl AlignedExpertPackPreparer {
         let model_id = validated_artifact.model_id().to_owned();
         let model_revision = validated_artifact.revision().to_owned();
         let config = validated_artifact.config();
-        let quantization_mode = match config.model_weight_storage() {
-            ModelWeightStorage::AffineQuantized => QuantizationMode::Affine,
-            ModelWeightStorage::NativeBfloat16 => QuantizationMode::NativeBfloat16,
-        };
         let tensor_name_to_shard_file_name = validated_artifact
             .shard_index()
             .language_tensor_name_to_shard_file_name()
@@ -124,7 +120,6 @@ impl AlignedExpertPackPreparer {
                     &tensor_name_to_shard_file_name,
                     &format!("language_model.model.layers.{layer_index}.mlp"),
                     config,
-                    quantization_mode,
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;

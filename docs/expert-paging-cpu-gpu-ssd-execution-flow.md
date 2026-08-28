@@ -13,7 +13,7 @@ Dependency direction:
 
 ## Resident fast path
 
-When every sparse expert fits with activation headroom, the model owns complete contiguous expert arrays. Compatible routed gate and up rows are concatenated once per layer during resident loading. Execution uses one gathered gate/up projection, splits its output before the Swish-gated linear unit, then runs the gathered down projection. Valid incompatible gate/up storage remains separate.
+When every sparse expert fits with activation headroom, the model owns complete contiguous expert arrays. Compatible routed gate and up rows are concatenated once per layer during resident loading. Execution uses one gathered gate/up projection, splits its output before the Swish-gated linear unit, then runs the gathered down projection. Valid incompatible gate/up storage remains separate. Each expert projection keeps the storage its OptiQ profile and shard inventory declare: native floating-point weights stay native, and affine projections keep packed weight, scales, biases, bit width, and group size. Mixed OptiQ layers are valid.
 
 ## Multi-token prefill
 

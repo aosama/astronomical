@@ -1,5 +1,4 @@
 pub(crate) mod artifacts;
-#[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_paging;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_residency;
@@ -11,9 +10,7 @@ pub use crate::expert_paging::build_source_manifests;
 #[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
-#[cfg(feature = "direct-mlx")]
 pub(crate) use expert_paging::RetainedExpertCache;
-#[cfg(feature = "direct-mlx")]
 pub use expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
