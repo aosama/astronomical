@@ -323,6 +323,9 @@ pub struct QuantizedExpertLayerPlan {
     pub expert_capacity: usize,
     pub quantization_bits: i32,
     pub quantization_group_size: i32,
+    /// Unanimous storage when every projection matches. Affine when any projection
+    /// is affine. Execution must use [`Self::quantization_mode_for_projection`]
+    /// because mixed OptiQ layers can contain both encodings.
     pub quantization_mode: QuantizationMode,
 }
 
@@ -399,6 +402,24 @@ impl QuantizedExpertLayerPlan {
             });
         }
         Ok(source_payload_bytes)
+    }
+
+    /// Returns the storage encoding of one SwitchMLP projection from validated sources.
+    ///
+    /// Affine projections retain scales and biases. Native projections have only a
+    /// weight tensor. Mixed OptiQ layers can use both encodings, so callers must not
+    /// assume [`Self::quantization_mode`] applies to every projection.
+    #[must_use]
+    pub fn quantization_mode_for_projection(&self, projection_name: &str) -> QuantizationMode {
+        let has_affine_companion_tensor = self.tensor_sources.iter().any(|tensor_source| {
+            tensor_source.projection_name == projection_name
+                && tensor_source.parameter_name != "weight"
+        });
+        if has_affine_companion_tensor {
+            QuantizationMode::Affine
+        } else {
+            QuantizationMode::NativeBfloat16
+        }
     }
 }
 

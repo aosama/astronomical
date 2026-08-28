@@ -120,7 +120,14 @@ impl ResidentGateUpFusionPlan {
     fn from_layer_plan(
         layer_plan: &QuantizedExpertLayerPlan,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let parameter_names: &[&str] = match layer_plan.quantization_mode {
+        let gate_quantization_mode = layer_plan.quantization_mode_for_projection("gate_proj");
+        let up_quantization_mode = layer_plan.quantization_mode_for_projection("up_proj");
+        if gate_quantization_mode != up_quantization_mode {
+            return Ok(Self::Separate {
+                incompatibility_reason: "gate and up storage encodings differ",
+            });
+        }
+        let parameter_names: &[&str] = match gate_quantization_mode {
             QuantizationMode::NativeBfloat16 => &["weight"],
             QuantizationMode::Affine => &["weight", "scales", "biases"],
         };
@@ -147,7 +154,7 @@ impl ResidentGateUpFusionPlan {
                     description: "resident gate/up fusion transient payload overflowed",
                 })?;
         }
-        if layer_plan.quantization_mode == QuantizationMode::Affine {
+        if gate_quantization_mode == QuantizationMode::Affine {
             let gate_weight = projection_parameter_source(layer_plan, "gate_proj", "weight")?;
             let up_weight = projection_parameter_source(layer_plan, "up_proj", "weight")?;
             if gate_weight.quantization_bits != up_weight.quantization_bits {

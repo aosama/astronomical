@@ -9,9 +9,9 @@ use astronomical_runtime_integration::MlxRuntime;
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
 use crate::MlxAllocationBudget;
+use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::expert_paging::safetensors_header::SafetensorsHeader;
-use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};
-use crate::qwen3_5::{ModelWeightStorage, Qwen3_5Config};
+use crate::qwen3_5::Qwen3_5Config;
 
 impl Qwen3_5ExpertPager {
     /// Returns the number of MoE layers with validated layer plans.
@@ -47,10 +47,6 @@ impl Qwen3_5ExpertPager {
         // One model-level cache prevents every decoder layer from reparsing the same shard header.
         // The cache owns bounded metadata only and is dropped after all byte-range plans are built.
         let mut safetensors_header_by_source_file = HashMap::<PathBuf, SafetensorsHeader>::new();
-        let quantization_mode = match config.model_weight_storage() {
-            ModelWeightStorage::NativeBfloat16 => QuantizationMode::NativeBfloat16,
-            ModelWeightStorage::AffineQuantized => QuantizationMode::Affine,
-        };
         for decoder_layer_index in 0..decoder_layer_count {
             let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
             let layer_plan = build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
@@ -59,7 +55,6 @@ impl Qwen3_5ExpertPager {
                 stored_tensor_name_by_canonical_name,
                 &layer_prefix,
                 config,
-                quantization_mode,
                 &mut safetensors_header_by_source_file,
             )?;
             layer_plans.push(layer_plan);
@@ -76,7 +71,6 @@ impl Qwen3_5ExpertPager {
                     stored_tensor_name_by_canonical_name,
                     "language_model.mtp.layers.0.mlp",
                     config,
-                    quantization_mode,
                     &mut safetensors_header_by_source_file,
                 )?;
             layer_plans.push(mtp_layer_plan);

@@ -161,7 +161,7 @@ fn load_resident_projection(
     let weight = take_validated_source_tensor(resident_source_tensors, weight_source)?;
     // Preserve the validated artifact representation exactly. Resident mode is
     // an ownership change, never an opportunity to requantize or widen weights.
-    match layer_plan.quantization_mode {
+    match layer_plan.quantization_mode_for_projection(projection_name) {
         QuantizationMode::NativeBfloat16 => Ok(Qwen3_5AffineWeights::NativeBfloat16 { weight }),
         QuantizationMode::Affine => {
             let scales_source = projection_parameter_source(layer_plan, projection_name, "scales")?;

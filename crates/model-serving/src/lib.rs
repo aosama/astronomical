@@ -289,13 +289,15 @@ pub use qwen3_5_moe::maximum_resident_gate_up_fusion_transient_payload_bytes;
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_moe::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoECachedPlusStreamedPageRoute,
-    Qwen3_5MoEPagedPrefillExecutionMode, build_quantized_expert_layer_plan, build_source_manifests,
-    contiguous_selected_runs, qwen3_5_moe_combine_experts,
-    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
-    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
-    qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    Qwen3_5MoEPagedPrefillExecutionMode, build_source_manifests, contiguous_selected_runs,
+    qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,
+    qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
+    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
-pub use qwen3_5_moe::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION};
+pub use qwen3_5_moe::{
+    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+    build_quantized_expert_layer_plan,
+};
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
     ExpertAssignmentOrder, SortedExpertAssignments, StackedExpertProjection,

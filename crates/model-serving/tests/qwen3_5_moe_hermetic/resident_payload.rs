@@ -124,6 +124,27 @@ fn should_keep_incompatible_quantization_bit_widths_separate_without_fusion_head
 }
 
 #[test]
+fn should_keep_mixed_native_and_affine_gate_up_separate_without_fusion_headroom() {
+    let mut resident_layer_plan = synthetic_gate_up_fusion_layer_plan(
+        QuantizationMode::Affine,
+        vec![4, 16, 4],
+        vec![4, 16, 4],
+        4,
+        4,
+        128,
+    );
+    resident_layer_plan.tensor_sources.retain(|tensor_source| {
+        tensor_source.projection_name != "gate_proj" || tensor_source.parameter_name == "weight"
+    });
+
+    assert_eq!(
+        maximum_resident_gate_up_fusion_transient_payload_bytes(&[resident_layer_plan])
+            .expect("mixed native and affine gate/up should remain a valid separate plan"),
+        0,
+    );
+}
+
+#[test]
 fn should_reject_a_gate_up_fusion_transient_that_exceeds_u64() {
     let resident_layer_plan = synthetic_gate_up_fusion_layer_plan(
         QuantizationMode::NativeBfloat16,

@@ -6,7 +6,7 @@ use astronomical_experimental_aligned_expert_packs::{
     read_aligned_expert_pack_header, validate_aligned_expert_pack_header,
 };
 use astronomical_model_serving::{
-    QuantizationMode, Qwen3_5ArtifactValidator, build_quantized_expert_layer_plan,
+    Qwen3_5ArtifactValidator, build_quantized_expert_layer_plan,
     build_quantized_expert_page_manifest_from_plan,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
@@ -144,7 +144,6 @@ async fn run_expert_data_plane_measurements(
         &language_tensor_name_to_shard_file_name,
         "language_model.model.layers.0.mlp",
         &qwen3_5_config,
-        QuantizationMode::Affine,
     )
     .expect("the first decoder layer should have one validated affine expert plan");
     let aligned_expert_pack_path = model_directory

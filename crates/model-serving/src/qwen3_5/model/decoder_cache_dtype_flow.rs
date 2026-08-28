@@ -226,7 +226,9 @@ fn expert_projection_output_dtype(
     expert_layer_plan: &QuantizedExpertLayerPlan,
     projection_name: &str,
 ) -> Result<MlxDtype, Qwen3_5ExecutionError> {
-    if expert_layer_plan.quantization_mode == QuantizationMode::NativeBfloat16 {
+    if expert_layer_plan.quantization_mode_for_projection(projection_name)
+        == QuantizationMode::NativeBfloat16
+    {
         return promote_floating_dtypes(activation_dtype, MlxDtype::BFloat16);
     }
     let scale_dtype = expert_parameter_dtype(expert_layer_plan, projection_name, "scales")?;
