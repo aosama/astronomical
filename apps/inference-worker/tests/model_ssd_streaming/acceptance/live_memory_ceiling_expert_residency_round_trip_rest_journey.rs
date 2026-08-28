@@ -27,7 +27,9 @@ pub(super) const LOG_MARKER: &str = "[live-memory-ceiling-residency-round-trip]"
 const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
 const INITIAL_MLX_MEMORY_CEILING_BYTES: u64 = 23_000_000_000;
 const RESIDENT_MLX_MEMORY_CEILING_BYTES: u64 = 38_000_000_000;
-const RETURN_TO_STREAMING_MLX_MEMORY_CEILING_BYTES: u64 = 30_000_000_000;
+// Below the oQ6e complete-owner idle snapshot (~28.5 GB). 30 GB used to look
+// too small only because admission stacked exclusive paper peaks.
+const RETURN_TO_STREAMING_MLX_MEMORY_CEILING_BYTES: u64 = 26_000_000_000;
 const INITIAL_PROMPT_TOKEN_COUNT: usize = 1_024;
 pub(super) const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 16;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 0;
@@ -59,7 +61,7 @@ async fn run_residency_round_trip() {
         INITIAL_PROMPT_TOKEN_COUNT,
     );
     eprintln!(
-        "{LOG_MARKER} phase=server_start status=start initial_ceiling_gb=23 resident_ceiling_gb=38 final_ceiling_gb=30 timeout_seconds={}",
+        "{LOG_MARKER} phase=server_start status=start initial_ceiling_gb=23 resident_ceiling_gb=38 final_ceiling_gb=26 timeout_seconds={}",
         JOURNEY_TIMEOUT.as_secs()
     );
     let real_model_rest_server = launch_real_model_rest_server(
@@ -122,7 +124,7 @@ async fn run_residency_round_trip() {
 
     apply_memory_ceiling(
         server_address,
-        30,
+        26,
         RETURN_TO_STREAMING_MLX_MEMORY_CEILING_BYTES,
     )
     .await;

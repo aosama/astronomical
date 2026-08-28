@@ -4,9 +4,7 @@ Agent orientation map for non-obvious repository facts; this is not user-facing 
 
 ## Maintenance mandate
 
-Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old.
-
-Last verified: 2026-08-28 (spot-checked: Laguna published MLX affine packaging, closed tool-call fail-open)
+Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old. Last verified: 2026-08-28 (decode seats planned complete layers before the first token).
 
 ## Project overview
 
@@ -68,7 +66,7 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 - The model retains shapeless MLX-C compilations for mixture-of-experts SwiGLU plus multi-token prefill-only attention gating, precise gated normalization, gated-delta decay, and sparse/shared expert combination. Shapeless callbacks must use scalar broadcast constants rather than input-shaped constants, which freeze the first traced token shape. One-token decode deliberately keeps the prior paths. The sorted-expert weighted-sum and gated-delta Metal kernel owners are retained with the model. mlx_closure_new() returning a null context is the valid pre-compilation output placeholder, not an allocation failure.
 - Neutral rotating attention retains one-token key/value state in physical ring order because unmasked decode is invariant to a shared key/value permutation. Multi-token updates expose chronological `window + chunk - 1` views for causal masking, then commit only the final window. Do not add a decode-time ring reorder.
 - Sparse mixture-of-experts ownership and streaming are Rust-owned. Phase-aware residency preserves a stable complete-layer foundation for multi-token prefill and uses remaining capacity for routed decode-page overlays selected from observed demand. Multi-token cold layers stream one complete-layer bounded SafeTensors page; one-token misses stream only the routed experts required by that forward.
-- Forward admission and live-ceiling changes reclaim routed decode overlays before complete prefill layers. Mandatory reads may promote the page just loaded when typed admission allows it; generation preparation only plans optional decode topology and never performs eager source reads. Planning failure clears the optional decode plan and continues through bounded streaming.
+- Forward admission and live-ceiling changes reclaim routed decode overlays before complete prefill layers. Mandatory reads may promote the page just loaded when typed admission allows it. Unseated planned complete layers load before the first decode token. Planning failure clears the optional decode plan and continues through bounded streaming.
 - The retired C++ expert page store, paged-execution kernels, C application binary interface, Rust wrappers, MLX paged-buffer patches, indirect-resource patches, and native tests are absent from the build. Do not restore them without a representative end-to-end result exceeding the Rust path with exact parity and no memory regression.
 - Multi-token nonresident layers stream as complete operation-local pages. One-token nonresident layers load temporary routed top-K pages. There is no production multi-token expert-group streaming path and no whole-forward missing-route replay. `/v1/status` reports `paged` with near-zero Experts payload for pure streaming, and `resident` only when the complete expert model is resident. Model-core plus transient request work is the expected idle/active MLX split for large paged models.
 - The menu derives cumulative session prompt reuse from completed-request prompt and reused-token totals; those totals survive model swaps and reset with the supervisor process. Its stacked MLX memory snapshot reconciles tracked expert, model-core, and request-context payload against measured active memory, assigns the remainder to runtime work, and derives available bytes from the machine-specific MLX ceiling. Request-scoped SpecPrefill draft scoring instead reports one standalone live-only Drafter category that includes its temporary decoder context and remaining draft-phase active work; it returns to zero after release. MLX has no allocator ownership tags, so never present the tracked categories as independently measured physical allocations or assign process-wide allocator-cache and peak counters to one model.
@@ -198,4 +196,4 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 
 ## Maintenance snapshot
 
-Verified on 2026-08-28: published MLX affine Laguna packaging, GPU sampling with omitted top_k=20, closed tool-call fail-open plus catch-all worker WARNs, REST/IPC still without top_k. Rust 1.97.1, edition 2024.
+Verified on 2026-08-28: leftover complete-layer seating before decode, concurrent-peak admission, Laguna 6bit paging journeys. Rust 1.97.1, edition 2024.

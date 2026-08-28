@@ -75,16 +75,25 @@ impl Qwen3_5EngineState {
                 "thinking-budget configuration contains a token outside the certified vocabulary",
             ));
         }
-        let total_context_tokens = inference_request
-            .input_token_ids()
-            .len()
-            .checked_add(usize::from(inference_request.max_output_tokens()))
+        let prompt_token_count = inference_request.input_token_ids().len();
+        let maximum_output_token_count = usize::from(inference_request.max_output_tokens());
+        let thinking_budget_token_count = inference_request.thinking_budget().map(usize::from);
+        let total_context_tokens = prompt_token_count
+            .checked_add(maximum_output_token_count)
             .ok_or_else(|| invalid_request_error("generation context token count overflowed"))?;
         if total_context_tokens > self.maximum_position_count {
             return Err(invalid_request_error(
                 "generation context exceeds the certified maximum position count",
             ));
         }
+        tracing::info!(
+            prompt_token_count,
+            maximum_output_token_count,
+            thinking_budget_token_count,
+            total_context_token_count = total_context_tokens,
+            maximum_position_count = self.maximum_position_count,
+            "resolved generation context token reservation"
+        );
         Ok(total_context_tokens)
     }
 }

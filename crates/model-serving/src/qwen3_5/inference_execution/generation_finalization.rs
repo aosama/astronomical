@@ -1,10 +1,11 @@
 //! One terminal cleanup path for success, rejection, cancellation, and failure.
 //!
 //! Request-owned lazy arrays are dropped before expert-retention policy resumes
-//! and before allocator cleanup. Final telemetry then reports the read-through
-//! topology preserved for the next request rather than the final token's
-//! in-flight graph.
+//! and before allocator cleanup. After that workspace is gone, complete residency
+//! is restored when the leftover ceiling admits it so a fitting model is not left
+//! streaming. Final telemetry then reports that restored ownership.
 
+use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
     MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
@@ -122,8 +123,12 @@ impl Qwen3_5EngineState {
                 self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
-        // Preserve the read-through topology. Finalization performs no source
-        // reads; future mandatory forwards populate any newly available budget.
+        // Fatal cleanup must not allocate a complete resident copy. Success,
+        // rejection, and cancellation can restore RAM ownership now that the
+        // request workspace is gone.
+        if outcome != PerformanceAttributionOutcome::Failed {
+            self.restore_complete_residency_after_released_request(&mut performance_attribution);
+        }
         let generation_finalization =
             self.collect_generation_finalization(&mut performance_attribution);
         self.record_generation_performance_attribution(
@@ -135,6 +140,24 @@ impl Qwen3_5EngineState {
             failure_description,
         );
         generation_finalization
+    }
+
+    fn restore_complete_residency_after_released_request(
+        &mut self,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        let Some(model) = self.model.as_mut() else {
+            return;
+        };
+        if let Err(residency_restore_error) = model.try_promote_experts_to_resident(
+            Qwen3_5ExpertResidencyTransitionReason::RequestCompletion,
+            performance_attribution,
+        ) {
+            tracing::warn!(
+                error = %residency_restore_error,
+                "complete expert residency restore after request completion failed; paging remains"
+            );
+        }
     }
 
     fn collect_generation_finalization(

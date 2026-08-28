@@ -88,6 +88,12 @@ impl Qwen3_5EngineState {
         {
             return Ok(ActiveRequestAdvance::Continue(prefill_progress));
         }
+        // Restore complete RAM ownership before the UI says "Preparing generation".
+        // Announcing first left a multi-second streaming label on a fitting model.
+        if !active_request.generation_residency_preparation_attempted {
+            active_request.generation_residency_preparation_attempted = true;
+            self.prepare_decode_expert_residency_after_prefill(request_id, active_request)?;
+        }
         if !active_request.generation_preparation_announced {
             active_request.generation_preparation_announced = true;
             let model = self
@@ -102,13 +108,6 @@ impl Qwen3_5EngineState {
                     resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
                 },
             ));
-        }
-        // Prefill just finished. Reconcile the larger generation-phase budget
-        // without reading storage; mandatory decode reads populate empty route
-        // ownership later. The one-shot flag prevents repeated planning.
-        if !active_request.generation_residency_preparation_attempted {
-            active_request.generation_residency_preparation_attempted = true;
-            self.prepare_decode_expert_residency_after_prefill(request_id, active_request)?;
         }
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 

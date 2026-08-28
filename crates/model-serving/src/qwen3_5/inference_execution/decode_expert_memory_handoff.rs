@@ -23,14 +23,16 @@
 //! tens of gigabytes are free. This file is the one place that:
 //!
 //! 1. Releases the temporary cap after the last prefill cleanup barrier.
-//! 2. Reconciles a pure decode topology target against already-owned pages.
-//! 3. Leaves all new ownership to later execution-required prefill/decode reads.
+//! 2. Restores complete RAM ownership when the leftover ceiling admits it.
+//! 3. Reconciles a pure decode topology target against already-owned pages.
+//! 4. Seats complete layers `memory/` named that decode would never load itself.
 //!
 //! Reconciliation is best-effort. A failed plan must not fail the user's
 //! request; decode can still stream missing routes.
 
 use astronomical_ipc_protocol::RequestId;
 
+use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{ExpertResidencyPhase, InferenceEngineError, PerformanceOperation};
 
 use super::{Qwen3_5EngineState, fatal_engine_error};
@@ -62,6 +64,19 @@ impl Qwen3_5EngineState {
                 "released prefill request-pressure expert retention ceiling before decode"
             );
         }
+        // Cache restore and prefill may demote a fitting model for a temporary
+        // workspace. Decode no longer needs that workspace, so put every expert
+        // back in RAM when the ceiling still admits it.
+        if let Err(residency_restore_error) = model.try_promote_experts_to_resident(
+            Qwen3_5ExpertResidencyTransitionReason::DecodeHandoff,
+            &mut active_request.performance_attribution,
+        ) {
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %residency_restore_error,
+                "complete expert residency restore before decode failed; paging remains"
+            );
+        }
         let context_token_count =
             u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
         let residency_preparation_result =
@@ -86,6 +101,30 @@ impl Qwen3_5EngineState {
                 "continued decode with operation-local expert streaming after optional residency planning failed"
             );
         }
+        let complete_layer_indexes_to_seat =
+            model.planned_complete_layer_indexes_to_seat_before_decode();
+        if !complete_layer_indexes_to_seat.is_empty() {
+            match model.seat_complete_layers_before_decode(
+                &complete_layer_indexes_to_seat,
+                &mut active_request.performance_attribution,
+            ) {
+                Ok(seated_payload_bytes) => {
+                    tracing::info!(
+                        request_id = request_id.value(),
+                        planned_complete_layer_count = complete_layer_indexes_to_seat.len(),
+                        seated_payload_bytes,
+                        "seated planned complete layers before decode"
+                    );
+                }
+                Err(seating_error) => {
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        error = %seating_error,
+                        "continued decode after planned complete-layer seating failed"
+                    );
+                }
+            }
+        }
         let expert_residency = model.expert_residency_telemetry();
         tracing::info!(
             request_id = request_id.value(),
@@ -93,7 +132,7 @@ impl Qwen3_5EngineState {
             total_layer_count = expert_residency.total_layer_count,
             resident_expert_count = expert_residency.resident_expert_count,
             resident_expert_payload_bytes = expert_residency.resident_expert_payload_bytes,
-            "generation preparation preserved expert topology without eager source reads"
+            "generation preparation seated leftover complete layers before decode"
         );
         Ok(())
     }

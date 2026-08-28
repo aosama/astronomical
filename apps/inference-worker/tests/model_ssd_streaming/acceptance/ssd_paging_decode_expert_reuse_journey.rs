@@ -12,8 +12,8 @@
 //! 2. The model is in paging mode: expert payload is non-zero during decode,
 //!    confirming the test setup exercises SSD streaming.
 //! 3. Memory stays within the configured ceiling (plus a small tolerance).
-//! 4. Attribution reports retained-route hits, directly proving that decode
-//!    reused expert ownership instead of merely completing through repeated reads.
+//! 4. Decode keeps expert ownership in leftover RAM: either a complete-layer
+//!    foundation, or retained routed pages that attribution shows being reused.
 //! 5. Decode throughput is reported as positive finite evidence without imposing
 //!    one laptop's hardware-specific performance threshold.
 //! 6. Exactly one generation attribution report is written, proving clean request
@@ -136,15 +136,17 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         MAXIMUM_MLX_MEMORY_BYTES.saturating_add(MAXIMUM_MLX_MEMORY_TOLERANCE_BYTES)
     );
 
-    // --- Structural assertion 4: decode reused retained route assignments ---
+    // --- Structural assertion 4: leftover RAM keeps expert ownership ---
+    // Seating complete layers is the preferred reuse. Routed-page hits remain
+    // valid when leftover cannot hold a complete-layer foundation.
     stop_real_model_rest_server(real_model_rest_server).await;
     let retained_route_assignment_hit_count = generation_attribution_counter(
         isolated_worker_home.path(),
         "retained_route_assignment_hit_count",
     );
     assert!(
-        retained_route_assignment_hit_count > 0,
-        "decode must reuse at least one retained expert route assignment"
+        final_expert_payload_bytes >= 1_000_000_000 || retained_route_assignment_hit_count > 0,
+        "decode must keep leftover complete layers or reuse retained routed pages; expert_payload_bytes={final_expert_payload_bytes} retained_route_assignment_hit_count={retained_route_assignment_hit_count}"
     );
 
     // --- Measured assertion 5: throughput remains portable evidence ---

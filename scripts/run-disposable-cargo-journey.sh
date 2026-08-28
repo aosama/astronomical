@@ -39,6 +39,7 @@ print_journeys() {
         measure-model-ssd-streaming-attribution \
         measure-model-ssd-streaming-opencode-long-context-reuse \
         measure-model-ssd-streaming-complete-expert-residency \
+        measure-model-ssd-streaming-leftover-complete-layer-seating \
         measure-model-ssd-streaming-live-memory-ceiling-round-trip \
         measure-model-ssd-streaming-decode-expert-retention \
         measure-model-ssd-streaming-cached-suffix-streaming-prefill \
@@ -161,7 +162,13 @@ main() {
             ;;
         measure-model-ssd-streaming-complete-expert-residency)
             lane_name="model-ssd-streaming-complete-expert-residency"
+            export TEST_TIMEOUT_SECONDS=120
             set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_keep_all_experts_resident_and_avoid_ssd_reads_when_the_model_fits_memory -- --ignored --nocapture
+            ;;
+        measure-model-ssd-streaming-leftover-complete-layer-seating)
+            lane_name="model-ssd-streaming-leftover-complete-layer-seating"
+            export TEST_TIMEOUT_SECONDS=120
+            set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_keep_leftover_complete_expert_layers_in_ram_during_squeezed_generation -- --ignored --nocapture
             ;;
         measure-model-ssd-streaming-live-memory-ceiling-round-trip)
             lane_name="model-ssd-streaming-live-memory-ceiling-round-trip"

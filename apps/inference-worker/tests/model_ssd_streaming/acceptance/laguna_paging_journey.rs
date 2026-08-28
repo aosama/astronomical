@@ -18,7 +18,7 @@ const CONSTRAINED_STARTUP_CHILD_KEY: &str =
     "ASTRONOMICAL_LAGUNA_CONSTRAINED_STARTUP_ACCEPTANCE_CHILD";
 const LIVE_TRANSITION_TEST_NAME: &str = "model_ssd_streaming::laguna_paging_journey::should_preserve_laguna_output_across_resident_to_model_ssd_streaming_transition";
 const CONSTRAINED_STARTUP_TEST_NAME: &str = "model_ssd_streaming::laguna_paging_journey::should_stream_laguna_from_ssd_when_the_ceiling_is_below_weight_files";
-const LAGUNA_XS_PUBLIC_MODEL_ID: &str = "Laguna-XS-2.1-oQ8e";
+
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
@@ -61,9 +61,21 @@ async fn run_isolated_acceptance(test_name: &str, child_environment_key: &str) {
     );
 }
 
+fn configured_laguna_model_id() -> String {
+    crate::common::configured_discovered_models()
+        .into_iter()
+        .find(|discovered_model| {
+            discovered_model.model_family == astronomical_config::ModelFamily::Laguna
+        })
+        .map(|discovered_model| discovered_model.model_id)
+        .expect("Development model_directories should discover a Laguna model")
+}
+
 fn run_constrained_startup_journey() {
+    let laguna_model_id = configured_laguna_model_id();
+    eprintln!("[laguna-constrained-startup] status=progress phase=select model={laguna_model_id}");
     let model_directory =
-        crate::common::configured_model_artifact_directory_by_id(LAGUNA_XS_PUBLIC_MODEL_ID);
+        crate::common::configured_model_artifact_directory_by_id(&laguna_model_id);
     let weight_file_payload_bytes = LagunaArtifactValidator::new()
         .validate(&model_directory)
         .expect("the configured Laguna artifact should validate")
@@ -105,6 +117,7 @@ fn run_constrained_startup_journey() {
         &generation_processor,
         &mut execution,
         RequestId::new(103_003),
+        &laguna_model_id,
         &source_excerpt,
     );
     assert_ne!(
@@ -120,8 +133,10 @@ fn run_constrained_startup_journey() {
 }
 
 fn run_real_laguna_memory_journey() {
+    let laguna_model_id = configured_laguna_model_id();
+    eprintln!("[laguna-memory-acceptance] status=progress phase=select model={laguna_model_id}");
     let model_directory =
-        crate::common::configured_model_artifact_directory_by_id(LAGUNA_XS_PUBLIC_MODEL_ID);
+        crate::common::configured_model_artifact_directory_by_id(&laguna_model_id);
     let machine_memory_ceiling_bytes = maximum_recommended_gpu_working_set_size_bytes()
         .expect("the machine GPU working-set recommendation should be readable");
     let startup_memory_ceiling_bytes = machine_memory_ceiling_bytes.saturating_sub(1);
@@ -154,6 +169,7 @@ fn run_real_laguna_memory_journey() {
         &generation_processor,
         &mut execution,
         RequestId::new(103_001),
+        &laguna_model_id,
         &source_excerpt,
     );
 
@@ -172,6 +188,7 @@ fn run_real_laguna_memory_journey() {
         &generation_processor,
         &mut execution,
         RequestId::new(103_002),
+        &laguna_model_id,
         &source_excerpt,
     );
     assert_eq!(
@@ -203,11 +220,12 @@ fn generate_token_ids(
     generation_processor: &astronomical_model_serving::LagunaGenerationProcessor,
     execution: &mut astronomical_model_serving::LagunaInferenceExecution,
     request_id: RequestId,
+    laguna_model_id: &str,
     source_excerpt: &str,
 ) -> (Vec<u32>, astronomical_model_serving::GenerationFinalization) {
     let command = ChatGenerationCommand {
         request_id,
-        model: LAGUNA_XS_PUBLIC_MODEL_ID.to_owned(),
+        model: laguna_model_id.to_owned(),
         messages: vec![ChatMessage::User {
             content: format!(
                 "Use this Romeo and Juliet source as the only evidence. Name the households and tragic outcome in two short sentences.\n\n{source_excerpt}"

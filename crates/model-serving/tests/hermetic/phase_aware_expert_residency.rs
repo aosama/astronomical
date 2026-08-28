@@ -1,7 +1,7 @@
 use astronomical_model_serving::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertResidencyPhase, PhaseAwareExpertResidencyPlanError, RetainedExpertPageClass,
-    plan_phase_aware_expert_residency,
+    complete_layer_indexes_required_before_decode, plan_phase_aware_expert_residency,
 };
 
 fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
@@ -177,7 +177,93 @@ fn should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence() 
             *target == ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
         })
     );
-    assert_eq!(plan.maximum_new_retained_bytes, 60);
+    assert!(plan.complete_layer_targets.is_empty());
+}
+
+#[test]
+fn should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_them() {
+    let plan = plan_phase_aware_expert_residency(
+        ExpertResidencyPhase::GenerationPreparation,
+        80,
+        &uniform_geometry(3),
+        &[],
+    )
+    .expect("leftover budget should seat complete layers after an empty demote");
+
+    assert!(
+        !plan.complete_layer_targets.is_empty(),
+        "empty post-demote topology must not plan zero complete layers when leftover fits them"
+    );
+    assert!(
+        plan.layer_targets.iter().any(|target| {
+            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        })
+    );
+}
+
+#[test]
+fn should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_model() {
+    let layer_geometries = (0..40)
+        .map(|layer_index| {
+            let complete_layer_payload_bytes =
+                if layer_index == 0 || layer_index == 1 || layer_index == 39 {
+                    1_610_612_736_u64
+                } else {
+                    452_984_832_u64
+                };
+            ExpertLayerGeometry {
+                layer_index,
+                complete_layer_payload_bytes,
+                expert_payload_bytes: complete_layer_payload_bytes / 128,
+                expert_capacity: 128,
+                experts_per_token: 8,
+            }
+        })
+        .collect::<Vec<_>>();
+    let leftover_expert_budget_bytes = 21_051_596_626;
+    let plan = plan_phase_aware_expert_residency(
+        ExpertResidencyPhase::GenerationPreparation,
+        leftover_expert_budget_bytes,
+        &layer_geometries,
+        &[],
+    )
+    .expect("a 21 GB leftover should plan a complete-layer foundation");
+
+    assert!(
+        plan.complete_layer_targets.len() >= 30,
+        "planned complete layers={}, leftover={leftover_expert_budget_bytes}",
+        plan.complete_layer_targets.len()
+    );
+    assert!(plan.complete_layer_targets.len() < 40);
+}
+
+#[test]
+fn should_require_unseated_complete_layers_to_be_loaded_before_decode() {
+    let plan = plan_phase_aware_expert_residency(
+        ExpertResidencyPhase::GenerationPreparation,
+        80,
+        &uniform_geometry(3),
+        &[],
+    )
+    .expect("leftover budget should name complete layers after an empty demote");
+    let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+
+    assert_eq!(layer_indexes, plan.complete_layer_targets);
+    assert!(!layer_indexes.is_empty());
+}
+
+#[test]
+fn should_not_require_already_preserved_complete_layers_to_be_loaded_again() {
+    let plan = plan_phase_aware_expert_residency(
+        ExpertResidencyPhase::GenerationPreparation,
+        80,
+        &uniform_geometry(3),
+        &[complete_residency(1)],
+    )
+    .expect("one preserved complete layer should plan without a seating pass");
+    let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+
+    assert!(!layer_indexes.contains(&1));
 }
 
 #[test]

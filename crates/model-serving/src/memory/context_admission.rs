@@ -67,12 +67,77 @@ impl ContextAdmissionRequirements {
 }
 
 /// Context-cache reconstruction temporarily owns both loaded and concatenated state.
+///
+/// `restored_context_token_count` is tokens that may already exist as prompt-cache
+/// blocks. Future output-budget tokens have no blocks and must not be multiplied in.
 #[must_use]
 pub fn persistent_context_restore_workspace_bytes(
     context_memory_reservation_bytes_per_token: usize,
     restored_context_token_count: usize,
 ) -> Option<usize> {
     context_memory_reservation_bytes_per_token.checked_mul(restored_context_token_count)
+}
+
+/// Peak active memory while complete experts are already seated in `current_active_memory_bytes`.
+///
+/// Cache restore and full request KV are exclusive phases: restore finishes before
+/// generation grows the output cache. Prefill layer-weight heuristics and SSD stream
+/// slots are already inside the seated active snapshot, so they are not added again.
+#[must_use]
+pub fn seated_complete_expert_request_peak_active_memory_bytes(
+    current_active_memory_bytes: usize,
+    context_growth_bytes: usize,
+    restore_overlap_workspace_bytes: usize,
+    publication_workspace_bytes: usize,
+) -> Option<usize> {
+    let restore_phase_active_memory_bytes = current_active_memory_bytes
+        .checked_add(restore_overlap_workspace_bytes)?
+        .checked_add(publication_workspace_bytes)?;
+    let serving_phase_active_memory_bytes = current_active_memory_bytes
+        .checked_add(context_growth_bytes)?
+        .checked_add(publication_workspace_bytes)?;
+    Some(restore_phase_active_memory_bytes.max(serving_phase_active_memory_bytes))
+}
+
+/// Temporary workspace charged against a request: seated peak extras, or paging extras.
+///
+/// When complete experts are already in `current_active`, layer-weight activation
+/// and SSD stream-slot bytes are ignored. Those weights are not a second owner.
+#[must_use]
+pub fn request_context_temporary_workspace_bytes(
+    complete_experts_are_resident: bool,
+    context_growth_bytes: usize,
+    restore_overlap_workspace_bytes: usize,
+    publication_workspace_bytes: usize,
+    paged_prefill_activation_workspace_bytes: usize,
+    paged_complete_layer_scratch_bytes: usize,
+) -> Option<usize> {
+    if complete_experts_are_resident {
+        seated_complete_expert_request_temporary_workspace_bytes(
+            context_growth_bytes,
+            restore_overlap_workspace_bytes,
+            publication_workspace_bytes,
+        )
+    } else {
+        publication_workspace_bytes
+            .checked_add(restore_overlap_workspace_bytes)?
+            .checked_add(paged_prefill_activation_workspace_bytes)?
+            .checked_add(paged_complete_layer_scratch_bytes)
+    }
+}
+
+/// Temporary workspace that makes `current + context_growth + temporary` equal the seated peak.
+///
+/// When request KV already covers prompt restore, this is publication workspace only.
+#[must_use]
+pub fn seated_complete_expert_request_temporary_workspace_bytes(
+    context_growth_bytes: usize,
+    restore_overlap_workspace_bytes: usize,
+    publication_workspace_bytes: usize,
+) -> Option<usize> {
+    let exclusive_restore_beyond_context_growth_bytes =
+        restore_overlap_workspace_bytes.saturating_sub(context_growth_bytes);
+    publication_workspace_bytes.checked_add(exclusive_restore_beyond_context_growth_bytes)
 }
 
 /// Combines independently owned persistent growth categories.

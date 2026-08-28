@@ -84,6 +84,7 @@ impl Qwen3_5EngineState {
                 request_id,
                 configured_maximum_output_tokens,
                 total_context_tokens,
+                inference_request.input_token_ids().len(),
                 self.persistent_prompt_cache.is_some()
                     && !inference_request.has_visual_embeddings(),
                 &mut performance_attribution,
