@@ -4,32 +4,24 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.21</title>
-            <pubDate>Fri, 28 Aug 2026 15:44:32 -0400</pubDate>
-            <sparkle:version>368</sparkle:version>
-            <sparkle:shortVersionString>0.2.21</sparkle:shortVersionString>
+            <title>0.2.22</title>
+            <pubDate>Fri, 28 Aug 2026 20:17:21 -0400</pubDate>
+            <sparkle:version>372</sparkle:version>
+            <sparkle:shortVersionString>0.2.22</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.21
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.22
 
-Stable macOS release for Apple Silicon.
+Qwen3.5 dense and mixture-of-experts tool attempts now reach the coding client when the model uses attribute-style function tags, writes the call inside an open thinking block, or leaves a partial control marker at stream end. A recoverable function name becomes a structured tool call. A nameless body becomes ordinary assistant text. Generation no longer aborts those parser defects as malformed model output. Laguna leftover control-marker prefixes and oversized frames follow the same never-abort rule.
 
-## Changes
+Existing configuration, model directories, and prompt-cache state are preserved.
 
-- Sparse models that fit the configured MLX ceiling stay fully in RAM. After a squeeze, leftover RAM that can hold complete expert layers remains in use during generation.
-- Unclosed tool-call envelopes are salvaged instead of aborting the stream.
-- Mixed native and affine OptiQ Qwen expert layers load for serving.
-
-## Compatibility
-
-Requires macOS 26.0 or later on Apple Silicon. Existing configuration, prompt cache, and Library models are preserved. Model precision is unchanged.
-
-This build is Developer ID signed, notarized, and distributed as a digest-bound disk image with a signed Sparkle update feed.
+This release is Developer ID signed, notarized, and stapled for macOS arm64.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.21/Astronomical-0.2.21-macOS-arm64.dmg" length="15744774" type="application/octet-stream" sparkle:edSignature="HIxIXjIIdQci7mlzjjVp3sFGHgN6jQ/5kBtomUUwCBWvjwtZfMw5suqLuNoD446Hemdy5Nlb2xQtt2W3jNMFBw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.22/Astronomical-0.2.22-macOS-arm64.dmg" length="15735974" type="application/octet-stream" sparkle:edSignature="OdcyoMmS75XBVtBBCrWnxPhNqyogHEG1Hw9Xqo/3at60v3CIj3JlzFUnJu5RwMiYwoLTAvj4K+GilIWu8eMoCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: sq8YmPSBzcZKhDusszBC86FTfyYMTZ6NE/zBmAbckZ8Hvqd1XAb9i9FhiBbguk5Nri/XCFdTntNlZOBBKxf3DQ==
-length: 1915
+edSignature: iv5J1wGJgF2YFYo9YnmAH9URGDSy/L/rfVqa1XlsNXa1h1DhmSQZ/p6U2JfdSzHDtKj5LXtzzwnydNmp2gRdBw==
+length: 1917
 -->
