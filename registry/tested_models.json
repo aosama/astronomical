@@ -1,9 +1,9 @@
 [
   {
-    "model_id": "scottlowry/Ornith-1.5-35B-A3B-oQ6e-mtp",
-    "revision": "571c2bfc3550805d9b97fabec1351c149744d7a9",
-    "tested_at": "2026-08-23",
-    "notes": "Current sparse qualification fixture. Six indexed shards with vision and MTP metadata; model SSD-streaming and live-memory-ceiling journeys passed."
+    "model_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
+    "revision": "5eec9f738580bca48a13054e1e3966bc239db0e9",
+    "tested_at": "2026-08-29",
+    "notes": "Current catalog offer and reference fixture. Five indexed language shards with a separate bf16 OptiQ vision sidecar (optiq/optiq_vision.safetensors) and an int4 MTP head (optiq/mtp.safetensors). OptiQ static 5.5 BPW, affine, group 64; 40 layers, 256 experts, 8 routed."
   },
   {
     "model_id": "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
