@@ -4,24 +4,24 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.23</title>
-            <pubDate>Sat, 29 Aug 2026 10:08:38 -0400</pubDate>
-            <sparkle:version>375</sparkle:version>
-            <sparkle:shortVersionString>0.2.23</sparkle:shortVersionString>
+            <title>0.2.24</title>
+            <pubDate>Sat, 29 Aug 2026 10:44:20 -0400</pubDate>
+            <sparkle:version>378</sparkle:version>
+            <sparkle:shortVersionString>0.2.24</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.23
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.24
 
-If a folder listed in model_directories is deleted or otherwise unreadable, Astronomical keeps running and continues to serve models from the remaining directories instead of exiting during discovery. The menu retries daemon startup after an early exit instead of remaining in the status bar while the local server is down. Status reports a path-free unavailable_model_directory diagnostic for the missing configuration entry.
+The Library catalog now offers Ornith 1.5 35B A3B OptiQ Static 5.5bpw and Ornith 1.5 9B Vision OptiQ Static 4.5bpw for download. FLUX.2 Klein 4B remains available.
 
-Existing configuration, model directories, and prompt-cache state are preserved. Invalid configuration documents still fail closed.
+Existing configuration, already-downloaded models, and prompt-cache state are preserved.
 
 This release is Developer ID signed, notarized, and stapled for macOS arm64.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.23/Astronomical-0.2.23-macOS-arm64.dmg" length="15741136" type="application/octet-stream" sparkle:edSignature="sCEkdf7mpZnkiMkQKWpY+9uv1Fy1T1iWe+4nvvXPFj55IXf+B9xBBj5WP0wkO6J78Qb5QwTboZYXJIfpYbzMCQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.24/Astronomical-0.2.24-macOS-arm64.dmg" length="15742182" type="application/octet-stream" sparkle:edSignature="8ILGtTiW2vedgnq+mzCV+ba4/aTihhHcjj3Uj2bpVYD9/xXTnOJw7FfeZWeUZ+IBX0XPRr7BGkZy1XYN4EUDBA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 7odb5Hysria2UAa37RpSqZiaRD3WJSwAp8HQEmavSy76wyYR90s1/NYixpIIKstjKb/4SxcYg9AW+Az+34CfBw==
-length: 1888
+edSignature: DIKQB1OGUn4FytQsNsWWoZr5S0SWtia7SnlWbHBas57dPoeuZMLBTnZ0duAitz7ouZZGncV63+3He1WTmw4pCw==
+length: 1582
 -->
