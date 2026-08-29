@@ -27,6 +27,9 @@ struct ModelDiscoveryDiagnosticDocument: Codable, Equatable {
 
   var message: String {
     let entries = configuredRootNumbers.map(String.init).joined(separator: ", ")
+    if code == "unavailable_model_directory" {
+      return "model_directories entry \(entries) is missing or unreadable. Other models remain available."
+    }
     return "Model \(modelID) appears in model_directories entries \(entries). Remove one duplicate root."
   }
 

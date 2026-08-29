@@ -115,6 +115,63 @@ async fn should_preserve_live_serving_and_expose_path_safe_duplicate_model_feedb
 }
 
 #[tokio::test]
+async fn should_apply_reload_when_an_authored_model_directory_is_missing() {
+    let temporary_home = tempfile::tempdir().expect("a temporary home should be created");
+    let missing_root = temporary_home.path().join("deleted-models");
+    let available_root = temporary_home.path().join("available-models");
+    write_minimal_qwen_model(&available_root.join("kept-model"));
+    write_config_file(
+        temporary_home.path(),
+        &serde_json::json!({
+            "runtime": { "model_directories": [missing_root, available_root] }
+        })
+        .to_string(),
+    );
+    let initial_resolved_config = sample_resolved_config();
+    let reloadable_config = Arc::new(RwLock::new(initial_resolved_config.clone()));
+    let application = build_development_application_with_reload(
+        ScriptedExecutor::ready(Vec::new()),
+        Arc::clone(&reloadable_config),
+        temporary_home.path().to_path_buf(),
+    );
+
+    let response = post_config_reload(&application).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = to_bytes(response.into_body(), 4 * 1024)
+        .await
+        .expect("the reload response should be readable");
+    let response_text = String::from_utf8_lossy(&response_body);
+    assert!(!response_text.contains(temporary_home.path().to_string_lossy().as_ref()));
+
+    let status_response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("status should remain available");
+    let status_body = to_bytes(status_response.into_body(), 16 * 1024)
+        .await
+        .expect("status should remain readable");
+    let status_json: serde_json::Value =
+        serde_json::from_slice(&status_body).expect("status should contain JSON");
+    assert_eq!(
+        status_json["configuration"]["model_discovery_diagnostics"][0]["code"],
+        "unavailable_model_directory"
+    );
+    assert_eq!(
+        status_json["configuration"]["model_discovery_diagnostics"][0]["configured_root_numbers"],
+        serde_json::json!([1])
+    );
+    assert!(
+        !String::from_utf8_lossy(&status_body)
+            .contains(temporary_home.path().to_string_lossy().as_ref())
+    );
+}
+
+#[tokio::test]
 async fn should_reject_retired_top_level_speculative_prefill_configuration() {
     let temporary_config_directory =
         tempfile::tempdir().expect("a temporary config directory is needed");

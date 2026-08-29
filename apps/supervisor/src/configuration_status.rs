@@ -148,7 +148,7 @@ impl ConfigurationStatusSummary {
                         .model_discovery_diagnostics
                         .iter()
                         .map(|diagnostic| ModelDiscoveryDiagnosticSummary {
-                            code: "ambiguous_model_identity",
+                            code: diagnostic.code.as_static_str(),
                             model_id: diagnostic.model_id.clone(),
                             configured_root_numbers: diagnostic.configured_root_numbers.clone(),
                         })

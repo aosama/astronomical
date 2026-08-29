@@ -77,6 +77,50 @@ final class DaemonControlTests: XCTestCase {
   }
 
   @MainActor
+  func test_should_retry_daemon_startup_after_an_early_exit_until_the_server_is_ready() async throws {
+    let scriptDirectoryURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: scriptDirectoryURL, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: scriptDirectoryURL) }
+    let failOnceScriptURL = scriptDirectoryURL.appendingPathComponent("fail-once-daemon.sh")
+    let failOnceMarkerURL = scriptDirectoryURL.appendingPathComponent("started-once")
+    try """
+    #!/bin/sh
+    if [ ! -f "$1" ]; then
+      touch "$1"
+      exit 1
+    fi
+    exec /bin/sleep 30
+    """.write(to: failOnceScriptURL, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755], ofItemAtPath: failOnceScriptURL.path)
+
+    let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: failOnceScriptURL.path)
+    defer { testContext.removeTemporaryDirectory() }
+    let supervisorClient = DelayedReadinessSupervisorClient(readyAfterCheckCount: 1)
+    let daemonLifecycleController = testContext.makeController(
+      supervisorClient: supervisorClient,
+      daemonArguments: [failOnceMarkerURL.path],
+      readinessTimeout: .milliseconds(250))
+    defer { daemonLifecycleController.stopOwnedDaemon() }
+    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let maintenanceCompleted = expectation(description: "daemon became ready after retry")
+
+    let maintenanceTask = Task { @MainActor in
+      await maintainDaemonForApplication(
+        daemonLifecycleController: daemonLifecycleController,
+        telemetryStore: telemetryStore,
+        retryDelay: .milliseconds(20))
+      maintenanceCompleted.fulfill()
+    }
+    await fulfillment(of: [maintenanceCompleted], timeout: 2)
+    maintenanceTask.cancel()
+
+    XCTAssertTrue(daemonLifecycleController.ownsDaemon)
+    XCTAssertNil(telemetryStore.controlActionFeedback)
+  }
+
+  @MainActor
   func test_should_present_a_startup_configuration_failure_in_control_feedback() async throws {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/usr/bin/false")
     defer { testContext.removeTemporaryDirectory() }

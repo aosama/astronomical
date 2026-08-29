@@ -11,8 +11,8 @@ use std::sync::Arc;
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
     AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError, LogLevel, LoggingConfig,
-    ModelCapabilities, ModelDiscoveryDiagnostic, PromptCacheConfig, ResolvedModelConfig,
-    discover_models, discover_models_excluding_ambiguous_identities,
+    ModelCapabilities, ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, PromptCacheConfig,
+    ResolvedModelConfig, discover_models, discover_models_excluding_ambiguous_identities,
 };
 use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
 use thiserror::Error;
@@ -121,6 +121,10 @@ impl ResolvedRuntimeConfigResolver {
         let configured_model_directories = user_config.model_directories().to_vec();
         let (mut discovered_models, model_discovery_diagnostics) =
             self.discover_effective_models(&configured_model_directories)?;
+        log_unavailable_model_directories(
+            &configured_model_directories,
+            &model_discovery_diagnostics,
+        );
         let discovered_model_ids = discovered_models
             .iter()
             .map(|discovered_model| discovered_model.model_id.clone())
@@ -192,8 +196,8 @@ impl ResolvedRuntimeConfigResolver {
         let automatic_model_directory = self.instance_paths.models_directory();
         let mut ordered_model_directories =
             Vec::with_capacity(configured_model_directories.len() + 1);
-        // Only the automatic occurrence is optional; an authored occurrence must reach discovery
-        // so a missing configured root retains its actionable failure.
+        // An absent automatic Library root stays optional. Authored roots that the user deleted
+        // are skipped later during discovery so remaining models still start.
         match automatic_model_directory.try_exists() {
             Ok(true) => ordered_model_directories.push(automatic_model_directory.clone()),
             Ok(false) => {}
@@ -304,7 +308,7 @@ pub enum ResolvedRuntimeConfigError {
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to discover models")]
+    #[error("failed to discover models: {0}")]
     ModelDiscovery(#[from] DiscoveredModelError),
     #[error("failed to derive the resolved configuration generation")]
     ResolvedGeneration(#[from] serde_json::Error),
@@ -480,4 +484,30 @@ fn apply_effective_model_limits(
     capabilities.max_input_tokens = effective_maximum_context_tokens.saturating_sub(1);
     capabilities.max_output_tokens =
         u32::from(u16::MAX).min(effective_maximum_context_tokens.saturating_sub(1));
+}
+
+fn log_unavailable_model_directories(
+    configured_model_directories: &[PathBuf],
+    model_discovery_diagnostics: &[ModelDiscoveryDiagnostic],
+) {
+    for diagnostic in model_discovery_diagnostics {
+        if diagnostic.code != ModelDiscoveryDiagnosticCode::UnavailableModelDirectory {
+            continue;
+        }
+        for configured_root_number in &diagnostic.configured_root_numbers {
+            let model_directory =
+                configured_root_number
+                    .checked_sub(1)
+                    .and_then(|configured_root_index| {
+                        configured_model_directories.get(configured_root_index)
+                    });
+            tracing::warn!(
+                configured_root_number,
+                model_directory = model_directory
+                    .map(|model_directory| model_directory.display().to_string())
+                    .as_deref(),
+                "skipping unavailable model directory; remaining models stay available"
+            );
+        }
+    }
 }

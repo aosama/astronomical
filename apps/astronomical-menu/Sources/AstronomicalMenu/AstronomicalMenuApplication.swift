@@ -13,6 +13,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
+  private var daemonMaintenanceTask: Task<Void, Never>?
 
   nonisolated func applicationWillFinishLaunching(_ notification: Notification) {
     DispatchQueue.main.async { NSApp.setActivationPolicy(.regular) }
@@ -75,9 +76,9 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
         popoverIsShown: telemetryPopover?.isShown == true
       )
     }
-    Task { [weak self] in
+    daemonMaintenanceTask = Task { [weak self] in
       guard let self else { return }
-      await startDaemonForApplication(
+      await maintainDaemonForApplication(
         daemonLifecycleController: daemonLifecycleController,
         telemetryStore: telemetryStore)
     }
@@ -86,6 +87,8 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    daemonMaintenanceTask?.cancel()
+    daemonMaintenanceTask = nil
     telemetryStore.stopPolling()
     daemonLifecycleController.stopOwnedDaemon()
   }
@@ -170,8 +173,28 @@ func startDaemonForApplication(
 ) async {
   do {
     try await daemonLifecycleController.startDaemonIfNeeded()
+    telemetryStore.completeServerStartup()
   } catch {
     telemetryStore.failServerStartup(error)
+  }
+}
+
+@MainActor
+func maintainDaemonForApplication(
+  daemonLifecycleController: DaemonLifecycleController,
+  telemetryStore: TelemetryStore,
+  retryDelay: Duration = .seconds(5)
+) async {
+  // Keep trying after a bad config or missing folder so the menu does not sit on a dead port.
+  while !Task.isCancelled {
+    do {
+      try await daemonLifecycleController.startDaemonIfNeeded()
+      telemetryStore.completeServerStartup()
+      return
+    } catch {
+      telemetryStore.failServerStartup(error)
+      try? await Task.sleep(for: retryDelay)
+    }
   }
 }
 

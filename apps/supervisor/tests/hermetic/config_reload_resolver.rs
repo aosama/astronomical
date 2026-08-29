@@ -3,7 +3,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use astronomical_config::DiscoveredModelError;
 use astronomical_supervisor::{ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver};
 
 #[test]
@@ -259,6 +258,10 @@ fn should_keep_unrelated_models_available_and_report_duplicate_authored_identiti
     assert_eq!(discovered_model_ids, vec!["available-model"]);
     assert_eq!(resolved_config.model_discovery_diagnostics.len(), 1);
     assert_eq!(
+        resolved_config.model_discovery_diagnostics[0].code,
+        astronomical_config::ModelDiscoveryDiagnosticCode::AmbiguousModelIdentity
+    );
+    assert_eq!(
         resolved_config.model_discovery_diagnostics[0].model_id,
         "ambiguous-model"
     );
@@ -293,32 +296,40 @@ fn should_keep_unrelated_models_available_and_report_duplicate_authored_identiti
 }
 
 #[test]
-fn should_retain_the_configured_root_failure_when_the_missing_automatic_path_is_authored() {
+fn should_keep_remaining_models_when_an_authored_root_is_missing() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
-    let missing_models_directory = config_home_directory
-        .path()
-        .join(".astronomical-dev/models");
+    let missing_models_directory = config_home_directory.path().join("deleted-models");
+    let available_models_directory = config_home_directory.path().join("available-models");
+    write_minimal_qwen_model(&available_models_directory.join("kept-model"));
     write_development_config(
         config_home_directory.path(),
-        std::slice::from_ref(&missing_models_directory),
+        &[missing_models_directory, available_models_directory],
     );
     let resolver = development_resolver(config_home_directory.path());
 
-    let resolution_error = resolver
+    let resolved_config = resolver
         .load()
-        .expect_err("an authored missing root should retain its discovery failure");
+        .expect("a missing authored root must not prevent startup");
 
-    assert!(matches!(
-        resolution_error,
-        ResolvedRuntimeConfigError::ModelDiscovery(DiscoveredModelError::ReadDirectory {
-            directory_path,
-            ..
-        }) if directory_path == missing_models_directory
-    ));
+    assert_eq!(resolved_config.discovered_models.len(), 1);
+    assert_eq!(resolved_config.discovered_models[0].model_id, "kept-model");
+    assert_eq!(resolved_config.model_discovery_diagnostics.len(), 1);
+    assert_eq!(
+        resolved_config.model_discovery_diagnostics[0].code,
+        astronomical_config::ModelDiscoveryDiagnosticCode::UnavailableModelDirectory
+    );
+    assert_eq!(
+        resolved_config.model_discovery_diagnostics[0].configured_root_numbers,
+        vec![1]
+    );
+    assert!(
+        !format!("{:?}", resolved_config.model_discovery_diagnostics)
+            .contains(config_home_directory.path().to_string_lossy().as_ref())
+    );
 }
 
 #[test]
-fn should_fail_closed_when_the_existing_automatic_models_path_is_not_a_directory() {
+fn should_start_when_the_automatic_models_path_is_not_a_directory() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
     write_development_config(config_home_directory.path(), &[]);
     let resolver = development_resolver(config_home_directory.path());
@@ -326,17 +337,12 @@ fn should_fail_closed_when_the_existing_automatic_models_path_is_not_a_directory
     fs::write(&automatic_models_directory, b"not a directory")
         .expect("the non-directory fixture should be written");
 
-    let resolution_error = resolver
+    let resolved_config = resolver
         .load()
-        .expect_err("an invalid automatic root should fail closed");
+        .expect("a non-directory automatic root must not prevent startup");
 
-    assert!(matches!(
-        resolution_error,
-        ResolvedRuntimeConfigError::ModelDiscovery(DiscoveredModelError::ReadDirectory {
-            directory_path,
-            ..
-        }) if directory_path == automatic_models_directory
-    ));
+    assert!(resolved_config.discovered_models.is_empty());
+    assert!(resolved_config.model_discovery_diagnostics.is_empty());
 }
 
 #[cfg(unix)]
