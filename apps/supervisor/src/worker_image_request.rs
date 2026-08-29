@@ -10,9 +10,9 @@ use astronomical_ipc_protocol::{ImageGenerationCommand, ProtocolError};
 use tokio::time::{Instant, timeout};
 
 use crate::{
-    GenerationPerformanceLog, GenerationStartError, ImageGenerationExecutionError,
-    ImageGenerationOutput, ImageGenerationTimeouts, RuntimeModelPolicy, WorkerActivity,
-    WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
+    CompletionAttributionLog, GenerationPerformanceLog, GenerationStartError,
+    ImageGenerationExecutionError, ImageGenerationOutput, ImageGenerationTimeouts,
+    RuntimeModelPolicy, WorkerActivity, WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
     worker_containment::{cancel_active_generation, contain_worker_failure},
     worker_health::{clear_active_request_progress, publish_activity},
     worker_loop_types::{ActiveImageGeneration, ActiveWorkerRequest},
@@ -35,6 +35,7 @@ pub(super) async fn handle_generate_image_command(
     model_load_deadline: &mut Option<Instant>,
     active_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
     model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
     model_load_timeout: Duration,
     cancellation_acknowledgement_timeout: Duration,
@@ -88,6 +89,7 @@ pub(super) async fn handle_generate_image_command(
                 model_load_deadline,
                 active_request,
                 performance_log,
+                completion_log,
                 expected_configuration_generation.as_deref(),
                 &expected_model_runtime_configuration,
             ),

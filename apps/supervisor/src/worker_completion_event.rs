@@ -1,8 +1,9 @@
 //! Completion-event validation, local performance logging, and stream delivery.
 //!
-//! Worker completion has three audiences with different contracts: protocol
+//! Worker completion has four audiences with different contracts: protocol
 //! validation protects supervisor state, the local performance log receives
-//! cache diagnostics, and the public stream receives only OpenAI-compatible
+//! cache diagnostics, the completion attribution log receives emitted tool
+//! calls when enabled, and the public stream receives only OpenAI-compatible
 //! completion fields. Keeping the fan-out here makes that separation explicit.
 
 use std::sync::{Arc, RwLock};
@@ -12,9 +13,10 @@ use astronomical_ipc_protocol::{
 };
 
 use crate::{
-    ChatGenerationStreamEvent, GenerationPerformanceLog, GenerationPerformanceRecord,
-    WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
+    ChatGenerationStreamEvent, CompletionAttributionLog, GenerationPerformanceLog,
+    GenerationPerformanceRecord, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
+    completion_attribution_log::record_completion_at_now,
     generation_performance_log::unix_epoch_millis,
     worker_event_handler::protocol_violation,
     worker_health::{clear_active_request_progress, publish_activity, record_serving_session},
@@ -33,6 +35,7 @@ pub(super) fn handle_worker_completion_event(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_worker_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
 ) -> Result<(), WorkerControlError> {
     // Cache diagnostics are request-scoped completion evidence. They go only to
     // the local performance row; the public generation stream keeps its stable
@@ -94,6 +97,12 @@ pub(super) fn handle_worker_completion_event(
         .ok()
         .flatten()
         .unwrap_or_default();
+    let completion_reason = match reason {
+        ChatGenerationCompletionReason::EndOfSequence => "end_of_sequence",
+        ChatGenerationCompletionReason::MaximumOutputTokens => "maximum_output_tokens",
+        ChatGenerationCompletionReason::ToolCalls => "tool_calls",
+        ChatGenerationCompletionReason::Cancelled => "cancelled",
+    };
     tracing::info!(
         request_id = request_id.value(),
         prompt_token_count,
@@ -113,17 +122,11 @@ pub(super) fn handle_worker_completion_event(
     performance_log.record(&GenerationPerformanceRecord {
         timestamp_millis: unix_epoch_millis(),
         request_id: request_id.value(),
-        model_id,
+        model_id: model_id.clone(),
         prompt_token_count,
         cached_token_count,
         generated_token_count,
-        completion_reason: match reason {
-            ChatGenerationCompletionReason::EndOfSequence => "end_of_sequence",
-            ChatGenerationCompletionReason::MaximumOutputTokens => "maximum_output_tokens",
-            ChatGenerationCompletionReason::ToolCalls => "tool_calls",
-            ChatGenerationCompletionReason::Cancelled => "cancelled",
-        }
-        .to_owned(),
+        completion_reason: completion_reason.to_owned(),
         prefill_elapsed_millis,
         generation_elapsed_millis,
         total_elapsed_millis,
@@ -140,6 +143,16 @@ pub(super) fn handle_worker_completion_event(
         mlx_active_memory_bytes: completed_request.last_mlx_active_memory_bytes,
         persistent_prompt_cache_diagnostics,
     });
+    // Attribute what the model emitted — function names and the arguments JSON —
+    // so argument pollution and foreign-dialect regressions are diagnosable
+    // instead of invisible. No-op unless the operator enabled the toggle.
+    record_completion_at_now(
+        completion_log,
+        request_id.value(),
+        &model_id,
+        completion_reason,
+        &completed_request.completed_tool_calls,
+    );
     record_serving_session(
         health_snapshot,
         prompt_token_count,

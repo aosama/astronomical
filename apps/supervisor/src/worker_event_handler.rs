@@ -10,8 +10,8 @@ use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
 
 use crate::{
-    ChatGenerationStreamEvent, ExpertResidencySnapshot, GenerationPerformanceLog, WorkerActivity,
-    WorkerControlError, WorkerHealthSnapshot,
+    ChatGenerationStreamEvent, CompletionAttributionLog, ExpertResidencySnapshot,
+    GenerationPerformanceLog, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
     worker_completion_event::handle_worker_completion_event,
     worker_generation_output::{
@@ -42,6 +42,7 @@ pub(super) fn handle_worker_event(
     model_load_deadline: &mut Option<Instant>,
     active_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
 ) -> Result<(), WorkerControlError> {
     match worker_event {
         WorkerEvent::RuntimeFeatureConfigurationApplied {
@@ -284,6 +285,7 @@ pub(super) fn handle_worker_event(
                 health_snapshot,
                 active_request,
                 performance_log,
+                completion_log,
             )?;
         }
         WorkerEvent::Failed { request_id, reason } => {

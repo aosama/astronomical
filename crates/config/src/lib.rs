@@ -287,6 +287,22 @@ impl AstronomicalConfig {
             .unwrap_or(false)
     }
 
+    /// Returns whether completion attribution is enabled.
+    ///
+    /// Completion attribution captures the emitted tool calls and arguments of
+    /// each chat completion to a bounded log so tool-call argument pollution
+    /// and foreign-dialect regressions are diagnosable. It defaults to disabled
+    /// so normal inference never pays the attribution cost unless the operator
+    /// explicitly requests it.
+    #[must_use]
+    pub fn completion_attribution_enabled(&self) -> bool {
+        self.user_config_file
+            .diagnostics
+            .as_ref()
+            .and_then(|diagnostics| diagnostics.completion_attribution_enabled)
+            .unwrap_or(false)
+    }
+
     /// Returns whether the optional Qwen thinking-channel seed may be read.
     ///
     /// The experiment is opt-in so an existing `thinking.md` file cannot alter

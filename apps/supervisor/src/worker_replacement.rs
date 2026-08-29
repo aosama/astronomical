@@ -8,9 +8,10 @@ use astronomical_ipc_protocol::{
 use tokio::time::{Instant, timeout};
 
 use crate::{
-    GenerationPerformanceLog, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
-    WorkerHealthStatus, WorkerProcess, worker_event_handler::handle_worker_event,
-    worker_health::publish_health, worker_loop_types::ActiveWorkerRequest,
+    CompletionAttributionLog, GenerationPerformanceLog, RuntimeModelPolicy, WorkerControlError,
+    WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
+    worker_event_handler::handle_worker_event, worker_health::publish_health,
+    worker_loop_types::ActiveWorkerRequest,
 };
 
 const MAXIMUM_DEFERRED_CANDIDATE_PROCESS_EVENTS: usize = 64;
@@ -51,6 +52,7 @@ impl WorkerReplacement {
         model_load_deadline: &mut Option<Instant>,
         active_generation: &mut Option<ActiveWorkerRequest>,
         performance_log: &mut GenerationPerformanceLog,
+        completion_log: &mut CompletionAttributionLog,
     ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
         let replacement_started_at = Instant::now();
         tracing::info!(
@@ -170,6 +172,7 @@ impl WorkerReplacement {
             model_load_deadline,
             active_generation,
             performance_log,
+            completion_log,
         );
         if let Err(publish_error) = publish_result {
             let cleanup_error = trusted_worker_process.force_terminate().await.err();
@@ -322,6 +325,7 @@ fn publish_candidate_acknowledgement(
     model_load_deadline: &mut Option<Instant>,
     active_generation: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
 ) -> Result<(), WorkerControlError> {
     handle_worker_event(
         candidate_acknowledgement.readiness_event,
@@ -330,6 +334,7 @@ fn publish_candidate_acknowledgement(
         model_load_deadline,
         active_generation,
         performance_log,
+        completion_log,
     )?;
     handle_worker_event(
         WorkerEvent::RuntimeFeatureConfigurationApplied {
@@ -341,6 +346,7 @@ fn publish_candidate_acknowledgement(
         model_load_deadline,
         active_generation,
         performance_log,
+        completion_log,
     )?;
     for deferred_process_event in candidate_acknowledgement.deferred_process_events {
         handle_worker_event(
@@ -350,6 +356,7 @@ fn publish_candidate_acknowledgement(
             model_load_deadline,
             active_generation,
             performance_log,
+            completion_log,
         )?;
     }
     Ok(())

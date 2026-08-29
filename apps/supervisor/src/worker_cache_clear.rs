@@ -9,8 +9,8 @@ use crate::worker_containment::contain_worker_failure;
 use crate::worker_event_handler::handle_worker_event;
 use crate::worker_loop_types::ActiveWorkerRequest;
 use crate::{
-    GenerationPerformanceLog, GenerationQueueDepth, PendingPromptCacheClear, WorkerControlError,
-    WorkerHealthSnapshot, WorkerProcess,
+    CompletionAttributionLog, GenerationPerformanceLog, GenerationQueueDepth,
+    PendingPromptCacheClear, WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
 };
 
 /// Result returned to the HTTP request that submitted one cache clear.
@@ -36,6 +36,7 @@ pub(super) async fn apply_prompt_cache_clear(
     model_load_deadline: &mut Option<Instant>,
     active_generation: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
 ) -> Result<PromptCacheClearOutcome, WorkerControlError> {
     let requested_model_id = model_id.clone();
     let clear_result = timeout(cache_clear_timeout, async {
@@ -69,6 +70,7 @@ pub(super) async fn apply_prompt_cache_clear(
                 model_load_deadline,
                 active_generation,
                 performance_log,
+                completion_log,
             )?;
         }
     })
@@ -117,6 +119,7 @@ pub(super) async fn apply_pending_prompt_cache_clear_if_idle(
     is_ready: &mut bool,
     model_load_deadline: &mut Option<Instant>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
     active_generation_permits: &Semaphore,
     generation_queue_permits: &Semaphore,
 ) {
@@ -140,6 +143,7 @@ pub(super) async fn apply_pending_prompt_cache_clear_if_idle(
         model_load_deadline,
         active_generation,
         performance_log,
+        completion_log,
     )
     .await;
 }
@@ -156,6 +160,7 @@ pub(super) async fn handle_prompt_cache_clear_command(
     is_ready: &mut bool,
     model_load_deadline: &mut Option<Instant>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
     active_generation_permits: &Semaphore,
     generation_queue_permits: &Semaphore,
 ) {
@@ -181,6 +186,7 @@ pub(super) async fn handle_prompt_cache_clear_command(
         model_load_deadline,
         active_generation,
         performance_log,
+        completion_log,
     )
     .await;
     let _send_outcome = clear_sender.send(clear_outcome);

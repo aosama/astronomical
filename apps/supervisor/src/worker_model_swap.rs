@@ -8,7 +8,10 @@ use tokio::time::Instant;
 use crate::worker_event_handler::handle_worker_event;
 use crate::worker_health::publish_health;
 use crate::worker_loop_types::ActiveWorkerRequest;
-use crate::{GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot, WorkerProcess};
+use crate::{
+    CompletionAttributionLog, GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot,
+    WorkerProcess,
+};
 
 /// Result of waiting for a worker model-swap acknowledgement.
 pub(super) enum ModelSwapWaitOutcome {
@@ -28,6 +31,7 @@ pub(super) async fn wait_for_model_swap(
     model_load_deadline: &mut Option<Instant>,
     active_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
     expected_configuration_generation: Option<&str>,
     expected_model_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
 ) -> Result<ModelSwapWaitOutcome, WorkerControlError> {
@@ -126,6 +130,7 @@ pub(super) async fn wait_for_model_swap(
                             model_load_deadline,
                             active_request,
                             performance_log,
+                            completion_log,
                         )?;
                         tracing::debug!(
                             worker_event = interleaved_worker_event_summary,
