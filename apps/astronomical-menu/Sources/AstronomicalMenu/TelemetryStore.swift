@@ -199,6 +199,14 @@ final class TelemetryStore: ObservableObject {
     presentControlActionFeedback(.failure(controlActionErrorMessage(startupError)))
   }
 
+  func completeServerStartup() {
+    if case .failure = controlActionFeedback {
+      controlActionFeedbackDismissalTask?.cancel()
+      controlActionFeedbackDismissalTask = nil
+      controlActionFeedback = nil
+    }
+  }
+
   @discardableResult
   func refresh() async -> SupervisorStatusDocument {
     latestStatusRefreshSequence += 1

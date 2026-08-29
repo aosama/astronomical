@@ -63,4 +63,18 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
     XCTAssertEqual(diagnostic.message, "Model shared-model appears in model_directories entries 1, 2. Remove one duplicate root.")
     XCTAssertFalse(diagnostic.message.contains("private-root-marker"))
   }
+
+  func test_should_decode_unavailable_model_directory_feedback_for_the_menu() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"idle","configuration":{"configured_generation":"configured","resolved_generation":"resolved","effective_generation":"effective","is_effective":true,"restart_required":false,"model_discovery_diagnostics":[{"code":"unavailable_model_directory","model_id":"","configured_root_numbers":[4]}]}}"#.utf8
+      )
+    )
+
+    let diagnostic = try XCTUnwrap(statusDocument.configuration?.modelDiscoveryDiagnostics?.first)
+    XCTAssertEqual(diagnostic.code, "unavailable_model_directory")
+    XCTAssertEqual(diagnostic.configuredRootNumbers, [4])
+    XCTAssertFalse(diagnostic.message.contains("private-root-marker"))
+  }
 }

@@ -15,11 +15,12 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     let mut resolved_config = sample_resolved_config();
     resolved_config.configuration_generation = configured_generation.to_owned();
     resolved_config.unmatched_model_config_ids = vec!["fictional/dormant-model".to_owned()];
-    resolved_config.model_discovery_diagnostics =
-        vec![astronomical_config::ModelDiscoveryDiagnostic {
-            model_id: "ambiguous-model".to_owned(),
-            configured_root_numbers: vec![1, 3],
-        }];
+    resolved_config.model_discovery_diagnostics = vec![
+        astronomical_config::ModelDiscoveryDiagnostic::ambiguous_model_identity(
+            "ambiguous-model",
+            vec![1, 3],
+        ),
+    ];
     let configured_worker_model_configuration = worker_model_configuration(false);
     let effective_worker_model_configuration = worker_model_configuration(true);
     resolved_config.model_policy_catalog = Arc::new(HashMap::from([(
@@ -176,6 +177,47 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     let status_text = String::from_utf8(status_bytes.to_vec()).expect("status should be UTF-8");
     assert!(!status_text.contains("/fictional/private"));
     assert!(!status_text.contains("prompt-cache"));
+}
+
+#[tokio::test]
+async fn should_expose_unavailable_model_directory_diagnostics_without_paths() {
+    let mut resolved_config = sample_resolved_config();
+    resolved_config.model_discovery_diagnostics =
+        vec![astronomical_config::ModelDiscoveryDiagnostic::unavailable_model_directory(4)];
+    let temporary_home = tempfile::tempdir().expect("status config home should exist");
+    let application = build_development_application_with_reload(
+        ScriptedExecutor::ready(Vec::new()),
+        Arc::new(RwLock::new(resolved_config)),
+        temporary_home.path().to_path_buf(),
+    );
+
+    let status_response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("status request should be valid"),
+        )
+        .await
+        .expect("status response should be returned");
+    let status_bytes = to_bytes(status_response.into_body(), 64 * 1024)
+        .await
+        .expect("status response should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&status_bytes).expect("status should contain JSON");
+
+    assert_eq!(
+        status_document["configuration"]["model_discovery_diagnostics"],
+        serde_json::json!([{
+            "code": "unavailable_model_directory",
+            "model_id": "",
+            "configured_root_numbers": [4]
+        }])
+    );
+    assert!(
+        !String::from_utf8_lossy(&status_bytes)
+            .contains(temporary_home.path().to_string_lossy().as_ref())
+    );
 }
 
 fn worker_model_configuration(mtp_enabled: bool) -> WorkerModelConfiguration {

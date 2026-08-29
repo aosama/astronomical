@@ -76,7 +76,15 @@ pub(crate) async fn reload_config(State(application_state): State<ApplicationSta
             candidate_resolved.clone();
     }
     let candidate_generation = candidate_resolved.configuration_generation.clone();
-    if let Some(discovery_diagnostic) = candidate_resolved.model_discovery_diagnostics.first() {
+    if let Some(discovery_diagnostic) =
+        candidate_resolved
+            .model_discovery_diagnostics
+            .iter()
+            .find(|diagnostic| {
+                diagnostic.code
+                    == astronomical_config::ModelDiscoveryDiagnosticCode::AmbiguousModelIdentity
+            })
+    {
         let configured_root_numbers = discovery_diagnostic
             .configured_root_numbers
             .iter()

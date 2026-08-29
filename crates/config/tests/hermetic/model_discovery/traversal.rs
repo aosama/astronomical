@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_config::{AstronomicalConfig, DiscoveredModelError};
+use astronomical_config::{AstronomicalConfig, DiscoveredModelError, ModelDiscoveryDiagnosticCode};
 
 use crate::hermetic::write_config;
 
@@ -112,6 +112,45 @@ fn should_exclude_ambiguous_models_and_report_path_safe_configured_root_numbers(
     );
     let diagnostic_debug_text = format!("{:?}", discovery_report.diagnostics[0]);
     assert!(!diagnostic_debug_text.contains(temporary_directory.path().to_string_lossy().as_ref()));
+}
+
+#[test]
+fn should_skip_an_unreadable_authored_root_and_keep_models_from_remaining_roots() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let missing_root_directory = temporary_directory.path().join("deleted-models");
+    let available_root_directory = temporary_directory.path().join("available-models");
+    let available_model_directory = available_root_directory.join("KeptModel");
+    fs::create_dir_all(&available_model_directory)
+        .expect("available model directory should be created");
+    write_minimal_model_config(&available_model_directory, "qwen3_5_moe", 262_144);
+    write_required_model_files(&available_model_directory);
+
+    let discovery_report = astronomical_config::discover_models_excluding_ambiguous_identities(&[
+        missing_root_directory,
+        available_root_directory,
+    ])
+    .expect("an unreadable authored root should not fail discovery");
+    let discovered_model_ids = discovery_report
+        .directory_scans
+        .iter()
+        .flat_map(|directory_scan| &directory_scan.discovered_models)
+        .map(|discovered_model| discovered_model.model_id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(discovered_model_ids, vec!["KeptModel"]);
+    assert_eq!(discovery_report.diagnostics.len(), 1);
+    assert_eq!(
+        discovery_report.diagnostics[0].code,
+        ModelDiscoveryDiagnosticCode::UnavailableModelDirectory
+    );
+    assert_eq!(
+        discovery_report.diagnostics[0].configured_root_numbers,
+        vec![1]
+    );
+    assert!(
+        !format!("{:?}", discovery_report.diagnostics)
+            .contains(temporary_directory.path().to_string_lossy().as_ref())
+    );
 }
 
 #[test]

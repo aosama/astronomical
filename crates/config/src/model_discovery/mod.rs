@@ -118,12 +118,61 @@ pub struct ModelDiscoveryDirectoryScan {
     pub discovered_models: Vec<DiscoveredModel>,
 }
 
-/// Path-safe explanation for one public identity excluded from tolerant discovery.
+/// Path-safe discovery warning published on status without exposing filesystem paths.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModelDiscoveryDiagnosticCode {
+    /// The same public identity exists under more than one authored root.
+    AmbiguousModelIdentity,
+    /// An authored `model_directories` entry cannot be read, usually because the user deleted it.
+    UnavailableModelDirectory,
+}
+
+impl ModelDiscoveryDiagnosticCode {
+    #[must_use]
+    pub const fn as_static_str(self) -> &'static str {
+        match self {
+            Self::AmbiguousModelIdentity => "ambiguous_model_identity",
+            Self::UnavailableModelDirectory => "unavailable_model_directory",
+        }
+    }
+}
+
+/// Path-safe explanation for one discovery warning that must not include local paths.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModelDiscoveryDiagnostic {
+    pub code: ModelDiscoveryDiagnosticCode,
     pub model_id: String,
     /// One-based positions in the authored `model_directories` array.
     pub configured_root_numbers: Vec<usize>,
+}
+
+impl ModelDiscoveryDiagnostic {
+    #[must_use]
+    pub fn ambiguous_model_identity(
+        model_id: impl Into<String>,
+        configured_root_numbers: Vec<usize>,
+    ) -> Self {
+        Self {
+            code: ModelDiscoveryDiagnosticCode::AmbiguousModelIdentity,
+            model_id: model_id.into(),
+            configured_root_numbers,
+        }
+    }
+
+    #[must_use]
+    pub fn unavailable_model_directory(configured_root_number: usize) -> Self {
+        Self {
+            code: ModelDiscoveryDiagnosticCode::UnavailableModelDirectory,
+            model_id: String::new(),
+            configured_root_numbers: vec![configured_root_number],
+        }
+    }
+}
+
+/// Outcome of scanning one configured root. Missing folders are skipped so the rest of the catalog stays available.
+enum ScannedModelRoot {
+    Available(Vec<DiscoveredModel>),
+    Unavailable,
 }
 
 /// Executable models and bounded ambiguity diagnostics from authored roots.
@@ -146,7 +195,10 @@ pub fn discover_models(
 ) -> Result<Vec<ModelDiscoveryDirectoryScan>, DiscoveredModelError> {
     let mut directory_scans = Vec::with_capacity(model_directories.len());
     for directory_path in model_directories {
-        let discovered_models = scan_directory_for_executable_models(directory_path)?;
+        let discovered_models = match scan_directory_for_executable_models(directory_path)? {
+            ScannedModelRoot::Available(discovered_models) => discovered_models,
+            ScannedModelRoot::Unavailable => Vec::new(),
+        };
         directory_scans.push(ModelDiscoveryDirectoryScan {
             path: directory_path.clone(),
             discovered_models,
@@ -162,9 +214,20 @@ pub fn discover_models_excluding_ambiguous_identities(
 ) -> Result<ModelDiscoveryReport, DiscoveredModelError> {
     let mut directory_scans = Vec::with_capacity(model_directories.len());
     let mut scanned_directories = std::collections::BTreeSet::new();
-    for directory_path in model_directories {
+    let mut diagnostics = Vec::new();
+    for (root_index, directory_path) in model_directories.iter().enumerate() {
         let discovered_models = if scanned_directories.insert(directory_path.clone()) {
-            scan_directory_for_executable_models(directory_path)?
+            match scan_directory_for_executable_models(directory_path)? {
+                ScannedModelRoot::Available(discovered_models) => discovered_models,
+                ScannedModelRoot::Unavailable => {
+                    if diagnostics.len() < MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS {
+                        diagnostics.push(ModelDiscoveryDiagnostic::unavailable_model_directory(
+                            root_index + 1,
+                        ));
+                    }
+                    Vec::new()
+                }
+            }
         } else {
             Vec::new()
         };
@@ -184,7 +247,6 @@ pub fn discover_models_excluding_ambiguous_identities(
         }
     }
     let mut ambiguous_model_ids = std::collections::BTreeSet::new();
-    let mut diagnostics = Vec::new();
     for (model_id, mut configured_root_numbers) in model_id_to_root_numbers {
         if configured_root_numbers.len() < 2 {
             continue;
@@ -193,10 +255,10 @@ pub fn discover_models_excluding_ambiguous_identities(
         configured_root_numbers.dedup();
         ambiguous_model_ids.insert(model_id.clone());
         if diagnostics.len() < MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS {
-            diagnostics.push(ModelDiscoveryDiagnostic {
+            diagnostics.push(ModelDiscoveryDiagnostic::ambiguous_model_identity(
                 model_id,
                 configured_root_numbers,
-            });
+            ));
         }
     }
     for directory_scan in &mut directory_scans {
@@ -218,10 +280,13 @@ pub fn discover_models_excluding_ambiguous_identities(
 /// Each family root is classified before family-owned executable validation.
 fn scan_directory_for_executable_models(
     root_directory: &Path,
-) -> Result<Vec<DiscoveredModel>, DiscoveredModelError> {
+) -> Result<ScannedModelRoot, DiscoveredModelError> {
     let mut discovered_models = Vec::new();
-    scan_directory_recursive(root_directory, 0, &mut discovered_models)?;
-    Ok(discovered_models)
+    match scan_directory_recursive(root_directory, 0, &mut discovered_models) {
+        Ok(()) => Ok(ScannedModelRoot::Available(discovered_models)),
+        Err(DiscoveredModelError::ReadDirectory { .. }) => Ok(ScannedModelRoot::Unavailable),
+        Err(error) => Err(error),
+    }
 }
 
 fn scan_directory_recursive(
