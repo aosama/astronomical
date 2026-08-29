@@ -84,6 +84,11 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
         "application-restart"
     );
     assert_eq!(
+        checked_in_schema_json["$defs"]["diagnostics"]["properties"]["completion_attribution_enabled"]
+            ["x-astronomical-apply-mode"],
+        "application-restart"
+    );
+    assert_eq!(
         checked_in_schema_json["$defs"]["mtp"]["properties"]["enabled"]["default"],
         false
     );
@@ -111,6 +116,7 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
     );
     assert!(astronomical_config.persistent_prompt_cache_enabled());
     assert!(!astronomical_config.performance_attribution_enabled());
+    assert!(!astronomical_config.completion_attribution_enabled());
     assert!(!astronomical_config.experimental_qwen_thinking_channel_seed_enabled());
 }
 

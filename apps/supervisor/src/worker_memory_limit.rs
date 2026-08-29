@@ -9,7 +9,10 @@ use tokio::time::{Instant, timeout};
 use crate::worker_containment::contain_worker_failure;
 use crate::worker_event_handler::handle_worker_event;
 use crate::worker_loop_types::ActiveWorkerRequest;
-use crate::{GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot, WorkerProcess};
+use crate::{
+    CompletionAttributionLog, GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot,
+    WorkerProcess,
+};
 
 /// Completion state returned by a live MLX memory-limit request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,6 +33,7 @@ pub(super) async fn apply_mlx_memory_limit(
     model_load_deadline: &mut Option<Instant>,
     active_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
 ) -> Result<MlxMemoryLimitUpdateOutcome, WorkerControlError> {
     let update_outcome = timeout(memory_limit_update_timeout, async {
         worker_process
@@ -56,6 +60,7 @@ pub(super) async fn apply_mlx_memory_limit(
                 model_load_deadline,
                 active_request,
                 performance_log,
+                completion_log,
             )?;
             if let Some(memory_limit_update_outcome) = memory_limit_update_outcome {
                 return Ok(memory_limit_update_outcome);

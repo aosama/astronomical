@@ -9,9 +9,9 @@ use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::{
-    ChatGenerationStreamEvent, GenerationStartError, ImageGenerationExecutionError,
-    ImageGenerationOutput, MlxMemoryLimitUpdateOutcome, PromptCacheClearOutcome,
-    RuntimeModelPolicy, WorkerControlError, WorkerTerminationOutcome,
+    ChatGenerationStreamEvent, CompletedToolCall, GenerationStartError,
+    ImageGenerationExecutionError, ImageGenerationOutput, MlxMemoryLimitUpdateOutcome,
+    PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerTerminationOutcome,
 };
 
 pub(crate) enum WorkerLoopCommand {
@@ -128,6 +128,9 @@ pub(crate) struct ActiveGeneration {
     pub(crate) max_output_tokens: u16,
     pub(crate) next_sequence_number: u16,
     pub(crate) next_tool_call_index: u16,
+    /// Tool calls emitted so far, accumulated for completion attribution.
+    /// Bounded at write time so the completion log never grows without bound.
+    pub(crate) completed_tool_calls: Vec<CompletedToolCall>,
     pub(crate) request_started_at: Instant,
     pub(crate) prefill_elapsed_millis: u64,
     pub(crate) maximum_mlx_peak_memory_bytes: Option<u64>,

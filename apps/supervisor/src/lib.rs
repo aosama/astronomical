@@ -5,6 +5,7 @@ mod application_build_identity;
 mod cache_clear_endpoint;
 mod chat_diagnostics;
 mod chat_generation_executor;
+mod completion_attribution_log;
 mod config_reload;
 mod config_reload_endpoint;
 mod config_reload_response;
@@ -87,6 +88,10 @@ pub use chat_diagnostics::{
 pub use chat_generation_executor::{
     ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
     GenerationStartError,
+};
+pub use completion_attribution_log::{
+    CompletedToolCall, CompletionArgumentsRecord, CompletionAttributionLog,
+    CompletionAttributionRecord, CompletionToolCallRecord,
 };
 pub use config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,

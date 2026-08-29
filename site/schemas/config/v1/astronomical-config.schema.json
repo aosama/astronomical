@@ -304,6 +304,12 @@
           "description": "Whether critical-path operations emit detailed performance attribution.",
           "x-astronomical-apply-mode": "application-restart"
         },
+        "completion_attribution_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether completed chat generations record emitted tool-call names and bounded arguments.",
+          "x-astronomical-apply-mode": "application-restart"
+        },
         "log_level": {
           "type": "string",
           "enum": ["error", "warn", "info", "debug", "trace"],

@@ -6,9 +6,9 @@ use std::{
 };
 
 use crate::{
-    GenerationPerformanceLog, ImageGenerationTimeouts, PromptCacheClearOutcome, RuntimeModelPolicy,
-    WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
-    WorkerTerminationOutcome,
+    CompletionAttributionLog, GenerationPerformanceLog, ImageGenerationTimeouts,
+    PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
+    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
 };
 use astronomical_ipc_protocol::{WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
 use tokio::sync::{Semaphore, mpsc, oneshot};
@@ -84,6 +84,7 @@ impl WorkerHandle {
             DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
             ImageGenerationTimeouts::DEFAULT,
             performance_log,
+            CompletionAttributionLog::disabled(),
             model_policy_catalog,
             None,
         )
@@ -104,6 +105,7 @@ impl WorkerHandle {
             DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
             ImageGenerationTimeouts::DEFAULT,
             performance_log,
+            CompletionAttributionLog::disabled(),
             model_policy_catalog,
             Some(worker_startup_configuration),
         )
@@ -116,6 +118,7 @@ impl WorkerHandle {
         worker_model_load_timeout: Duration,
         image_generation_timeouts: ImageGenerationTimeouts,
         performance_log: GenerationPerformanceLog,
+        completion_log: CompletionAttributionLog,
         model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: WorkerStartupConfiguration,
     ) -> Result<Self, WorkerControlError> {
@@ -125,6 +128,7 @@ impl WorkerHandle {
             DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT,
             image_generation_timeouts,
             performance_log,
+            completion_log,
             model_policy_catalog,
             Some(worker_startup_configuration),
         )
@@ -145,6 +149,7 @@ impl WorkerHandle {
             worker_cancellation_acknowledgement_timeout,
             ImageGenerationTimeouts::DEFAULT,
             performance_log,
+            CompletionAttributionLog::disabled(),
             model_policy_catalog,
             None,
         )
@@ -166,6 +171,7 @@ impl WorkerHandle {
             worker_cancellation_acknowledgement_timeout,
             image_generation_timeouts,
             performance_log,
+            CompletionAttributionLog::disabled(),
             model_policy_catalog,
             None,
         )
@@ -178,6 +184,7 @@ impl WorkerHandle {
         worker_cancellation_acknowledgement_timeout: Duration,
         image_generation_timeouts: ImageGenerationTimeouts,
         performance_log: GenerationPerformanceLog,
+        completion_log: CompletionAttributionLog,
         model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         worker_startup_configuration: Option<WorkerStartupConfiguration>,
     ) -> Result<Self, WorkerControlError> {
@@ -206,6 +213,7 @@ impl WorkerHandle {
             worker_cancellation_acknowledgement_timeout,
             image_generation_timeouts,
             performance_log,
+            completion_log,
             model_policy_catalog,
             Arc::clone(&active_generation_permits),
             Arc::clone(&generation_queue_permits),

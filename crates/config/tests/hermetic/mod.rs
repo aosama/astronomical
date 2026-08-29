@@ -1,3 +1,4 @@
+mod completion_attribution;
 mod config;
 mod model_discovery;
 mod performance_attribution;
