@@ -230,6 +230,7 @@ fn build_migrated_config(
         models,
         diagnostics: Some(DiagnosticsConfigFile {
             performance_attribution_enabled: legacy_config.performance_attribution_enabled,
+            completion_attribution_enabled: None,
             log_level: legacy_config.logging.as_ref().map(|logging| logging.level),
             retained_log_files: legacy_config
                 .logging

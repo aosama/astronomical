@@ -22,10 +22,10 @@ use crate::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, apply_mlx_memory_limit, contain_mlx_memory_limit_failure,
 };
 use crate::{
-    ChatGenerationStreamErrorCode, GenerationPerformanceLog, GenerationStartError,
-    ImageGenerationExecutionError, ImageGenerationTimeouts, RuntimeModelPolicy, WorkerActivity,
-    WorkerControlError, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
-    WorkerTerminationOutcome,
+    ChatGenerationStreamErrorCode, CompletionAttributionLog, GenerationPerformanceLog,
+    GenerationStartError, ImageGenerationExecutionError, ImageGenerationTimeouts,
+    RuntimeModelPolicy, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
+    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
     chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect},
     worker_containment::{
         cancel_active_generation, close_worker_if_running, contain_worker_failure,
@@ -55,6 +55,7 @@ pub(crate) async fn run_worker(
     cancellation_acknowledgement_timeout: Duration,
     image_generation_timeouts: ImageGenerationTimeouts,
     mut performance_log: GenerationPerformanceLog,
+    mut completion_log: CompletionAttributionLog,
     mut model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     active_generation_permits: Arc<Semaphore>,
     generation_queue_permits: Arc<Semaphore>,
@@ -85,6 +86,7 @@ pub(crate) async fn run_worker(
                 &mut model_load_deadline,
                 &mut active_generation,
                 &mut performance_log,
+                &mut completion_log,
             )
             .await
             {
@@ -106,6 +108,7 @@ pub(crate) async fn run_worker(
             &mut is_ready,
             &mut model_load_deadline,
             &mut performance_log,
+            &mut completion_log,
             &active_generation_permits,
             &generation_queue_permits,
         )
@@ -157,6 +160,7 @@ pub(crate) async fn run_worker(
                             &mut model_load_deadline,
                             &mut active_generation,
                             &mut performance_log,
+                            &mut completion_log,
                             &model_policy_catalog,
                             model_load_timeout,
                             cancellation_acknowledgement_timeout,
@@ -198,6 +202,7 @@ pub(crate) async fn run_worker(
                             &mut model_load_deadline,
                             &mut active_generation,
                             &mut performance_log,
+                            &mut completion_log,
                             &model_policy_catalog,
                             model_load_timeout,
                             cancellation_acknowledgement_timeout,
@@ -267,6 +272,7 @@ pub(crate) async fn run_worker(
                             &mut model_load_deadline,
                             &mut active_generation,
                             &mut performance_log,
+                            &mut completion_log,
                         )
                         .await;
                         let _send_outcome = restart_sender.send(replacement_result);
@@ -299,6 +305,7 @@ pub(crate) async fn run_worker(
                             &mut model_load_deadline,
                             &mut active_generation,
                             &mut performance_log,
+                            &mut completion_log,
                         )
                         .await;
                         let _send_outcome = update_sender.send(update_outcome);
@@ -324,6 +331,7 @@ pub(crate) async fn run_worker(
                             &mut is_ready,
                             &mut model_load_deadline,
                             &mut performance_log,
+                            &mut completion_log,
                             &active_generation_permits,
                             &generation_queue_permits,
                         )
@@ -341,6 +349,7 @@ pub(crate) async fn run_worker(
                             &mut model_load_deadline,
                             &mut active_generation,
                             &mut performance_log,
+                            &mut completion_log,
                         ) {
                             if matches!(
                                 &event_handling_error,

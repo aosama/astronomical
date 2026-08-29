@@ -11,8 +11,8 @@ use astronomical_ipc_protocol::ProtocolError;
 use tokio::time::{Instant, timeout};
 
 use crate::{
-    GenerationPerformanceLog, GenerationStartError, RuntimeModelPolicy, WorkerActivity,
-    WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
+    CompletionAttributionLog, GenerationPerformanceLog, GenerationStartError, RuntimeModelPolicy,
+    WorkerActivity, WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
     worker_containment::{cancel_active_generation, contain_worker_failure},
     worker_health::{clear_active_request_progress, publish_activity},
     worker_loop_types::{ActiveGeneration, ActiveWorkerRequest},
@@ -30,6 +30,7 @@ pub(super) async fn handle_generate_command(
     model_load_deadline: &mut Option<Instant>,
     active_request: &mut Option<ActiveWorkerRequest>,
     performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
     model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
     model_load_timeout: Duration,
     cancellation_acknowledgement_timeout: Duration,
@@ -101,6 +102,7 @@ pub(super) async fn handle_generate_command(
                     model_load_deadline,
                     active_request,
                     performance_log,
+                    completion_log,
                     expected_configuration_generation.as_deref(),
                     &expected_model_runtime_configuration,
                 ),
@@ -189,6 +191,7 @@ pub(super) async fn handle_generate_command(
         max_output_tokens: request_max_output_tokens,
         next_sequence_number: 0,
         next_tool_call_index: 0,
+        completed_tool_calls: Vec::new(),
         request_started_at: Instant::now(),
         prefill_elapsed_millis: 0,
         maximum_mlx_peak_memory_bytes: None,

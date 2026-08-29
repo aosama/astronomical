@@ -7,12 +7,13 @@ use std::{
 
 use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
 use astronomical_supervisor::{
-    ApplicationBuildIdentity, AstronomicalInstanceLock, DownloadCatalog, DownloadCatalogError,
-    GenerationPerformanceLog, ImageGenerationTimeouts, LibraryDownloadCoordinatorError,
-    LibraryModelDiscoveryRefresh, ReqwestHubTransportBuildError, ResolvedRuntimeConfigError,
-    ResolvedRuntimeConfigResolver, ShutdownController, SupervisorPerformanceAttributionLog,
-    SupervisorPerformanceMeasurement, SupervisorPerformanceOperation, WorkerControlError,
-    WorkerHandle, build_application_with_full_control_and_library_download,
+    ApplicationBuildIdentity, AstronomicalInstanceLock, CompletionAttributionLog, DownloadCatalog,
+    DownloadCatalogError, GenerationPerformanceLog, ImageGenerationTimeouts,
+    LibraryDownloadCoordinatorError, LibraryModelDiscoveryRefresh, ReqwestHubTransportBuildError,
+    ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver, ShutdownController,
+    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
+    SupervisorPerformanceOperation, WorkerControlError, WorkerHandle,
+    build_application_with_full_control_and_library_download,
 };
 use thiserror::Error;
 use tokio::{net::TcpListener, signal};
@@ -173,12 +174,18 @@ async fn run_daemon(
     );
     let performance_log = GenerationPerformanceLog::open(logging_config.directory())
         .map_err(DaemonError::CreatePerformanceLog)?;
+    let completion_log = CompletionAttributionLog::open(
+        logging_config.directory(),
+        user_config.completion_attribution_enabled(),
+    )
+    .map_err(DaemonError::CreateCompletionAttributionLog)?;
     let worker_handle =
         match WorkerHandle::launch_with_startup_configuration_and_image_generation_timeouts(
             &resolved_runtime_config.worker_executable_path,
             WORKER_MODEL_LOAD_TIMEOUT,
             ImageGenerationTimeouts::DEFAULT,
             performance_log,
+            completion_log,
             Arc::clone(&resolved_runtime_config.model_policy_catalog),
             resolved_runtime_config.worker_startup_configuration(),
         )
@@ -320,6 +327,8 @@ enum DaemonError {
     CreateLogAppender(#[source] tracing_appender::rolling::InitError),
     #[error("failed to create the performance log: {0}")]
     CreatePerformanceLog(#[source] io::Error),
+    #[error("failed to create the completion attribution log: {0}")]
+    CreateCompletionAttributionLog(#[source] io::Error),
     #[error("failed to create the supervisor performance-attribution log: {0}")]
     CreateSupervisorPerformanceAttributionLog(#[source] io::Error),
     #[error("failed to record supervisor performance attribution: {0}")]

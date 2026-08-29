@@ -1,4 +1,5 @@
 mod chat_generation_executor;
+mod completion_attribution_log;
 mod config_reload;
 mod config_reload_resolver;
 mod download_catalog;

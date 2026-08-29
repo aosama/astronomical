@@ -8,8 +8,8 @@ use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
 
 use crate::{
-    ActiveRequestProgress, ChatGenerationStreamEvent, WorkerActivity, WorkerControlError,
-    WorkerHealthSnapshot,
+    ActiveRequestProgress, ChatGenerationStreamEvent, CompletedToolCall, WorkerActivity,
+    WorkerControlError, WorkerHealthSnapshot,
     chat_generation_executor::try_send_stream_event,
     worker_event_handler::protocol_violation,
     worker_health::{
@@ -60,12 +60,22 @@ pub(super) fn handle_worker_output(
     let mut next_tool_call_index = active_request.next_tool_call_index;
     for output in &outputs {
         if let astronomical_ipc_protocol::ChatGenerationOutput::ToolCall {
-            tool_call_index, ..
+            tool_call_index,
+            function_name,
+            arguments_json,
         } = output
         {
             if *tool_call_index != next_tool_call_index {
                 return Err(protocol_violation("tool-call index mismatch"));
             }
+            // Accumulate the emitted tool call for completion attribution so the
+            // completion event can log function names and arguments without
+            // re-reading the public stream. The arguments are bounded at write time.
+            active_request.completed_tool_calls.push(CompletedToolCall {
+                tool_call_index: *tool_call_index,
+                function_name: function_name.clone(),
+                arguments_json: arguments_json.clone(),
+            });
             next_tool_call_index = next_tool_call_index
                 .checked_add(1)
                 .ok_or_else(|| protocol_violation("tool-call index overflow"))?;

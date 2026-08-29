@@ -101,6 +101,8 @@ pub(crate) struct DiagnosticsConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) performance_attribution_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) completion_attribution_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) log_level: Option<LogLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) retained_log_files: Option<usize>,
