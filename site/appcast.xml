@@ -4,24 +4,24 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.22</title>
-            <pubDate>Fri, 28 Aug 2026 20:17:21 -0400</pubDate>
-            <sparkle:version>372</sparkle:version>
-            <sparkle:shortVersionString>0.2.22</sparkle:shortVersionString>
+            <title>0.2.23</title>
+            <pubDate>Sat, 29 Aug 2026 10:08:38 -0400</pubDate>
+            <sparkle:version>375</sparkle:version>
+            <sparkle:shortVersionString>0.2.23</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.22
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.23
 
-Qwen3.5 dense and mixture-of-experts tool attempts now reach the coding client when the model uses attribute-style function tags, writes the call inside an open thinking block, or leaves a partial control marker at stream end. A recoverable function name becomes a structured tool call. A nameless body becomes ordinary assistant text. Generation no longer aborts those parser defects as malformed model output. Laguna leftover control-marker prefixes and oversized frames follow the same never-abort rule.
+If a folder listed in model_directories is deleted or otherwise unreadable, Astronomical keeps running and continues to serve models from the remaining directories instead of exiting during discovery. The menu retries daemon startup after an early exit instead of remaining in the status bar while the local server is down. Status reports a path-free unavailable_model_directory diagnostic for the missing configuration entry.
 
-Existing configuration, model directories, and prompt-cache state are preserved.
+Existing configuration, model directories, and prompt-cache state are preserved. Invalid configuration documents still fail closed.
 
 This release is Developer ID signed, notarized, and stapled for macOS arm64.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.22/Astronomical-0.2.22-macOS-arm64.dmg" length="15735974" type="application/octet-stream" sparkle:edSignature="OdcyoMmS75XBVtBBCrWnxPhNqyogHEG1Hw9Xqo/3at60v3CIj3JlzFUnJu5RwMiYwoLTAvj4K+GilIWu8eMoCQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.23/Astronomical-0.2.23-macOS-arm64.dmg" length="15741136" type="application/octet-stream" sparkle:edSignature="sCEkdf7mpZnkiMkQKWpY+9uv1Fy1T1iWe+4nvvXPFj55IXf+B9xBBj5WP0wkO6J78Qb5QwTboZYXJIfpYbzMCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: iv5J1wGJgF2YFYo9YnmAH9URGDSy/L/rfVqa1XlsNXa1h1DhmSQZ/p6U2JfdSzHDtKj5LXtzzwnydNmp2gRdBw==
-length: 1917
+edSignature: 7odb5Hysria2UAa37RpSqZiaRD3WJSwAp8HQEmavSy76wyYR90s1/NYixpIIKstjKb/4SxcYg9AW+Az+34CfBw==
+length: 1888
 -->
