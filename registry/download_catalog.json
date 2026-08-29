@@ -2,41 +2,38 @@
   "schema_version": 1,
   "entries": [
     {
-      "huggingface_id": "scottlowry/Ornith-1.5-35B-A3B-oQ6e-mtp",
-      "revision": "571c2bfc3550805d9b97fabec1351c149744d7a9",
-      "display_name": "Ornith 1.5 35B A3B",
+      "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
+      "revision": "5eec9f738580bca48a13054e1e3966bc239db0e9",
+      "display_name": "Ornith 1.5 35B A3B OptiQ Static 5.5bpw",
       "family": "qwen3_5",
-      "approximate_size_bytes": 30167174693,
+      "approximate_size_bytes": 27559063009,
       "public": true,
-      "description": "A fast mixture-of-experts model with vision and multi-token prediction. Great for chat, reasoning, and tool use.",
+      "description": "A static mixed-precision OptiQ quant of the Ornith 1.5 35B-A3B mixture-of-experts vision-language model, targeted and achieved at 5.5 BPW (group 64, affine). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. Attention, router, shared experts, embeddings, lm_head, and the bf16 vision tower keep the static high-bit recipe; image input and MTP require mlx-optiq.",
       "capabilities": {
         "supports_reasoning": true,
         "supports_vision": true,
-        "supports_tool_calls": true,
-        "context_window": 262144,
-        "max_output_tokens": 32768
+        "supports_tool_calls": true
       },
-      "quantization_label": "oQ6e (6-bit enhanced)",
-      "architecture_summary": "Qwen 3.5 MoE, 35B params, 3B active (A3B)",
+      "quantization_label": "OptiQ static 5.5bpw (mixed-precision affine, group 64)",
+      "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed",
       "upstream_license": "MIT"
     },
     {
-      "huggingface_id": "Shiftedx/ornith-1.5-9b-affine4-bf16recurrence-vision-mlx",
-      "revision": "750596c078284ae61aa1cd085c8d839909b686e5",
-      "display_name": "Ornith 1.5 9B Vision",
+      "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
+      "revision": "27ea26a6175ead91d1067f020be41318d045849b",
+      "display_name": "Ornith 1.5 9B Vision OptiQ Static 4.5bpw",
       "family": "qwen3_5",
-      "approximate_size_bytes": 6541441712,
+      "approximate_size_bytes": 7286495182,
       "public": true,
-      "description": "A lightweight 9B dense reasoning model with vision, tool use, and strong coding benchmarks. Affine 4-bit language with BF16 recurrence and BF16 vision tower.",
+      "description": "A static mixed-precision OptiQ quant of the Ornith 1.5 9B dense vision-language model, targeted at 4.5 BPW and achieved at 4.63 BPW (group 64, affine). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. Language tensors are a 4/5/6/8-bit mix; the vision tower stays bf16. Image input and MTP require mlx-optiq.",
       "capabilities": {
         "supports_reasoning": true,
         "supports_vision": true,
         "supports_tool_calls": true,
-        "context_window": 262144,
-        "max_output_tokens": 32768
+        "context_window": 262144
       },
-      "quantization_label": "4-bit affine (group 32) + BF16 recurrence + BF16 vision",
-      "architecture_summary": "Qwen 3.5 dense, 9B params, 32 layers, 27-layer vision tower",
+      "quantization_label": "OptiQ static 4.5bpw (mixed-precision affine, group 64)",
+      "architecture_summary": "Qwen3.5 dense VLM, 9B params, 32 layers, 27-layer vision tower",
       "upstream_license": "MIT"
     },
     {
