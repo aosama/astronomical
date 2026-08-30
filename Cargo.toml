@@ -74,7 +74,7 @@ incremental = false
 debug = false
 
 # Tests share target/debug with development builds. Give them the same bounded
-# diagnostics policy so qualification feature combinations do not recreate the
+# diagnostics policy so acceptance feature combinations do not recreate the
 # object-file and incremental-cache growth avoided by the development profile.
 [profile.test]
 debug = "line-tables-only"

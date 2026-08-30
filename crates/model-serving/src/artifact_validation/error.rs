@@ -274,7 +274,7 @@ pub enum ArtifactValidationError {
         dtype_string: String,
     },
 
-    /// A certified tensor is absent from the safetensors file.
+    /// An expected tensor is absent from the safetensors file.
     #[error("tensor {tensor_name} is missing from the safetensors weight file {file_name}")]
     TensorMissing {
         /// Expected tensor name.
@@ -283,14 +283,14 @@ pub enum ArtifactValidationError {
         file_name: String,
     },
 
-    /// The safetensors file contains a tensor absent from the certified profile.
+    /// The safetensors file contains a tensor absent from the expected profile.
     #[error("extra tensor {tensor_name} in the safetensors weight file")]
     UnexpectedTensor {
         /// Unexpected tensor name.
         tensor_name: String,
     },
 
-    /// A tensor has a different dtype than the certified profile allows.
+    /// A tensor has a different dtype than the expected profile allows.
     #[error("tensor {tensor_name} dtype mismatch: expected {expected_dtype:?}, got {actual_dtype}")]
     TensorDtypeMismatch {
         /// Tensor name.
@@ -301,7 +301,7 @@ pub enum ArtifactValidationError {
         actual_dtype: Dtype,
     },
 
-    /// A tensor has a different shape than the certified profile allows.
+    /// A tensor has a different shape than the expected profile allows.
     #[error(
         "tensor {tensor_name} shape mismatch: expected {expected_shape:?}, got {actual_shape:?}"
     )]

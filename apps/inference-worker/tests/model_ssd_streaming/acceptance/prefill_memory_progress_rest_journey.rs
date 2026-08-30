@@ -8,8 +8,7 @@
 //! with different active-memory bytes appear while the model processes
 //! prompt tokens from zero through at least 2,000.
 //!
-//! Ornith 1.5 35B A3B oQ6e MTP is a mixture-of-experts architecture.
-//! Its six-bit quantized experts are paged from SSD under a 32 GB ceiling.
+//! The large sparse MoE e2e fixture pages experts from SSD under a 32 GB ceiling.
 //! Each prefill chunk brings new expert pages into MLX memory, making attribution
 //! grow visibly chunk by chunk.
 //!
@@ -31,11 +30,13 @@ use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep, timeout};
 
-use crate::common::real_model_rest_server::{
+use crate::support::serving_rest::{
     JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 
-const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
+fn model_id() -> &'static str {
+    crate::support::large_sparse_moe_model_id()
+}
 // This ceiling defines a reproducible acceptance cell only. Production code
 // must not hardwire it or assume this model always pages experts.
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 32_000_000_000;
@@ -57,19 +58,19 @@ async fn should_report_changing_bounded_mlx_memory_during_prefill() {
 }
 
 async fn run_mlx_memory_progress_rest_journey() {
-    let model_directory = crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
+    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home =
         tempfile::tempdir().expect("the MLX memory progress worker home should be created");
     write_acceptance_config(isolated_worker_home.path(), &model_directory);
     let repeated_source = ROMEO_AND_JULIET_SOURCE.repeat(2);
-    let user_message = crate::common::exact_model_prompt::build_exact_model_prompt_content(
+    let user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
         &model_directory,
         &repeated_source,
         "Summarize Romeo and Juliet briefly. Mention the central conflict and tragic outcome.",
         PROMPT_TOKEN_COUNT,
     );
     let real_model_rest_server = launch_real_model_rest_server(
-        MODEL_ID,
+        model_id(),
         model_directory,
         isolated_worker_home.path(),
         MAXIMUM_MLX_MEMORY_BYTES,
@@ -79,10 +80,10 @@ async fn run_mlx_memory_progress_rest_journey() {
     let openai_client = Client::with_config(
         OpenAIConfig::new()
             .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-qualification-client"),
+            .with_api_key("local-acceptance-client"),
     );
     let completion_request = json!({
-        "model": MODEL_ID,
+        "model": model_id(),
         "messages": [{"role": "user", "content": user_message}],
         "stream": true,
         "stream_options": {"include_usage": true},

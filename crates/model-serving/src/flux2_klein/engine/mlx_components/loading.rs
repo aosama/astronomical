@@ -107,7 +107,7 @@ impl Flux2KleinMlxComponents {
             attribution.finish_model_loading(ModelLoadingPerformanceAttributionMetadata {
                 outcome,
                 model_id: Some(self.serving_model_id.clone()),
-                model_revision: Some(FLUX2_KLEIN_OFFICIAL_REVISION.to_owned()),
+                model_revision: Some(self.provenance.revision().to_owned()),
                 prefill_transient_observation_completed: false,
                 prefill_observed_transient_high_water_bytes: 0,
                 total_artifact_payload_bytes,
@@ -135,7 +135,7 @@ impl Flux2KleinMlxComponents {
         self.performance_attribution_log = Some(attribution_log);
         Ok(Flux2KleinComponentLoad::new(
             self.serving_model_id.clone(),
-            FLUX2_KLEIN_OFFICIAL_REVISION,
+            self.provenance.revision(),
             official_capabilities(),
             minimum_ceiling_bytes,
         ))

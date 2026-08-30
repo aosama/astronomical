@@ -6,7 +6,7 @@ fn should_emit_the_exact_fragmented_text_lifecycle_and_skip_prefill_telemetry() 
     let mut encoder = OpenAiResponsesStreamEncoder::new(
         "resp_instance-11".to_owned(),
         1_753_000_000,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
     );
@@ -87,7 +87,7 @@ fn should_stream_raw_reasoning_as_summary_text_without_encrypted_content() {
     let mut encoder = OpenAiResponsesStreamEncoder::new(
         "resp_instance-12".to_owned(),
         1_753_000_000,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
     );
@@ -172,7 +172,7 @@ fn should_close_open_text_before_emitting_an_incomplete_terminal_event() {
     let mut encoder = OpenAiResponsesStreamEncoder::new(
         "resp_instance-13".to_owned(),
         1_753_000_000,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
     );
@@ -219,7 +219,7 @@ fn should_emit_a_terminal_failed_response_for_a_worker_reported_context_failure(
     let mut encoder = OpenAiResponsesStreamEncoder::new(
         "resp_instance-14".to_owned(),
         1_753_000_000,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
     );
@@ -255,7 +255,7 @@ fn should_mark_partially_emitted_output_incomplete_when_the_worker_fails() {
     let mut encoder = OpenAiResponsesStreamEncoder::new(
         "resp_instance-15".to_owned(),
         1_753_000_000,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
     );

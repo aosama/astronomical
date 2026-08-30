@@ -8,7 +8,7 @@ readonly WAIT_TIMEOUT_SECONDS=120
 readonly CLEANUP_TIMEOUT_SECONDS=10
 APP_BUNDLE_PATH=""
 RUN_REAL_MODEL_JOURNEY="false"
-QUALIFICATION_MODEL_IDENTIFIER=""
+LIVE_SERVING_PROBE_MODEL_IDENTIFIER=""
 BUNDLE_ONLY="false"
 LAUNCHED_DAEMON_PID=""
 LAUNCHED_MENU_PID=""
@@ -132,12 +132,12 @@ read_plist_value() {
 validate_real_model() {
     start_step "real-model-romeo-and-juliet"
     printf '%s\n' "  Shared GPU and wired memory are not isolated; this explicit journey may affect Stable latency."
-    if ! jq --exit-status --arg model "$QUALIFICATION_MODEL_IDENTIFIER" \
+    if ! jq --exit-status --arg model "$LIVE_SERVING_PROBE_MODEL_IDENTIFIER" \
         'any(.data[]; .id == $model)' "$models_file" >/dev/null; then
-        print_error "qualification model is not advertised: ${QUALIFICATION_MODEL_IDENTIFIER}"
+        print_error "live serving probe model is not advertised: ${LIVE_SERVING_PROBE_MODEL_IDENTIFIER}"
         exit 1
     fi
-    model_identifier="$QUALIFICATION_MODEL_IDENTIFIER"
+    model_identifier="$LIVE_SERVING_PROBE_MODEL_IDENTIFIER"
     printf '%s model=%s status=selected\n' \
         "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$model_identifier"
     romeo_fixture="${repository_root}/apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
@@ -147,14 +147,14 @@ validate_real_model() {
     if ! curl --silent --show-error --fail --max-time 120 \
         --header 'Content-Type: application/json' --data-binary "@${request_file}" \
         "${supervisor_base_url}/v1/chat/completions" > "${VALIDATION_TEMP_DIRECTORY}/chat-response.json"; then
-        print_error "qualification request failed for model: ${model_identifier}"
+        print_error "live serving probe request failed for model: ${model_identifier}"
         print_daemon_diagnostics
         exit 1
     fi
     if ! jq --exit-status \
         '.choices[0].message | [.content, .reasoning_content] | any(type == "string" and length > 0)' \
         "${VALIDATION_TEMP_DIRECTORY}/chat-response.json" >/dev/null; then
-        print_error "qualification model returned no assistant text or reasoning output: ${model_identifier}"
+        print_error "live serving probe model returned no assistant text or reasoning output: ${model_identifier}"
         exit 1
     fi
     finish_step
@@ -178,7 +178,7 @@ main() {
                     ''|-*) print_error "--real-model requires a model identifier"; exit 2 ;;
                 esac
                 RUN_REAL_MODEL_JOURNEY="true"
-                QUALIFICATION_MODEL_IDENTIFIER="$2"
+                LIVE_SERVING_PROBE_MODEL_IDENTIFIER="$2"
                 shift 2
                 ;;
             --bundle-only)

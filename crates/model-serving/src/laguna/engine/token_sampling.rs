@@ -11,7 +11,7 @@ pub(super) fn random_state_for_strategy(
     sampling_strategy: &LagunaSamplingStrategy,
 ) -> Result<Option<MlxArray>, InferenceEngineError> {
     match sampling_strategy {
-        LagunaSamplingStrategy::Greedy => Ok(None),
+        LagunaSamplingStrategy::HighestLogit => Ok(None),
         LagunaSamplingStrategy::Sample(sampler_config) => {
             Ok(Some(random_state_for_sampler(runtime, sampler_config)?))
         }
@@ -44,10 +44,10 @@ pub(super) fn select_next_token_id(
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<u32, InferenceEngineError> {
     match sampling_strategy {
-        LagunaSamplingStrategy::Greedy => {
-            LagunaModel::greedy_token_id(runtime, logits, performance_attribution).map_err(
+        LagunaSamplingStrategy::HighestLogit => {
+            LagunaModel::highest_logit_token_id(runtime, logits, performance_attribution).map_err(
                 |sampling_error| InferenceEngineError::Fatal {
-                    reason: format!("Laguna greedy sampling failed: {sampling_error:?}"),
+                    reason: format!("Laguna highest-logit selection failed: {sampling_error:?}"),
                 },
             )
         }
@@ -76,10 +76,10 @@ pub(super) fn select_next_token_id(
 
 pub(super) fn log_executed_sampling(request_id: u64, sampling_strategy: &LagunaSamplingStrategy) {
     match sampling_strategy {
-        LagunaSamplingStrategy::Greedy => {
+        LagunaSamplingStrategy::HighestLogit => {
             tracing::info!(
                 request_id,
-                sampling_is_greedy = true,
+                sampling_selects_highest_logit = true,
                 executed_temperature_thousandths = 0_u16,
                 executed_top_k = Option::<u16>::None,
                 executed_top_p_thousandths = 1_000_u16,
@@ -89,7 +89,7 @@ pub(super) fn log_executed_sampling(request_id: u64, sampling_strategy: &LagunaS
         LagunaSamplingStrategy::Sample(sampler_config) => {
             tracing::info!(
                 request_id,
-                sampling_is_greedy = false,
+                sampling_selects_highest_logit = false,
                 executed_temperature_thousandths = sampler_config.temperature_thousandths(),
                 executed_top_k = sampler_config.sampling_top_k(),
                 executed_top_p_thousandths = sampler_config.top_p_thousandths(),

@@ -3,7 +3,7 @@ const FIVE_THOUSAND_WORD_FIXTURE: &str =
 const FIFTY_THOUSAND_WORD_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 const HUNDRED_THOUSAND_WORD_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_100000_deterministic_words.txt");
+    include_str!("../fixtures/model_metrics_100000_romeo_and_juliet_words.txt");
 
 pub(super) struct PersistentPromptCacheWarmupCase {
     pub(super) benchmark_name: &'static str,
@@ -36,7 +36,7 @@ pub(super) fn fifty_thousand_word_case() -> PersistentPromptCacheWarmupCase {
 pub(super) fn hundred_thousand_word_case() -> PersistentPromptCacheWarmupCase {
     PersistentPromptCacheWarmupCase {
         benchmark_name: "model_persistent_prompt_cache_warmup_100000_words",
-        instruction: "Read the following deterministic document and reply with OK.",
+        instruction: "Read the following public-domain book excerpt and reply with OK.",
         maximum_output_tokens: 1,
         source_document: HUNDRED_THOUSAND_WORD_FIXTURE,
         source_word_count: 100_000,

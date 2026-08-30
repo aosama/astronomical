@@ -24,7 +24,7 @@ impl Qwen3_5EngineState {
             .any(|token_id| *token_id >= self.vocabulary_size)
         {
             return Err(fatal_engine_error(
-                "injected model feedback contains a token outside the certified vocabulary",
+                "injected model feedback contains a token outside the model vocabulary",
             ));
         }
 
@@ -82,7 +82,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| invalid_request_error("generation context token count overflowed"))?;
         if projected_context_tokens > self.maximum_position_count {
             return Err(invalid_request_error(
-                "generation context exceeds the certified maximum position count",
+                "generation context exceeds the model maximum position count",
             ));
         }
 

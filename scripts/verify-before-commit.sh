@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 # Runs the complete local commit gate on Cargo's stable routine artifact graph.
-# Release and model qualification remain isolated behind disposable journeys.
+# Release and model acceptance remain isolated behind disposable journeys.
 
 set -eu
 

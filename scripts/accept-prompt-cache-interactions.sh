@@ -1,0 +1,62 @@
+#!/usr/bin/env sh
+
+set -eu
+
+if [ "$#" -ne 0 ]; then
+    printf '%s\n' "Error: this acceptance script does not accept arguments" >&2
+    exit 2
+fi
+
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
+    exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+        --lane prompt-cache-interactions -- \
+        "${repository_root}/scripts/accept-prompt-cache-interactions.sh"
+fi
+CDPATH='' cd -- "$repository_root"
+
+if command -v timeout >/dev/null 2>&1; then
+    timeout_executable="$(command -v timeout)"
+elif command -v gtimeout >/dev/null 2>&1; then
+    timeout_executable="$(command -v gtimeout)"
+else
+    printf '%s\n' "Error: GNU timeout is required; install Homebrew coreutils" >&2
+    exit 1
+fi
+
+readonly acceptance_test_name="prompt_cache_acceptance::cache_interaction_matrix::should_run_selected_pinned_ornith_cache_interaction_matrix_cell"
+readonly acceptance_cells="
+fixed-live-reuse
+fixed-worker-restart
+fixed-deleted-while-live
+"
+
+completed_cell_count=0
+total_cell_count=3
+matrix_started_at_seconds="$(date +%s)"
+
+for acceptance_cell in ${acceptance_cells}; do
+    cell_started_at_seconds="$(date +%s)"
+    printf '%s\n' "[prompt-cache-interaction-matrix] status=start cell=${acceptance_cell} completed=${completed_cell_count}/${total_cell_count} timeout_seconds=120"
+    ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL="${acceptance_cell}" \
+        CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$(sysctl -n hw.logicalcpu)}" \
+        "${timeout_executable}" --foreground -k 5s 120s \
+        cargo --verbose test \
+            --package astronomical-model-serving \
+            --features direct-mlx \
+            --test prompt_cache_acceptance_tests \
+            "${acceptance_test_name}" \
+            -- \
+            --ignored \
+            --exact \
+            --nocapture \
+            --test-threads=1
+    completed_cell_count=$((completed_cell_count + 1))
+    cell_finished_at_seconds="$(date +%s)"
+    cell_elapsed_seconds=$((cell_finished_at_seconds - cell_started_at_seconds))
+    printf '%s\n' "[prompt-cache-interaction-matrix] status=success cell=${acceptance_cell} completed=${completed_cell_count}/${total_cell_count} elapsed_seconds=${cell_elapsed_seconds}"
+done
+
+matrix_finished_at_seconds="$(date +%s)"
+matrix_elapsed_seconds=$((matrix_finished_at_seconds - matrix_started_at_seconds))
+printf '%s\n' "[prompt-cache-interaction-matrix] status=success completed=${completed_cell_count}/${total_cell_count} elapsed_seconds=${matrix_elapsed_seconds}"

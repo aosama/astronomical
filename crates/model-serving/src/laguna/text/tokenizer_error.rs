@@ -3,7 +3,7 @@ use thiserror::Error;
 /// A typed failure while loading, encoding, or incrementally decoding Laguna tokens.
 #[derive(Debug, Error)]
 pub enum LagunaTokenizerError {
-    #[error("failed to load certified Laguna tokenizer bytes")]
+    #[error("failed to load validated Laguna tokenizer bytes")]
     LoadTokenizer {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,

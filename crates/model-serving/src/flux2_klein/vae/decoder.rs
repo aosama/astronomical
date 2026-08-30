@@ -21,7 +21,7 @@ pub(super) const BATCH_NORM_EPSILON: f32 = 0.000_1;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Flux2KleinVaeDecodeMode {
     Complete,
-    /// Retained only as a qualification seam; production rejects independent tiles.
+    /// Retained only as a acceptance seam; production rejects independent tiles.
     Tiled(Flux2KleinVaeTilingConfig),
 }
 

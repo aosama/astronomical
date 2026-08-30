@@ -1,6 +1,6 @@
 //! Executes the resolved Laguna sampler on GPU logits.
 //!
-//! Greedy stays argmax. Sampled requests use the shared MLX categorical graph so
+//! Highest-logit selection stays argmax. Sampled requests use the shared MLX categorical graph so
 //! temperature, top-k, and top-p cannot be logged as effective and then ignored.
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};

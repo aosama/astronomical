@@ -52,6 +52,60 @@ fn should_discover_the_reviewed_distilled_bf16_flux2_klein_profile_with_typed_ca
 }
 
 #[test]
+fn should_discover_klein_when_the_immutable_revision_is_not_the_catalog_pin() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory
+        .path()
+        .join("Locally-Renamed-Flux-Artifact");
+    write_executable_flux2_klein_artifact(&model_directory);
+    invalidate_artifact(&model_directory, InvalidArtifact::WrongRevision);
+
+    let directory_scans = discover_configured_models(&temporary_directory);
+    let discovered_model = directory_scans[0]
+        .discovered_models
+        .first()
+        .expect("a complete Klein pipeline should be advertised regardless of Hub SHA");
+
+    assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
+    assert_eq!(
+        discovered_model.revision,
+        "0123456789abcdef0123456789abcdef01234567"
+    );
+}
+
+#[test]
+fn should_discover_klein_from_library_provenance_without_huggingface_cache_metadata() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory
+        .path()
+        .join("black-forest-labs")
+        .join("FLUX.2-klein-4B");
+    write_executable_flux2_klein_artifact(&model_directory);
+    fs::remove_file(model_directory.join(".cache/huggingface/download/model_index.json.metadata"))
+        .expect("Hugging Face download metadata should be removable");
+    fs::write(
+        model_directory.join(".astronomical-library-provenance.json"),
+        format!(
+            "{{\"schema_version\":1,\"provider_model_id\":\"{PROVIDER_MODEL_ID}\",\"revision\":\"{REVIEWED_REVISION}\"}}"
+        ),
+    )
+    .expect("Library provenance should be written");
+
+    let directory_scans = discover_configured_models(&temporary_directory);
+    let discovered_model = directory_scans[0]
+        .discovered_models
+        .first()
+        .expect("a Library-published Klein pipeline should be advertised");
+
+    assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
+    assert_eq!(discovered_model.revision, REVIEWED_REVISION);
+    assert_eq!(
+        discovered_model.provider_model_id.as_deref(),
+        Some(PROVIDER_MODEL_ID)
+    );
+}
+
+#[test]
 fn should_verify_exact_directory_evidence_without_scanning_a_parent_root() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let selected_model_directory = temporary_directory.path().join("selected-model");
@@ -92,10 +146,6 @@ fn should_report_bounded_path_free_flux_verification_failures() {
         (
             InvalidArtifact::WrongLicense,
             Flux2KleinDirectoryVerificationError::InvalidLicense,
-        ),
-        (
-            InvalidArtifact::WrongRevision,
-            Flux2KleinDirectoryVerificationError::UnexpectedRevision,
         ),
         (
             InvalidArtifact::EmptyWeightMap,
@@ -142,7 +192,6 @@ fn should_reject_malformed_wrong_profile_license_or_revision_evidence() {
         InvalidArtifact::BaseProfile,
         InvalidArtifact::WrongDtype,
         InvalidArtifact::WrongLicense,
-        InvalidArtifact::WrongRevision,
         InvalidArtifact::MissingComponent,
         InvalidArtifact::EmptyWeightMap,
         InvalidArtifact::UnsafeShardPath,

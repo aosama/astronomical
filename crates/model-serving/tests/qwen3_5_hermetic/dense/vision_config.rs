@@ -1,10 +1,10 @@
 use astronomical_model_serving::Qwen3_5VisionConfig;
 
-use crate::qwen3_5_hermetic::vision_config_test_support::CERTIFIED_VISION_CONFIG_JSON;
+use crate::qwen3_5_hermetic::vision_config_test_support::FROZEN_VISION_CONFIG_JSON;
 
 #[test]
 fn should_accept_the_dense_qwen3_5_vision_model_type() {
-    let config_bytes = CERTIFIED_VISION_CONFIG_JSON.replace(
+    let config_bytes = FROZEN_VISION_CONFIG_JSON.replace(
         "\"model_type\": \"qwen3_5_moe_vision\"",
         "\"model_type\": \"qwen3_5_vision\"",
     );

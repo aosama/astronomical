@@ -1,5 +1,5 @@
 // Sequential one-query Scaled Dot-Product Attention (SDPA) for Multi-Token
-// Prediction (MTP) verify. Native causal SDPA matches greedy tokens on this
+// Prediction (MTP) verify. Native causal SDPA matches highest-logit tokens on this
 // geometry, but the tiled kernel for query length two against a long prefix
 // is slower than two vector passes.
 use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};

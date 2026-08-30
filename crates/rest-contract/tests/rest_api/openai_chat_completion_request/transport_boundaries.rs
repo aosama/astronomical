@@ -4,7 +4,7 @@ use super::*;
 fn should_accept_opencode_large_output_budget_without_a_public_coding_cap() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "inspect the repository"}],
         "stream": true,
         "max_tokens": 20000
@@ -31,7 +31,7 @@ fn should_accept_large_opencode_chat_history_without_a_public_message_count_cap(
         })
         .collect::<Vec<_>>();
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": request_messages,
         "stream": true,
     })
@@ -59,7 +59,7 @@ fn should_accept_many_small_text_content_parts_without_a_public_part_count_cap()
         })
         .collect::<Vec<_>>();
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": content_parts}],
     })
     .to_string();
@@ -92,7 +92,7 @@ fn should_accept_many_small_tool_definitions_without_a_public_tool_count_cap() {
         })
         .collect::<Vec<_>>();
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "use a tool"}],
         "tools": tools,
         "tool_choice": "auto",
@@ -114,7 +114,7 @@ fn should_accept_many_small_tool_definitions_without_a_public_tool_count_cap() {
 fn should_accept_large_assistant_tool_call_arguments_without_a_public_field_byte_cap() {
     let large_arguments_json = format!(r#"{{"payload":"{}"}}"#, "x".repeat(80 * 1024));
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{
             "role": "assistant",
             "tool_calls": [{
@@ -149,7 +149,7 @@ fn should_accept_a_single_text_message_larger_than_the_old_public_message_byte_l
     let large_message_content = "x".repeat(128 * 1024);
     let request_json = format!(
         r#"{{
-            "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model": "astronomical/fake-mixture-of-experts",
             "messages": [{{"role": "user", "content": {}}}],
             "stream": true
         }}"#,
@@ -175,7 +175,7 @@ fn should_accept_large_ignored_reasoning_effort_without_a_public_field_byte_cap(
     let oversized_reasoning_effort = "x".repeat(8 * 1024);
     let request_json = format!(
         r#"{{
-            "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model": "astronomical/fake-mixture-of-experts",
             "messages": [{{"role": "user", "content": "Inspect the repository."}}],
             "reasoning_effort": {}
         }}"#,

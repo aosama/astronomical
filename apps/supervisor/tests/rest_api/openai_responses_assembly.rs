@@ -6,7 +6,7 @@ fn should_collect_reasoning_summary_text_and_function_calls_into_one_response() 
     let mut collector = OpenAiResponsesCollector::new(
         "resp_instance-9".to_owned(),
         1_753_000_000,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        "astronomical/fake-mixture-of-experts".to_owned(),
         Some("Be precise.".to_owned()),
         Default::default(),
     );
@@ -83,7 +83,7 @@ fn should_mark_a_maximum_output_token_response_incomplete() {
     let mut collector = OpenAiResponsesCollector::new(
         "resp_instance-10".to_owned(),
         1_753_000_000,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
     );

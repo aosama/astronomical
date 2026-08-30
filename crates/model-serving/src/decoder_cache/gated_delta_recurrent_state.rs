@@ -25,7 +25,7 @@ pub struct GatedDeltaRecurrentStateCheckpoint {
 impl GatedDeltaRecurrentState {
     /// Creates empty recurrent state without allocating MLX arrays.
     ///
-    /// Uses the certified Qwen3.5-MoE shape `[1, 32, 128, 128]` for the two GPU
+    /// Uses the Qwen3.5-MoE shape `[1, 32, 128, 128]` for the two GPU
     /// unit tests that exercise this owner in isolation. Production code
     /// should use `empty_with_shape` with config-derived dimensions.
     #[must_use]

@@ -5,8 +5,8 @@ use astronomical_model_serving::{
 use serde_json::{Value, json};
 
 use crate::common::qwen3_5_moe::{
-    certified_optiq_metadata_bytes, certified_optiq_ornith_config_bytes,
-    certified_ornith_config_bytes,
+    frozen_optiq_metadata_bytes, frozen_ornith_1_0_config_bytes,
+    frozen_ornith_1_0_optiq_config_bytes,
 };
 
 mod compatibility_fallbacks;

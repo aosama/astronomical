@@ -71,7 +71,7 @@ pub fn validate_metallib_path(metallib_path: impl AsRef<Path>) -> Result<(), Mlx
     if opened_metadata.len() != expected_size_bytes {
         return Err(MlxRuntimeError::InvalidMetallibPath {
             description: format!(
-                "metallib size differs from the certified build output: expected {expected_size_bytes}, got {}",
+                "metallib size differs from the build-produced metallib: expected {expected_size_bytes}, got {}",
                 opened_metadata.len()
             ),
         });
@@ -84,7 +84,7 @@ pub fn validate_metallib_path(metallib_path: impl AsRef<Path>) -> Result<(), Mlx
     if actual_sha256_hex != EXPECTED_METALLIB_SHA256_HEX {
         return Err(MlxRuntimeError::InvalidMetallibPath {
             description: format!(
-                "metallib digest differs from the certified build output: {metallib_path:?}"
+                "metallib digest differs from the build-produced metallib: {metallib_path:?}"
             ),
         });
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Separates compilation from execution so cold qualification builds can finish
+# Separates compilation from execution so cold acceptance builds can finish
 # without weakening the repository-wide 120-second test-process boundary.
 
 set -eu

@@ -11,7 +11,7 @@ use super::{
 const TEST_MTP_FULL_ATTENTION_GROWTH_TOKENS: i32 = 1;
 
 // These owner-thread operations intentionally live beside their asynchronous
-// public wrappers. Keeping qualification-only state mutation out of the engine
+// public wrappers. Keeping acceptance-only state mutation out of the engine
 // owner prevents the production lifecycle module from becoming a test-control bag.
 impl Qwen3_5EngineState {
     fn expert_memory_mode_for_tests(&self) -> Option<ExpertMemoryMode> {
@@ -70,7 +70,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| fatal_engine_error("cannot execute resident MTP before loading"))?;
         if loaded_model.expert_memory_mode() != ExpertMemoryMode::Resident {
             return Err(fatal_engine_error(
-                "cannot execute the resident MTP qualification while experts are paged",
+                "cannot execute the resident MTP acceptance while experts are paged",
             ));
         }
         let next_token_indices = loaded_model
@@ -92,7 +92,7 @@ impl Qwen3_5EngineState {
             )
             .map_err(InferenceEngineError::from)?;
         loaded_model
-            .greedy_token_id(mtp_forward_output.draft_logits())
+            .highest_logit_token_id(mtp_forward_output.draft_logits())
             .map_err(InferenceEngineError::from)
     }
 
@@ -268,7 +268,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
-    /// Removes resident-promotion source descriptors to qualify typed failure recovery.
+    /// Removes resident-promotion source descriptors to prove typed failure recovery.
     #[doc(hidden)]
     pub async fn remove_resident_expert_source_files_for_tests(
         &self,
@@ -299,7 +299,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             .map_err(|_| fatal_engine_error("resident MTP owner operation returned no draft token"))
     }
 
-    /// Returns truthful per-model prompt work for an active qualification request.
+    /// Returns truthful per-model prompt work for an active acceptance request.
     #[doc(hidden)]
     pub async fn prompt_work_reuse_for_tests(
         &self,
@@ -320,7 +320,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
-    /// Returns the target conversation positions selected for an active qualification request.
+    /// Returns the target conversation positions selected for an active acceptance request.
     #[doc(hidden)]
     pub async fn speculative_prefill_selected_token_positions_for_tests(
         &self,
@@ -347,7 +347,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
-    /// Rejects one completed prefill attempt so qualification can verify full retry rollback.
+    /// Rejects one completed prefill attempt so acceptance can verify full retry rollback.
     pub async fn force_next_prefill_capacity_rejection_for_tests(
         &self,
         request_id: RequestId,
@@ -358,7 +358,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         .await
     }
 
-    /// Forces one draft-prefix restore failure so qualification can verify uncached retry.
+    /// Forces one draft-prefix restore failure so acceptance can verify uncached retry.
     pub async fn force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(
         &self,
         request_id: RequestId,

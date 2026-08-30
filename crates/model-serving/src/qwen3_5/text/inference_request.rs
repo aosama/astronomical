@@ -31,23 +31,18 @@ impl PreparedInferenceRequest for Qwen3_5InferenceRequest {
 
 impl Qwen3_5InferenceRequest {
     /// Creates a token-level request accepted by Qwen3.5 inference.
+    ///
+    /// Omitted sampling uses temperature 1.0. Temperature 0 is only selected
+    /// when a caller passes it explicitly through `new_sampling`.
     pub fn new(request_id: RequestId, input_token_ids: Vec<u32>, max_output_tokens: u16) -> Self {
-        Self {
-            input_token_ids,
-            ordinary_target_prefill_control_span_token_count: 0,
-            visual_embeddings: None,
-            visual_embedding_row_count: 0,
-            processed_visual_images: Vec::new(),
-            image_pad_token_id: None,
-            max_output_tokens,
+        Self::new_sampling(
             request_id,
-            sampling_strategy: Qwen3_5SamplingStrategy::Greedy,
-            generation_starts_inside_thinking_block: true,
-            thinking_budget: None,
-            forced_thinking_transition_token_ids: Vec::new(),
-            natural_reasoning_end_token_ids: Vec::new(),
-            performance_attribution: PerformanceAttribution::disabled(),
-        }
+            input_token_ids,
+            max_output_tokens,
+            1_000,
+            1_000,
+            None,
+        )
     }
 
     /// Creates a token-level request using Qwen3.5's fixed top-k sampling family.
@@ -81,7 +76,7 @@ impl Qwen3_5InferenceRequest {
         seed: Option<u64>,
     ) -> Self {
         let sampling_strategy = if temperature_thousandths == 0 {
-            Qwen3_5SamplingStrategy::Greedy
+            Qwen3_5SamplingStrategy::HighestLogit
         } else {
             Qwen3_5SamplingStrategy::TopKTopP {
                 temperature_thousandths,
@@ -300,7 +295,7 @@ impl Qwen3_5InferenceRequest {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Qwen3_5SamplingStrategy {
     /// Selects the maximum finite logit without random state.
-    Greedy,
+    HighestLogit,
     /// Applies temperature, fixed top-k, top-p, and an optional deterministic seed.
     TopKTopP {
         temperature_thousandths: u16,

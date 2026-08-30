@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Prevents serving and qualification tests from reaching active Stable state.
+# Prevents serving and acceptance tests from reaching active Stable state.
 
 set -eu
 

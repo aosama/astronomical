@@ -5,12 +5,12 @@ use astronomical_model_serving::{
 };
 use serde_json::json;
 
-use crate::common::qwen3_5::certified_dense_qwen3_6_config;
+use crate::common::qwen3_5::frozen_dense_qwen3_6_config;
 use crate::qwen3_5_hermetic::config::support::minimal_valid_config_json;
 
 #[test]
 fn should_classify_the_dense_model_type_as_dense_feed_forward_architecture() {
-    let dense_config = certified_dense_qwen3_6_config();
+    let dense_config = frozen_dense_qwen3_6_config();
 
     assert_eq!(
         dense_config.feed_forward_architecture(),

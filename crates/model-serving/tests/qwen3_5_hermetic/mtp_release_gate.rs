@@ -77,7 +77,7 @@ fn should_reject_a_depth_that_changes_target_authoritative_output() {
         &depth_three,
         EXPECTED_OUTPUT_TOKEN_COUNT,
     )
-    .expect_err("changed model output must block production qualification");
+    .expect_err("changed model output must block production acceptance");
 
     assert_eq!(
         rejection,
@@ -104,7 +104,7 @@ fn should_reject_depth_three_when_it_does_not_beat_every_shallower_control() {
         &depth_three,
         EXPECTED_OUTPUT_TOKEN_COUNT,
     )
-    .expect_err("a slower deeper route must remain unqualified");
+    .expect_err("a slower deeper route must remain unused");
 
     assert_eq!(
         rejection,

@@ -23,7 +23,9 @@ use super::model_process_metrics::{
     WorkerPhysicalFootprint, find_worker_process_id, measure_worker_physical_footprint,
 };
 
-pub(super) const MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
+pub(super) fn model_id() -> &'static str {
+    crate::support::large_sparse_moe_model_id()
+}
 pub(super) const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 const READY_ATTEMPT_LIMIT: u8 = 70;
 
@@ -280,7 +282,7 @@ async fn measure_worker_summarization(
     let mut stream_receiver = worker_handle
         .start_chat_generation(ChatGenerationCommand {
             request_id: RequestId::new(1),
-            model: MODEL_ID.to_owned(),
+            model: model_id().to_owned(),
             messages: vec![ChatMessage::User {
                 content: format!(
                     "{}\n\n{source_document}",

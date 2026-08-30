@@ -4,9 +4,7 @@ use astronomical_model_serving::{
     DecoderCacheLayerLayout, PersistentPromptCacheModelContract, laguna_decoder_cache_layout,
 };
 
-use super::support::{
-    LagunaQualificationSize, config_value, normalize, qualification_config_value,
-};
+use super::support::{LagunaAcceptanceSize, acceptance_config_value, config_value, normalize};
 
 #[test]
 fn should_derive_mixed_append_only_and_rotating_topology_from_descriptors() {
@@ -15,14 +13,14 @@ fn should_derive_mixed_append_only_and_rotating_topology_from_descriptors() {
         .expect("a synthetic Laguna contract should produce a cache layout");
     assert_eq!(synthetic_layout.layer_count(), 5);
 
-    let extra_small_layout = laguna_decoder_cache_layout(&normalize(qualification_config_value(
-        LagunaQualificationSize::ExtraSmall,
+    let extra_small_layout = laguna_decoder_cache_layout(&normalize(acceptance_config_value(
+        LagunaAcceptanceSize::ExtraSmall,
     )))
-    .expect("the XS qualification contract should produce a cache layout");
-    let small_layout = laguna_decoder_cache_layout(&normalize(qualification_config_value(
-        LagunaQualificationSize::Small,
+    .expect("the XS acceptance contract should produce a cache layout");
+    let small_layout = laguna_decoder_cache_layout(&normalize(acceptance_config_value(
+        LagunaAcceptanceSize::Small,
     )))
-    .expect("the S qualification contract should produce a cache layout");
+    .expect("the S acceptance contract should produce a cache layout");
     assert_ne!(
         extra_small_layout.layer_count(),
         small_layout.layer_count(),
@@ -61,15 +59,13 @@ fn should_derive_mixed_append_only_and_rotating_topology_from_descriptors() {
 
 #[test]
 fn should_resolve_a_fifty_gigabyte_cache_contract_or_name_the_quota_limit() {
-    let extra_small_contract = normalize(qualification_config_value(
-        LagunaQualificationSize::ExtraSmall,
-    ));
+    let extra_small_contract = normalize(acceptance_config_value(LagunaAcceptanceSize::ExtraSmall));
     let extra_small_layout = laguna_decoder_cache_layout(&extra_small_contract)
-        .expect("the XS qualification contract should produce a cache layout");
+        .expect("the XS acceptance contract should produce a cache layout");
     let fifty_gigabyte_quota_bytes = 50_000_000_000_u64;
     let resolved_contract = PersistentPromptCacheModelContract::resolve(
         "Laguna-XS".to_owned(),
-        "qualification".to_owned(),
+        "acceptance".to_owned(),
         extra_small_layout,
         extra_small_contract.model().maximum_position_count() as usize,
         40_000_000_000,

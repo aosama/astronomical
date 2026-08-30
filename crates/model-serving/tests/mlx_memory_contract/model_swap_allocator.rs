@@ -12,8 +12,12 @@ use tokio::time::{Duration as TokioDuration, MissedTickBehavior, interval, timeo
 
 use crate::common::generation_progress::await_generation_advance_with_live_progress;
 
-const FIRST_MODEL_ID: &str = crate::common::ORNITH_MODEL_SWAP_SOURCE_MODEL_ID;
-const REPLACEMENT_MODEL_ID: &str = crate::common::ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
+fn first_model_id() -> &'static str {
+    crate::common::large_sparse_moe_model_id()
+}
+fn replacement_model_id() -> &'static str {
+    crate::common::large_sparse_moe_model_id()
+}
 const VALIDATION_MAXIMUM_OUTPUT_TOKENS: u32 = 20_480;
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 const IMAGE_PAD_TOKEN_ID: u32 = 248_069;
@@ -28,7 +32,7 @@ const SAY_HI_PROMPT_TOKEN_IDS: [u32; 15] = [
 ];
 
 #[tokio::test]
-#[ignore = "loads the configured Ornith 1.5 oQ6e artifact, drops it, then reloads oQ6e"]
+#[ignore = "loads the large sparse MoE e2e fixture, drops it, then reloads it"]
 async fn should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_model() {
     timeout(MODEL_SWAP_TEST_TIMEOUT, run_model_swap_allocator_contract())
         .await
@@ -37,28 +41,29 @@ async fn should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_
 
 async fn run_model_swap_allocator_contract() {
     let _direct_mlx_test_guard = crate::common::direct_mlx_test_guard().await;
-    let first_model_directory = crate::common::configured_model_directory_by_id(FIRST_MODEL_ID)
+    let first_model_id = first_model_id();
+    let replacement_model_id = replacement_model_id();
+    let first_model_directory = crate::common::configured_model_directory_by_id(first_model_id)
         .unwrap_or_else(|| {
             panic!(
-                "the memory contract requires the local {FIRST_MODEL_ID} artifact; configure it in ~/.astronomical-dev/config.json"
+                "the memory contract requires the local {first_model_id} artifact; configure it in ~/.astronomical-dev/config.json"
             )
         });
     let replacement_model_directory =
-        crate::common::configured_model_directory_by_id(REPLACEMENT_MODEL_ID).unwrap_or_else(|| {
+        crate::common::configured_model_directory_by_id(replacement_model_id).unwrap_or_else(|| {
             panic!(
-                "the memory contract requires the local {REPLACEMENT_MODEL_ID} artifact; configure it in ~/.astronomical-dev/config.json"
+                "the memory contract requires the local {replacement_model_id} artifact; configure it in ~/.astronomical-dev/config.json"
             )
         });
-    let mlx_memory_limits =
-        crate::common::sample_model_artifact_qualification_mlx_memory_limits().await;
-    eprintln!("[memory-contract] status=progress phase=load_first_model model={FIRST_MODEL_ID}");
+    let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
+    eprintln!("[memory-contract] status=progress phase=load_first_model model={first_model_id}");
     let mut first_model_engine = create_engine(
         &first_model_directory,
         &mlx_memory_limits,
         PerformanceAttribution::disabled(),
         PerformanceAttributionLog::disabled(),
     );
-    load_engine_with_progress(&mut first_model_engine, FIRST_MODEL_ID).await;
+    load_engine_with_progress(&mut first_model_engine, first_model_id).await;
     run_bounded_generation(&mut first_model_engine, RequestId::new(FIRST_REQUEST_ID)).await;
     drop(first_model_engine);
 
@@ -75,12 +80,12 @@ async fn run_model_swap_allocator_contract() {
     );
     assert!(
         post_drop_snapshot.allocator_cache_memory_bytes() > 0,
-        "dropping {FIRST_MODEL_ID} must leave reclaimable MLX allocator bytes before replacement loading"
+        "dropping {first_model_id} must leave reclaimable MLX allocator bytes before replacement loading"
     );
     assert_eq!(
         post_drop_snapshot.active_memory_bytes(),
         0,
-        "dropping {FIRST_MODEL_ID} must release every active model allocation before replacement loading"
+        "dropping {first_model_id} must release every active model allocation before replacement loading"
     );
     drop(post_drop_runtime);
 
@@ -93,7 +98,7 @@ async fn run_model_swap_allocator_contract() {
         PerformanceAttributionLog::open(&performance_attribution_log_path, true)
             .expect("the memory contract should open the replacement attribution log");
     eprintln!(
-        "[memory-contract] status=progress phase=load_replacement_model model={REPLACEMENT_MODEL_ID}"
+        "[memory-contract] status=progress phase=load_replacement_model model={replacement_model_id}"
     );
     let mut replacement_model_engine = create_engine(
         &replacement_model_directory,
@@ -101,12 +106,12 @@ async fn run_model_swap_allocator_contract() {
         PerformanceAttribution::enabled(),
         performance_attribution_log,
     );
-    load_engine_with_progress(&mut replacement_model_engine, REPLACEMENT_MODEL_ID).await;
+    load_engine_with_progress(&mut replacement_model_engine, replacement_model_id).await;
 
     let attribution_report_documents =
         read_attribution_report_documents(&performance_attribution_log_path);
     let replacement_model_loading_report =
-        model_loading_report(&attribution_report_documents, REPLACEMENT_MODEL_ID);
+        model_loading_report(&attribution_report_documents, replacement_model_id);
     assert_replacement_cleanup_order(replacement_model_loading_report);
     let replacement_model_loading_allocator_cache_memory_bytes =
         replacement_model_loading_report["mlx_allocator_cache_memory_bytes"]

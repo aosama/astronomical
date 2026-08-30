@@ -2,8 +2,8 @@ use super::*;
 
 #[test]
 fn should_accept_a_single_element_eos_token_id_array() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
     // Single-element array should also work
     config_value["eos_token_id"] = json!([248046]);
     let config_bytes = serde_json::to_vec(&config_value)
@@ -17,9 +17,9 @@ fn should_accept_a_single_element_eos_token_id_array() {
 
 #[test]
 fn should_accept_a_single_eos_token_id_and_use_pad_token_id_as_second() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
-    // Simulate oQ6e-style config with a single eos_token_id integer
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
+    // Simulate a sparse mixed-precision config with a single eos_token_id integer
     config_value["eos_token_id"] = json!(248046);
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");
@@ -34,8 +34,8 @@ fn should_accept_a_single_eos_token_id_and_use_pad_token_id_as_second() {
 
 #[test]
 fn should_accept_an_ornith_config_with_a_different_rope_base() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
     config_value["text_config"]["rope_theta"] = json!(100000.0);
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");
@@ -45,8 +45,8 @@ fn should_accept_an_ornith_config_with_a_different_rope_base() {
 
 #[test]
 fn should_accept_every_declared_end_of_sequence_token_id() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
     config_value["eos_token_id"] = json!([248046, 248044, 248043]);
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");
@@ -61,8 +61,8 @@ fn should_accept_every_declared_end_of_sequence_token_id() {
 
 #[test]
 fn should_accept_router_logits_as_an_ignored_generation_output_preference() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
     config_value["text_config"]["output_router_logits"] = json!(true);
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");
@@ -204,8 +204,8 @@ fn should_parse_config_when_top_level_partial_rotary_factor_is_absent_but_rope_p
 
 #[test]
 fn should_accept_an_ornith_config_with_tied_embeddings() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
     config_value["tie_word_embeddings"] = json!(true);
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");

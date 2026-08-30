@@ -37,7 +37,7 @@ pub enum LagunaOutputEvent {
     },
 }
 
-/// Strict bounded incremental parser for the certified Poolside output contract.
+/// Strict bounded incremental parser for the Poolside output contract.
 #[derive(Debug)]
 pub struct LagunaOutputParser {
     completed_tool_call_count: u16,

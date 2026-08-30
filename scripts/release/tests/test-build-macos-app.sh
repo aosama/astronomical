@@ -58,7 +58,7 @@ assert_bundle_exists() {
         exit 1
     }
     [ "$(cat "${expected_app_bundle}/Contents/Resources/share/mlx/mlx.metallib")" = "fixture-metallib" ] || {
-        print_error "packaged mlx.metallib is not the certified source copy in ${expected_app_bundle}"
+        print_error "packaged mlx.metallib is not the build-produced copy in ${expected_app_bundle}"
         exit 1
     }
     [ -d "${expected_app_bundle}/Contents/Frameworks/Sparkle.framework" ] || {

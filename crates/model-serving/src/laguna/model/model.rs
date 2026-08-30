@@ -371,7 +371,7 @@ impl LagunaModel {
     }
 
     /// Selects the highest-logit vocabulary row on the GPU and copies one token ID.
-    pub fn greedy_token_id(
+    pub fn highest_logit_token_id(
         runtime: &MlxRuntime,
         logits: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,

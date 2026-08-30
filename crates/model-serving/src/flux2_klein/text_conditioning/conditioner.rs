@@ -36,7 +36,7 @@ impl Flux2KleinTextConditioner {
         Ok(Self { tokenizer, weights })
     }
 
-    // The complete path remains available for parity qualification and non-interruptible callers.
+    // The complete path remains available for parity acceptance and non-interruptible callers.
     #[allow(dead_code)]
     pub(crate) fn condition(
         self,

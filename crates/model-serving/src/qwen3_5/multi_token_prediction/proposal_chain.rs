@@ -58,7 +58,7 @@ impl Qwen3_5Model {
                         performance_attribution,
                     )?;
                     let draft_token_indices =
-                        self.build_greedy_token(forward_output.draft_logits())?;
+                        self.select_highest_logit_token(forward_output.draft_logits())?;
                     let (_, post_normalization_hidden_states) = forward_output.into_arrays();
                     draft_token_arrays.push(draft_token_indices);
                     post_normalization_hidden_rows.push(post_normalization_hidden_states);

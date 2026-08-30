@@ -4,7 +4,7 @@ use super::*;
 fn should_reject_an_output_budget_above_the_worker_representation_limit() {
     let request_json = format!(
         r#"{{
-            "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model": "astronomical/fake-mixture-of-experts",
             "messages": [{{"role": "user", "content": "write a function"}}],
             "max_tokens": {}
         }}"#,
@@ -31,7 +31,7 @@ fn should_reject_an_output_budget_above_the_worker_representation_limit() {
 fn should_reject_caller_supplied_stop_sequences_before_worker_admission() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "Inspect the repository."}],
         "stop": ["</tool_call>"]
     }
@@ -53,7 +53,7 @@ fn should_reject_caller_supplied_stop_sequences_before_worker_admission() {
 fn should_reject_required_tool_choice_before_worker_admission() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "Inspect the repository."}],
         "tools": [
             {
@@ -83,7 +83,7 @@ fn should_reject_required_tool_choice_before_worker_admission() {
 fn should_reject_a_named_forced_function_before_worker_admission() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "Inspect the repository."}],
         "tools": [
             {
@@ -113,7 +113,7 @@ fn should_reject_a_named_forced_function_before_worker_admission() {
 fn should_reject_a_known_but_unsupported_opencode_option_explicitly() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "Inspect the repository."}],
         "store": true
     }
@@ -133,7 +133,7 @@ fn should_reject_a_known_but_unsupported_opencode_option_explicitly() {
 fn should_reject_an_unknown_openai_field_explicitly() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "Inspect the repository."}],
         "response_format": {"type": "json_object"}
     }

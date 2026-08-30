@@ -26,7 +26,7 @@ impl Qwen3_5MultiTokenPredictionRequest {
         mtp_enabled: bool,
         mtp_runtime_is_active: bool,
         model_has_mtp_weights: bool,
-        sampling_is_greedy: bool,
+        sampling_selects_highest_logit: bool,
         has_precomputed_visual_embeddings: bool,
         has_processed_visual_images: bool,
         persistent_prompt_cache_is_available: bool,
@@ -40,7 +40,7 @@ impl Qwen3_5MultiTokenPredictionRequest {
             mtp_enabled,
             mtp_runtime_is_active,
             model_has_mtp_weights,
-            sampling_is_greedy,
+            sampling_selects_highest_logit,
             has_precomputed_visual_embeddings,
             has_processed_visual_images,
             persistent_prompt_cache_is_available,
@@ -170,8 +170,10 @@ impl Qwen3_5MultiTokenPredictionRequest {
             )
     }
 
-    pub(crate) fn is_greedy_sampling_strategy(sampling_strategy: Qwen3_5SamplingStrategy) -> bool {
-        matches!(sampling_strategy, Qwen3_5SamplingStrategy::Greedy)
+    pub(crate) fn sampling_strategy_selects_highest_logit(
+        sampling_strategy: Qwen3_5SamplingStrategy,
+    ) -> bool {
+        matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit)
     }
 }
 
@@ -193,7 +195,9 @@ pub(crate) fn create_optional_prediction_session(
         user_enabled_optional_prediction,
         optional_prediction_runtime_is_active,
         model_has_optional_prediction_weights,
-        Qwen3_5MultiTokenPredictionRequest::is_greedy_sampling_strategy(sampling_strategy),
+        Qwen3_5MultiTokenPredictionRequest::sampling_strategy_selects_highest_logit(
+            sampling_strategy,
+        ),
         has_precomputed_visual_embeddings,
         has_processed_visual_images,
         persistent_prompt_cache_is_available,

@@ -6,7 +6,7 @@ use astronomical_supervisor::{
 #[test]
 fn should_keep_only_non_payload_request_metadata_in_diagnostics() {
     let request_body = br#"{
-        "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model":"astronomical/fake-mixture-of-experts",
         "api_key":"body-api-secret",
         "messages":[{"role":"user","content":"inspect the failure\napi_key: user-api-secret\ncontinue safely"}],
         "stream":true
@@ -25,7 +25,7 @@ fn should_keep_only_non_payload_request_metadata_in_diagnostics() {
 #[test]
 fn should_summarize_the_latest_user_message_for_info_diagnostics() {
     let request_body = br#"{
-        "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model":"astronomical/fake-mixture-of-experts",
         "messages":[
             {"role":"system","content":"system"},
             {"role":"user","content":"earlier"},
@@ -49,7 +49,7 @@ fn should_summarize_the_latest_user_message_for_info_diagnostics() {
 #[test]
 fn should_summarize_message_roles_for_translation_rejection_diagnostics() {
     let request_body = br#"{
-        "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model":"astronomical/fake-mixture-of-experts",
         "messages":[
             {"role":"user","content":"earlier context"},
             {"role":"system","content":"a chronological update"},
@@ -71,7 +71,7 @@ fn should_summarize_message_roles_for_translation_rejection_diagnostics() {
 #[test]
 fn should_not_retain_secret_bearing_user_message_text_in_info_diagnostics() {
     let request_body = br#"{
-        "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model":"astronomical/fake-mixture-of-experts",
         "messages":[
             {"role":"user","content":"please use token: definitely-secret\nnormal followup"}
         ],

@@ -38,7 +38,7 @@ pub(crate) type Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer
 impl Qwen3_5Model {
     /// Scores prompt-token importance with a local draft-model decoder state.
     ///
-    /// The prompt forward retains full-attention keys. Bounded greedy lookahead
+    /// The prompt forward retains full-attention keys. Bounded highest-logit lookahead
     /// then retains post-RoPE queries, and the resulting attention distributions
     /// are reduced to one float32 score per prompt position. The decoder state is
     /// deliberately local because only the scores are needed after this method.
@@ -291,7 +291,7 @@ impl Qwen3_5Model {
             description: "speculative-prefill draft prompt produced no logits",
         })?;
         for _lookahead_step in 0..lookahead_token_count {
-            let lookahead_token_id = self.greedy_token_id(&draft_logits)?;
+            let lookahead_token_id = self.highest_logit_token_id(&draft_logits)?;
             let lookahead_forward_output = self
                 .forward_chunk_with_speculative_prefill_attention_capture_and_performance_attribution(
                     &[lookahead_token_id],

@@ -11,9 +11,9 @@ pub struct Qwen3_5SamplerConfig {
     pub temperature_thousandths: u16,
     /// The model's default nucleus-sampling probability expressed in thousandths.
     pub top_p_thousandths: u16,
-    /// The certified top-k value for sampling. Must match the value used
+    /// The model top-k value for sampling. Must match the value used
     /// during model training and evaluation.
-    pub certified_top_k: i32,
+    pub model_top_k: i32,
 }
 
 /// Discovers the sampler configuration from a model's `generation_config.json` bytes.
@@ -24,7 +24,7 @@ pub fn discover_sampler_config(generation_config_bytes: Option<&[u8]>) -> Qwen3_
         .and_then(|bytes| serde_json::from_slice::<GenerationConfig>(bytes).ok())
         .unwrap_or_default();
     Qwen3_5SamplerConfig {
-        // Temperature zero is a valid model-provided greedy policy. Keep it distinct from an
+        // Temperature zero is a valid model-provided highest-logit policy. Keep it distinct from an
         // absent or malformed field, which alone falls back to Astronomical's product default.
         temperature_thousandths: decimal_thousandths(
             model_generation_configuration.temperature,
@@ -33,7 +33,7 @@ pub fn discover_sampler_config(generation_config_bytes: Option<&[u8]>) -> Qwen3_
             u16::MAX,
         ),
         top_p_thousandths: decimal_thousandths(model_generation_configuration.top_p, 950, 1, 1_000),
-        certified_top_k: model_generation_configuration
+        model_top_k: model_generation_configuration
             .top_k
             .filter(|configured_top_k| *configured_top_k > 0)
             .unwrap_or(20),

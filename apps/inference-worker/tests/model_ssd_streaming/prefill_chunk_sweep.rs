@@ -11,7 +11,9 @@ use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use tokio::time::{Instant, timeout};
 
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
-const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
+fn model_id() -> &'static str {
+    crate::support::large_sparse_moe_model_id()
+}
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 const SWEEP_TIMEOUT: Duration = Duration::from_secs(115);
@@ -82,7 +84,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
     let mut protocol_writer = ProtocolWriter::new(test_to_worker);
     let mut protocol_reader = ProtocolReader::new(test_from_worker);
 
-    let isolated_development_home = crate::common::isolated_development_home_from_user_config();
+    let isolated_development_home = crate::support::isolated_development_home_from_user_config();
     let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_development_home.path().to_path_buf(),
         std::path::PathBuf::new(),
@@ -92,7 +94,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
     let worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
     let model_policy = worker_runtime_config
         .model_policy_catalog
-        .get(MODEL_ID)
+        .get(model_id())
         .expect("the configured benchmark model should have a resolved policy");
     let mut worker_model_configuration = model_policy.worker_model_configuration.clone();
     worker_model_configuration
@@ -147,7 +149,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
     );
     let chat_command = ChatGenerationCommand {
         request_id: RequestId::new(1),
-        model: MODEL_ID.to_owned(),
+        model: model_id,
         messages: vec![ChatMessage::User {
             content: user_prompt,
             images: Vec::new(),

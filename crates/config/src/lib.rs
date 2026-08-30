@@ -138,7 +138,7 @@ impl AstronomicalConfig {
         })
     }
 
-    /// Loads a Stable-shaped config beneath a supplied home for qualification callers.
+    /// Loads a Stable-shaped config beneath a supplied home for acceptance callers.
     pub fn load_from_home_directory(
         home_directory: impl Into<PathBuf>,
     ) -> Result<Self, AstronomicalConfigError> {

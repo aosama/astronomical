@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 # Runs only the direct-MLX contract binaries so unrelated hermetic and
-# model-artifact qualification modules never enter this direct-MLX graph.
+# model-artifact acceptance modules never enter this direct-MLX graph.
 
 set -eu
 

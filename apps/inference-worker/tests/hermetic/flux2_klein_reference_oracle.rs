@@ -8,7 +8,7 @@ use crate::flux2_klein_reference_oracle::{ExpectedFluxReference, FluxReferenceOr
 
 const MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
 const MODEL_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
-const PROMPT: &str = "A Romeo and Juliet-derived qualification prompt";
+const PROMPT: &str = "A Romeo and Juliet-derived acceptance prompt";
 
 #[test]
 fn should_reject_malformed_independent_reference_bundles() {
@@ -106,7 +106,7 @@ fn should_reject_incorrect_pixels_with_maximum_and_mean_error_diagnostics() {
     let oracle = parse_valid_bundle();
     let error = oracle
         .compare_generated_rgb(&[0_u8; 12])
-        .expect_err("deterministic but incorrect pixels must not qualify");
+        .expect_err("deterministic but incorrect pixels must not pass");
     assert!(error.contains("max_error="));
     assert!(error.contains("mean_error="));
 }

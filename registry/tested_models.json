@@ -15,7 +15,7 @@
     "model_id": "Jundot/Qwen3.6-35B-A3B-oQ4e-mtp",
     "revision": "discovered",
     "tested_at": "2026-07-31",
-    "notes": "Qwen3.6 sparse-MoE MTP artifact. 5 shards, separate vision sidecar, and one MTP layer; used by the serial allocator model-swap qualification."
+    "notes": "Qwen3.6 sparse-MoE MTP artifact. 5 shards, separate vision sidecar, and one MTP layer; used by the serial allocator model-swap acceptance."
   },
   {
     "model_id": "brainworkup/Ornith-1.0-9B-oQ8e",
@@ -27,6 +27,6 @@
     "model_id": "mlx-community/XYZ-Aquila-mini-OptiQ-4bit",
     "revision": "b897e54279d02c37174b3d7b1dc002d0bd2c09d9",
     "tested_at": "2026-07-29",
-    "notes": "OptiQ mixed-precision affine model: 7 language shards, separate vision sidecar, 40 layers, 256 experts, and 8 routed experts per token. Ignored artifact and REST text/image E2E qualifications cover the local checkpoint."
+    "notes": "OptiQ mixed-precision affine model: 7 language shards, separate vision sidecar, 40 layers, 256 experts, and 8 routed experts per token. Ignored artifact and REST text/image E2E acceptance covers the local checkpoint."
   }
 ]
