@@ -426,6 +426,45 @@ impl Qwen3_5EngineState {
             prefill_chunck_elapsed_millis,
             "completed synchronous Qwen3.5 prompt-processing chunk"
         );
+        let mlx_memory_telemetry = mlx_memory_snapshot
+            .map(|mlx_memory_snapshot| {
+                let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
+                    .map_err(|_| {
+                        fatal_engine_error("MLX active memory bytes exceed the u64 range")
+                    })?;
+                let active_memory_breakdown = model.active_memory_breakdown(
+                    &active_request.request_decoder_state,
+                    active_request.additional_context_state_payload_bytes(),
+                    active_memory_bytes,
+                    0,
+                );
+                Ok::<crate::MlxMemoryTelemetry, InferenceEngineError>(
+                    crate::MlxMemoryTelemetry::new(
+                        active_memory_bytes,
+                        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(
+                            |_| {
+                                fatal_engine_error(
+                                    "MLX allocator-cache memory bytes exceed the u64 range",
+                                )
+                            },
+                        )?,
+                        u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(|_| {
+                            fatal_engine_error("MLX peak memory bytes exceed the u64 range")
+                        })?,
+                        active_memory_breakdown,
+                    )
+                    // The claim derives from the breakdown of this exact snapshot
+                    // so the progress pair cannot straddle a promotion or demote
+                    // (issue #337).
+                    .with_expert_residency_telemetry(
+                        model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+                    ),
+                )
+            })
+            .transpose()?;
+        let expert_residency = mlx_memory_telemetry
+            .as_ref()
+            .and_then(|telemetry| telemetry.expert_residency_telemetry());
         Ok(Some(GeneratedToken::PrefillProgress {
             processed_token_count: prefill_token_count as u32,
             elapsed_millis: prefill_chunck_elapsed_millis,
@@ -433,37 +472,8 @@ impl Qwen3_5EngineState {
             completed_prefill_chunk_tokens: u32::try_from(prefill_token_count).map_err(|_| {
                 fatal_engine_error("completed_prefill_chunk_tokens exceeds the u32 range")
             })?,
-            mlx_memory_telemetry: mlx_memory_snapshot
-                .map(|mlx_memory_snapshot| {
-                    let active_memory_bytes =
-                        u64::try_from(mlx_memory_snapshot.active_memory_bytes()).map_err(|_| {
-                            fatal_engine_error("MLX active memory bytes exceed the u64 range")
-                        })?;
-                    Ok::<crate::MlxMemoryTelemetry, InferenceEngineError>(
-                        crate::MlxMemoryTelemetry::new(
-                            active_memory_bytes,
-                            u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes())
-                                .map_err(|_| {
-                                    fatal_engine_error(
-                                        "MLX allocator-cache memory bytes exceed the u64 range",
-                                    )
-                                })?,
-                            u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
-                                |_| {
-                                    fatal_engine_error("MLX peak memory bytes exceed the u64 range")
-                                },
-                            )?,
-                            model.active_memory_breakdown(
-                                &active_request.request_decoder_state,
-                                active_request.additional_context_state_payload_bytes(),
-                                active_memory_bytes,
-                                0,
-                            ),
-                        ),
-                    )
-                })
-                .transpose()?,
-            expert_residency_telemetry: Some(model.expert_residency_telemetry()),
+            mlx_memory_telemetry,
+            expert_residency_telemetry: expert_residency,
             speculative_prefill_draft_memory_telemetry: active_request
                 .speculative_prefill_draft_memory_telemetry
                 .take(),
