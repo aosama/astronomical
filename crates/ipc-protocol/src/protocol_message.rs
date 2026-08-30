@@ -247,8 +247,13 @@ pub enum WorkerEvent {
         minimum_mlx_memory_ceiling_bytes: u64,
     },
     /// Delivers an explicitly requested idle or model-load MLX observation.
+    ///
+    /// The residency snapshot is captured at the same instant as the memory
+    /// snapshot so the public status can never pair a fresh measurement with a
+    /// stale residency claim (issue #337).
     MlxMemorySample {
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+        expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
     /// Reports one accepted live MLX memory-ceiling adjustment.
     MlxMemoryLimitChanged {
@@ -333,6 +338,8 @@ pub enum WorkerEvent {
         outputs: Vec<ChatGenerationOutput>,
         /// Present when this output follows a measured decode boundary.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+        /// Sparse-expert ownership captured with the same decode observation.
+        expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
     /// Reports initial prompt-processing status or one completed prompt-processing chunk.
     PrefillProgress {
@@ -358,6 +365,8 @@ pub enum WorkerEvent {
         total_layer_count: u32,
         resident_expert_count: u32,
         resident_expert_payload_bytes: u64,
+        /// Memory observation captured at the same owner-thread instant as the residency.
+        mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Reports generated-token progress that has not necessarily produced public output yet.
     GenerationProgress {
@@ -367,6 +376,8 @@ pub enum WorkerEvent {
         elapsed_millis: u64,
         /// Present when generation advanced without public model output.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+        /// Sparse-expert ownership captured with the same decode observation.
+        expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
     /// Reports the measured first decode forward independently from preparation and output.
     FirstDecodeCompleted {

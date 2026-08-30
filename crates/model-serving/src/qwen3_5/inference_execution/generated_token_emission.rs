@@ -67,7 +67,8 @@ impl Qwen3_5EngineState {
                             mlx_active_memory_bytes,
                             0,
                         ),
-                    ),
+                    )
+                    .with_expert_residency_telemetry(model.expert_residency_telemetry()),
                 )
             })
             .transpose()?;

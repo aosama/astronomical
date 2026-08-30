@@ -107,6 +107,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     .max_output_tokens,
                                 elapsed_millis: 250,
                                 mlx_memory_snapshot: None,
+                                expert_residency: None,
                             })
                             .await?;
                         tokio::time::sleep(Duration::from_millis(750)).await;
@@ -154,6 +155,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         event_writer
                             .send_event(&WorkerEvent::MlxMemorySample {
                                 mlx_memory_snapshot: Some(cancellation_memory_snapshot(33_000)),
+                                expert_residency: None,
                             })
                             .await?;
                         cancellation_mlx_telemetry = CancellationMlxTelemetry::Clear;
@@ -168,6 +170,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 total_layer_count: 40,
                                 resident_expert_count: 40,
                                 resident_expert_payload_bytes: 23_073_914_880,
+                                mlx_memory_snapshot: None,
                             };
                         event_writer
                             .send_event(&generation_preparation_event)
@@ -186,6 +189,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     text: "out of order".to_owned(),
                                 }],
                                 mlx_memory_snapshot: None,
+                                expert_residency: None,
                             })
                             .await?;
                     }
@@ -197,6 +201,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 generated_token_count: 1,
                                 outputs: Vec::new(),
                                 mlx_memory_snapshot: None,
+                                expert_residency: None,
                             })
                             .await?;
                         event_writer
@@ -228,6 +233,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     },
                                 ],
                                 mlx_memory_snapshot: None,
+                                expert_residency: None,
                             })
                             .await?;
                     }
@@ -243,6 +249,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     arguments_json: r#"{"path":"AGENTS.md"}"#.to_owned(),
                                 }],
                                 mlx_memory_snapshot: None,
+                                expert_residency: None,
                             })
                             .await?;
                         event_writer
@@ -281,6 +288,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                         text: "fragment".to_owned(),
                                     }],
                                     mlx_memory_snapshot: None,
+                                    expert_residency: None,
                                 })
                                 .await?;
                         }
@@ -335,6 +343,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     text: "done".to_owned(),
                                 }],
                                 mlx_memory_snapshot: None,
+                                expert_residency: None,
                             })
                             .await?;
                         event_writer
@@ -423,6 +432,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         event_writer
                             .send_event(&WorkerEvent::MlxMemorySample {
                                 mlx_memory_snapshot: Some(cancellation_memory_snapshot(44_000)),
+                                expert_residency: None,
                             })
                             .await?;
                     }
@@ -430,6 +440,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         event_writer
                             .send_event(&WorkerEvent::MlxMemorySample {
                                 mlx_memory_snapshot: None,
+                                expert_residency: None,
                             })
                             .await?;
                     }
