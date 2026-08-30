@@ -2,6 +2,7 @@ mod artifact;
 mod artifact_helpers;
 mod artifact_inventory;
 mod mtp_contract;
+mod ram_budget_geometry;
 mod shard_index;
 mod sidecar_declaration;
 pub(crate) mod tensor_spec;
@@ -22,6 +23,9 @@ pub use crate::qwen3_5::multi_token_prediction::{
 };
 pub use artifact::{Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator};
 pub use mtp_contract::{MAXIMUM_MTPLX_RUNTIME_BYTES, Qwen3_5MtpContract, Qwen3_5MtpContractError};
+pub use ram_budget_geometry::{
+    Qwen3_5RamBudgetGeometryError, mlx_ram_budget_model_geometry_from_validated_artifact,
+};
 pub use shard_index::{MAXIMUM_INDEX_BYTES, Qwen3_5ArtifactError, Qwen3_5ShardIndex};
 pub use sidecar_declaration::{
     Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,

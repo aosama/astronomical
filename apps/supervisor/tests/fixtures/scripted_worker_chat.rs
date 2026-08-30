@@ -54,6 +54,7 @@ where
                 generated_token_count,
                 outputs,
                 mlx_memory_snapshot: None,
+                expert_residency: None,
             })
             .await?;
     }
@@ -107,6 +108,7 @@ where
                 text: "activity transition".to_owned(),
             }],
             mlx_memory_snapshot: None,
+            expert_residency: None,
         })
         .await?;
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;

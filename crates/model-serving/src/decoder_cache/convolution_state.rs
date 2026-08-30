@@ -7,7 +7,7 @@ const CONVOLUTION_STATE_OPERATION: &str = "roll the in-memory convolution rollin
 /// The convolution state is a fixed-shape `[1, 3, convolution_dimension]`
 /// rolling buffer that holds the last 3 tokens of the mixed query/key/value
 /// input for the next conv1d call. The empty state allocates nothing; the
-/// first `update` call materializes a zero buffer of the certified dimension,
+/// first `update` call materializes a zero buffer of the config dimension,
 /// prepends it to the new input, and stores the trailing 3-token slice.
 pub struct ConvolutionState {
     state: Option<MlxArray>,
@@ -29,7 +29,7 @@ pub struct ConvolutionStateBoundaryCheckpointUpdate {
 impl ConvolutionState {
     /// Creates empty convolution state without allocating MLX arrays.
     ///
-    /// Uses the certified Qwen3.5-MoE dimension `8192` and kernel dimension `4` for
+    /// Uses the Qwen3.5-MoE dimension `8192` and kernel dimension `4` for
     /// the two GPU unit tests that exercise this owner in isolation. Production
     /// code should use `empty_with_shape` with config-derived dimensions.
     #[must_use]
@@ -65,7 +65,7 @@ impl ConvolutionState {
     ///
     /// `token_count` is the number of new tokens in `mixed_queries_keys_values`.
     /// The rolling buffer keeps exactly `kernel_dimension - 1` trailing
-    /// tokens across calls (3 for the certified Qwen3.5-MoE config).
+    /// tokens across calls (3 for the Qwen3.5-MoE config).
     pub fn update(
         &mut self,
         runtime: &MlxRuntime,

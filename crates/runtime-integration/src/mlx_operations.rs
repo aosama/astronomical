@@ -87,7 +87,7 @@ impl MlxRuntime {
         })
     }
 
-    /// Applies fused RMS normalization with a required certified weight.
+    /// Applies fused RMS normalization with a required weight.
     pub fn rms_norm(
         &self,
         input: &MlxArray,

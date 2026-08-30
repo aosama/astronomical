@@ -16,7 +16,7 @@ fn should_reject_a_second_tool_result_for_the_same_assistant_tool_call() {
     };
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(64),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::Assistant {
                 content: None,
@@ -50,7 +50,7 @@ fn should_reject_a_second_tool_result_for_the_same_assistant_tool_call() {
 fn should_reject_duplicate_declared_tool_names() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(65),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: vec![
             ChatToolDefinition {
@@ -81,7 +81,7 @@ fn should_reject_duplicate_declared_tool_names() {
 fn should_reject_a_forced_tool_choice_for_an_undeclared_function() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(66),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::Function {
@@ -105,7 +105,7 @@ fn should_reject_a_forced_tool_choice_for_an_undeclared_function() {
 fn should_reject_required_tool_choice_before_prompt_rendering() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(79),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::Required,
@@ -123,7 +123,7 @@ fn should_reject_required_tool_choice_before_prompt_rendering() {
 fn should_reject_a_declared_forced_tool_choice_before_prompt_rendering() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(80),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: vec![ChatToolDefinition {
             name: "glob".to_owned(),
@@ -175,7 +175,7 @@ fn should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits() {
     let schema_with_large_description = format!(r#"{{"description":"{}"}}"#, "x".repeat(25 * 1024));
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(69),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: vec![
             ChatToolDefinition {
@@ -203,7 +203,7 @@ fn should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits() {
 fn should_reject_an_empty_chat_history_before_worker_preprocessing() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(70),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: Vec::new(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
@@ -221,7 +221,7 @@ fn should_reject_an_empty_chat_history_before_worker_preprocessing() {
 fn should_accept_large_chat_history_without_worker_message_count_cap() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(81),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: (0..250)
             .map(|message_number| ChatMessage::User {
                 content: format!("short turn {message_number}"),
@@ -243,7 +243,7 @@ fn should_accept_large_chat_history_without_worker_message_count_cap() {
 fn should_accept_many_small_tool_definitions_without_worker_tool_count_cap() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(82),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: (0..250)
             .map(|tool_number| ChatToolDefinition {
@@ -266,7 +266,7 @@ fn should_accept_many_small_tool_definitions_without_worker_tool_count_cap() {
 fn should_reject_a_zero_structured_chat_output_token_budget() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(71),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
@@ -290,7 +290,7 @@ fn should_reject_a_zero_structured_chat_output_token_budget() {
 fn should_accept_large_structured_chat_output_budget_for_model_context_admission() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(72),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
@@ -308,7 +308,7 @@ fn should_accept_large_structured_chat_output_budget_for_model_context_admission
 fn should_accept_one_chat_message_larger_than_the_old_message_byte_limit_when_the_ipc_frame_fits() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(74),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "x".repeat(48 * 1024 + 1),
             images: Vec::new(),
@@ -332,7 +332,7 @@ fn should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_
  {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(75),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::User {
                 content: "a".repeat(16 * 1024),
@@ -371,7 +371,7 @@ fn should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_
 fn should_accept_a_semantically_valid_large_chat_command_that_fits_one_ipc_frame() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(76),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::User {
                 content: "a".repeat(16 * 1024),
@@ -410,7 +410,7 @@ fn should_accept_a_semantically_valid_large_chat_command_that_fits_one_ipc_frame
 fn should_accept_a_large_tool_description_when_the_ipc_frame_fits() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(77),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: vec![ChatToolDefinition {
             name: "glob".to_owned(),
@@ -431,7 +431,7 @@ fn should_accept_a_large_tool_description_when_the_ipc_frame_fits() {
 fn should_accept_a_large_assistant_tool_call_id_when_the_ipc_frame_fits() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(77),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::Assistant {
             content: None,
             reasoning_content: None,
@@ -459,7 +459,7 @@ fn should_accept_large_assistant_tool_call_arguments_when_the_ipc_frame_fits() {
     let large_arguments_json = format!(r#"{{"payload":"{}"}}"#, "x".repeat(16_665));
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(83),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::Assistant {
             content: None,
             reasoning_content: None,

@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// A bounded failure while certifying the Laguna text-side artifact contract.
+/// A bounded failure while validating the Laguna text-side artifact contract.
 #[derive(Debug, Error)]
 pub enum LagunaTextArtifactError {
     #[error("Laguna {document_name} contains {actual_bytes} bytes, exceeding {maximum_bytes}")]

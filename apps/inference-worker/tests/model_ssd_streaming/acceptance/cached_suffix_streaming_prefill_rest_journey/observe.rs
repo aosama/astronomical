@@ -11,7 +11,7 @@ use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep};
 
-use crate::common::real_model_rest_server::get_json_endpoint;
+use crate::support::serving_rest::get_json_endpoint;
 
 use super::reports::InteractionReports;
 use super::support::{

@@ -6,7 +6,7 @@ use astronomical_model_serving::Qwen3_5PromptProcessingChunkSizer;
 fn should_process_fixed_chunks_and_an_exact_terminal_remainder() {
     let chunk_sizer =
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
-            .expect("the qualified fixed size should construct");
+            .expect("the chosen fixed size should construct");
 
     assert_eq!(
         chunk_sizer.next_prompt_processing_chunk_end(0, 5_000),
@@ -37,7 +37,7 @@ fn should_use_the_ssd_streaming_fixed_size_only_while_experts_are_paged() {
 fn should_bound_the_next_chunk_by_proven_executable_capacity() {
     let chunk_sizer =
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
-            .expect("the qualified fixed size should construct");
+            .expect("the chosen fixed size should construct");
 
     assert_eq!(
         chunk_sizer.next_prompt_processing_chunk_end_with_maximum_executable_capacity(

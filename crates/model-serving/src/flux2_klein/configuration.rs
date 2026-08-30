@@ -427,7 +427,7 @@ struct SchedulerDocument {
     use_karras_sigmas: bool,
 }
 
-/// CPU-scalar scheduler constants certified against the artifact configuration.
+/// CPU-scalar scheduler constants matched to the artifact configuration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Flux2KleinSchedulerConfig;
 

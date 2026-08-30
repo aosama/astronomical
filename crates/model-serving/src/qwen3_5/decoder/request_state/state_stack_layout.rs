@@ -57,9 +57,9 @@ pub(super) fn request_decoder_layer_state_from_layout(
                     "Qwen linear attention requires convolution and recurrent tensor components",
                 ));
             };
-            if convolution_tensor.qualified_role_name()
+            if convolution_tensor.tensor_role_name()
                 != crate::qwen3_5::decoder::cache_layout::QWEN_CONVOLUTION_TENSOR_ROLE
-                || recurrent_tensor.qualified_role_name()
+                || recurrent_tensor.tensor_role_name()
                     != crate::qwen3_5::decoder::cache_layout::QWEN_RECURRENCE_TENSOR_ROLE
             {
                 return Err(request_decoder_state_error(

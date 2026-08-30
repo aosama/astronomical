@@ -132,10 +132,10 @@ pub enum OpenAiImageGenerationValidationError {
         minimum_pixels: u32,
         maximum_pixels: u32,
     },
-    /// The initial native profile has one qualified diffusion schedule.
+    /// The initial native profile has one supported diffusion schedule.
     #[error("image generation supports exactly 4 steps, received {actual_steps}")]
     UnsupportedStepCount { actual_steps: u32 },
-    /// The initial native profile has one qualified guidance setting.
+    /// The initial native profile has one supported guidance setting.
     #[error("image generation supports guidance 1.0 only, received {actual_guidance}")]
     UnsupportedGuidance { actual_guidance: f32 },
     /// Only inline base64 JSON preserves the initial endpoint's local transport contract.

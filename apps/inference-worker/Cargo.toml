@@ -24,7 +24,7 @@ workspace = true
 
 [features]
 performance-measurement = []
-model-artifact-qualification = []
+serving-acceptance = []
 memory-management-acceptance = []
 
 [dependencies]

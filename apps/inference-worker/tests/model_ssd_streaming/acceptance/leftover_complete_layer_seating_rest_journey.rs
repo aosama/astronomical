@@ -1,11 +1,11 @@
 //! User journey proving leftover complete expert layers stay in RAM after a squeeze.
 //!
-//! The OptiQ-5bit fixture can hold every expert at 35 GB. This 26 GB cell is just
+//! The resident sparse MoE e2e fixture can hold every expert at 35 GB. This 26 GB cell is just
 //! under that complete-owner idle snapshot, so the request cannot keep the atomic
 //! complete blob. Leftover RAM can still hold tens of gigabytes of complete layers.
 //! Generating with Experts 0.00 GB is the failure this journey exists to catch.
 //!
-//! Qualification ceilings are evidence cells, not production constants.
+//! Acceptance ceilings are evidence cells, not production constants.
 
 use std::{
     fs,
@@ -18,11 +18,13 @@ use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep, timeout};
 
-use crate::common::real_model_rest_server::{
+use crate::support::serving_rest::{
     get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 
-const MODEL_ID: &str = "Ornith-1.5-35B-A3B-OptiQ-5bit";
+fn model_id() -> &'static str {
+    crate::support::resident_sparse_moe_model_id()
+}
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 26_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 4_096;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 128;
@@ -47,17 +49,17 @@ async fn should_keep_leftover_complete_expert_layers_in_ram_during_squeezed_gene
 }
 
 async fn run_leftover_complete_layer_seating_rest_journey() {
-    let model_directory = crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
+    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home = isolated_leftover_seating_worker_home();
     write_acceptance_config(&isolated_worker_home, &model_directory);
-    let user_message = crate::common::exact_model_prompt::build_exact_model_prompt_content(
+    let user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
         &model_directory,
         ROMEO_AND_JULIET_SOURCE,
         "Summarize Romeo and Juliet in one concise paragraph. Include the central conflict, major decisions, and tragic outcome.",
         PROMPT_TOKEN_COUNT,
     );
     let real_model_rest_server = launch_real_model_rest_server(
-        MODEL_ID,
+        model_id(),
         model_directory,
         &isolated_worker_home,
         MAXIMUM_MLX_MEMORY_BYTES,
@@ -70,7 +72,7 @@ async fn run_leftover_complete_layer_seating_rest_journey() {
             .with_api_key("local-acceptance-client"),
     );
     let completion_request = json!({
-        "model": MODEL_ID,
+        "model": model_id(),
         "messages": [{"role": "user", "content": user_message}],
         "stream": true,
         "stream_options": {"include_usage": true},

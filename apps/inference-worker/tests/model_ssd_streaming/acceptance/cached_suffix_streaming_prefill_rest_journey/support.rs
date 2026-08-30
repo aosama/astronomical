@@ -14,15 +14,15 @@ use super::{
     PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL, PREFILL_CHUNK_TOKEN_COUNT,
 };
 
-/// Builds realistic tool-control pressure without coupling qualification to one client.
+/// Builds realistic tool-control pressure without coupling acceptance to one client.
 pub(super) fn production_shaped_tools(tool_count: usize) -> Vec<Value> {
     (0..tool_count)
         .map(|tool_number| {
             json!({
                 "type": "function",
                 "function": {
-                    "name": format!("astronomical_qualification_tool_{tool_number}"),
-                    "description": "A local qualification tool that must not be called.",
+                    "name": format!("astronomical_acceptance_tool_{tool_number}"),
+                    "description": "A local acceptance tool that must not be called.",
                     "parameters": {
                         "type": "object",
                         "properties": {},
@@ -97,12 +97,12 @@ pub(super) fn write_interaction_config(
 ///
 /// Disposable Cargo targets are deleted after the journey, so evidence cannot live
 /// there. The workspace `target/` directory survives that cleanup and is gitignored.
-/// `ASTRONOMICAL_QUALIFICATION_EVIDENCE_DIRECTORY` overrides the destination.
-pub(super) fn persist_qualification_evidence(isolated_worker_home: &Path) -> PathBuf {
+/// `ASTRONOMICAL_ACCEPTANCE_EVIDENCE_DIRECTORY` overrides the destination.
+pub(super) fn persist_acceptance_evidence(isolated_worker_home: &Path) -> PathBuf {
     let logging_directory = interaction_instance_paths(isolated_worker_home).logging_directory();
-    let evidence_directory = qualification_evidence_directory();
+    let evidence_directory = acceptance_evidence_directory();
     fs::create_dir_all(&evidence_directory)
-        .expect("the qualification evidence directory should be created");
+        .expect("the acceptance evidence directory should be created");
     for report_file_name in ["performance.jsonl", "performance-attribution.jsonl"] {
         let source_report_path = logging_directory.join(report_file_name);
         if source_report_path.exists() {
@@ -111,7 +111,7 @@ pub(super) fn persist_qualification_evidence(isolated_worker_home: &Path) -> Pat
                 evidence_directory.join(report_file_name),
             )
             .unwrap_or_else(|copy_error| {
-                panic!("qualification evidence should copy {report_file_name}: {copy_error}")
+                panic!("acceptance evidence should copy {report_file_name}: {copy_error}")
             });
         }
     }
@@ -124,35 +124,35 @@ pub(super) fn persist_qualification_evidence(isolated_worker_home: &Path) -> Pat
     evidence_directory
 }
 
-pub(super) fn qualification_evidence_root() -> PathBuf {
+pub(super) fn acceptance_evidence_root() -> PathBuf {
     if let Ok(configured_evidence_directory) =
-        env::var("ASTRONOMICAL_QUALIFICATION_EVIDENCE_DIRECTORY")
+        env::var("ASTRONOMICAL_ACCEPTANCE_EVIDENCE_DIRECTORY")
     {
         return PathBuf::from(configured_evidence_directory);
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("target/qualification-evidence/cached-suffix-streaming-prefill")
+        .join("target/acceptance-evidence/cached-suffix-streaming-prefill")
 }
 
-fn qualification_evidence_directory() -> PathBuf {
+fn acceptance_evidence_directory() -> PathBuf {
     let unix_epoch_millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("the qualification clock should be after the Unix epoch")
+        .expect("the acceptance clock should be after the Unix epoch")
         .as_millis();
-    qualification_evidence_root().join(unix_epoch_millis.to_string())
+    acceptance_evidence_root().join(unix_epoch_millis.to_string())
 }
 
 pub(super) fn write_json_document(document_path: &Path, document: &Value) {
     if let Some(parent_directory) = document_path.parent() {
         fs::create_dir_all(parent_directory)
-            .expect("the qualification summary directory should be created");
+            .expect("the acceptance summary directory should be created");
     }
     fs::write(
         document_path,
-        serde_json::to_vec_pretty(document).expect("the qualification summary should serialize"),
+        serde_json::to_vec_pretty(document).expect("the acceptance summary should serialize"),
     )
-    .expect("the qualification summary should be written");
+    .expect("the acceptance summary should be written");
 }
 
 fn copy_worker_log_files(logging_directory: &Path, evidence_directory: &Path) {

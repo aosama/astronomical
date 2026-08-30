@@ -9,7 +9,7 @@ use astronomical_supervisor::translate_openai_responses_request;
 fn should_translate_string_input_into_one_user_chat_message() {
     let request = serde_json::from_str::<OpenAiResponsesRequest>(
         r#"{
-            "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model":"astronomical/fake-mixture-of-experts",
             "input":"Explain this repository.",
             "max_output_tokens":512,
             "temperature":0.6,
@@ -25,7 +25,7 @@ fn should_translate_string_input_into_one_user_chat_message() {
         chat_generation_command,
         ChatGenerationCommand {
             request_id: RequestId::new(700),
-            model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+            model: "astronomical/fake-mixture-of-experts".to_owned(),
             messages: vec![ChatMessage::User {
                 content: "Explain this repository.".to_owned(),
                 images: Vec::new(),
@@ -48,7 +48,7 @@ fn should_translate_string_input_into_one_user_chat_message() {
 fn should_translate_summary_reasoning_and_function_loop_replay() {
     let request = serde_json::from_str::<OpenAiResponsesRequest>(
         r#"{
-            "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model":"astronomical/fake-mixture-of-experts",
             "instructions":"You are a coding assistant.",
             "input":[
                 {"role":"user","content":"Inspect files."},

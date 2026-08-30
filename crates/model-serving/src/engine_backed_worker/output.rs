@@ -59,18 +59,23 @@ where
                 reason: "batched output count exceeds the u16 range".to_owned(),
             }
         })?;
+        let (mlx_memory_snapshot, expert_residency) = mlx_memory_telemetry
+            .map(|mlx_memory_telemetry| {
+                let (mlx_memory_snapshot, expert_residency) = worker_memory_observation(
+                    MlxMemorySnapshotSource::DecodeSubmitted,
+                    mlx_memory_telemetry,
+                );
+                (Some(mlx_memory_snapshot), expert_residency)
+            })
+            .unwrap_or((None, None));
         event_writer
             .send_event(&WorkerEvent::Output {
                 request_id: active_generation.request_id,
                 sequence_number: active_generation.next_sequence_number,
                 generated_token_count: active_generation.generated_token_count,
                 outputs: model_outputs,
-                mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
-                    worker_memory_snapshot(
-                        MlxMemorySnapshotSource::DecodeSubmitted,
-                        mlx_memory_telemetry,
-                    )
-                }),
+                mlx_memory_snapshot,
+                expert_residency,
             })
             .await?;
         active_generation.next_sequence_number = active_generation
@@ -152,18 +157,23 @@ where
             .map_or(0, |generation_started_at| {
                 generation_started_at.elapsed().as_millis() as u64
             });
+        let (mlx_memory_snapshot, expert_residency) = mlx_memory_telemetry
+            .map(|mlx_memory_telemetry| {
+                let (mlx_memory_snapshot, expert_residency) = worker_memory_observation(
+                    MlxMemorySnapshotSource::DecodeSubmitted,
+                    mlx_memory_telemetry,
+                );
+                (Some(mlx_memory_snapshot), expert_residency)
+            })
+            .unwrap_or((None, None));
         event_writer
             .send_event(&WorkerEvent::GenerationProgress {
                 request_id: active_generation.request_id,
                 generated_token_count: active_generation.generated_token_count,
                 maximum_output_tokens: active_generation.max_output_tokens,
                 elapsed_millis,
-                mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
-                    worker_memory_snapshot(
-                        MlxMemorySnapshotSource::DecodeSubmitted,
-                        mlx_memory_telemetry,
-                    )
-                }),
+                mlx_memory_snapshot,
+                expert_residency,
             })
             .await?;
         Ok(())
@@ -368,32 +378,51 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        let mlx_memory_snapshot = match self.loaded_runtime.as_ref() {
+        let mlx_memory_observation = match self.loaded_runtime.as_ref() {
             Some(LoadedRuntime::Autoregressive(loaded_model)) => loaded_model
                 .engine
                 .collect_mlx_memory_telemetry()
                 .await
                 .map_err(engine_generation_error)?
                 .map(|mlx_memory_telemetry| {
-                    worker_memory_snapshot(mlx_memory_snapshot_source, mlx_memory_telemetry)
+                    worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
                 }),
             Some(LoadedRuntime::Image(image_engine)) => image_engine
                 .collect_mlx_memory_telemetry()
                 .map(|mlx_memory_telemetry| {
-                    worker_memory_snapshot(mlx_memory_snapshot_source, mlx_memory_telemetry)
+                    worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
                 }),
             None => None,
         };
-        let Some(mlx_memory_snapshot) = mlx_memory_snapshot else {
+        let Some((mlx_memory_snapshot, expert_residency)) = mlx_memory_observation else {
             return Ok(());
         };
         event_writer
             .send_event(&WorkerEvent::MlxMemorySample {
                 mlx_memory_snapshot: Some(mlx_memory_snapshot),
+                expert_residency,
             })
             .await?;
         Ok(())
     }
+}
+
+/// Pairs one measurement with the expert ownership observed at the same instant,
+/// so the public status never reconciles figures from different moments.
+fn worker_memory_observation(
+    mlx_memory_snapshot_source: MlxMemorySnapshotSource,
+    mlx_memory_telemetry: MlxMemoryTelemetry,
+) -> (
+    astronomical_ipc_protocol::WorkerMlxMemorySnapshot,
+    Option<astronomical_ipc_protocol::WorkerExpertResidencySnapshot>,
+) {
+    let expert_residency = mlx_memory_telemetry
+        .expert_residency_telemetry()
+        .map(worker_expert_residency_snapshot);
+    (
+        worker_memory_snapshot(mlx_memory_snapshot_source, mlx_memory_telemetry),
+        expert_residency,
+    )
 }
 
 /// Converts engine-owned residency telemetry into the public worker snapshot.

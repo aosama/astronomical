@@ -27,7 +27,7 @@ pub struct LagunaGenerationProcessor {
 }
 
 impl LagunaGenerationProcessor {
-    /// Creates a processor with disabled attribution for standalone text qualification.
+    /// Creates a processor with disabled attribution for standalone text acceptance.
     pub fn new(
         model_id: impl Into<String>,
         descriptor: LagunaTextArtifactDescriptor,

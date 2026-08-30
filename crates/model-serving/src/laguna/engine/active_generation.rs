@@ -36,7 +36,7 @@ pub(super) struct LagunaActiveGeneration {
     pub(super) prompt_work_reuse: WorkerPromptWorkReuse,
     /// Resolved sampler that decode must execute, not only log.
     pub(super) sampling_strategy: crate::laguna::LagunaSamplingStrategy,
-    /// PRNG state advanced once per sampled token; absent for greedy requests.
+    /// PRNG state advanced once per sampled token; absent for highest-logit requests.
     pub(super) random_state: Option<MlxArray>,
 }
 

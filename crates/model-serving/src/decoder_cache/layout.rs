@@ -50,7 +50,7 @@ impl DecoderCacheTensorDtype {
 /// Static tensor contract for one named decoder-cache state component.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecoderCacheTensorLayout {
-    qualified_role_name: String,
+    tensor_role_name: String,
     dtype: DecoderCacheTensorDtype,
     dimensions: Vec<usize>,
     sequence_axis: Option<usize>,
@@ -89,7 +89,7 @@ impl DecoderCachePersistedTensorLayout {
         format!(
             "layer_{}_{}",
             self.decoder_layer_index,
-            self.tensor_layout.qualified_role_name()
+            self.tensor_layout.tensor_role_name()
         )
     }
 }
@@ -98,12 +98,12 @@ impl DecoderCacheTensorLayout {
     /// Creates a fixed-shape tensor restored only from a boundary snapshot.
     #[must_use]
     pub fn fixed(
-        qualified_role_name: impl Into<String>,
+        tensor_role_name: impl Into<String>,
         dtype: DecoderCacheTensorDtype,
         dimensions: Vec<usize>,
     ) -> Self {
         Self {
-            qualified_role_name: qualified_role_name.into(),
+            tensor_role_name: tensor_role_name.into(),
             dtype,
             dimensions,
             sequence_axis: None,
@@ -113,23 +113,23 @@ impl DecoderCacheTensorLayout {
     /// Creates a tensor sliced and concatenated along one token axis.
     #[must_use]
     pub fn sequence(
-        qualified_role_name: impl Into<String>,
+        tensor_role_name: impl Into<String>,
         dtype: DecoderCacheTensorDtype,
         dimensions: Vec<usize>,
         sequence_axis: usize,
     ) -> Self {
         Self {
-            qualified_role_name: qualified_role_name.into(),
+            tensor_role_name: tensor_role_name.into(),
             dtype,
             dimensions,
             sequence_axis: Some(sequence_axis),
         }
     }
 
-    /// Returns the deterministic model-qualified tensor role name.
+    /// Returns the deterministic tensor role name.
     #[must_use]
-    pub fn qualified_role_name(&self) -> &str {
-        &self.qualified_role_name
+    pub fn tensor_role_name(&self) -> &str {
+        &self.tensor_role_name
     }
 
     /// Returns the exact scalar type expected in memory and on disk.
@@ -154,39 +154,35 @@ impl DecoderCacheTensorLayout {
     pub fn fixed_payload_byte_count(&self) -> Result<usize, DecoderCacheLayoutError> {
         if self.sequence_axis.is_some() || self.dimensions.contains(&0) {
             return Err(DecoderCacheLayoutError::InvalidTensorPayloadGeometry {
-                qualified_role_name: self.qualified_role_name.clone(),
+                tensor_role_name: self.tensor_role_name.clone(),
                 description: "a fixed tensor must not contain a sequence axis or dynamic dimension",
             });
         }
-        checked_tensor_payload_byte_count(&self.qualified_role_name, &self.dimensions, self.dtype)
+        checked_tensor_payload_byte_count(&self.tensor_role_name, &self.dimensions, self.dtype)
     }
 
     /// Returns checked payload bytes for one token of a sequence tensor.
     pub fn sequence_payload_byte_count_per_token(&self) -> Result<usize, DecoderCacheLayoutError> {
         let Some(sequence_axis) = self.sequence_axis else {
             return Err(DecoderCacheLayoutError::InvalidTensorPayloadGeometry {
-                qualified_role_name: self.qualified_role_name.clone(),
+                tensor_role_name: self.tensor_role_name.clone(),
                 description: "a sequence tensor must declare a sequence axis",
             });
         };
         if sequence_axis >= self.dimensions.len() || self.dimensions[sequence_axis] != 0 {
             return Err(DecoderCacheLayoutError::InvalidTensorPayloadGeometry {
-                qualified_role_name: self.qualified_role_name.clone(),
+                tensor_role_name: self.tensor_role_name.clone(),
                 description: "the sequence axis must contain the dynamic dimension",
             });
         }
         let mut one_token_dimensions = self.dimensions.clone();
         one_token_dimensions[sequence_axis] = 1;
-        checked_tensor_payload_byte_count(
-            &self.qualified_role_name,
-            &one_token_dimensions,
-            self.dtype,
-        )
+        checked_tensor_payload_byte_count(&self.tensor_role_name, &one_token_dimensions, self.dtype)
     }
 }
 
 fn checked_tensor_payload_byte_count(
-    qualified_role_name: &str,
+    tensor_role_name: &str,
     dimensions: &[usize],
     dtype: DecoderCacheTensorDtype,
 ) -> Result<usize, DecoderCacheLayoutError> {
@@ -197,13 +193,13 @@ fn checked_tensor_payload_byte_count(
         });
     let Some(element_count) = element_count else {
         return Err(DecoderCacheLayoutError::TensorPayloadByteCountOverflow {
-            qualified_role_name: qualified_role_name.to_owned(),
+            tensor_role_name: tensor_role_name.to_owned(),
         });
     };
     element_count
         .checked_mul(dtype.scalar_byte_count())
         .ok_or_else(|| DecoderCacheLayoutError::TensorPayloadByteCountOverflow {
-            qualified_role_name: qualified_role_name.to_owned(),
+            tensor_role_name: tensor_role_name.to_owned(),
         })
 }
 
@@ -390,14 +386,14 @@ fn validate_sequence_tensor(
     let Some(sequence_axis) = tensor_layout.sequence_axis else {
         return Err(DecoderCacheLayoutError::SequenceTensorMissingAxis {
             layer_index,
-            qualified_role_name: tensor_layout.qualified_role_name.clone(),
+            tensor_role_name: tensor_layout.tensor_role_name.clone(),
         });
     };
     validate_tensor_role_and_dimensions(tensor_layout, layer_index, layer_tensor_role_names)?;
     if sequence_axis >= tensor_layout.dimensions.len() {
         return Err(DecoderCacheLayoutError::SequenceAxisOutsideTensorRank {
             layer_index,
-            qualified_role_name: tensor_layout.qualified_role_name.clone(),
+            tensor_role_name: tensor_layout.tensor_role_name.clone(),
             sequence_axis,
             tensor_rank: tensor_layout.dimensions.len(),
         });
@@ -406,7 +402,7 @@ fn validate_sequence_tensor(
         return Err(
             DecoderCacheLayoutError::SequenceAxisMustUseDynamicDimension {
                 layer_index,
-                qualified_role_name: tensor_layout.qualified_role_name.clone(),
+                tensor_role_name: tensor_layout.tensor_role_name.clone(),
             },
         );
     }
@@ -421,14 +417,14 @@ fn validate_boundary_tensor(
     if tensor_layout.sequence_axis.is_some() {
         return Err(DecoderCacheLayoutError::BoundaryTensorHasSequenceAxis {
             layer_index,
-            qualified_role_name: tensor_layout.qualified_role_name.clone(),
+            tensor_role_name: tensor_layout.tensor_role_name.clone(),
         });
     }
     validate_tensor_role_and_dimensions(tensor_layout, layer_index, layer_tensor_role_names)?;
     if tensor_layout.dimensions.contains(&0) {
         return Err(DecoderCacheLayoutError::BoundaryTensorHasDynamicDimension {
             layer_index,
-            qualified_role_name: tensor_layout.qualified_role_name.clone(),
+            tensor_role_name: tensor_layout.tensor_role_name.clone(),
         });
     }
     Ok(())
@@ -439,19 +435,19 @@ fn validate_tensor_role_and_dimensions(
     layer_index: usize,
     layer_tensor_role_names: &mut HashSet<String>,
 ) -> Result<(), DecoderCacheLayoutError> {
-    if tensor_layout.qualified_role_name.is_empty() {
+    if tensor_layout.tensor_role_name.is_empty() {
         return Err(DecoderCacheLayoutError::EmptyTensorRole { layer_index });
     }
     if tensor_layout.dimensions.is_empty() {
         return Err(DecoderCacheLayoutError::ZeroTensorRank {
             layer_index,
-            qualified_role_name: tensor_layout.qualified_role_name.clone(),
+            tensor_role_name: tensor_layout.tensor_role_name.clone(),
         });
     }
-    if !layer_tensor_role_names.insert(tensor_layout.qualified_role_name.clone()) {
+    if !layer_tensor_role_names.insert(tensor_layout.tensor_role_name.clone()) {
         return Err(DecoderCacheLayoutError::DuplicateTensorRole {
             layer_index,
-            qualified_role_name: tensor_layout.qualified_role_name.clone(),
+            tensor_role_name: tensor_layout.tensor_role_name.clone(),
         });
     }
     Ok(())

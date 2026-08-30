@@ -1,6 +1,7 @@
 mod adaptive_ram_growth_guard;
 mod allocation_admission;
 mod ceiling_change;
+mod complete_residency_headroom_boundary;
 mod context_admission;
 #[cfg(feature = "direct-mlx")]
 mod context_admission_logging;
@@ -27,6 +28,7 @@ pub use adaptive_ram_growth_guard::{
     AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection,
 };
 pub use ceiling_change::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
+pub use complete_residency_headroom_boundary::CompleteResidencyHeadroomBoundary;
 pub use context_admission::{
     ContextAdmissionRequirements, combined_persistent_growth_bytes,
     persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,

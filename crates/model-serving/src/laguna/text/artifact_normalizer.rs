@@ -33,7 +33,7 @@ pub struct LagunaTextArtifactSources<'a> {
 pub struct LagunaTextArtifactNormalizer;
 
 impl LagunaTextArtifactNormalizer {
-    /// Certifies text semantics before tokenizer construction or request rendering.
+    /// Validates text semantics before tokenizer construction or request rendering.
     pub fn normalize(
         target_contract: &LagunaTargetContract,
         sources: LagunaTextArtifactSources<'_>,

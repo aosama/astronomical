@@ -182,23 +182,18 @@ fn should_reject_text_index_parameter_count_that_disagrees_with_physical_geometr
 }
 
 #[test]
-fn should_reject_non_official_provenance_and_never_render_local_paths() {
+fn should_reject_non_klein_or_non_apache_provenance_and_never_render_local_paths() {
     let model_directory = tempfile::tempdir().expect("the test should create a model directory");
     SyntheticFlux2KleinArtifact::official().write(model_directory.path());
     let unsupported_provenance = [
         Flux2KleinArtifactProvenance::new(
-            FLUX2_KLEIN_OFFICIAL_MODEL_ID,
-            FLUX2_KLEIN_OFFICIAL_REVISION,
-            "Apache-2.0",
-        ),
-        Flux2KleinArtifactProvenance::new(
-            "another-owner/FLUX.2-klein-4B",
+            "not-a-klein-pipeline",
             FLUX2_KLEIN_OFFICIAL_REVISION,
             "Apache-2.0",
         ),
         Flux2KleinArtifactProvenance::new(
             FLUX2_KLEIN_PROVIDER_MODEL_ID,
-            "0000000000000000000000000000000000000000",
+            "not-a-revision",
             "Apache-2.0",
         ),
         Flux2KleinArtifactProvenance::new(
@@ -211,7 +206,7 @@ fn should_reject_non_official_provenance_and_never_render_local_paths() {
     for provenance in unsupported_provenance {
         let error = Flux2KleinArtifactValidator::new()
             .validate(model_directory.path(), provenance)
-            .expect_err("every changed provenance field must fail closed");
+            .expect_err("non-Klein identity, a non-immutable revision, or a non-Apache license must fail closed");
         assert!(matches!(
             error,
             Flux2KleinArtifactError::UnsupportedProvenance { .. }
@@ -221,6 +216,28 @@ fn should_reject_non_official_provenance_and_never_render_local_paths() {
                 .to_string()
                 .contains(&model_directory.path().display().to_string())
         );
+    }
+}
+
+#[test]
+fn should_accept_klein_identity_with_any_immutable_revision() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    SyntheticFlux2KleinArtifact::official().write(model_directory.path());
+    for provenance in [
+        Flux2KleinArtifactProvenance::new(
+            FLUX2_KLEIN_OFFICIAL_MODEL_ID,
+            FLUX2_KLEIN_OFFICIAL_REVISION,
+            "Apache-2.0",
+        ),
+        Flux2KleinArtifactProvenance::new(
+            "another-owner/FLUX.2-klein-4B",
+            "0000000000000000000000000000000000000000",
+            "Apache-2.0",
+        ),
+    ] {
+        Flux2KleinArtifactValidator::new()
+            .validate(model_directory.path(), provenance)
+            .expect("Klein 4B files plus Apache-2.0 must validate without one Hub SHA");
     }
 }
 

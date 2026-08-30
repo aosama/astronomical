@@ -45,7 +45,7 @@ main() {
         > "${fixture_app}/Contents/Info.plist"
     printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > "${fixture_app}/Contents/MacOS/fixture"
     chmod +x "${fixture_app}/Contents/MacOS/fixture"
-    printf '%s\n' 'certified-metallib' > "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
+    printf '%s\n' 'packaged-metallib' > "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
 
     printf '%s\n' '[dmg-test] case=missing-metallib-is-rejected status=start'
     rm -f "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
@@ -60,7 +60,7 @@ main() {
         print_error "DMG builder did not report the missing mlx.metallib"
         exit 1
     }
-    printf '%s\n' 'certified-metallib' > "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
+    printf '%s\n' 'packaged-metallib' > "${fixture_app}/Contents/Resources/share/mlx/mlx.metallib"
     printf '%s\n' '[dmg-test] case=missing-metallib-is-rejected status=success'
 
     printf '%s\n' '[dmg-test] case=drag-to-applications-journey status=start'
@@ -91,7 +91,7 @@ main() {
         print_error "DMG omitted mlx.metallib from Astronomical.app"
         exit 1
     }
-    [ "$(cat "${MOUNT_POINT}/Astronomical.app/Contents/Resources/share/mlx/mlx.metallib")" = "certified-metallib" ] || {
+    [ "$(cat "${MOUNT_POINT}/Astronomical.app/Contents/Resources/share/mlx/mlx.metallib")" = "packaged-metallib" ] || {
         print_error "DMG did not preserve the packaged mlx.metallib bytes"
         exit 1
     }

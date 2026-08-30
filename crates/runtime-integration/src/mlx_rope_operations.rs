@@ -1,7 +1,7 @@
 use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, raw};
 
 impl MlxRuntime {
-    /// Applies the certified nontraditional Llama rotary embedding.
+    /// Applies the nontraditional Llama rotary embedding.
     pub fn rope(
         &self,
         input: &MlxArray,

@@ -61,7 +61,7 @@ fn should_accept_a_large_model_id_when_the_ipc_frame_fits() {
 fn should_reject_a_temperature_above_the_supported_sampling_range() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "Inspect the repository.".to_owned(),
             images: Vec::new(),
@@ -91,7 +91,7 @@ fn should_reject_a_temperature_above_the_supported_sampling_range() {
 fn should_reject_a_top_p_above_the_supported_sampling_range() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "Inspect the repository.".to_owned(),
             images: Vec::new(),
@@ -121,7 +121,7 @@ fn should_reject_a_top_p_above_the_supported_sampling_range() {
 fn should_reject_malformed_assistant_tool_call_arguments() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::Assistant {
             content: None,
             reasoning_content: None,
@@ -159,7 +159,7 @@ fn should_reject_malformed_assistant_tool_call_arguments() {
 fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_object() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::Assistant {
             content: None,
             reasoning_content: None,
@@ -197,7 +197,7 @@ fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_objec
 fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "Inspect the repository.".to_owned(),
             images: Vec::new(),
@@ -228,7 +228,7 @@ fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
 fn should_reject_a_duplicate_assistant_tool_call_id() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(61),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::User {
                 content: "Inspect the repository.".to_owned(),
@@ -288,7 +288,7 @@ fn should_accept_a_reused_tool_call_id_after_its_previous_result() {
     };
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(63),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::User {
                 content: "Read the file.".to_owned(),
@@ -341,7 +341,7 @@ fn should_accept_a_reused_tool_call_id_after_its_previous_result() {
 fn should_reject_a_system_message_after_conversation_history_begins() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(62),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::User {
                 content: "Inspect the repository.".to_owned(),
@@ -373,7 +373,7 @@ fn should_reject_a_system_message_after_conversation_history_begins() {
 fn should_reject_a_tool_result_without_a_prior_assistant_tool_call() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(63),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::User {
                 content: "Inspect the repository.".to_owned(),

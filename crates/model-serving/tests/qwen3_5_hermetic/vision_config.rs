@@ -1,12 +1,11 @@
 use astronomical_model_serving::Qwen3_5VisionConfig;
 
-use super::vision_config_test_support::CERTIFIED_VISION_CONFIG_JSON;
+use super::vision_config_test_support::FROZEN_VISION_CONFIG_JSON;
 
 #[test]
-fn should_parse_the_certified_ornith_vision_config() {
-    let vision_config =
-        Qwen3_5VisionConfig::from_json_bytes(CERTIFIED_VISION_CONFIG_JSON.as_bytes())
-            .expect("the certified Ornith config should parse vision_config");
+fn should_parse_the_frozen_ornith_1_0_vision_config() {
+    let vision_config = Qwen3_5VisionConfig::from_json_bytes(FROZEN_VISION_CONFIG_JSON.as_bytes())
+        .expect("the frozen Ornith 1.0 config should parse vision_config");
 
     assert_eq!(vision_config.depth(), 27);
     assert_eq!(vision_config.hidden_size(), 1152);
@@ -39,7 +38,7 @@ fn should_allow_a_text_only_qwen_config_without_vision_config() {
 
 #[test]
 fn should_accept_an_ornith_vision_config_with_a_different_depth() {
-    let config_bytes = CERTIFIED_VISION_CONFIG_JSON.replace("\"depth\": 27", "\"depth\": 32");
+    let config_bytes = FROZEN_VISION_CONFIG_JSON.replace("\"depth\": 27", "\"depth\": 32");
     let vision_config = Qwen3_5VisionConfig::from_json_bytes(config_bytes.as_bytes())
         .expect("vision config with a different depth should be accepted");
     assert_eq!(vision_config.depth(), 32);
@@ -48,7 +47,7 @@ fn should_accept_an_ornith_vision_config_with_a_different_depth() {
 #[test]
 fn should_accept_an_ornith_vision_config_with_a_different_hidden_size() {
     let config_bytes =
-        CERTIFIED_VISION_CONFIG_JSON.replace("\"hidden_size\": 1152", "\"hidden_size\": 1024");
+        FROZEN_VISION_CONFIG_JSON.replace("\"hidden_size\": 1152", "\"hidden_size\": 1024");
     let vision_config = Qwen3_5VisionConfig::from_json_bytes(config_bytes.as_bytes())
         .expect("vision config with a different hidden_size should be accepted");
     assert_eq!(vision_config.hidden_size(), 1024);
@@ -57,7 +56,7 @@ fn should_accept_an_ornith_vision_config_with_a_different_hidden_size() {
 #[test]
 fn should_accept_an_ornith_vision_config_with_a_different_patch_size() {
     let config_bytes =
-        CERTIFIED_VISION_CONFIG_JSON.replace("\"patch_size\": 16", "\"patch_size\": 14");
+        FROZEN_VISION_CONFIG_JSON.replace("\"patch_size\": 16", "\"patch_size\": 14");
     let vision_config = Qwen3_5VisionConfig::from_json_bytes(config_bytes.as_bytes())
         .expect("vision config with a different patch_size should be accepted");
     assert_eq!(vision_config.patch_size(), 14);
@@ -66,7 +65,7 @@ fn should_accept_an_ornith_vision_config_with_a_different_patch_size() {
 #[test]
 fn should_reject_a_vision_hidden_size_that_cannot_form_equal_attention_heads() {
     let config_bytes =
-        CERTIFIED_VISION_CONFIG_JSON.replace("\"hidden_size\": 1152", "\"hidden_size\": 1153");
+        FROZEN_VISION_CONFIG_JSON.replace("\"hidden_size\": 1152", "\"hidden_size\": 1153");
 
     let vision_config = Qwen3_5VisionConfig::from_json_bytes(config_bytes.as_bytes());
 
@@ -75,7 +74,7 @@ fn should_reject_a_vision_hidden_size_that_cannot_form_equal_attention_heads() {
 
 #[test]
 fn should_reject_a_vision_activation_outside_the_qwen3_5_execution_graph() {
-    let config_bytes = CERTIFIED_VISION_CONFIG_JSON.replace(
+    let config_bytes = FROZEN_VISION_CONFIG_JSON.replace(
         "\"hidden_act\": \"gelu_pytorch_tanh\"",
         "\"hidden_act\": \"silu\"",
     );
@@ -87,7 +86,7 @@ fn should_reject_a_vision_activation_outside_the_qwen3_5_execution_graph() {
 
 #[test]
 fn should_reject_an_ornith_vision_config_with_the_wrong_model_type() {
-    let config_bytes = CERTIFIED_VISION_CONFIG_JSON.replace(
+    let config_bytes = FROZEN_VISION_CONFIG_JSON.replace(
         "\"model_type\": \"qwen3_5_moe_vision\"",
         "\"model_type\": \"wrong_vision\"",
     );

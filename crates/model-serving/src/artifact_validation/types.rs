@@ -7,7 +7,7 @@ pub struct RequiredFileProfile {
     pub size_bytes: u64,
 }
 
-/// Supported safetensors dtype names for certified tensor metadata.
+/// Supported safetensors dtype names for expected tensor metadata.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TensorDtype {
     /// Floating-point storage accepted by MLX affine scales and biases.
@@ -22,7 +22,7 @@ pub enum TensorDtype {
     UInt32,
 }
 
-/// Certified metadata for one expected tensor in the model weight file.
+/// Expected metadata for one expected tensor in the model weight file.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TensorProfile {
     /// Full safetensors tensor name.

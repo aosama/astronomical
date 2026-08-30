@@ -1,4 +1,7 @@
-//! Exact shallow discovery contract for the reviewed distilled FLUX.2 Klein 4B pipeline.
+//! Shallow discovery for a distilled FLUX.2 Klein 4B Diffusers pipeline.
+//!
+//! Geometry, Apache-2.0 license, and required modular files prove the family.
+//! An immutable revision is recorded when present; serving does not pin one Hub SHA.
 
 use std::collections::BTreeSet;
 use std::fs::{self, File};
@@ -17,7 +20,6 @@ use super::{ImageGenerationCapabilities, ModelLicense};
 
 pub(super) const CANONICAL_MODEL_ID: &str = "FLUX.2-klein-4B";
 pub(super) const PROVIDER_MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
-const REVIEWED_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
 const MAXIMUM_JSON_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_TEXT_ENCODER_INDEX_BYTES: u64 = 32 * 1024 * 1024;
 const MAXIMUM_SIDECAR_BYTES: u64 = 64 * 1024 * 1024;
@@ -70,8 +72,6 @@ pub enum Flux2KleinDirectoryVerificationError {
     ModelSizeOverflow,
     #[error("FLUX.2 Klein immutable revision evidence is missing")]
     MissingRevision,
-    #[error("FLUX.2 Klein artifact revision does not match the reviewed profile")]
-    UnexpectedRevision,
 }
 
 pub(super) fn classifies_pipeline_index(
@@ -114,14 +114,18 @@ fn verify_model_directory_evidence(
         )?;
     }
     let model_size_bytes = measure_modular_weight_bytes(model_directory)?;
-    let revision = immutable_file_revision(model_directory, "model_index.json")
+    let library_provenance =
+        super::classified_artifacts::immutable_model_provenance(model_directory);
+    let revision = library_provenance
+        .as_ref()
+        .map(|(_, recorded_revision)| recorded_revision.clone())
+        .or_else(|| immutable_file_revision(model_directory, "model_index.json"))
         .ok_or(Flux2KleinDirectoryVerificationError::MissingRevision)?;
-    if revision != REVIEWED_REVISION {
-        return Err(Flux2KleinDirectoryVerificationError::UnexpectedRevision);
-    }
     Ok(Flux2KleinDirectoryEvidence {
         canonical_model_id: CANONICAL_MODEL_ID.to_owned(),
-        provider_model_id: PROVIDER_MODEL_ID.to_owned(),
+        provider_model_id: library_provenance
+            .map(|(recorded_provider_model_id, _)| recorded_provider_model_id)
+            .unwrap_or_else(|| PROVIDER_MODEL_ID.to_owned()),
         revision,
         license: ModelLicense::Apache20,
         capabilities: ImageGenerationCapabilities {

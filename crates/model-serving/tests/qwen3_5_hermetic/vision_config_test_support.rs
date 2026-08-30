@@ -1,4 +1,4 @@
-pub(crate) const CERTIFIED_VISION_CONFIG_JSON: &str = r#"{
+pub(crate) const FROZEN_VISION_CONFIG_JSON: &str = r#"{
     "architectures": ["Qwen3_5MoeForConditionalGeneration"],
     "model_type": "qwen3_5_moe",
     "dtype": "bfloat16",

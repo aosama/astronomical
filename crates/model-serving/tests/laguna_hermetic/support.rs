@@ -2,7 +2,7 @@ use astronomical_model_serving::{LagunaTargetContract, LagunaTargetNormalizer};
 use serde_json::{Map, Value, json};
 
 #[derive(Clone, Copy)]
-pub(super) enum LagunaQualificationSize {
+pub(super) enum LagunaAcceptanceSize {
     ExtraSmall,
     Small,
 }
@@ -34,8 +34,8 @@ pub(super) fn config_value(layer_count: usize) -> Value {
     })
 }
 
-/// Retains observed XS/S shapes as qualification rows rather than allowed-domain constants.
-pub(super) fn qualification_config_value(fixture_size: LagunaQualificationSize) -> Value {
+/// Retains observed XS/S shapes as acceptance rows rather than allowed-domain constants.
+pub(super) fn acceptance_config_value(fixture_size: LagunaAcceptanceSize) -> Value {
     let (
         hidden_size,
         intermediate_size,
@@ -50,7 +50,7 @@ pub(super) fn qualification_config_value(fixture_size: LagunaQualificationSize) 
         quantization_group_size,
         uses_wrapped_namespace,
     ) = match fixture_size {
-        LagunaQualificationSize::ExtraSmall => (
+        LagunaAcceptanceSize::ExtraSmall => (
             2_048,
             8_192,
             40,
@@ -64,7 +64,7 @@ pub(super) fn qualification_config_value(fixture_size: LagunaQualificationSize) 
             64,
             false,
         ),
-        LagunaQualificationSize::Small => (
+        LagunaAcceptanceSize::Small => (
             3_072,
             12_288,
             48,
@@ -170,7 +170,7 @@ pub(super) fn qualification_config_value(fixture_size: LagunaQualificationSize) 
     });
     config["quantization"] = quantization.clone();
     config["quantization_config"] = quantization;
-    if matches!(fixture_size, LagunaQualificationSize::Small) {
+    if matches!(fixture_size, LagunaAcceptanceSize::Small) {
         config["moe_router_logit_softcapping"] = json!(0.0);
     }
     config

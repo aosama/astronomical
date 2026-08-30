@@ -14,7 +14,7 @@ use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
 /// One decoder layer's in-memory state. Linear-attention layers carry a
 /// convolution rolling buffer and a gated-delta recurrent state; full-attention
 /// layers carry a single KV state owner.
-/// One in-memory state entry per certified Qwen3.5 decoder layer. Owns every
+/// One in-memory state entry per Qwen3.5 decoder layer. Owns every
 /// KV tensor and recurrent state for one request; the engine threads a
 /// `&mut RequestDecoderStateStack` through every forward pass.
 pub struct RequestDecoderStateStack {

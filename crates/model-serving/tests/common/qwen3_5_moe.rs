@@ -10,38 +10,38 @@ use astronomical_model_serving::{
 };
 use serde_json::{Value, json};
 
-pub fn certified_ornith_config() -> Qwen3_5Config {
-    Qwen3_5Config::from_json_bytes(&certified_optiq_ornith_config_bytes())
-        .expect("the certified Ornith config should parse")
+pub fn frozen_ornith_1_0_config() -> Qwen3_5Config {
+    Qwen3_5Config::from_json_bytes(&frozen_ornith_1_0_optiq_config_bytes())
+        .expect("the frozen Ornith 1.0 config should parse")
 }
 
-pub fn certified_ornith_vision_config() -> Qwen3_5VisionConfig {
-    Qwen3_5VisionConfig::from_json_bytes(&certified_optiq_ornith_vision_config_bytes())
-        .expect("the certified Ornith vision config should parse")
+pub fn frozen_ornith_1_0_vision_config() -> Qwen3_5VisionConfig {
+    Qwen3_5VisionConfig::from_json_bytes(&frozen_ornith_1_0_optiq_vision_config_bytes())
+        .expect("the frozen Ornith 1.0 vision config should parse")
 }
 
-pub fn certified_ornith_image_processor() -> Qwen3_5ImageProcessor {
-    Qwen3_5ImageProcessor::from_vision_config(&certified_ornith_vision_config())
+pub fn frozen_ornith_1_0_image_processor() -> Qwen3_5ImageProcessor {
+    Qwen3_5ImageProcessor::from_vision_config(&frozen_ornith_1_0_vision_config())
 }
 
 pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelContract {
-    let certified_ornith_config = certified_ornith_config();
-    // This hermetic fixture has no bound MLX arrays. Supply its certified BF16
-    // state contract explicitly; real engine qualifications use load-derived
+    let frozen_ornith_1_0_config = frozen_ornith_1_0_config();
+    // This hermetic fixture has no bound MLX arrays. Supply its frozen BF16
+    // state contract explicitly; real engine acceptance uses load-derived
     // dtypes and read the resulting block geometry back from the engine.
-    let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&certified_ornith_config);
+    let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&frozen_ornith_1_0_config);
     PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&certified_ornith_config, 256, &decoder_layer_cache_dtypes)
-            .expect("the certified Ornith configuration should build a decoder-cache layout"),
-        certified_ornith_config.maximum_position_count() as usize,
+        qwen3_5_decoder_cache_layout(&frozen_ornith_1_0_config, 256, &decoder_layer_cache_dtypes)
+            .expect("the frozen Ornith 1.0 configuration should build a decoder-cache layout"),
+        frozen_ornith_1_0_config.maximum_position_count() as usize,
         20_000_000_000,
         50_000_000_000,
         None,
         4,
     )
-    .expect("the certified Ornith configuration should resolve a storage contract")
+    .expect("the frozen Ornith 1.0 configuration should resolve a storage contract")
 }
 
 pub fn bfloat16_decoder_layer_cache_dtypes(
@@ -77,22 +77,22 @@ fn decoder_layer_cache_dtypes(
 }
 
 pub fn persistent_visual_embedding_model_contract() -> PersistentVisualEmbeddingModelContract {
-    let certified_ornith_vision_config = certified_ornith_vision_config();
+    let frozen_ornith_1_0_vision_config = frozen_ornith_1_0_vision_config();
     let qwen3_5_image_processor =
-        Qwen3_5ImageProcessor::from_vision_config(&certified_ornith_vision_config);
+        Qwen3_5ImageProcessor::from_vision_config(&frozen_ornith_1_0_vision_config);
     PersistentVisualEmbeddingModelContract::new(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        certified_ornith_vision_config.out_hidden_size() as usize,
+        frozen_ornith_1_0_vision_config.out_hidden_size() as usize,
         qwen3_5_image_processor.maximum_image_token_count_after_spatial_merge(),
     )
 }
 
-pub fn certified_qwen3_5_language_tensor_profiles() -> Vec<TensorProfile> {
-    qwen3_5_language_tensor_profiles(&certified_ornith_config())
+pub fn expected_qwen3_5_language_tensor_profiles() -> Vec<TensorProfile> {
+    qwen3_5_language_tensor_profiles(&frozen_ornith_1_0_config())
 }
 
-pub fn certified_ornith_config_bytes() -> Vec<u8> {
+pub fn frozen_ornith_1_0_config_bytes() -> Vec<u8> {
     let config_bytes = br#"
     {
         "architectures": ["Qwen3_5MoeForConditionalGeneration"],
@@ -133,7 +133,7 @@ pub fn certified_ornith_config_bytes() -> Vec<u8> {
     }
     "#;
     let mut config_value = serde_json::from_slice::<Value>(config_bytes)
-        .expect("the certified test config should decode as JSON");
+        .expect("the frozen test config should decode as JSON");
     let mut quantization = json!({
         "group_size": 64,
         "bits": 6,
@@ -151,11 +151,11 @@ pub fn certified_ornith_config_bytes() -> Vec<u8> {
     quantization["language_model.lm_head"] = json!({"group_size": 64, "bits": 8});
     config_value["quantization"] = quantization.clone();
     config_value["quantization_config"] = quantization;
-    config_value["text_config"]["layer_types"] = json!(certified_layer_types());
-    serde_json::to_vec(&config_value).expect("the certified test config should serialize as JSON")
+    config_value["text_config"]["layer_types"] = json!(expected_layer_types());
+    serde_json::to_vec(&config_value).expect("the frozen test config should serialize as JSON")
 }
 
-pub fn certified_optiq_ornith_config_bytes() -> Vec<u8> {
+pub fn frozen_ornith_1_0_optiq_config_bytes() -> Vec<u8> {
     let config_bytes = br#"
     {
         "architectures": ["Qwen3_5MoeForConditionalGeneration"],
@@ -202,13 +202,13 @@ pub fn certified_optiq_ornith_config_bytes() -> Vec<u8> {
     }
     "#;
     let mut config_value = serde_json::from_slice::<Value>(config_bytes)
-        .expect("the certified OptiQ test config should decode as JSON");
+        .expect("the frozen OptiQ test config should decode as JSON");
     let mut quantization = json!({
         "group_size": 64,
         "bits": 4,
         "mode": "affine",
     });
-    let quantized_module_names = certified_quantized_module_names();
+    let quantized_module_names = expected_quantized_module_names();
     for (quantized_module_index, quantized_module_name) in quantized_module_names.iter().enumerate()
     {
         let quantization_bits = if quantized_module_index < 113 { 4 } else { 8 };
@@ -216,14 +216,14 @@ pub fn certified_optiq_ornith_config_bytes() -> Vec<u8> {
     }
     config_value["quantization"] = quantization.clone();
     config_value["quantization_config"] = quantization;
-    config_value["text_config"]["layer_types"] = json!(certified_layer_types());
+    config_value["text_config"]["layer_types"] = json!(expected_layer_types());
     serde_json::to_vec(&config_value)
-        .expect("the certified OptiQ test config should serialize as JSON")
+        .expect("the frozen OptiQ test config should serialize as JSON")
 }
 
-pub fn certified_optiq_ornith_vision_config_bytes() -> Vec<u8> {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_optiq_ornith_config_bytes())
-        .expect("the certified OptiQ test config should decode as JSON");
+pub fn frozen_ornith_1_0_optiq_vision_config_bytes() -> Vec<u8> {
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_optiq_config_bytes())
+        .expect("the frozen OptiQ test config should decode as JSON");
     config_value["vision_config"] = json!({
         "deepstack_visual_indexes": [],
         "depth": 27,
@@ -242,12 +242,12 @@ pub fn certified_optiq_ornith_vision_config_bytes() -> Vec<u8> {
         "temporal_patch_size": 2
     });
     serde_json::to_vec(&config_value)
-        .expect("the certified OptiQ vision test config should serialize as JSON")
+        .expect("the frozen OptiQ vision test config should serialize as JSON")
 }
 
-pub fn certified_optiq_metadata_bytes() -> Vec<u8> {
-    let config_value = serde_json::from_slice::<Value>(&certified_optiq_ornith_config_bytes())
-        .expect("the certified OptiQ test config should decode as JSON");
+pub fn frozen_optiq_metadata_bytes() -> Vec<u8> {
+    let config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_optiq_config_bytes())
+        .expect("the frozen OptiQ test config should decode as JSON");
     let mut measured_module_bits = config_value["quantization"]
         .as_object()
         .expect("the quantization map should be an object")
@@ -273,10 +273,10 @@ pub fn certified_optiq_metadata_bytes() -> Vec<u8> {
         "threshold": 0.0,
         "per_layer": measured_module_bits,
     }))
-    .expect("the certified OptiQ metadata should serialize as JSON")
+    .expect("the frozen OptiQ metadata should serialize as JSON")
 }
 
-fn certified_quantized_module_names() -> Vec<String> {
+fn expected_quantized_module_names() -> Vec<String> {
     let mut quantized_module_names = Vec::with_capacity(512);
     for decoder_layer_index in 0..40 {
         let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}");
@@ -314,7 +314,7 @@ fn certified_quantized_module_names() -> Vec<String> {
     quantized_module_names
 }
 
-fn certified_layer_types() -> Vec<&'static str> {
+fn expected_layer_types() -> Vec<&'static str> {
     (0..40)
         .map(|decoder_layer_index| {
             if decoder_layer_index % 4 == 3 {

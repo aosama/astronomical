@@ -1,7 +1,7 @@
 //! Locates the MLX AOT metallib without depending on a purgeable cache.
 //!
 //! A shipped app must keep working after macOS or a cleaner deletes
-//! `~/Library/Caches`. The certified kernels therefore live beside the worker
+//! `~/Library/Caches`. The build-produced kernels therefore live beside the worker
 //! inside the app bundle. Unpackaged `cargo run` may still use the compile-time
 //! native-store copy, but that path is a fallback, not the packaged default.
 

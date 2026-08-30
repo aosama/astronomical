@@ -302,12 +302,12 @@ fn resolve_hugging_face_snapshot_blob_path(
 pub(crate) fn hugging_face_snapshot_model_id(model_directory: &Path) -> Option<String> {
     let model_cache_directory = hugging_face_model_cache_directory(model_directory)?;
     let cache_directory_name = model_cache_directory.file_name()?.to_str()?;
-    let provider_qualified_model_id =
+    let hub_repository_id =
         astronomical_config::decode_huggingface_cache_directory_name(cache_directory_name)?;
     Some(
-        provider_qualified_model_id
+        hub_repository_id
             .split_once('/')
-            .map_or(provider_qualified_model_id.clone(), |(_, model_id)| {
+            .map_or(hub_repository_id.clone(), |(_, model_id)| {
                 model_id.to_owned()
             }),
     )

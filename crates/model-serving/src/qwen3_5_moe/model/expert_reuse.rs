@@ -50,7 +50,7 @@ impl Qwen3_5Model {
     /// Streams every expert in the layer. Seats that page only when the phase
     /// plan named this decoder index for mandatory complete-layer promotion.
     ///
-    /// Greedy leftover-RAM adopt during the first multi-token chunk seats more
+    /// Leftover-RAM adopt during the first multi-token chunk seats more
     /// complete layers than activation headroom plus the stream slot can share
     /// with the MLX ceiling. The next complete-layer read then fails, and
     /// prefill halves down to one-token chunks.

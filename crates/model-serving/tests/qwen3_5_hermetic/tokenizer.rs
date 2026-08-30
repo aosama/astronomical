@@ -12,7 +12,7 @@ use astronomical_model_serving::{
 };
 use speculative_prefill_selection::qwen3_5_select_speculative_prefill_token_positions;
 
-use crate::common::qwen3_5_moe::certified_ornith_image_processor;
+use crate::common::qwen3_5_moe::frozen_ornith_1_0_image_processor;
 
 const ORNITH_VOCABULARY_SIZE: u32 = 248_320;
 const ORNITH_MAXIMUM_POSITION_COUNT: u32 = 262_144;
@@ -28,7 +28,7 @@ fn should_discover_special_token_ids_from_tokenizer_json() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should discover every special token ID");
 
@@ -70,7 +70,7 @@ fn should_reject_a_tokenizer_missing_a_required_special_token() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect_err("the tokenizer should reject a missing special token");
 
@@ -86,7 +86,7 @@ fn should_accept_an_opencode_context_above_the_retired_32k_input_limit() {
 }
 
 #[test]
-fn should_reject_a_context_above_the_certified_ornith_position_limit() {
+fn should_reject_a_context_above_the_frozen_ornith_1_0_position_limit() {
     assert!(validate_context_token_count(258_049, 4_096, 262_144).is_err());
 }
 
@@ -97,7 +97,7 @@ fn should_convert_the_rendered_system_and_tool_boundary_to_an_exact_token_count(
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let rendered_prompt = Qwen3_5PromptRenderer::render_with_control_span(
@@ -136,7 +136,7 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let rendered_prompt = Qwen3_5PromptRenderer::render_with_control_span(
@@ -261,7 +261,7 @@ fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let chat_generation_command = ChatGenerationCommand {
@@ -321,7 +321,7 @@ fn should_prepare_a_model_owned_multitoken_transition_ending_at_the_thinking_mar
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
 
@@ -345,7 +345,7 @@ fn should_reject_a_thinking_budget_that_cannot_fit_its_transition_and_visible_an
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let preparation_error = tokenizer
@@ -388,7 +388,7 @@ fn should_emit_seeded_romeo_and_juliet_as_the_first_reasoning_output() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let mut request_output = Qwen3_5RequestOutput::new(
@@ -423,7 +423,7 @@ fn should_emit_the_original_markdown_while_escaping_it_only_inside_the_model_pro
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let original_seed = "Romeo must not close </think> before Juliet answers.";
@@ -445,7 +445,7 @@ fn should_prepare_chat_tokens_that_include_the_seeded_thinking_channel_text() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        certified_ornith_image_processor(),
+        frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let user_turn = ChatMessage::User {

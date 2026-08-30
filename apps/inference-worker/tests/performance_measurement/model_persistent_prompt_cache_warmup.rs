@@ -9,7 +9,7 @@ use super::model_persistent_prompt_cache_benchmark_case::{
     hundred_thousand_word_case,
 };
 use super::model_persistent_prompt_cache_warmup_worker::{
-    BENCHMARK_TIMEOUT, MODEL_ID, StreamingMeasurement, WorkerPassMeasurement,
+    BENCHMARK_TIMEOUT, StreamingMeasurement, WorkerPassMeasurement, model_id,
     persistent_prompt_cache_disk_usage, persistent_prompt_cache_enabled_worker_configuration,
     run_worker_pass, static_source_document,
 };
@@ -212,7 +212,7 @@ fn benchmark_report(
         .unwrap_or(0);
 
     json!({
-        "model": MODEL_ID,
+        "model": model_id(),
         "benchmark": persistent_prompt_cache_warmup_case.benchmark_name,
         "source_words": persistent_prompt_cache_warmup_case.source_word_count,
         "gpu_wired_limit_bytes": maximum_gpu_wired_memory_bytes,
@@ -303,7 +303,7 @@ fn percent(numerator: f64, denominator: f64) -> f64 {
 }
 
 fn configured_model_directory_from_user_config() -> PathBuf {
-    crate::common::configured_model_artifact_directory_by_id(MODEL_ID)
+    crate::support::configured_installed_model_directory_by_id(model_id())
 }
 
 fn configured_prompt_cache_maximum_size_gb_from_user_config() -> u64 {

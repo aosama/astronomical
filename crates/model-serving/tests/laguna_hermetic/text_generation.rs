@@ -246,7 +246,7 @@ fn should_resolve_generation_sampling_and_explicit_request_overrides() {
 }
 
 #[test]
-fn should_preserve_generation_config_greedy_policy_without_request_overrides() {
+fn should_preserve_generation_config_zero_temperature_policy_without_request_overrides() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
     text_artifact
         .generation_config
@@ -255,13 +255,13 @@ fn should_preserve_generation_config_greedy_policy_without_request_overrides() {
 
     let prepared_generation = processor(text_artifact)
         .prepare_chat(&romeo_and_juliet_command(9_809, None))
-        .expect("the greedy generation policy should prepare");
+        .expect("the zero-temperature generation policy should prepare");
 
     assert!(!prepared_generation.sampler_config().uses_sampling());
 }
 
 #[test]
-fn should_apply_explicit_request_sampling_precedence_over_a_greedy_artifact_default() {
+fn should_apply_explicit_request_sampling_precedence_over_a_zero_temperature_artifact_default() {
     let mut text_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
     text_artifact
         .generation_config
@@ -285,19 +285,26 @@ fn should_apply_explicit_request_sampling_precedence_over_a_greedy_artifact_defa
     );
     assert_eq!(sampled_generation.sampler_config().top_p_thousandths(), 825);
 
-    let mut greedy_command = romeo_and_juliet_command(9_821, None);
-    greedy_command.settings.temperature_thousandths = Some(0);
-    greedy_command.settings.top_p_thousandths = Some(825);
-    let greedy_generation = processor
-        .prepare_chat(&greedy_command)
-        .expect("an explicit zero request temperature should remain greedy");
+    let mut zero_temperature_command = romeo_and_juliet_command(9_821, None);
+    zero_temperature_command.settings.temperature_thousandths = Some(0);
+    zero_temperature_command.settings.top_p_thousandths = Some(825);
+    let zero_temperature_generation = processor
+        .prepare_chat(&zero_temperature_command)
+        .expect("an explicit zero request temperature should remain highest-logit");
 
-    assert!(!greedy_generation.sampler_config().uses_sampling());
+    assert!(!zero_temperature_generation.sampler_config().uses_sampling());
     assert_eq!(
-        greedy_generation.sampler_config().temperature_thousandths(),
+        zero_temperature_generation
+            .sampler_config()
+            .temperature_thousandths(),
         0
     );
-    assert_eq!(greedy_generation.sampler_config().top_p_thousandths(), 825);
+    assert_eq!(
+        zero_temperature_generation
+            .sampler_config()
+            .top_p_thousandths(),
+        825
+    );
 }
 
 #[test]

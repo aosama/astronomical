@@ -12,7 +12,7 @@ Describe the smallest implemented solution and any removed complexity.
 
 ## Verification
 
-List the exact focused and repository checks that passed. State any hardware-dependent qualification that could not run.
+List the exact focused and repository checks that passed. State any hardware-dependent acceptance that could not run.
 
 ## Safety
 

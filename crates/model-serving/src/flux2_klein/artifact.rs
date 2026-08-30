@@ -75,6 +75,16 @@ impl Flux2KleinArtifactProvenance {
             OFFICIAL_LICENSE_IDENTIFIER,
         )
     }
+
+    #[must_use]
+    pub fn model_id(&self) -> &str {
+        &self.model_id
+    }
+
+    #[must_use]
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
 }
 
 /// License metadata exposed without treating a directory or model name as authority.
@@ -374,12 +384,24 @@ impl Flux2KleinArtifactValidator {
     }
 }
 
+fn provenance_identifies_flux2_klein(model_id: &str) -> bool {
+    model_id == FLUX2_KLEIN_OFFICIAL_MODEL_ID
+        || model_id == FLUX2_KLEIN_PROVIDER_MODEL_ID
+        || model_id.rsplit('/').next() == Some(FLUX2_KLEIN_OFFICIAL_MODEL_ID)
+}
+
+fn provenance_records_immutable_revision(revision: &str) -> bool {
+    revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 fn validate_provenance(
     provenance: &Flux2KleinArtifactProvenance,
 ) -> Result<(), Flux2KleinArtifactError> {
-    if provenance.model_id == FLUX2_KLEIN_PROVIDER_MODEL_ID
-        && provenance.revision == FLUX2_KLEIN_OFFICIAL_REVISION
-        && provenance.license_identifier == OFFICIAL_LICENSE_IDENTIFIER
+    // Architecture files prove Klein 4B. Provenance only has to name that family,
+    // record an immutable revision, and keep Apache-2.0. One Hub SHA is not a gate.
+    if provenance.license_identifier == OFFICIAL_LICENSE_IDENTIFIER
+        && provenance_identifies_flux2_klein(&provenance.model_id)
+        && provenance_records_immutable_revision(&provenance.revision)
     {
         return Ok(());
     }

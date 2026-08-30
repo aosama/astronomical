@@ -4,7 +4,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::Qwen3_5PromptRenderer;
 
-use crate::common::qwen3_5_moe::certified_ornith_image_processor;
+use crate::common::qwen3_5_moe::frozen_ornith_1_0_image_processor;
 
 #[test]
 fn should_render_one_user_turn_with_the_pinned_ornith_thinking_prefix() {
@@ -224,7 +224,7 @@ fn should_not_render_literal_image_pad_text_as_an_image_placeholder() {
 
 #[test]
 fn should_compute_image_token_counts_from_decoded_image_bytes_and_render_vision_markers() {
-    let image_processor = certified_ornith_image_processor();
+    let image_processor = frozen_ornith_1_0_image_processor();
     let processed_image = image_processor
         .process_image_bytes(crate::common::SYNTHETIC_RED_PNG_BYTES)
         .expect("synthetic red fixture should preprocess into vision patches");

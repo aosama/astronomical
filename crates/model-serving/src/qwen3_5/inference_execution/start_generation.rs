@@ -47,7 +47,7 @@ impl Qwen3_5EngineState {
         let mut natural_reasoning_end_token_ids =
             inference_request.natural_reasoning_end_token_ids().to_vec();
         if !natural_reasoning_end_token_ids.contains(&self.think_end_token_id) {
-            // The certified marker remains authoritative for direct engine callers that do not
+            // The model thinking marker remains authoritative for direct engine callers that do not
             // pass tokenizer-derived implicit boundaries such as tool-call starts.
             natural_reasoning_end_token_ids.push(self.think_end_token_id);
         }
@@ -92,7 +92,7 @@ impl Qwen3_5EngineState {
         let admitted_generation_start = (|| {
             let sampling_strategy = inference_request.sampling_strategy();
             let random_state = match sampling_strategy {
-                Qwen3_5SamplingStrategy::Greedy => None,
+                Qwen3_5SamplingStrategy::HighestLogit => None,
                 Qwen3_5SamplingStrategy::TopKTopP {
                     temperature_thousandths,
                     top_k,
@@ -414,9 +414,10 @@ impl Qwen3_5EngineState {
                     .map_err(|_| fatal_engine_error("loaded MTP depth is outside 1 through 3"))?,
             )
             .map_err(qwen3_5_runtime_error)?;
-            let sampling_is_greedy = matches!(sampling_strategy, Qwen3_5SamplingStrategy::Greedy);
+            let sampling_selects_highest_logit =
+                matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
             let effective_temperature_thousandths = match sampling_strategy {
-                Qwen3_5SamplingStrategy::Greedy => 0,
+                Qwen3_5SamplingStrategy::HighestLogit => 0,
                 Qwen3_5SamplingStrategy::TopKTopP {
                     temperature_thousandths,
                     ..
@@ -428,7 +429,7 @@ impl Qwen3_5EngineState {
                 mtp_enabled = self.mtp_enabled,
                 sparse_experts_are_paged,
                 persistent_prompt_cache_is_available,
-                sampling_is_greedy,
+                sampling_selects_highest_logit,
                 effective_temperature_thousandths,
                 optional_prediction_session_is_active = optional_prediction_session.is_some(),
                 "resolved optional multi-token prediction request session"
@@ -475,6 +476,7 @@ impl Qwen3_5EngineState {
                 sampling_strategy,
                 visual_embeddings,
                 consumed_visual_embedding_count: 0,
+                has_visual_inputs: has_precomputed_visual_embeddings || has_processed_visual_images,
                 image_pad_token_id,
                 thinking_budget_state,
                 expert_weight_memory_cache_statistics_at_request_start,
