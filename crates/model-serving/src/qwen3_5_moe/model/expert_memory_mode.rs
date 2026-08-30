@@ -1,13 +1,24 @@
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
 use crate::ExpertResidencyTelemetry;
+use crate::MlxActiveMemoryBreakdown;
 use crate::classify_expert_memory_mode;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
-    /// Returns retained-expert count and payload for status and IPC.
+    /// Builds the residency claim from the reconciled breakdown of the same MLX
+    /// measurement. In paged mode the retained cache counts adopted lazy pages —
+    /// layers seated for ownership before their arrays are materialized by the
+    /// layer-interval eval — so its bookkeeping payload exceeds the physically
+    /// resident bytes during the seat-to-first-eval window. The only truthful
+    /// resident-payload figure is therefore the measured attribution from the
+    /// snapshot this breakdown reconciles (issue #337). Complete residency is
+    /// fully materialized by definition, so it keeps reporting owner figures.
     #[must_use]
-    pub(crate) fn expert_residency_telemetry(&self) -> ExpertResidencyTelemetry {
+    pub(crate) fn expert_residency_telemetry_for_breakdown(
+        &self,
+        mlx_memory_breakdown: &MlxActiveMemoryBreakdown,
+    ) -> ExpertResidencyTelemetry {
         let total_layer_count = self
             .expert_pager
             .as_ref()
@@ -35,7 +46,7 @@ impl Qwen3_5Model {
         ExpertResidencyTelemetry {
             total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),
             resident_expert_count: u32::try_from(expert_statistics.entry_count).unwrap_or(u32::MAX),
-            resident_expert_payload_bytes: expert_statistics.resident_payload_byte_count,
+            resident_expert_payload_bytes: mlx_memory_breakdown.expert_payload_bytes,
         }
     }
 

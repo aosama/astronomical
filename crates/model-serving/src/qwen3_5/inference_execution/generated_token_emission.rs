@@ -1,7 +1,8 @@
-use astronomical_runtime_integration::{MlxArray, MlxMemorySnapshot};
+use astronomical_runtime_integration::MlxArray;
 
 use crate::{GeneratedToken, InferenceEngineError, PerformanceCounter, PerformanceOperation};
 
+use super::completed_forward_memory::CompletedForwardMemoryObservation;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::Qwen3_5Model;
@@ -27,7 +28,7 @@ impl Qwen3_5EngineState {
         model: &Qwen3_5Model,
         active_request: &mut Qwen3_5EngineRequest,
         generated_token_id: u32,
-        mlx_memory_snapshot: Option<&MlxMemorySnapshot>,
+        completed_forward_memory: Option<&CompletedForwardMemoryObservation>,
     ) -> Result<GeneratedTokenEmission, InferenceEngineError> {
         active_request.generated_token_count = active_request
             .generated_token_count
@@ -42,12 +43,23 @@ impl Qwen3_5EngineState {
 
         let is_terminal = self.end_of_sequence_token_ids.contains(&generated_token_id)
             || active_request.generated_token_count >= active_request.maximum_output_tokens;
-        let mlx_memory_telemetry = mlx_memory_snapshot
-            .map(|mlx_memory_snapshot| {
+        let mlx_memory_telemetry = completed_forward_memory
+            .map(|completed_forward_memory| {
+                let mlx_memory_snapshot = &completed_forward_memory.mlx_memory_snapshot;
                 let mlx_active_memory_bytes =
                     u64::try_from(mlx_memory_snapshot.active_memory_bytes()).map_err(|_| {
                         fatal_engine_error("MLX active memory bytes exceed the u64 range")
                     })?;
+                let active_memory_breakdown = model.active_memory_breakdown(
+                    &active_request.request_decoder_state,
+                    active_request.additional_context_state_payload_bytes(),
+                    mlx_active_memory_bytes,
+                    0,
+                );
+                // The breakdown reconciles the snapshot captured at one instant by
+                // the observation owner, and the residency claim is derived from
+                // that same breakdown, so this pair can never straddle a promotion
+                // or demote (issue #337).
                 Ok::<crate::MlxMemoryTelemetry, InferenceEngineError>(
                     crate::MlxMemoryTelemetry::new(
                         mlx_active_memory_bytes,
@@ -61,14 +73,11 @@ impl Qwen3_5EngineState {
                         u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(|_| {
                             fatal_engine_error("MLX peak memory bytes exceed the u64 range")
                         })?,
-                        model.active_memory_breakdown(
-                            &active_request.request_decoder_state,
-                            active_request.additional_context_state_payload_bytes(),
-                            mlx_active_memory_bytes,
-                            0,
-                        ),
+                        active_memory_breakdown,
                     )
-                    .with_expert_residency_telemetry(model.expert_residency_telemetry()),
+                    .with_expert_residency_telemetry(
+                        model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+                    ),
                 )
             })
             .transpose()?;
