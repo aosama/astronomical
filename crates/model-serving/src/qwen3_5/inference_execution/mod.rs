@@ -31,6 +31,7 @@ mod request_memory_release;
 mod resident_memory_pressure;
 mod speculative_prefill;
 mod start_generation;
+mod terminal_prefill_seed;
 mod test_controls;
 use std::cell::RefCell;
 use std::collections::HashMap;

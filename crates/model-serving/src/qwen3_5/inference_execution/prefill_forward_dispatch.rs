@@ -4,21 +4,25 @@
 //!
 //! 1. **Speculative-prefill sparse target** — only selected positions are
 //!    forwarded on the dense target decoder.
-//! 2. **Visual prefill** — prompt tokens accompanied by image embeddings.
+//! 2. **Visual prefill** — the current chunk contains image-pad tokens and the
+//!    request still owns visual embeddings. A request-level vision tensor alone
+//!    is not enough; text-only suffixes must use the text path so cache restore
+//!    and cold prefill seed the first generated token the same way.
 //! 3. **Terminal history capture** — optional draft-model decoder state
 //!    initialisation on the final chunk.
 //! 4. **Plain text prefill** — the common path; may seed the first generated
 //!    token if this is the terminal chunk, or forward with optional prompt-cache
 //!    boundary checkpoints.
-//!
-//! Also contains `seed_first_generated_token_from_terminal_prefill_chunk` which
-//! extracts logits from the last prompt token to jump-start decode.
 
 use astronomical_ipc_protocol::RequestId;
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests};
 use super::prefill_chunk_planning::PrefillChunckPlan;
 use super::prompt_prefill_counters::prepare_sparse_target_gpu_inputs;
+use super::terminal_prefill_seed::{
+    chunk_requires_visual_embeddings, seed_first_generated_token_from_terminal_prefill_chunk,
+    seed_terminal_text_prefill_after_prompt_cache_boundaries,
+};
 use super::{Qwen3_5EngineState, speculative_prefill::configured_speculative_prefill_failure};
 
 use crate::InferenceEngineError;
@@ -161,6 +165,10 @@ fn dispatch_speculative_sparse_target_forward(
         .take_forced_speculative_prefill_failure_for_tests(
             Qwen3_5SpeculativePrefillFailureStageForTests::SparseTargetExecution,
         );
+    let sparse_target_requires_visual_embeddings = chunk_requires_visual_embeddings(
+        active_request,
+        &sparse_target_gpu_inputs.selected_prompt_token_ids,
+    );
 
     let sparse_target_forward_result: Result<(), Qwen3_5ExecutionError> = (|| {
         if should_force_sparse_target_active_memory_limit_rejection {
@@ -180,7 +188,14 @@ fn dispatch_speculative_sparse_target_forward(
         active_request.performance_attribution.measure_operation(
             PerformanceOperation::SpeculativePrefillSparseTargetForward,
             |performance_attribution| {
-                if let Some(visual_embeddings) = active_request.visual_embeddings.as_ref() {
+                if sparse_target_requires_visual_embeddings {
+                    let visual_embeddings =
+                        active_request.visual_embeddings.as_ref().ok_or_else(|| {
+                            Qwen3_5ExecutionError::InvalidInput {
+                                description:
+                                    "prefill chunk contains image-pad tokens but visual embeddings are missing",
+                            }
+                        })?;
                     // Selected token IDs are compact, but explicit offsets
                     // preserve original rotary positions and image rows
                     // preserve visual consumption order.
@@ -238,8 +253,24 @@ fn dispatch_non_speculative_forward(
 ) -> Result<NonSpeculativeOutcome, PrefillForwardError> {
     let mut boundary_checkpoints = Vec::new();
     let mut terminal_history_token_count = 0;
+    // Request-owned visual embeddings stay attached after every image-pad in this
+    // prompt has already been consumed. Dispatching on that tensor made a cached
+    // suffix take text prefill with first-token seeding while the cold suffix of
+    // the same text took visual prefill without seeding, so the first generated
+    // token diverged after a lossless KV restore.
+    let chunk_requires_visual_embeddings = chunk_requires_visual_embeddings(
+        active_request,
+        &active_request.input_token_ids[prefill_start..prefill_end],
+    );
 
-    if active_request.visual_embeddings.is_some() {
+    if chunk_requires_visual_embeddings {
+        if active_request.visual_embeddings.is_none() {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description:
+                    "prefill chunk contains image-pad tokens but visual embeddings are missing",
+            }
+            .into());
+        }
         let (consumed_visual_embedding_count, visual_boundary_checkpoints) =
             dispatch_visual_prefill(
                 active_request,
@@ -417,6 +448,16 @@ fn dispatch_text_prefill(
                 description: "planned text prompt-cache checkpoints have no block contract",
             }
         })?;
+        if chunk_includes_final_prompt_token {
+            return seed_terminal_text_prefill_after_prompt_cache_boundaries(
+                active_request,
+                model,
+                prefill_start,
+                prefill_end,
+                intermediate_completed_prefill_chunck_tokens,
+                persistent_prompt_cache_block_token_count,
+            );
+        }
         model
             .prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
                 &active_request.input_token_ids[prefill_start..prefill_end],
@@ -428,66 +469,4 @@ fn dispatch_text_prefill(
             )
             .map(|checkpoint_outcome| checkpoint_outcome.boundary_checkpoints)
     }
-}
-
-// ---------------------------------------------------------------------------
-// Terminal chunk: seed first generated token from last prompt logits
-// ---------------------------------------------------------------------------
-
-/// Extract logits from the last prompt token to jump-start decode.
-///
-/// On the terminal prefill chunk, we forward all prompt tokens and then
-/// sample the first generated token from the final logits. When an optional
-/// prediction session is active, the pre-final-normalization hidden state
-/// is also captured for the drafter.
-fn seed_first_generated_token_from_terminal_prefill_chunk(
-    model: &Qwen3_5Model,
-    active_request: &mut Qwen3_5EngineRequest,
-    prefill_start: usize,
-    prefill_end: usize,
-) -> Result<(), Qwen3_5ExecutionError> {
-    let prompt_token_ids = active_request.input_token_ids[prefill_start..prefill_end].to_vec();
-    if active_request.has_optional_prediction_session() {
-        let target_forward_output = model
-            .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
-                &prompt_token_ids,
-                active_request.next_position_tokens,
-                &mut active_request.request_decoder_state,
-                &mut active_request.performance_attribution,
-            )?;
-        let last_hidden_row_index = i32::try_from(prompt_token_ids.len().saturating_sub(1))
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                description: "terminal prefill token count exceeds the MLX int32 range".into(),
-            })?;
-        let last_prompt_hidden_state = target_forward_output
-            .pre_final_normalization_hidden_state_at(model.runtime(), last_hidden_row_index)
-            .map_err(Qwen3_5ExecutionError::from)?;
-        let first_generated_token =
-            active_request
-                .build_generated_token(model, target_forward_output.final_logits())
-                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                    description:
-                        "failed to sample the first generated token from terminal prefill logits"
-                            .into(),
-                })?;
-        active_request.set_pending_generated_token(first_generated_token);
-        if let Some(prediction_session) = active_request.optional_prediction_session_mut() {
-            prediction_session.set_target_hidden_states(Some(last_prompt_hidden_state));
-        }
-        return Ok(());
-    }
-    let final_prompt_logits = model.forward_chunk_with_performance_attribution(
-        &prompt_token_ids,
-        active_request.next_position_tokens,
-        &mut active_request.request_decoder_state,
-        &mut active_request.performance_attribution,
-    )?;
-    let first_generated_token = active_request
-        .build_generated_token(model, &final_prompt_logits)
-        .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-            description: "failed to sample the first generated token from terminal prefill logits"
-                .into(),
-        })?;
-    active_request.set_pending_generated_token(first_generated_token);
-    Ok(())
 }
