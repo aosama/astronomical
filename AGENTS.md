@@ -8,6 +8,8 @@
 
 - NEVER pipe long-running commands through | tail -30, | head, | rg, | grep, or any filter at all. Show the raw output live; if a copy is needed for forensics, pipe through `tee` to a file and nothing else. The user must be able to observe progress as it happens.
 
+- When overseeing GitHub Actions builds (CI runs, PR checks, post-merge verification), poll at intervals of at most 10 seconds so the result is noticed the moment it lands instead of waiting on a long sleep between checks. Use a bounded number of polls so a stuck run still reports back.
+
 - MLX/GPU acceptance journeys must never run in parallel. Each journey loads model weights into wired GPU memory, so concurrent journeys multiply that demand past the machine's physical limit and can hard-panic the whole system (watchdog starvation → forced power-off). This is enforced structurally: `scripts/run-bounded-cargo-test.sh` rejects any ignored-test invocation that asks for more than one test thread and injects `--test-threads=1` otherwise, so callers cannot parallelize real-model journeys. Confirm no other Astronomical instance is holding a resident model before starting.
 
 - All and any tests must have a built in timeout with a maximum of 120 seconds. Exceptions can be made for tests that deal with performance endurance tests and/or reproducing OOM issues.
