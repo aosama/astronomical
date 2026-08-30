@@ -1,6 +1,6 @@
 use astronomical_model_serving::{Qwen3_5ImageGrid, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan};
 
-const CERTIFIED_VISION_CONFIG_JSON: &str = r#"
+const FROZEN_VISION_CONFIG_JSON: &str = r#"
 {
   "vision_config": {
     "depth": 27,
@@ -22,9 +22,8 @@ const CERTIFIED_VISION_CONFIG_JSON: &str = r#"
 
 #[test]
 fn should_plan_rectangular_vision_positions_in_spatial_merge_order() {
-    let vision_config =
-        Qwen3_5VisionConfig::from_json_bytes(CERTIFIED_VISION_CONFIG_JSON.as_bytes())
-            .expect("the certified Ornith vision config should parse");
+    let vision_config = Qwen3_5VisionConfig::from_json_bytes(FROZEN_VISION_CONFIG_JSON.as_bytes())
+        .expect("the frozen Ornith 1.0 vision config should parse");
     let image_grid = Qwen3_5ImageGrid {
         temporal_patch_count: 1,
         height_patch_count: 4,

@@ -132,7 +132,7 @@ async fn should_match_streamed_and_complete_conditioning_then_cancel_and_reuse_t
         drop(source_weights);
         runtime
             .clear_allocator_cache()
-            .expect("the serialized fixture sources should release before qualification");
+            .expect("the serialized fixture sources should release before acceptance");
 
         let complete_map = load_reduced_map(&runtime, &shard_path);
         let complete_weights = tensor_names

@@ -90,11 +90,26 @@ async fn should_reject_unpinned_flux_identity_before_model_loading() {
 
 #[tokio::test]
 async fn should_reject_changed_evidence_between_supervisor_discovery_and_worker_load() {
-    for mutate_discovered_artifact in [
-        mutate_revision as fn(&std::path::Path),
-        mutate_license,
-        mutate_profile,
-        remove_component,
+    // A mutated revision breaks the worker's config-vs-directory identity
+    // check before artifact verification runs; the other mutations leave
+    // provenance intact and are caught by exact-directory verification.
+    for (mutate_discovered_artifact, expected_failure_reason) in [
+        (
+            mutate_revision as fn(&std::path::Path),
+            "selected FLUX.2 Klein model identity or revision is unsupported",
+        ),
+        (
+            mutate_license as fn(&std::path::Path),
+            "selected FLUX.2 Klein artifact failed exact-directory verification",
+        ),
+        (
+            mutate_profile as fn(&std::path::Path),
+            "selected FLUX.2 Klein artifact failed exact-directory verification",
+        ),
+        (
+            remove_component as fn(&std::path::Path),
+            "selected FLUX.2 Klein artifact failed exact-directory verification",
+        ),
     ] {
         let model_directory = flux_model_directory();
         let discovered_model = discover_models(&[model_directory.path().to_path_buf()])
@@ -116,10 +131,7 @@ async fn should_reject_changed_evidence_between_supervisor_discovery_and_worker_
         let Err(load_failure_reason) = factory_outcome else {
             panic!("changed selected-directory evidence must fail before engine construction");
         };
-        assert_eq!(
-            load_failure_reason,
-            "selected FLUX.2 Klein artifact failed exact-directory verification"
-        );
+        assert_eq!(load_failure_reason, expected_failure_reason);
         assert!(
             !load_failure_reason.contains(
                 model_directory

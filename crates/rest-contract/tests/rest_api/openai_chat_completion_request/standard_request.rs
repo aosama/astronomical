@@ -4,7 +4,7 @@ use super::*;
 fn should_deserialize_a_standard_streaming_tool_use_request() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {"role": "system", "content": "You are a coding assistant."},
             {"role": "user", "content": "List Rust source files."}
@@ -40,7 +40,7 @@ fn should_deserialize_a_standard_streaming_tool_use_request() {
         .expect("the bounded standard tool-use request should validate");
     assert_eq!(
         chat_completion_request.model(),
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit"
+        "astronomical/fake-mixture-of-experts"
     );
     assert_eq!(chat_completion_request.messages().len(), 2);
     assert_eq!(chat_completion_request.tools().len(), 1);
@@ -52,7 +52,7 @@ fn should_deserialize_a_standard_streaming_tool_use_request() {
 fn should_expose_validated_request_parts_without_leaking_rest_dtos_into_ipc() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {"role": "user", "content": [{"type": "text", "text": "Inspect "}, {"type": "text", "text": "the repository."}]}
         ],
@@ -82,10 +82,7 @@ fn should_expose_validated_request_parts_without_leaking_rest_dtos_into_ipc() {
         .into_parts()
         .expect("the validated request should expose conversion parts");
 
-    assert_eq!(
-        request_parts.model,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit"
-    );
+    assert_eq!(request_parts.model, "astronomical/fake-mixture-of-experts");
     assert_eq!(request_parts.maximum_output_tokens, 512);
     assert_eq!(request_parts.requested_maximum_output_tokens, Some(512));
     assert_eq!(request_parts.tool_choice, OpenAiToolChoiceMode::None);

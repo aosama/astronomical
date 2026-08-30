@@ -234,7 +234,7 @@ async fn should_match_dequantized_reference_for_every_affine_bit_and_group_size(
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
     // These are exactly the affine profiles accepted by the pinned MLX runtime.
-    // The nested loops qualify the complete 6 × 3 compatibility matrix.
+    // The nested loops cover the complete 6 × 3 compatibility matrix.
     let supported_bits = [2_i32, 3, 4, 5, 6, 8];
     let supported_group_sizes = [32_i32, 64, 128];
 
@@ -390,7 +390,7 @@ async fn should_execute_empty_dense_and_affine_assignment_sets() {
 async fn should_execute_named_xs_and_s_projection_geometries_without_defaults() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    // These are named qualification evidence from issue #100. They are local
+    // These are named acceptance evidence from issue #100. They are local
     // test rows, not constants or defaults that production routing may inherit.
     let named_rows = [
         ("xs_routed", 8_i32, 256_i32, 512_i32),

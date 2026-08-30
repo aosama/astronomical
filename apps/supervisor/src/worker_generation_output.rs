@@ -29,6 +29,7 @@ pub(super) fn handle_worker_output(
         generated_token_count,
         outputs,
         mlx_memory_snapshot,
+        expert_residency,
     } = worker_event
     else {
         return Err(protocol_violation(
@@ -125,6 +126,9 @@ pub(super) fn handle_worker_output(
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
     }
+    if let Some(expert_residency) = expert_residency {
+        crate::worker_health::publish_worker_expert_residency(health_snapshot, expert_residency);
+    }
     Ok(())
 }
 
@@ -139,6 +143,7 @@ pub(super) fn handle_worker_generation_progress(
         maximum_output_tokens,
         elapsed_millis,
         mlx_memory_snapshot,
+        expert_residency,
     } = worker_event
     else {
         return Err(protocol_violation(
@@ -188,6 +193,9 @@ pub(super) fn handle_worker_generation_progress(
     );
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
+    }
+    if let Some(expert_residency) = expert_residency {
+        crate::worker_health::publish_worker_expert_residency(health_snapshot, expert_residency);
     }
     Ok(())
 }

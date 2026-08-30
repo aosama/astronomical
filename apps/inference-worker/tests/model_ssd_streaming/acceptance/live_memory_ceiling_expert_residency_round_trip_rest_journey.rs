@@ -7,27 +7,47 @@
 
 mod support;
 
-use std::{net::SocketAddr, time::Instant};
+use std::{
+    fs,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, interval, timeout};
 
-use crate::common::real_model_rest_server::{
-    JOURNEY_TIMEOUT, launch_real_model_rest_server, put_json_endpoint, stop_real_model_rest_server,
+use crate::support::serving_rest::{
+    JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, put_json_endpoint,
+    stop_real_model_rest_server,
 };
 use support::{
+    artifact_directory_regular_file_bytes, assert_expert_reporting_consistency,
     assert_machine_supports_round_trip, assert_nonresident_status_before_request,
     assert_resident_status, assert_streaming_status, read_generation_evidence,
-    wait_for_idle_status, write_round_trip_config,
+    wait_for_idle_status, wait_for_settled_resident_status, write_mid_streaming_raise_config,
+    write_round_trip_config,
 };
 
 pub(super) const LOG_MARKER: &str = "[live-memory-ceiling-residency-round-trip]";
-const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
+
+/// Raise margin above the artifact payload: enough that idle complete residency
+/// fits, but deliberately smaller than the context reserve of a ~40,000-token
+/// conversation, so request-time residency stays tight (the issue #337 squeeze).
+const RESIDENCY_RAISE_MARGIN_BYTES: u64 = 1_500_000_000;
+const MID_STREAMING_PROMPT_TOKEN_COUNT: usize = 26_000;
+const POST_RAISE_FRESH_SOURCE_REPEATS: usize = 2;
+const STATUS_CONSISTENCY_SAMPLE_INTERVAL: Duration = Duration::from_millis(200);
+const SETTLE_TIMEOUT: Duration = Duration::from_secs(45);
+
+fn model_id() -> &'static str {
+    crate::support::large_sparse_moe_model_id()
+}
 const INITIAL_MLX_MEMORY_CEILING_BYTES: u64 = 23_000_000_000;
 const RESIDENT_MLX_MEMORY_CEILING_BYTES: u64 = 38_000_000_000;
-// Below the oQ6e complete-owner idle snapshot (~28.5 GB). 30 GB used to look
+// Below the large sparse MoE complete-owner idle snapshot (~28.5 GB). 30 GB used to look
 // too small only because admission stacked exclusive paper peaks.
 const RETURN_TO_STREAMING_MLX_MEMORY_CEILING_BYTES: u64 = 26_000_000_000;
 const INITIAL_PROMPT_TOKEN_COUNT: usize = 1_024;
@@ -44,9 +64,228 @@ async fn should_serve_one_conversation_across_streaming_resident_and_streaming_m
         .expect("the live-ceiling expert-residency round trip must finish within 115 seconds");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "raises the worker ceiling during a long cached streaming conversation and asserts residency reporting consistency (issue #337)"]
+async fn should_settle_fully_resident_after_raising_the_memory_ceiling_mid_streaming_conversation()
+{
+    timeout(JOURNEY_TIMEOUT, run_mid_streaming_raise_settlement())
+        .await
+        .expect("the mid-streaming ceiling raise settlement must finish within 115 seconds");
+}
+
+async fn run_mid_streaming_raise_settlement() {
+    let journey_started_at = Instant::now();
+    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
+    let artifact_payload_bytes = artifact_directory_regular_file_bytes(&model_directory);
+    assert!(artifact_payload_bytes > 0);
+    let initial_ceiling_bytes = artifact_payload_bytes / 2;
+    let initial_ceiling_gb = initial_ceiling_bytes / 1_000_000_000;
+    let raised_ceiling_gb = (artifact_payload_bytes + RESIDENCY_RAISE_MARGIN_BYTES) / 1_000_000_000;
+    let raised_ceiling_bytes = raised_ceiling_gb * 1_000_000_000;
+    // Persistent (not tempfile) so the worker's residency transition and
+    // reclamation logs survive the journey for issue #337 diagnosis.
+    let isolated_worker_home =
+        support::acceptance_evidence_root().join("worker-home-mid-streaming-raise");
+    fs::remove_dir_all(&isolated_worker_home).ok();
+    fs::create_dir_all(&isolated_worker_home)
+        .expect("the mid-streaming raise worker home should be created");
+    // Canonicalize so the prompt-cache validator sees no ../.. components.
+    let isolated_worker_home = isolated_worker_home
+        .canonicalize()
+        .unwrap_or(isolated_worker_home);
+    write_mid_streaming_raise_config(
+        &isolated_worker_home,
+        &model_directory,
+        initial_ceiling_bytes,
+    );
+    let initial_user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
+        &model_directory,
+        ROMEO_AND_JULIET_SOURCE,
+        "Explain how haste shapes the tragedy in one concise paragraph.",
+        MID_STREAMING_PROMPT_TOKEN_COUNT,
+    );
+    eprintln!(
+        "{LOG_MARKER} phase=mid_streaming_raise status=start initial_ceiling_gb={initial_ceiling_gb} raised_ceiling_gb={raised_ceiling_gb} artifact_payload_gb={:.3} prompt_tokens={MID_STREAMING_PROMPT_TOKEN_COUNT}",
+        artifact_payload_bytes as f64 / 1_000_000_000.0,
+    );
+    let real_model_rest_server = launch_real_model_rest_server(
+        model_id(),
+        model_directory,
+        &isolated_worker_home,
+        initial_ceiling_bytes,
+    )
+    .await;
+    let server_address = real_model_rest_server.server_address;
+    let initial_status = wait_for_idle_status(server_address, "initial_idle").await;
+    assert_machine_supports_round_trip(&initial_status, raised_ceiling_bytes);
+    let openai_client = Client::with_config(
+        OpenAIConfig::new()
+            .with_api_base(format!("http://{server_address}/v1"))
+            .with_api_key("local-mid-streaming-raise-client"),
+    );
+
+    let first_assistant_response = execute_conversation_request(
+        &openai_client,
+        json!([{"role": "user", "content": initial_user_message}]),
+        "turn_1_streaming_growth",
+    )
+    .await;
+    let first_status = wait_for_idle_status(server_address, "turn_1_finalization").await;
+    assert_nonresident_status_before_request(&first_status, initial_ceiling_bytes);
+    assert_expert_reporting_consistency(&first_status, "turn_1_finalization");
+
+    let second_user_message =
+        "Which decision best demonstrates that haste, and why? Answer briefly.";
+    let second_assistant_response = execute_conversation_request(
+        &openai_client,
+        json!([
+            {"role": "user", "content": initial_user_message},
+            {"role": "assistant", "content": first_assistant_response},
+            {"role": "user", "content": second_user_message}
+        ]),
+        "turn_2_cached_streaming",
+    )
+    .await;
+    let second_status = wait_for_idle_status(server_address, "turn_2_finalization").await;
+    assert_nonresident_status_before_request(&second_status, initial_ceiling_bytes);
+    assert_expert_reporting_consistency(&second_status, "turn_2_finalization");
+
+    apply_memory_ceiling(server_address, raised_ceiling_gb, raised_ceiling_bytes).await;
+
+    // The fresh source keeps the post-raise turn in streamed prefill long enough
+    // to sample the exact window where issue #337 reported a complete-residency
+    // claim beside a zero measured expert payload.
+    let post_raise_source = ROMEO_AND_JULIET_SOURCE.repeat(POST_RAISE_FRESH_SOURCE_REPEATS);
+    let third_user_message =
+        format!("Use this additional context without quoting it: {post_raise_source}");
+    let first_reporting_violation = Arc::new(Mutex::new(None::<String>));
+    let sampler_violation = Arc::clone(&first_reporting_violation);
+    let status_sampler = tokio::spawn(async move {
+        let mut sampling_interval = interval(STATUS_CONSISTENCY_SAMPLE_INTERVAL);
+        let mut sample_count = 0_u64;
+        sampling_interval.tick().await;
+        loop {
+            sampling_interval.tick().await;
+            sample_count += 1;
+            let status_document = get_json_endpoint(server_address, "/v1/status").await;
+            let snapshot_expert_payload_bytes =
+                status_document["mlx_memory_snapshot"]["expert_payload_bytes"]
+                    .as_u64()
+                    .unwrap_or(0);
+            let claimed_resident_payload_bytes =
+                status_document["expert_residency"]["resident_expert_payload_bytes"].as_u64();
+            if sample_count % 5 == 0 {
+                eprintln!(
+                    "{LOG_MARKER} phase=status_sample status=progress sample={sample_count} expert_memory_mode={} measured_expert_payload_gb={:.3} claimed_resident_payload_gb={}",
+                    status_document["expert_memory_mode"]
+                        .as_str()
+                        .unwrap_or("unavailable"),
+                    snapshot_expert_payload_bytes as f64 / 1_000_000_000.0,
+                    claimed_resident_payload_bytes
+                        .map(|claimed| format!("{:.3}", claimed as f64 / 1_000_000_000.0))
+                        .unwrap_or_else(|| "none".to_owned()),
+                );
+            }
+            if let Some(claimed) = claimed_resident_payload_bytes {
+                let reporting_gap_bytes = claimed.abs_diff(snapshot_expert_payload_bytes);
+                if reporting_gap_bytes > support::EXPERT_REPORTING_CONSISTENCY_TOLERANCE_BYTES {
+                    let mut violation_slot = sampler_violation
+                        .lock()
+                        .expect("the status consistency violation slot should lock");
+                    if violation_slot.is_none() {
+                        *violation_slot = Some(format!(
+                            "claimed_resident_payload_bytes={claimed} measured_expert_payload_bytes={snapshot_expert_payload_bytes} expert_memory_mode={} snapshot_source={} status={status_document}",
+                            status_document["expert_memory_mode"]
+                                .as_str()
+                                .unwrap_or("unavailable"),
+                            status_document["mlx_memory_snapshot"]["source"]
+                                .as_str()
+                                .unwrap_or("unavailable"),
+                        ));
+                    }
+                    break;
+                }
+            }
+        }
+    });
+    let third_assistant_response = execute_conversation_request(
+        &openai_client,
+        json!([
+            {"role": "user", "content": initial_user_message},
+            {"role": "assistant", "content": first_assistant_response},
+            {"role": "user", "content": second_user_message},
+            {"role": "assistant", "content": second_assistant_response},
+            {"role": "user", "content": third_user_message}
+        ]),
+        "turn_3_post_raise_streaming",
+    )
+    .await;
+    assert!(!third_assistant_response.is_empty());
+
+    wait_for_settled_resident_status(
+        server_address,
+        "post_raise_settlement",
+        raised_ceiling_bytes,
+        SETTLE_TIMEOUT,
+    )
+    .await;
+
+    // The production contradiction appeared during a request that followed a
+    // completed promotion, so turn 4 stays inside the sampler's window too.
+    let fourth_user_message = "Close with one sentence on the Prince's judgment.";
+    execute_conversation_request(
+        &openai_client,
+        json!([
+            {"role": "user", "content": initial_user_message},
+            {"role": "assistant", "content": first_assistant_response},
+            {"role": "user", "content": second_user_message},
+            {"role": "assistant", "content": second_assistant_response},
+            {"role": "user", "content": third_user_message},
+            {"role": "assistant", "content": third_assistant_response},
+            {"role": "user", "content": fourth_user_message}
+        ]),
+        "turn_4_resident",
+    )
+    .await;
+    let fourth_status = wait_for_idle_status(server_address, "turn_4_finalization").await;
+    assert_resident_status(&fourth_status, raised_ceiling_bytes);
+    status_sampler.abort();
+    let reporting_violation = first_reporting_violation
+        .lock()
+        .expect("the status consistency violation slot should lock")
+        .clone();
+    assert!(
+        reporting_violation.is_none(),
+        "status reported contradictory expert residency during the post-raise turns (issue #337): {reporting_violation:?}"
+    );
+    stop_real_model_rest_server(real_model_rest_server).await;
+
+    let generation_evidence = read_generation_evidence(
+        &isolated_worker_home,
+        &[
+            initial_ceiling_gb * 1_000_000_000,
+            initial_ceiling_gb * 1_000_000_000,
+            raised_ceiling_bytes,
+            raised_ceiling_bytes,
+        ],
+    );
+    assert!(
+        generation_evidence[0].expert_source_read_bytes > 0,
+        "the first long turn must stream experts under the initial streaming ceiling"
+    );
+    eprintln!(
+        "{LOG_MARKER} phase=mid_streaming_raise status=success elapsed_seconds={:.3} raised_ceiling_gb={raised_ceiling_gb} turn_1_expert_read_gb={:.3} turn_2_expert_read_gb={:.3} turn_3_expert_read_gb={:.3} turn_4_expert_read_gb={:.3}",
+        journey_started_at.elapsed().as_secs_f64(),
+        generation_evidence[0].expert_source_read_bytes as f64 / 1_000_000_000.0,
+        generation_evidence[1].expert_source_read_bytes as f64 / 1_000_000_000.0,
+        generation_evidence[2].expert_source_read_bytes as f64 / 1_000_000_000.0,
+        generation_evidence[3].expert_source_read_bytes as f64 / 1_000_000_000.0,
+    );
+}
+
 async fn run_residency_round_trip() {
     let journey_started_at = Instant::now();
-    let model_directory = crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
+    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home =
         tempfile::tempdir().expect("the live-ceiling round-trip worker home should be created");
     write_round_trip_config(
@@ -54,7 +293,7 @@ async fn run_residency_round_trip() {
         &model_directory,
         INITIAL_MLX_MEMORY_CEILING_BYTES,
     );
-    let initial_user_message = crate::common::exact_model_prompt::build_exact_model_prompt_content(
+    let initial_user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
         &model_directory,
         ROMEO_AND_JULIET_SOURCE,
         "Explain how haste shapes the tragedy in one concise paragraph.",
@@ -65,7 +304,7 @@ async fn run_residency_round_trip() {
         JOURNEY_TIMEOUT.as_secs()
     );
     let real_model_rest_server = launch_real_model_rest_server(
-        MODEL_ID,
+        model_id(),
         model_directory,
         isolated_worker_home.path(),
         INITIAL_MLX_MEMORY_CEILING_BYTES,
@@ -180,7 +419,7 @@ async fn execute_conversation_request(
     let request_started_at = Instant::now();
     eprintln!("{LOG_MARKER} phase={request_label} status=start");
     let request_document = json!({
-        "model": MODEL_ID,
+        "model": model_id(),
         "messages": conversation_messages,
         "stream": true,
         "stream_options": {"include_usage": true},

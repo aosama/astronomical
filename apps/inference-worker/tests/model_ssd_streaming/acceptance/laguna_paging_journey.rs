@@ -62,20 +62,14 @@ async fn run_isolated_acceptance(test_name: &str, child_environment_key: &str) {
 }
 
 fn configured_laguna_model_id() -> String {
-    crate::common::configured_discovered_models()
-        .into_iter()
-        .find(|discovered_model| {
-            discovered_model.model_family == astronomical_config::ModelFamily::Laguna
-        })
-        .map(|discovered_model| discovered_model.model_id)
-        .expect("Development model_directories should discover a Laguna model")
+    crate::support::laguna_xs_model_id().to_owned()
 }
 
 fn run_constrained_startup_journey() {
     let laguna_model_id = configured_laguna_model_id();
     eprintln!("[laguna-constrained-startup] status=progress phase=select model={laguna_model_id}");
     let model_directory =
-        crate::common::configured_model_artifact_directory_by_id(&laguna_model_id);
+        crate::support::configured_installed_model_directory_by_id(&laguna_model_id);
     let weight_file_payload_bytes = LagunaArtifactValidator::new()
         .validate(&model_directory)
         .expect("the configured Laguna artifact should validate")
@@ -136,7 +130,7 @@ fn run_real_laguna_memory_journey() {
     let laguna_model_id = configured_laguna_model_id();
     eprintln!("[laguna-memory-acceptance] status=progress phase=select model={laguna_model_id}");
     let model_directory =
-        crate::common::configured_model_artifact_directory_by_id(&laguna_model_id);
+        crate::support::configured_installed_model_directory_by_id(&laguna_model_id);
     let machine_memory_ceiling_bytes = maximum_recommended_gpu_working_set_size_bytes()
         .expect("the machine GPU working-set recommendation should be readable");
     let startup_memory_ceiling_bytes = machine_memory_ceiling_bytes.saturating_sub(1);

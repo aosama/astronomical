@@ -405,7 +405,7 @@ fn build_vision_tensor_shard_map(shard_index: &super::Qwen3_5ShardIndex) -> Hash
         if let Some(shard_position) = shard_index
             .model_shard_file_names()
             .iter()
-            .position(|certified_file_name| *certified_file_name == *shard_file_name)
+            .position(|expected_file_name| *expected_file_name == *shard_file_name)
         {
             vision_tensor_name_to_shard_index.insert(vision_tensor_name.clone(), shard_position);
         }

@@ -1,6 +1,6 @@
 //! User journey proving SSD-paged expert reuse across decode tokens under a constrained 23 GB ceiling.
 //!
-//! The model cannot keep every expert resident in this qualification cell. The
+//! The model cannot keep every expert resident in this acceptance cell. The
 //! desired behavior is therefore not merely "request succeeds": routed experts
 //! must remain reusable across decoder layers instead of consuming nearly the
 //! whole ceiling on early layers while repeatedly reading omitted routes.
@@ -26,11 +26,13 @@ use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep, timeout};
 
-use crate::common::real_model_rest_server::{
+use crate::support::serving_rest::{
     JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 
-const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
+fn model_id() -> &'static str {
+    crate::support::large_sparse_moe_model_id()
+}
 // This ceiling defines a reproducible acceptance cell only. Production code must
 // not hardwire it or assume this model always leaves exactly four layers cold.
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 23_000_000_000;
@@ -56,19 +58,19 @@ async fn should_reuse_retained_decode_experts_while_staying_within_the_mlx_memor
 }
 
 async fn run_ssd_paging_decode_expert_reuse_journey() {
-    let model_directory = crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
+    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home =
         tempfile::tempdir().expect("the memory-management worker home should be created");
-    write_qualification_config(isolated_worker_home.path(), &model_directory);
+    write_acceptance_config(isolated_worker_home.path(), &model_directory);
     let repeated_source = ROMEO_AND_JULIET_SOURCE.repeat(3);
-    let user_message = crate::common::exact_model_prompt::build_exact_model_prompt_content(
+    let user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
         &model_directory,
         &repeated_source,
         "Summarize Romeo and Juliet in one concise paragraph. Include the central conflict, major decisions, and tragic outcome.",
         PROMPT_TOKEN_COUNT,
     );
     let real_model_rest_server = launch_real_model_rest_server(
-        MODEL_ID,
+        model_id(),
         model_directory,
         isolated_worker_home.path(),
         MAXIMUM_MLX_MEMORY_BYTES,
@@ -78,10 +80,10 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
     let openai_client = Client::with_config(
         OpenAIConfig::new()
             .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-qualification-client"),
+            .with_api_key("local-acceptance-client"),
     );
     let completion_request = json!({
-        "model": MODEL_ID,
+        "model": model_id(),
         "messages": [{"role": "user", "content": user_message}],
         "stream": true,
         "stream_options": {"include_usage": true},
@@ -406,7 +408,7 @@ async fn consume_completed_stream(
     }
 }
 
-fn write_qualification_config(isolated_worker_home: &Path, model_directory: &Path) {
+fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
     let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the memory-management configuration directory should be created");

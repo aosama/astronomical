@@ -36,12 +36,15 @@ impl Qwen3_5EngineState {
             })?;
         let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
             .map_err(|_| super::fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
-        Ok(Some(MlxMemoryTelemetry::new(
-            active_memory_bytes,
-            allocator_cache_memory_bytes,
-            peak_memory_bytes,
-            model.finalized_active_memory_breakdown(active_memory_bytes, 0),
-        )))
+        Ok(Some(
+            MlxMemoryTelemetry::new(
+                active_memory_bytes,
+                allocator_cache_memory_bytes,
+                peak_memory_bytes,
+                model.finalized_active_memory_breakdown(active_memory_bytes, 0),
+            )
+            .with_expert_residency_telemetry(model.expert_residency_telemetry()),
+        ))
     }
 
     pub(super) fn finalize_generation_request_after_error(

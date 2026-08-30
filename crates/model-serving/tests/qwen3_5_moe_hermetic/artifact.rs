@@ -5,22 +5,22 @@ use astronomical_model_serving::{
 use serde_json::Value;
 
 use crate::common::qwen3_5_moe::{
-    certified_ornith_config, certified_qwen3_5_language_tensor_profiles,
+    expected_qwen3_5_language_tensor_profiles, frozen_ornith_1_0_config,
 };
 use crate::qwen3_5_hermetic::artifact_test_support::{
-    certified_test_index_bytes, certified_test_index_bytes_with_mtp_tensor_names,
+    frozen_test_index_bytes, frozen_test_index_bytes_with_mtp_tensor_names,
 };
 
 #[test]
 fn should_classify_empty_mtp_inventory_as_target_only() {
-    let certified_ornith_config = certified_ornith_config();
-    let language_tensor_profiles = certified_qwen3_5_language_tensor_profiles();
-    let index_bytes = certified_test_index_bytes();
+    let frozen_ornith_1_0_config = frozen_ornith_1_0_config();
+    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
+    let index_bytes = frozen_test_index_bytes();
     let shard_index = Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)
         .expect("the target-only shard inventory should parse");
 
     let mtp_artifact_capability =
-        Qwen3_5MtpArtifactCapability::from_shard_index(&certified_ornith_config, &shard_index);
+        Qwen3_5MtpArtifactCapability::from_shard_index(&frozen_ornith_1_0_config, &shard_index);
 
     assert_eq!(
         mtp_artifact_capability,
@@ -32,17 +32,17 @@ fn should_classify_empty_mtp_inventory_as_target_only() {
 
 #[test]
 fn should_classify_complete_mtp_inventory_as_mtp_capable() {
-    let certified_ornith_config = certified_ornith_config();
-    let language_tensor_profiles = certified_qwen3_5_language_tensor_profiles();
-    let index_bytes = certified_test_index_bytes_with_mtp_tensor_names(
-        qwen3_5_mtp_tensor_names(&certified_ornith_config),
+    let frozen_ornith_1_0_config = frozen_ornith_1_0_config();
+    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
+    let index_bytes = frozen_test_index_bytes_with_mtp_tensor_names(
+        qwen3_5_mtp_tensor_names(&frozen_ornith_1_0_config),
         &language_tensor_profiles,
     );
     let shard_index = Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)
         .expect("the MTP-capable shard inventory should parse");
 
     let mtp_artifact_capability =
-        Qwen3_5MtpArtifactCapability::from_shard_index(&certified_ornith_config, &shard_index);
+        Qwen3_5MtpArtifactCapability::from_shard_index(&frozen_ornith_1_0_config, &shard_index);
 
     assert!(
         matches!(
@@ -59,19 +59,17 @@ fn should_classify_complete_mtp_inventory_as_mtp_capable() {
 
 #[test]
 fn should_fall_back_to_target_only_for_a_partial_mtp_inventory() {
-    let certified_ornith_config = certified_ornith_config();
-    let language_tensor_profiles = certified_qwen3_5_language_tensor_profiles();
-    let mut mtp_tensor_names = qwen3_5_mtp_tensor_names(&certified_ornith_config);
+    let frozen_ornith_1_0_config = frozen_ornith_1_0_config();
+    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
+    let mut mtp_tensor_names = qwen3_5_mtp_tensor_names(&frozen_ornith_1_0_config);
     mtp_tensor_names.remove("language_model.mtp.fc.weight");
-    let index_bytes = certified_test_index_bytes_with_mtp_tensor_names(
-        mtp_tensor_names,
-        &language_tensor_profiles,
-    );
+    let index_bytes =
+        frozen_test_index_bytes_with_mtp_tensor_names(mtp_tensor_names, &language_tensor_profiles);
     let shard_index = Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)
         .expect("the partial MTP shard inventory should parse");
 
     let mtp_artifact_capability =
-        Qwen3_5MtpArtifactCapability::from_shard_index(&certified_ornith_config, &shard_index);
+        Qwen3_5MtpArtifactCapability::from_shard_index(&frozen_ornith_1_0_config, &shard_index);
 
     assert_eq!(
         mtp_artifact_capability,
@@ -83,10 +81,10 @@ fn should_fall_back_to_target_only_for_a_partial_mtp_inventory() {
 
 #[test]
 fn should_omit_an_absent_mtp_only_shard_without_removing_target_ownership() {
-    let ornith_config = certified_ornith_config();
-    let language_tensor_profiles = certified_qwen3_5_language_tensor_profiles();
+    let ornith_config = frozen_ornith_1_0_config();
+    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
     let mut index_document =
-        serde_json::from_slice::<Value>(&certified_test_index_bytes_with_mtp_tensor_names(
+        serde_json::from_slice::<Value>(&frozen_test_index_bytes_with_mtp_tensor_names(
             qwen3_5_mtp_tensor_names(&ornith_config),
             &language_tensor_profiles,
         ))

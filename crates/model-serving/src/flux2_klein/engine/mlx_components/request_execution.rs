@@ -300,7 +300,7 @@ impl Flux2KleinMlxComponents {
                 outcome,
                 request_id,
                 self.serving_model_id.clone(),
-                FLUX2_KLEIN_OFFICIAL_REVISION.to_owned(),
+                self.provenance.revision().to_owned(),
                 width_pixels,
                 height_pixels,
                 4,
@@ -336,7 +336,7 @@ fn build_keyed_initial_latents(
     runtime.multiply_scalar(&noise, initial_sigma as f32)
 }
 
-/// Exposes production shape, schedule, and keyed-noise construction to external qualification.
+/// Exposes production shape, schedule, and keyed-noise construction to external acceptance.
 pub fn flux2_klein_initial_latents_for_tests(
     runtime: &MlxRuntime,
     seed: u64,
@@ -370,7 +370,7 @@ pub fn flux2_klein_keyed_noise_and_euler_for_tests(
     Ok(updated)
 }
 
-/// Direct-MLX scalar seam for qualifying pinned scheduler accumulation.
+/// Direct-MLX scalar seam for proving pinned scheduler accumulation.
 pub fn flux2_klein_euler_update_for_tests(
     runtime: &MlxRuntime,
     sample: &MlxArray,

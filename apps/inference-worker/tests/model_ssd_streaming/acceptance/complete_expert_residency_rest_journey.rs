@@ -1,6 +1,6 @@
 //! User journey proving that a fitting model stays completely resident.
 //!
-//! At a 35 GB decimal-SI MLX ceiling, the OptiQ-5bit sparse fixture has enough room
+//! At a 35 GB decimal-SI MLX ceiling, the resident sparse MoE e2e fixture has enough room
 //! for model core, every expert, and required request headroom. Cache is enabled.
 //! The journey sends a 15,000-token Romeo and Juliet request and proves:
 //!
@@ -19,12 +19,14 @@ use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep, timeout};
 
-use crate::common::real_model_rest_server::{
+use crate::support::serving_rest::{
     get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 
-const MODEL_ID: &str = "Ornith-1.5-35B-A3B-OptiQ-5bit";
-// Qualification cells are explicit evidence, not production constants. Runtime
+fn model_id() -> &'static str {
+    crate::support::resident_sparse_moe_model_id()
+}
+// Acceptance cells are explicit evidence, not production constants. Runtime
 // policy continues to derive capacity from user/machine ceiling and model geometry.
 const MAXIMUM_MLX_MEMORY_BYTES: u64 = 35_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 15_000;
@@ -49,19 +51,19 @@ async fn should_keep_all_experts_resident_and_avoid_ssd_reads_when_the_model_fit
 }
 
 async fn run_complete_expert_residency_rest_journey() {
-    let model_directory = crate::common::configured_model_artifact_directory_by_id(MODEL_ID);
+    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home = isolated_complete_residency_worker_home();
     write_acceptance_config(&isolated_worker_home, &model_directory);
     // One 15,000-token slice of the long Romeo and Juliet fixture. The builder
     // tokenizes with the real model tokenizer so the public request is exact.
-    let user_message = crate::common::exact_model_prompt::build_exact_model_prompt_content(
+    let user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
         &model_directory,
         ROMEO_AND_JULIET_SOURCE,
         "Summarize Romeo and Juliet in one concise paragraph. Include the central conflict, major decisions, and tragic outcome.",
         PROMPT_TOKEN_COUNT,
     );
     let real_model_rest_server = launch_real_model_rest_server(
-        MODEL_ID,
+        model_id(),
         model_directory,
         &isolated_worker_home,
         MAXIMUM_MLX_MEMORY_BYTES,
@@ -75,7 +77,7 @@ async fn run_complete_expert_residency_rest_journey() {
             .with_api_key("local-acceptance-client"),
     );
     let completion_request = json!({
-        "model": MODEL_ID,
+        "model": model_id(),
         "messages": [{"role": "user", "content": user_message}],
         "stream": true,
         "stream_options": {"include_usage": true},

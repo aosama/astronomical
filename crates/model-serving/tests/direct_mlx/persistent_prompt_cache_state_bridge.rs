@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use astronomical_model_serving::{DecoderCacheState, RequestDecoderStateStack};
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
 
-use crate::common::qwen3_5_moe::{certified_ornith_config, persistent_prompt_cache_model_contract};
+use crate::common::qwen3_5_moe::{
+    frozen_ornith_1_0_config, persistent_prompt_cache_model_contract,
+};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -13,7 +15,7 @@ async fn should_extract_split_persistent_prompt_cache_tensors_from_populated_dec
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();
     let block_token_count = persistent_prompt_cache_model_contract().block_token_count();
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let mut request_decoder_state = crate::common::standard_request_decoder_state(&ornith_config);
     populate_request_decoder_state(&runtime, &mut request_decoder_state);
 
@@ -72,7 +74,7 @@ async fn should_extract_only_the_requested_full_attention_kv_slice_from_longer_m
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();
     let block_token_count = persistent_prompt_cache_model_contract().block_token_count();
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let mut request_decoder_state = crate::common::standard_request_decoder_state(&ornith_config);
     populate_request_decoder_state_with_full_attention_tokens(
         &runtime,
@@ -115,7 +117,7 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
     let mut recurrent_snapshot_tensors = recurrent_snapshot_tensors;
 
     let mut restored_request_decoder_state =
-        crate::common::standard_request_decoder_state(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&frozen_ornith_1_0_config());
     restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
@@ -185,7 +187,7 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
 async fn should_round_trip_compact_sparse_target_decoder_state_without_dense_recomputation() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = shared_runtime();
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let mut sparse_target_decoder_state =
         crate::common::standard_request_decoder_state(&ornith_config);
     populate_request_decoder_state_with_full_attention_tokens(
@@ -205,7 +207,7 @@ async fn should_round_trip_compact_sparse_target_decoder_state_without_dense_rec
 
     let restored_attention_layer = restored_sparse_target_decoder_state
         .layer(3)
-        .expect("the certified full-attention layer should remain present");
+        .expect("the frozen full-attention layer should remain present");
     match restored_attention_layer {
         DecoderCacheState::AppendOnlyAttention { attention } => {
             assert_eq!(attention.offset_tokens(), 7);
@@ -218,7 +220,7 @@ async fn should_round_trip_compact_sparse_target_decoder_state_without_dense_rec
             );
         }
         DecoderCacheState::Composite { .. } => {
-            panic!("the certified full-attention layer must not change kind")
+            panic!("the frozen full-attention layer must not change kind")
         }
     }
 }
@@ -234,7 +236,7 @@ async fn should_materialize_restored_split_persistent_prompt_cache_state_before_
         tiny_persistent_prompt_cache_recurrent_snapshot_tensors(&runtime, 30.0);
 
     let mut restored_request_decoder_state =
-        crate::common::standard_request_decoder_state(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&frozen_ornith_1_0_config());
     restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
@@ -258,7 +260,7 @@ async fn should_reject_a_kv_block_tensor_map_missing_a_required_tensor() {
         tiny_persistent_prompt_cache_recurrent_snapshot_tensors(&runtime, 30.0);
 
     let mut restored_request_decoder_state =
-        crate::common::standard_request_decoder_state(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&frozen_ornith_1_0_config());
     let mut kv_block_tensor_maps = [kv_block_tensors];
     let mut recurrent_snapshot_tensors = recurrent_snapshot_tensors;
     let restore_result = restored_request_decoder_state
@@ -283,7 +285,7 @@ async fn should_reject_a_recurrent_snapshot_tensor_map_missing_a_required_tensor
     recurrent_snapshot_tensors.remove("layer_0_linear.gated_delta_recurrent");
 
     let mut restored_request_decoder_state =
-        crate::common::standard_request_decoder_state(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&frozen_ornith_1_0_config());
     let restore_result = restored_request_decoder_state
         .restore_from_persistent_prompt_cache_blocks(
             &runtime,
@@ -298,7 +300,7 @@ fn tiny_persistent_prompt_cache_kv_block_tensors(
     runtime: &MlxRuntime,
     tensor_value_base: f32,
 ) -> HashMap<String, MlxArray> {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let full_attention_layer_count = (0..ornith_config.layer_count() as usize)
         .filter(|layer_index| ornith_config.decoder_layer_is_full_attention(*layer_index))
         .count();
@@ -329,7 +331,7 @@ fn tiny_persistent_prompt_cache_recurrent_snapshot_tensors(
     runtime: &MlxRuntime,
     tensor_value_base: f32,
 ) -> HashMap<String, MlxArray> {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let linear_attention_layer_count = (0..ornith_config.layer_count() as usize)
         .filter(|layer_index| !ornith_config.decoder_layer_is_full_attention(*layer_index))
         .count();
@@ -378,7 +380,7 @@ fn populate_request_decoder_state_with_full_attention_tokens(
     request_decoder_state: &mut RequestDecoderStateStack,
     full_attention_token_count: usize,
 ) {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let key_value_head_count = ornith_config.key_value_head_count() as i32;
     let head_dimension = ornith_config.head_dimension() as i32;
     let linear_convolution_kernel_dimension =
@@ -391,7 +393,7 @@ fn populate_request_decoder_state_with_full_attention_tokens(
                 .saturating_mul(ornith_config.linear_value_head_dimension() as usize),
         );
     let linear_convolution_dimension_i32 = i32::try_from(linear_convolution_dimension)
-        .expect("the certified linear convolution dimension should fit i32");
+        .expect("the frozen linear convolution dimension should fit i32");
     let linear_value_head_count = ornith_config.linear_value_head_count() as i32;
     let linear_value_head_dimension = ornith_config.linear_value_head_dimension() as i32;
     let linear_key_head_dimension = ornith_config.linear_key_head_dimension() as i32;

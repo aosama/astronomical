@@ -80,6 +80,9 @@ pub struct MlxMemoryTelemetry {
     pub allocator_cache_memory_bytes: u64,
     pub peak_memory_bytes: u64,
     pub active_memory_breakdown: MlxActiveMemoryBreakdown,
+    /// Sparse-expert ownership captured at the same instant as the measurement,
+    /// so a published snapshot can never pair with a stale residency claim.
+    pub expert_residency_telemetry: Option<crate::ExpertResidencyTelemetry>,
 }
 
 impl MlxMemoryTelemetry {
@@ -95,7 +98,23 @@ impl MlxMemoryTelemetry {
             allocator_cache_memory_bytes,
             peak_memory_bytes,
             active_memory_breakdown,
+            expert_residency_telemetry: None,
         }
+    }
+
+    /// Attaches the sparse-expert ownership observed at this measurement instant.
+    #[must_use]
+    pub const fn with_expert_residency_telemetry(
+        mut self,
+        expert_residency_telemetry: crate::ExpertResidencyTelemetry,
+    ) -> Self {
+        self.expert_residency_telemetry = Some(expert_residency_telemetry);
+        self
+    }
+
+    #[must_use]
+    pub const fn expert_residency_telemetry(self) -> Option<crate::ExpertResidencyTelemetry> {
+        self.expert_residency_telemetry
     }
 }
 

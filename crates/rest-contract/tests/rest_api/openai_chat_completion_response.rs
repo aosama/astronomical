@@ -8,14 +8,14 @@ fn should_serialize_an_openai_compatible_streaming_text_delta() {
     let streaming_chunk = OpenAiChatCompletionChunk::text_delta(
         "chatcmpl-local-42",
         1_784_231_803,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "astronomical/fake-mixture-of-experts",
         "local fragment",
     );
 
     assert_eq!(
         serde_json::to_string(&streaming_chunk)
             .expect("the OpenAI-compatible chunk should serialize"),
-        r#"{"id":"chatcmpl-local-42","object":"chat.completion.chunk","created":1784231803,"model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit","choices":[{"index":0,"delta":{"content":"local fragment"},"finish_reason":null}]}"#
+        r#"{"id":"chatcmpl-local-42","object":"chat.completion.chunk","created":1784231803,"model":"astronomical/fake-mixture-of-experts","choices":[{"index":0,"delta":{"content":"local fragment"},"finish_reason":null}]}"#
     );
 }
 
@@ -26,7 +26,7 @@ fn should_serialize_a_terminal_tool_call_chunk_with_requested_usage() {
     let terminal_chunk = OpenAiChatCompletionChunk::finished(
         "chatcmpl-local-42",
         1_784_231_803,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "astronomical/fake-mixture-of-experts",
         OpenAiFinishReason::ToolCalls,
     )
     .with_usage(token_usage);
@@ -34,7 +34,7 @@ fn should_serialize_a_terminal_tool_call_chunk_with_requested_usage() {
     assert_eq!(
         serde_json::to_string(&terminal_chunk)
             .expect("the terminal OpenAI-compatible chunk should serialize"),
-        r#"{"id":"chatcmpl-local-42","object":"chat.completion.chunk","created":1784231803,"model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":31,"completion_tokens":7,"total_tokens":38}}"#
+        r#"{"id":"chatcmpl-local-42","object":"chat.completion.chunk","created":1784231803,"model":"astronomical/fake-mixture-of-experts","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":31,"completion_tokens":7,"total_tokens":38}}"#
     );
 }
 
@@ -45,7 +45,7 @@ fn should_serialize_a_non_streaming_response_with_reasoning_and_text() {
     let response = OpenAiChatCompletionResponse::new(
         "chatcmpl-local-42",
         1_784_231_803,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "astronomical/fake-mixture-of-experts",
         OpenAiAssistantMessage::new(
             Some("The repository uses Rust.".to_owned()),
             Some("I inspected the source tree.".to_owned()),
@@ -58,7 +58,7 @@ fn should_serialize_a_non_streaming_response_with_reasoning_and_text() {
     assert_eq!(
         serde_json::to_string(&response)
             .expect("the non-streaming OpenAI-compatible response should serialize"),
-        r#"{"id":"chatcmpl-local-42","object":"chat.completion","created":1784231803,"model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit","choices":[{"index":0,"message":{"role":"assistant","content":"The repository uses Rust.","reasoning_content":"I inspected the source tree."},"finish_reason":"stop"}],"usage":{"prompt_tokens":31,"completion_tokens":7,"total_tokens":38}}"#
+        r#"{"id":"chatcmpl-local-42","object":"chat.completion","created":1784231803,"model":"astronomical/fake-mixture-of-experts","choices":[{"index":0,"message":{"role":"assistant","content":"The repository uses Rust.","reasoning_content":"I inspected the source tree."},"finish_reason":"stop"}],"usage":{"prompt_tokens":31,"completion_tokens":7,"total_tokens":38}}"#
     );
 }
 

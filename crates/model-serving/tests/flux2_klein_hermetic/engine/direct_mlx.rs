@@ -1,4 +1,4 @@
-//! Small-geometry qualification of MLX load boundaries, keyed noise, and Euler arithmetic.
+//! Small-geometry acceptance of MLX load boundaries, keyed noise, and Euler arithmetic.
 //! Direct tests share one limit contract because MLX runtime initialization is process-wide.
 
 use std::fs;

@@ -9,7 +9,7 @@ pub(super) fn command_with_tool_schema(
 ) -> ChatGenerationCommand {
     ChatGenerationCommand {
         request_id: RequestId::new(request_id),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: user_messages(),
         tools: vec![ChatToolDefinition {
             name: "glob".to_owned(),

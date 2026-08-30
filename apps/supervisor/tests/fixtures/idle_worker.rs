@@ -257,6 +257,7 @@ where
                 context_state_payload_bytes: 0,
                 speculative_prefill_draft_memory_bytes: 0,
             }),
+            expert_residency: None,
         })
         .await
 }

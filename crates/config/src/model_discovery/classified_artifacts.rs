@@ -156,7 +156,6 @@ pub(super) fn immutable_model_provenance(model_directory: &Path) -> Option<(Stri
     if provenance.schema_version != 1
         || !has_valid_revision
         || !is_valid_provider_model_id(&provenance.provider_model_id)
-        || immutable_model_revision(model_directory).as_deref() != Some(&provenance.revision)
     {
         return None;
     }

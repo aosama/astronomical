@@ -1,3 +1,12 @@
+#[allow(dead_code)]
+mod e2e_test_model_names;
+#[allow(dead_code, unused_imports)]
+pub(crate) use e2e_test_model_names::{
+    dense_mtp_model_id, e2e_test_model_ids, flux2_klein_model_id, laguna_xs_model_id,
+    large_sparse_moe_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
+    small_dense_model_id,
+};
+
 #[cfg(feature = "direct-mlx")]
 use std::path::PathBuf;
 #[cfg(feature = "direct-mlx")]
@@ -79,7 +88,7 @@ pub(crate) fn standard_request_decoder_state(
 }
 
 #[allow(dead_code)]
-pub(crate) fn resolve_model_artifact_qualification_mlx_memory_ceiling_bytes(
+pub(crate) fn resolve_serving_acceptance_mlx_memory_ceiling_bytes(
     configured_mlx_memory_ceiling_bytes: Option<u64>,
     machine_mlx_memory_ceiling_bytes: usize,
 ) -> usize {
@@ -117,15 +126,6 @@ const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
 #[allow(dead_code)]
 const MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Current large sparse artifact used by real-model qualification boundaries.
-#[allow(dead_code)] // Shared by independently feature-gated qualification binaries.
-pub(crate) const ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID: &str = "Ornith-1.5-35B-A3B-oQ6e-mtp";
-
-/// Same Ornith 1.5 oQ6e artifact used when a qualification drops and reloads.
-#[allow(dead_code)] // Used only by the explicit MLX memory-contract boundary.
-pub(crate) const ORNITH_MODEL_SWAP_SOURCE_MODEL_ID: &str =
-    ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID;
-
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) const DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES: usize = 512 * 1024 * 1024;
@@ -141,18 +141,17 @@ pub(crate) async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> MlxMemoryLimits {
+pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLimits {
     let astronomical_config = AstronomicalConfig::load_from_development_location()
-        .expect("the standard Astronomical configuration should load for model qualification");
+        .expect("the standard Astronomical configuration should load for model acceptance");
     let machine_mlx_memory_ceiling_bytes = sample_machine_mlx_memory_ceiling_bytes().await;
     let configured_mlx_memory_ceiling_bytes = astronomical_config
         .maximum_mlx_memory_bytes()
         .expect("the configured model-artifact MLX memory ceiling should be valid");
-    let effective_mlx_memory_ceiling_bytes =
-        resolve_model_artifact_qualification_mlx_memory_ceiling_bytes(
-            configured_mlx_memory_ceiling_bytes,
-            machine_mlx_memory_ceiling_bytes,
-        );
+    let effective_mlx_memory_ceiling_bytes = resolve_serving_acceptance_mlx_memory_ceiling_bytes(
+        configured_mlx_memory_ceiling_bytes,
+        machine_mlx_memory_ceiling_bytes,
+    );
     eprintln!(
         "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
         machine_mlx_memory_ceiling_bytes,
@@ -170,10 +169,9 @@ pub(crate) async fn sample_model_artifact_qualification_mlx_memory_limits() -> M
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-/// Uses only the machine ceiling so residency qualifications are not changed by
+/// Uses only the machine ceiling so residency acceptance is not changed by
 /// a developer's ordinary lower application cap.
-pub(crate) async fn sample_machine_model_artifact_qualification_mlx_memory_limits()
--> MlxMemoryLimits {
+pub(crate) async fn sample_machine_serving_acceptance_mlx_memory_limits() -> MlxMemoryLimits {
     let machine_mlx_memory_ceiling_bytes = sample_machine_mlx_memory_ceiling_bytes().await;
     eprintln!(
         "[model-artifact-machine-memory] machine_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
@@ -232,8 +230,8 @@ async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) fn configured_ornith_model_artifact_directory() -> PathBuf {
-    configured_model_artifact_directory_by_id(ORNITH_MODEL_ARTIFACT_QUALIFICATION_MODEL_ID)
+pub(crate) fn configured_large_sparse_moe_model_directory() -> PathBuf {
+    configured_installed_model_directory_by_id(large_sparse_moe_model_id())
 }
 
 #[cfg(feature = "direct-mlx")]
@@ -276,9 +274,9 @@ pub(crate) fn discovered_chat_capabilities(
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathBuf {
+pub(crate) fn configured_installed_model_directory_by_id(model_id: &str) -> PathBuf {
     let astronomical_config = AstronomicalConfig::load_from_development_location()
-        .expect("the standard Astronomical configuration should load for model qualification");
+        .expect("the standard Astronomical configuration should load for model acceptance");
     configured_discovered_model_by_id(&astronomical_config, model_id).model_directory
 }
 
@@ -286,7 +284,7 @@ pub(crate) fn configured_model_artifact_directory_by_id(model_id: &str) -> PathB
 #[allow(dead_code)]
 pub(crate) fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf> {
     let astronomical_config = AstronomicalConfig::load_from_development_location()
-        .expect("the standard Astronomical configuration should load for model qualification");
+        .expect("the standard Astronomical configuration should load for model acceptance");
     astronomical_config
         .find_configured_model_directory_by_id(model_id)
         .unwrap_or_else(|discovery_error| {
@@ -300,7 +298,7 @@ pub(crate) fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf
 #[allow(dead_code)]
 pub(crate) fn configured_model_artifact_prompt_cache_maximum_size_bytes() -> u64 {
     AstronomicalConfig::load_from_development_location()
-        .expect("~/.astronomical-dev/config.json should load for model-artifact qualification")
+        .expect("~/.astronomical-dev/config.json should load for model-artifact acceptance")
         .prompt_cache()
         .expect("~/.astronomical-dev/config.json should define prompt_cache.max_size_gb")
         .global_prompt_cache_maximum_size_bytes()

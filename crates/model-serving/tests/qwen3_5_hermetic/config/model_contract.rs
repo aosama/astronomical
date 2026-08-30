@@ -1,11 +1,11 @@
 use super::*;
 
 #[test]
-fn should_parse_the_certified_qwen3_5_moe_text_core_config() {
-    let config_bytes = certified_ornith_config_bytes();
+fn should_parse_the_frozen_qwen3_5_moe_text_core_config() {
+    let config_bytes = frozen_ornith_1_0_config_bytes();
 
     let ornith_config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the certified Ornith core config should parse");
+        .expect("the frozen Ornith 1.0 core config should parse");
 
     assert_eq!(ornith_config.hidden_size(), 2_048);
     assert_eq!(ornith_config.layer_count(), 40);
@@ -37,15 +37,15 @@ fn should_parse_the_certified_qwen3_5_moe_text_core_config() {
 #[test]
 fn should_parse_a_native_bfloat16_config_without_quantization_metadata() {
     let mut native_bfloat16_config_document =
-        serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-            .expect("the certified Ornith config should decode as JSON");
+        serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+            .expect("the frozen Ornith 1.0 config should decode as JSON");
     native_bfloat16_config_document
         .as_object_mut()
-        .expect("the certified Ornith config should be a JSON object")
+        .expect("the frozen Ornith 1.0 config should be a JSON object")
         .remove("quantization");
     native_bfloat16_config_document
         .as_object_mut()
-        .expect("the certified Ornith config should remain a JSON object")
+        .expect("the frozen Ornith 1.0 config should remain a JSON object")
         .remove("quantization_config");
     let native_bfloat16_config_bytes = serde_json::to_vec(&native_bfloat16_config_document)
         .expect("the native BF16 config should serialize");
@@ -77,11 +77,11 @@ fn should_parse_a_native_bfloat16_config_without_quantization_metadata() {
 #[test]
 fn should_parse_a_config_with_only_one_quantization_document() {
     let mut single_quantization_document =
-        serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-            .expect("the certified Ornith config should decode as JSON");
+        serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+            .expect("the frozen Ornith 1.0 config should decode as JSON");
     single_quantization_document
         .as_object_mut()
-        .expect("the certified Ornith config should be a JSON object")
+        .expect("the frozen Ornith 1.0 config should be a JSON object")
         .remove("quantization_config");
     let single_quantization_bytes = serde_json::to_vec(&single_quantization_document)
         .expect("the single quantization config should serialize");
@@ -99,8 +99,8 @@ fn should_parse_a_config_with_only_one_quantization_document() {
 
 #[test]
 fn should_estimate_long_context_memory_from_full_attention_key_value_state_only() {
-    let ornith_config = Qwen3_5Config::from_json_bytes(&certified_ornith_config_bytes())
-        .expect("the certified Ornith core config should parse");
+    let ornith_config = Qwen3_5Config::from_json_bytes(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen Ornith 1.0 core config should parse");
 
     assert_eq!(
         ornith_config.context_memory_reservation_bytes(179_350),
@@ -111,8 +111,8 @@ fn should_estimate_long_context_memory_from_full_attention_key_value_state_only(
 
 #[test]
 fn should_reject_a_context_memory_reservation_that_overflows_the_platform_range() {
-    let ornith_config = Qwen3_5Config::from_json_bytes(&certified_ornith_config_bytes())
-        .expect("the certified Ornith core config should parse");
+    let ornith_config = Qwen3_5Config::from_json_bytes(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen Ornith 1.0 core config should parse");
 
     assert_eq!(
         ornith_config.context_memory_reservation_bytes(usize::MAX),
@@ -122,8 +122,8 @@ fn should_reject_a_context_memory_reservation_that_overflows_the_platform_range(
 
 #[test]
 fn should_use_the_declared_attention_type_for_each_decoder_layer() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
     config_value["text_config"]["layer_types"][0] = json!("full_attention");
     config_value["text_config"]["layer_types"][3] = json!("linear_attention");
     let config_bytes = serde_json::to_vec(&config_value)
@@ -143,8 +143,8 @@ fn should_use_the_declared_attention_type_for_each_decoder_layer() {
 
 #[test]
 fn should_reject_an_ornith_layer_schedule_with_the_wrong_number_of_layers() {
-    let mut config_value = serde_json::from_slice::<Value>(&certified_ornith_config_bytes())
-        .expect("the certified test config should decode as JSON");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
     config_value["text_config"]["layer_types"] = json!([]);
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");

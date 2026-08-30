@@ -83,7 +83,7 @@ pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_at
             .ok_or(Qwen3_5ExecutionError::InvalidInput {
                 description: "target verification forward did not retain all-position logits",
             })?;
-    let target_token_indices = model.build_greedy_token(all_position_logits)?;
+    let target_token_indices = model.select_highest_logit_token(all_position_logits)?;
     let target_token_ids = performance_attribution.measure_operation(
         PerformanceOperation::MtpTargetVerificationSynchronizationWait,
         |_performance_attribution| -> Result<Vec<u32>, Qwen3_5ExecutionError> {

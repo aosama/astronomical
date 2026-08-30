@@ -71,7 +71,7 @@ impl ModelLicense {
 /// One executable model discovered by recursive directory scanning.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiscoveredModel {
-    /// The model identity from the leaf directory name (e.g. "Ornith-1.0-35B-OptiQ-4bit").
+    /// The model identity from the leaf directory name (e.g. "fake-mixture-of-experts").
     /// For HuggingFace cache entries, this is derived from the decoded `org/repo` path
     /// with the org prefix stripped (e.g. "Ornith-1.0-35B-6bit" from "mlx-community/Ornith-1.0-35B-6bit").
     pub model_id: String,

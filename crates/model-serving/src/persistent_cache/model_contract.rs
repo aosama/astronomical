@@ -463,7 +463,7 @@ fn update_tensor_layout_fingerprint(
         let tensor_layout = persisted_tensor_layout.tensor_layout();
         update_length_prefixed_bytes(
             fingerprint_digest,
-            tensor_layout.qualified_role_name().as_bytes(),
+            tensor_layout.tensor_role_name().as_bytes(),
         );
         update_length_prefixed_bytes(
             fingerprint_digest,

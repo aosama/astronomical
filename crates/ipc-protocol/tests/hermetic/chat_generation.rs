@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
 fn should_serialize_one_structured_chat_generation_command_without_rest_types() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(44),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![
             ChatMessage::System {
                 content: "You are a coding assistant.".to_owned(),
@@ -53,7 +53,7 @@ fn should_serialize_one_structured_chat_generation_command_without_rest_types() 
     assert_eq!(
         serde_json::to_string(&chat_generation_command)
             .expect("the structured chat payload should serialize"),
-        r#"{"request_id":44,"model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit","messages":[{"role":"system","content":"You are a coding assistant."},{"role":"assistant","content":null,"reasoning_content":"I should inspect the repository.","tool_calls":[{"id":"call_1","function":{"name":"glob","arguments_json":"{\"pattern\":\"src/**/*.rs\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"src/lib.rs"},{"role":"user","content":"Summarize the source files.","images":[]}],"tools":[{"name":"glob","description":"List matching files.","parameters_json":"{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\"}}}"}],"tool_choice":{"kind":"auto"},"settings":{"max_output_tokens":512,"temperature_thousandths":600,"top_p_thousandths":950,"seed":7,"thinking_budget":null}}"#
+        r#"{"request_id":44,"model":"astronomical/fake-mixture-of-experts","messages":[{"role":"system","content":"You are a coding assistant."},{"role":"assistant","content":null,"reasoning_content":"I should inspect the repository.","tool_calls":[{"id":"call_1","function":{"name":"glob","arguments_json":"{\"pattern\":\"src/**/*.rs\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"src/lib.rs"},{"role":"user","content":"Summarize the source files.","images":[]}],"tools":[{"name":"glob","description":"List matching files.","parameters_json":"{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\"}}}"}],"tool_choice":{"kind":"auto"},"settings":{"max_output_tokens":512,"temperature_thousandths":600,"top_p_thousandths":950,"seed":7,"thinking_budget":null}}"#
     );
 }
 
@@ -100,7 +100,7 @@ fn should_round_trip_ready_model_capabilities_with_vision_support() {
 fn should_round_trip_one_chat_command_with_a_user_message_image() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(99),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "What is in this picture?".to_owned(),
             images: vec![astronomical_ipc_protocol::ChatImageInput {
@@ -172,7 +172,7 @@ fn should_reject_a_qwen_thinking_channel_seed_that_exceeds_its_bounded_contract(
 fn chat_generation_command_with_seed(qwen_thinking_channel_seed: String) -> ChatGenerationCommand {
     ChatGenerationCommand {
         request_id: RequestId::new(105),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "Who is Romeo?".to_owned(),
             images: Vec::new(),

@@ -1,0 +1,99 @@
+use astronomical_ipc_protocol::RequestId;
+use astronomical_model_serving::{
+    GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Engine,
+    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
+};
+
+use super::engine_prompt_cache::{
+    persistent_prompt_cache_eligible_prompt_token_ids,
+    require_persistent_prompt_cache_acceptance_completion,
+};
+
+#[tokio::test]
+#[ignore = "loads and generates with the complete Ornith artifact"]
+async fn should_generate_without_prompt_cache_storage_contract_work_when_cache_is_disabled() {
+    require_persistent_prompt_cache_acceptance_completion(
+        run_prompt_cache_disabled_cold_prefill_acceptance(),
+    )
+    .await;
+}
+
+async fn run_prompt_cache_disabled_cold_prefill_acceptance() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the Ornith artifact should validate before engine loading");
+    let mlx_memory_limits =
+        crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
+    let mut cache_disabled_chunking_configuration =
+        crate::common::standard_worker_chunking_configuration();
+    // This value deliberately violates the model's persistent-state alignment. Disabled cache
+    // execution must never resolve or validate a storage contract that cannot be used.
+    cache_disabled_chunking_configuration.prompt_cache_block_tokens = Some(1);
+    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
+        validated_artifact,
+        mlx_memory_limits.active_memory_limit_bytes(),
+        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        None,
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
+            .expect("the test prefill chunk size should be valid"),
+        248_069,
+        model_directory.to_path_buf(),
+        cache_disabled_chunking_configuration,
+        true,
+        crate::common::disabled_worker_speculative_prefill_configuration(),
+    )
+    .expect("the bounded Ornith engine settings should be valid");
+    qwen3_5_engine
+        .load()
+        .await
+        .expect("the engine should materialize the complete Ornith model");
+    let request_id = RequestId::new(2_000);
+    qwen3_5_engine
+        .start_generation(
+            Qwen3_5InferenceRequest::new(
+                request_id,
+                persistent_prompt_cache_eligible_prompt_token_ids(15),
+                10,
+            )
+            .with_image_pad_token_id(248_069),
+        )
+        .await
+        .expect("the engine should accept one generation request");
+
+    let mut generated_token_ids = Vec::new();
+    let mut observed_generation_finalization = false;
+    while generated_token_ids.len() < 10 {
+        match qwen3_5_engine
+            .decode_next_token(request_id)
+            .await
+            .expect("each engine boundary should advance the request")
+        {
+            GeneratedToken::TokenId {
+                token_id,
+                generation_finalization,
+                ..
+            } => {
+                generated_token_ids.push(token_id);
+                if generation_finalization.is_some() {
+                    observed_generation_finalization = true;
+                    break;
+                }
+            }
+            GeneratedToken::PrefillProgress { .. } => {}
+            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
+            GeneratedToken::GenerationPreparationStarted { .. } => {}
+            GeneratedToken::EndOfSequence => break,
+        }
+    }
+
+    assert!(
+        !generated_token_ids.is_empty(),
+        "cache-disabled execution should generate at least one model token"
+    );
+    assert!(
+        observed_generation_finalization || generated_token_ids.len() == 10,
+        "cache-disabled execution should terminate through the engine contract or its output budget"
+    );
+}

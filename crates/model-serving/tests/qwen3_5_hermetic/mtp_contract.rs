@@ -3,7 +3,7 @@ use astronomical_model_serving::{
     qwen3_5_mtp_tensor_names,
 };
 
-use crate::common::qwen3_5_moe::certified_ornith_config;
+use crate::common::qwen3_5_moe::frozen_ornith_1_0_config;
 
 const SUPPORTED_CONTRACT: &str = r#"{
   "base_hidden_variant": "post_norm",
@@ -118,7 +118,7 @@ fn should_validate_mtp_draft_depth_boundaries() {
 
 #[test]
 fn should_resolve_complete_known_qwen_inventory_with_named_contract_depth_safely() {
-    let config = certified_ornith_config();
+    let config = frozen_ornith_1_0_config();
     let config_bytes = config_with_contract(SUPPORTED_CONTRACT);
     let runtime_bytes = format!(
         r#"{{"arch_id":"qwen3-next-mtp","mtplx_version":"2.3.0","mtp_contract":{SUPPORTED_CONTRACT},"mtp_depth_max":9}}"#,

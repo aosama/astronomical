@@ -36,7 +36,7 @@
 
 ## Local Environment Boundaries
 
-- Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, qualification artifacts, documentation, GitHub content, or agent instructions.
+- Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, acceptance artifacts, documentation, GitHub content, or agent instructions.
 
 - Resolve user-controlled locations through configuration, environment variables, platform-standard application directories, command-line arguments, or explicit user file selection.
 
@@ -52,6 +52,7 @@
 
 - Code files should remain around the 500 lines marker not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
+- Compiler warnings are defects. If a compile or test run you invoked emits a warning, remediate it in the same turn before moving on. There is no "I can do this later." Do not leave unused imports, dead code, visibility mismatches, or other warnings as known leftovers.
 
 ## No Backward Compatibility for REST API surface
 

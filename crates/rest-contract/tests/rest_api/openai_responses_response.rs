@@ -6,7 +6,7 @@ fn should_serialize_raw_model_reasoning_as_a_plaintext_summary_without_encrypted
         "resp_instance-7",
         1_753_000_000,
         1_753_000_007,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "astronomical/fake-mixture-of-experts",
         Some("Be precise.".to_owned()),
         vec![
             OpenAiResponseOutputItem::reasoning("rs_instance-7", "Inspect first."),

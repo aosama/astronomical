@@ -1,7 +1,7 @@
 //! Hermetic arithmetic contracts for complete sparse-expert payload admission.
 //!
 //! These tests use fictional paths and geometry because admission must be exact
-//! before files are opened or MLX is initialized. Real-artifact qualifications
+//! before files are opened or MLX is initialized. Real-artifact acceptance
 //! separately prove that the computed inventory can be materialized.
 
 use std::path::PathBuf;

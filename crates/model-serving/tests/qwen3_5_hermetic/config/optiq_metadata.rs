@@ -28,13 +28,13 @@ fn should_accept_two_bit_optiq_metadata_supported_by_mlx_affine_quantization() {
 
 #[test]
 fn should_require_the_optiq_metadata_bit_map_to_match_the_config() {
-    let config_bytes = certified_optiq_ornith_config_bytes();
-    let metadata_bytes = certified_optiq_metadata_bytes();
+    let config_bytes = frozen_ornith_1_0_optiq_config_bytes();
+    let metadata_bytes = frozen_optiq_metadata_bytes();
     let ornith_config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the certified OptiQ Ornith config should parse");
+        .expect("the frozen Ornith 1.0 OptiQ config should parse");
 
     let optiq_metadata = OptiQMetadata::from_json_bytes(&metadata_bytes)
-        .expect("the certified OptiQ metadata should parse");
+        .expect("the frozen OptiQ metadata should parse");
 
     assert_eq!(optiq_metadata.measured_module_count(), 510);
     optiq_metadata
@@ -44,14 +44,14 @@ fn should_require_the_optiq_metadata_bit_map_to_match_the_config() {
 
 #[test]
 fn should_accept_measured_optiq_profiles_that_are_a_strict_subset_of_the_config() {
-    let config_bytes = certified_optiq_ornith_config_bytes();
+    let config_bytes = frozen_ornith_1_0_optiq_config_bytes();
     let ornith_config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the certified OptiQ Ornith config should parse");
-    let mut metadata_document = serde_json::from_slice::<Value>(&certified_optiq_metadata_bytes())
-        .expect("the certified OptiQ metadata should decode as JSON");
+        .expect("the frozen Ornith 1.0 OptiQ config should parse");
+    let mut metadata_document = serde_json::from_slice::<Value>(&frozen_optiq_metadata_bytes())
+        .expect("the frozen OptiQ metadata should decode as JSON");
     let measured_module_profiles = metadata_document["per_layer"]
         .as_object_mut()
-        .expect("the certified OptiQ metadata should contain measured module profiles");
+        .expect("the frozen OptiQ metadata should contain measured module profiles");
     measured_module_profiles.retain(|module_name, _| !module_name.contains(".mlp.switch_mlp."));
     let metadata_bytes = serde_json::to_vec(&metadata_document)
         .expect("the measured-subset OptiQ metadata should serialize");
@@ -67,11 +67,11 @@ fn should_accept_measured_optiq_profiles_that_are_a_strict_subset_of_the_config(
 
 #[test]
 fn should_accept_optional_output_head_measurement_in_optiq_metadata() {
-    let config_bytes = certified_optiq_ornith_config_bytes();
+    let config_bytes = frozen_ornith_1_0_optiq_config_bytes();
     let ornith_config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the certified OptiQ Ornith config should parse");
-    let mut metadata_document = serde_json::from_slice::<Value>(&certified_optiq_metadata_bytes())
-        .expect("the certified OptiQ metadata should decode as JSON");
+        .expect("the frozen Ornith 1.0 OptiQ config should parse");
+    let mut metadata_document = serde_json::from_slice::<Value>(&frozen_optiq_metadata_bytes())
+        .expect("the frozen OptiQ metadata should decode as JSON");
     metadata_document["per_layer"]["language_model.lm_head"] = json!({
         "bits": 8,
         "group_size": 64
@@ -89,18 +89,18 @@ fn should_accept_optional_output_head_measurement_in_optiq_metadata() {
 
 #[test]
 fn should_compare_supported_optiq_metadata_group_sizes_with_the_model_config() {
-    let config_bytes = certified_optiq_ornith_config_bytes();
+    let config_bytes = frozen_ornith_1_0_optiq_config_bytes();
     let ornith_config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the certified OptiQ Ornith config should parse");
-    let mut metadata_document = serde_json::from_slice::<Value>(&certified_optiq_metadata_bytes())
-        .expect("the certified OptiQ metadata should decode as JSON");
+        .expect("the frozen Ornith 1.0 OptiQ config should parse");
+    let mut metadata_document = serde_json::from_slice::<Value>(&frozen_optiq_metadata_bytes())
+        .expect("the frozen OptiQ metadata should decode as JSON");
     let measured_module_profiles = metadata_document["per_layer"]
         .as_object_mut()
-        .expect("the certified OptiQ metadata should contain measured module profiles");
+        .expect("the frozen OptiQ metadata should contain measured module profiles");
     let (_, first_measured_module_profile) = measured_module_profiles
         .iter_mut()
         .next()
-        .expect("the certified OptiQ metadata should measure at least one module");
+        .expect("the frozen OptiQ metadata should measure at least one module");
     first_measured_module_profile["group_size"] = json!(32);
     let metadata_bytes = serde_json::to_vec(&metadata_document)
         .expect("the modified OptiQ metadata should serialize");

@@ -19,7 +19,7 @@ pub(super) struct LagunaTemplateContract {
 #[derive(Clone, Debug)]
 pub struct LagunaTextArtifactDescriptor {
     // Parsing tokenizer JSON is startup work. Every request and processor shares
-    // the already-certified tokenizer instead of retaining and reparsing its bytes.
+    // the already-validated tokenizer instead of retaining and reparsing its bytes.
     tokenizer: Arc<Tokenizer>,
     model_vocabulary_size: u32,
     maximum_context_tokens: u32,
@@ -129,13 +129,13 @@ impl LagunaTextArtifactDescriptor {
         &self.template_contract.default_system_message
     }
 
-    /// Returns the certified reasoning parser identifier.
+    /// Returns the reasoning parser identifier.
     #[must_use]
     pub fn reasoning_parser_id(&self) -> &str {
         &self.reasoning_parser_id
     }
 
-    /// Returns the certified tool-call parser identifier.
+    /// Returns the tool-call parser identifier.
     #[must_use]
     pub fn tool_call_parser_id(&self) -> &str {
         &self.tool_call_parser_id

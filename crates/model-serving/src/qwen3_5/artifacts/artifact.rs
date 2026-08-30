@@ -31,9 +31,7 @@ use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_tensor_profiles;
 
 /// Validates the complete Qwen3.5 artifact before any native allocation.
 ///
-/// Everything is discovered from the model directory. No hardcoded model profiles
-/// or certification checks — the config, shard index, and tokenizer are the
-/// sole sources of truth.
+/// Everything is discovered from the model directory. The config, shard index, and tokenizer are the sole sources of truth.
 #[derive(Debug, Default)]
 pub struct Qwen3_5ArtifactValidator;
 

@@ -24,7 +24,23 @@ fn should_preserve_bounded_qwen3_5_moe_sampling_settings_in_the_inference_reques
 }
 
 #[test]
-fn should_treat_zero_temperature_as_greedy_generation() {
+fn should_use_temperature_one_when_sampling_settings_are_omitted() {
+    let inference_request =
+        Qwen3_5InferenceRequest::new(RequestId::new(899), vec![248_045, 846, 198], 512);
+
+    assert_eq!(
+        inference_request.sampling_strategy(),
+        Qwen3_5SamplingStrategy::TopKTopP {
+            temperature_thousandths: 1_000,
+            top_k: 20,
+            top_p_thousandths: 1_000,
+            seed: None,
+        }
+    );
+}
+
+#[test]
+fn should_select_highest_logit_when_temperature_is_zero() {
     let inference_request = Qwen3_5InferenceRequest::new_sampling(
         RequestId::new(901),
         vec![248_045, 846, 198],
@@ -36,7 +52,7 @@ fn should_treat_zero_temperature_as_greedy_generation() {
 
     assert_eq!(
         inference_request.sampling_strategy(),
-        Qwen3_5SamplingStrategy::Greedy
+        Qwen3_5SamplingStrategy::HighestLogit
     );
 }
 

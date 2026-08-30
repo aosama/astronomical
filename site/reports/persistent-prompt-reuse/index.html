@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#d8ff3e">
     <meta property="og:type" content="article">
     <meta property="og:title" content="A repeated prefix skipped 2,048 prompt tokens">
-    <meta property="og:description" content="Persistent prompt reuse qualified on a Qwen3.6 MTP artifact without restoring incompatible speculative state.">
+    <meta property="og:description" content="Persistent prompt reuse verified on a Qwen3.6 MTP artifact without restoring incompatible speculative state.">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="../../assets/mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="../../styles.css">
@@ -33,25 +33,25 @@
         <div class="report-meta">
           <span>FIELD REPORT R–001</span>
           <span>5 AUGUST 2026</span>
-          <span class="verdict verdict-verified"><i></i> Qualified</span>
+          <span class="verdict verdict-verified"><i></i> Verified</span>
         </div>
         <p class="eyebrow">Prompt reuse / Persistent state</p>
         <h1>A repeated prefix skipped <em>2,048 prompt tokens.</em></h1>
         <p class="report-lead">Astronomical restored one complete prompt-state block on the second request while preserving generated-token parity on a Qwen3.6 model artifact with multi-token prediction weights.</p>
       </header>
 
-      <section class="report-stat-band report-stat-band-acid" aria-label="Qualification results">
+      <section class="report-stat-band report-stat-band-acid" aria-label="Measured results">
         <div><strong>1</strong><span>first-request miss</span></div>
         <div><strong>1</strong><span>repeat-request hit</span></div>
         <div><strong>2,048</strong><span>prompt tokens restored</span></div>
-        <div><strong>Equal</strong><span>greedy generated tokens</span></div>
+        <div><strong>Equal</strong><span>generated tokens</span></div>
       </section>
 
       <div class="report-body shell">
         <aside class="report-toc" aria-label="Report contents">
           <span>IN THIS REPORT</span>
           <a href="#problem">The repeated work</a>
-          <a href="#qualification">Qualification</a>
+          <a href="#measured">Measured</a>
           <a href="#mtp">MTP boundary</a>
           <a href="#meaning">What it means</a>
         </aside>
@@ -63,8 +63,8 @@
             <p>Tool definitions, system instructions, repository context, and conversation history often repeat between requests. Astronomical records exact decoder state at fixed 2,048-token boundaries in a bounded persistent store. A matching future prefix can resume from that state instead of replaying every earlier token.</p>
           </section>
 
-          <section id="qualification">
-            <p class="section-index">02 / Qualification</p>
+          <section id="measured">
+            <p class="section-index">02 / Measured</p>
             <h2>Miss once. Publish state. Hit on the identical request.</h2>
             <div class="request-sequence" aria-label="Two-request prompt reuse sequence">
               <div class="request-block">
@@ -81,14 +81,14 @@
                 <b>2,048 SAVED</b>
               </div>
             </div>
-            <p>The qualification compares cold and restored greedy output token IDs, not only a hit counter. This guards against a fast restore that resumes from the wrong model state.</p>
+            <p>The acceptance compares cold and restored output token IDs, not only a hit counter. This guards against a fast restore that resumes from the wrong model state.</p>
           </section>
 
           <section id="mtp">
             <p class="section-index">03 / The MTP boundary</p>
             <h2>Persistent target state and speculative state are not interchangeable.</h2>
             <p>The current persistent format stores target decoder state. It does not store the shifted request history used by multi-token prediction. Restoring target state into an active speculative request would therefore combine incompatible histories.</p>
-            <p>Astronomical resolves this without disabling reuse: when persistent prompt storage is available, the request uses target-only execution. When it is unavailable, an eligible greedy request can use multi-token prediction normally.</p>
+            <p>Astronomical resolves this without disabling reuse: when persistent prompt storage is available, the request uses target-only execution. When it is unavailable, an eligible highest-logit request can use multi-token prediction normally.</p>
             <div class="principle-callout"><span>INVARIANT</span><p>Never trade correct model state for speculative speed. Reuse the compatible target path instead.</p></div>
           </section>
 
@@ -101,14 +101,14 @@
 
           <section class="share-card share-card-acid">
             <span>SHARE THE RESULT</span>
-            <p>Astronomical restored 2,048 repeated Qwen3.6 prompt tokens from persistent model state on the second request, with identical greedy output. Measured work avoided, without a hidden precision change.</p>
-            <a class="button button-dark" href="https://twitter.com/intent/tweet?text=Astronomical%20restored%202%2C048%20repeated%20Qwen3.6%20prompt%20tokens%20from%20persistent%20model%20state%20on%20the%20second%20request%2C%20with%20identical%20greedy%20output.%20Measured%20work%20avoided%2C%20without%20a%20hidden%20precision%20change.&url=https%3A%2F%2Faosama.github.io%2Fastronomical%2Freports%2Fpersistent-prompt-reuse%2F">Post on X <span aria-hidden="true">↗</span></a>
+            <p>Astronomical restored 2,048 repeated Qwen3.6 prompt tokens from persistent model state on the second request, with identical output. Measured work avoided, without a hidden precision change.</p>
+            <a class="button button-dark" href="https://twitter.com/intent/tweet?text=Astronomical%20restored%202%2C048%20repeated%20Qwen3.6%20prompt%20tokens%20from%20persistent%20model%20state%20on%20the%20second%20request%2C%20with%20identical%20output.%20Measured%20work%20avoided%2C%20without%20a%20hidden%20precision%20change.&url=https%3A%2F%2Faosama.github.io%2Fastronomical%2Freports%2Fpersistent-prompt-reuse%2F">Post on X <span aria-hidden="true">↗</span></a>
           </section>
 
           <footer class="report-sources">
             <h2>Sources and limits</h2>
-            <p>The result comes from the ignored Qwen3.6 persistent-prompt qualification and the real supervisor cache-statistics end-to-end test. The tested contract is one miss, one published state block, one hit, at least 2,048 tokens restored, and equal greedy output.</p>
-            <a href="https://github.com/aosama/astronomical/tree/main/crates/model-serving/tests/persistent_prompt_cache_qualification">Inspect the qualification <span aria-hidden="true">↗</span></a>
+            <p>The result comes from the ignored Qwen3.6 persistent-prompt acceptance and the real supervisor cache-statistics end-to-end test. The tested contract is one miss, one published state block, one hit, at least 2,048 tokens restored, and equal output.</p>
+            <a href="https://github.com/aosama/astronomical/tree/main/crates/model-serving/tests/prompt_cache_acceptance">Inspect the prompt-cache acceptance <span aria-hidden="true">↗</span></a>
           </footer>
         </article>
       </div>

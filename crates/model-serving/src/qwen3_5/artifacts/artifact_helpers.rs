@@ -61,7 +61,7 @@ pub(super) fn read_required_file_bytes(
                     file_name: required_file.file_name().to_owned(),
                     source: std::io::Error::new(
                         std::io::ErrorKind::UnexpectedEof,
-                        "validated required file ended before its certified size",
+                        "validated required file ended before its expected size",
                     ),
                 },
             );

@@ -7,7 +7,9 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use std::collections::HashMap;
 use tokio::sync::MutexGuard;
 
-use crate::common::qwen3_5_moe::{certified_ornith_config, persistent_prompt_cache_model_contract};
+use crate::common::qwen3_5_moe::{
+    frozen_ornith_1_0_config, persistent_prompt_cache_model_contract,
+};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -153,7 +155,7 @@ fn should_create_qwen_request_state_from_the_shared_decoder_cache_layout() {
     let request_decoder_state = RequestDecoderStateStack::empty_from_decoder_cache_layout(
         persistent_prompt_cache_model_contract.decoder_cache_layout(),
     )
-    .expect("the certified Qwen decoder-cache layout should create request state");
+    .expect("the frozen Qwen decoder-cache layout should create request state");
 
     assert_eq!(
         request_decoder_state.layer_count(),
@@ -330,10 +332,10 @@ async fn should_return_active_view_covering_only_written_tokens() {
 #[tokio::test]
 async fn should_restore_decoder_state_stack_to_checkpoint_after_mtp_attention_update() {
     let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let full_attention_layer_index = (0..ornith_config.layer_count() as usize)
         .find(|layer_index| ornith_config.decoder_layer_is_full_attention(*layer_index))
-        .expect("the certified config should contain at least one full-attention layer");
+        .expect("the frozen config should contain at least one full-attention layer");
     let mut decoder_state_stack = crate::common::standard_request_decoder_state(&ornith_config);
 
     let initial_keys = runtime
@@ -409,7 +411,7 @@ async fn should_lazily_allocate_gated_delta_recurrent_state_as_zeros_on_first_us
         "an empty recurrent state should not allocate MLX arrays before the first use"
     );
 
-    // First use materializes a float32 zero tensor of the certified gated-delta shape.
+    // First use materializes a float32 zero tensor of the config gated-delta shape.
     let recurrent_state_view = recurrent_state
         .current_or_zero(&runtime)
         .expect("the first current_or_zero call should allocate a zero tensor");
@@ -455,20 +457,20 @@ async fn should_roll_convolution_state_buffer_by_token_count() {
 }
 
 #[tokio::test]
-async fn should_create_empty_decoder_state_stack_in_certified_layer_order() {
-    let ornith_config = certified_ornith_config();
+async fn should_create_empty_decoder_state_stack_in_config_layer_order() {
+    let ornith_config = frozen_ornith_1_0_config();
     let decoder_layer_count = ornith_config.layer_count() as usize;
     let decoder_state_stack = crate::common::standard_request_decoder_state(&ornith_config);
 
     assert_eq!(
         decoder_state_stack.layer_count(),
         decoder_layer_count,
-        "the decoder stack should match the certified Ornith layer count"
+        "the decoder stack should match the frozen Ornith 1.0 layer count"
     );
     for layer_index in 0..decoder_layer_count {
         let layer_state = decoder_state_stack
             .layer(layer_index)
-            .expect("every certified decoder layer should own one model-state entry");
+            .expect("every decoder layer should own one model-state entry");
         if ornith_config.decoder_layer_is_full_attention(layer_index) {
             assert!(
                 matches!(layer_state, DecoderCacheState::AppendOnlyAttention { .. }),
@@ -491,14 +493,14 @@ async fn should_create_empty_decoder_state_stack_in_certified_layer_order() {
 
 #[tokio::test]
 async fn should_expose_decoder_state_stack_mutably_in_the_same_decoder_order() {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let decoder_layer_count = ornith_config.layer_count() as usize;
     let mut decoder_state_stack = crate::common::standard_request_decoder_state(&ornith_config);
 
     for layer_index in 0..decoder_layer_count {
         let layer_state = decoder_state_stack
             .layer_mut(layer_index)
-            .expect("every certified decoder layer should be mutably accessible");
+            .expect("every decoder layer should be mutably accessible");
         if ornith_config.decoder_layer_is_full_attention(layer_index) {
             assert!(matches!(
                 layer_state,
@@ -518,10 +520,10 @@ async fn should_expose_decoder_state_stack_mutably_in_the_same_decoder_order() {
 async fn should_report_inconsistent_linear_layer_tensor_allocation() {
     let (_direct_mlx_guard, runtime) = test_runtime().await;
     let mut decoder_state_stack =
-        crate::common::standard_request_decoder_state(&certified_ornith_config());
+        crate::common::standard_request_decoder_state(&frozen_ornith_1_0_config());
     let linear_layer_state = decoder_state_stack
         .layer_mut(0)
-        .expect("layer 0 should exist in the certified decoder stack");
+        .expect("layer 0 should exist in the decoder stack");
 
     match linear_layer_state {
         DecoderCacheState::Composite {

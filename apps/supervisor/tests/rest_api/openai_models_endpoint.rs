@@ -14,7 +14,7 @@ use tower::ServiceExt;
 
 use crate::common::{MODEL_ID, ScriptedExecutor};
 
-const DISCOVERED_VISION_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
+const DISCOVERED_VISION_MODEL_ID: &str = "fake-mixture-of-experts";
 
 #[tokio::test]
 async fn should_list_the_independent_token_limits_produced_by_model_discovery() {

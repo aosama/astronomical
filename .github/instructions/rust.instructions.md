@@ -51,8 +51,6 @@ Write Rust that a Java-background maintainer can navigate confidently: explicit 
 
 - Tests live under the crate-root tests/ directory, not in #[cfg(test)] mod tests blocks inside src/.
 
-- Use a small number of auto-discovered integration-test binaries organized by execution boundary so hermetic, direct-MLX, and model-artifact qualification changes compile only their own test subtree; shared helpers live in tests/common/.
-
 - If broader public visibility is needed for these crate-root tests, prefer the readable public seam over inline tests or privacy workarounds.
 
 ## Cargo Verification (source: rust.instructions.md)

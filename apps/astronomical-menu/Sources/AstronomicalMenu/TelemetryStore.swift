@@ -232,7 +232,7 @@ final class TelemetryStore: ObservableObject {
       hasDiscoveredModels = await supervisorClient.modelsAreAvailable()
     } catch {
       // Polling must remain self-healing, while retaining enough bounded context to distinguish
-      // contract drift from an ordinary stopped server during qualification and support.
+      // contract drift from an ordinary stopped server during acceptance and support.
       refreshResult = (.unavailable, boundedStatusRefreshErrorMessage(error))
       hasDiscoveredModels = false
     }

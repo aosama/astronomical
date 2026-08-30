@@ -1,7 +1,7 @@
 /// Resolves a requested model ID to one known leaf model ID.
 ///
 /// Clients may send a provider prefix such as
-/// `mlx-community/Ornith-1.0-35B-OptiQ-4bit`, while the local registry stores
+/// `astronomical/fake-mixture-of-experts`, while the local registry stores
 /// only the leaf directory name.
 pub fn resolve_model_id<'model_id>(
     requested_model_id: &'model_id str,

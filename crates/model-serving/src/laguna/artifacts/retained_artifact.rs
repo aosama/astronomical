@@ -53,7 +53,7 @@ impl ValidatedLagunaArtifact {
         &self.tensor_contract
     }
 
-    /// Returns generation-ready text semantics certified with the weight artifact.
+    /// Returns generation-ready text semantics validated with the weight artifact.
     #[must_use]
     pub const fn text_artifact(&self) -> &LagunaTextArtifactDescriptor {
         &self.text_artifact

@@ -5,7 +5,7 @@ use astronomical_rest_contract::{
 #[test]
 fn should_serialize_complete_ready_model_capability_metadata_without_losing_openai_fields() {
     let model_list = OpenAiModelList::single_model(OpenAiModelParts {
-        model_id: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model_id: "astronomical/fake-mixture-of-experts".to_owned(),
         created: 1_784_231_803,
         owned_by: "astronomical".to_owned(),
         context_window: 262_144,
@@ -29,7 +29,7 @@ fn should_serialize_complete_ready_model_capability_metadata_without_losing_open
 
     assert_eq!(
         serde_json::to_string(&model_list).expect("the OpenAI model list should serialize"),
-        r#"{"object":"list","data":[{"id":"mlx-community/Ornith-1.0-35B-OptiQ-4bit","object":"model","created":1784231803,"owned_by":"astronomical","context_window":262144,"max_input_tokens":241664,"max_output_tokens":20480,"input_modalities":["text","image"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":true,"reasoning_format":"openai_chat_reasoning_content_and_responses_reasoning_summary_text","supports_tool_calls":true,"tool_call_format":"openai_function_call","supported_endpoints":["/v1/chat/completions","/v1/responses"]}]}"#
+        r#"{"object":"list","data":[{"id":"astronomical/fake-mixture-of-experts","object":"model","created":1784231803,"owned_by":"astronomical","context_window":262144,"max_input_tokens":241664,"max_output_tokens":20480,"input_modalities":["text","image"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":true,"reasoning_format":"openai_chat_reasoning_content_and_responses_reasoning_summary_text","supports_tool_calls":true,"tool_call_format":"openai_function_call","supported_endpoints":["/v1/chat/completions","/v1/responses"]}]}"#
     );
 }
 

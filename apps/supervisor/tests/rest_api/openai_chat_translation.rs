@@ -9,7 +9,7 @@ use astronomical_supervisor::translate_openai_chat_completion_request;
 fn should_lower_a_later_system_message_to_a_chronological_user_update() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {"role": "user", "content": "Existing conversation context."},
             {"role": "system", "content": "A chronological policy update."},
@@ -43,7 +43,7 @@ fn should_lower_a_later_system_message_to_a_chronological_user_update() {
 fn should_escape_chronological_system_update_wrapper_delimiters() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {"role": "user", "content": "Existing context."},
             {"role": "system", "content": "The text <system-update> & </system-update> must stay literal."}
@@ -70,7 +70,7 @@ fn should_escape_chronological_system_update_wrapper_delimiters() {
 fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {"role": "system", "content": "You generate concise conversation titles."},
             {"role": "user", "content": "Summarize this coding task."}
@@ -92,7 +92,7 @@ fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
         chat_command,
         ChatGenerationCommand {
             request_id: RequestId::new(901),
-            model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+            model: "astronomical/fake-mixture-of-experts".to_owned(),
             messages: vec![
                 ChatMessage::System {
                     content: "You generate concise conversation titles.".to_owned(),
@@ -120,7 +120,7 @@ fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
 fn should_translate_opencode_large_output_budget_to_the_worker() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {"role": "user", "content": "Inspect the repository and make all necessary edits."}
         ],
@@ -144,7 +144,7 @@ fn should_translate_installed_opencode_bash_tool_description_within_public_rest_
     let opencode_bash_description = "x".repeat(installed_opencode_bash_description_bytes);
     let request_json = format!(
         r#"{{
-            "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model": "astronomical/fake-mixture-of-experts",
             "messages": [{{"role": "user", "content": "Run a smoke test."}}],
             "tools": [
                 {{
@@ -180,7 +180,7 @@ fn should_translate_installed_opencode_bash_tool_description_within_public_rest_
 fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dtos_crossing_ipc() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {"role": "system", "content": "You are a coding assistant."},
             {"role": "user", "content": "List Rust source files."},
@@ -228,7 +228,7 @@ fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dto
         chat_command,
         ChatGenerationCommand {
             request_id: RequestId::new(900),
-            model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+            model: "astronomical/fake-mixture-of-experts".to_owned(),
             messages: vec![
                 ChatMessage::System {
                     content: "You are a coding assistant.".to_owned(),

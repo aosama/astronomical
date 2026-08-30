@@ -2,7 +2,7 @@ use astronomical_model_serving::{
     TensorDtype, TensorProfile, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
 };
 
-use crate::common::qwen3_5::certified_dense_qwen3_6_config;
+use crate::common::qwen3_5::frozen_dense_qwen3_6_config;
 
 fn assert_affine_module_is_native_or_packed(
     mtp_tensor_profiles: &[TensorProfile],
@@ -31,7 +31,7 @@ fn assert_affine_module_is_native_or_packed(
 
 #[test]
 fn should_describe_the_dense_qwen3_6_mtp_tensor_namespace_and_shapes() {
-    let dense_qwen3_6_config = certified_dense_qwen3_6_config();
+    let dense_qwen3_6_config = frozen_dense_qwen3_6_config();
     let expected_tensor_names = qwen3_5_mtp_tensor_names(&dense_qwen3_6_config);
     let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&dense_qwen3_6_config);
 

@@ -5,7 +5,7 @@
 set -eu
 
 readonly SUBJECT_TIMEOUT_SECONDS=30
-readonly QUALIFICATION_MODEL_IDENTIFIER="fixture-qualified-text-model"
+readonly LIVE_SERVING_PROBE_MODEL_IDENTIFIER="fixture-advertised-text-model"
 SANDBOX_DIRECTORY=""
 
 print_error() {
@@ -122,7 +122,7 @@ case "$request_url" in
         printf '%s\n' '{"application":{"channel":"development","version":"0.0.0-test","commit":"abc1234"}}'
         ;;
     */v1/models)
-        if [ "${FAKE_INCLUDE_QUALIFICATION_MODEL:-true}" = "true" ]; then
+        if [ "${FAKE_INCLUDE_PROBE_MODEL:-true}" = "true" ]; then
             jq --null-input --arg model "$FAKE_EXPECTED_MODEL_IDENTIFIER" \
                 '{data:[{id:"larger-model-returned-first"},{id:$model}]}'
         else
@@ -160,7 +160,7 @@ run_validator() {
     if PATH="${fake_command_directory}:${PATH}" \
         FAKE_DAEMON_PID_FILE="$fake_daemon_pid_file" \
         FAKE_REQUESTED_MODEL_FILE="$fake_requested_model_file" \
-        FAKE_EXPECTED_MODEL_IDENTIFIER="$QUALIFICATION_MODEL_IDENTIFIER" \
+        FAKE_EXPECTED_MODEL_IDENTIFIER="$LIVE_SERVING_PROBE_MODEL_IDENTIFIER" \
         FAKE_RESPONSE_HAS_OUTPUT="${FAKE_RESPONSE_HAS_OUTPUT:-true}" \
         timeout "$SUBJECT_TIMEOUT_SECONDS" "$validator_script" \
         --app-bundle "$fixture_app_bundle" "$@" > "$validator_output_file" 2>&1; then
@@ -195,27 +195,27 @@ main() {
 
     printf '%s\n' '[app-validator-test] case=explicit-advertised-model status=start'
     if ! run_validator "${SANDBOX_DIRECTORY}/success.log" \
-        --real-model "$QUALIFICATION_MODEL_IDENTIFIER"; then
+        --real-model "$LIVE_SERVING_PROBE_MODEL_IDENTIFIER"; then
         perl -ne 'print if $. <= 200' "${SANDBOX_DIRECTORY}/success.log" >&2
-        print_error "validator rejected the advertised qualification model"
+        print_error "validator rejected the advertised live serving probe model"
         exit 1
     fi
-    [ "$(cat "$fake_requested_model_file")" = "$QUALIFICATION_MODEL_IDENTIFIER" ] || {
-        print_error "validator did not request the explicit qualification model"
+    [ "$(cat "$fake_requested_model_file")" = "$LIVE_SERVING_PROBE_MODEL_IDENTIFIER" ] || {
+        print_error "validator did not request the explicit live serving probe model"
         exit 1
     }
     printf '%s\n' '[app-validator-test] case=explicit-advertised-model status=success'
 
     printf '%s\n' '[app-validator-test] case=unadvertised-model status=start'
     rm -f "$fake_requested_model_file"
-    if FAKE_INCLUDE_QUALIFICATION_MODEL=false run_validator \
-        "${SANDBOX_DIRECTORY}/unadvertised.log" --real-model "$QUALIFICATION_MODEL_IDENTIFIER"; then
-        print_error "validator accepted an unadvertised qualification model"
+    if FAKE_INCLUDE_PROBE_MODEL=false run_validator \
+        "${SANDBOX_DIRECTORY}/unadvertised.log" --real-model "$LIVE_SERVING_PROBE_MODEL_IDENTIFIER"; then
+        print_error "validator accepted an unadvertised live serving probe model"
         exit 1
     fi
-    grep -F "qualification model is not advertised: ${QUALIFICATION_MODEL_IDENTIFIER}" \
+    grep -F "live serving probe model is not advertised: ${LIVE_SERVING_PROBE_MODEL_IDENTIFIER}" \
         "${SANDBOX_DIRECTORY}/unadvertised.log" >/dev/null || {
-        print_error "validator did not report the unavailable qualification model"
+        print_error "validator did not report the unavailable live serving probe model"
         exit 1
     }
     [ ! -e "$fake_requested_model_file" ] || {
@@ -226,11 +226,11 @@ main() {
 
     printf '%s\n' '[app-validator-test] case=empty-assistant-output status=start'
     if FAKE_RESPONSE_HAS_OUTPUT=false run_validator \
-        "${SANDBOX_DIRECTORY}/empty-output.log" --real-model "$QUALIFICATION_MODEL_IDENTIFIER"; then
+        "${SANDBOX_DIRECTORY}/empty-output.log" --real-model "$LIVE_SERVING_PROBE_MODEL_IDENTIFIER"; then
         print_error "validator accepted an empty assistant response"
         exit 1
     fi
-    grep -F "qualification model returned no assistant text or reasoning output: ${QUALIFICATION_MODEL_IDENTIFIER}" \
+    grep -F "live serving probe model returned no assistant text or reasoning output: ${LIVE_SERVING_PROBE_MODEL_IDENTIFIER}" \
         "${SANDBOX_DIRECTORY}/empty-output.log" >/dev/null || {
         print_error "validator did not report the empty assistant response"
         exit 1

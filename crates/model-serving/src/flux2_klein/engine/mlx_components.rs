@@ -24,8 +24,8 @@ use crate::{
 use super::super::transformer::{Flux2KleinForwardAdvance, Flux2KleinForwardState};
 use super::super::vae::{Flux2KleinVaeDecodeAdvance, Flux2KleinVaeDecodeState};
 use super::super::{
-    FLUX2_KLEIN_OFFICIAL_REVISION, Flux2KleinArtifactProvenance, Flux2KleinArtifactValidator,
-    Flux2KleinFlowSchedule, Flux2KleinFlowScheduler, Flux2KleinFlowStep, Flux2KleinImageDimensions,
+    Flux2KleinArtifactProvenance, Flux2KleinArtifactValidator, Flux2KleinFlowSchedule,
+    Flux2KleinFlowScheduler, Flux2KleinFlowStep, Flux2KleinImageDimensions,
     Flux2KleinMemoryAdmission, Flux2KleinPackedLatentLayout, Flux2KleinPngEncoder,
     Flux2KleinResidencyPlan, Flux2KleinTransformer, Flux2KleinTransformerInputs,
     Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder, ValidatedFlux2KleinArtifact,

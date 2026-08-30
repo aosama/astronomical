@@ -1,12 +1,12 @@
 use astronomical_model_serving::{Qwen3_5Config, TensorDtype, qwen3_5_language_tensor_profiles};
 
-use crate::common::qwen3_5_moe::certified_ornith_config_bytes;
+use crate::common::qwen3_5_moe::frozen_ornith_1_0_config_bytes;
 
 #[test]
 fn should_profile_a_log_as_stored_model_float_when_decay_math_uses_float32() {
     let mut config_document =
-        serde_json::from_slice::<serde_json::Value>(&certified_ornith_config_bytes())
-            .expect("the certified config should parse as JSON");
+        serde_json::from_slice::<serde_json::Value>(&frozen_ornith_1_0_config_bytes())
+            .expect("the frozen config should parse as JSON");
     config_document["text_config"]["mamba_ssm_dtype"] = serde_json::json!("float32");
     let config_bytes =
         serde_json::to_vec(&config_document).expect("the float32 state config should serialize");

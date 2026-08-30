@@ -235,7 +235,7 @@ fn should_admit_decode_when_only_a_temporary_cache_restore_workspace_forced_demo
 
 #[test]
 fn should_keep_complete_residency_when_cache_restore_overlap_excludes_output_budget() {
-    // Live agent turn on OptiQ-5bit at a 35 GB ceiling: 15,399 prompt tokens,
+    // Live agent turn on resident sparse MoE at a 35 GB ceiling: 15,399 prompt tokens,
     // 65,535 max output, cache on, 21.59 GB experts already seated. Charging
     // restore overlap on prompt+output demoted; charging it on prompt tokens
     // only keeps complete residency.

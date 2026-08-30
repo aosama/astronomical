@@ -1,12 +1,12 @@
 use astronomical_model_serving::qwen3_5_mtp_request_is_eligible;
 
-fn opted_in_resident_greedy_text_request_without_prompt_cache() -> bool {
+fn opted_in_resident_highest_logit_text_request_without_prompt_cache() -> bool {
     qwen3_5_mtp_request_is_eligible(true, true, true, true, false, false, false, false, 32, 0)
 }
 
 #[test]
-fn should_allow_opted_in_resident_greedy_text_without_prompt_cache() {
-    assert!(opted_in_resident_greedy_text_request_without_prompt_cache());
+fn should_allow_opted_in_resident_highest_logit_text_without_prompt_cache() {
+    assert!(opted_in_resident_highest_logit_text_request_without_prompt_cache());
 }
 
 #[test]

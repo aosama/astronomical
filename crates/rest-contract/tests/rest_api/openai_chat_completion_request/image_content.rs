@@ -4,7 +4,7 @@ use super::*;
 fn should_reject_a_file_image_url_before_worker_admission() {
     let request_json = r#"
     {
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [
             {
                 "role": "user",
@@ -34,7 +34,7 @@ fn should_accept_a_data_uri_image_content_part() {
     let red_pixel_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
     let data_uri = format!("data:image/png;base64,{red_pixel_png_base64}");
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{
             "role": "user",
             "content": [
@@ -72,7 +72,7 @@ fn should_accept_a_data_uri_image_content_part() {
 #[test]
 fn should_reject_an_http_image_url() {
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{
             "role": "user",
             "content": [
@@ -100,7 +100,7 @@ fn should_reject_an_http_image_url() {
 #[test]
 fn should_reject_a_file_image_url() {
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{
             "role": "user",
             "content": [
@@ -128,7 +128,7 @@ fn should_reject_a_file_image_url() {
 #[test]
 fn should_reject_a_non_image_data_uri_mime_type() {
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{
             "role": "user",
             "content": [
@@ -156,7 +156,7 @@ fn should_reject_a_non_image_data_uri_mime_type() {
 #[test]
 fn should_reject_a_malformed_data_uri_without_a_comma() {
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{
             "role": "user",
             "content": [
@@ -184,7 +184,7 @@ fn should_reject_a_malformed_data_uri_without_a_comma() {
 #[test]
 fn should_reject_invalid_base64_in_a_data_uri() {
     let request_json = json!({
-        "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+        "model": "astronomical/fake-mixture-of-experts",
         "messages": [{
             "role": "user",
             "content": [

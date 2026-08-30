@@ -1,4 +1,4 @@
-"""Serve signed Sparkle qualification artifacts on an ephemeral loopback port."""
+"""Serve signed Sparkle acceptance artifacts on an ephemeral loopback port."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def main() -> None:
     request_handler = partial(SimpleHTTPRequestHandler, directory=str(arguments.directory))
     with ThreadingHTTPServer(("127.0.0.1", 0), request_handler) as server:
         arguments.port_file.write_text(f"{server.server_port}\n", encoding="utf-8")
-        print(f"Sparkle qualification server listening on 127.0.0.1:{server.server_port}", flush=True)
+        print(f"Sparkle acceptance server listening on 127.0.0.1:{server.server_port}", flush=True)
         server.serve_forever()
 
 

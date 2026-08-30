@@ -16,7 +16,7 @@ const ACCEPTED_VISION_MODEL_TYPES: &[&str] = &[
     "qwen3_5_moe",
 ];
 
-/// The certified Qwen3.5 vision configuration accepted for Qwen3.5 execution.
+/// The Qwen3.5 vision configuration accepted for Qwen3.5 execution.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Qwen3_5VisionConfig {
     depth: u32,
@@ -66,67 +66,67 @@ impl Qwen3_5VisionConfig {
         }))
     }
 
-    /// Returns the certified vision transformer block count.
+    /// Returns the vision transformer block count.
     #[must_use]
     pub const fn depth(&self) -> u32 {
         self.depth
     }
 
-    /// Returns the certified vision hidden dimension.
+    /// Returns the vision hidden dimension.
     #[must_use]
     pub const fn hidden_size(&self) -> u32 {
         self.hidden_size
     }
 
-    /// Returns the certified input channel count (3 for RGB).
+    /// Returns the input channel count (3 for RGB).
     #[must_use]
     pub const fn in_channels(&self) -> u32 {
         self.in_channels
     }
 
-    /// Returns the certified feed-forward intermediate size.
+    /// Returns the feed-forward intermediate size.
     #[must_use]
     pub const fn intermediate_size(&self) -> u32 {
         self.intermediate_size
     }
 
-    /// Returns the certified attention head count.
+    /// Returns the attention head count.
     #[must_use]
     pub const fn head_count(&self) -> u32 {
         self.head_count
     }
 
-    /// Returns the certified positional embedding count.
+    /// Returns the positional embedding count.
     #[must_use]
     pub const fn position_embedding_count(&self) -> u32 {
         self.position_embedding_count
     }
 
-    /// Returns the certified patch size in pixels.
+    /// Returns the patch size in pixels.
     #[must_use]
     pub const fn patch_size(&self) -> u32 {
         self.patch_size
     }
 
-    /// Returns the certified spatial merge size.
+    /// Returns the spatial merge size.
     #[must_use]
     pub const fn spatial_merge_size(&self) -> u32 {
         self.spatial_merge_size
     }
 
-    /// Returns the certified temporal patch size.
+    /// Returns the temporal patch size.
     #[must_use]
     pub const fn temporal_patch_size(&self) -> u32 {
         self.temporal_patch_size
     }
 
-    /// Returns the certified output hidden size (projects into the text model).
+    /// Returns the output hidden size (projects into the text model).
     #[must_use]
     pub const fn out_hidden_size(&self) -> u32 {
         self.out_hidden_size
     }
 
-    /// Returns the certified vision hidden activation function name.
+    /// Returns the vision hidden activation function name.
     #[must_use]
     pub fn hidden_activation(&self) -> &str {
         &self.hidden_activation

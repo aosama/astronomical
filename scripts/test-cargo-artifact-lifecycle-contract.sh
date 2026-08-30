@@ -132,7 +132,7 @@ PYTHON
         ;;
     nested)
         "${ASTRONOMICAL_TEST_REPOSITORY_ROOT}/scripts/run-in-disposable-cargo-target.sh" \
-            --lane nested-qualification -- \
+            --lane nested-acceptance -- \
             "${ASTRONOMICAL_TEST_REPOSITORY_ROOT}/scripts/cargo-lifecycle-fixture.sh" \
             capture "${target_record_path}.nested"
         ;;
@@ -309,7 +309,7 @@ TOML
     nested_target_record="${SANDBOX_DIRECTORY}/nested-target"
     ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
         ASTRONOMICAL_TEST_REPOSITORY_ROOT="$sandbox_repository" \
-        run_subject "$timeout_executable" "$lifecycle_subject" --lane outer-qualification -- \
+        run_subject "$timeout_executable" "$lifecycle_subject" --lane outer-acceptance -- \
         "$lifecycle_fixture" nested "$nested_target_record"
     [ "$(cat "$nested_target_record")" = "$(cat "${nested_target_record}.nested")" ] || {
         print_error "nested Cargo lane created a second target owner"
@@ -323,7 +323,7 @@ TOML
     failure_target_record="${SANDBOX_DIRECTORY}/failure-target"
     failure_status=0
     ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
-        run_subject "$timeout_executable" "$lifecycle_subject" --lane failed-qualification -- \
+        run_subject "$timeout_executable" "$lifecycle_subject" --lane failed-acceptance -- \
         "$lifecycle_fixture" fail "$failure_target_record" || failure_status=$?
     [ "$failure_status" -eq 23 ] || {
         print_error "lifecycle did not preserve the child failure status"
@@ -351,7 +351,7 @@ TOML
     interruption_target_record="${SANDBOX_DIRECTORY}/interruption-target"
     interruption_status=0
     ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
-        "$timeout_executable" --foreground -k 5s 2s "$lifecycle_subject" --lane interrupted-qualification -- \
+        "$timeout_executable" --foreground -k 5s 2s "$lifecycle_subject" --lane interrupted-acceptance -- \
         "$lifecycle_fixture" interrupt "$interruption_target_record" || interruption_status=$?
     [ "$interruption_status" -eq 124 ] || [ "$interruption_status" -eq 143 ] || {
         print_error "interrupted lifecycle returned unexpected status ${interruption_status}"
@@ -425,7 +425,7 @@ CARGO
     assert_lane_root_is_empty "$lane_root"
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=direct-mlx-journey-is-disposable status=success'
 
-    printf '%s\n' '[cargo-artifact-lifecycle-test] case=named-qualification-journey-is-disposable status=start'
+    printf '%s\n' '[cargo-artifact-lifecycle-test] case=named-acceptance-journey-is-disposable status=start'
     named_journey_target_record="${SANDBOX_DIRECTORY}/named-journey-target"
     ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
         ASTRONOMICAL_TEST_CARGO_TARGET_RECORD="$named_journey_target_record" \
@@ -433,7 +433,7 @@ CARGO
         run_subject "$timeout_executable" "$journey_subject" test-model-ssd-streaming-support
     assert_path_is_absent "$(cat "$named_journey_target_record")"
     assert_lane_root_is_empty "$lane_root"
-    printf '%s\n' '[cargo-artifact-lifecycle-test] case=named-qualification-journey-is-disposable status=success'
+    printf '%s\n' '[cargo-artifact-lifecycle-test] case=named-acceptance-journey-is-disposable status=success'
 
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=profile-and-command-ownership status=start'
     journey_list_path="${SANDBOX_DIRECTORY}/journey-list"
@@ -465,28 +465,26 @@ assert "readonly COMPILE_TIMEOUT_SECONDS=600" in bounded_test_runner
 assert "readonly DEFAULT_TEST_TIMEOUT_SECONDS=120" in bounded_test_runner
 journey_dispatcher = (repository_root / "scripts/run-disposable-cargo-journey.sh").read_text()
 assert "run-bounded-cargo-test.sh" in journey_dispatcher
-ignored_suite_runner = (repository_root / "scripts/run-ignored-qualification-suite.sh").read_text()
+ignored_suite_runner = (repository_root / "scripts/run-ignored-serving-acceptance.sh").read_text()
 assert "run-bounded-cargo-test.sh" in ignored_suite_runner
 assert "--ignored --list" in ignored_suite_runner
 assert "--foreground" in (repository_root / "scripts/test-direct-mlx.sh").read_text()
 assert "--foreground" in (
-    repository_root / "scripts/qualify-qwen3-5-persistent-prompt-cache-interactions.sh"
+    repository_root / "scripts/accept-prompt-cache-interactions.sh"
 ).read_text()
 
 expected_journeys = {
     "accept-model-ssd-streaming",
-    "qualify-model-artifacts",
-    "qualify-cache-disabled-generation",
-    "qualify-cached-reverse-model-swap",
-    "qualify-deployed-model-rest-liveness",
-    "qualify-laguna-attribution",
-    "qualify-laguna-family-model-swap",
-    "qualify-qwen3-5-thinking-seed-rest",
-    "qualify-smallest-qwen3-5-hard-thinking-budget-rest",
-    "qualify-speculative-prefill-rest",
-    "qualify-persistent-prompt-cache",
+    "accept-serving",
+    "accept-cache-disabled-generation",
+    "accept-cached-reverse-model-swap",
+    "accept-tool-call-reuse",
+    "accept-laguna-family-swap",
+    "accept-thinking-seed",
+    "accept-hard-thinking-budget",
+    "accept-speculative-prefill",
+    "accept-prompt-cache",
     "test-model-ssd-streaming-support",
-    "test-model-ssd-streaming-attribution-support",
     "test-persistent-prompt-cache-performance-support",
     "measure-model-ssd-streaming-summary",
     "measure-persistent-prompt-cache-warmup",
@@ -498,22 +496,18 @@ expected_journeys = {
     "measure-model-ssd-streaming-prefill-4096",
     "measure-model-ssd-streaming-prefill-8192",
     "measure-model-ssd-streaming-read-concurrency",
-    "measure-model-ssd-streaming-attribution",
-    "measure-model-ssd-streaming-opencode-long-context-reuse",
     "measure-model-ssd-streaming-complete-expert-residency",
     "measure-model-ssd-streaming-leftover-complete-layer-seating",
     "measure-model-ssd-streaming-live-memory-ceiling-round-trip",
     "measure-model-ssd-streaming-decode-expert-retention",
     "measure-model-ssd-streaming-cached-suffix-streaming-prefill",
     "measure-model-ssd-streaming-high-ram-cached-suffix-prefill",
-    "measure-model-ssd-streaming-near-disk-oq6e-cached-suffix-prefill",
-    "measure-model-ssd-streaming-oq6e-tight-ceiling-prefill",
-    "measure-model-ssd-streaming-oq6e-long-conversation",
+    "measure-model-ssd-streaming-large-sparse-moe-tight-ceiling-prefill",
     "measure-model-ssd-streaming-prefill-memory-progress",
     "measure-model-ssd-streaming-laguna-paging",
-    "measure-experimental-aligned-expert-packs-ornith-generation",
-    "measure-experimental-aligned-expert-packs-ornith-prompt-processing",
-    "measure-experimental-aligned-expert-packs-oq6e-data-plane",
+    "measure-experimental-aligned-expert-packs-large-sparse-moe-generation",
+    "measure-experimental-aligned-expert-packs-large-sparse-moe-prompt-processing",
+    "measure-experimental-aligned-expert-packs-large-sparse-moe-data-plane",
 }
 assert set(journey_list_path.read_text().splitlines()) == expected_journeys
 PYTHON

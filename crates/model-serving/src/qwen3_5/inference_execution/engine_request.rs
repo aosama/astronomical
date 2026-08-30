@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
 
-/// Deterministic failure points used by isolated SpecPrefill qualification.
+/// Deterministic failure points used by isolated SpecPrefill acceptance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[doc(hidden)]
 pub enum Qwen3_5SpeculativePrefillFailureStageForTests {
@@ -78,6 +78,10 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) visual_embeddings: Option<MlxArray>,
     /// How many visual embeddings earlier prefill chunks have already consumed.
     pub(super) consumed_visual_embedding_count: usize,
+    /// Whether the request was constructed with an image source. Ordinary text may
+    /// contain a vocabulary collision with the artifact's image-pad ID; only genuine
+    /// image requests may demand visual embedding rows.
+    pub(super) has_visual_inputs: bool,
     /// Token ID used for image-pad placeholders in the input prompt.
     pub(super) image_pad_token_id: u32,
     pub(super) thinking_budget_state: Qwen3_5ThinkingBudgetState,
@@ -252,8 +256,8 @@ impl Qwen3_5EngineRequest {
         let generated_token_outcome = self.performance_attribution.measure_operation(
             PerformanceOperation::TokenSamplingGraphConstruction,
             |_performance_attribution| match sampling_strategy {
-                Qwen3_5SamplingStrategy::Greedy => model
-                    .build_greedy_token(logits)
+                Qwen3_5SamplingStrategy::HighestLogit => model
+                    .select_highest_logit_token(logits)
                     .map_err(qwen3_5_runtime_error),
                 Qwen3_5SamplingStrategy::TopKTopP {
                     temperature_thousandths,

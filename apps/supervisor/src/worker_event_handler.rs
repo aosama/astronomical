@@ -23,7 +23,7 @@ use crate::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
         publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
         publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
-        publish_persistent_prompt_cache_stats,
+        publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
     },
     worker_loop_types::{ActiveGeneration, ActiveWorkerRequest},
     worker_prefill_progress::handle_worker_prefill_progress,
@@ -131,11 +131,15 @@ pub(super) fn handle_worker_event(
         }
         WorkerEvent::MlxMemorySample {
             mlx_memory_snapshot,
+            expert_residency,
         } => {
             if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
                 publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
             } else {
                 clear_latest_mlx_memory_snapshot(health_snapshot);
+            }
+            if let Some(expert_residency) = expert_residency {
+                publish_worker_expert_residency(health_snapshot, expert_residency);
             }
         }
         WorkerEvent::MlxMemoryLimitChanged {
@@ -233,7 +237,11 @@ pub(super) fn handle_worker_event(
             total_layer_count,
             resident_expert_count,
             resident_expert_payload_bytes,
+            mlx_memory_snapshot,
         } => {
+            if let Some(mlx_memory_snapshot) = &mlx_memory_snapshot {
+                publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot.clone());
+            }
             handle_generation_preparation_started(
                 request_id,
                 ExpertResidencySnapshot {

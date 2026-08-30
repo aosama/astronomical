@@ -220,7 +220,7 @@ fn validate_bound_vision_tensor(
     if !tensor_dtype_matches_profile {
         return Err(Qwen3_5ExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
-            description: "vision tensor dtype differs from the certified profile",
+            description: "vision tensor dtype differs from the expected profile",
         });
     }
     let expected_shape = tensor_profile
@@ -236,7 +236,7 @@ fn validate_bound_vision_tensor(
     if tensor.shape() != expected_shape {
         return Err(Qwen3_5ExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
-            description: "vision tensor shape differs from the certified profile",
+            description: "vision tensor shape differs from the expected profile",
         });
     }
     Ok(())

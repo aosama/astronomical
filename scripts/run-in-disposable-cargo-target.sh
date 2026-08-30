@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 # Runs one foreground build journey in an owned Cargo target and removes that
-# target afterward. High-churn qualification and release graphs remain useful
+# target afterward. High-churn acceptance and release graphs remain useful
 # through sccache without accumulating linked binaries and symbols in the repo.
 
 set -eu

@@ -86,7 +86,7 @@ fn should_reject_a_declared_dtype_that_differs_from_the_model_contract() {
         .decoder_cache_layout()
         .sequence_tensor_layouts()
         .first()
-        .expect("the certified model should have sequence state")
+        .expect("the frozen model should have sequence state")
         .persistent_tensor_name();
     let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
     let sequence_state_file_path = temporary_directory.path().join("wrong-dtype.safetensors");
@@ -120,7 +120,7 @@ fn should_reject_a_missing_declared_tensor() {
         .decoder_cache_layout()
         .sequence_tensor_layouts()
         .first()
-        .expect("the certified model should have sequence state")
+        .expect("the frozen model should have sequence state")
         .persistent_tensor_name();
     let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
     let sequence_state_file_path = temporary_directory
@@ -249,7 +249,7 @@ fn write_contract_generated_file(
         header_entries.insert(
             tensor_name.clone(),
             json!({
-                // Pick a dtype different from the contract rather than assuming the certified
+                // Pick a dtype different from the contract rather than assuming the frozen
                 // sequence tensors use one particular precision. The header validator must
                 // reject the mismatch before it considers the synthetic payload contents.
                 "dtype": if wrong_dtype_tensor_name == Some(tensor_name.as_str()) {

@@ -67,7 +67,7 @@ fn should_use_an_explicit_artifact_default_for_automatic_depth() {
 }
 
 #[test]
-fn should_use_production_qualified_depth_one_when_the_artifact_has_no_default() {
+fn should_use_production_depth_one_when_the_artifact_has_no_default() {
     let capability = Qwen3_5MtpArtifactCapability::MtpCapable {
         stored_mtp_layer_count: 1,
         artifact_maximum_draft_depth: Some(

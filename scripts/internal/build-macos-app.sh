@@ -43,7 +43,7 @@ require_command() {
     fi
 }
 
-# Cache directories are purgeable. Copy the certified metallib into the bundle
+# Cache directories are purgeable. Copy the build-produced metallib into the bundle
 # so a shipped app can start after ~/Library/Caches is deleted.
 resolve_packaged_mlx_metallib_source() {
     repository_root="$1"

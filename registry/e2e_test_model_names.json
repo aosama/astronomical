@@ -1,0 +1,8 @@
+{
+  "large_sparse_moe": "Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
+  "resident_sparse_moe": "Ornith-1.5-35B-A3B-OptiQ-4bit",
+  "laguna_xs": "Laguna-XS-2.1-6bit",
+  "dense_mtp": "Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
+  "small_dense": "Qwen3.5-0.8B-MLX-4bit",
+  "flux2_klein": "FLUX.2-klein-4B"
+}

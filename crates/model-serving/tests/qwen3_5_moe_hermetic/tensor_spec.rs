@@ -5,11 +5,11 @@ use astronomical_model_serving::{
     qwen3_5_resident_language_tensor_profiles,
 };
 
-use crate::common::qwen3_5_moe::certified_ornith_config;
+use crate::common::qwen3_5_moe::frozen_ornith_1_0_config;
 
 #[test]
 fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
 
     let tensor_profiles = qwen3_5_language_tensor_profiles(&ornith_config);
     let tensor_profile_by_name = tensor_profile_by_name(&tensor_profiles);
@@ -159,7 +159,7 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
 
 #[test]
 fn should_exclude_sparse_expert_tensors_from_every_resident_profile() {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
 
     let resident_tensor_profiles = qwen3_5_resident_language_tensor_profiles(&ornith_config);
     let resident_tensor_profile_by_name = tensor_profile_by_name(&resident_tensor_profiles);

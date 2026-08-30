@@ -40,7 +40,7 @@ impl Qwen3_5TokenDecoder {
         }
     }
 
-    /// Decodes one generated token while suppressing both certified stop tokens.
+    /// Decodes one generated token while suppressing both model stop tokens.
     pub fn push_token(
         &mut self,
         generated_token_id: u32,

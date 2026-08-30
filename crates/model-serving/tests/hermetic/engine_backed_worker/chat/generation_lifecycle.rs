@@ -36,6 +36,7 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
                 },
             ],
             mlx_memory_snapshot: None,
+            expert_residency: None,
         }
     );
     assert_eq!(
@@ -50,6 +51,7 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
                 arguments_json: r#"{"pattern":"src/**/*.rs"}"#.to_owned(),
             }],
             mlx_memory_snapshot: None,
+            expert_residency: None,
         }
     );
     assert_eq!(
@@ -165,6 +167,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
                 },
             ],
             mlx_memory_snapshot: None,
+            expert_residency: None,
         }
     );
     assert_eq!(
@@ -179,6 +182,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
                 arguments_json: r#"{"pattern":"src/**/*.rs"}"#.to_owned(),
             }],
             mlx_memory_snapshot: None,
+            expert_residency: None,
         }
     );
     assert_eq!(
@@ -198,6 +202,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
                 arguments_json: r#"{"pattern":"tests/**/*.rs"}"#.to_owned(),
             }],
             mlx_memory_snapshot: None,
+            expert_residency: None,
         }
     );
     assert_eq!(

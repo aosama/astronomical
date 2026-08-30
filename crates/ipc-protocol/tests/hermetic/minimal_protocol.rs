@@ -52,7 +52,7 @@ fn should_serialize_speculative_prefill_runtime_state_as_snake_case() {
 async fn should_round_trip_an_unversioned_chat_command() {
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(71),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "Explain this Rust function.".to_owned(),
             images: Vec::new(),
@@ -116,6 +116,7 @@ async fn should_round_trip_generation_preparation_topology() {
         total_layer_count: 40,
         resident_expert_count: 32,
         resident_expert_payload_bytes: 21_969_764_352,
+        mlx_memory_snapshot: None,
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
@@ -237,6 +238,7 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
             context_state_payload_bytes: 0,
             speculative_prefill_draft_memory_bytes: 0,
         }),
+        expert_residency: None,
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let (supervisor_reader_transport, supervisor_writer_transport) =
@@ -275,7 +277,7 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
 async fn should_send_a_large_chat_command_as_one_bounded_frame() {
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(73),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "x".repeat(RETIRED_SMALL_FRAME_BYTES * 2),
             images: Vec::new(),
@@ -324,7 +326,7 @@ async fn should_send_a_large_chat_command_as_one_bounded_frame() {
 async fn should_round_trip_a_fifty_thousand_word_command_without_material_delay() {
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(74),
-        model: "mlx-community/Ornith-1.0-35B-OptiQ-4bit".to_owned(),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
         messages: vec![ChatMessage::User {
             content: "public-domain-word ".repeat(50_000),
             images: Vec::new(),
@@ -379,6 +381,7 @@ async fn should_round_trip_one_unified_chat_output_event() {
             text: "The function validates its input.".to_owned(),
         }],
         mlx_memory_snapshot: None,
+        expert_residency: None,
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
@@ -406,6 +409,7 @@ async fn should_round_trip_generation_progress_event() {
         maximum_output_tokens: 64,
         elapsed_millis: 900,
         mlx_memory_snapshot: None,
+        expert_residency: None,
     };
 
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);

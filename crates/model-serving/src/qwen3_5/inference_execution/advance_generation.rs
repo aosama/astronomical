@@ -101,11 +101,13 @@ impl Qwen3_5EngineState {
                 .as_ref()
                 .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let expert_residency = model.expert_residency_telemetry();
+            let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry()?;
             return Ok(ActiveRequestAdvance::Continue(
                 crate::GeneratedToken::GenerationPreparationStarted {
                     total_layer_count: expert_residency.total_layer_count,
                     resident_expert_count: expert_residency.resident_expert_count,
                     resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
+                    mlx_memory_telemetry,
                 },
             ));
         }

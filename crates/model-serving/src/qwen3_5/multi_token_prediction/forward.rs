@@ -139,7 +139,8 @@ impl Qwen3_5Model {
                 )
             },
         )?;
-        let draft_token_indices = self.build_greedy_token(mtp_forward_output.draft_logits())?;
+        let draft_token_indices =
+            self.select_highest_logit_token(mtp_forward_output.draft_logits())?;
         self.evaluate_mtp_updated_state(
             mtp_request_state,
             &[

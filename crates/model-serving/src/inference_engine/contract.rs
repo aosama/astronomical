@@ -341,10 +341,15 @@ pub enum GeneratedToken {
         total_token_count: u32,
     },
     /// Prefill is complete and the engine is reconciling expert ownership before decode.
+    ///
+    /// The memory observation is captured at the same owner-thread instant as the
+    /// residency so the public status never pairs fresh residency with a stale
+    /// prefill-era measurement (issue #337).
     GenerationPreparationStarted {
         total_layer_count: u32,
         resident_expert_count: u32,
         resident_expert_payload_bytes: u64,
+        mlx_memory_telemetry: Option<crate::MlxMemoryTelemetry>,
     },
     /// Engine-side end-of-sequence without an explicit token ID.
     EndOfSequence,

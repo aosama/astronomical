@@ -4,7 +4,7 @@ use astronomical_rest_contract::{OpenAiResponseInputParts, OpenAiResponsesReques
 fn should_parse_a_non_streaming_response_request_with_string_input() {
     let request = serde_json::from_str::<OpenAiResponsesRequest>(
         r#"{
-            "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model": "astronomical/fake-mixture-of-experts",
             "input": "Explain the repository.",
             "max_output_tokens": 512,
             "temperature": 0.6,
@@ -17,10 +17,7 @@ fn should_parse_a_non_streaming_response_request_with_string_input() {
         .into_parts()
         .expect("the minimal Responses request should validate");
 
-    assert_eq!(
-        request_parts.model,
-        "mlx-community/Ornith-1.0-35B-OptiQ-4bit"
-    );
+    assert_eq!(request_parts.model, "astronomical/fake-mixture-of-experts");
     assert_eq!(
         request_parts.input,
         OpenAiResponseInputParts::Text("Explain the repository.".to_owned())
@@ -56,7 +53,7 @@ fn should_preserve_omitted_responses_generation_settings_and_request_only_metada
 fn should_preserve_ordered_response_items_for_manual_function_loop_replay() {
     let request = serde_json::from_str::<OpenAiResponsesRequest>(
         r#"{
-            "model": "mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model": "astronomical/fake-mixture-of-experts",
             "instructions": "Be precise.",
             "input": [
                 {"role":"user","content":[{"type":"input_text","text":"Inspect the repository."}]},
@@ -90,7 +87,7 @@ fn should_decode_a_responses_data_uri_image_in_user_content_order() {
     let red_pixel_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
     let request_json = format!(
         r#"{{
-            "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model":"astronomical/fake-mixture-of-experts",
             "input":[{{
                 "role":"user",
                 "content":[
@@ -124,7 +121,7 @@ fn should_decode_a_responses_data_uri_image_in_user_content_order() {
 fn should_accept_native_function_tools_and_harmless_compatibility_fields() {
     let request = serde_json::from_str::<OpenAiResponsesRequest>(
         r#"{
-            "model":"mlx-community/Ornith-1.0-35B-OptiQ-4bit",
+            "model":"astronomical/fake-mixture-of-experts",
             "input":"List Rust files.",
             "tools":[{
                 "type":"function",

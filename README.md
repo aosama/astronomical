@@ -32,7 +32,7 @@ Astronomical is not a generic server wrapped around an off-the-shelf model loop.
 | --- | --- |
 | Automatic sparse-expert residency and paging | Keeps the complete sparse model resident when safe and uses SSD capacity when memory is needed elsewhere. |
 | Adaptive memory admission | Projects context growth and observed transient work before allocation, then reclaims only the expert memory required for the next operation. |
-| Deterministic prompt chunking | Uses a qualified fixed size, exact terminal remainders, and bounded memory-capacity reduction without spending user latency on online exploration. |
+| Deterministic prompt chunking | Uses a chosen fixed size, exact terminal remainders, and bounded memory-capacity reduction without spending user latency on online exploration. |
 | Persistent prompt reuse | Restores validated prompt state, recurrent snapshots, and projected image embeddings from a bounded SSD store so repeated prefixes need less work. |
 | GPU-native sampling and decode | Keeps sampling on the graphics processor and submits one token ahead to reduce avoidable host synchronization. |
 | Sorted mixture-of-experts execution | Groups larger routing batches by expert and reuses one ordering across projections to reduce scattered quantized matrix work. |
@@ -85,7 +85,7 @@ Astronomical keeps the trusted daily driver separate from repository development
 
 Config, logs, prompt caches, daemon ownership, process locks, and loopback endpoints are isolated. A standard instance rejects a configured endpoint belonging to the other channel. Both configs may reference the same read-only model directories. Real-model development still shares the Mac's GPU, wired memory, and storage bandwidth with Stable.
 
-Serving and qualification tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
+Serving and acceptance tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
 
 On first launch each instance creates its own versioned `config.json` and adjacent offline JSON Schema. Open Library in Observatory to install a curated model under that instance's automatic models directory. When an existing unversioned configuration can be migrated without changing its behavior, Astronomical preserves its exact bytes once as `config.legacy-v0.json` before atomically replacing `config.json`. An unsafe migration leaves the original configuration unchanged and creates no backup. Additional existing model locations remain available as recursive scan roots:
 
@@ -156,7 +156,7 @@ Run the macOS menu contracts:
 
     scripts/test-macos-menu-contracts.sh
 
-Direct MLX and real-model qualification lanes remain explicit because they require Apple graphics hardware or local model artifacts. See the [repository discovery guide](repo-discovery-guide-for-agents.md) for the maintained command map.
+Direct MLX and real-model acceptance lanes remain explicit because they require Apple graphics hardware or local model artifacts. See the [repository discovery guide](repo-discovery-guide-for-agents.md) for the maintained command map.
 
 ## Contributing
 

@@ -31,7 +31,7 @@ impl Qwen3_5EngineState {
                 inference_request.forced_thinking_transition_token_ids();
             if forced_transition_token_ids.last().copied() != Some(self.think_end_token_id) {
                 return Err(invalid_request_error(
-                    "thinking budget requires a model-owned transition ending with the certified thinking marker",
+                    "thinking budget requires a model-owned transition ending with the model thinking marker",
                 ));
             }
             let minimum_bounded_output_tokens = minimum_bounded_output_token_count(
@@ -62,7 +62,7 @@ impl Qwen3_5EngineState {
             .any(|token_id| *token_id >= self.vocabulary_size)
         {
             return Err(fatal_engine_error(
-                "generation prompt contains a token outside the certified vocabulary",
+                "generation prompt contains a token outside the model vocabulary",
             ));
         }
         if inference_request
@@ -72,7 +72,7 @@ impl Qwen3_5EngineState {
             .any(|token_id| *token_id >= self.vocabulary_size)
         {
             return Err(invalid_request_error(
-                "thinking-budget configuration contains a token outside the certified vocabulary",
+                "thinking-budget configuration contains a token outside the model vocabulary",
             ));
         }
         let prompt_token_count = inference_request.input_token_ids().len();
@@ -83,7 +83,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| invalid_request_error("generation context token count overflowed"))?;
         if total_context_tokens > self.maximum_position_count {
             return Err(invalid_request_error(
-                "generation context exceeds the certified maximum position count",
+                "generation context exceeds the model maximum position count",
             ));
         }
         tracing::info!(

@@ -1,4 +1,4 @@
-//! Acceptance-first lifecycle and reduced direct-MLX engine qualification.
+//! Acceptance-first lifecycle and reduced direct-MLX engine acceptance.
 
 mod lifecycle;
 mod lifecycle_support;

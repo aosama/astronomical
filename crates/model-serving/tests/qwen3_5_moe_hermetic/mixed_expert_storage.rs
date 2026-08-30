@@ -16,7 +16,7 @@ use astronomical_model_serving::{
 };
 use serde_json::json;
 
-use crate::common::qwen3_5_moe::certified_ornith_config_bytes;
+use crate::common::qwen3_5_moe::frozen_ornith_1_0_config_bytes;
 
 const EXPERT_CAPACITY: usize = 2;
 const OUTPUT_DIMENSION: usize = 4;
@@ -270,8 +270,8 @@ fn write_expert_artifact(
         }
     }
     write_safetensors_file(&model_directory.path().join(SHARD_FILE_NAME), &tensors);
-    let mut config = Qwen3_5Config::from_json_bytes(&certified_ornith_config_bytes())
-        .expect("the certified Ornith config should parse");
+    let mut config = Qwen3_5Config::from_json_bytes(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen Ornith 1.0 config should parse");
     if resolve_unquantized_modules {
         let shard_tensor_names = weight_map.keys().cloned().collect::<BTreeSet<_>>();
         config.resolve_unquantized_modules_from_shard_index(&shard_tensor_names);

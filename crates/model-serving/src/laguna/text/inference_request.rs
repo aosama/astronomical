@@ -7,7 +7,7 @@ use super::LagunaSamplerConfig;
 /// Architecture-facing sampling strategy retained without another model-family dependency.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LagunaSamplingStrategy {
-    Greedy,
+    HighestLogit,
     Sample(LagunaSamplerConfig),
 }
 
@@ -43,7 +43,7 @@ impl LagunaInferenceRequest {
         let sampling_strategy = if sampler_config.uses_sampling() {
             LagunaSamplingStrategy::Sample(sampler_config)
         } else {
-            LagunaSamplingStrategy::Greedy
+            LagunaSamplingStrategy::HighestLogit
         };
         Self {
             request_id,

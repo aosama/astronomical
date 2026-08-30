@@ -13,7 +13,7 @@ pub struct LagunaTokenizer {
 }
 
 impl LagunaTokenizer {
-    /// Shares the tokenizer certified bidirectionally by text artifact normalization.
+    /// Shares the tokenizer already validated by text artifact normalization.
     pub fn from_descriptor(
         descriptor: &LagunaTextArtifactDescriptor,
     ) -> Result<Self, LagunaTokenizerError> {

@@ -9,26 +9,26 @@ const TEST_MLX_MEMORY_CEILING_BYTES: u64 = 20_000_000_000;
 const TEST_SSD_QUOTA_BYTES: u64 = 50_000_000_000;
 
 use crate::common::qwen3_5_moe::{
-    certified_ornith_config, persistent_visual_embedding_model_contract,
+    frozen_ornith_1_0_config, persistent_visual_embedding_model_contract,
 };
 
 #[test]
-fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_metadata() {
-    let ornith_config = certified_ornith_config();
+fn should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadata() {
+    let ornith_config = frozen_ornith_1_0_config();
     let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
 
     let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
         qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes)
-            .expect("the certified Ornith configuration should build a decoder-cache layout"),
+            .expect("the frozen Ornith 1.0 configuration should build a decoder-cache layout"),
         ornith_config.maximum_position_count() as usize,
         TEST_MLX_MEMORY_CEILING_BYTES,
         TEST_SSD_QUOTA_BYTES,
         None,
         4,
     )
-    .expect("the certified model should resolve an SSD storage contract");
+    .expect("the frozen model should resolve an SSD storage contract");
     let persistent_visual_embedding_model_contract = persistent_visual_embedding_model_contract();
 
     assert_eq!(
@@ -50,7 +50,7 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_meta
             .decoder_cache_layout()
             .sequence_tensor_layouts()
             .first()
-            .expect("the certified layout should contain sequence state")
+            .expect("the frozen layout should contain sequence state")
             .tensor_layout()
             .dimensions(),
         &[1, 2, 0, 256]
@@ -60,7 +60,7 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_meta
             .decoder_cache_layout()
             .boundary_tensor_layouts()
             .first()
-            .expect("the certified layout should contain boundary state")
+            .expect("the frozen layout should contain boundary state")
             .tensor_layout()
             .dimensions(),
         &[1, 3, 8_192]
@@ -131,7 +131,7 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_certified_model_meta
 
 #[test]
 fn should_preserve_mixed_execution_dtypes_in_persistent_prompt_cache_geometry() {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
     decoder_layer_cache_dtypes[0] = Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
         convolution: DecoderCacheTensorDtype::Float32,
@@ -171,7 +171,7 @@ fn should_preserve_mixed_execution_dtypes_in_persistent_prompt_cache_geometry() 
 
 #[test]
 fn should_reject_decoder_cache_execution_dtypes_with_a_missing_layer() {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
     decoder_layer_cache_dtypes.pop();
 
@@ -190,7 +190,7 @@ fn should_reject_decoder_cache_execution_dtypes_with_a_missing_layer() {
 
 #[test]
 fn should_reject_decoder_cache_execution_dtypes_for_the_wrong_attention_family() {
-    let ornith_config = certified_ornith_config();
+    let ornith_config = frozen_ornith_1_0_config();
     let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
     decoder_layer_cache_dtypes[0] = Qwen3_5DecoderLayerCacheDtypes::FullAttention {
         keys: DecoderCacheTensorDtype::BFloat16,

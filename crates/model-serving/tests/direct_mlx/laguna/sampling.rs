@@ -18,20 +18,23 @@ async fn should_select_the_highest_logit_token_on_the_gpu() {
             .array_from_f32(&[1.0, 5.0, 2.0, 0.5, 9.0, 3.0], &[1, 2, 3])
             .expect("prompt logits should be placed on the runtime");
         let mut performance_attribution = PerformanceAttribution::disabled();
-        let selected_token_id =
-            LagunaModel::greedy_token_id(&runtime, &prompt_logits, &mut performance_attribution)
-                .expect("greedy sampling should copy one token ID");
+        let selected_token_id = LagunaModel::highest_logit_token_id(
+            &runtime,
+            &prompt_logits,
+            &mut performance_attribution,
+        )
+        .expect("highest-logit selection should copy one token ID");
         assert_eq!(
             selected_token_id, 1,
             "the last-token row [0.5, 9.0, 3.0] should select vocabulary index 1"
         );
     })
     .await
-    .expect("greedy Laguna sampling should finish within 30 seconds");
+    .expect("highest-logit Laguna selection should finish within 30 seconds");
 }
 
 #[tokio::test]
-async fn should_match_greedy_when_top_k_keeps_only_the_highest_logit() {
+async fn should_match_highest_logit_when_top_k_keeps_only_the_highest_logit() {
     tokio::time::timeout(LAGUNA_SAMPLING_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = sampling_runtime();
@@ -39,9 +42,12 @@ async fn should_match_greedy_when_top_k_keeps_only_the_highest_logit() {
             .array_from_f32(&[0.5, 9.0, 3.0], &[1, 1, 3])
             .expect("prompt logits should be placed on the runtime");
         let mut performance_attribution = PerformanceAttribution::disabled();
-        let greedy_token_id =
-            LagunaModel::greedy_token_id(&runtime, &prompt_logits, &mut performance_attribution)
-                .expect("greedy sampling should copy one token ID");
+        let highest_logit_token_id = LagunaModel::highest_logit_token_id(
+            &runtime,
+            &prompt_logits,
+            &mut performance_attribution,
+        )
+        .expect("highest-logit selection should copy one token ID");
         let mut random_state = runtime
             .random_key(42)
             .expect("a sampling key should be created");
@@ -55,8 +61,8 @@ async fn should_match_greedy_when_top_k_keeps_only_the_highest_logit() {
             &mut performance_attribution,
         )
         .expect("top-k 1 sampling should copy one token ID");
-        assert_eq!(greedy_token_id, 1);
-        assert_eq!(sampled_token_id, greedy_token_id);
+        assert_eq!(highest_logit_token_id, 1);
+        assert_eq!(sampled_token_id, highest_logit_token_id);
     })
     .await
     .expect("top-k 1 Laguna sampling should finish within 30 seconds");
@@ -71,10 +77,13 @@ async fn should_draw_both_tied_high_logits_instead_of_always_argmax() {
             .array_from_f32(&[5.0, 5.0, 0.0], &[1, 1, 3])
             .expect("tied high logits should be placed on the runtime");
         let mut performance_attribution = PerformanceAttribution::disabled();
-        let greedy_token_id =
-            LagunaModel::greedy_token_id(&runtime, &prompt_logits, &mut performance_attribution)
-                .expect("greedy sampling should copy one token ID");
-        assert_eq!(greedy_token_id, 0);
+        let highest_logit_token_id = LagunaModel::highest_logit_token_id(
+            &runtime,
+            &prompt_logits,
+            &mut performance_attribution,
+        )
+        .expect("highest-logit selection should copy one token ID");
+        assert_eq!(highest_logit_token_id, 0);
 
         let mut random_state = runtime
             .random_key(7)
@@ -100,7 +109,7 @@ async fn should_draw_both_tied_high_logits_instead_of_always_argmax() {
         }
         assert!(
             selected_first && selected_second,
-            "temperature 1.0 with two equal top logits should not collapse to greedy argmax"
+            "temperature 1.0 with two equal top logits should not collapse to highest-logit argmax"
         );
     })
     .await

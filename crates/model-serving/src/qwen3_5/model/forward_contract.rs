@@ -102,7 +102,7 @@ pub(super) fn validate_generated_token_forward(
     }
     if starting_position_tokens >= maximum_position_count {
         return Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "forward chunk exceeds the certified maximum position count",
+            description: "forward chunk exceeds the model maximum position count",
         });
     }
     Ok(())
@@ -159,7 +159,7 @@ pub(crate) fn validate_forward_input(
         .is_none_or(|ending_position| ending_position > maximum_position_count)
     {
         return Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "forward chunk exceeds certified model positions",
+            description: "forward chunk exceeds the model maximum position count",
         });
     }
     i32::try_from(token_count).map_err(|_| Qwen3_5ExecutionError::InvalidInput {

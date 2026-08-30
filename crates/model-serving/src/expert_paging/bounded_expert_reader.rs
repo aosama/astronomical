@@ -35,7 +35,7 @@ use super::quantized_expert_manifest::{
 
 /// Loads only the validated tensor ranges described by one expert-page manifest.
 ///
-/// This is public so architecture-neutral qualification tools can compare the
+/// This is public so architecture-neutral acceptance tools can compare the
 /// production bounded-reader baseline with alternative expert-pack layouts.
 pub fn load_quantized_expert_page(
     runtime: &astronomical_runtime_integration::MlxRuntime,

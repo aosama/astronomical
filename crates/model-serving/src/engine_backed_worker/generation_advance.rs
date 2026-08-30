@@ -339,6 +339,7 @@ where
                 total_layer_count,
                 resident_expert_count,
                 resident_expert_payload_bytes,
+                mlx_memory_telemetry,
             } => {
                 event_writer
                     .send_event(&WorkerEvent::GenerationPreparationStarted {
@@ -346,6 +347,12 @@ where
                         total_layer_count,
                         resident_expert_count,
                         resident_expert_payload_bytes,
+                        mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
+                            super::output::worker_memory_snapshot(
+                                MlxMemorySnapshotSource::DecodeSubmitted,
+                                mlx_memory_telemetry,
+                            )
+                        }),
                     })
                     .await?;
                 Ok(Some(active_generation))

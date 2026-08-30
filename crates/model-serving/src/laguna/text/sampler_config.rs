@@ -14,7 +14,7 @@ pub struct LagunaSamplerConfig {
 impl LagunaSamplerConfig {
     /// Truncation used when `generation_config.json` omits `top_k`.
     ///
-    /// Poolside's Laguna eval and published Transformers recipe certify `top_k = 20`.
+    /// Poolside's Laguna eval and published Transformers recipe uses `top_k = 20`.
     /// MLX affine packages often drop that field; sampling still applies this default
     /// rather than drawing from the full vocabulary.
     pub const DEFAULT_SAMPLING_TOP_K: u16 = 20;

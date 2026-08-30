@@ -116,14 +116,14 @@ fn should_classify_prefixed_native_operation_capacity_errors() {
 }
 
 #[test]
-fn should_reject_a_relocated_metallib_whose_certified_bytes_were_changed() {
+fn should_reject_a_relocated_metallib_whose_build_produced_bytes_were_changed() {
     let relocation_directory =
         tempfile::tempdir().expect("the test should create a relocation directory");
     let relocated_metallib_path = relocation_directory.path().join("mlx.metallib");
     fs::copy(compiled_metallib_path(), &relocated_metallib_path)
         .expect("the test should copy the build-produced metallib");
     validate_metallib_path(&relocated_metallib_path)
-        .expect("an exact relocated metallib copy should retain its certified identity");
+        .expect("an exact relocated metallib copy should retain its build-produced identity");
 
     let relocated_metallib = OpenOptions::new()
         .read(true)

@@ -25,7 +25,9 @@ const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 const DOCUMENT_WORD_COUNT: usize = 5_000;
 const FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS: u32 = 8_192;
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
-const MODEL_ID: &str = crate::common::ORNITH_SSD_STREAMING_MODEL_ID;
+fn model_id() -> &'static str {
+    crate::support::large_sparse_moe_model_id()
+}
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
@@ -221,7 +223,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         "maximum_prefill_mlx_active_memory_bytes": streaming_measurement.maximum_prefill_mlx_active_memory_bytes,
         "maximum_prefill_mlx_allocator_cache_memory_bytes": streaming_measurement.maximum_prefill_mlx_allocator_cache_memory_bytes,
         "maximum_prefill_mlx_peak_memory_bytes": streaming_measurement.maximum_prefill_mlx_peak_memory_bytes,
-        "model": MODEL_ID,
+        "model": model_id(),
         "output_paragraphs": output_paragraph_count,
         "peak_worker_physical_footprint_bytes": physical_footprint.peak_bytes,
         "prompt_processing_seconds": prompt_processing_duration.as_secs_f64(),
@@ -237,7 +239,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
 }
 
 fn configured_model_directory_from_user_config() -> PathBuf {
-    crate::common::configured_model_artifact_directory_by_id(MODEL_ID)
+    crate::support::configured_installed_model_directory_by_id(model_id())
 }
 
 fn isolated_prompt_cache_worker_launcher(
@@ -305,7 +307,7 @@ async fn measure_worker_summarization(
     let mut stream_receiver = worker_handle
         .start_chat_generation(ChatGenerationCommand {
             request_id: RequestId::new(1),
-            model: MODEL_ID.to_owned(),
+            model: model_id().to_owned(),
             messages: vec![ChatMessage::User {
                 content: user_prompt,
                 images: Vec::new(),

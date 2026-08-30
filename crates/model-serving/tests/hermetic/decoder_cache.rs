@@ -176,7 +176,7 @@ fn should_reject_persistence_alignment_overflow() {
 }
 
 #[test]
-fn should_reject_duplicate_qualified_tensor_roles_across_one_layer() {
+fn should_reject_duplicate_tensor_roles_across_one_layer() {
     let rejection = DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::composite(vec![
         DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
             "state",

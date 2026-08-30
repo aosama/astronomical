@@ -66,7 +66,7 @@ impl AstronomicalInstancePaths {
     }
 
     /// Resolves an active user's existing home before deriving standard state.
-    /// Qualification fixtures use `for_home_directory` when no real home exists.
+    /// Acceptance fixtures use `for_home_directory` when no real home exists.
     pub fn for_user_home_directory(
         home_directory: impl Into<PathBuf>,
         runtime_instance: AstronomicalRuntimeInstance,

@@ -1,4 +1,4 @@
-//! Serialized direct-MLX qualification for FLUX component boundaries.
+//! Serialized direct-MLX acceptance for FLUX component boundaries.
 
 #[path = "../../flux2_klein_hermetic/engine/direct_mlx.rs"]
 mod engine;

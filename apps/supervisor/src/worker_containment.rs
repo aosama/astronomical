@@ -311,11 +311,18 @@ async fn cancel_worker_request(
                 }
                 WorkerEvent::MlxMemorySample {
                     mlx_memory_snapshot,
+                    expert_residency,
                 } => {
                     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
                         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
                     } else {
                         clear_latest_mlx_memory_snapshot(health_snapshot);
+                    }
+                    if let Some(expert_residency) = expert_residency {
+                        crate::worker_health::publish_worker_expert_residency(
+                            health_snapshot,
+                            expert_residency,
+                        );
                     }
                 }
                 WorkerEvent::Completed {

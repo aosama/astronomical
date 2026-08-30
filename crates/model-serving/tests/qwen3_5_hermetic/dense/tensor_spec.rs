@@ -1,10 +1,10 @@
 use astronomical_model_serving::{TensorDtype, qwen3_5_language_tensor_profiles};
 
-use crate::common::qwen3_5::certified_dense_qwen3_6_config;
+use crate::common::qwen3_5::frozen_dense_qwen3_6_config;
 
 #[test]
 fn should_generate_dense_qwen3_5_language_tensor_profiles_without_sparse_experts() {
-    let dense_qwen3_6_config = certified_dense_qwen3_6_config();
+    let dense_qwen3_6_config = frozen_dense_qwen3_6_config();
     let dense_tensor_profiles = qwen3_5_language_tensor_profiles(&dense_qwen3_6_config);
     let dense_intermediate_size = dense_qwen3_6_config.dense_intermediate_size() as usize;
     let hidden_size = dense_qwen3_6_config.hidden_size() as usize;

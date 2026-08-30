@@ -92,7 +92,7 @@ fn should_treat_optional_whitespace_around_poolside_tags_as_the_same_protocol() 
 }
 
 #[test]
-fn should_certify_special_tokens_from_tokenizer_json_when_the_decoder_map_is_absent() {
+fn should_load_special_tokens_from_tokenizer_json_when_the_decoder_map_is_absent() {
     let mut artifact_without_decoder = SyntheticLagunaTextArtifact::extra_small_inline();
     artifact_without_decoder
         .tokenizer_config

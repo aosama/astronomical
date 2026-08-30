@@ -61,7 +61,7 @@ impl Qwen3_5Tokenizer {
         Ok(token_identifier_mapping_hasher.finalize().into())
     }
 
-    /// Loads and certifies tokenizer JSON bytes retained by artifact validation.
+    /// Loads tokenizer JSON bytes retained by artifact validation.
     pub fn from_json_bytes(
         tokenizer_bytes: &[u8],
         model_id: &str,
@@ -282,8 +282,8 @@ impl Qwen3_5Tokenizer {
             )
             .map_err(Qwen3_5TokenizerError::InvalidChatCommand)?;
         // Resolve the requested model ID against the loaded model's leaf-only ID.
-        // Clients may send "org/model-name" (e.g. "mlx-community/Ornith-1.0-35B-OptiQ-4bit")
-        // while internally the model ID is just the leaf name (e.g. "Ornith-1.0-35B-OptiQ-4bit").
+        // Clients may send "org/model-name" (e.g. "astronomical/fake-mixture-of-experts")
+        // while internally the model ID is just the leaf name (e.g. "fake-mixture-of-experts").
         let resolved_requested_model_id =
             resolve_model_id(&chat_generation_command.model, &[self.model_id.as_str()]);
         if resolved_requested_model_id != self.model_id {
@@ -347,8 +347,8 @@ impl Qwen3_5Tokenizer {
             usize::from(chat_generation_command.settings.max_output_tokens),
             self.maximum_position_count as usize,
         )?;
-        let model_certified_top_k = match u16::try_from(self.model_sampler_config.certified_top_k) {
-            Ok(model_certified_top_k) if model_certified_top_k > 0 => model_certified_top_k,
+        let model_top_k = match u16::try_from(self.model_sampler_config.model_top_k) {
+            Ok(model_top_k) if model_top_k > 0 => model_top_k,
             _ => 20,
         };
         let mut inference_request = Qwen3_5InferenceRequest::new_sampling_with_top_k(
@@ -359,7 +359,7 @@ impl Qwen3_5Tokenizer {
                 .settings
                 .temperature_thousandths
                 .unwrap_or(self.model_sampler_config.temperature_thousandths),
-            model_certified_top_k,
+            model_top_k,
             chat_generation_command
                 .settings
                 .top_p_thousandths
