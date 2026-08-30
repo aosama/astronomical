@@ -4,24 +4,39 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.24</title>
-            <pubDate>Sat, 29 Aug 2026 10:44:20 -0400</pubDate>
-            <sparkle:version>378</sparkle:version>
-            <sparkle:shortVersionString>0.2.24</sparkle:shortVersionString>
+            <title>0.2.25</title>
+            <pubDate>Sun, 30 Aug 2026 16:50:07 -0400</pubDate>
+            <sparkle:version>384</sparkle:version>
+            <sparkle:shortVersionString>0.2.25</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.24
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.25
 
-The Library catalog now offers Ornith 1.5 35B A3B OptiQ Static 5.5bpw and Ornith 1.5 9B Vision OptiQ Static 4.5bpw for download. FLUX.2 Klein 4B remains available.
+A stability-focused release consolidating correctness fixes in expert-residency reporting and visual prompt-cache restoration, plus a reorganized acceptance suite that guards those behaviors.
 
-Existing configuration, already-downloaded models, and prompt-cache state are preserved.
+### Fixed
 
-This release is Developer ID signed, notarized, and stapled for macOS arm64.
+- **Visual prompt-cache restore correctness (#336)**: restoring a cached visual prompt could change the first generated token of the resumed conversation. The restore path now preserves the exact first-token behavior.
+- **Honest expert-residency reporting (#337, #340)**: the expert-residency claim and the measured MLX memory snapshot now agree at every observed instant, including during live memory-ceiling changes while a conversation streams. Previously the claim could report the full seated expert payload while MLX held only a fraction of it. The pairing is enforced structurally in the serving engine and guarded by a permanent acceptance journey.
+
+### Improved
+
+- **Bounded tool-call completion log (#333)**: emitted tool calls are recorded in a bounded completion log, improving observability for agent-style sessions.
+- **Acceptance suite reorganization (#338, towards #334)**: real-model qualification journeys consolidated one per outcome, with hermetic discovery contracts. The full memory-management acceptance suite passes 12/12 serially, and real-model GPU journeys are now structurally guaranteed to run one at a time.
+- Agent instructions now bound CI oversight polling to ten-second intervals.
+
+### Compatibility
+
+- macOS 26.0 or newer on Apple Silicon (arm64). No configuration migration required; existing user state and persistent prompt caches are preserved.
+
+### Distribution
+
+- The app is Developer ID signed with Hardened Runtime, notarized by Apple, and delivered through a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.24/Astronomical-0.2.24-macOS-arm64.dmg" length="15742182" type="application/octet-stream" sparkle:edSignature="8ILGtTiW2vedgnq+mzCV+ba4/aTihhHcjj3Uj2bpVYD9/xXTnOJw7FfeZWeUZ+IBX0XPRr7BGkZy1XYN4EUDBA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.25/Astronomical-0.2.25-macOS-arm64.dmg" length="15787274" type="application/octet-stream" sparkle:edSignature="awxWaSwW8d/+lr/HQzCQpDhm2aE71w2DqYI2L098D1iigGLecR0G/BoOiOAsu+khICrwQ3qPpL7Mw/wHD6LxCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: DIKQB1OGUn4FytQsNsWWoZr5S0SWtia7SnlWbHBas57dPoeuZMLBTnZ0duAitz7ouZZGncV63+3He1WTmw4pCw==
-length: 1582
+edSignature: K8kB9l7FC1yMjl9aXNLCq8PZy5EHNTZ+23R2LBbSj52TsRziHkaZxzes9J/c7poNgv25A/7ek3pk10n2/vGaDg==
+length: 2986
 -->
