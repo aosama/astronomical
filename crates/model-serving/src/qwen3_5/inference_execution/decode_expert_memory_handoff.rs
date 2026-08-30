@@ -125,13 +125,20 @@ impl Qwen3_5EngineState {
                 }
             }
         }
-        let expert_residency = model.expert_residency_telemetry();
+        // Internal ownership log: this deliberately reports the retained cache's
+        // seated bookkeeping, not the published measured claim — the seating pass
+        // just enqueued these lazy pages and no snapshot is taken here.
+        let expert_statistics = model.expert_weight_memory_cache_statistics();
+        let total_layer_count = model
+            .expert_pager
+            .as_ref()
+            .map_or(0, |expert_pager| expert_pager.layer_count());
         tracing::info!(
             request_id = request_id.value(),
             context_token_count,
-            total_layer_count = expert_residency.total_layer_count,
-            resident_expert_count = expert_residency.resident_expert_count,
-            resident_expert_payload_bytes = expert_residency.resident_expert_payload_bytes,
+            total_layer_count,
+            resident_expert_count = expert_statistics.entry_count,
+            resident_expert_payload_bytes = expert_statistics.resident_payload_byte_count,
             "generation preparation seated leftover complete layers before decode"
         );
         Ok(())

@@ -72,12 +72,22 @@ impl Qwen3_5EngineState {
         let peak_memory_bytes =
             u64::try_from(mlx_memory_snapshot_after_adjustment.peak_memory_bytes())
                 .map_err(|_| super::fatal_engine_error("MLX peak memory exceeds the u64 range"))?;
-        let mlx_memory_telemetry = Some(MlxMemoryTelemetry::new(
-            active_memory_bytes,
-            allocator_cache_memory_bytes,
-            peak_memory_bytes,
-            model.finalized_active_memory_breakdown(active_memory_bytes, 0),
-        ));
+        let active_memory_breakdown =
+            model.finalized_active_memory_breakdown(active_memory_bytes, 0);
+        // One claim serves both the telemetry and the adjustment event, derived
+        // from the breakdown of this exact snapshot so neither publication can
+        // straddle a promotion or demote (issue #337).
+        let expert_residency =
+            model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown);
+        let mlx_memory_telemetry = Some(
+            MlxMemoryTelemetry::new(
+                active_memory_bytes,
+                allocator_cache_memory_bytes,
+                peak_memory_bytes,
+                active_memory_breakdown,
+            )
+            .with_expert_residency_telemetry(expert_residency),
+        );
         let expert_memory_mode = model.expert_memory_mode();
         let expert_residency_transition_occurred =
             expert_memory_mode != expert_memory_mode_before_adjustment;
@@ -107,6 +117,6 @@ impl Qwen3_5EngineState {
             expert_memory_mode,
             mlx_memory_telemetry,
         )
-        .with_expert_residency_telemetry(model.expert_residency_telemetry()))
+        .with_expert_residency_telemetry(expert_residency))
     }
 }

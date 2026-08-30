@@ -156,7 +156,7 @@ impl Qwen3_5EngineState {
                 )?;
                 return Ok(None);
             }
-            let memory_snapshot = collect_completed_forward_memory_snapshot(
+            let memory_observation = collect_completed_forward_memory_snapshot(
                 &mut self.adaptive_ram_growth_guard,
                 growth_context.with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
                 true,
@@ -170,7 +170,7 @@ impl Qwen3_5EngineState {
                 model,
                 active_request,
                 current_generated_token_id,
-                memory_snapshot.as_ref(),
+                Some(&memory_observation),
             )?;
             return Ok(Some(if emission.is_terminal {
                 ActiveRequestAdvance::Complete(emission.generated_token)

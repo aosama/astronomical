@@ -13,7 +13,8 @@ use crate::{
 };
 
 use super::completed_forward_memory::{
-    collect_completed_forward_memory_snapshot, record_completed_adaptive_ram_growth,
+    capture_completed_forward_memory_observation, collect_completed_forward_memory_snapshot,
+    record_completed_adaptive_ram_growth,
 };
 use super::generated_token_emission::synchronize_generated_token_id;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
@@ -100,8 +101,18 @@ impl Qwen3_5EngineState {
                 .model
                 .as_ref()
                 .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            let expert_residency = model.expert_residency_telemetry();
             let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry()?;
+            // The telemetry carries the residency derived from its own reconciled
+            // breakdown, so the announced claim and snapshot describe one instant
+            // (issue #337).
+            let expert_residency = mlx_memory_telemetry
+                .as_ref()
+                .and_then(|telemetry| telemetry.expert_residency_telemetry())
+                .unwrap_or_else(|| {
+                    model.expert_residency_telemetry_for_breakdown(
+                        &crate::MlxActiveMemoryBreakdown::default(),
+                    )
+                });
             return Ok(ActiveRequestAdvance::Continue(
                 crate::GeneratedToken::GenerationPreparationStarted {
                     total_layer_count: expert_residency.total_layer_count,
@@ -132,21 +143,16 @@ impl Qwen3_5EngineState {
                 .model
                 .as_ref()
                 .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            let mlx_memory_snapshot = if !self.adaptive_ram_growth_guard_enabled {
+            let completed_forward_memory = if !self.adaptive_ram_growth_guard_enabled {
                 None
             } else {
-                Some(
-                    model
-                        .runtime()
-                        .memory_snapshot()
-                        .map_err(qwen3_5_runtime_error)?,
-                )
+                Some(capture_completed_forward_memory_observation(model)?)
             };
             let generated_token_emission = self.build_generated_token_emission(
                 model,
                 active_request,
                 queued_prediction_token_id,
-                mlx_memory_snapshot.as_ref(),
+                completed_forward_memory.as_ref(),
             )?;
             return if generated_token_emission.is_terminal {
                 Ok(ActiveRequestAdvance::Complete(
@@ -320,13 +326,8 @@ impl Qwen3_5EngineState {
                 .model
                 .as_ref()
                 .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            let mlx_memory_snapshot = if self.adaptive_ram_growth_guard_enabled {
-                Some(
-                    model
-                        .runtime()
-                        .memory_snapshot()
-                        .map_err(qwen3_5_runtime_error)?,
-                )
+            let completed_forward_memory = if self.adaptive_ram_growth_guard_enabled {
+                Some(capture_completed_forward_memory_observation(model)?)
             } else {
                 None
             };
@@ -334,7 +335,7 @@ impl Qwen3_5EngineState {
                 model,
                 active_request,
                 current_generated_token_id,
-                mlx_memory_snapshot.as_ref(),
+                completed_forward_memory.as_ref(),
             )?;
             return Ok(ActiveRequestAdvance::Complete(
                 generated_token_emission.generated_token,
@@ -407,7 +408,7 @@ impl Qwen3_5EngineState {
                 )
                 .map_err(InferenceEngineError::from)?;
         }
-        let mlx_memory_snapshot = collect_completed_forward_memory_snapshot(
+        let completed_forward_memory = collect_completed_forward_memory_snapshot(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context
                 .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
@@ -423,7 +424,7 @@ impl Qwen3_5EngineState {
             model,
             active_request,
             current_generated_token_id,
-            mlx_memory_snapshot.as_ref(),
+            Some(&completed_forward_memory),
         )?;
         if generated_token_emission.is_terminal {
             Ok(ActiveRequestAdvance::Complete(

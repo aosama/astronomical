@@ -28,6 +28,30 @@ use crate::{
 
 use super::qwen3_5_runtime_error;
 
+/// A memory observation whose raw MLX snapshot is captured at one owner-thread
+/// instant, before any learning or reclamation this path may trigger. The
+/// residency claim paired with this snapshot is derived from the reconciled
+/// breakdown of this exact snapshot at emission time, so a promotion or demote
+/// can never publish a claim that disagrees with its own measurement (issue
+/// #337).
+#[derive(Debug)]
+pub(in crate::qwen3_5) struct CompletedForwardMemoryObservation {
+    pub(in crate::qwen3_5) mlx_memory_snapshot: MlxMemorySnapshot,
+}
+
+/// Captures the raw MLX snapshot at one instant.
+pub(in crate::qwen3_5) fn capture_completed_forward_memory_observation(
+    model: &Qwen3_5Model,
+) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
+    let mlx_memory_snapshot = model
+        .runtime()
+        .memory_snapshot()
+        .map_err(qwen3_5_runtime_error)?;
+    Ok(CompletedForwardMemoryObservation {
+        mlx_memory_snapshot,
+    })
+}
+
 /// Collects post-forward MLX telemetry and records adaptive learning when enabled.
 ///
 /// The returned snapshot is also used for user-visible memory telemetry. Returning
@@ -42,19 +66,20 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
     retained_expert_payload_bytes_before_growth: u64,
     exact_temporary_workspace_bytes: usize,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<Option<MlxMemorySnapshot>, InferenceEngineError> {
-    let memory_snapshot_after_growth = performance_attribution.measure_operation(
+) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
+    // The snapshot is captured under attribution so the published pair describes
+    // one instant: the residency claim is derived from this exact snapshot's
+    // reconciled breakdown when the emission is built. Learning and reclamation
+    // below may demote or retune expert ownership; the next observation captures
+    // that state on its own.
+    let observation = performance_attribution.measure_operation(
         PerformanceOperation::CompletedForwardMemorySnapshot,
-        |_performance_attribution| {
-            model
-                .runtime()
-                .memory_snapshot()
-                .map_err(qwen3_5_runtime_error)
-        },
+        |_performance_attribution| capture_completed_forward_memory_observation(model),
     )?;
     if active_memory_bytes_before_growth == usize::MAX {
-        return Ok(Some(memory_snapshot_after_growth));
+        return Ok(observation);
     }
+    let memory_snapshot_after_growth = observation.mlx_memory_snapshot;
 
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         adaptive_ram_growth_context,
@@ -90,7 +115,9 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
         );
         record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
     }
-    Ok(Some(memory_snapshot_after_growth))
+    Ok(CompletedForwardMemoryObservation {
+        mlx_memory_snapshot: memory_snapshot_after_growth,
+    })
 }
 
 /// Records adaptive learning for a completed operation that needs no snapshot result.

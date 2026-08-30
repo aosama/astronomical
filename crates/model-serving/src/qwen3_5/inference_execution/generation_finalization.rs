@@ -36,14 +36,21 @@ impl Qwen3_5EngineState {
             })?;
         let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
             .map_err(|_| super::fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
+        let active_memory_breakdown =
+            model.finalized_active_memory_breakdown(active_memory_bytes, 0);
         Ok(Some(
             MlxMemoryTelemetry::new(
                 active_memory_bytes,
                 allocator_cache_memory_bytes,
                 peak_memory_bytes,
-                model.finalized_active_memory_breakdown(active_memory_bytes, 0),
+                active_memory_breakdown,
             )
-            .with_expert_residency_telemetry(model.expert_residency_telemetry()),
+            // The claim is derived from the breakdown reconciling this exact
+            // snapshot, so the published pair cannot straddle a promotion or
+            // demote (issue #337).
+            .with_expert_residency_telemetry(
+                model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+            ),
         ))
     }
 
@@ -171,7 +178,6 @@ impl Qwen3_5EngineState {
             return GenerationFinalization::default();
         };
         let expert_memory_mode = Some(model.expert_memory_mode());
-        let expert_residency_telemetry = Some(model.expert_residency_telemetry());
         let mlx_memory_telemetry = match performance_attribution.measure_operation(
             PerformanceOperation::FinalizedMlxMemorySnapshot,
             |_performance_attribution| model.runtime().memory_snapshot(),
@@ -185,18 +191,31 @@ impl Qwen3_5EngineState {
                     Ok(active_memory_bytes),
                     Ok(allocator_cache_memory_bytes),
                     Ok(peak_memory_bytes),
-                ) => Some(MlxMemoryTelemetry::new(
-                    active_memory_bytes,
-                    allocator_cache_memory_bytes,
-                    peak_memory_bytes,
-                    model.finalized_active_memory_breakdown(active_memory_bytes, 0),
-                )),
+                ) => {
+                    // The finalized claim derives from the breakdown reconciling
+                    // this exact snapshot, so the pair cannot straddle a
+                    // promotion or demote (issue #337).
+                    let active_memory_breakdown =
+                        model.finalized_active_memory_breakdown(active_memory_bytes, 0);
+                    let expert_residency_telemetry = Some(
+                        model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+                    );
+                    (
+                        Some(MlxMemoryTelemetry::new(
+                            active_memory_bytes,
+                            allocator_cache_memory_bytes,
+                            peak_memory_bytes,
+                            active_memory_breakdown,
+                        )),
+                        expert_residency_telemetry,
+                    )
+                }
                 memory_counter_results => {
                     tracing::warn!(
                         ?memory_counter_results,
                         "could not publish finalized MLX memory because a runtime counter exceeds the u64 range"
                     );
-                    None
+                    (None, None)
                 }
             },
             Err(memory_snapshot_error) => {
@@ -204,9 +223,10 @@ impl Qwen3_5EngineState {
                     error = %memory_snapshot_error,
                     "could not capture finalized MLX memory after expert residency recovery"
                 );
-                None
+                (None, None)
             }
         };
+        let (mlx_memory_telemetry, expert_residency_telemetry) = mlx_memory_telemetry;
         GenerationFinalization::new(
             expert_memory_mode,
             mlx_memory_telemetry,
