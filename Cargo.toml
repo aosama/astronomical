@@ -26,7 +26,7 @@ license = "Apache-2.0"
 publish = false
 repository = "https://github.com/aosama/astronomical"
 rust-version = "1.97.1"
-version = "0.2.25"
+version = "0.2.26"
 
 [workspace.dependencies]
 async-openai = { version = "0.41.3", default-features = false, features = ["byot", "chat-completion"] }
