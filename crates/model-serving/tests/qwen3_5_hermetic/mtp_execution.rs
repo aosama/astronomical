@@ -215,12 +215,14 @@ fn should_reject_verification_vectors_that_do_not_match_the_effective_depth() {
 
 #[test]
 fn should_keep_verification_transient_arrays_independent_of_boundary_snapshots() {
-    let depth_one = qwen3_5_mtp_verification_transient_array_bytes(MtpDraftDepth::DEPTH_ONE, 8, 4)
-        .expect("depth-one transient arrays should not overflow");
+    let depth_one =
+        qwen3_5_mtp_verification_transient_array_bytes(MtpDraftDepth::DEPTH_ONE, 8, 4, false)
+            .expect("depth-one transient arrays should not overflow");
     let depth_two = qwen3_5_mtp_verification_transient_array_bytes(
         MtpDraftDepth::new(2).expect("depth two should be valid"),
         8,
         4,
+        false,
     )
     .expect("depth-two transient arrays should not overflow");
     let projection = MtpMemoryProjection::new(

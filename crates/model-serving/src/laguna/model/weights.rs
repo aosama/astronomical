@@ -295,6 +295,32 @@ impl LagunaNativeWeights {
         self.vectors.get(&layer_id(layer_index, role))
     }
 
+    /// Returns the routed-expert payload bytes across every bound layer.
+    ///
+    /// A fully resident MoE keeps its routed experts in the bound weights with
+    /// no paging plan, so the residency telemetry can report the roster payload
+    /// directly from ownership instead of paging geometry.
+    pub(in crate::laguna) fn resident_routed_expert_payload_bytes(&self) -> u64 {
+        let mut routed_payload_bytes = 0_u64;
+        for (tensor_id, linear) in &self.linears {
+            if matches!(
+                tensor_id,
+                LagunaTensorId::Layer {
+                    role: LagunaLayerTensorRole::RoutedExpert(_),
+                    ..
+                }
+            ) {
+                routed_payload_bytes =
+                    routed_payload_bytes.saturating_add(linear.payload_byte_count());
+            }
+        }
+        for fused_gate_up in self.fused_routed_gate_up.values() {
+            routed_payload_bytes =
+                routed_payload_bytes.saturating_add(fused_gate_up.payload_byte_count());
+        }
+        routed_payload_bytes
+    }
+
     pub(in crate::laguna) fn fused_routed_gate_up(
         &self,
         layer_index: usize,

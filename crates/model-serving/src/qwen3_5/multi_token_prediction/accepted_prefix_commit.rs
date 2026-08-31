@@ -7,8 +7,9 @@ use crate::{InferenceEngineError, PerformanceOperation};
 
 use super::MtpVerificationDecision;
 use super::request_state::Qwen3_5MtpRequestStateAllocationCheckpoint;
-use super::target_verification::TargetVerificationOutput;
 use super::verified_emission_queue::{VerifiedEmissionQueue, VerifiedTargetFrontier};
+use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
+use crate::qwen3_5::model::Qwen3_5TargetForwardOutput;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn commit_accepted_mtp_prefix(
@@ -20,7 +21,8 @@ pub(crate) fn commit_accepted_mtp_prefix(
     predictor_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
     draft_token_ids: &[u32],
     decision: &MtpVerificationDecision,
-    mut verification_output: TargetVerificationOutput,
+    mut prefix_boundaries: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    target_forward_output: Qwen3_5TargetForwardOutput,
 ) -> Result<(), InferenceEngineError> {
     let accepted_count = usize::from(decision.accepted_count());
     let retained_target_input_count = accepted_count + 1;
@@ -32,11 +34,7 @@ pub(crate) fn commit_accepted_mtp_prefix(
             })?)
             .ok_or_else(|| fatal_engine_error("retained MTP target position overflowed"))?;
 
-    let mut prefix_boundaries = verification_output
-        .prefix_boundaries
-        .drain(..)
-        .map(Some)
-        .collect::<Vec<_>>();
+    let mut prefix_boundaries = prefix_boundaries.drain(..).map(Some).collect::<Vec<_>>();
     if retained_target_input_count < verifier_input_count {
         let retained_boundary = prefix_boundaries
             .get_mut(accepted_count)
@@ -117,12 +115,11 @@ pub(crate) fn commit_accepted_mtp_prefix(
         predictor_checkpoint,
         draft_token_ids.len(),
         &draft_token_ids[..accepted_count],
-        &verification_output,
+        &target_forward_output,
     )?;
     let retained_hidden_row_index = i32::try_from(accepted_count)
         .map_err(|_| fatal_engine_error("MTP retained hidden row exceeds Int32"))?;
-    let retained_target_hidden = verification_output
-        .target_forward_output
+    let retained_target_hidden = target_forward_output
         .pre_final_normalization_hidden_state_at(model.runtime(), retained_hidden_row_index)
         .map_err(qwen3_5_runtime_error)?;
     if let Some(prediction_request) = active_request.optional_prediction_session_mut() {
@@ -140,7 +137,7 @@ fn commit_confirmed_predictor_history(
     predictor_checkpoint: Qwen3_5MtpRequestStateAllocationCheckpoint,
     proposed_draft_count: usize,
     accepted_draft_token_ids: &[u32],
-    verification_output: &TargetVerificationOutput,
+    target_forward_output: &Qwen3_5TargetForwardOutput,
 ) -> Result<(), InferenceEngineError> {
     active_request.measure_operation_with_request(
         PerformanceOperation::MtpPredictorCommitReplay,
@@ -190,8 +187,7 @@ fn commit_confirmed_predictor_history(
                                 .runtime()
                                 .array_from_u32(&[*accepted_token_id], &[1, 1])
                                 .map_err(qwen3_5_runtime_error)?;
-                            let target_hidden_row = verification_output
-                                .target_forward_output
+                            let target_hidden_row = target_forward_output
                                 .pre_final_normalization_hidden_state_at(
                                     model.runtime(),
                                     i32::try_from(accepted_position).map_err(|_| {

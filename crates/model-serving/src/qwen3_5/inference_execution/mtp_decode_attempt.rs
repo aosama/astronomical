@@ -79,7 +79,7 @@ impl Qwen3_5EngineState {
             let boundary_snapshot_bytes =
                 verification_boundary_snapshot_bytes(model, candidate_depth)?;
             let verification_transient_array_bytes =
-                verification_transient_array_bytes(model, candidate_depth)?;
+                verification_transient_array_bytes(model, active_request, candidate_depth)?;
             // Admission charges snapshots and transient arrays together because they coexist.
             // Attribution records them on separate counters so one owner cannot hide the other.
             let verification_workspace_bytes = boundary_snapshot_bytes

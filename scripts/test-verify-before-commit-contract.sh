@@ -93,6 +93,19 @@ printf '%s\n' "$(basename "$0") $*" >> "${ASTRONOMICAL_TEST_SCRIPT_LOG:?}"
 SCRIPT
         chmod +x "${sandbox_scripts_directory}/${script_name}"
     done
+    # The direct-MLX lane runs a real script that owns its Cargo target
+    # coordination, so the sandbox fake mirrors its one bounded Cargo run.
+    cat > "${sandbox_scripts_directory}/test-direct-mlx.sh" <<'SCRIPT'
+#!/usr/bin/env sh
+set -eu
+printf '%s\n' "test-direct-mlx.sh $*" >> "${ASTRONOMICAL_TEST_SCRIPT_LOG:?}"
+timeout --foreground -k 5s 120s \
+    cargo --verbose test \
+        --package astronomical-model-serving \
+        --features astronomical-model-serving/direct-mlx \
+        --test direct_mlx_tests
+SCRIPT
+    chmod +x "${sandbox_scripts_directory}/test-direct-mlx.sh"
 }
 
 assert_cargo_alias_contract() {
@@ -191,8 +204,8 @@ main() {
             run_verification_script "${sandbox_scripts_directory}/verify-before-commit.sh" "$verification_output"
     )
 
-    [ "$(wc -l < "$cargo_log" | tr -d '[:space:]')" -eq 3 ] || {
-        print_error "verification did not use exactly three Cargo invocations including formatting"
+    [ "$(wc -l < "$cargo_log" | tr -d '[:space:]')" -eq 4 ] || {
+        print_error "verification did not use exactly four Cargo invocations including formatting"
         exit 1
     }
     grep -F "fmt --all -- --check|pwd=${sandbox_repository}|target=${custom_target_directory}|wrapper=caller-selected-wrapper" "$cargo_log" >/dev/null || {
@@ -207,6 +220,10 @@ main() {
         print_error "Rust tests were not one combined bounded execution invocation"
         exit 1
     }
+    grep -F -- '--features astronomical-model-serving/direct-mlx' "$cargo_log" >/dev/null || {
+        print_error "the direct-MLX lane did not run through the disposable Cargo target coordinator"
+        exit 1
+    }
     [ ! -e "$sccache_log" ] || {
         print_error "verification invoked sccache"
         exit 1
@@ -215,7 +232,11 @@ main() {
         print_error "Rust compilation did not retain its separate timeout"
         exit 1
     }
-    [ "$(grep -c '^120s|' "$timeout_log")" -eq 16 ] || {
+    grep -F '600s|scripts/test-direct-mlx.sh' "$timeout_log" >/dev/null || {
+        print_error "the direct-MLX lane did not retain its separate compile-class timeout"
+        exit 1
+    }
+    [ "$(grep -c '^120s|' "$timeout_log")" -eq 17 ] || {
         print_error "verification did not bound every non-compilation step to 120 seconds"
         exit 1
     }
