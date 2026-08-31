@@ -5,6 +5,7 @@ use crate::serving_acceptance::support::mtp_support::run_one_layer_mtp_head_forw
 mod dense_head;
 mod engine_support;
 mod lifecycle;
+mod temperature_one_measurement;
 
 use engine_support::{
     generate_with_mtp_engine, installed_model_has_complete_mtp_inventory,

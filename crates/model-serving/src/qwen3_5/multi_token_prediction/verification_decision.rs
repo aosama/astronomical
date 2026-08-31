@@ -1,7 +1,6 @@
 use thiserror::Error;
 
 use super::{MtpDepthDowngradeReason, MtpDraftDepth};
-
 /// Target-authoritative outcome of one fixed-depth MTP verification window.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MtpVerificationDecision {
@@ -57,10 +56,35 @@ impl MtpVerificationDecision {
     }
 }
 
-/// Invalid bounded vectors supplied to the pure verifier decision boundary.
+/// Invalid bounded inputs supplied to a pure verifier decision boundary.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-#[error("MTP verification vectors do not match the effective draft depth")]
-pub struct MtpVerificationDecisionError;
+pub enum MtpVerificationDecisionError {
+    #[error("MTP verification vectors do not match the effective draft depth")]
+    VectorLengthMismatch,
+    #[error("an untruncated sampled verification window requires the residual or bonus token")]
+    MissingPostPrefixToken,
+}
+
+/// Speculative acceptance `min(1, p/q)` for one drafted token.
+///
+/// `p` is the target distribution's probability of the drafted token and `q` is
+/// the draft distribution's probability of emitting it. The ratio caps at one so
+/// a target that favors the draft never adds rejection cost, and a token the
+/// draft distribution could not have produced is an automatic rejection.
+#[must_use]
+pub fn qwen3_5_mtp_sampled_acceptance_probability(
+    target_token_probability: f32,
+    draft_token_probability: f32,
+) -> f32 {
+    if draft_token_probability <= 0.0 || !draft_token_probability.is_finite() {
+        return 0.0;
+    }
+    if !target_token_probability.is_finite() || target_token_probability >= draft_token_probability
+    {
+        return 1.0;
+    }
+    target_token_probability / draft_token_probability
+}
 
 /// Computes longest-prefix acceptance and truncates accepted output at the first EOS.
 pub fn qwen3_5_mtp_verification_decision(
@@ -73,7 +97,7 @@ pub fn qwen3_5_mtp_verification_decision(
     if draft_token_ids.len() != usize::from(proposed_count)
         || target_token_ids.len() != usize::from(proposed_count) + 1
     {
-        return Err(MtpVerificationDecisionError);
+        return Err(MtpVerificationDecisionError::VectorLengthMismatch);
     }
 
     let matched_prefix_count = draft_token_ids
@@ -81,17 +105,75 @@ pub fn qwen3_5_mtp_verification_decision(
         .zip(target_token_ids)
         .take_while(|(draft_token_id, target_token_id)| draft_token_id == target_token_id)
         .count();
-    let first_accepted_eos_position = draft_token_ids[..matched_prefix_count]
+    let coin_accepted_prefix_count = matched_prefix_count;
+    let first_accepted_eos_position = draft_token_ids[..coin_accepted_prefix_count]
         .iter()
         .position(|draft_token_id| end_of_sequence_token_ids.contains(draft_token_id));
-    let accepted_count =
-        first_accepted_eos_position.map_or(matched_prefix_count, |eos_position| eos_position + 1);
+    let accepted_count = first_accepted_eos_position
+        .map_or(coin_accepted_prefix_count, |eos_position| eos_position + 1);
     let was_eos_truncated = first_accepted_eos_position.is_some();
     let pending_target_token_id = if was_eos_truncated {
         None
     } else {
         target_token_ids.get(accepted_count).copied()
     };
+
+    Ok(MtpVerificationDecision {
+        effective_depth,
+        proposed_count,
+        accepted_count: accepted_count as u8,
+        pending_target_token_id,
+        was_eos_truncated,
+        operational_fallback: false,
+    })
+}
+
+/// Coin-backed sampled verification of one fixed-depth MTP window.
+///
+/// `accepted_coin_flags` carries one acceptance outcome per drafted token in
+/// draft order; `post_prefix_token_id` is the residual re-sample after a
+/// rejection or the sampled bonus after a fully accepted window. Accepted-prefix
+/// and EOS-truncation semantics mirror [`qwen3_5_mtp_verification_decision`]
+/// exactly, so both decoding modes share one commit and emission path.
+///
+/// The distribution-equivalence guarantee of speculative sampling is preserved
+/// because the acceptance coin at every position is drawn as Bernoulli of
+/// [`qwen3_5_mtp_sampled_acceptance_probability`] and a rejection resamples the
+/// emitted token from mass proportional to `max(0, p − q)` over the same
+/// position distribution.
+#[must_use]
+pub fn qwen3_5_mtp_sampled_verification_decision(
+    effective_depth: MtpDraftDepth,
+    draft_token_ids: &[u32],
+    accepted_coin_flags: &[bool],
+    post_prefix_token_id: Option<u32>,
+    end_of_sequence_token_ids: &[u32],
+) -> Result<MtpVerificationDecision, MtpVerificationDecisionError> {
+    let proposed_count = effective_depth.get();
+    if draft_token_ids.len() != usize::from(proposed_count)
+        || accepted_coin_flags.len() != usize::from(proposed_count)
+    {
+        return Err(MtpVerificationDecisionError::VectorLengthMismatch);
+    }
+    let post_prefix_token_id =
+        post_prefix_token_id.ok_or(MtpVerificationDecisionError::MissingPostPrefixToken)?;
+
+    let coin_accepted_prefix_count = accepted_coin_flags
+        .iter()
+        .take_while(|accepted| **accepted)
+        .count();
+    let first_accepted_eos_position = draft_token_ids[..coin_accepted_prefix_count]
+        .iter()
+        .position(|draft_token_id| end_of_sequence_token_ids.contains(draft_token_id));
+    let (accepted_count, was_eos_truncated, pending_target_token_id) =
+        match first_accepted_eos_position {
+            Some(eos_position) => (eos_position + 1, true, None),
+            None => (
+                coin_accepted_prefix_count,
+                false,
+                Some(post_prefix_token_id),
+            ),
+        };
 
     Ok(MtpVerificationDecision {
         effective_depth,

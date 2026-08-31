@@ -1,4 +1,9 @@
 //! Dynamic 2-4 row target verification with exact prefix-boundary capture.
+//!
+//! The window forward is shared between the greedy (argmax) and sampled
+//! (`min(1, p/q)`) verifiers; each wrapper evaluates the window's lazy graph
+//! with its own decision arrays and completes the boundary checkpoints after
+//! that evaluation so every recurrent snapshot tensor is materialized.
 
 use std::collections::HashMap;
 
@@ -19,13 +24,46 @@ pub(crate) struct TargetVerificationOutput {
     pub(crate) prefix_boundaries: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 }
 
-pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_attribution(
+/// One verification-window forward before any token selection.
+pub(super) struct MtpVerificationWindow {
+    pub(super) target_forward_output: Qwen3_5TargetForwardOutput,
+    pub(super) boundary_collector: Option<Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector>,
+    pub(super) completed_verifier_prefix_rows: Vec<i32>,
+}
+
+/// Materializes the window's boundary snapshots after the caller's evaluation.
+pub(super) fn completed_verification_prefix_boundaries(
+    boundary_collector: Option<Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector>,
+    completed_verifier_prefix_rows: &[i32],
+    token_ids: &[u32],
+) -> Result<Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+    let prefix_boundaries = match boundary_collector {
+        Some(boundary_collector) => boundary_collector.complete()?,
+        None => completed_verifier_prefix_rows
+            .iter()
+            .map(
+                |completed_rows| Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
+                    completed_prefill_chunk_tokens: *completed_rows as usize,
+                    recurrent_snapshot_tensors: HashMap::new(),
+                },
+            )
+            .collect(),
+    };
+    if prefix_boundaries.len() + 1 != token_ids.len() {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "target verification returned an unexpected boundary count",
+        });
+    }
+    Ok(prefix_boundaries)
+}
+
+pub(in crate::qwen3_5) fn forward_mtp_verification_window_with_performance_attribution(
     model: &Qwen3_5Model,
     token_ids: &[u32],
     starting_position_tokens: u32,
     request_decoder_state: &mut RequestDecoderStateStack,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<TargetVerificationOutput, Qwen3_5ExecutionError> {
+) -> Result<MtpVerificationWindow, Qwen3_5ExecutionError> {
     if !(2..=4).contains(&token_ids.len()) {
         return Err(Qwen3_5ExecutionError::InvalidInput {
             description: "target verification window requires two through four target tokens",
@@ -77,6 +115,36 @@ pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_at
         performance_attribution,
         true,
     )?;
+    if target_forward_output.all_position_logits().is_none() {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "target verification forward did not retain all-position logits",
+        });
+    }
+    Ok(MtpVerificationWindow {
+        target_forward_output,
+        boundary_collector,
+        completed_verifier_prefix_rows,
+    })
+}
+
+pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_attribution(
+    model: &Qwen3_5Model,
+    token_ids: &[u32],
+    starting_position_tokens: u32,
+    request_decoder_state: &mut RequestDecoderStateStack,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<TargetVerificationOutput, Qwen3_5ExecutionError> {
+    let MtpVerificationWindow {
+        target_forward_output,
+        boundary_collector,
+        completed_verifier_prefix_rows,
+    } = forward_mtp_verification_window_with_performance_attribution(
+        model,
+        token_ids,
+        starting_position_tokens,
+        request_decoder_state,
+        performance_attribution,
+    )?;
     let all_position_logits =
         target_forward_output
             .all_position_logits()
@@ -97,23 +165,11 @@ pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_at
             Ok(target_token_indices.to_vec_u32()?)
         },
     )?;
-    let prefix_boundaries = match boundary_collector {
-        Some(boundary_collector) => boundary_collector.complete()?,
-        None => completed_verifier_prefix_rows
-            .into_iter()
-            .map(
-                |completed_rows| Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-                    completed_prefill_chunk_tokens: completed_rows as usize,
-                    recurrent_snapshot_tensors: HashMap::new(),
-                },
-            )
-            .collect(),
-    };
-    if prefix_boundaries.len() + 1 != token_ids.len() {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "target verification returned an unexpected boundary count",
-        });
-    }
+    let prefix_boundaries = completed_verification_prefix_boundaries(
+        boundary_collector,
+        &completed_verifier_prefix_rows,
+        token_ids,
+    )?;
     Ok(TargetVerificationOutput {
         target_forward_output,
         target_token_ids,

@@ -68,7 +68,8 @@ pub(super) fn terminal_optional_prefill_error_is_fallback(
         | Qwen3_5ExecutionError::DecoderLayerCountMismatch { .. }
         | Qwen3_5ExecutionError::InvalidRequestDecoderState { .. }
         | Qwen3_5ExecutionError::PersistentPromptCache(_)
-        | Qwen3_5ExecutionError::PersistentPromptCacheStateBridge(_) => false,
+        | Qwen3_5ExecutionError::PersistentPromptCacheStateBridge(_)
+        | Qwen3_5ExecutionError::SampledDecoding(_) => false,
     }
 }
 

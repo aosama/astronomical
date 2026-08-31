@@ -9,7 +9,7 @@ use crate::expert_paging::{
     ExpertWeightMemoryCacheStatistics, ExpertWeightPage, RetainedExpertPageCache,
     RetainedExpertReclamation,
 };
-use crate::laguna::normalization::LagunaTargetContract;
+use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetContract};
 use crate::laguna::paging::{LagunaExpertPagingPlan, LagunaExpertWeightPage};
 use crate::memory::{
     ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, RequestExpertResidency,
@@ -26,16 +26,21 @@ use super::expert_coverage::{
 use super::weights::LagunaNativeWeights;
 
 /// Last sparse-expert grain executed by the model.
+///
+/// `expert_count` carries the number of routed experts the grain materialized so
+/// residency telemetry can report the same grain as the payload figures.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::laguna) enum LagunaLastExpertForward {
     #[default]
     None,
     StreamedCompleteLayer {
         layer_count: u32,
+        expert_count: u32,
         payload_bytes: u64,
     },
     StreamedRoutedPage {
         layer_count: u32,
+        expert_count: u32,
         payload_bytes: u64,
     },
 }
@@ -374,20 +379,43 @@ impl LagunaExpertResidencyState {
     ) -> ExpertResidencyTelemetry {
         let statistics = self.expert_weight_memory_cache_statistics(contract, weights);
         let total_layer_count = u32::try_from(sparse_layer_count(contract)).unwrap_or(u32::MAX);
+        let last_forward = *self.last_forward.borrow();
         let retained_expert_count =
             if self.expert_memory_mode(contract, weights) == ExpertMemoryMode::Resident {
-                self.paging_plan.as_ref().map_or(0, |paging_plan| {
-                    paging_plan
-                        .sparse_layers()
-                        .iter()
-                        .map(crate::laguna::paging::LagunaSparseLayerPagingPlan::expert_capacity)
-                        .sum()
-                })
+                // Natively resident experts live in the bound weights, which a
+                // fully resident model carries without any paging plan; the
+                // roster therefore comes from the normalized geometry.
+                contract
+                    .layers()
+                    .iter()
+                    .filter_map(|layer_descriptor| match layer_descriptor.feed_forward() {
+                        LagunaFeedForwardDescriptor::Moe(moe_descriptor) => {
+                            Some(u64::from(moe_descriptor.expert_count()))
+                        }
+                        LagunaFeedForwardDescriptor::Dense(_) => None,
+                    })
+                    .sum::<u64>()
             } else {
-                self.retained_layers
+                let retained_cache_expert_count: u64 = self
+                    .retained_layers
                     .borrow()
                     .as_ref()
                     .map_or(0, RetainedExpertPageCache::resident_expert_count)
+                    as u64;
+                if retained_cache_expert_count > 0 {
+                    retained_cache_expert_count
+                } else {
+                    match last_forward {
+                        // A streamed page that nothing retained is still the
+                        // resident expert payload this forward materialized,
+                        // which is the same grain the payload bytes report.
+                        LagunaLastExpertForward::StreamedCompleteLayer { expert_count, .. }
+                        | LagunaLastExpertForward::StreamedRoutedPage { expert_count, .. } => {
+                            u64::from(expert_count)
+                        }
+                        LagunaLastExpertForward::None => 0,
+                    }
+                }
             };
         ExpertResidencyTelemetry {
             total_layer_count,
@@ -417,11 +445,14 @@ impl LagunaExpertResidencyState {
         ) = match (mode, last_forward) {
             (ExpertMemoryMode::Resident, _) => {
                 let complete_layer_count = resident_sparse_layer_count(contract, weights);
-                let native_complete_layer_payload_byte_count = self
-                    .paging_plan
-                    .as_ref()
-                    .and_then(|plan| resident_complete_payload_bytes(plan, contract, weights))
-                    .unwrap_or(0);
+                let native_complete_layer_payload_byte_count = match self.paging_plan.as_ref() {
+                    Some(plan) => {
+                        resident_complete_payload_bytes(plan, contract, weights).unwrap_or(0)
+                    }
+                    // Without a paging plan every routed payload is the bound
+                    // weight ownership itself.
+                    None => weights.resident_routed_expert_payload_bytes(),
+                };
                 (
                     complete_layer_count.saturating_add(cache_statistics.complete_layer_count),
                     native_complete_layer_payload_byte_count
@@ -441,6 +472,7 @@ impl LagunaExpertResidencyState {
                 LagunaLastExpertForward::StreamedCompleteLayer {
                     layer_count,
                     payload_bytes,
+                    ..
                 },
             ) => (layer_count as usize, payload_bytes, 0, 0),
             (
@@ -448,6 +480,7 @@ impl LagunaExpertResidencyState {
                 LagunaLastExpertForward::StreamedRoutedPage {
                     layer_count,
                     payload_bytes,
+                    ..
                 },
             ) => (0, 0, layer_count as usize, payload_bytes),
             _ => (0, 0, 0, 0),
