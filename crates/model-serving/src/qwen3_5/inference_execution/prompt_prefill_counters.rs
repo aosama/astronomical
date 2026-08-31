@@ -4,7 +4,7 @@ use super::engine_request::Qwen3_5EngineRequest;
 use super::persistent_prompt_cache_capture::{
     PromptStatePersistenceOwner, required_prompt_state_persistence_failure,
 };
-use super::{Qwen3_5SpeculativePrefillChunckMode, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5SpeculativePrefillChunkMode, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::Qwen3_5Model;
 use crate::qwen3_5::multi_token_prediction::record_terminal_history_token_count;
 
@@ -18,7 +18,7 @@ pub(super) struct SparseTargetGpuInputs {
 pub(super) fn prepare_sparse_target_gpu_inputs(
     active_request: &mut Qwen3_5EngineRequest,
     model: &Qwen3_5Model,
-    selected_speculative_prefill_positions_for_current_chunck: &[usize],
+    selected_speculative_prefill_positions_for_current_chunk: &[usize],
     speculative_prefill_target_token_count: usize,
 ) -> Result<SparseTargetGpuInputs, crate::InferenceEngineError> {
     let full_prompt_token_indices_on_gpu = active_request
@@ -28,7 +28,7 @@ pub(super) fn prepare_sparse_target_gpu_inputs(
             fatal_engine_error("speculative-prefill GPU prompt token indices are unavailable")
         })?;
     let selected_prompt_position_offsets: Vec<i32> =
-        selected_speculative_prefill_positions_for_current_chunck
+        selected_speculative_prefill_positions_for_current_chunk
             .iter()
             .map(|selected_prompt_position| {
                 i32::try_from(*selected_prompt_position).map_err(|_| {
@@ -53,7 +53,7 @@ pub(super) fn prepare_sparse_target_gpu_inputs(
         i32::try_from(speculative_prefill_target_token_count).map_err(|_| {
             fatal_engine_error("speculative-prefill selected token count exceeds the MLX range")
         })?;
-    let selected_prompt_token_ids = selected_speculative_prefill_positions_for_current_chunck
+    let selected_prompt_token_ids = selected_speculative_prefill_positions_for_current_chunk
         .iter()
         .map(|selected_prompt_position| {
             active_request
@@ -93,9 +93,9 @@ pub(super) fn record_sparse_target_and_mode_counters(
     model: &Qwen3_5Model,
     speculative_prefill_target_is_active: bool,
     speculative_prefill_target_token_count: usize,
-    speculative_prefill_chunck_mode: Qwen3_5SpeculativePrefillChunckMode,
+    speculative_prefill_chunk_mode: Qwen3_5SpeculativePrefillChunkMode,
     prefill_token_count: usize,
-    all_completed_prefill_chunck_tokens: &[usize],
+    all_completed_prefill_chunk_tokens: &[usize],
     terminal_history_token_count: usize,
     boundary_checkpoints: &mut Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 ) -> Result<(), crate::InferenceEngineError> {
@@ -115,7 +115,7 @@ pub(super) fn record_sparse_target_and_mode_counters(
                 Some(current_target_expert_payload_bytes);
         }
         active_request.performance_attribution.record_counter(
-            PerformanceCounter::SpeculativePrefillSparseTargetChunckCount,
+            PerformanceCounter::SpeculativePrefillSparseTargetChunkCount,
             1,
         );
         active_request.performance_attribution.record_counter(
@@ -123,14 +123,14 @@ pub(super) fn record_sparse_target_and_mode_counters(
             u64::try_from(speculative_prefill_target_token_count).unwrap_or(u64::MAX),
         );
     }
-    if all_completed_prefill_chunck_tokens.last().copied() == Some(prefill_token_count) {
+    if all_completed_prefill_chunk_tokens.last().copied() == Some(prefill_token_count) {
         let recurrent_snapshot_tensors = active_request
             .request_decoder_state
             .extract_persistent_prompt_cache_recurrent_snapshot_tensors();
         match recurrent_snapshot_tensors {
             Ok(recurrent_snapshot_tensors) => {
                 boundary_checkpoints.push(Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-                    completed_prefill_chunck_tokens: prefill_token_count,
+                    completed_prefill_chunk_tokens: prefill_token_count,
                     recurrent_snapshot_tensors,
                 });
             }
@@ -144,10 +144,10 @@ pub(super) fn record_sparse_target_and_mode_counters(
             }
         }
     }
-    match speculative_prefill_chunck_mode {
-        Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix => {
+    match speculative_prefill_chunk_mode {
+        Qwen3_5SpeculativePrefillChunkMode::TargetOnlyPrefix => {
             active_request.performance_attribution.record_counter(
-                PerformanceCounter::SpeculativePrefillTargetOnlyPrefixChunckCount,
+                PerformanceCounter::SpeculativePrefillTargetOnlyPrefixChunkCount,
                 1,
             );
             active_request.performance_attribution.record_counter(
@@ -155,14 +155,14 @@ pub(super) fn record_sparse_target_and_mode_counters(
                 u64::try_from(prefill_token_count).unwrap_or(u64::MAX),
             );
         }
-        Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture => {
+        Qwen3_5SpeculativePrefillChunkMode::TerminalAdditionalHistoryCapture => {
             active_request.performance_attribution.record_counter(
-                PerformanceCounter::SpeculativePrefillTerminalCaptureChunckCount,
+                PerformanceCounter::SpeculativePrefillTerminalCaptureChunkCount,
                 1,
             );
             record_terminal_history_token_count(active_request, terminal_history_token_count);
         }
-        Qwen3_5SpeculativePrefillChunckMode::OrdinaryTarget => {}
+        Qwen3_5SpeculativePrefillChunkMode::OrdinaryTarget => {}
     }
     Ok(())
 }

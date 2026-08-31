@@ -350,28 +350,28 @@ fn assert_representative_tool_prompt_selection_boundaries(
     let selectable_conversation_token_count = final_generation_kickoff_position
         .checked_sub(representative_tool_prompt.ordinary_target_prefill_control_span_token_count)
         .expect("the selectable conversation must follow the complete control span");
-    let selectable_conversation_chunck_count =
+    let selectable_conversation_chunk_count =
         selectable_conversation_token_count.div_ceil(SELECTION_CHUNCK_TOKEN_COUNT);
-    let percentage_derived_conversation_chunck_budget = (selectable_conversation_chunck_count
+    let percentage_derived_conversation_chunk_budget = (selectable_conversation_chunk_count
         * SPECULATIVE_PREFILL_KEEP_PERCENTAGE as usize)
         .div_ceil(100);
     let mandatory_trailing_start_position =
         selectable_conversation_token_count.saturating_sub(MANDATORY_TRAILING_TOKEN_COUNT);
-    let first_mandatory_trailing_chunck_index =
+    let first_mandatory_trailing_chunk_index =
         mandatory_trailing_start_position / SELECTION_CHUNCK_TOKEN_COUNT;
-    let mandatory_trailing_chunck_count =
-        selectable_conversation_chunck_count.saturating_sub(first_mandatory_trailing_chunck_index);
-    let retained_conversation_chunck_count =
-        percentage_derived_conversation_chunck_budget.max(mandatory_trailing_chunck_count);
-    let final_selectable_chunck_token_count = selectable_conversation_token_count.saturating_sub(
-        selectable_conversation_chunck_count
+    let mandatory_trailing_chunk_count =
+        selectable_conversation_chunk_count.saturating_sub(first_mandatory_trailing_chunk_index);
+    let retained_conversation_chunk_count =
+        percentage_derived_conversation_chunk_budget.max(mandatory_trailing_chunk_count);
+    let final_selectable_chunk_token_count = selectable_conversation_token_count.saturating_sub(
+        selectable_conversation_chunk_count
             .saturating_sub(1)
             .saturating_mul(SELECTION_CHUNCK_TOKEN_COUNT),
     );
-    let expected_selected_conversation_token_count = retained_conversation_chunck_count
+    let expected_selected_conversation_token_count = retained_conversation_chunk_count
         .saturating_sub(1)
         .saturating_mul(SELECTION_CHUNCK_TOKEN_COUNT)
-        .saturating_add(final_selectable_chunck_token_count);
+        .saturating_add(final_selectable_chunk_token_count);
     let complete_ordered_target_positions = (0..representative_tool_prompt
         .ordinary_target_prefill_control_span_token_count)
         .chain(

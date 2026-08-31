@@ -175,13 +175,13 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
     let selectable_conversation_token_count = final_generation_kickoff_position
         .checked_sub(ordinary_target_prefill_control_span_token_count)
         .expect("conversation tokens should follow the protected control span");
-    let selection_chunck_token_count = 64_usize;
+    let selection_chunk_token_count = 64_usize;
     let keep_percentage = 20_u32;
     let mandatory_trailing_token_count = 128_usize;
-    let selectable_conversation_chunck_count =
-        selectable_conversation_token_count.div_ceil(selection_chunck_token_count);
-    let percentage_derived_conversation_chunck_budget =
-        (selectable_conversation_chunck_count * keep_percentage as usize).div_ceil(100);
+    let selectable_conversation_chunk_count =
+        selectable_conversation_token_count.div_ceil(selection_chunk_token_count);
+    let percentage_derived_conversation_chunk_budget =
+        (selectable_conversation_chunk_count * keep_percentage as usize).div_ceil(100);
     let importance_scores = (0..selectable_conversation_token_count)
         .map(|conversation_token_position| (conversation_token_position % 97) as f32)
         .collect::<Vec<_>>();
@@ -189,15 +189,15 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
         qwen3_5_select_speculative_prefill_token_positions(
             &importance_scores,
             keep_percentage,
-            selection_chunck_token_count,
+            selection_chunk_token_count,
             mandatory_trailing_token_count,
         )
         .expect("the selectable conversation should produce a sparse target selection");
-    let mut selected_conversation_chunck_indices = selected_relative_conversation_positions
+    let mut selected_conversation_chunk_indices = selected_relative_conversation_positions
         .iter()
-        .map(|selected_relative_position| selected_relative_position / selection_chunck_token_count)
+        .map(|selected_relative_position| selected_relative_position / selection_chunk_token_count)
         .collect::<Vec<_>>();
-    selected_conversation_chunck_indices.dedup();
+    selected_conversation_chunk_indices.dedup();
     let selected_absolute_conversation_positions = selected_relative_conversation_positions
         .iter()
         .map(|selected_relative_position| {
@@ -220,8 +220,8 @@ fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_se
                 + selectable_conversation_token_count
     );
     assert_eq!(
-        selected_conversation_chunck_indices.len(),
-        percentage_derived_conversation_chunck_budget
+        selected_conversation_chunk_indices.len(),
+        percentage_derived_conversation_chunk_budget
     );
     assert!(
         (selectable_conversation_token_count - mandatory_trailing_token_count

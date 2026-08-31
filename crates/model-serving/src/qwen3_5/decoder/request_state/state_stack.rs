@@ -208,7 +208,7 @@ impl RequestDecoderStateStack {
         verified_prefix_position_tokens: u32,
         mut verified_prefix_boundary_checkpoint: Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     ) -> Result<(), MlxRuntimeError> {
-        if verified_prefix_boundary_checkpoint.completed_prefill_chunck_tokens == 0 {
+        if verified_prefix_boundary_checkpoint.completed_prefill_chunk_tokens == 0 {
             return Err(request_decoder_state_error(
                 "verification boundary must retain at least one verifier row",
             ));

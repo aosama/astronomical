@@ -65,7 +65,7 @@ pub(super) async fn run_representative_generation(
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     mlx_memory_limits: astronomical_runtime_integration::MlxMemoryLimits,
 ) -> RepresentativeGenerationMeasurement {
-    run_representative_generation_with_selection_chunck_token_count(
+    run_representative_generation_with_selection_chunk_token_count(
         target_model_directory,
         draft_model_directory,
         draft_model_id,
@@ -81,7 +81,7 @@ pub(super) async fn run_representative_generation(
     .await
 }
 
-pub(super) async fn run_representative_generation_with_selection_chunck_token_count(
+pub(super) async fn run_representative_generation_with_selection_chunk_token_count(
     target_model_directory: &Path,
     draft_model_directory: &Path,
     draft_model_id: &str,
@@ -89,7 +89,7 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
     speculative_prefill_enabled: bool,
     maximum_output_token_count: u16,
     speculative_prefill_keep_percentage: u32,
-    speculative_prefill_selection_chunck_token_count: u32,
+    speculative_prefill_selection_chunk_token_count: u32,
     request_id: RequestId,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     mlx_memory_limits: astronomical_runtime_integration::MlxMemoryLimits,
@@ -114,7 +114,7 @@ pub(super) async fn run_representative_generation_with_selection_chunck_token_co
             .then(|| draft_model_directory.to_path_buf()),
         minimum_prompt_tokens: SPECULATIVE_PREFILL_MINIMUM_PROMPT_TOKENS,
         keep_percentage: speculative_prefill_keep_percentage,
-        selection_chunck_token_count: speculative_prefill_selection_chunck_token_count,
+        selection_chunk_token_count: speculative_prefill_selection_chunk_token_count,
         mandatory_trailing_token_count: SPECULATIVE_PREFILL_MANDATORY_TRAILING_TOKEN_COUNT,
         lookahead_token_count: SPECULATIVE_PREFILL_LOOKAHEAD_TOKEN_COUNT,
         importance_pooling_kernel_token_count:

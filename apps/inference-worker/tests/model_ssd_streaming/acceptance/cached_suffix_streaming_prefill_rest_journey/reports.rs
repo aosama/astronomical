@@ -102,9 +102,8 @@ pub(super) fn assert_reported_interaction(
         "generation preparation must not reread expert weights solely to warm RAM"
     );
     let cold_prefill_chunk_count =
-        attribution_counter(&reports.attribution_reports[0], "prefill_chunck_count");
-    let append_prefill_chunk_count =
-        attribution_counter(append_attribution, "prefill_chunck_count");
+        attribution_counter(&reports.attribution_reports[0], "prefill_chunk_count");
+    let append_prefill_chunk_count = attribution_counter(append_attribution, "prefill_chunk_count");
     assert!(
         append_prefill_chunk_count >= 2,
         "the cached suffix must span at least two prompt-processing chunks so a streamed tail can reread: chunks={append_prefill_chunk_count}"

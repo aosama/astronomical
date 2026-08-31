@@ -49,7 +49,7 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
             fixed_prompt_processing_chunk_size_tokens,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
         )
-        .expect("the benchmark prefill chunck size should be valid"),
+        .expect("the benchmark prefill chunk size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),

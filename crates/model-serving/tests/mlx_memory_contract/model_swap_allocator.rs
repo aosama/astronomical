@@ -195,7 +195,7 @@ fn create_engine(
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             FIXED_PREFILL_CHUNCK_TOKENS,
         )
-        .expect("the fixed prefill chunck size should be valid"),
+        .expect("the fixed prefill chunk size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),

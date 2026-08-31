@@ -7,25 +7,25 @@ const BOUNDARY_CHECKPOINT_COLLECTOR_OPERATION: &str =
 
 /// Exact recurrent tensors for one local prefill boundary.
 pub struct Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-    pub completed_prefill_chunck_tokens: usize,
+    pub completed_prefill_chunk_tokens: usize,
     pub recurrent_snapshot_tensors: HashMap<String, MlxArray>,
 }
 
 /// Request-local collector for intermediate persistent prompt-cache boundaries.
 pub struct Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector {
     checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
-    completed_prefill_chunck_tokens: Vec<i32>,
+    completed_prefill_chunk_tokens: Vec<i32>,
     checkpoint_interval_token_count: i32,
     expected_boundary_tensor_count: usize,
 }
 
 impl Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector {
     pub fn new(
-        completed_prefill_chunck_tokens: Vec<usize>,
+        completed_prefill_chunk_tokens: Vec<usize>,
         expected_boundary_tensor_count: usize,
         checkpoint_interval_token_count: usize,
     ) -> Result<Self, MlxRuntimeError> {
-        if completed_prefill_chunck_tokens.is_empty()
+        if completed_prefill_chunk_tokens.is_empty()
             || expected_boundary_tensor_count == 0
             || checkpoint_interval_token_count == 0
         {
@@ -35,43 +35,42 @@ impl Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector {
         }
         let checkpoint_interval_token_count = i32::try_from(checkpoint_interval_token_count)
             .map_err(|_| collector_error("checkpoint interval exceeds the Int32 range"))?;
-        let mut signed_completed_prefill_chunck_tokens =
-            Vec::with_capacity(completed_prefill_chunck_tokens.len());
-        let mut previous_completed_prefill_chunck_tokens = 0_usize;
-        for current_completed_prefill_chunck_tokens in &completed_prefill_chunck_tokens {
-            if *current_completed_prefill_chunck_tokens <= previous_completed_prefill_chunck_tokens
-            {
+        let mut signed_completed_prefill_chunk_tokens =
+            Vec::with_capacity(completed_prefill_chunk_tokens.len());
+        let mut previous_completed_prefill_chunk_tokens = 0_usize;
+        for current_completed_prefill_chunk_tokens in &completed_prefill_chunk_tokens {
+            if *current_completed_prefill_chunk_tokens <= previous_completed_prefill_chunk_tokens {
                 return Err(collector_error(
                     "checkpoint positions must be positive and strictly increasing",
                 ));
             }
-            previous_completed_prefill_chunck_tokens = *current_completed_prefill_chunck_tokens;
-            signed_completed_prefill_chunck_tokens.push(
-                i32::try_from(*current_completed_prefill_chunck_tokens)
+            previous_completed_prefill_chunk_tokens = *current_completed_prefill_chunk_tokens;
+            signed_completed_prefill_chunk_tokens.push(
+                i32::try_from(*current_completed_prefill_chunk_tokens)
                     .map_err(|_| collector_error("checkpoint position exceeds the Int32 range"))?,
             );
         }
         Ok(Self {
-            checkpoints: completed_prefill_chunck_tokens
+            checkpoints: completed_prefill_chunk_tokens
                 .into_iter()
-                .map(|completed_prefill_chunck_tokens| {
+                .map(|completed_prefill_chunk_tokens| {
                     Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-                        completed_prefill_chunck_tokens,
+                        completed_prefill_chunk_tokens,
                         recurrent_snapshot_tensors: HashMap::with_capacity(
                             expected_boundary_tensor_count,
                         ),
                     }
                 })
                 .collect(),
-            completed_prefill_chunck_tokens: signed_completed_prefill_chunck_tokens,
+            completed_prefill_chunk_tokens: signed_completed_prefill_chunk_tokens,
             checkpoint_interval_token_count,
             expected_boundary_tensor_count,
         })
     }
 
     #[must_use]
-    pub fn completed_prefill_chunck_tokens(&self) -> &[i32] {
-        &self.completed_prefill_chunck_tokens
+    pub fn completed_prefill_chunk_tokens(&self) -> &[i32] {
+        &self.completed_prefill_chunk_tokens
     }
 
     #[must_use]

@@ -333,7 +333,7 @@ async fn should_stop_when_the_configured_drafter_prefix_restore_fails() {
         draft_model_directory: Some(draft_model_directory_path.clone()),
         minimum_prompt_tokens: 8,
         keep_percentage: 50,
-        selection_chunck_token_count: 4,
+        selection_chunk_token_count: 4,
         mandatory_trailing_token_count: 4,
         lookahead_token_count: 2,
         importance_pooling_kernel_token_count: 3,

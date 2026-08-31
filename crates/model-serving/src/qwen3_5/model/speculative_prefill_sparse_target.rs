@@ -6,7 +6,7 @@ use crate::{PerformanceAttribution, Qwen3_5ExecutionError};
 use super::{Qwen3_5Model, RequestDecoderStateStack};
 
 impl Qwen3_5Model {
-    pub(crate) fn prefill_chunck_with_speculative_prefill_gpu_token_indices_and_position_offsets_and_performance_attribution(
+    pub(crate) fn prefill_chunk_with_speculative_prefill_gpu_token_indices_and_position_offsets_and_performance_attribution(
         &self,
         selected_token_indices_on_gpu: &MlxArray,
         selected_token_count: i32,
@@ -59,7 +59,7 @@ impl Qwen3_5Model {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn prefill_chunck_with_speculative_prefill_gpu_token_indices_and_visual_embeddings_and_position_offsets_and_performance_attribution(
+    pub(crate) fn prefill_chunk_with_speculative_prefill_gpu_token_indices_and_visual_embeddings_and_position_offsets_and_performance_attribution(
         &self,
         selected_token_indices_on_gpu: &MlxArray,
         selected_prompt_token_ids: &[u32],

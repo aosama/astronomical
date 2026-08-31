@@ -44,7 +44,7 @@ pub struct PersistentSpeculativePrefillSelectionContract {
     pub(super) draft_model_revision: String,
     pub(super) token_identifier_mapping_digest: [u8; 32],
     pub(super) keep_percentage: u32,
-    pub(super) selection_chunck_token_count: u32,
+    pub(super) selection_chunk_token_count: u32,
     pub(super) mandatory_trailing_token_count: u32,
     pub(super) lookahead_token_count: u32,
     pub(super) importance_pooling_kernel_token_count: u32,
@@ -63,7 +63,7 @@ impl PersistentSpeculativePrefillSelectionContract {
         draft_model_revision: String,
         token_identifier_mapping_digest: [u8; 32],
         keep_percentage: u32,
-        selection_chunck_token_count: u32,
+        selection_chunk_token_count: u32,
         mandatory_trailing_token_count: u32,
         lookahead_token_count: u32,
         importance_pooling_kernel_token_count: u32,
@@ -77,7 +77,7 @@ impl PersistentSpeculativePrefillSelectionContract {
             draft_model_revision,
             token_identifier_mapping_digest,
             keep_percentage,
-            selection_chunck_token_count,
+            selection_chunk_token_count,
             mandatory_trailing_token_count,
             lookahead_token_count,
             importance_pooling_kernel_token_count,
@@ -145,7 +145,7 @@ impl PersistentSpeculativePrefillSelectionContract {
         selection_identity_hasher.update(self.token_identifier_mapping_digest);
         for selection_configuration_number in [
             self.keep_percentage,
-            self.selection_chunck_token_count,
+            self.selection_chunk_token_count,
             self.mandatory_trailing_token_count,
             self.lookahead_token_count,
             self.importance_pooling_kernel_token_count,
@@ -375,8 +375,8 @@ fn validate_contract_metadata(
             selection_contract.keep_percentage.to_string(),
         ),
         (
-            "selection_chunck_token_count",
-            selection_contract.selection_chunck_token_count.to_string(),
+            "selection_chunk_token_count",
+            selection_contract.selection_chunk_token_count.to_string(),
         ),
         (
             "mandatory_trailing_token_count",
