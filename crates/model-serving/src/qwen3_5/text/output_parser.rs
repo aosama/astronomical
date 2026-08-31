@@ -2,7 +2,10 @@
 //!
 //! Dense and mixture-of-experts share this parser. Tool-call defects fail open so a
 //! coding client can reject or retry. Incomplete control-marker prefixes flush as
-//! visible text at generation end instead of aborting the stream.
+//! visible text at generation end instead of aborting the stream. Tool-call markers
+//! quoted inside model prose (a coding model discussing tool syntax) must not hijack
+//! the state machine: a think close inside a tool-call body proves the opener was
+//! prose, so the parser restores the buffered text to its origin channel and resumes.
 
 use std::collections::BTreeMap;
 
@@ -206,7 +209,7 @@ impl Qwen3_5OutputParser {
                 return Ok(true);
             }
             self.take_pending_prefix(marker.len());
-            self.enter_state_after_start_marker(marker);
+            self.enter_state_after_start_marker(marker, false);
             return Ok(true);
         }
 
@@ -243,7 +246,7 @@ impl Qwen3_5OutputParser {
             if marker == THINK_END_MARKER {
                 self.state = Qwen3_5OutputParserState::Text;
             } else {
-                self.enter_state_after_start_marker(marker);
+                self.enter_state_after_start_marker(marker, true);
             }
             return Ok(true);
         }
@@ -289,11 +292,25 @@ impl Qwen3_5OutputParser {
     fn advance_tool_call(
         &mut self,
         output_events: &mut Vec<Qwen3_5OutputEvent>,
-        entry: ToolCallEntryKind,
+        entry: ToolCallEntry,
     ) -> Result<bool, Qwen3_5OutputParserError> {
-        let Some((marker_index, end_marker)) =
-            earliest_marker(&self.pending_output, salvage::tool_call_end_markers(entry))
-        else {
+        let end_marker_match = earliest_marker(
+            &self.pending_output,
+            salvage::tool_call_end_markers(entry.kind),
+        );
+        let spurious_think_close_index = self.pending_output.find(THINK_END_MARKER);
+        let opener_was_quoted_prose = match (end_marker_match, spurious_think_close_index) {
+            (Some((end_marker_index, _)), Some(think_close_index)) => {
+                think_close_index < end_marker_index
+            }
+            (None, Some(_)) => true,
+            _ => false,
+        };
+        if opener_was_quoted_prose {
+            self.resync_spurious_tool_call(output_events, entry);
+            return Ok(true);
+        }
+        let Some((marker_index, end_marker)) = end_marker_match else {
             return Ok(false);
         };
         let remaining_body = self.take_pending_prefix(marker_index);
@@ -301,7 +318,7 @@ impl Qwen3_5OutputParser {
         if end_marker != TOOL_CALL_END_MARKER {
             self.consume_trailing_envelope_close_if_present();
         }
-        let reconstructed_body = salvage::reconstruct_tool_call_body(entry, &remaining_body);
+        let reconstructed_body = salvage::reconstruct_tool_call_body(entry.kind, &remaining_body);
         // Closed envelopes fail open: the harness owns retries.
         match self.parse_tool_call(&reconstructed_body) {
             Ok(tool_call) => {
@@ -326,6 +343,31 @@ impl Qwen3_5OutputParser {
         }
         self.state = Qwen3_5OutputParserState::Text;
         Ok(true)
+    }
+
+    /// A think close inside a tool-call body proves the opener was quoted prose:
+    /// a real tool-call body cannot contain a think close. Restore the opener and
+    /// the buffered text to the origin channel, consume the marker, and resume
+    /// channel scanning so a real tool call later in the generation still arrives.
+    fn resync_spurious_tool_call(
+        &mut self,
+        output_events: &mut Vec<Qwen3_5OutputEvent>,
+        entry: ToolCallEntry,
+    ) {
+        let think_close_index = self
+            .pending_output
+            .find(THINK_END_MARKER)
+            .expect("resync requires a think close already found in the pending output");
+        let buffered_body = self.take_pending_prefix(think_close_index);
+        self.take_pending_prefix(THINK_END_MARKER.len());
+        let restored_prose = format!("{}{buffered_body}", entry.opener);
+        if entry.opened_in_reasoning {
+            output_events.push(Qwen3_5OutputEvent::ReasoningDelta(restored_prose));
+        } else {
+            self.has_streamed_visible_text = true;
+            output_events.push(Qwen3_5OutputEvent::TextDelta(restored_prose));
+        }
+        self.state = Qwen3_5OutputParserState::Text;
     }
 
     fn parse_tool_call(
@@ -372,7 +414,7 @@ impl Qwen3_5OutputParser {
         }))
     }
 
-    fn enter_state_after_start_marker(&mut self, marker: &str) {
+    fn enter_state_after_start_marker(&mut self, marker: &'static str, opened_in_reasoning: bool) {
         self.state = match marker {
             THINK_START_MARKER => {
                 if self.has_streamed_visible_text {
@@ -381,13 +423,21 @@ impl Qwen3_5OutputParser {
                     Qwen3_5OutputParserState::Reasoning
                 }
             }
-            TOOL_CALL_START_MARKER => {
-                Qwen3_5OutputParserState::ToolCall(ToolCallEntryKind::Envelope)
-            }
-            BARE_FUNCTION_START_MARKER => {
-                Qwen3_5OutputParserState::ToolCall(ToolCallEntryKind::BareFunction)
-            }
-            INVOKE_START_MARKER => Qwen3_5OutputParserState::ToolCall(ToolCallEntryKind::InvokeTag),
+            TOOL_CALL_START_MARKER => Qwen3_5OutputParserState::ToolCall(ToolCallEntry {
+                kind: ToolCallEntryKind::Envelope,
+                opener: TOOL_CALL_START_MARKER,
+                opened_in_reasoning,
+            }),
+            BARE_FUNCTION_START_MARKER => Qwen3_5OutputParserState::ToolCall(ToolCallEntry {
+                kind: ToolCallEntryKind::BareFunction,
+                opener: BARE_FUNCTION_START_MARKER,
+                opened_in_reasoning,
+            }),
+            INVOKE_START_MARKER => Qwen3_5OutputParserState::ToolCall(ToolCallEntry {
+                kind: ToolCallEntryKind::InvokeTag,
+                opener: INVOKE_START_MARKER,
+                opened_in_reasoning,
+            }),
             _ => Qwen3_5OutputParserState::Text,
         };
     }
@@ -449,8 +499,18 @@ impl Qwen3_5OutputParser {
 enum Qwen3_5OutputParserState {
     Text,
     Reasoning,
-    ToolCall(ToolCallEntryKind),
+    ToolCall(ToolCallEntry),
     SuppressedLateReasoning,
+}
+
+/// One entered tool-call attempt: its dialect kind, the exact opener marker to
+/// restore when the attempt turns out to be quoted prose, and the channel the
+/// opener appeared in.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ToolCallEntry {
+    kind: ToolCallEntryKind,
+    opener: &'static str,
+    opened_in_reasoning: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
