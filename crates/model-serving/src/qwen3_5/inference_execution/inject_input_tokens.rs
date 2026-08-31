@@ -152,7 +152,7 @@ impl Qwen3_5EngineState {
                 .as_ref()
                 .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             model
-                .prefill_chunck_with_performance_attribution(
+                .prefill_chunk_with_performance_attribution(
                     feedback_prefix_token_ids,
                     active_request.next_position_tokens,
                     &mut active_request.request_decoder_state,

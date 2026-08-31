@@ -9,7 +9,7 @@ use super::active_generation::LagunaPrefillRequestCheckpoint;
 use super::execution::LagunaInferenceExecution;
 use super::memory::complete_laguna_forward_memory_observation;
 use crate::laguna::{LagunaModel, laguna_decoder_cache_layout};
-use crate::persistent_prompt_cache_boundary_clamped_prefill_chunck_end;
+use crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end;
 use crate::{
     AdaptiveRamGrowthPhase, GeneratedToken, InferenceEngineError, MlxRamBudget,
     PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
@@ -78,7 +78,7 @@ impl LagunaInferenceExecution {
         let initial_chunk_end_token_position_exclusive = persistent_prompt_cache
             .as_ref()
             .map(|store| {
-                persistent_prompt_cache_boundary_clamped_prefill_chunck_end(
+                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
                     chunk_start_token_position,
                     requested_chunk_end_token_position_exclusive,
                     store.model_contract.block_token_count(),

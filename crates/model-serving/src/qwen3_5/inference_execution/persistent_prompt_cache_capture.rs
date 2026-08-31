@@ -86,7 +86,7 @@ impl Qwen3_5EngineState {
             persistent_prompt_cache.model_contract.block_token_count();
         for boundary_checkpoint in boundary_checkpoints {
             let Some(absolute_boundary) = successful_prefill_start
-                .checked_add(boundary_checkpoint.completed_prefill_chunck_tokens)
+                .checked_add(boundary_checkpoint.completed_prefill_chunk_tokens)
             else {
                 return Err(required_prompt_state_persistence_failure(
                     prompt_state_persistence_owner,

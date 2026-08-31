@@ -22,7 +22,7 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: usize = 10;
 
 struct PersistentPromptCacheParityAcceptanceOutcome {
     cold_generated_token_ids: Vec<u32>,
-    cold_completed_prefill_chunck_token_counts: Vec<u32>,
+    cold_completed_prefill_chunk_token_counts: Vec<u32>,
     restored_cached_token_count: u32,
     restored_generated_token_ids: Vec<u32>,
 }
@@ -98,15 +98,15 @@ async fn should_preserve_tokens_after_persistent_prompt_cache_restore() {
 async fn should_restore_exact_cache_parity_for_one_selected_large_prefill_size() {
     require_persistent_prompt_cache_acceptance_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let configured_prefill_chunck_tokens = std::env::var(
+        let configured_prefill_chunk_tokens = std::env::var(
             "ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS",
         )
-        .map_or(Ok(8_192), |configured_prefill_chunck_tokens| {
-            configured_prefill_chunck_tokens.parse::<u32>()
+        .map_or(Ok(8_192), |configured_prefill_chunk_tokens| {
+            configured_prefill_chunk_tokens.parse::<u32>()
         })
         .expect("the selected prompt-cache prefill acceptance size should be an integer");
         assert!(
-            [2_048, 4_096, 8_192].contains(&configured_prefill_chunck_tokens),
+            [2_048, 4_096, 8_192].contains(&configured_prefill_chunk_tokens),
             "the selected prompt-cache prefill acceptance size must be 2048, 4096, or 8192"
         );
         let model_directory = crate::common::configured_large_sparse_moe_model_directory();
@@ -123,20 +123,20 @@ async fn should_restore_exact_cache_parity_for_one_selected_large_prefill_size()
             &model_directory,
             representative_prompt_token_ids,
             LARGE_PREFILL_ACCEPTANCE_OUTPUT_TOKEN_COUNT,
-            configured_prefill_chunck_tokens,
+            configured_prefill_chunk_tokens,
         )
         .await;
 
         assert!(
             acceptance_outcome
-                .cold_completed_prefill_chunck_token_counts
-                .contains(&configured_prefill_chunck_tokens),
+                .cold_completed_prefill_chunk_token_counts
+                .contains(&configured_prefill_chunk_tokens),
             "the selected prefill size must complete as one model forward"
         );
         assert!(
             acceptance_outcome.restored_cached_token_count
-                >= configured_prefill_chunck_tokens,
-            "the restored request recovered {} tokens but must recover every 2048-token block produced by one selected {configured_prefill_chunck_tokens}-token forward",
+                >= configured_prefill_chunk_tokens,
+            "the restored request recovered {} tokens but must recover every 2048-token block produced by one selected {configured_prefill_chunk_tokens}-token forward",
             acceptance_outcome.restored_cached_token_count,
         );
         assert!(
@@ -159,7 +159,7 @@ async fn run_persistent_prompt_cache_parity_acceptance(
     model_directory: &Path,
     prompt_token_ids: Vec<u32>,
     generated_token_count: usize,
-    fixed_prefill_chunck_tokens: u32,
+    fixed_prefill_chunk_tokens: u32,
 ) -> PersistentPromptCacheParityAcceptanceOutcome {
     let persistent_prompt_cache_directory =
         tempfile::tempdir().expect("the test should create a prompt-cache directory");
@@ -172,7 +172,7 @@ async fn run_persistent_prompt_cache_parity_acceptance(
         load_persistent_prompt_cache_acceptance_engine(
             model_directory,
             persistent_prompt_cache_directory.path(),
-            fixed_prefill_chunck_tokens,
+            fixed_prefill_chunk_tokens,
         )
         .await;
     let first_request_id = RequestId::new(2_001);
@@ -185,12 +185,12 @@ async fn run_persistent_prompt_cache_parity_acceptance(
         .await
         .expect("the first engine should accept the request");
     assert_eq!(first_generation_start.cached_token_count(), 0);
-    let (cold_generated_token_ids, cold_completed_prefill_chunck_token_counts) =
+    let (cold_generated_token_ids, cold_completed_prefill_chunk_token_counts) =
         generate_token_ids(&mut qwen3_5_engine, first_request_id, generated_token_count).await;
-    let minimum_expected_sequence_state_block_count =
-        (usize::try_from(fixed_prefill_chunck_tokens).unwrap_or(usize::MAX)
-            / prompt_cache_block_token_count)
-            .max(1);
+    let minimum_expected_sequence_state_block_count = (usize::try_from(fixed_prefill_chunk_tokens)
+        .unwrap_or(usize::MAX)
+        / prompt_cache_block_token_count)
+        .max(1);
     wait_for_persistent_prompt_cache_blocks(
         &qwen3_5_engine,
         minimum_expected_sequence_state_block_count,
@@ -213,7 +213,7 @@ async fn run_persistent_prompt_cache_parity_acceptance(
         "the second run should report at least one restored prompt-cache block"
     );
     let restored_cached_token_count = second_generation_start.cached_token_count();
-    let (restored_generated_token_ids, _restored_completed_prefill_chunck_token_counts) =
+    let (restored_generated_token_ids, _restored_completed_prefill_chunk_token_counts) =
         generate_token_ids(
             &mut qwen3_5_engine,
             second_request_id,
@@ -222,7 +222,7 @@ async fn run_persistent_prompt_cache_parity_acceptance(
         .await;
     PersistentPromptCacheParityAcceptanceOutcome {
         cold_generated_token_ids,
-        cold_completed_prefill_chunck_token_counts,
+        cold_completed_prefill_chunk_token_counts,
         restored_cached_token_count,
         restored_generated_token_ids,
     }
@@ -231,22 +231,22 @@ async fn run_persistent_prompt_cache_parity_acceptance(
 pub(super) async fn load_persistent_prompt_cache_acceptance_engine(
     model_directory: &Path,
     persistent_prompt_cache_directory: &Path,
-    fixed_prefill_chunck_tokens: u32,
+    fixed_prefill_chunk_tokens: u32,
 ) -> (Qwen3_5Engine, String, String, usize) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    let prefill_chunck_sizer =
+    let prefill_chunk_sizer =
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            fixed_prefill_chunck_tokens,
+            fixed_prefill_chunk_tokens,
         )
         .expect("the selected fixed prefill size should be valid");
     let mlx_memory_limits =
         crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
-    worker_chunking_configuration.prompt_cache_block_tokens = Some(fixed_prefill_chunck_tokens);
+    worker_chunking_configuration.prompt_cache_block_tokens = Some(fixed_prefill_chunk_tokens);
     let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
@@ -256,7 +256,7 @@ pub(super) async fn load_persistent_prompt_cache_acceptance_engine(
             persistent_prompt_cache_directory.to_path_buf(),
             crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
         )),
-        prefill_chunck_sizer,
+        prefill_chunk_sizer,
         248_069,
         model_directory.to_path_buf(),
         worker_chunking_configuration,
@@ -383,7 +383,7 @@ pub(super) async fn generate_token_ids(
     generated_token_count: usize,
 ) -> (Vec<u32>, Vec<u32>) {
     let mut generated_token_ids = Vec::new();
-    let mut completed_prefill_chunck_token_counts = Vec::new();
+    let mut completed_prefill_chunk_token_counts = Vec::new();
     loop {
         match qwen3_5_engine
             .decode_next_token(request_id)
@@ -399,17 +399,17 @@ pub(super) async fn generate_token_ids(
                 if generation_finalization.is_some()
                     || generated_token_ids.len() == generated_token_count
                 {
-                    return (generated_token_ids, completed_prefill_chunck_token_counts);
+                    return (generated_token_ids, completed_prefill_chunk_token_counts);
                 }
             }
             GeneratedToken::PrefillProgress {
                 completed_prefill_chunk_tokens,
                 ..
-            } => completed_prefill_chunck_token_counts.push(completed_prefill_chunk_tokens),
+            } => completed_prefill_chunk_token_counts.push(completed_prefill_chunk_tokens),
             GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
             GeneratedToken::GenerationPreparationStarted { .. } => {}
             GeneratedToken::EndOfSequence => {
-                return (generated_token_ids, completed_prefill_chunck_token_counts);
+                return (generated_token_ids, completed_prefill_chunk_token_counts);
             }
         }
     }

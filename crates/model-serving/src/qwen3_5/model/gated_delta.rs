@@ -193,18 +193,18 @@ impl Qwen3_5Model {
             &linear_attention_weights.decay_interval_projection,
             paged_prefill_execution_mode,
         )?;
-        let completed_prefill_chunck_tokens = boundary_checkpoint_collector
+        let completed_prefill_chunk_tokens = boundary_checkpoint_collector
             .as_ref()
-            .map(|collector| collector.completed_prefill_chunck_tokens().to_vec());
-        let (convolution_input, boundary_convolution_states) = match completed_prefill_chunck_tokens
+            .map(|collector| collector.completed_prefill_chunk_tokens().to_vec());
+        let (convolution_input, boundary_convolution_states) = match completed_prefill_chunk_tokens
             .as_deref()
         {
-            Some(completed_prefill_chunck_tokens) => {
+            Some(completed_prefill_chunk_tokens) => {
                 let checkpoint_update = convolution_state.update_with_boundary_checkpoints(
                     &self.runtime,
                     &mixed_queries_keys_values,
                     token_count,
-                    completed_prefill_chunck_tokens,
+                    completed_prefill_chunk_tokens,
                 )?;
                 (
                     checkpoint_update.convolution_input,
@@ -291,8 +291,8 @@ impl Qwen3_5Model {
         };
         let current_recurrent_state = recurrent_state.current_or_zero(&self.runtime)?;
         let (recurrent_output, next_recurrent_state, boundary_recurrent_states) =
-            match completed_prefill_chunck_tokens.as_deref() {
-                Some(completed_prefill_chunck_tokens) => {
+            match completed_prefill_chunk_tokens.as_deref() {
+                Some(completed_prefill_chunk_tokens) => {
                     let checkpoint_interval_token_count = boundary_checkpoint_collector
                         .as_ref()
                         .map(|collector| collector.checkpoint_interval_token_count())
@@ -308,7 +308,7 @@ impl Qwen3_5Model {
                         &decays,
                         &update_rates,
                         &current_recurrent_state,
-                        completed_prefill_chunck_tokens,
+                        completed_prefill_chunk_tokens,
                         checkpoint_interval_token_count,
                     )?;
                     (

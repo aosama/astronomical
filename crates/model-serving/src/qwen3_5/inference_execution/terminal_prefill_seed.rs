@@ -26,7 +26,7 @@ pub(super) fn seed_terminal_text_prefill_after_prompt_cache_boundaries(
     model: &Qwen3_5Model,
     prefill_start: usize,
     prefill_end: usize,
-    intermediate_completed_prefill_chunck_tokens: &[usize],
+    intermediate_completed_prefill_chunk_tokens: &[usize],
     persistent_prompt_cache_block_token_count: usize,
 ) -> Result<Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
     // A terminal text chunk can still contain cache-block boundaries. The terminal
@@ -34,11 +34,11 @@ pub(super) fn seed_terminal_text_prefill_after_prompt_cache_boundaries(
     // so the chunk is a single forward pass. This avoids the prefix+tail split that
     // would create an extra expert streaming pass for SSD-paged models.
     let terminal_outcome = model
-        .terminal_prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
+        .terminal_prefill_chunk_with_boundary_checkpoints_and_performance_attribution(
             &active_request.input_token_ids[prefill_start..prefill_end],
             active_request.next_position_tokens,
             &mut active_request.request_decoder_state,
-            intermediate_completed_prefill_chunck_tokens.to_vec(),
+            intermediate_completed_prefill_chunk_tokens.to_vec(),
             persistent_prompt_cache_block_token_count,
             &mut active_request.performance_attribution,
         )?;

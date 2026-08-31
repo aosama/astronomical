@@ -67,7 +67,7 @@ impl SpeculativePrefillConfig {
     }
 
     #[must_use]
-    pub const fn selection_chunck_token_count(&self) -> u32 {
+    pub const fn selection_chunk_token_count(&self) -> u32 {
         self.selection_chunk_token_count
     }
 

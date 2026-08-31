@@ -81,21 +81,21 @@ fn final_prefill_logits_for_chunk_size(
     qwen3_5_model: &Qwen3_5Model,
     qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
-    prefill_chunck_tokens: usize,
+    prefill_chunk_tokens: usize,
 ) -> (u32, Vec<f32>) {
     let mut request_decoder_state = crate::common::standard_request_decoder_state(qwen3_5_config);
     let final_prompt_token_index = prompt_token_ids
         .len()
         .checked_sub(1)
         .expect("the diagnostic prompt should contain a final decode-seeding token");
-    for prefill_chunck_start in (0..final_prompt_token_index).step_by(prefill_chunck_tokens) {
-        let prefill_chunck_end = prefill_chunck_start
-            .saturating_add(prefill_chunck_tokens)
+    for prefill_chunk_start in (0..final_prompt_token_index).step_by(prefill_chunk_tokens) {
+        let prefill_chunk_end = prefill_chunk_start
+            .saturating_add(prefill_chunk_tokens)
             .min(final_prompt_token_index);
         qwen3_5_model
-            .prefill_chunck(
-                &prompt_token_ids[prefill_chunck_start..prefill_chunck_end],
-                u32::try_from(prefill_chunck_start)
+            .prefill_chunk(
+                &prompt_token_ids[prefill_chunk_start..prefill_chunk_end],
+                u32::try_from(prefill_chunk_start)
                     .expect("the diagnostic prompt position should fit u32"),
                 &mut request_decoder_state,
             )

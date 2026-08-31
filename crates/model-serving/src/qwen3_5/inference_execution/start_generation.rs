@@ -470,7 +470,7 @@ impl Qwen3_5EngineState {
                 next_position_tokens,
                 pending_generated_token: None,
                 prefill_cursor,
-                maximum_successful_prefill_chunck_tokens: None,
+                maximum_successful_prefill_chunk_tokens: None,
                 random_state,
                 request_id: inference_request.request_id(),
                 sampling_strategy,

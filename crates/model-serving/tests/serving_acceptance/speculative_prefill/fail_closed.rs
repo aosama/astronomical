@@ -48,7 +48,7 @@ async fn should_stop_model_activation_when_the_configured_drafter_is_unavailable
                 draft_model_directory: Some(unavailable_draft_directory.path().to_path_buf()),
                 minimum_prompt_tokens: 8_192,
                 keep_percentage: SPECULATIVE_PREFILL_KEEP_PERCENTAGE,
-                selection_chunck_token_count: 32,
+                selection_chunk_token_count: 32,
                 mandatory_trailing_token_count: 512,
                 lookahead_token_count: 8,
                 importance_pooling_kernel_token_count: 13,
@@ -129,7 +129,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
                 draft_model_directory: Some(draft_model_directory),
                 minimum_prompt_tokens: 8_192,
                 keep_percentage: SPECULATIVE_PREFILL_KEEP_PERCENTAGE,
-                selection_chunck_token_count: 32,
+                selection_chunk_token_count: 32,
                 mandatory_trailing_token_count: 512,
                 lookahead_token_count: 8,
                 importance_pooling_kernel_token_count: 13,
@@ -222,7 +222,7 @@ async fn should_recover_sparse_target_memory_pressure_without_target_only_retry(
         let sparse_target_chunk_count =
             crate::serving_acceptance::support::performance_attribution::counter_amount(
                 recovery_generation_report,
-                "speculative_prefill_sparse_target_chunck_count",
+                "speculative_prefill_sparse_target_chunk_count",
             );
         let speculative_prefill_fallback_count =
             crate::serving_acceptance::support::performance_attribution::counter_amount(

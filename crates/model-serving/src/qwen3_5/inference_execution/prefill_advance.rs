@@ -22,16 +22,16 @@ use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use crate::{
     ExpertResidencyPhase, GeneratedToken, InferenceEngineError, PerformanceCounter,
-    PerformanceOperation, persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
-    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
+    PerformanceOperation, persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
+    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
 use super::super::model::memory_admission::invalid_request_error;
 use super::completed_forward_memory::collect_completed_forward_memory_snapshot;
-use super::prompt_prefill_errors::PromptPrefillChunckAttemptError;
+use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{
     Qwen3_5EngineState, Qwen3_5PromptProcessingChunkSizer, fatal_engine_error,
-    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary,
     qwen3_5_prompt_prefill_end_exclusive, qwen3_5_runtime_error,
     qwen3_5_speculative_prefill_sparse_target_is_active,
     speculative_prefill::SpeculativePrefillSelectionPreparation,
@@ -112,7 +112,7 @@ impl Qwen3_5EngineState {
                 prefill_end_exclusive,
                 sparse_experts_are_paged,
                 active_request
-                    .maximum_successful_prefill_chunck_tokens()
+                    .maximum_successful_prefill_chunk_tokens()
                     .unwrap_or(usize::MAX),
             );
         // The control-span boundary separates dense system-prompt prefill from
@@ -121,8 +121,8 @@ impl Qwen3_5EngineState {
         // and the boundary only fractures the chunk — producing a tiny stub like
         // 351 tokens that adds a full forward overhead for almost no progress.
         // Skip the control-span clamp when speculative prefill is off.
-        let requested_prefill_chunck_end = if active_request.should_use_speculative_prefill {
-            qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
+        let requested_prefill_chunk_end = if active_request.should_use_speculative_prefill {
+            qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary(
                 prefill_start,
                 configured_prompt_processing_chunk_end,
                 active_request.ordinary_target_prefill_control_span_token_count,
@@ -132,7 +132,7 @@ impl Qwen3_5EngineState {
             configured_prompt_processing_chunk_end
         };
         // The control-span clamp guarantees this chunk is wholly dense or wholly
-        // sparse; execute_prompt_prefill_chunck never receives a mixed contract.
+        // sparse; execute_prompt_prefill_chunk never receives a mixed contract.
         // Required publication is synchronous, so do not let one forward cross
         // multiple durable boundaries. A successful forward produces one exact
         // checkpoint, publishes it, and only then advances the request cursor.
@@ -141,7 +141,7 @@ impl Qwen3_5EngineState {
         // times. When the configured chunk crosses at most one durable boundary,
         // clamping only splits a later complete-layer SSD stream (1,792 then a
         // 561-token stub) without reducing publication count.
-        let requested_prefill_chunck_end = if self.persistent_prompt_cache.is_some()
+        let requested_prefill_chunk_end = if self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
             && !active_request.has_optional_prediction_session()
             && !qwen3_5_speculative_prefill_sparse_target_is_active(
@@ -159,168 +159,168 @@ impl Qwen3_5EngineState {
                 })
                 .unwrap_or(0);
             let crossed_cache_boundary_count =
-                persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
+                persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
                     prefill_start,
-                    requested_prefill_chunck_end,
+                    requested_prefill_chunk_end,
                     persistent_prompt_cache_block_token_count,
                 )
                 .len();
             if crossed_cache_boundary_count <= 1 {
-                requested_prefill_chunck_end
+                requested_prefill_chunk_end
             } else {
-                persistent_prompt_cache_boundary_clamped_prefill_chunck_end(
+                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
                     prefill_start,
-                    requested_prefill_chunck_end,
+                    requested_prefill_chunk_end,
                     persistent_prompt_cache_block_token_count,
                 )
             }
         } else {
-            requested_prefill_chunck_end
+            requested_prefill_chunk_end
         };
         // The token count becomes immutable for each attempt. Runtime capacity
         // recovery restores the checkpoint before retrying or halving this size.
         let forward_chunk_started_at = Instant::now();
-        let requested_prefill_chunck_token_count = requested_prefill_chunck_end - prefill_start;
-        let mut attempted_prefill_chunck_token_count = active_request
-            .clamped_prefill_chunck_token_count(
-                requested_prefill_chunck_token_count,
+        let requested_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
+        let mut attempted_prefill_chunk_token_count = active_request
+            .clamped_prefill_chunk_token_count(
+                requested_prefill_chunk_token_count,
                 prefill_end_exclusive.saturating_sub(prefill_start),
             );
-        let mut has_retried_current_prefill_chunck_after_reclamation = false;
+        let mut has_retried_current_prefill_chunk_after_reclamation = false;
         let mut has_observed_prefill_capacity_constraint = false;
-        let (prefill_end, prompt_prefill_chunck_outcome) = loop {
+        let (prefill_end, prompt_prefill_chunk_outcome) = loop {
             if let Some(model) = self.model.as_ref() {
                 model.clear_expert_demand_for_residency();
             }
             let prefill_end = prefill_start
-                .checked_add(attempted_prefill_chunck_token_count)
+                .checked_add(attempted_prefill_chunk_token_count)
                 .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
-            match self.execute_prompt_prefill_chunck(
+            match self.execute_prompt_prefill_chunk(
                 request_id,
                 active_request,
                 prefill_start,
                 prefill_end,
             ) {
-                Ok(prompt_prefill_chunck_outcome) => {
-                    break (prefill_end, prompt_prefill_chunck_outcome);
+                Ok(prompt_prefill_chunk_outcome) => {
+                    break (prefill_end, prompt_prefill_chunk_outcome);
                 }
-                Err(PromptPrefillChunckAttemptError::Engine(generation_error)) => {
+                Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
                     return Err(generation_error);
                 }
-                Err(PromptPrefillChunckAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
+                Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
                     if let Some(smaller_executable_chunk_size_tokens) =
                         Qwen3_5PromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
-                            attempted_prefill_chunck_token_count,
+                            attempted_prefill_chunk_token_count,
                         )
                     {
                         tracing::warn!(
                             request_id = request_id.value(),
-                            attempted_prefill_chunck_token_count,
+                            attempted_prefill_chunk_token_count,
                             smaller_executable_chunk_size_tokens,
                             reason = %reason,
                             "prefill admission selected the next smaller executable chunk"
                         );
-                        attempted_prefill_chunck_token_count = smaller_executable_chunk_size_tokens;
+                        attempted_prefill_chunk_token_count = smaller_executable_chunk_size_tokens;
                         has_observed_prefill_capacity_constraint = true;
-                        has_retried_current_prefill_chunck_after_reclamation = false;
+                        has_retried_current_prefill_chunk_after_reclamation = false;
                         continue;
                     }
                     tracing::warn!(
                         request_id = request_id.value(),
-                        attempted_prefill_chunck_token_count,
+                        attempted_prefill_chunk_token_count,
                         reason = %reason,
                         "fixed prefill chunk cannot fit under the MLX ceiling after expert-memory admission"
                     );
                     return Err(invalid_request_error(format!(
-                        "configured prefill chunk of {attempted_prefill_chunck_token_count} tokens cannot fit under the MLX ceiling after reclaiming elastic experts: {reason}"
+                        "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling after reclaiming elastic experts: {reason}"
                     )));
                 }
-                Err(PromptPrefillChunckAttemptError::ActiveMemoryLimitExceeded {
+                Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
                     active_memory_bytes,
                     attempted_allocation_bytes,
                     allowed_active_memory_bytes,
                     prefill_request_checkpoint,
                 }) => {
-                    let should_retry_same_prefill_chunck = self
-                        .recover_fixed_prefill_chunck_after_active_memory_limit(
+                    let should_retry_same_prefill_chunk = self
+                        .recover_fixed_prefill_chunk_after_active_memory_limit(
                             request_id,
                             active_request,
-                            attempted_prefill_chunck_token_count,
+                            attempted_prefill_chunk_token_count,
                             active_memory_bytes,
                             attempted_allocation_bytes,
                             allowed_active_memory_bytes,
                             prefill_request_checkpoint,
-                            has_retried_current_prefill_chunck_after_reclamation,
+                            has_retried_current_prefill_chunk_after_reclamation,
                         )?;
                     has_observed_prefill_capacity_constraint = true;
-                    if should_retry_same_prefill_chunck {
-                        has_retried_current_prefill_chunck_after_reclamation = true;
+                    if should_retry_same_prefill_chunk {
+                        has_retried_current_prefill_chunk_after_reclamation = true;
                         active_request
                             .performance_attribution
                             .record_counter(PerformanceCounter::PrefillCapacityRetryCount, 1);
                     } else {
                         if let Some(smaller_executable_chunk_size_tokens) =
                             Qwen3_5PromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
-                                attempted_prefill_chunck_token_count,
+                                attempted_prefill_chunk_token_count,
                             )
                         {
-                            attempted_prefill_chunck_token_count =
+                            attempted_prefill_chunk_token_count =
                                 smaller_executable_chunk_size_tokens;
-                            has_retried_current_prefill_chunck_after_reclamation = false;
+                            has_retried_current_prefill_chunk_after_reclamation = false;
                             continue;
                         }
                         return Err(invalid_request_error(format!(
-                            "configured prefill chunk of {attempted_prefill_chunck_token_count} tokens cannot fit under the MLX ceiling after reclaiming elastic experts"
+                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling after reclaiming elastic experts"
                         )));
                     }
                 }
-                Err(PromptPrefillChunckAttemptError::GraphicsProcessorMemoryExhausted {
+                Err(PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
                     reason,
                     prefill_request_checkpoint,
                 }) => {
-                    let should_retry_same_prefill_chunck = self
-                        .recover_fixed_prefill_chunck_after_graphics_processor_exhaustion(
+                    let should_retry_same_prefill_chunk = self
+                        .recover_fixed_prefill_chunk_after_graphics_processor_exhaustion(
                             request_id,
                             active_request,
-                            attempted_prefill_chunck_token_count,
+                            attempted_prefill_chunk_token_count,
                             reason.as_str(),
                             prefill_request_checkpoint,
-                            has_retried_current_prefill_chunck_after_reclamation,
+                            has_retried_current_prefill_chunk_after_reclamation,
                         )?;
                     has_observed_prefill_capacity_constraint = true;
-                    if should_retry_same_prefill_chunck {
-                        has_retried_current_prefill_chunck_after_reclamation = true;
+                    if should_retry_same_prefill_chunk {
+                        has_retried_current_prefill_chunk_after_reclamation = true;
                         active_request
                             .performance_attribution
                             .record_counter(PerformanceCounter::PrefillCapacityRetryCount, 1);
                     } else {
                         if let Some(smaller_executable_chunk_size_tokens) =
                             Qwen3_5PromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
-                                attempted_prefill_chunck_token_count,
+                                attempted_prefill_chunk_token_count,
                             )
                         {
-                            attempted_prefill_chunck_token_count =
+                            attempted_prefill_chunk_token_count =
                                 smaller_executable_chunk_size_tokens;
-                            has_retried_current_prefill_chunck_after_reclamation = false;
+                            has_retried_current_prefill_chunk_after_reclamation = false;
                             continue;
                         }
                         return Err(invalid_request_error(format!(
-                            "configured prefill chunk of {attempted_prefill_chunck_token_count} tokens exhausted GPU memory after reclaiming elastic experts: {reason}"
+                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory after reclaiming elastic experts: {reason}"
                         )));
                     }
                 }
             }
         };
         let active_memory_bytes_before_growth =
-            prompt_prefill_chunck_outcome.active_memory_bytes_before_growth;
+            prompt_prefill_chunk_outcome.active_memory_bytes_before_growth;
         let retained_expert_payload_bytes_before_growth =
-            prompt_prefill_chunck_outcome.retained_expert_payload_bytes_before_growth;
+            prompt_prefill_chunk_outcome.retained_expert_payload_bytes_before_growth;
         let forward_chunk_elapsed_millis =
-            prompt_prefill_chunck_outcome.forward_chunk_elapsed_millis;
-        let adaptive_ram_growth_context = prompt_prefill_chunck_outcome.adaptive_ram_growth_context;
+            prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
+        let adaptive_ram_growth_context = prompt_prefill_chunk_outcome.adaptive_ram_growth_context;
         let exact_temporary_workspace_bytes =
-            prompt_prefill_chunck_outcome.exact_temporary_workspace_bytes;
-        let boundary_checkpoints = prompt_prefill_chunck_outcome.boundary_checkpoints;
+            prompt_prefill_chunk_outcome.exact_temporary_workspace_bytes;
+        let boundary_checkpoints = prompt_prefill_chunk_outcome.boundary_checkpoints;
         let model = self
             .model
             .as_ref()
@@ -332,7 +332,7 @@ impl Qwen3_5EngineState {
         // work without ever teaching subsequent admission about its workspace.
         let should_retain_adaptive_ram_growth_observation = true;
         if has_observed_prefill_capacity_constraint {
-            active_request.record_successful_capacity_prefill_chunck(prefill_token_count);
+            active_request.record_successful_capacity_prefill_chunk(prefill_token_count);
         }
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
@@ -357,9 +357,9 @@ impl Qwen3_5EngineState {
         active_request.prefill_cursor = prefill_end;
         // Retire the chunk tape. Reclaim the allocator cache only when it is
         // large enough to justify an IOGPU-visible clear.
-        let memory_snapshot_before_end_of_prefill_chunck_cleanup =
+        let memory_snapshot_before_end_of_prefill_chunk_cleanup =
             model.runtime().memory_snapshot().ok();
-        let end_of_prefill_chunck_cleanup_started_at = Instant::now();
+        let end_of_prefill_chunk_cleanup_started_at = Instant::now();
         active_request
             .performance_attribution
             .measure_operation(
@@ -373,31 +373,31 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(qwen3_5_runtime_error)?;
-        let memory_snapshot_after_end_of_prefill_chunck_cleanup =
+        let memory_snapshot_after_end_of_prefill_chunk_cleanup =
             model.runtime().memory_snapshot().ok();
         tracing::info!(
             request_id = request_id.value(),
-            cleanup_stage = "end_of_prefill_chunck_cleanup",
+            cleanup_stage = "end_of_prefill_chunk_cleanup",
             prefill_start,
             prefill_end,
             active_memory_bytes_before_cleanup =
-                memory_snapshot_before_end_of_prefill_chunck_cleanup
+                memory_snapshot_before_end_of_prefill_chunk_cleanup
                     .as_ref()
                     .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
             allocator_cache_memory_bytes_before_cleanup =
-                memory_snapshot_before_end_of_prefill_chunck_cleanup
+                memory_snapshot_before_end_of_prefill_chunk_cleanup
                     .as_ref()
                     .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
-            active_memory_bytes_after_cleanup = memory_snapshot_after_end_of_prefill_chunck_cleanup
+            active_memory_bytes_after_cleanup = memory_snapshot_after_end_of_prefill_chunk_cleanup
                 .as_ref()
                 .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
             allocator_cache_memory_bytes_after_cleanup =
-                memory_snapshot_after_end_of_prefill_chunck_cleanup
+                memory_snapshot_after_end_of_prefill_chunk_cleanup
                     .as_ref()
                     .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
             runtime_active_memory_limit_bytes =
                 model.runtime().memory_limits().active_memory_limit_bytes(),
-            cleanup_elapsed_millis = end_of_prefill_chunck_cleanup_started_at
+            cleanup_elapsed_millis = end_of_prefill_chunk_cleanup_started_at
                 .elapsed()
                 .as_millis(),
             "cleared MLX allocator-cache storage after prompt-processing chunk"
@@ -416,14 +416,14 @@ impl Qwen3_5EngineState {
         // Rebuilding them at every barrier would repeatedly read the same model
         // payload while the demand histogram is still changing.
         let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
-        let prefill_chunck_elapsed_millis = forward_chunk_started_at.elapsed().as_millis() as u64;
+        let prefill_chunk_elapsed_millis = forward_chunk_started_at.elapsed().as_millis() as u64;
         tracing::trace!(
             request_id = request_id.value(),
             prefill_start_token = prefill_start,
             prefill_end_token = prefill_end,
             prefill_token_count,
             forward_chunk_elapsed_millis,
-            prefill_chunck_elapsed_millis,
+            prefill_chunk_elapsed_millis,
             "completed synchronous Qwen3.5 prompt-processing chunk"
         );
         let mlx_memory_telemetry = mlx_memory_snapshot
@@ -467,7 +467,7 @@ impl Qwen3_5EngineState {
             .and_then(|telemetry| telemetry.expert_residency_telemetry());
         Ok(Some(GeneratedToken::PrefillProgress {
             processed_token_count: prefill_token_count as u32,
-            elapsed_millis: prefill_chunck_elapsed_millis,
+            elapsed_millis: prefill_chunk_elapsed_millis,
             forward_prefill_chunk_elapsed_millis: forward_chunk_elapsed_millis,
             completed_prefill_chunk_tokens: u32::try_from(prefill_token_count).map_err(|_| {
                 fatal_engine_error("completed_prefill_chunk_tokens exceeds the u32 range")

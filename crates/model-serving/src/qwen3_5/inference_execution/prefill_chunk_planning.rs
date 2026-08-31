@@ -6,29 +6,29 @@
 //! feed into admission and the forward dispatch.
 
 use crate::{
-    AdaptiveRamGrowthContext, persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
+    AdaptiveRamGrowthContext, persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
-use super::prompt_prefill_errors::PromptPrefillChunckAttemptError;
+use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{
-    Qwen3_5EngineState, Qwen3_5SpeculativePrefillChunckMode, fatal_engine_error,
+    Qwen3_5EngineState, Qwen3_5SpeculativePrefillChunkMode, fatal_engine_error,
     qwen3_5_runtime_error, qwen3_5_selected_speculative_prefill_positions_for_range,
-    qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
+    qwen3_5_speculative_prefill_chunk_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 
 /// Immutable decisions computed before memory admission and forward execution.
 ///
 /// Every field is a pure function of the request state and the model config.
 /// Nothing here triggers GPU work or mutable engine state.
-pub(super) struct PrefillChunckPlan {
+pub(super) struct PrefillChunkPlan {
     /// Token count of this chunk (`prefill_end - prefill_start`).
     pub(super) prefill_token_count: usize,
 
     /// Speculative-prefill mode for this chunk (dense prefix, sparse target,
     /// or terminal history capture).
-    pub(super) speculative_prefill_chunck_mode: Qwen3_5SpeculativePrefillChunckMode,
+    pub(super) speculative_prefill_chunk_mode: Qwen3_5SpeculativePrefillChunkMode,
 
     /// Whether sparse speculative-prefill target execution is active for this
     /// chunk. When true, only selected positions are forwarded on the dense
@@ -40,16 +40,16 @@ pub(super) struct PrefillChunckPlan {
 
     /// Absolute prompt positions selected for speculative-prefill sparse
     /// target within this chunk.
-    pub(super) selected_speculative_prefill_positions_for_current_chunck: Vec<usize>,
+    pub(super) selected_speculative_prefill_positions_for_current_chunk: Vec<usize>,
 
     /// Completed chunk-end offsets (relative to chunk start) where a prompt
     /// cache boundary checkpoint should be captured after the forward.
-    pub(super) all_completed_prefill_chunck_tokens: Vec<usize>,
+    pub(super) all_completed_prefill_chunk_tokens: Vec<usize>,
 
-    /// Like `all_completed_prefill_chunck_tokens` but with the final boundary
+    /// Like `all_completed_prefill_chunk_tokens` but with the final boundary
     /// removed — intermediate checkpoints that need a snapshot during the
     /// forward.
-    pub(super) intermediate_completed_prefill_chunck_tokens: Vec<usize>,
+    pub(super) intermediate_completed_prefill_chunk_tokens: Vec<usize>,
 
     /// Block token count from the persistent prompt-cache contract, if
     /// applicable.
@@ -71,15 +71,15 @@ pub(super) struct PrefillChunckPlan {
 impl Qwen3_5EngineState {
     /// Compute all pre-admission decisions for a prompt-processing chunk.
     ///
-    /// Returns a plan that feeds into `execute_prompt_prefill_chunck`'s
+    /// Returns a plan that feeds into `execute_prompt_prefill_chunk`'s
     /// admission and forward phases. This method performs no GPU work and
     /// no mutable engine state changes.
-    pub(super) fn plan_prompt_prefill_chunck(
+    pub(super) fn plan_prompt_prefill_chunk(
         &self,
         active_request: &Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
-    ) -> Result<PrefillChunckPlan, PromptPrefillChunckAttemptError> {
+    ) -> Result<PrefillChunkPlan, PromptPrefillChunkAttemptError> {
         let model = self
             .model
             .as_ref()
@@ -91,7 +91,7 @@ impl Qwen3_5EngineState {
             .checked_sub(1)
             .ok_or_else(|| fatal_engine_error("generation prompt must not be empty"))?;
 
-        let speculative_prefill_chunck_mode = qwen3_5_speculative_prefill_chunck_mode(
+        let speculative_prefill_chunk_mode = qwen3_5_speculative_prefill_chunk_mode(
             active_request.has_optional_prediction_session(),
             prefill_end,
             final_prompt_index,
@@ -115,7 +115,7 @@ impl Qwen3_5EngineState {
         // plan checkpoint boundaries, derive a synthetic block length, or
         // reserve checkpoint/publication memory. Cache-enabled execution uses
         // the one contract owned by the open store.
-        let (all_completed_prefill_chunck_tokens, persistent_prompt_cache_block_token_count) =
+        let (all_completed_prefill_chunk_tokens, persistent_prompt_cache_block_token_count) =
             if capture_is_eligible {
                 let persistent_prompt_cache_block_token_count = self
                     .persistent_prompt_cache
@@ -128,7 +128,7 @@ impl Qwen3_5EngineState {
                     .model_contract_ref()
                     .block_token_count();
                 (
-                    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
+                    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
                         prefill_start,
                         prefill_end,
                         persistent_prompt_cache_block_token_count,
@@ -139,15 +139,15 @@ impl Qwen3_5EngineState {
                 (Vec::new(), None)
             };
 
-        let mut intermediate_completed_prefill_chunck_tokens =
-            all_completed_prefill_chunck_tokens.clone();
-        if intermediate_completed_prefill_chunck_tokens.last().copied() == Some(prefill_token_count)
+        let mut intermediate_completed_prefill_chunk_tokens =
+            all_completed_prefill_chunk_tokens.clone();
+        if intermediate_completed_prefill_chunk_tokens.last().copied() == Some(prefill_token_count)
         {
-            intermediate_completed_prefill_chunck_tokens.pop();
+            intermediate_completed_prefill_chunk_tokens.pop();
         }
 
         let boundary_checkpoint_workspace_bytes =
-            if intermediate_completed_prefill_chunck_tokens.is_empty() {
+            if intermediate_completed_prefill_chunk_tokens.is_empty() {
                 0
             } else {
                 model
@@ -158,14 +158,13 @@ impl Qwen3_5EngineState {
                             "failed to project boundary checkpoint workspace: {error}"
                         ))
                     })?
-                    .checked_mul(intermediate_completed_prefill_chunck_tokens.len())
+                    .checked_mul(intermediate_completed_prefill_chunk_tokens.len())
                     .ok_or_else(|| {
                         fatal_engine_error("boundary checkpoint workspace bytes overflowed")
                     })?
             };
 
-        let direct_publication_workspace_bytes = if !all_completed_prefill_chunck_tokens.is_empty()
-        {
+        let direct_publication_workspace_bytes = if !all_completed_prefill_chunk_tokens.is_empty() {
             self.persistent_prompt_cache
                 .as_ref()
                 .map(|persistent_prompt_cache| {
@@ -184,7 +183,7 @@ impl Qwen3_5EngineState {
                 fatal_engine_error("prompt-cache publication workspace bytes overflowed")
             })?;
 
-        let selected_speculative_prefill_positions_for_current_chunck =
+        let selected_speculative_prefill_positions_for_current_chunk =
             if active_request.should_use_speculative_prefill {
                 active_request
                     .speculative_prefill_selected_token_positions
@@ -203,23 +202,23 @@ impl Qwen3_5EngineState {
         // Global selection positions are ascending absolute offsets. Slice them
         // to this logical chunk without changing their original prompt positions.
         let speculative_prefill_target_token_count =
-            selected_speculative_prefill_positions_for_current_chunck.len();
+            selected_speculative_prefill_positions_for_current_chunk.len();
 
         let speculative_prefill_target_is_active =
             speculative_prefill_sparse_conversation_range_is_active
                 && !matches!(
-                    speculative_prefill_chunck_mode,
-                    Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
+                    speculative_prefill_chunk_mode,
+                    Qwen3_5SpeculativePrefillChunkMode::TerminalAdditionalHistoryCapture
                 );
 
         // Terminal optional-history capture needs dense target hidden rows, so
         // it deliberately overrides sparse execution for that one final chunk.
         let additional_persistent_state_growth_bytes = match (
-            speculative_prefill_chunck_mode,
+            speculative_prefill_chunk_mode,
             active_request.optional_prediction_session(),
         ) {
             (
-                Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture,
+                Qwen3_5SpeculativePrefillChunkMode::TerminalAdditionalHistoryCapture,
                 Some(optional_prediction_session),
             ) if active_request.visual_embeddings.is_none() => {
                 let additional_full_attention_bytes_per_layer_token = model
@@ -251,8 +250,8 @@ impl Qwen3_5EngineState {
                     && !active_request.has_optional_prediction_session(),
             )
             .with_target_only_prefix(matches!(
-                speculative_prefill_chunck_mode,
-                Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix
+                speculative_prefill_chunk_mode,
+                Qwen3_5SpeculativePrefillChunkMode::TargetOnlyPrefix
             ))
             .with_speculative_prefill_sparse_target(speculative_prefill_target_is_active)
             .context_identifier_flags(),
@@ -261,14 +260,14 @@ impl Qwen3_5EngineState {
             model.sparse_experts_are_paged(),
         );
 
-        Ok(PrefillChunckPlan {
+        Ok(PrefillChunkPlan {
             prefill_token_count,
-            speculative_prefill_chunck_mode,
+            speculative_prefill_chunk_mode,
             speculative_prefill_target_is_active,
             speculative_prefill_target_token_count,
-            selected_speculative_prefill_positions_for_current_chunck,
-            all_completed_prefill_chunck_tokens,
-            intermediate_completed_prefill_chunck_tokens,
+            selected_speculative_prefill_positions_for_current_chunk,
+            all_completed_prefill_chunk_tokens,
+            intermediate_completed_prefill_chunk_tokens,
             persistent_prompt_cache_block_token_count,
             direct_publication_workspace_bytes,
             exact_temporary_workspace_bytes,

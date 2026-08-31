@@ -16,7 +16,7 @@ pub(crate) fn select_absolute_speculative_prefill_positions_from_draft_scores(
     selectable_importance_score_range: std::ops::Range<usize>,
     scoring_start_position_tokens: usize,
     keep_percentage: u32,
-    selection_chunck_token_count: u32,
+    selection_chunk_token_count: u32,
     mandatory_trailing_token_count: u32,
 ) -> Result<
     (
@@ -60,7 +60,7 @@ pub(crate) fn select_absolute_speculative_prefill_positions_from_draft_scores(
         draft_model.runtime(),
         &selectable_importance_scores,
         keep_percentage,
-        usize::try_from(selection_chunck_token_count).map_err(|_| {
+        usize::try_from(selection_chunk_token_count).map_err(|_| {
             crate::Qwen3_5ExecutionError::InvalidInput {
                 description: "speculative-prefill selection chunk count exceeds the usize range",
             }

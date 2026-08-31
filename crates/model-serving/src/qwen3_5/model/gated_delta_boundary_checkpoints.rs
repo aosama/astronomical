@@ -75,7 +75,7 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     decays: &MlxArray,
     update_rates: &MlxArray,
     recurrent_state: &MlxArray,
-    completed_prefill_chunck_tokens: &[i32],
+    completed_prefill_chunk_tokens: &[i32],
     checkpoint_interval_token_count: i32,
 ) -> Result<Qwen3_5GatedDeltaBoundaryCheckpointResult, MlxRuntimeError> {
     let sequence_shape = validate_gated_delta_sequence_shapes(
@@ -87,16 +87,16 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
         recurrent_state,
     )?;
     validate_boundary_checkpoint_positions(
-        completed_prefill_chunck_tokens,
+        completed_prefill_chunk_tokens,
         checkpoint_interval_token_count,
         sequence_shape.token_count,
     )?;
-    let checkpoint_count = i32::try_from(completed_prefill_chunck_tokens.len()).map_err(|_| {
+    let checkpoint_count = i32::try_from(completed_prefill_chunk_tokens.len()).map_err(|_| {
         gated_delta_sequence_error("gated-delta checkpoint count exceeds the Int32 range")
     })?;
     let token_count = runtime.array_from_i32(&[sequence_shape.token_count], &[])?;
     let first_checkpoint_token_count =
-        runtime.array_from_i32(&[completed_prefill_chunck_tokens[0]], &[])?;
+        runtime.array_from_i32(&[completed_prefill_chunk_tokens[0]], &[])?;
     let checkpoint_interval_token_count =
         runtime.array_from_i32(&[checkpoint_interval_token_count], &[])?;
     let checkpoint_count_input = runtime.array_from_i32(&[checkpoint_count], &[])?;
@@ -164,7 +164,7 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
         gated_delta_sequence_error("checkpoint kernel did not return boundary recurrent states")
     })?;
     let recurrent_state_shape = recurrent_state.shape();
-    let mut recurrent_boundary_states = Vec::with_capacity(completed_prefill_chunck_tokens.len());
+    let mut recurrent_boundary_states = Vec::with_capacity(completed_prefill_chunk_tokens.len());
     for checkpoint_index in 0..checkpoint_count {
         let recurrent_boundary_state_with_checkpoint_axis = runtime.slice(
             &packed_recurrent_boundary_states,
@@ -191,11 +191,11 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
 }
 
 fn validate_boundary_checkpoint_positions(
-    completed_prefill_chunck_tokens: &[i32],
+    completed_prefill_chunk_tokens: &[i32],
     checkpoint_interval_token_count: i32,
     token_count: i32,
 ) -> Result<(), MlxRuntimeError> {
-    if completed_prefill_chunck_tokens.is_empty() {
+    if completed_prefill_chunk_tokens.is_empty() {
         return Err(gated_delta_sequence_error(
             "gated-delta boundary checkpoint positions must not be empty",
         ));
@@ -205,24 +205,24 @@ fn validate_boundary_checkpoint_positions(
             "gated-delta checkpoint interval must be positive",
         ));
     }
-    let mut previous_completed_prefill_chunck_tokens = 0;
-    for current_completed_prefill_chunck_tokens in completed_prefill_chunck_tokens {
-        if *current_completed_prefill_chunck_tokens <= previous_completed_prefill_chunck_tokens
-            || *current_completed_prefill_chunck_tokens >= token_count
+    let mut previous_completed_prefill_chunk_tokens = 0;
+    for current_completed_prefill_chunk_tokens in completed_prefill_chunk_tokens {
+        if *current_completed_prefill_chunk_tokens <= previous_completed_prefill_chunk_tokens
+            || *current_completed_prefill_chunk_tokens >= token_count
         {
             return Err(gated_delta_sequence_error(
                 "gated-delta boundary checkpoints must be positive, strictly increasing, and less than token_count",
             ));
         }
-        if previous_completed_prefill_chunck_tokens > 0
-            && *current_completed_prefill_chunck_tokens - previous_completed_prefill_chunck_tokens
+        if previous_completed_prefill_chunk_tokens > 0
+            && *current_completed_prefill_chunk_tokens - previous_completed_prefill_chunk_tokens
                 != checkpoint_interval_token_count
         {
             return Err(gated_delta_sequence_error(
                 "gated-delta boundary checkpoint spacing must match the supplied interval",
             ));
         }
-        previous_completed_prefill_chunck_tokens = *current_completed_prefill_chunck_tokens;
+        previous_completed_prefill_chunk_tokens = *current_completed_prefill_chunk_tokens;
     }
     Ok(())
 }

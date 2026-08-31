@@ -148,23 +148,23 @@ async fn should_select_speculative_prefill_chunks_on_the_gpu() {
         vec![4, 5, 6, 7, 12, 13, 14, 15],
     );
 
-    let partial_final_chunck_scores = runtime
+    let partial_final_chunk_scores = runtime
         .array_from_f32(&[0.1, 0.2, 0.3, 0.4, 0.5], &[5])
         .expect("the partial final selection chunk should be valid");
-    let partial_final_chunck_positions = qwen3_5_select_speculative_prefill_token_positions_on_gpu(
+    let partial_final_chunk_positions = qwen3_5_select_speculative_prefill_token_positions_on_gpu(
         &runtime,
-        &partial_final_chunck_scores,
+        &partial_final_chunk_scores,
         100,
         3,
         1,
     )
     .expect("GPU selection should remove padded final positions");
-    let partial_final_chunck_positions = runtime
-        .astype(&partial_final_chunck_positions, MlxDtype::UInt32)
+    let partial_final_chunk_positions = runtime
+        .astype(&partial_final_chunk_positions, MlxDtype::UInt32)
         .expect("partial final positions should cast to uint32");
     assert_eq!(
         runtime
-            .copy_u32_values(&partial_final_chunck_positions)
+            .copy_u32_values(&partial_final_chunk_positions)
             .expect("the bounded partial final positions should copy"),
         vec![0, 1, 2, 3, 4],
     );

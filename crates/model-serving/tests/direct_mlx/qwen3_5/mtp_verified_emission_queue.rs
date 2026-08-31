@@ -8,7 +8,7 @@ fn frontier(position_tokens: u32, completed_verifier_rows: usize) -> VerifiedTar
     VerifiedTargetFrontier {
         position_tokens,
         boundary: Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-            completed_prefill_chunck_tokens: completed_verifier_rows,
+            completed_prefill_chunk_tokens: completed_verifier_rows,
             recurrent_snapshot_tensors: HashMap::new(),
         },
     }

@@ -17,7 +17,7 @@
 use astronomical_ipc_protocol::RequestId;
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5SpeculativePrefillFailureStageForTests};
-use super::prefill_chunk_planning::PrefillChunckPlan;
+use super::prefill_chunk_planning::PrefillChunkPlan;
 use super::prompt_prefill_counters::prepare_sparse_target_gpu_inputs;
 use super::terminal_prefill_seed::{
     chunk_requires_visual_embeddings, seed_first_generated_token_from_terminal_prefill_chunk,
@@ -65,7 +65,7 @@ impl From<InferenceEngineError> for PrefillForwardError {
 impl Qwen3_5EngineState {
     /// Execute the appropriate forward path for this chunk based on the plan.
     ///
-    /// Returns execution errors without wrapping in `PromptPrefillChunckAttemptError`
+    /// Returns execution errors without wrapping in `PromptPrefillChunkAttemptError`
     /// so the orchestrator can attach the checkpoint.
     pub(super) fn dispatch_prefill_forward(
         &mut self,
@@ -73,7 +73,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
-        plan: &PrefillChunckPlan,
+        plan: &PrefillChunkPlan,
     ) -> Result<ForwardDispatchOutcome, PrefillForwardError> {
         let model = self
             .model
@@ -90,7 +90,7 @@ impl Qwen3_5EngineState {
                 request_id,
                 active_request,
                 model,
-                &plan.selected_speculative_prefill_positions_for_current_chunck,
+                &plan.selected_speculative_prefill_positions_for_current_chunk,
                 plan.speculative_prefill_target_token_count,
             )?;
         }
@@ -200,7 +200,7 @@ fn dispatch_speculative_sparse_target_forward(
                     // preserve original rotary positions and image rows
                     // preserve visual consumption order.
                     model
-                        .prefill_chunck_with_speculative_prefill_gpu_token_indices_and_visual_embeddings_and_position_offsets_and_performance_attribution(
+                        .prefill_chunk_with_speculative_prefill_gpu_token_indices_and_visual_embeddings_and_position_offsets_and_performance_attribution(
                             &sparse_target_gpu_inputs.selected_token_indices_on_gpu,
                             &sparse_target_gpu_inputs.selected_prompt_token_ids,
                             active_request.next_position_tokens,
@@ -218,7 +218,7 @@ fn dispatch_speculative_sparse_target_forward(
                         })
                 } else {
                     model
-                        .prefill_chunck_with_speculative_prefill_gpu_token_indices_and_position_offsets_and_performance_attribution(
+                        .prefill_chunk_with_speculative_prefill_gpu_token_indices_and_position_offsets_and_performance_attribution(
                             &sparse_target_gpu_inputs.selected_token_indices_on_gpu,
                             sparse_target_gpu_inputs.selected_token_count_i32,
                             active_request.next_position_tokens,
@@ -249,7 +249,7 @@ fn dispatch_non_speculative_forward(
     model: &Qwen3_5Model,
     prefill_start: usize,
     prefill_end: usize,
-    plan: &PrefillChunckPlan,
+    plan: &PrefillChunkPlan,
 ) -> Result<NonSpeculativeOutcome, PrefillForwardError> {
     let mut boundary_checkpoints = Vec::new();
     let mut terminal_history_token_count = 0;
@@ -277,14 +277,14 @@ fn dispatch_non_speculative_forward(
                 model,
                 prefill_start,
                 prefill_end,
-                &plan.intermediate_completed_prefill_chunck_tokens,
+                &plan.intermediate_completed_prefill_chunk_tokens,
                 plan.persistent_prompt_cache_block_token_count,
             )?;
         boundary_checkpoints = visual_boundary_checkpoints;
         active_request.consumed_visual_embedding_count += consumed_visual_embedding_count;
     } else if matches!(
-        plan.speculative_prefill_chunck_mode,
-        super::Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture,
+        plan.speculative_prefill_chunk_mode,
+        super::Qwen3_5SpeculativePrefillChunkMode::TerminalAdditionalHistoryCapture,
     ) {
         terminal_history_token_count =
             dispatch_terminal_history_capture(active_request, model, prefill_start, prefill_end)?;
@@ -294,7 +294,7 @@ fn dispatch_non_speculative_forward(
             model,
             prefill_start,
             prefill_end,
-            &plan.intermediate_completed_prefill_chunck_tokens,
+            &plan.intermediate_completed_prefill_chunk_tokens,
             plan.persistent_prompt_cache_block_token_count,
         )?;
     }
@@ -314,7 +314,7 @@ fn dispatch_visual_prefill(
     model: &Qwen3_5Model,
     prefill_start: usize,
     prefill_end: usize,
-    intermediate_completed_prefill_chunck_tokens: &[usize],
+    intermediate_completed_prefill_chunk_tokens: &[usize],
     persistent_prompt_cache_block_token_count: Option<usize>,
 ) -> Result<
     (
@@ -329,9 +329,9 @@ fn dispatch_visual_prefill(
         .as_ref()
         .expect("dispatch_visual_prefill called when visual_embeddings is None");
 
-    if intermediate_completed_prefill_chunck_tokens.is_empty() {
+    if intermediate_completed_prefill_chunk_tokens.is_empty() {
         model
-            .prefill_chunck_with_visual_embeddings_and_performance_attribution(
+            .prefill_chunk_with_visual_embeddings_and_performance_attribution(
                 &active_request.input_token_ids[prefill_start..prefill_end],
                 active_request.next_position_tokens,
                 visual_embeddings,
@@ -349,14 +349,14 @@ fn dispatch_visual_prefill(
             }
         })?;
         model
-            .prefill_chunck_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
+            .prefill_chunk_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
                 &active_request.input_token_ids[prefill_start..prefill_end],
                 active_request.next_position_tokens,
                 visual_embeddings,
                 active_request.consumed_visual_embedding_count,
                 &mut active_request.request_decoder_state,
                 active_request.image_pad_token_id,
-                intermediate_completed_prefill_chunck_tokens.to_vec(),
+                intermediate_completed_prefill_chunk_tokens.to_vec(),
                 persistent_prompt_cache_block_token_count,
                 &mut active_request.performance_attribution,
             )
@@ -419,12 +419,11 @@ fn dispatch_text_prefill(
     model: &Qwen3_5Model,
     prefill_start: usize,
     prefill_end: usize,
-    intermediate_completed_prefill_chunck_tokens: &[usize],
+    intermediate_completed_prefill_chunk_tokens: &[usize],
     persistent_prompt_cache_block_token_count: Option<usize>,
 ) -> Result<Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
     let chunk_includes_final_prompt_token = prefill_end == active_request.input_token_ids.len();
-    if chunk_includes_final_prompt_token && intermediate_completed_prefill_chunck_tokens.is_empty()
-    {
+    if chunk_includes_final_prompt_token && intermediate_completed_prefill_chunk_tokens.is_empty() {
         seed_first_generated_token_from_terminal_prefill_chunk(
             model,
             active_request,
@@ -432,9 +431,9 @@ fn dispatch_text_prefill(
             prefill_end,
         )?;
         Ok(Vec::new())
-    } else if intermediate_completed_prefill_chunck_tokens.is_empty() {
+    } else if intermediate_completed_prefill_chunk_tokens.is_empty() {
         model
-            .prefill_chunck_with_performance_attribution(
+            .prefill_chunk_with_performance_attribution(
                 &active_request.input_token_ids[prefill_start..prefill_end],
                 active_request.next_position_tokens,
                 &mut active_request.request_decoder_state,
@@ -454,16 +453,16 @@ fn dispatch_text_prefill(
                 model,
                 prefill_start,
                 prefill_end,
-                intermediate_completed_prefill_chunck_tokens,
+                intermediate_completed_prefill_chunk_tokens,
                 persistent_prompt_cache_block_token_count,
             );
         }
         model
-            .prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
+            .prefill_chunk_with_boundary_checkpoints_and_performance_attribution(
                 &active_request.input_token_ids[prefill_start..prefill_end],
                 active_request.next_position_tokens,
                 &mut active_request.request_decoder_state,
-                intermediate_completed_prefill_chunck_tokens.to_vec(),
+                intermediate_completed_prefill_chunk_tokens.to_vec(),
                 persistent_prompt_cache_block_token_count,
                 &mut active_request.performance_attribution,
             )

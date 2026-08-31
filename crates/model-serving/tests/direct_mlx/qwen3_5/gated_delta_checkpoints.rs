@@ -119,7 +119,7 @@ async fn should_checkpoint_reject_invalid_gated_delta_boundary_plans() {
         .expect("the validation recurrent state should be valid");
     let checkpoint_kernel = qwen3_5_gated_delta_checkpoint_kernel()
         .expect("the checkpoint gated-delta kernel should construct");
-    for (completed_prefill_chunck_tokens, checkpoint_interval_token_count) in [
+    for (completed_prefill_chunk_tokens, checkpoint_interval_token_count) in [
         (vec![], 2),
         (vec![0], 2),
         (vec![4, 2], 2),
@@ -139,11 +139,11 @@ async fn should_checkpoint_reject_invalid_gated_delta_boundary_plans() {
                 &complete_inputs.3,
                 &complete_inputs.4,
                 &initial_recurrent_state,
-                &completed_prefill_chunck_tokens,
+                &completed_prefill_chunk_tokens,
                 checkpoint_interval_token_count,
             )
             .is_err(),
-            "invalid checkpoint plan should be rejected: {completed_prefill_chunck_tokens:?} with interval {checkpoint_interval_token_count}"
+            "invalid checkpoint plan should be rejected: {completed_prefill_chunk_tokens:?} with interval {checkpoint_interval_token_count}"
         );
     }
 }
