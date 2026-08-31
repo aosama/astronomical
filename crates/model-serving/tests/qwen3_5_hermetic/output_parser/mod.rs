@@ -20,6 +20,7 @@ mod foreign_dialect;
 mod happy_path_permutations;
 mod marker_permutations;
 mod permissive_arguments;
+mod prose_marker_hijack;
 mod reasoning;
 mod schema_forms;
 mod support;
