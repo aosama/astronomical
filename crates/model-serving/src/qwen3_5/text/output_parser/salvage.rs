@@ -13,7 +13,7 @@ use super::{
 impl Qwen3_5OutputParser {
     pub(super) fn salvage_unclosed_tool_call(&mut self) -> Vec<Qwen3_5OutputEvent> {
         let entry = match self.state {
-            Qwen3_5OutputParserState::ToolCall(entry) => entry,
+            Qwen3_5OutputParserState::ToolCall(entry) => entry.kind,
             _ => ToolCallEntryKind::Envelope,
         };
         let remaining_body = std::mem::take(&mut self.pending_output);
@@ -21,9 +21,21 @@ impl Qwen3_5OutputParser {
         let tool_call_body = reconstruct_tool_call_body(entry, &remaining_body);
         match self.fail_open_closed_tool_call(&tool_call_body) {
             Some(salvaged_event) => {
+                log_salvaged_unclosed_tool_call(
+                    self.parse_tool_call(&tool_call_body).err().as_ref(),
+                    &tool_call_body,
+                    Some(&salvaged_event),
+                );
                 vec![self.emit_tool_call_or_visible_text(salvaged_event, tool_call_body)]
             }
-            None => Vec::new(),
+            None => {
+                log_salvaged_unclosed_tool_call(
+                    self.parse_tool_call(&tool_call_body).err().as_ref(),
+                    &tool_call_body,
+                    None,
+                );
+                Vec::new()
+            }
         }
     }
 
@@ -53,6 +65,32 @@ impl Qwen3_5OutputParser {
         self.completed_tool_call_count = next_completed_tool_call_count;
         true
     }
+}
+
+/// Salvaging drops the pending call from the state machine without the closed-path
+/// warning, so this log is the only production signal that a generation ended with
+/// an unclosed tool-call attempt.
+pub(super) fn log_salvaged_unclosed_tool_call(
+    parser_error: Option<&Qwen3_5OutputParserError>,
+    tool_call_body: &str,
+    salvaged_event: Option<&Qwen3_5OutputEvent>,
+) {
+    let (function_name, forwarded_arguments_json) = match salvaged_event {
+        Some(Qwen3_5OutputEvent::ToolCall(tool_call)) => (
+            tool_call.function_name.as_str(),
+            tool_call.arguments_json.as_str(),
+        ),
+        _ => ("", ""),
+    };
+    tracing::warn!(
+        diagnostic_code = parser_error
+            .map(Qwen3_5OutputParserError::diagnostic_code)
+            .unwrap_or("unclosed_tool_call"),
+        function_name,
+        forwarded_arguments_json,
+        unclosed_tool_call_body = bounded_fail_open_log_body(tool_call_body),
+        "salvaged unclosed Qwen3.5 tool call"
+    );
 }
 
 pub(super) fn log_fail_open_closed_tool_call(
