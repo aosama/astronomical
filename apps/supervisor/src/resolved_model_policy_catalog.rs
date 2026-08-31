@@ -192,7 +192,7 @@ fn speculative_prefill_configuration(
         draft_model_directory: Some(draft_model_directory),
         minimum_prompt_tokens: speculative_prefill_config.minimum_prompt_tokens(),
         keep_percentage: speculative_prefill_config.keep_percentage(),
-        selection_chunck_token_count: speculative_prefill_config.selection_chunck_token_count(),
+        selection_chunk_token_count: speculative_prefill_config.selection_chunk_token_count(),
         mandatory_trailing_token_count: speculative_prefill_config.mandatory_trailing_token_count(),
         lookahead_token_count: speculative_prefill_config.lookahead_token_count(),
         importance_pooling_kernel_token_count: speculative_prefill_config

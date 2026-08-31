@@ -83,9 +83,9 @@ impl ConvolutionState {
         runtime: &MlxRuntime,
         mixed_queries_keys_values: &MlxArray,
         token_count: i32,
-        completed_prefill_chunck_tokens: &[i32],
+        completed_prefill_chunk_tokens: &[i32],
     ) -> Result<ConvolutionStateBoundaryCheckpointUpdate, MlxRuntimeError> {
-        if completed_prefill_chunck_tokens.is_empty() {
+        if completed_prefill_chunk_tokens.is_empty() {
             return Err(convolution_error(
                 "boundary checkpoint positions must not be empty".to_owned(),
             ));
@@ -94,7 +94,7 @@ impl ConvolutionState {
             runtime,
             mixed_queries_keys_values,
             token_count,
-            completed_prefill_chunck_tokens,
+            completed_prefill_chunk_tokens,
         )
     }
 
@@ -103,7 +103,7 @@ impl ConvolutionState {
         runtime: &MlxRuntime,
         mixed_queries_keys_values: &MlxArray,
         token_count: i32,
-        completed_prefill_chunck_tokens: &[i32],
+        completed_prefill_chunk_tokens: &[i32],
     ) -> Result<ConvolutionStateBoundaryCheckpointUpdate, MlxRuntimeError> {
         let input_shape = mixed_queries_keys_values.shape();
         let expected_input_shape = [1, token_count, self.linear_convolution_dimension];
@@ -114,17 +114,17 @@ impl ConvolutionState {
             )));
         }
         let rolling_buffer_tokens = self.linear_convolution_kernel_dimension.saturating_sub(1);
-        let mut previous_completed_prefill_chunck_tokens = 0;
-        for current_completed_prefill_chunck_tokens in completed_prefill_chunck_tokens {
-            if *current_completed_prefill_chunck_tokens <= previous_completed_prefill_chunck_tokens
-                || *current_completed_prefill_chunck_tokens >= token_count
+        let mut previous_completed_prefill_chunk_tokens = 0;
+        for current_completed_prefill_chunk_tokens in completed_prefill_chunk_tokens {
+            if *current_completed_prefill_chunk_tokens <= previous_completed_prefill_chunk_tokens
+                || *current_completed_prefill_chunk_tokens >= token_count
             {
                 return Err(convolution_error(
                     "boundary checkpoint positions must be positive, strictly increasing, and less than token_count"
                         .to_owned(),
                 ));
             }
-            previous_completed_prefill_chunck_tokens = *current_completed_prefill_chunck_tokens;
+            previous_completed_prefill_chunk_tokens = *current_completed_prefill_chunk_tokens;
         }
         if self.state.as_ref().is_some_and(|state| {
             state.shape() != [1, rolling_buffer_tokens, self.linear_convolution_dimension]
@@ -152,14 +152,14 @@ impl ConvolutionState {
             runtime.concatenate_axis(&[initial_state, mixed_queries_keys_values], 1)?;
 
         let mut boundary_convolution_states =
-            Vec::with_capacity(completed_prefill_chunck_tokens.len());
-        for current_completed_prefill_chunck_tokens in completed_prefill_chunck_tokens {
+            Vec::with_capacity(completed_prefill_chunk_tokens.len());
+        for current_completed_prefill_chunk_tokens in completed_prefill_chunk_tokens {
             boundary_convolution_states.push(runtime.slice(
                 &convolution_input,
-                &[0, *current_completed_prefill_chunck_tokens, 0],
+                &[0, *current_completed_prefill_chunk_tokens, 0],
                 &[
                     1,
-                    current_completed_prefill_chunck_tokens + rolling_buffer_tokens,
+                    current_completed_prefill_chunk_tokens + rolling_buffer_tokens,
                     self.linear_convolution_dimension,
                 ],
                 &[1, 1, 1],

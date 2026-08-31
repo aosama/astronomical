@@ -34,7 +34,7 @@ pub(crate) struct Qwen3_5SpeculativePrefillStoreKey {
     pub(crate) token_identifier_mapping_digest: Option<[u8; 32]>,
     /// Selection policy inputs; changing any one invalidates reuse.
     pub(crate) keep_percentage: u32,
-    pub(crate) selection_chunck_token_count: u32,
+    pub(crate) selection_chunk_token_count: u32,
     pub(crate) mandatory_trailing_token_count: u32,
     pub(crate) lookahead_token_count: u32,
     pub(crate) importance_pooling_kernel_token_count: u32,
@@ -65,7 +65,7 @@ impl Qwen3_5EngineState {
             self.speculative_prefill_draft_model_revision.clone()?,
             self.speculative_prefill_token_identifier_mapping_digest?,
             self.speculative_prefill.keep_percentage,
-            self.speculative_prefill.selection_chunck_token_count,
+            self.speculative_prefill.selection_chunk_token_count,
             self.speculative_prefill.mandatory_trailing_token_count,
             self.speculative_prefill.lookahead_token_count,
             self.speculative_prefill
@@ -86,7 +86,7 @@ impl Qwen3_5EngineState {
             self.speculative_prefill_draft_model_revision.clone()?,
             self.speculative_prefill_token_identifier_mapping_digest?,
             self.speculative_prefill.keep_percentage,
-            self.speculative_prefill.selection_chunck_token_count,
+            self.speculative_prefill.selection_chunk_token_count,
             self.speculative_prefill.mandatory_trailing_token_count,
             self.speculative_prefill.lookahead_token_count,
             self.speculative_prefill
@@ -108,7 +108,7 @@ impl Qwen3_5EngineState {
             token_identifier_mapping_digest: self
                 .speculative_prefill_token_identifier_mapping_digest,
             keep_percentage: self.speculative_prefill.keep_percentage,
-            selection_chunck_token_count: self.speculative_prefill.selection_chunck_token_count,
+            selection_chunk_token_count: self.speculative_prefill.selection_chunk_token_count,
             mandatory_trailing_token_count: self.speculative_prefill.mandatory_trailing_token_count,
             lookahead_token_count: self.speculative_prefill.lookahead_token_count,
             importance_pooling_kernel_token_count: self
@@ -243,8 +243,8 @@ impl Qwen3_5EngineState {
             && draft_prefix_store_key.token_identifier_mapping_digest
                 == self.speculative_prefill_token_identifier_mapping_digest
             && draft_prefix_store_key.keep_percentage == self.speculative_prefill.keep_percentage
-            && draft_prefix_store_key.selection_chunck_token_count
-                == self.speculative_prefill.selection_chunck_token_count
+            && draft_prefix_store_key.selection_chunk_token_count
+                == self.speculative_prefill.selection_chunk_token_count
             && draft_prefix_store_key.mandatory_trailing_token_count
                 == self.speculative_prefill.mandatory_trailing_token_count
             && draft_prefix_store_key.lookahead_token_count

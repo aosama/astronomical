@@ -189,7 +189,7 @@ impl Qwen3_5Model {
     /// `visual_embeddings` carries the full visual embedding tensor for all images in the request.
     /// `starting_visual_embedding_index` tracks how many visual embeddings earlier chunks consumed.
     /// Returns the count of visual embeddings consumed by this chunk.
-    pub fn prefill_chunck_with_visual_embeddings(
+    pub fn prefill_chunk_with_visual_embeddings(
         &self,
         chunk_token_ids: &[u32],
         starting_position_tokens: u32,
@@ -199,7 +199,7 @@ impl Qwen3_5Model {
         image_pad_token_id: u32,
     ) -> Result<usize, Qwen3_5ExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
-        self.prefill_chunck_with_visual_embeddings_and_performance_attribution(
+        self.prefill_chunk_with_visual_embeddings_and_performance_attribution(
             chunk_token_ids,
             starting_position_tokens,
             visual_embeddings,
@@ -211,14 +211,14 @@ impl Qwen3_5Model {
     }
 
     /// Executes one intermediate prompt chunk and materializes only reusable decoder state.
-    pub fn prefill_chunck(
+    pub fn prefill_chunk(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
-        self.prefill_chunck_with_performance_attribution(
+        self.prefill_chunk_with_performance_attribution(
             token_ids,
             starting_position_tokens,
             request_decoder_state,

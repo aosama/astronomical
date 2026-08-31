@@ -23,7 +23,7 @@ fn should_reject_a_router_gate_quantization_override_with_invalid_bits() {
 }
 
 #[test]
-fn should_parse_an_oq6e_sparse_quantization_config_with_mixed_group_sizes() {
+fn should_parse_a_sparse_mixture_of_experts_quantization_config_with_mixed_group_sizes() {
     let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
         .expect("the frozen test config should decode as JSON");
     let mut quantization = json!({"group_size": 64, "bits": 6, "mode": "affine"});

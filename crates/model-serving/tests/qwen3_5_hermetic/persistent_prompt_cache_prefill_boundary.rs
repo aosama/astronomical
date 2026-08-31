@@ -1,15 +1,15 @@
 use astronomical_model_serving::{
-    persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
-    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
+    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
+    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
 #[test]
-fn should_report_every_persistent_prompt_cache_boundary_crossed_by_one_prefill_chunck() {
+fn should_report_every_persistent_prompt_cache_boundary_crossed_by_one_prefill_chunk() {
     for (
-        prefill_chunck_start,
-        prefill_chunck_end,
+        prefill_chunk_start,
+        prefill_chunk_end,
         persistent_prompt_cache_block_token_count,
-        expected_completed_prefill_chunck_tokens,
+        expected_completed_prefill_chunk_tokens,
     ) in [
         (0, 128, 2_048, Vec::new()),
         (0, 2_048, 2_048, vec![2_048]),
@@ -24,13 +24,13 @@ fn should_report_every_persistent_prompt_cache_boundary_crossed_by_one_prefill_c
         (usize::MAX - 1_024, usize::MAX, 2_048, Vec::new()),
     ] {
         assert_eq!(
-            expected_completed_prefill_chunck_tokens,
-            persistent_prompt_cache_boundary_completed_prefill_chunck_tokens(
-                prefill_chunck_start,
-                prefill_chunck_end,
+            expected_completed_prefill_chunk_tokens,
+            persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+                prefill_chunk_start,
+                prefill_chunk_end,
                 persistent_prompt_cache_block_token_count,
             ),
-            "unexpected local boundary counts for [{prefill_chunck_start}, {prefill_chunck_end})"
+            "unexpected local boundary counts for [{prefill_chunk_start}, {prefill_chunk_end})"
         );
     }
 }
@@ -38,10 +38,10 @@ fn should_report_every_persistent_prompt_cache_boundary_crossed_by_one_prefill_c
 #[test]
 fn should_clamp_cache_enabled_prefill_to_the_next_persistent_boundary() {
     for (
-        prefill_chunck_start,
-        requested_prefill_chunck_end,
+        prefill_chunk_start,
+        requested_prefill_chunk_end,
         persistent_prompt_cache_block_token_count,
-        expected_prefill_chunck_end,
+        expected_prefill_chunk_end,
     ) in [
         (0, 128, 2_048, 128),
         (0, 4_096, 2_048, 2_048),
@@ -53,13 +53,13 @@ fn should_clamp_cache_enabled_prefill_to_the_next_persistent_boundary() {
         (usize::MAX - 1_024, usize::MAX, 2_048, usize::MAX),
     ] {
         assert_eq!(
-            expected_prefill_chunck_end,
-            persistent_prompt_cache_boundary_clamped_prefill_chunck_end(
-                prefill_chunck_start,
-                requested_prefill_chunck_end,
+            expected_prefill_chunk_end,
+            persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
+                prefill_chunk_start,
+                requested_prefill_chunk_end,
                 persistent_prompt_cache_block_token_count,
             ),
-            "unexpected boundary clamp for [{prefill_chunck_start}, {requested_prefill_chunck_end})"
+            "unexpected boundary clamp for [{prefill_chunk_start}, {requested_prefill_chunk_end})"
         );
     }
 }

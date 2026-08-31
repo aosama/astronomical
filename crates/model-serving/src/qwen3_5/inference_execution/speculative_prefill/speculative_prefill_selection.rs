@@ -12,7 +12,7 @@ pub enum Qwen3_5SpeculativePrefillSelectionError {
     /// A percentage outside 1..=100 has no valid retention meaning.
     KeepPercentageOutOfRange,
     /// Zero-sized chunks would make grouping and progress undefined.
-    SelectionChunckTokenCountMustBePositive,
+    SelectionChunkTokenCountMustBePositive,
     /// NaN or infinity cannot participate in deterministic ranking.
     ImportanceScoreNotFinite,
     /// A count, offset, or range could not be represented safely.
@@ -24,7 +24,7 @@ impl std::fmt::Display for Qwen3_5SpeculativePrefillSelectionError {
         let description = match self {
             Self::EmptyImportanceScores => "importance scores must not be empty",
             Self::KeepPercentageOutOfRange => "keep percentage must be between 1 and 100",
-            Self::SelectionChunckTokenCountMustBePositive => {
+            Self::SelectionChunkTokenCountMustBePositive => {
                 "selection chunk token count must be positive"
             }
             Self::ImportanceScoreNotFinite => "importance scores must be finite",
@@ -46,7 +46,7 @@ impl std::error::Error for Qwen3_5SpeculativePrefillSelectionError {}
 pub fn qwen3_5_select_speculative_prefill_token_positions(
     importance_scores: &[f32],
     keep_percentage: u32,
-    selection_chunck_token_count: usize,
+    selection_chunk_token_count: usize,
     mandatory_trailing_token_count: usize,
 ) -> Result<Vec<usize>, Qwen3_5SpeculativePrefillSelectionError> {
     // Validate the complete policy and score domain before deriving counts. This
@@ -57,9 +57,9 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     if !(1..=100).contains(&keep_percentage) {
         return Err(Qwen3_5SpeculativePrefillSelectionError::KeepPercentageOutOfRange);
     }
-    if selection_chunck_token_count == 0 {
+    if selection_chunk_token_count == 0 {
         return Err(
-            Qwen3_5SpeculativePrefillSelectionError::SelectionChunckTokenCountMustBePositive,
+            Qwen3_5SpeculativePrefillSelectionError::SelectionChunkTokenCountMustBePositive,
         );
     }
     if importance_scores.iter().any(|score| !score.is_finite()) {
@@ -71,9 +71,9 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     // context, while the upper clamp naturally handles 100 percent.
     let chunk_count = importance_scores
         .len()
-        .checked_add(selection_chunck_token_count - 1)
+        .checked_add(selection_chunk_token_count - 1)
         .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
-        / selection_chunck_token_count;
+        / selection_chunk_token_count;
     let retained_chunk_count =
         usize::try_from((u128::from(chunk_count as u64) * u128::from(keep_percentage) + 99) / 100)
             .map_err(|_| Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
@@ -88,7 +88,7 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     let first_mandatory_trailing_chunk_index = if mandatory_trailing_token_count == 0 {
         chunk_count
     } else {
-        mandatory_trailing_start_position / selection_chunck_token_count
+        mandatory_trailing_start_position / selection_chunk_token_count
     };
     let mandatory_trailing_chunk_count = chunk_count - first_mandatory_trailing_chunk_index;
     let ranked_chunk_end = chunk_count - mandatory_trailing_chunk_count;
@@ -99,10 +99,10 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     let mut ranked_chunks = Vec::with_capacity(ranked_chunk_end);
     for chunk_index in 0..ranked_chunk_end {
         let chunk_start = chunk_index
-            .checked_mul(selection_chunck_token_count)
+            .checked_mul(selection_chunk_token_count)
             .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?;
         let chunk_end = chunk_start
-            .saturating_add(selection_chunck_token_count)
+            .saturating_add(selection_chunk_token_count)
             .min(importance_scores.len());
         let chunk_score = importance_scores[chunk_start..chunk_end]
             .iter()
@@ -138,10 +138,10 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     let mut selected_token_positions = Vec::new();
     for chunk_index in selected_chunk_indices {
         let chunk_start = chunk_index
-            .checked_mul(selection_chunck_token_count)
+            .checked_mul(selection_chunk_token_count)
             .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?;
         let chunk_end = chunk_start
-            .saturating_add(selection_chunck_token_count)
+            .saturating_add(selection_chunk_token_count)
             .min(importance_scores.len());
         selected_token_positions.extend(chunk_start..chunk_end);
     }

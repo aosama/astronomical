@@ -137,7 +137,7 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
-            .expect("the test prefill_chunck_tokens should be valid"),
+            .expect("the test prefill_chunk_tokens should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),

@@ -2,7 +2,7 @@
 #[path = "../../src/qwen3_5/inference_execution/prefill_execution_context.rs"]
 mod prefill_execution_context;
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill/chunk_mode.rs"]
-mod speculative_prefill_chunck_policy;
+mod speculative_prefill_chunk_policy;
 #[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_control_span.rs"]
 mod speculative_prefill_control_span;
 #[path = "../../src/qwen3_5/model/speculative_prefill_draft_forward.rs"]
@@ -18,12 +18,12 @@ use astronomical_model_serving::InferenceEngineError;
 use prefill_execution_context::{
     Qwen3_5PrefillExecutionContext, SPECULATIVE_PREFILL_TARGET_ONLY_PREFIX_CONTEXT_FLAG,
 };
-use speculative_prefill_chunck_policy::{
-    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_prompt_prefill_end_exclusive,
-    qwen3_5_speculative_prefill_chunck_mode,
+use speculative_prefill_chunk_policy::{
+    Qwen3_5SpeculativePrefillChunkMode, qwen3_5_prompt_prefill_end_exclusive,
+    qwen3_5_speculative_prefill_chunk_mode,
 };
 use speculative_prefill_control_span::{
-    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary,
     qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 use speculative_prefill_draft_forward::qwen3_5_speculative_prefill_draft_forward_end;
@@ -220,15 +220,15 @@ fn should_preserve_the_configured_drafter_forward_size_without_persistent_captur
 #[test]
 fn should_end_ordinary_target_prefill_exactly_at_the_control_span_boundary() {
     assert_eq!(
-        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(0, 2_048, 1_200),
+        qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary(0, 2_048, 1_200),
         Some(1_200)
     );
     assert_eq!(
-        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(0, 512, 1_200),
+        qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary(0, 512, 1_200),
         Some(512)
     );
     assert_eq!(
-        qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(1_200, 3_248, 1_200),
+        qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary(1_200, 3_248, 1_200),
         Some(3_248)
     );
 }
@@ -330,34 +330,34 @@ fn should_select_every_nonfinal_score_from_a_cache_deleted_visual_prompt() {
 }
 
 #[test]
-fn should_use_ordinary_target_prefill_when_mtp_is_disabled_for_a_nonterminal_chunck() {
+fn should_use_ordinary_target_prefill_when_mtp_is_disabled_for_a_nonterminal_chunk() {
     assert_eq!(
-        qwen3_5_speculative_prefill_chunck_mode(false, 3, 5),
-        Qwen3_5SpeculativePrefillChunckMode::OrdinaryTarget,
+        qwen3_5_speculative_prefill_chunk_mode(false, 3, 5),
+        Qwen3_5SpeculativePrefillChunkMode::OrdinaryTarget,
     );
 }
 
 #[test]
-fn should_use_ordinary_target_prefill_when_mtp_is_disabled_for_a_terminal_chunck() {
+fn should_use_ordinary_target_prefill_when_mtp_is_disabled_for_a_terminal_chunk() {
     assert_eq!(
-        qwen3_5_speculative_prefill_chunck_mode(false, 5, 5),
-        Qwen3_5SpeculativePrefillChunckMode::OrdinaryTarget,
+        qwen3_5_speculative_prefill_chunk_mode(false, 5, 5),
+        Qwen3_5SpeculativePrefillChunkMode::OrdinaryTarget,
     );
 }
 
 #[test]
-fn should_use_target_only_mtp_prefix_prefill_for_an_active_nonterminal_chunck() {
+fn should_use_target_only_mtp_prefix_prefill_for_an_active_nonterminal_chunk() {
     assert_eq!(
-        qwen3_5_speculative_prefill_chunck_mode(true, 3, 5),
-        Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix,
+        qwen3_5_speculative_prefill_chunk_mode(true, 3, 5),
+        Qwen3_5SpeculativePrefillChunkMode::TargetOnlyPrefix,
     );
 }
 
 #[test]
-fn should_use_terminal_mtp_capture_for_an_active_terminal_chunck() {
+fn should_use_terminal_mtp_capture_for_an_active_terminal_chunk() {
     assert_eq!(
-        qwen3_5_speculative_prefill_chunck_mode(true, 5, 5),
-        Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture,
+        qwen3_5_speculative_prefill_chunk_mode(true, 5, 5),
+        Qwen3_5SpeculativePrefillChunkMode::TerminalAdditionalHistoryCapture,
     );
 }
 

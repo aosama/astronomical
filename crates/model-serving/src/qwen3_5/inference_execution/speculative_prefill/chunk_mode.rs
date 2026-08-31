@@ -8,7 +8,7 @@
 
 /// Prompt-processing mode selected for one attempted Qwen3.5 chunk.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Qwen3_5SpeculativePrefillChunckMode {
+pub enum Qwen3_5SpeculativePrefillChunkMode {
     /// Execute the ordinary target-only path.
     ///
     /// No optional prediction session exists, so there is no private history to
@@ -49,23 +49,23 @@ pub const fn qwen3_5_prompt_prefill_end_exclusive(
 /// The optional-prediction terminal chunk ends at `final_prompt_index` because
 /// that request reserves the last prompt token for generation kickoff.
 #[must_use]
-pub const fn qwen3_5_speculative_prefill_chunck_mode(
+pub const fn qwen3_5_speculative_prefill_chunk_mode(
     has_optional_prediction_session: bool,
     prefill_end: usize,
     final_prompt_index: usize,
-) -> Qwen3_5SpeculativePrefillChunckMode {
+) -> Qwen3_5SpeculativePrefillChunkMode {
     // The absence of a session is the strongest condition: terminal position is
     // irrelevant when no additional state owner exists.
     if !has_optional_prediction_session {
-        return Qwen3_5SpeculativePrefillChunckMode::OrdinaryTarget;
+        return Qwen3_5SpeculativePrefillChunkMode::OrdinaryTarget;
     }
     // `final_prompt_index` is deliberately an index, not the token-vector length.
     // Equality means this chunk has consumed every token except the one reserved
     // for the generation-kickoff forward.
     if prefill_end == final_prompt_index {
-        Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
+        Qwen3_5SpeculativePrefillChunkMode::TerminalAdditionalHistoryCapture
     } else {
         // Earlier chunks must not initialize history from a partial prompt.
-        Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix
+        Qwen3_5SpeculativePrefillChunkMode::TargetOnlyPrefix
     }
 }

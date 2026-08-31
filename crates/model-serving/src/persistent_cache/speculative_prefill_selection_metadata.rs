@@ -44,8 +44,8 @@ pub(crate) fn selection_file_metadata_entries(
             selection_contract.keep_percentage.to_string(),
         ),
         (
-            "selection_chunck_token_count",
-            selection_contract.selection_chunck_token_count.to_string(),
+            "selection_chunk_token_count",
+            selection_contract.selection_chunk_token_count.to_string(),
         ),
         (
             "mandatory_trailing_token_count",

@@ -4,7 +4,7 @@
 
 - Rust and C++ are not automatically faster than Python. Python only submits graphs to Apple’s MLX array framework; graph shape and selected Metal kernels dominate.
 - Compare the exact model implementation selected by model_type. Qwen3.5-MoE uses qwen3_5_moe, not the similar qwen3_next model.
-- Match Machine Learning framework for Apple silicon (MLX) version, model files, prompt, tokenizer, sampling, prefill_chunck_tokens, cache state, and build profile before comparing.
+- Match Machine Learning framework for Apple silicon (MLX) version, model files, prompt, tokenizer, sampling, prefill_chunk_tokens, cache state, and build profile before comparing.
 - Measure long-context parity after the runtime chat template is rendered, and pass the same thinking-mode setting to both the prompt renderer and output parser; counting only source text or disabling thinking in metadata produces unlike workloads.
 - Source-matched sanitize behavior is part of model arithmetic. Stock MLX-LM 0.31.3 double-shifts already-converted Qwen3.5 and Qwen3.6 normalization weights when MTP tensors are present, corrupting target-only output; apply the checkpoint producer's sanitize correction while keeping MTP construction disabled.
 - Use release builds for performance. Debug builds remain useful for correctness only.

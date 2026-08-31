@@ -57,11 +57,11 @@ use crate::{
 use self::engine_request::Qwen3_5EngineRequest;
 pub use self::engine_request::Qwen3_5SpeculativePrefillFailureStageForTests;
 pub use self::speculative_prefill::{
-    Qwen3_5SpeculativePrefillChunckMode, Qwen3_5SpeculativePrefillSelectionError,
-    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    Qwen3_5SpeculativePrefillChunkMode, Qwen3_5SpeculativePrefillSelectionError,
+    qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary,
     qwen3_5_prompt_prefill_end_exclusive, qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_selected_speculative_prefill_positions_for_range,
-    qwen3_5_speculative_prefill_chunck_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
+    qwen3_5_speculative_prefill_chunk_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 use super::model::Qwen3_5Model;
 use super::{MtpDraftDepth, ValidatedQwen3_5Artifact};
@@ -82,7 +82,7 @@ pub use prompt_processing_chunk_sizer::{
 pub type Qwen3_5Engine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
-    /// Starts the owner thread with an explicit `prefill_chunck_tokens` sizer.
+    /// Starts the owner thread with an explicit `prefill_chunk_tokens` sizer.
     ///
     /// The model directory remains required for sparse expert paging.
     // Construction dependencies remain explicit to avoid another configuration facade.

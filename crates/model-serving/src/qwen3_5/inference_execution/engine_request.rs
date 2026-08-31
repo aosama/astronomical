@@ -70,7 +70,7 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) pending_generated_token: Option<MlxArray>,
     pub(super) prefill_cursor: usize,
     /// Largest chunk proven to fit after a capacity-driven retry in this request.
-    pub(super) maximum_successful_prefill_chunck_tokens: Option<usize>,
+    pub(super) maximum_successful_prefill_chunk_tokens: Option<usize>,
     pub(super) random_state: Option<MlxArray>,
     pub(super) request_id: RequestId,
     pub(super) sampling_strategy: Qwen3_5SamplingStrategy,
@@ -190,35 +190,35 @@ impl Qwen3_5EngineRequest {
     }
 
     #[must_use]
-    pub(super) fn clamped_prefill_chunck_token_count(
+    pub(super) fn clamped_prefill_chunk_token_count(
         &self,
-        requested_prefill_chunck_token_count: usize,
+        requested_prefill_chunk_token_count: usize,
         remaining_prompt_token_count: usize,
     ) -> usize {
         // A folded paged stub is the rest of the prompt and may exceed the last
         // proven size by less than one configured chunk. Capacity recovery still
         // halves if that forward cannot fit.
-        if requested_prefill_chunck_token_count >= remaining_prompt_token_count {
+        if requested_prefill_chunk_token_count >= remaining_prompt_token_count {
             return remaining_prompt_token_count;
         }
-        self.maximum_successful_prefill_chunck_tokens.map_or(
-            requested_prefill_chunck_token_count,
-            |maximum_successful_prefill_chunck_tokens| {
-                requested_prefill_chunck_token_count.min(maximum_successful_prefill_chunck_tokens)
+        self.maximum_successful_prefill_chunk_tokens.map_or(
+            requested_prefill_chunk_token_count,
+            |maximum_successful_prefill_chunk_tokens| {
+                requested_prefill_chunk_token_count.min(maximum_successful_prefill_chunk_tokens)
             },
         )
     }
 
     #[must_use]
-    pub(super) const fn maximum_successful_prefill_chunck_tokens(&self) -> Option<usize> {
-        self.maximum_successful_prefill_chunck_tokens
+    pub(super) const fn maximum_successful_prefill_chunk_tokens(&self) -> Option<usize> {
+        self.maximum_successful_prefill_chunk_tokens
     }
 
-    pub(super) fn record_successful_capacity_prefill_chunck(
+    pub(super) fn record_successful_capacity_prefill_chunk(
         &mut self,
-        successful_prefill_chunck_token_count: usize,
+        successful_prefill_chunk_token_count: usize,
     ) {
-        self.maximum_successful_prefill_chunck_tokens = Some(successful_prefill_chunck_token_count);
+        self.maximum_successful_prefill_chunk_tokens = Some(successful_prefill_chunk_token_count);
     }
 
     pub(crate) fn measure_operation_with_request<OperationOutput>(

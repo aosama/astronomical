@@ -77,11 +77,11 @@ mod speculative_prefill_visual_embedding;
 
 // Public pure helpers are retained for crate consumers and direct source tests.
 pub use self::chunk_mode::{
-    Qwen3_5SpeculativePrefillChunckMode, qwen3_5_prompt_prefill_end_exclusive,
-    qwen3_5_speculative_prefill_chunck_mode,
+    Qwen3_5SpeculativePrefillChunkMode, qwen3_5_prompt_prefill_end_exclusive,
+    qwen3_5_speculative_prefill_chunk_mode,
 };
 pub use self::speculative_prefill_control_span::{
-    qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary,
+    qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary,
     qwen3_5_speculative_prefill_sparse_target_is_active,
 };
 pub use self::speculative_prefill_selection::{

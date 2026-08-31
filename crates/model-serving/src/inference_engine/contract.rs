@@ -324,7 +324,7 @@ pub enum GeneratedToken {
         elapsed_millis: u64,
         /// Time spent evaluating the model, excluding allocator cleanup and telemetry.
         forward_prefill_chunk_elapsed_millis: u64,
-        /// Selected `prefill_chunck_tokens` used for this completed prompt-processing chunk.
+        /// Selected `prefill_chunk_tokens` used for this completed prompt-processing chunk.
         completed_prefill_chunk_tokens: u32,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         /// Current retained-expert ownership after this chunk.

@@ -63,7 +63,7 @@ fn disabled_speculative_prefill() -> WorkerSpeculativePrefillConfiguration {
         draft_model_directory: None,
         minimum_prompt_tokens: 1,
         keep_percentage: 1,
-        selection_chunck_token_count: 1,
+        selection_chunk_token_count: 1,
         mandatory_trailing_token_count: 1,
         lookahead_token_count: 1,
         importance_pooling_kernel_token_count: 1,

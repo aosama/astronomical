@@ -66,7 +66,7 @@ pub(super) fn construct_automatic_residency_engine(
         allocator_cache_memory_limit_bytes,
         None,
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
-            .expect("the test prefill_chunck_tokens should be valid"),
+            .expect("the test prefill_chunk_tokens should be valid"),
         think_end_token_id,
         model_directory,
         crate::common::standard_worker_chunking_configuration(),

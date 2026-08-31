@@ -328,7 +328,7 @@ pub(super) fn print_request_records(reports: &InteractionReports) {
             attribution_report["outcome"],
             attribution_report["rejection_reason"],
             counters["RestoredPersistentPromptCacheTokenCount"],
-            counters["PrefillChunckCount"],
+            counters["PrefillChunkCount"],
             counters["RustExpertStreamingPayloadByteCount"],
             counters["PositionalFileReadCallCount"],
             counters["PositionalFileReadByteCount"],

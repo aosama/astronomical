@@ -187,7 +187,7 @@ impl Qwen3_5Model {
             let draft_forward_output = if let Some((visual_embeddings, image_pad_token_id)) =
                 visual_embedding_input
             {
-                let (draft_forward_output, consumed_visual_embeddings_in_chunck) = self
+                let (draft_forward_output, consumed_visual_embeddings_in_chunk) = self
                     .forward_visual_chunk_with_speculative_prefill_attention_capture_and_performance_attribution(
                         draft_prompt_token_ids,
                         draft_forward_position_tokens,
@@ -199,7 +199,7 @@ impl Qwen3_5Model {
                         performance_attribution,
                     )?;
                 consumed_visual_embedding_count = consumed_visual_embedding_count
-                    .checked_add(consumed_visual_embeddings_in_chunck)
+                    .checked_add(consumed_visual_embeddings_in_chunk)
                     .ok_or(Qwen3_5ExecutionError::InvalidInput {
                         description: "speculative-prefill draft visual embedding cursor overflowed",
                     })?;

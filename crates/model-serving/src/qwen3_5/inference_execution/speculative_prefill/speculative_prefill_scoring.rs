@@ -465,7 +465,7 @@ impl Qwen3_5EngineState {
                         selectable_importance_score_range.clone(),
                         scoring_start_position_tokens,
                         self.speculative_prefill.keep_percentage,
-                        self.speculative_prefill.selection_chunck_token_count,
+                        self.speculative_prefill.selection_chunk_token_count,
                         self.speculative_prefill.mandatory_trailing_token_count,
                     )
                 })

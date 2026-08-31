@@ -60,7 +60,7 @@ pub(crate) fn disabled_worker_speculative_prefill_configuration()
         draft_model_directory: None,
         minimum_prompt_tokens: 8_192,
         keep_percentage: 20,
-        selection_chunck_token_count: 32,
+        selection_chunk_token_count: 32,
         mandatory_trailing_token_count: 512,
         lookahead_token_count: 8,
         importance_pooling_kernel_token_count: 13,

@@ -46,7 +46,7 @@ pub(super) async fn load_mtp_test_engine(
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
-            .expect("the MTP test prefill_chunck_tokens should be valid"),
+            .expect("the MTP test prefill_chunk_tokens should be valid"),
         think_end_token_id,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),

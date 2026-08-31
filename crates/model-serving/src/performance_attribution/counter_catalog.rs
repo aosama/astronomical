@@ -12,7 +12,7 @@ pub enum PerformanceCounter {
     RestoredPersistentPromptCacheTokenCount,
     GeneratedTokenCount,
     ForcedThinkingTransitionTokenCount,
-    PrefillChunckCount,
+    PrefillChunkCount,
     PrefillCapacityRejectionCount,
     PrefillCapacityRetryCount,
     RustExpertStreamingPayloadByteCount,
@@ -50,9 +50,9 @@ pub enum PerformanceCounter {
     ExpertResidencyCommitRejectionCount,
     MtpMemoryAdmissionFallbackCount,
     MtpAdmittedAttemptCount,
-    SpeculativePrefillTargetOnlyPrefixChunckCount,
+    SpeculativePrefillTargetOnlyPrefixChunkCount,
     SpeculativePrefillTargetOnlyPrefixTokenCount,
-    SpeculativePrefillTerminalCaptureChunckCount,
+    SpeculativePrefillTerminalCaptureChunkCount,
     SpeculativePrefillTerminalMtpHistoryTokenCount,
     SpeculativePrefillDraftScoringCount,
     SpeculativePrefillDraftPrefixStoreHitCount,
@@ -65,7 +65,7 @@ pub enum PerformanceCounter {
     SpeculativePrefillSelectionPersistentHitCount,
     SpeculativePrefillMandatoryVisualTokenCount,
     SpeculativePrefillSelectedTokenCount,
-    SpeculativePrefillSparseTargetChunckCount,
+    SpeculativePrefillSparseTargetChunkCount,
     SpeculativePrefillDraftScoredSuffixTokenCount,
     SpeculativePrefillTargetPersistentStateWriteCount,
     SpeculativePrefillTargetPersistentStateRestoredTokenCount,
@@ -103,7 +103,7 @@ impl PerformanceCounter {
         Self::RestoredPersistentPromptCacheTokenCount,
         Self::GeneratedTokenCount,
         Self::ForcedThinkingTransitionTokenCount,
-        Self::PrefillChunckCount,
+        Self::PrefillChunkCount,
         Self::PrefillCapacityRejectionCount,
         Self::PrefillCapacityRetryCount,
         Self::RustExpertStreamingPayloadByteCount,
@@ -141,9 +141,9 @@ impl PerformanceCounter {
         Self::ExpertResidencyCommitRejectionCount,
         Self::MtpMemoryAdmissionFallbackCount,
         Self::MtpAdmittedAttemptCount,
-        Self::SpeculativePrefillTargetOnlyPrefixChunckCount,
+        Self::SpeculativePrefillTargetOnlyPrefixChunkCount,
         Self::SpeculativePrefillTargetOnlyPrefixTokenCount,
-        Self::SpeculativePrefillTerminalCaptureChunckCount,
+        Self::SpeculativePrefillTerminalCaptureChunkCount,
         Self::SpeculativePrefillTerminalMtpHistoryTokenCount,
         Self::SpeculativePrefillDraftScoringCount,
         Self::SpeculativePrefillDraftPrefixStoreHitCount,
@@ -156,7 +156,7 @@ impl PerformanceCounter {
         Self::SpeculativePrefillSelectionPersistentHitCount,
         Self::SpeculativePrefillMandatoryVisualTokenCount,
         Self::SpeculativePrefillSelectedTokenCount,
-        Self::SpeculativePrefillSparseTargetChunckCount,
+        Self::SpeculativePrefillSparseTargetChunkCount,
         Self::SpeculativePrefillDraftScoredSuffixTokenCount,
         Self::SpeculativePrefillTargetPersistentStateWriteCount,
         Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount,
@@ -193,7 +193,7 @@ impl PerformanceCounter {
             }
             Self::GeneratedTokenCount => "generated_token_count",
             Self::ForcedThinkingTransitionTokenCount => "forced_thinking_transition_token_count",
-            Self::PrefillChunckCount => "prefill_chunck_count",
+            Self::PrefillChunkCount => "prefill_chunk_count",
             Self::PrefillCapacityRejectionCount => "prefill_capacity_rejection_count",
             Self::PrefillCapacityRetryCount => "prefill_capacity_retry_count",
             Self::RustExpertStreamingPayloadByteCount => "rust_expert_streaming_payload_byte_count",
@@ -275,14 +275,14 @@ impl PerformanceCounter {
             Self::ExpertResidencyCommitRejectionCount => "expert_residency_commit_rejection_count",
             Self::MtpMemoryAdmissionFallbackCount => "mtp_memory_admission_fallback_count",
             Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
-            Self::SpeculativePrefillTargetOnlyPrefixChunckCount => {
-                "speculative_prefill_target_only_prefix_chunck_count"
+            Self::SpeculativePrefillTargetOnlyPrefixChunkCount => {
+                "speculative_prefill_target_only_prefix_chunk_count"
             }
             Self::SpeculativePrefillTargetOnlyPrefixTokenCount => {
                 "speculative_prefill_target_only_prefix_token_count"
             }
-            Self::SpeculativePrefillTerminalCaptureChunckCount => {
-                "speculative_prefill_terminal_capture_chunck_count"
+            Self::SpeculativePrefillTerminalCaptureChunkCount => {
+                "speculative_prefill_terminal_capture_chunk_count"
             }
             Self::SpeculativePrefillTerminalMtpHistoryTokenCount => {
                 "speculative_prefill_terminal_mtp_history_token_count"
@@ -318,8 +318,8 @@ impl PerformanceCounter {
             Self::SpeculativePrefillSelectedTokenCount => {
                 "speculative_prefill_selected_token_count"
             }
-            Self::SpeculativePrefillSparseTargetChunckCount => {
-                "speculative_prefill_sparse_target_chunck_count"
+            Self::SpeculativePrefillSparseTargetChunkCount => {
+                "speculative_prefill_sparse_target_chunk_count"
             }
             Self::SpeculativePrefillDraftScoredSuffixTokenCount => {
                 "speculative_prefill_draft_scored_suffix_token_count"

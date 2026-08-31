@@ -30,11 +30,11 @@ use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 
 impl Qwen3_5EngineState {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn recover_fixed_prefill_chunck_after_active_memory_limit(
+    pub(super) fn recover_fixed_prefill_chunk_after_active_memory_limit(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
-        attempted_prefill_chunck_token_count: usize,
+        attempted_prefill_chunk_token_count: usize,
         active_memory_bytes_at_failure: usize,
         attempted_allocation_bytes: usize,
         allowed_active_memory_bytes: usize,
@@ -99,7 +99,7 @@ impl Qwen3_5EngineState {
             );
         }
         let sparse_experts_are_paged = model.sparse_experts_are_paged();
-        let should_retry_same_prefill_chunck = ForwardRecoveryPolicy::retry_is_authorized(
+        let should_retry_same_prefill_chunk = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,
@@ -108,7 +108,7 @@ impl Qwen3_5EngineState {
         );
         tracing::warn!(
             request_id = request_id.value(),
-            attempted_prefill_chunck_token_count,
+            attempted_prefill_chunk_token_count,
             active_memory_bytes_at_failure,
             attempted_allocation_bytes,
             allowed_active_memory_bytes,
@@ -120,18 +120,18 @@ impl Qwen3_5EngineState {
                 memory_snapshot_before_reclamation.active_memory_bytes(),
             active_memory_bytes_after_reclamation,
             did_demote_complete_resident_owner,
-            should_retry_same_prefill_chunck,
+            should_retry_same_prefill_chunk,
             "native MLX prefill allocation reached the active-memory ceiling; released resident or paged experts for the fixed chunk"
         );
-        Ok(should_retry_same_prefill_chunck)
+        Ok(should_retry_same_prefill_chunk)
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn recover_fixed_prefill_chunck_after_graphics_processor_exhaustion(
+    pub(super) fn recover_fixed_prefill_chunk_after_graphics_processor_exhaustion(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
-        attempted_prefill_chunck_token_count: usize,
+        attempted_prefill_chunk_token_count: usize,
         failure_reason: &str,
         prefill_request_checkpoint: Qwen3_5PrefillRequestCheckpoint,
         has_already_retried_after_reclamation: bool,
@@ -193,7 +193,7 @@ impl Qwen3_5EngineState {
             retained_payload_before_reclamation.saturating_sub(retained_payload_after_reclamation),
         );
         let sparse_experts_are_paged = model.sparse_experts_are_paged();
-        let should_retry_same_prefill_chunck = ForwardRecoveryPolicy::retry_is_authorized(
+        let should_retry_same_prefill_chunk = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,
@@ -202,7 +202,7 @@ impl Qwen3_5EngineState {
         );
         tracing::warn!(
             request_id = request_id.value(),
-            attempted_prefill_chunck_token_count,
+            attempted_prefill_chunk_token_count,
             reason = failure_reason,
             fixed_forward_workspace_bytes,
             expert_reclamation_target_bytes,
@@ -212,10 +212,10 @@ impl Qwen3_5EngineState {
                 memory_snapshot_before_reclamation.active_memory_bytes(),
             active_memory_bytes_after_reclamation,
             did_demote_complete_resident_owner,
-            should_retry_same_prefill_chunck,
+            should_retry_same_prefill_chunk,
             "graphics-processor memory exhaustion; released resident or paged experts for the fixed chunk"
         );
-        Ok(should_retry_same_prefill_chunck)
+        Ok(should_retry_same_prefill_chunk)
     }
 }
 

@@ -218,8 +218,8 @@ pub use persistent_cache::{
     PersistentVisualEmbeddingFileError, PersistentVisualEmbeddingFileHeader,
     PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
     longest_reusable_speculative_prefill_target_prefix,
-    persistent_prompt_cache_boundary_clamped_prefill_chunck_end,
-    persistent_prompt_cache_boundary_completed_prefill_chunck_tokens,
+    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
+    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 #[cfg(feature = "direct-mlx")]
 pub use persistent_cache::{

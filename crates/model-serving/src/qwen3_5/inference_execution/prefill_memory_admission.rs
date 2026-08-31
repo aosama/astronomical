@@ -4,7 +4,7 @@
 //! logs slow admissions and records expert-byte reclamation diagnostics.
 
 use super::engine_request::Qwen3_5EngineRequest;
-use super::prompt_prefill_errors::PromptPrefillChunckAttemptError;
+use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 
 use crate::AdaptiveRamGrowthContext;
@@ -29,7 +29,7 @@ impl Qwen3_5EngineState {
         additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
         direct_publication_workspace_bytes: usize,
-    ) -> Result<AdmissionOutcome, PromptPrefillChunckAttemptError> {
+    ) -> Result<AdmissionOutcome, PromptPrefillChunkAttemptError> {
         let model = self
             .model
             .as_ref()

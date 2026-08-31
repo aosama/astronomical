@@ -87,7 +87,7 @@ async fn run_configured_cold_cache_summary_journey(
         .expect("the configured MLX memory limits should be valid");
     let target_maximum_position_count = validated_target_artifact.config().maximum_position_count();
     let target_model_revision = validated_target_artifact.revision().to_owned();
-    let prefill_chunck_sizer = configured_prefill_chunck_sizer(
+    let prefill_chunk_sizer = configured_prefill_chunk_sizer(
         &resolved_target_config,
         target_maximum_position_count,
         &target_model_id,
@@ -126,7 +126,7 @@ async fn run_configured_cold_cache_summary_journey(
         draft_model_directory: Some(draft_model_directory),
         minimum_prompt_tokens: 8_192,
         keep_percentage: 20,
-        selection_chunck_token_count: 32,
+        selection_chunk_token_count: 32,
         mandatory_trailing_token_count: 512,
         lookahead_token_count: 8,
         importance_pooling_kernel_token_count: 13,
@@ -136,7 +136,7 @@ async fn run_configured_cold_cache_summary_journey(
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         Some(persistent_prompt_cache_disk_store_config),
-        prefill_chunck_sizer,
+        prefill_chunk_sizer,
         target_tokenizer.think_end_token_id(),
         target_model_directory,
         crate::common::standard_worker_chunking_configuration(),
@@ -286,7 +286,7 @@ async fn run_configured_cold_cache_summary_journey(
     );
 }
 
-fn configured_prefill_chunck_sizer(
+fn configured_prefill_chunk_sizer(
     resolved_target_config: &ResolvedModelConfig,
     _target_maximum_position_count: u32,
     _target_model_id: &str,

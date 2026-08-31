@@ -45,11 +45,11 @@ async fn should_collect_complete_persistent_prompt_cache_boundary_tensors_in_pro
 
     assert_eq!(completed_checkpoints.len(), 2);
     assert_eq!(
-        completed_checkpoints[0].completed_prefill_chunck_tokens,
+        completed_checkpoints[0].completed_prefill_chunk_tokens,
         2_048
     );
     assert_eq!(
-        completed_checkpoints[1].completed_prefill_chunck_tokens,
+        completed_checkpoints[1].completed_prefill_chunk_tokens,
         4_096
     );
     for completed_checkpoint in completed_checkpoints {

@@ -78,22 +78,22 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
 
         let reports = read_attribution_report_documents(&attribution_log_path);
         let generation_report = generation_report_for_request(&reports, REQUEST_ID.value());
-        let prefill_chunck_count = counter_amount(generation_report, "prefill_chunck_count");
+        let prefill_chunk_count = counter_amount(generation_report, "prefill_chunk_count");
         assert_eq!(
-            prefill_chunck_count, 2,
+            prefill_chunk_count, 2,
             "4,096 prompt tokens with fixed 2,048-token chunks must use two prefill chunks"
         );
         let allocator_cache_cleanup_count =
             operation_occurrence_count(generation_report, "mlx_allocator_cache_cleanup");
         assert!(
-            allocator_cache_cleanup_count >= prefill_chunck_count.saturating_add(1),
+            allocator_cache_cleanup_count >= prefill_chunk_count.saturating_add(1),
             "each completed prefill chunk and request finalization must execute synchronized allocator cleanup; pressure recovery may add more cleanups"
         );
         let route_preparation_count = operation_occurrence_count(
             generation_report,
             "rust_expert_streaming_layer_preparation",
         );
-        let ordinary_forward_count = prefill_chunck_count
+        let ordinary_forward_count = prefill_chunk_count
             .saturating_add(u64::try_from(generated_token_ids.len()).unwrap_or(u64::MAX));
         // Complete-layer streaming still prepares one snapshot per nonresident layer
         // per ordinary forward. Bound preparations so whole-forward replay cannot hide.
@@ -102,7 +102,7 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
         let maximum_route_preparation_count = baseline_route_preparation_count
             .saturating_add(sparse_layer_count.saturating_sub(1));
         eprintln!(
-            "[paged-prefill-no-replay 2/3] status=progress prefill_chuncks={prefill_chunck_count} route_preparations={route_preparation_count} baseline_route_preparations={baseline_route_preparation_count} generation_elapsed_seconds={:.3} disk_page_loads={} source_read_bytes={}",
+            "[paged-prefill-no-replay 2/3] status=progress prefill_chunks={prefill_chunk_count} route_preparations={route_preparation_count} baseline_route_preparations={baseline_route_preparation_count} generation_elapsed_seconds={:.3} disk_page_loads={} source_read_bytes={}",
             generation_elapsed.as_secs_f64(),
             counter_amount(generation_report, "positional_file_read_call_count"),
             counter_amount(generation_report, "positional_file_read_byte_count"),

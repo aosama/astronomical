@@ -3,7 +3,7 @@
 pub enum Qwen3_5SpeculativePrefillSelectionError {
     EmptyImportanceScores,
     KeepPercentageOutOfRange,
-    SelectionChunckTokenCountMustBePositive,
+    SelectionChunkTokenCountMustBePositive,
     ImportanceScoreNotFinite,
     SelectionArithmeticOverflow,
 }
@@ -13,7 +13,7 @@ impl std::fmt::Display for Qwen3_5SpeculativePrefillSelectionError {
         let description = match self {
             Self::EmptyImportanceScores => "importance scores must not be empty",
             Self::KeepPercentageOutOfRange => "keep percentage must be between 1 and 100",
-            Self::SelectionChunckTokenCountMustBePositive => {
+            Self::SelectionChunkTokenCountMustBePositive => {
                 "selection chunk token count must be positive"
             }
             Self::ImportanceScoreNotFinite => "importance scores must be finite",
@@ -29,7 +29,7 @@ impl std::error::Error for Qwen3_5SpeculativePrefillSelectionError {}
 
 /// Prompt-processing mode selected for one attempted Qwen3.5 chunk.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Qwen3_5SpeculativePrefillChunckMode {
+pub enum Qwen3_5SpeculativePrefillChunkMode {
     /// Execute the ordinary target-only path for a request without an optional session.
     OrdinaryTarget,
     /// Execute only the target model before terminal additional-state capture.
@@ -40,18 +40,18 @@ pub enum Qwen3_5SpeculativePrefillChunckMode {
 
 /// Selects whether one prompt chunk may initialize private additional history.
 #[must_use]
-pub const fn qwen3_5_speculative_prefill_chunck_mode(
+pub const fn qwen3_5_speculative_prefill_chunk_mode(
     has_optional_prediction_session: bool,
     prefill_end: usize,
     final_prompt_index: usize,
-) -> Qwen3_5SpeculativePrefillChunckMode {
+) -> Qwen3_5SpeculativePrefillChunkMode {
     if !has_optional_prediction_session {
-        return Qwen3_5SpeculativePrefillChunckMode::OrdinaryTarget;
+        return Qwen3_5SpeculativePrefillChunkMode::OrdinaryTarget;
     }
     if prefill_end == final_prompt_index {
-        Qwen3_5SpeculativePrefillChunckMode::TerminalAdditionalHistoryCapture
+        Qwen3_5SpeculativePrefillChunkMode::TerminalAdditionalHistoryCapture
     } else {
-        Qwen3_5SpeculativePrefillChunckMode::TargetOnlyPrefix
+        Qwen3_5SpeculativePrefillChunkMode::TargetOnlyPrefix
     }
 }
 
@@ -62,7 +62,7 @@ pub const fn qwen3_5_speculative_prefill_chunck_mode(
 pub fn qwen3_5_select_speculative_prefill_token_positions(
     importance_scores: &[f32],
     keep_percentage: u32,
-    selection_chunck_token_count: usize,
+    selection_chunk_token_count: usize,
     mandatory_trailing_token_count: usize,
 ) -> Result<Vec<usize>, Qwen3_5SpeculativePrefillSelectionError> {
     if importance_scores.is_empty() {
@@ -71,9 +71,9 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     if !(1..=100).contains(&keep_percentage) {
         return Err(Qwen3_5SpeculativePrefillSelectionError::KeepPercentageOutOfRange);
     }
-    if selection_chunck_token_count == 0 {
+    if selection_chunk_token_count == 0 {
         return Err(
-            Qwen3_5SpeculativePrefillSelectionError::SelectionChunckTokenCountMustBePositive,
+            Qwen3_5SpeculativePrefillSelectionError::SelectionChunkTokenCountMustBePositive,
         );
     }
     if importance_scores.iter().any(|score| !score.is_finite()) {
@@ -82,9 +82,9 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
 
     let chunk_count = importance_scores
         .len()
-        .checked_add(selection_chunck_token_count - 1)
+        .checked_add(selection_chunk_token_count - 1)
         .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
-        / selection_chunck_token_count;
+        / selection_chunk_token_count;
     let retained_chunk_count =
         usize::try_from((u128::from(chunk_count as u64) * u128::from(keep_percentage) + 99) / 100)
             .map_err(|_| Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
@@ -94,9 +94,9 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
         0
     } else {
         mandatory_trailing_token_count
-            .checked_add(selection_chunck_token_count - 1)
+            .checked_add(selection_chunk_token_count - 1)
             .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?
-            / selection_chunck_token_count
+            / selection_chunk_token_count
     }
     .min(chunk_count);
     let ranked_chunk_end = chunk_count - mandatory_trailing_chunk_count;
@@ -105,10 +105,10 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     let mut ranked_chunks = Vec::with_capacity(ranked_chunk_end);
     for chunk_index in 0..ranked_chunk_end {
         let chunk_start = chunk_index
-            .checked_mul(selection_chunck_token_count)
+            .checked_mul(selection_chunk_token_count)
             .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?;
         let chunk_end = chunk_start
-            .saturating_add(selection_chunck_token_count)
+            .saturating_add(selection_chunk_token_count)
             .min(importance_scores.len());
         let chunk_score = importance_scores[chunk_start..chunk_end]
             .iter()
@@ -138,10 +138,10 @@ pub fn qwen3_5_select_speculative_prefill_token_positions(
     let mut selected_token_positions = Vec::new();
     for chunk_index in selected_chunk_indices {
         let chunk_start = chunk_index
-            .checked_mul(selection_chunck_token_count)
+            .checked_mul(selection_chunk_token_count)
             .ok_or(Qwen3_5SpeculativePrefillSelectionError::SelectionArithmeticOverflow)?;
         let chunk_end = chunk_start
-            .saturating_add(selection_chunck_token_count)
+            .saturating_add(selection_chunk_token_count)
             .min(importance_scores.len());
         selected_token_positions.extend(chunk_start..chunk_end);
     }

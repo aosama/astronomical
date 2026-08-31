@@ -103,7 +103,7 @@ pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_at
             .into_iter()
             .map(
                 |completed_rows| Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-                    completed_prefill_chunck_tokens: completed_rows as usize,
+                    completed_prefill_chunk_tokens: completed_rows as usize,
                     recurrent_snapshot_tensors: HashMap::new(),
                 },
             )

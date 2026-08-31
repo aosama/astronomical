@@ -71,7 +71,7 @@ async fn should_restore_attention_only_state_at_a_three_row_verifier_boundary() 
         .restore_verified_prefix(
             3,
             Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-                completed_prefill_chunck_tokens: 3,
+                completed_prefill_chunk_tokens: 3,
                 recurrent_snapshot_tensors: HashMap::new(),
             },
         )

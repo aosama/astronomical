@@ -32,7 +32,7 @@ pub(crate) struct Qwen3_5TerminalCheckpointPrefillOutcome {
 impl Qwen3_5Model {
     // Visual-prefill inputs stay explicit rather than introducing a parameter facade.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn prefill_chunck_with_visual_embeddings_and_performance_attribution(
+    pub(crate) fn prefill_chunk_with_visual_embeddings_and_performance_attribution(
         &self,
         chunk_token_ids: &[u32],
         starting_position_tokens: u32,
@@ -126,7 +126,7 @@ impl Qwen3_5Model {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn prefill_chunck_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
+    pub(crate) fn prefill_chunk_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
         &self,
         chunk_token_ids: &[u32],
         starting_position_tokens: u32,
@@ -134,7 +134,7 @@ impl Qwen3_5Model {
         starting_visual_embedding_index: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
-        completed_prefill_chunck_tokens: Vec<usize>,
+        completed_prefill_chunk_tokens: Vec<usize>,
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
@@ -142,7 +142,7 @@ impl Qwen3_5Model {
         for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
             let mut boundary_checkpoint_collector =
                 Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
-                    completed_prefill_chunck_tokens.clone(),
+                    completed_prefill_chunk_tokens.clone(),
                     self.decoder_cache_layout.boundary_tensor_count(),
                     checkpoint_interval_token_count,
                 )?;
@@ -174,7 +174,7 @@ impl Qwen3_5Model {
         })
     }
 
-    pub(crate) fn prefill_chunck_with_performance_attribution(
+    pub(crate) fn prefill_chunk_with_performance_attribution(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
@@ -230,12 +230,12 @@ impl Qwen3_5Model {
         })
     }
 
-    pub(crate) fn prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
+    pub(crate) fn prefill_chunk_with_boundary_checkpoints_and_performance_attribution(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        completed_prefill_chunck_tokens: Vec<usize>,
+        completed_prefill_chunk_tokens: Vec<usize>,
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
@@ -243,7 +243,7 @@ impl Qwen3_5Model {
         for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
             let mut boundary_checkpoint_collector =
                 Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
-                    completed_prefill_chunck_tokens.clone(),
+                    completed_prefill_chunk_tokens.clone(),
                     self.decoder_cache_layout.boundary_tensor_count(),
                     checkpoint_interval_token_count,
                 )?;
@@ -292,12 +292,12 @@ impl Qwen3_5Model {
     /// graph (with lm_head) while also collecting boundary checkpoints, so the
     /// terminal chunk is a single forward pass instead of a prefix+tail split.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn terminal_prefill_chunck_with_boundary_checkpoints_and_performance_attribution(
+    pub(crate) fn terminal_prefill_chunk_with_boundary_checkpoints_and_performance_attribution(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        completed_prefill_chunck_tokens: Vec<usize>,
+        completed_prefill_chunk_tokens: Vec<usize>,
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TerminalCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
@@ -305,7 +305,7 @@ impl Qwen3_5Model {
         for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
             let mut boundary_checkpoint_collector =
                 Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
-                    completed_prefill_chunck_tokens.clone(),
+                    completed_prefill_chunk_tokens.clone(),
                     self.decoder_cache_layout.boundary_tensor_count(),
                     checkpoint_interval_token_count,
                 )?;

@@ -9,7 +9,7 @@
 /// one forward never mixes mandatory dense control context with sparse
 /// conversation positions.
 #[must_use]
-pub const fn qwen3_5_prefill_chunck_end_at_ordinary_target_control_span_boundary(
+pub const fn qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary(
     prefill_start_position: usize,
     candidate_prefill_end_position: usize,
     ordinary_target_prefill_control_span_end_position: usize,
