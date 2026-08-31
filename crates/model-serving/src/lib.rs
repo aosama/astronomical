@@ -105,6 +105,11 @@ pub use flux2_klein::{
     apply_rope_for_component_oracle, flux2_klein_euler_update_for_tests,
     flux2_klein_initial_latents_for_tests, flux2_klein_keyed_noise_and_euler_for_tests,
 };
+#[doc(hidden)]
+#[cfg(feature = "direct-mlx")]
+pub use gpu_token_sampling::{
+    sample_acceptance_coins_for_tests, sample_from_relative_probabilities_for_tests,
+};
 pub use image_generation_engine::{
     ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
     ImageGenerationUnavailableEngine,
@@ -255,12 +260,14 @@ pub use qwen3_5::{
     plan_qwen3_5_visual_prompt_cache_block_inputs, qwen3_5_decoder_cache_layout,
     qwen3_5_language_tensor_profiles, qwen3_5_mtp_effective_depth_and_reason_for_windows,
     qwen3_5_mtp_effective_depth_for_windows, qwen3_5_mtp_memory_admission,
-    qwen3_5_mtp_request_is_eligible, qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
-    qwen3_5_mtp_verification_decision, qwen3_5_mtp_verification_transient_array_bytes,
-    qwen3_5_request_enables_thinking, qwen3_5_resident_language_tensor_profiles,
-    qwen3_5_vision_tensor_profiles, resolve_sampling_seed, translate_qwen3_5_preparation_error,
-    translate_request_output_error, validate_context_token_count,
-    validate_qwen3_5_mtp_sidecar_for_tests, validate_qwen3_5_mtp_sidecar_result_for_tests,
+    qwen3_5_mtp_request_is_eligible, qwen3_5_mtp_sampled_acceptance_probability,
+    qwen3_5_mtp_sampled_verification_decision, qwen3_5_mtp_tensor_names,
+    qwen3_5_mtp_tensor_profiles, qwen3_5_mtp_verification_decision,
+    qwen3_5_mtp_verification_transient_array_bytes, qwen3_5_request_enables_thinking,
+    qwen3_5_resident_language_tensor_profiles, qwen3_5_vision_tensor_profiles,
+    resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
+    validate_context_token_count, validate_qwen3_5_mtp_sidecar_for_tests,
+    validate_qwen3_5_mtp_sidecar_result_for_tests,
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{

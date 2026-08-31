@@ -399,7 +399,6 @@ impl Qwen3_5EngineState {
                 self.mtp_enabled,
                 self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active,
                 model_has_optional_prediction_head,
-                sampling_strategy,
                 has_precomputed_visual_embeddings,
                 has_processed_visual_images,
                 persistent_prompt_cache_is_available,

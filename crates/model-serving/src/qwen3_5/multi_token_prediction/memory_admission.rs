@@ -128,6 +128,7 @@ pub fn qwen3_5_mtp_verification_transient_array_bytes(
     depth: MtpDraftDepth,
     vocabulary_size: usize,
     hidden_size: usize,
+    verification_samples_acceptance: bool,
 ) -> Result<usize, MtpMemoryProjectionError> {
     let draft_count = usize::from(depth.get());
     let verifier_row_count = draft_count.checked_add(1).ok_or(MtpMemoryProjectionError)?;
@@ -136,6 +137,19 @@ pub fn qwen3_5_mtp_verification_transient_array_bytes(
         .and_then(|row_count| row_count.checked_mul(vocabulary_size))
         .and_then(|element_count| element_count.checked_mul(std::mem::size_of::<f32>()))
         .ok_or(MtpMemoryProjectionError)?;
+    // Sampled acceptance keeps masked and probability copies of the same rows,
+    // plus the residual `max(0, p − q)` rows, resident beside the logits.
+    let sampled_distribution_bytes = if verification_samples_acceptance {
+        let sampled_row_count = 2 * draft_count + 2 * verifier_row_count;
+        let sampled_row_bytes = sampled_row_count
+            .checked_mul(vocabulary_size)
+            .and_then(|element_count| element_count.checked_mul(std::mem::size_of::<f32>()))
+            .and_then(|bytes| bytes.checked_add(draft_count * std::mem::size_of::<f32>()))
+            .ok_or(MtpMemoryProjectionError)?;
+        sampled_row_bytes
+    } else {
+        0
+    };
     // Qwen hidden rows remain BF16 (2 bytes) through verification.
     let hidden_row_bytes = draft_count
         .checked_add(verifier_row_count)
@@ -146,10 +160,15 @@ pub fn qwen3_5_mtp_verification_transient_array_bytes(
         .checked_add(verifier_row_count)
         .and_then(|element_count| element_count.checked_mul(std::mem::size_of::<u32>()))
         .ok_or(MtpMemoryProjectionError)?;
-    [logits_bytes, hidden_row_bytes, decision_bytes]
-        .into_iter()
-        .try_fold(0_usize, usize::checked_add)
-        .ok_or(MtpMemoryProjectionError)
+    [
+        logits_bytes,
+        sampled_distribution_bytes,
+        hidden_row_bytes,
+        decision_bytes,
+    ]
+    .into_iter()
+    .try_fold(0_usize, usize::checked_add)
+    .ok_or(MtpMemoryProjectionError)
 }
 
 /// Chooses the deepest candidate that fits without rejecting target-only work.

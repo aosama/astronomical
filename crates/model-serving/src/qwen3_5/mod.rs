@@ -63,7 +63,8 @@ pub use multi_token_prediction::{
     MtpMemoryCandidate, MtpMemoryProjection, MtpMemoryProjectionError, MtpVerificationDecision,
     MtpVerificationDecisionError, qwen3_5_mtp_effective_depth_and_reason_for_windows,
     qwen3_5_mtp_effective_depth_for_windows, qwen3_5_mtp_memory_admission,
-    qwen3_5_mtp_request_is_eligible, qwen3_5_mtp_verification_decision,
+    qwen3_5_mtp_request_is_eligible, qwen3_5_mtp_sampled_acceptance_probability,
+    qwen3_5_mtp_sampled_verification_decision, qwen3_5_mtp_verification_decision,
     qwen3_5_mtp_verification_transient_array_bytes,
 };
 #[cfg(feature = "direct-mlx")]

@@ -280,6 +280,29 @@ impl Qwen3_5EngineRequest {
         generated_token_outcome
     }
 
+    /// Returns the sampling strategy this request resolves its tokens with.
+    pub(in crate::qwen3_5) fn sampling_strategy(&self) -> Qwen3_5SamplingStrategy {
+        self.sampling_strategy
+    }
+
+    /// Hands the keyed sampling stream to decode operations that need their own
+    /// random-key splits, such as sampled multi-token-prediction verification.
+    pub(in crate::qwen3_5) fn take_sampling_random_state(
+        &mut self,
+    ) -> Result<MlxArray, InferenceEngineError> {
+        self.random_state
+            .take()
+            .ok_or_else(|| fatal_engine_error("sampled request lost its random state"))
+    }
+
+    /// Returns the keyed sampling stream after a decode operation used it.
+    pub(in crate::qwen3_5) fn restore_sampling_random_state(
+        &mut self,
+        sampling_random_state: MlxArray,
+    ) {
+        self.random_state = Some(sampling_random_state);
+    }
+
     pub(crate) fn advance_position(
         &mut self,
         forwarded_token_count: usize,

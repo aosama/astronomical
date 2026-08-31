@@ -7,7 +7,10 @@ set -eu
 
 readonly COMPILE_TIMEOUT_SECONDS=600
 readonly TEST_TIMEOUT_SECONDS=120
-readonly TOTAL_STEP_COUNT=17
+# The direct-MLX lane compiles its feature world in an owned Cargo target before
+# its own bounded run, so it needs the compilation timeout class.
+readonly DIRECT_MLX_TIMEOUT_SECONDS=600
+readonly TOTAL_STEP_COUNT=18
 
 COMPLETED_STEP_COUNT=0
 
@@ -120,6 +123,9 @@ main() {
         --timings --no-run --jobs "$logical_cpu_count"
     run_step run-rust "$TEST_TIMEOUT_SECONDS" cargo verify-commit-rust \
         --jobs "$logical_cpu_count" -- --quiet --test-threads "$logical_cpu_count"
+    # Hosted CI cannot execute the direct-MLX lane; the 2026-08-26 Laguna
+    # residency regression proved behavioral breaks ship silently without it.
+    run_step test-direct-mlx "$DIRECT_MLX_TIMEOUT_SECONDS" scripts/test-direct-mlx.sh
 
     [ "$COMPLETED_STEP_COUNT" -eq "$TOTAL_STEP_COUNT" ] || {
         print_error "verification plan completed ${COMPLETED_STEP_COUNT} of ${TOTAL_STEP_COUNT} steps"

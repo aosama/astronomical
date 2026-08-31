@@ -6,7 +6,6 @@ use super::verified_emission_queue::{VerifiedEmissionQueue, VerifiedTargetFronti
 use crate::decoder_cache::{
     FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,
 };
-use crate::qwen3_5::Qwen3_5SamplingStrategy;
 
 pub(crate) type MultiTokenPredictionRequestAllocationCheckpoint =
     Qwen3_5MtpRequestStateAllocationCheckpoint;
@@ -26,7 +25,6 @@ impl Qwen3_5MultiTokenPredictionRequest {
         mtp_enabled: bool,
         mtp_runtime_is_active: bool,
         model_has_mtp_weights: bool,
-        sampling_selects_highest_logit: bool,
         has_precomputed_visual_embeddings: bool,
         has_processed_visual_images: bool,
         persistent_prompt_cache_is_available: bool,
@@ -40,7 +38,6 @@ impl Qwen3_5MultiTokenPredictionRequest {
             mtp_enabled,
             mtp_runtime_is_active,
             model_has_mtp_weights,
-            sampling_selects_highest_logit,
             has_precomputed_visual_embeddings,
             has_processed_visual_images,
             persistent_prompt_cache_is_available,
@@ -169,19 +166,11 @@ impl Qwen3_5MultiTokenPredictionRequest {
                 sequential_update_token_counts,
             )
     }
-
-    pub(crate) fn sampling_strategy_selects_highest_logit(
-        sampling_strategy: Qwen3_5SamplingStrategy,
-    ) -> bool {
-        matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit)
-    }
 }
-
 pub(crate) fn create_optional_prediction_session(
     user_enabled_optional_prediction: bool,
     optional_prediction_runtime_is_active: bool,
     model_has_optional_prediction_weights: bool,
-    sampling_strategy: Qwen3_5SamplingStrategy,
     has_precomputed_visual_embeddings: bool,
     has_processed_visual_images: bool,
     persistent_prompt_cache_is_available: bool,
@@ -195,9 +184,6 @@ pub(crate) fn create_optional_prediction_session(
         user_enabled_optional_prediction,
         optional_prediction_runtime_is_active,
         model_has_optional_prediction_weights,
-        Qwen3_5MultiTokenPredictionRequest::sampling_strategy_selects_highest_logit(
-            sampling_strategy,
-        ),
         has_precomputed_visual_embeddings,
         has_processed_visual_images,
         persistent_prompt_cache_is_available,

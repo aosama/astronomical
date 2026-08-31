@@ -271,7 +271,12 @@ async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_o
     let runtime = test_runtime();
     let contract = tiny_mixed_contract();
     let weights = bind_tiny_weights(&runtime, &contract);
-    let model = LagunaModel::new(contract, weights).expect("the mixed model should construct");
+    // The documented production default keeps a resident multi-token prefill on
+    // one lazy tape (zero interval), so the submission test configures the
+    // configurable resident interval explicitly.
+    let model = LagunaModel::new(contract, weights)
+        .expect("the mixed model should construct")
+        .with_graph_submission_layer_intervals(1, 0, 0);
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     let mut performance_attribution = PerformanceAttribution::enabled();

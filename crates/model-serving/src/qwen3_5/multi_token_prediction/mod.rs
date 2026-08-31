@@ -28,6 +28,10 @@ mod request_state;
 #[cfg(feature = "direct-mlx")]
 mod runtime;
 #[cfg(feature = "direct-mlx")]
+mod sampled_decoding;
+#[cfg(feature = "direct-mlx")]
+mod sampled_verification;
+#[cfg(feature = "direct-mlx")]
 mod target_verification;
 mod tensor_namespace;
 mod verification_decision;
@@ -86,6 +90,7 @@ pub use tensor_namespace::{qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles
 pub use verification_decision::{
     MtpVerificationDecision, MtpVerificationDecisionError,
     qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
+    qwen3_5_mtp_sampled_acceptance_probability, qwen3_5_mtp_sampled_verification_decision,
     qwen3_5_mtp_verification_decision,
 };
 #[cfg(feature = "direct-mlx")]

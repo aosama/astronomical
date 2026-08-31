@@ -7,12 +7,14 @@ use crate::qwen3_5::model::Qwen3_5Model;
 use crate::{InferenceEngineError, PerformanceCounter};
 
 use super::accepted_prefix_commit::commit_accepted_mtp_prefix;
+use super::sampled_verification::MtpSampledSamplingSettings;
 use super::target_verification::forward_target_verification_window_with_performance_attribution;
 use super::{
     MtpDepthDowngradeReason, MtpDraftDepth, MtpVerificationDecision,
     qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
     qwen3_5_mtp_verification_decision,
 };
+use crate::qwen3_5::Qwen3_5SamplingStrategy;
 
 /// Preserves the phase-one depth-one contract for direct runtime callers.
 #[doc(hidden)]
@@ -83,12 +85,17 @@ pub(in crate::qwen3_5) fn projected_verification_window_memory_growth_bytes(
 /// Operation-local logits, hidden rows, and decision vectors. Snapshots are excluded.
 pub(in crate::qwen3_5) fn verification_transient_array_bytes(
     model: &Qwen3_5Model,
+    active_request: &Qwen3_5EngineRequest,
     effective_depth: MtpDraftDepth,
 ) -> Result<usize, InferenceEngineError> {
     super::qwen3_5_mtp_verification_transient_array_bytes(
         effective_depth,
         model.config().vocabulary_size() as usize,
         model.config().hidden_size() as usize,
+        matches!(
+            active_request.sampling_strategy(),
+            Qwen3_5SamplingStrategy::TopKTopP { .. }
+        ),
     )
     .map_err(|_| fatal_engine_error("MTP verification transient arrays overflowed"))
 }
@@ -134,6 +141,50 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
         PerformanceCounter::MtpEffectiveDepthTotal,
         u64::from(effective_depth.get()),
     );
+    match active_request.sampling_strategy() {
+        Qwen3_5SamplingStrategy::HighestLogit => {
+            attempt_greedy_prediction_proposal_and_verification(
+                model,
+                active_request,
+                request_id,
+                current_generated_token,
+                current_generated_token_id,
+                effective_depth,
+                end_of_sequence_token_ids,
+            )
+        }
+        Qwen3_5SamplingStrategy::TopKTopP {
+            temperature_thousandths,
+            top_k,
+            top_p_thousandths,
+            ..
+        } => super::sampled_decoding::attempt_sampled_prediction_proposal_and_verification(
+            model,
+            active_request,
+            request_id,
+            current_generated_token,
+            current_generated_token_id,
+            effective_depth,
+            end_of_sequence_token_ids,
+            MtpSampledSamplingSettings {
+                temperature_thousandths,
+                top_k,
+                top_p_thousandths,
+            },
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn attempt_greedy_prediction_proposal_and_verification(
+    model: &Qwen3_5Model,
+    active_request: &mut Qwen3_5EngineRequest,
+    request_id: RequestId,
+    current_generated_token: &MlxArray,
+    current_generated_token_id: u32,
+    effective_depth: MtpDraftDepth,
+    end_of_sequence_token_ids: &[u32],
+) -> Result<MtpVerificationDecision, InferenceEngineError> {
     let mut prediction_request = active_request
         .take_optional_prediction_session()
         .ok_or_else(|| fatal_engine_error("MTP request session disappeared before proposal"))?;
@@ -252,7 +303,8 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
         predictor_commit_checkpoint,
         &draft_token_ids,
         &decision,
-        verification_output,
+        verification_output.prefix_boundaries,
+        verification_output.target_forward_output,
     );
     if let Err(commit_error) = commit_outcome {
         restore_complete_attempt_state(
@@ -351,7 +403,7 @@ pub(in crate::qwen3_5) fn forward_next_target_token_with_prediction_state(
     Ok(Some(next_generated_token))
 }
 
-fn record_mtp_outcome(
+pub(in crate::qwen3_5) fn record_mtp_outcome(
     active_request: &mut Qwen3_5EngineRequest,
     decision: &MtpVerificationDecision,
 ) {
@@ -366,7 +418,7 @@ fn record_mtp_outcome(
     );
 }
 
-fn restore_complete_attempt_state(
+pub(in crate::qwen3_5) fn restore_complete_attempt_state(
     active_request: &mut Qwen3_5EngineRequest,
     target_state_checkpoint: crate::RequestDecoderStateStackCheckpoint,
     predictor_state_checkpoint: super::Qwen3_5MtpRequestStateAllocationCheckpoint,

@@ -81,14 +81,17 @@ pub(in crate::laguna) fn forward_paged_mixture_of_experts(
         crate::performance_attribution::PerformanceOperation::PagedMoeOutputMaterializationSynchronizationWait,
         |_| runtime.evaluate_arrays(&[&output]),
     )?;
+    let materialized_expert_count = expert_page.manifest().expert_ids.len() as u32;
     let last_forward = if should_stream_complete_layer {
         LagunaLastExpertForward::StreamedCompleteLayer {
             layer_count: 1,
+            expert_count: materialized_expert_count,
             payload_bytes: expert_page.resident_payload_byte_count(),
         }
     } else {
         LagunaLastExpertForward::StreamedRoutedPage {
             layer_count: 1,
+            expert_count: materialized_expert_count,
             payload_bytes: expert_page.resident_payload_byte_count(),
         }
     };
