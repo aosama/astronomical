@@ -64,11 +64,14 @@ pub fn qwen3_5_gated_delta_checkpoint_kernel() -> Result<MlxMetalKernel, MlxRunt
     )
 }
 
-/// Applies fused gated-delta recurrence while retaining requested boundary states.
+/// Applies fused gated-delta recurrence while retaining requested boundary
+/// states. A retained kernel uses the fused Metal route; a capability-demoted
+/// kernel — `None` — uses the ops-based fallback, which snapshots boundaries
+/// at exactly the same completed-token positions.
 #[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     runtime: &MlxRuntime,
-    gated_delta_checkpoint_kernel: &MlxMetalKernel,
+    gated_delta_checkpoint_kernel: Option<&MlxMetalKernel>,
     queries: &MlxArray,
     keys: &MlxArray,
     values: &MlxArray,
@@ -78,6 +81,19 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     completed_prefill_chunk_tokens: &[i32],
     checkpoint_interval_token_count: i32,
 ) -> Result<Qwen3_5GatedDeltaBoundaryCheckpointResult, MlxRuntimeError> {
+    let Some(gated_delta_checkpoint_kernel) = gated_delta_checkpoint_kernel else {
+        return qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
+            runtime,
+            queries,
+            keys,
+            values,
+            decays,
+            update_rates,
+            recurrent_state,
+            completed_prefill_chunk_tokens,
+            checkpoint_interval_token_count,
+        );
+    };
     let sequence_shape = validate_gated_delta_sequence_shapes(
         queries,
         keys,
@@ -225,4 +241,120 @@ fn validate_boundary_checkpoint_positions(
         previous_completed_prefill_chunk_tokens = *current_completed_prefill_chunk_tokens;
     }
     Ok(())
+}
+
+/// Applies the gated-delta recurrence with boundary snapshots through repeated
+/// one-token public MLX ops — the documented fallback for a GPU whose
+/// capability probe demoted the fused checkpoint kernel. Boundary states are
+/// captured at exactly the same completed-token positions the fused kernel
+/// writes, so the persistent prompt cache boundary contract is preserved.
+#[allow(clippy::too_many_arguments)]
+pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
+    runtime: &MlxRuntime,
+    queries: &MlxArray,
+    keys: &MlxArray,
+    values: &MlxArray,
+    decays: &MlxArray,
+    update_rates: &MlxArray,
+    recurrent_state: &MlxArray,
+    completed_prefill_chunk_tokens: &[i32],
+    checkpoint_interval_token_count: i32,
+) -> Result<Qwen3_5GatedDeltaBoundaryCheckpointResult, MlxRuntimeError> {
+    let sequence_shape = validate_gated_delta_sequence_shapes(
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        recurrent_state,
+    )?;
+    validate_boundary_checkpoint_positions(
+        completed_prefill_chunk_tokens,
+        checkpoint_interval_token_count,
+        sequence_shape.token_count,
+    )?;
+    let query_shape = queries.shape();
+    let (key_head_count, key_head_dimension) = (query_shape[2], query_shape[3]);
+    let value_head_count = values.shape()[2];
+    let value_head_dimension = values.shape()[3];
+    let mut token_outputs = Vec::with_capacity(sequence_shape.token_count as usize);
+    let mut recurrent_boundary_states = Vec::with_capacity(completed_prefill_chunk_tokens.len());
+    let mut next_checkpoint_position_index = 0_usize;
+    let mut current_recurrent_state = runtime.astype(
+        recurrent_state,
+        astronomical_runtime_integration::MlxDtype::Float32,
+    )?;
+    for token_index in 0..sequence_shape.token_count {
+        let token_queries = runtime
+            .slice(
+                queries,
+                &[0, token_index, 0, 0],
+                &[1, token_index + 1, key_head_count, key_head_dimension],
+                &[1, 1, 1, 1],
+            )
+            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
+        let token_keys = runtime
+            .slice(
+                keys,
+                &[0, token_index, 0, 0],
+                &[1, token_index + 1, key_head_count, key_head_dimension],
+                &[1, 1, 1, 1],
+            )
+            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
+        let token_values = runtime
+            .slice(
+                values,
+                &[0, token_index, 0, 0],
+                &[1, token_index + 1, value_head_count, value_head_dimension],
+                &[1, 1, 1, 1],
+            )
+            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
+        let token_decays = runtime
+            .slice(
+                decays,
+                &[0, token_index, 0],
+                &[1, token_index + 1, value_head_count],
+                &[1, 1, 1],
+            )
+            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
+        let token_update_rates = runtime
+            .slice(
+                update_rates,
+                &[0, token_index, 0],
+                &[1, token_index + 1, value_head_count],
+                &[1, 1, 1],
+            )
+            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
+        let (token_output, next_recurrent_state) = super::gated_delta::qwen3_5_gated_delta_step(
+            runtime,
+            &token_queries,
+            &token_keys,
+            &token_values,
+            &token_decays,
+            &token_update_rates,
+            &current_recurrent_state,
+        )?;
+        token_outputs.push(token_output);
+        current_recurrent_state = next_recurrent_state;
+        let completed_token_count = token_index + 1;
+        if next_checkpoint_position_index < completed_prefill_chunk_tokens.len()
+            && completed_prefill_chunk_tokens[next_checkpoint_position_index]
+                == completed_token_count
+        {
+            // The fused kernel publishes float32 boundary states; the aliasing
+            // float32 cast yields an owned handle without a data copy.
+            recurrent_boundary_states.push(runtime.astype(
+                &current_recurrent_state,
+                astronomical_runtime_integration::MlxDtype::Float32,
+            )?);
+            next_checkpoint_position_index += 1;
+        }
+    }
+    let token_output_references = token_outputs.iter().collect::<Vec<_>>();
+    let sequence_outputs = runtime.stack_axis(&token_output_references, 1)?;
+    Ok(Qwen3_5GatedDeltaBoundaryCheckpointResult {
+        sequence_outputs,
+        next_recurrent_state: current_recurrent_state,
+        recurrent_boundary_states,
+    })
 }

@@ -2,6 +2,7 @@
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
+use crate::kernel_capability::worker_process_kernel_capabilities;
 use crate::laguna::startup::weight_loader::load_laguna_bindable_tensors;
 use crate::laguna::{LagunaModel, LagunaNativeWeights};
 use crate::{
@@ -69,15 +70,22 @@ impl LagunaInferenceExecution {
             .map_err(|_| InferenceEngineError::Fatal {
                 reason: "Laguna weight binding failed".to_owned(),
             })?;
-        let mut model = LagunaModel::new(pending_startup.target_contract, weights)
-            .map_err(|_| InferenceEngineError::Fatal {
-                reason: "Laguna model construction failed".to_owned(),
-            })?
-            .with_graph_submission_layer_intervals(
-                pending_startup.prefill_graph_submission_layer_interval,
-                pending_startup.experimental_ssd_paging_prefill_graph_submission_layer_interval,
-                pending_startup.experimental_ssd_paging_generation_graph_submission_layer_interval,
-            );
+        let mut model = LagunaModel::new(
+            pending_startup.target_contract,
+            weights,
+            worker_process_kernel_capabilities(
+                &runtime,
+                &mut pending_startup.model_loading_performance_attribution,
+            ),
+        )
+        .map_err(|_| InferenceEngineError::Fatal {
+            reason: "Laguna model construction failed".to_owned(),
+        })?
+        .with_graph_submission_layer_intervals(
+            pending_startup.prefill_graph_submission_layer_interval,
+            pending_startup.experimental_ssd_paging_prefill_graph_submission_layer_interval,
+            pending_startup.experimental_ssd_paging_generation_graph_submission_layer_interval,
+        );
         if !pending_startup.paging_plan.sparse_layers().is_empty() {
             model = model
                 .with_paging_plan(pending_startup.paging_plan)

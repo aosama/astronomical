@@ -8,6 +8,7 @@ mod e2e_test_model_names;
 mod engine_backed_worker;
 mod expert_memory_admission;
 mod expert_residency_policy;
+mod kernel_capability;
 mod memory_policy;
 mod mlx_ram_budget;
 #[cfg(feature = "direct-mlx")]

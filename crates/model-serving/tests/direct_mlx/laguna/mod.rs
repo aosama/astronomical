@@ -1,4 +1,5 @@
 mod affine_moe;
+mod affine_moe_demotion;
 mod hybrid_attention;
 mod hybrid_attention_reference;
 mod memory_policy;

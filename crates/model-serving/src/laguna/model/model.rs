@@ -6,6 +6,7 @@ use astronomical_runtime_integration::{MlxArray, MlxCompiledSwiGlu, MlxMetalKern
 use crate::ExpertResidencyTelemetry;
 use crate::MlxAllocationBudget;
 use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
+use crate::kernel_capability::{CustomMetalKernelFamily, WorkerKernelCapabilities};
 use crate::laguna::artifacts::LagunaGlobalTensorRole;
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetContract};
 use crate::laguna::paging::LagunaExpertPagingPlan;
@@ -35,24 +36,35 @@ pub struct LagunaModel {
 }
 
 impl LagunaModel {
-    /// Constructs a model from a normalized contract and bound native weights.
+    /// Constructs a model from a normalized contract, bound native weights,
+    /// and this worker process's retained kernel-capability verdicts.
     pub fn new(
         contract: LagunaTargetContract,
         weights: LagunaNativeWeights,
+        worker_kernel_capabilities: &WorkerKernelCapabilities,
     ) -> Result<Self, LagunaExecutionError> {
         if contract.layers().is_empty() {
             return Err(LagunaExecutionError::invalid_geometry(
                 "a Laguna model must contain at least one layer descriptor",
             ));
         }
-        let sorted_expert_reduction_kernel = if contract
+        let has_sparse_layers = contract
             .layers()
             .iter()
-            .any(|layer| matches!(layer.feed_forward(), LagunaFeedForwardDescriptor::Moe(_)))
-        {
-            Some(sorted_expert_weighted_sum_kernel()?)
-        } else {
-            None
+            .any(|layer| matches!(layer.feed_forward(), LagunaFeedForwardDescriptor::Moe(_)));
+        let sorted_expert_reduction_kernel = match has_sparse_layers {
+            false => None,
+            true if worker_kernel_capabilities
+                .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum) =>
+            {
+                Some(sorted_expert_weighted_sum_kernel()?)
+            }
+            true => {
+                tracing::info!(
+                    "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
+                );
+                None
+            }
         };
         let compiled_swiglu = MlxCompiledSwiGlu::new()?;
         Ok(Self {

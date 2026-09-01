@@ -26,7 +26,7 @@ pub(in crate::laguna) fn forward_resident_mixture_of_experts(
     moe_descriptor: &LagunaMoeDescriptor,
     layer_index: usize,
     router_logit_softcap: f64,
-    sorted_expert_reduction_kernel: &MlxMetalKernel,
+    sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     compiled_swiglu: &MlxCompiledSwiGlu,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
@@ -58,7 +58,7 @@ fn forward_resident_mixture_of_experts_inner(
     moe_descriptor: &LagunaMoeDescriptor,
     layer_index: usize,
     router_logit_softcap: f64,
-    sorted_expert_reduction_kernel: &MlxMetalKernel,
+    sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     compiled_swiglu: &MlxCompiledSwiGlu,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
@@ -120,14 +120,19 @@ fn gathered_routed_swiglu(
     selected_indices: &MlxArray,
     selected_scores: &MlxArray,
     applies_router_weight_on_input: bool,
-    sorted_expert_reduction_kernel: &MlxMetalKernel,
+    sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     compiled_swiglu: &MlxCompiledSwiGlu,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
     // Input-side weighting needs one hidden row per assignment, so skip the
-    // 64-assignment sort that expects a shared hidden row per token.
-    let should_sort = !applies_router_weight_on_input
-        && selected_indices.element_count() >= MINIMUM_SORTED_EXPERT_ASSIGNMENTS;
+    // 64-assignment sort that expects a shared hidden row per token. A
+    // capability-demoted kernel also skips sorting: the unsorted MLX route
+    // then serves the whole forward.
+    let sorted_reduction_route = sorted_expert_reduction_kernel.filter(|_reduction_kernel| {
+        !applies_router_weight_on_input
+            && selected_indices.element_count() >= MINIMUM_SORTED_EXPERT_ASSIGNMENTS
+    });
+    let should_sort = sorted_reduction_route.is_some();
     let gather_states = if applies_router_weight_on_input {
         router_weighted_expert_inputs(runtime, hidden_states, selected_scores)?
     } else {
@@ -202,9 +207,16 @@ fn gathered_routed_swiglu(
         )?;
 
     if let Some(sorted) = sorted_assignments {
+        // The sort decision requires the retained kernel, so this guard is an
+        // internal invariant rather than a reachable capability failure.
+        let reduction_kernel = sorted_reduction_route.ok_or_else(|| {
+            LagunaExecutionError::invalid_geometry(
+                "sorted assignments require the retained sorted-expert reduction kernel",
+            )
+        })?;
         return Ok(sorted_expert_weighted_sum(
             runtime,
-            sorted_expert_reduction_kernel,
+            reduction_kernel,
             &selected_outputs,
             &sorted.inverse_order,
             selected_scores,

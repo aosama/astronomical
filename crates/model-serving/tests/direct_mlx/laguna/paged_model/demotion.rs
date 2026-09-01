@@ -20,12 +20,16 @@ async fn should_demote_native_experts_and_recover_complete_residency_through_bou
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, true)
         .expect("resident Laguna weights should bind");
-    let mut model = LagunaModel::new(contract, weights)
-        .expect("a resident model should construct")
-        .with_paging_plan(plan)
-        .expect("resident demotion requires a paging fallback")
-        .with_retained_expert_ceiling(complete_layer_payload_bytes)
-        .expect("a complete retained layer should fit");
+    let mut model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a resident model should construct")
+    .with_paging_plan(plan)
+    .expect("resident demotion requires a paging fallback")
+    .with_retained_expert_ceiling(complete_layer_payload_bytes)
+    .expect("a complete retained layer should fit");
     let prompt_tokens = runtime
         .array_from_u32(&[1, 2], &[2])
         .expect("Romeo-shaped prompt tokens should be valid");

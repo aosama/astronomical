@@ -185,7 +185,12 @@ async fn should_grow_full_state_and_bound_sliding_state_through_prefill_and_deco
     let runtime = test_runtime();
     let contract = tiny_mixed_contract();
     let weights = bind_tiny_weights(&runtime, &contract);
-    let model = LagunaModel::new(contract, weights).expect("the mixed model should construct");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("the mixed model should construct");
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     assert_eq!(decoder_state.payload_byte_count(), 0);
@@ -274,9 +279,13 @@ async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_o
     // The documented production default keeps a resident multi-token prefill on
     // one lazy tape (zero interval), so the submission test configures the
     // configurable resident interval explicitly.
-    let model = LagunaModel::new(contract, weights)
-        .expect("the mixed model should construct")
-        .with_graph_submission_layer_intervals(1, 0, 0);
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("the mixed model should construct")
+    .with_graph_submission_layer_intervals(1, 0, 0);
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     let mut performance_attribution = PerformanceAttribution::enabled();
@@ -326,6 +335,7 @@ async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_o
     let lazy_tape_model = LagunaModel::new(
         lazy_tape_contract.clone(),
         bind_tiny_weights(&runtime, &lazy_tape_contract),
+        crate::common::test_worker_kernel_capabilities(&runtime),
     )
     .expect("the comparison model should construct")
     .with_graph_submission_layer_intervals(0, 0, 0);

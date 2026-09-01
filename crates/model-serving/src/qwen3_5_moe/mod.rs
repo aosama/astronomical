@@ -26,6 +26,7 @@ pub(crate) use model::{
     Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
 };
 #[cfg(feature = "direct-mlx")]
+#[cfg(feature = "direct-mlx")]
 pub use model::{
     Qwen3_5MoECachedPlusStreamedPageRoute, Qwen3_5MoEPagedPrefillExecutionMode,
     qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,

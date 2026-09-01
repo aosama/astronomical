@@ -290,6 +290,10 @@ impl Qwen3_5Model {
             self.runtime.exp(&self.runtime.negative(&decay_products)?)?
         };
         let current_recurrent_state = recurrent_state.current_or_zero(&self.runtime)?;
+        // Each dispatch entry owns its capability routing: a retained kernel
+        // takes the fused Metal route; a demoted kernel falls back to the
+        // ops-based public MLX route inside the dispatch, and the checkpoint
+        // fallback preserves the prompt-cache boundary snapshot positions.
         let (recurrent_output, next_recurrent_state, boundary_recurrent_states) =
             match completed_prefill_chunk_tokens.as_deref() {
                 Some(completed_prefill_chunk_tokens) => {
@@ -301,7 +305,7 @@ impl Qwen3_5Model {
                         })?;
                     let checkpoint_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
                         &self.runtime,
-                        &self.gated_delta_checkpoint_kernel,
+                        self.gated_delta_checkpoint_kernel.as_ref(),
                         &queries,
                         &keys,
                         &values,
@@ -320,7 +324,7 @@ impl Qwen3_5Model {
                 None => {
                     let (recurrent_output, next_recurrent_state) = qwen3_5_gated_delta_sequence(
                         &self.runtime,
-                        &self.gated_delta_kernel,
+                        self.gated_delta_kernel.as_ref(),
                         &queries,
                         &keys,
                         &values,

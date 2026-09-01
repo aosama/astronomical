@@ -1,5 +1,6 @@
 mod attention;
 mod flux2_klein;
+mod kernel_capability;
 mod laguna;
 mod persistent_prompt_cache_block_topology;
 mod persistent_prompt_cache_block_transaction;

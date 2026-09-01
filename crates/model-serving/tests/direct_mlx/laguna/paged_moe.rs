@@ -58,7 +58,7 @@ async fn should_stream_complete_and_routed_pages_with_matching_gathered_swiglu()
         &complete_indices,
         &scores,
         false,
-        &kernel,
+        Some(&kernel),
         &mut performance_attribution,
     )
     .expect("complete-page SwiGLU should execute");
@@ -69,7 +69,7 @@ async fn should_stream_complete_and_routed_pages_with_matching_gathered_swiglu()
         &routed_indices,
         &scores,
         false,
-        &kernel,
+        Some(&kernel),
         &mut performance_attribution,
     )
     .expect("routed-page SwiGLU should execute");

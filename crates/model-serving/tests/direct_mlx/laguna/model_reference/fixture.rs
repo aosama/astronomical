@@ -24,8 +24,12 @@ pub(super) fn build_fixture(runtime: &MlxRuntime, row: &ReferenceRow) -> Referen
     let inventories = build_tensor_inventories(runtime, &contract, row);
     let weights = LagunaNativeWeights::bind(runtime, inventories.production_tensors, &contract)
         .unwrap_or_else(|error| panic!("{} weights should bind: {error:?}", row.row_name));
-    let model = LagunaModel::new(contract, weights)
-        .unwrap_or_else(|error| panic!("{} model should construct: {error:?}", row.row_name));
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .unwrap_or_else(|error| panic!("{} model should construct: {error:?}", row.row_name));
     ReferenceFixture {
         model,
         reference_tensors: inventories.reference_tensors,

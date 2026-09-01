@@ -10,7 +10,6 @@ use crate::sparse_experts::{
 
 const ROUTE_EXPERTS_OPERATION: &str = "route Qwen3.5-MoE sparse experts";
 const COMBINE_EXPERTS_OPERATION: &str = "combine Qwen3.5-MoE sparse and shared experts";
-pub(super) const MINIMUM_SORTED_EXPERT_ASSIGNMENTS: usize = 64;
 
 /// Selects and optionally renormalizes the highest-probability sparse experts.
 pub fn qwen3_5_moe_route_experts(

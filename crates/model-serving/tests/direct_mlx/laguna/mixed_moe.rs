@@ -228,7 +228,12 @@ async fn should_run_dense_then_sparse_prefill_and_decode_with_attribution() {
     let contract = dense_then_sparse_contract();
     let weights = bind_dense_then_sparse_weights(&runtime, &contract, true)
         .expect("dense-then-sparse weights should bind");
-    let model = LagunaModel::new(contract, weights).expect("the mixed model should construct");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("the mixed model should construct");
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     let mut performance_attribution = PerformanceAttribution::enabled();
