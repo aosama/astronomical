@@ -308,6 +308,9 @@ assert_workflow_contract() {
 
         sccache_restore = steps.find { |step| step["id"] == "sccache-cache" }
         raise "sccache key is not stable by dependency graph" unless sccache_restore.fetch("with").fetch("key").include?("Cargo.lock")
+        raise "sccache key couples to the native identity; the native build product cache owns that identity" if sccache_restore.fetch("with").fetch("key").include?("NATIVE_BUILD_IDENTITY")
+        sccache_fallbacks = sccache_restore.fetch("with").fetch("restore-keys").to_s.split(/\s*\n\s*/).reject(&:empty?)
+        raise "sccache restore omits an identity-free fallback" unless sccache_fallbacks.any? { |fallback| !fallback.include?("NATIVE_BUILD_IDENTITY") }
         swift_restore = steps.find { |step| step["id"] == "swiftpm-cache" }
         raise "Swift state is coupled to Rust" if swift_restore.fetch("with").fetch("key").include?("Cargo")
         raise "Swift cache omits toolchain compatibility" unless swift_restore.fetch("with").fetch("key").include?("SWIFT_TOOLCHAIN_IDENTITY")
