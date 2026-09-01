@@ -1,8 +1,7 @@
 use astronomical_model_serving::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPhase, ForwardRecoveryDecision, ForwardRecoveryRequirements,
-    PhaseAwareExpertResidencyPlanError, RequestExpertLayerRole, RequestExpertResidency,
-    RetainedExpertPageClass, plan_phase_aware_expert_residency,
+    ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryPhase,
+    RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass, plan_expert_residency,
     publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
@@ -32,8 +31,8 @@ fn should_keep_complete_layers_during_prefill_even_when_the_plan_names_a_release
             experts_per_token: 2,
         })
         .collect::<Vec<_>>();
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Prefill,
+    let plan = plan_expert_residency(
+        MemoryPhase::Prefill,
         60,
         &geometries,
         &[CurrentExpertLayerResidency {
@@ -51,15 +50,15 @@ fn should_keep_complete_layers_during_prefill_even_when_the_plan_names_a_release
         ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
     );
     assert!(!should_enact_planned_expert_release(
-        ExpertResidencyPhase::Prefill,
+        MemoryPhase::Prefill,
         plan.layer_targets[2],
     ));
     assert!(!should_enact_planned_expert_release(
-        ExpertResidencyPhase::GenerationPreparation,
+        MemoryPhase::GenerationPreparation,
         plan.layer_targets[2],
     ));
     assert!(should_enact_planned_expert_release(
-        ExpertResidencyPhase::Idle,
+        MemoryPhase::Idle,
         plan.layer_targets[2],
     ));
 }
@@ -179,13 +178,13 @@ fn should_plan_prefill_with_the_floored_ceiling_when_seated_layers_exceed_leftov
     let seated_complete_layer_payload_bytes = 80;
     assert!(
         matches!(
-            plan_phase_aware_expert_residency(
-                ExpertResidencyPhase::Prefill,
+            plan_expert_residency(
+                MemoryPhase::Prefill,
                 leftover_expert_budget_bytes,
                 &geometries,
                 &seated_complete_layers,
             ),
-            Err(PhaseAwareExpertResidencyPlanError::CurrentResidencyExceedsCeiling),
+            Err(ExpertResidencyPlanError::CurrentResidencyExceedsCeiling),
         ),
         "planning against the tighter leftover number must not silently drop seated layers"
     );
@@ -193,8 +192,8 @@ fn should_plan_prefill_with_the_floored_ceiling_when_seated_layers_exceed_leftov
         leftover_expert_budget_bytes,
         seated_complete_layer_payload_bytes,
     );
-    plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Prefill,
+    plan_expert_residency(
+        MemoryPhase::Prefill,
         floored_ceiling_bytes,
         &geometries,
         &seated_complete_layers,
@@ -205,11 +204,10 @@ fn should_plan_prefill_with_the_floored_ceiling_when_seated_layers_exceed_leftov
 #[test]
 fn should_keep_the_opening_prefill_pin_set_when_later_leftover_wants_more_layers() {
     let geometries = uniform_geometry(3);
-    let opening_candidate =
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 100, &geometries, &[])
-            .expect("two complete layers should fit the opening leftover");
+    let opening_candidate = plan_expert_residency(MemoryPhase::Prefill, 100, &geometries, &[])
+        .expect("two complete layers should fit the opening leftover");
     let (opened_residency, opened_plan) = publish_request_stable_residency_plan(
-        ExpertResidencyPhase::Prefill,
+        MemoryPhase::Prefill,
         None,
         opening_candidate,
         &[],
@@ -230,11 +228,10 @@ fn should_keep_the_opening_prefill_pin_set_when_later_leftover_wants_more_layers
         ExpertLayerResidencyTarget::StreamOperationLocal
     );
 
-    let richer_candidate =
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 120, &geometries, &[])
-            .expect("the full model should fit a richer leftover");
+    let richer_candidate = plan_expert_residency(MemoryPhase::Prefill, 120, &geometries, &[])
+        .expect("the full model should fit a richer leftover");
     let (_continued_residency, continued_plan) = publish_request_stable_residency_plan(
-        ExpertResidencyPhase::Prefill,
+        MemoryPhase::Prefill,
         Some(&opened_residency),
         richer_candidate,
         &[],
@@ -252,17 +249,15 @@ fn should_keep_the_opening_prefill_pin_set_when_later_leftover_wants_more_layers
 #[test]
 fn should_keep_opening_prefill_pins_when_later_leftover_is_tighter_without_capacity_failure() {
     let geometries = uniform_geometry(3);
-    let opening_candidate =
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 100, &geometries, &[])
-            .expect("two complete layers should fit the opening leftover");
+    let opening_candidate = plan_expert_residency(MemoryPhase::Prefill, 100, &geometries, &[])
+        .expect("two complete layers should fit the opening leftover");
     let opened_residency = RequestExpertResidency::open_prefill(&opening_candidate);
     assert_eq!(opened_residency.pinned_complete_layer_indexes(), vec![0, 1]);
 
-    let tighter_candidate =
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 70, &geometries, &[])
-            .expect("one complete layer should still fit a tighter leftover");
+    let tighter_candidate = plan_expert_residency(MemoryPhase::Prefill, 70, &geometries, &[])
+        .expect("one complete layer should still fit a tighter leftover");
     let (continued_residency, continued_plan) = publish_request_stable_residency_plan(
-        ExpertResidencyPhase::Prefill,
+        MemoryPhase::Prefill,
         Some(&opened_residency),
         tighter_candidate,
         &[],
@@ -286,9 +281,8 @@ fn should_keep_opening_prefill_pins_when_later_leftover_is_tighter_without_capac
 #[test]
 fn should_not_re_pin_a_layer_after_a_prefill_capacity_failure() {
     let geometries = uniform_geometry(3);
-    let opening_candidate =
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 100, &geometries, &[])
-            .expect("two complete layers should fit");
+    let opening_candidate = plan_expert_residency(MemoryPhase::Prefill, 100, &geometries, &[])
+        .expect("two complete layers should fit");
     let opened_residency = RequestExpertResidency::open_prefill(&opening_candidate);
     let shrunk_residency = opened_residency.shrink_after_capacity_failure(40, &geometries);
     assert_eq!(
@@ -296,11 +290,10 @@ fn should_not_re_pin_a_layer_after_a_prefill_capacity_failure() {
         Some(RequestExpertLayerRole::Streamed)
     );
 
-    let richer_candidate =
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 120, &geometries, &[])
-            .expect("leftover after failure still wants every layer");
+    let richer_candidate = plan_expert_residency(MemoryPhase::Prefill, 120, &geometries, &[])
+        .expect("leftover after failure still wants every layer");
     let (_published_residency, published_plan) = publish_request_stable_residency_plan(
-        ExpertResidencyPhase::Prefill,
+        MemoryPhase::Prefill,
         Some(&shrunk_residency),
         richer_candidate,
         &[],
@@ -341,15 +334,15 @@ fn should_keep_prefill_routed_pages_when_generation_handoff_replans() {
             covered_weighted_demand: 4,
         },
     ];
-    let generation_candidate = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
+    let generation_candidate = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
         120,
         &geometries,
         &prefill_routed_pages,
     )
     .expect("generation leftover should keep every prefill routed page");
     let (generation_residency, generation_plan) = publish_request_stable_residency_plan(
-        ExpertResidencyPhase::GenerationPreparation,
+        MemoryPhase::GenerationPreparation,
         None,
         generation_candidate,
         &prefill_routed_pages,

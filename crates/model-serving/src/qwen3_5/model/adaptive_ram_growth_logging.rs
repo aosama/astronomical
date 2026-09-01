@@ -7,7 +7,7 @@ pub(crate) fn log_adaptive_ram_growth_admission_decision(
     decision: &'static str,
 ) {
     let stable_limit_exceeded = adaptive_ram_growth_projection.stable_projected_bytes()
-        > adaptive_ram_growth_projection.active_memory_limit_bytes();
+        > adaptive_ram_growth_projection.active_memory_ceiling_bytes();
     let peak_limit_exceeded = adaptive_ram_growth_projection.peak_projected_bytes()
         > adaptive_ram_growth_projection.allowed_active_memory_bytes();
     let recovery_reserve_exceeded = adaptive_ram_growth_projection.recovery_projected_bytes()
@@ -16,7 +16,7 @@ pub(crate) fn log_adaptive_ram_growth_admission_decision(
         !stable_limit_exceeded && !peak_limit_exceeded && recovery_reserve_exceeded;
     tracing::info!(
         decision,
-        phase = ?adaptive_ram_growth_context.adaptive_ram_growth_phase(),
+        phase = ?adaptive_ram_growth_context.memory_phase(),
         forward_token_count = adaptive_ram_growth_context.forward_token_count(),
         sparse_experts_are_paged = adaptive_ram_growth_context.sparse_experts_are_paged(),
         current_active_memory_bytes = adaptive_ram_growth_projection.current_active_memory_bytes(),
@@ -31,7 +31,7 @@ pub(crate) fn log_adaptive_ram_growth_admission_decision(
         stable_projected_bytes = adaptive_ram_growth_projection.stable_projected_bytes(),
         peak_projected_bytes = adaptive_ram_growth_projection.peak_projected_bytes(),
         recovery_projected_bytes = adaptive_ram_growth_projection.recovery_projected_bytes(),
-        active_memory_limit_bytes = adaptive_ram_growth_projection.active_memory_limit_bytes(),
+        active_memory_ceiling_bytes = adaptive_ram_growth_projection.active_memory_ceiling_bytes(),
         allowed_active_memory_bytes = adaptive_ram_growth_projection.allowed_active_memory_bytes(),
         operation_reclamation_required_bytes =
             adaptive_ram_growth_projection.operation_reclamation_required_bytes(),
@@ -79,7 +79,7 @@ pub(crate) fn log_adaptive_ram_growth_pressure(
             adaptive_ram_growth_projection.operation_reclamation_required_bytes(),
         recovery_reserve_shortfall_bytes =
             adaptive_ram_growth_projection.recovery_reserve_shortfall_bytes(),
-        active_memory_limit_bytes = adaptive_ram_growth_projection.active_memory_limit_bytes(),
+        active_memory_ceiling_bytes = adaptive_ram_growth_projection.active_memory_ceiling_bytes(),
         allowed_active_memory_bytes = adaptive_ram_growth_projection.allowed_active_memory_bytes(),
         expert_reclamation_target_bytes,
         retained_expert_payload_bytes_before,

@@ -21,8 +21,8 @@ use astronomical_runtime_integration::MlxMemorySnapshot;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::qwen3_5_moe::model::record_expert_reclamation_attribution;
 use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthPhase, InferenceEngineError,
-    MlxRamBudgetMeasurement, MlxRamBudgetPhase, PerformanceAttribution, PerformanceOperation,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError,
+    MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
     RetainedExpertReclamation, measured_non_expert_forward_growth_bytes,
 };
 
@@ -94,9 +94,7 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
     // not be retained. This prevents warm layers from consuming activation space
     // already proven necessary by another context in the same phase.
     let phase_observed_transient_high_water_bytes = adaptive_ram_growth_guard
-        .observed_transient_high_water_bytes(
-            adaptive_ram_growth_context.adaptive_ram_growth_phase(),
-        );
+        .observed_transient_high_water_bytes(adaptive_ram_growth_context.memory_phase());
     model.update_expert_pager_transient_high_water_bytes(
         u64::try_from(phase_observed_transient_high_water_bytes).unwrap_or(u64::MAX),
     );
@@ -156,10 +154,7 @@ fn record_composed_ram_budget_measurement(
     exact_temporary_workspace_bytes: usize,
     memory_snapshot_after_growth: &MlxMemorySnapshot,
 ) -> RetainedExpertReclamation {
-    let mlx_ram_budget_phase = match adaptive_ram_growth_context.adaptive_ram_growth_phase() {
-        AdaptiveRamGrowthPhase::Prefill => MlxRamBudgetPhase::Prefill,
-        AdaptiveRamGrowthPhase::Decode => MlxRamBudgetPhase::Decode,
-    };
+    let mlx_ram_budget_phase = adaptive_ram_growth_context.memory_phase();
     // Peak includes complete/routed pages promoted by mandatory reads. Subtract
     // only newly retained payload so the composed budget learns request workspace
     // without reserving the same expert ownership a second time.

@@ -42,8 +42,8 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use super::{
-    expert_reclamation_bytes_to_fit_fixed_forward,
+use crate::memory::{
+    MemoryPhase, expert_reclamation_bytes_to_fit_fixed_forward,
     required_complete_residency_activation_headroom_bytes,
 };
 
@@ -55,14 +55,6 @@ const CONTEXT_TOKEN_BUCKET_WIDTH: u64 = 1_024;
 
 /// Extra safety margin applied on top of measured context-window need.
 const CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES: u64 = 64_000_000;
-
-/// Forward class that consumed or will consume temporary activation memory.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MlxRamBudgetPhase {
-    Prefill,
-    Decode,
-    Idle,
-}
 
 /// Immutable inputs known once a model is loaded against one ceiling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -102,7 +94,7 @@ pub struct MlxRamBudgetSnapshot {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxRamBudgetMeasurement {
     /// Execution class whose activation high-water this sample may raise.
-    pub phase: MlxRamBudgetPhase,
+    pub phase: MemoryPhase,
     /// Context size used to choose a monotonic coarse learning bucket.
     pub context_token_count: u64,
     /// Measured request-owned persistent and transient bytes above model core.
@@ -271,9 +263,9 @@ impl MlxRamBudget {
     }
 
     #[must_use]
-    pub fn activation_headroom_bytes(&self, phase: MlxRamBudgetPhase) -> u64 {
+    pub fn activation_headroom_bytes(&self, phase: MemoryPhase) -> u64 {
         match phase {
-            MlxRamBudgetPhase::Prefill => {
+            MemoryPhase::Prefill => {
                 // One complete layer is enough to stream a single page. A
                 // seated 38.6 GB model under a 40 GB ceiling still needs room
                 // for a multi-token prefill working set; three layers is the
@@ -286,7 +278,9 @@ impl MlxRamBudget {
                     self.prefill_activation_headroom_bytes,
                 )
             }
-            MlxRamBudgetPhase::Decode => {
+            // GenerationPreparation budgets like decode (see the mapping
+            // contract in phase.rs): token writing is activation-cheap.
+            MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
                 if self.has_decode_activation_measurement {
                     self.decode_activation_headroom_bytes
                 } else if self.has_prefill_activation_measurement {
@@ -305,7 +299,7 @@ impl MlxRamBudget {
                     )
                 }
             }
-            MlxRamBudgetPhase::Idle => 0,
+            MemoryPhase::Idle => 0,
         }
     }
 
@@ -335,19 +329,22 @@ impl MlxRamBudget {
             .or_insert(measured_with_buffer);
 
         match measurement.phase {
-            MlxRamBudgetPhase::Prefill => {
+            MemoryPhase::Prefill => {
                 self.has_prefill_activation_measurement = true;
                 self.prefill_activation_headroom_bytes = self
                     .prefill_activation_headroom_bytes
                     .max(measurement.observed_activation_headroom_bytes);
             }
-            MlxRamBudgetPhase::Decode => {
+            // GenerationPreparation evidence belongs to the decode window: it
+            // observes the same activation shape that generation will repeat
+            // (see the mapping contract in phase.rs).
+            MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
                 self.has_decode_activation_measurement = true;
                 self.decode_activation_headroom_bytes = self
                     .decode_activation_headroom_bytes
                     .max(measurement.observed_activation_headroom_bytes);
             }
-            MlxRamBudgetPhase::Idle => {}
+            MemoryPhase::Idle => {}
         }
         // Idle has no activation operation to learn from. It can still mark that
         // context evidence exists if a caller deliberately records an idle sample.
@@ -357,7 +354,7 @@ impl MlxRamBudget {
     #[must_use]
     pub fn plan(
         &self,
-        phase: MlxRamBudgetPhase,
+        phase: MemoryPhase,
         context_token_count: u64,
         other_fixed_bytes: u64,
     ) -> MlxRamBudgetSnapshot {
@@ -365,16 +362,20 @@ impl MlxRamBudget {
         // live context reserve. Prefill/decode plans protect the next operation's
         // context even if the current allocator snapshot is temporarily lower.
         let context_window_reserve_bytes = match phase {
-            MlxRamBudgetPhase::Idle => 0,
-            MlxRamBudgetPhase::Prefill | MlxRamBudgetPhase::Decode => {
+            MemoryPhase::Idle => 0,
+            MemoryPhase::Prefill | MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
                 self.context_window_reserve_bytes(context_token_count)
             }
         };
         let activation_headroom_bytes = self.activation_headroom_bytes(phase);
         let complete_layer_stream_slot_bytes = match phase {
-            MlxRamBudgetPhase::Prefill => self.model_geometry.largest_complete_expert_layer_bytes,
-            MlxRamBudgetPhase::Decode => self.model_geometry.largest_routed_expert_page_bytes,
-            MlxRamBudgetPhase::Idle => 0,
+            MemoryPhase::Prefill => self.model_geometry.largest_complete_expert_layer_bytes,
+            // GenerationPreparation budgets like decode (see phase.rs): token
+            // writing needs the routed-page slot, not a complete-layer slot.
+            MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
+                self.model_geometry.largest_routed_expert_page_bytes
+            }
+            MemoryPhase::Idle => 0,
         };
         let fixed_non_expert_bytes = self
             .model_geometry

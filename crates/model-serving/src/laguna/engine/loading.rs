@@ -6,7 +6,7 @@ use crate::kernel_capability::worker_process_kernel_capabilities;
 use crate::laguna::startup::weight_loader::load_laguna_bindable_tensors;
 use crate::laguna::{LagunaModel, LagunaNativeWeights};
 use crate::{
-    AdaptiveRamGrowthGuard, EngineLoadResult, InferenceEngineError, MlxRamBudgetPhase,
+    AdaptiveRamGrowthGuard, EngineLoadResult, InferenceEngineError, MemoryPhase,
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
@@ -114,7 +114,7 @@ impl LagunaInferenceExecution {
                     .update_model_geometry(measured_model_geometry);
                 let initial_ram_budget = laguna_ram_budget_snapshot(
                     &pending_startup.mlx_ram_budget,
-                    MlxRamBudgetPhase::Prefill,
+                    MemoryPhase::Prefill,
                     0,
                 );
                 tracing::info!(

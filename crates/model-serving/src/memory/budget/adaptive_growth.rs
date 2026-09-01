@@ -22,14 +22,7 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use super::ExpertRetentionReclamationPlan;
-
-/// Forward-pass class whose temporary allocation history informs admission.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum AdaptiveRamGrowthPhase {
-    Prefill,
-    Decode,
-}
+use crate::memory::{ExpertReclamationPlan, MemoryPhase};
 
 /// Exact recurrent execution shape whose temporary allocation evidence may recur.
 ///
@@ -37,7 +30,7 @@ pub enum AdaptiveRamGrowthPhase {
 /// positions, visual requests, MTP histories, or sparse-expert residency modes.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AdaptiveRamGrowthContext {
-    adaptive_ram_growth_phase: AdaptiveRamGrowthPhase,
+    memory_phase: MemoryPhase,
     forward_token_count: usize,
     prompt_position_context_bucket: u64,
     has_visual_embeddings: bool,
@@ -56,7 +49,7 @@ impl AdaptiveRamGrowthContext {
         sparse_experts_are_paged: bool,
     ) -> Self {
         Self {
-            adaptive_ram_growth_phase: AdaptiveRamGrowthPhase::Prefill,
+            memory_phase: MemoryPhase::Prefill,
             forward_token_count,
             prompt_position_context_bucket,
             has_visual_embeddings,
@@ -73,7 +66,7 @@ impl AdaptiveRamGrowthContext {
         sparse_experts_are_paged: bool,
     ) -> Self {
         Self {
-            adaptive_ram_growth_phase: AdaptiveRamGrowthPhase::Decode,
+            memory_phase: MemoryPhase::Decode,
             forward_token_count,
             prompt_position_context_bucket: 0,
             has_visual_embeddings: false,
@@ -83,8 +76,8 @@ impl AdaptiveRamGrowthContext {
     }
 
     #[must_use]
-    pub const fn adaptive_ram_growth_phase(self) -> AdaptiveRamGrowthPhase {
-        self.adaptive_ram_growth_phase
+    pub const fn memory_phase(self) -> MemoryPhase {
+        self.memory_phase
     }
 
     /// Returns the exact number of tokens forwarded by this operation.
@@ -110,7 +103,7 @@ impl AdaptiveRamGrowthContext {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdaptiveRamGrowthGuard {
     /// Stable ceiling C. A one-percent allowance P is derived for transient peak.
-    active_memory_limit_bytes: usize,
+    active_memory_ceiling_bytes: usize,
     /// High-water transient bytes keyed by execution shape and ownership mode.
     observed_transient_high_water_bytes_by_context: BTreeMap<AdaptiveRamGrowthContext, usize>,
 }
@@ -131,7 +124,7 @@ pub struct AdaptiveRamGrowthProjection {
     stable_projected_bytes: usize,
     peak_projected_bytes: usize,
     recovery_projected_bytes: usize,
-    active_memory_limit_bytes: usize,
+    active_memory_ceiling_bytes: usize,
     allowed_active_memory_bytes: usize,
 }
 
@@ -193,8 +186,8 @@ impl AdaptiveRamGrowthProjection {
     }
 
     #[must_use]
-    pub const fn active_memory_limit_bytes(&self) -> usize {
-        self.active_memory_limit_bytes
+    pub const fn active_memory_ceiling_bytes(&self) -> usize {
+        self.active_memory_ceiling_bytes
     }
 
     /// Returns the configured ceiling plus its approved one-percent transient allowance.
@@ -208,7 +201,7 @@ impl AdaptiveRamGrowthProjection {
     pub const fn operation_reclamation_required_bytes(&self) -> usize {
         let stable_deficit_bytes = self
             .stable_projected_bytes
-            .saturating_sub(self.active_memory_limit_bytes);
+            .saturating_sub(self.active_memory_ceiling_bytes);
         let peak_deficit_bytes = self
             .peak_projected_bytes
             .saturating_sub(self.allowed_active_memory_bytes);
@@ -234,16 +227,16 @@ impl AdaptiveRamGrowthProjection {
     pub const fn expert_retention_reclamation_plan(
         &self,
         retained_expert_payload_bytes: usize,
-    ) -> ExpertRetentionReclamationPlan {
-        // Pass peak twice on purpose. `ExpertRetentionReclamationPlan` is a pure
+    ) -> ExpertReclamationPlan {
+        // Pass peak twice on purpose. `ExpertReclamationPlan` is a pure
         // three-boundary formula also used by stricter callers; replacing recovery
         // with peak here excludes recovery-only deficits from preemptive eviction
         // while preserving one shared checked-arithmetic implementation.
-        ExpertRetentionReclamationPlan::for_projected_memory(
+        ExpertReclamationPlan::for_projected_memory(
             self.stable_projected_bytes,
             self.peak_projected_bytes,
             self.peak_projected_bytes,
-            self.active_memory_limit_bytes,
+            self.active_memory_ceiling_bytes,
             self.allowed_active_memory_bytes,
             retained_expert_payload_bytes,
         )
@@ -262,53 +255,46 @@ impl AdaptiveRamGrowthProjection {
 
 impl AdaptiveRamGrowthGuard {
     /// Creates a guard for one machine-derived MLX active-memory limit.
-    pub fn new(active_memory_limit_bytes: usize) -> Result<Self, AdaptiveRamGrowthGuardError> {
-        if active_memory_limit_bytes == 0 {
-            return Err(AdaptiveRamGrowthGuardError::InvalidActiveMemoryLimit);
+    pub fn new(active_memory_ceiling_bytes: usize) -> Result<Self, AdaptiveRamGrowthGuardError> {
+        if active_memory_ceiling_bytes == 0 {
+            return Err(AdaptiveRamGrowthGuardError::InvalidActiveMemoryCeiling);
         }
         Ok(Self {
-            active_memory_limit_bytes,
+            active_memory_ceiling_bytes,
             observed_transient_high_water_bytes_by_context: BTreeMap::new(),
         })
     }
 
     /// Replaces the active limit while retaining all exact-context measurements.
-    pub fn update_active_memory_limit_bytes(
+    pub fn update_active_memory_ceiling_bytes(
         &mut self,
-        active_memory_limit_bytes: usize,
+        active_memory_ceiling_bytes: usize,
     ) -> Result<(), AdaptiveRamGrowthGuardError> {
-        if active_memory_limit_bytes == 0 {
-            return Err(AdaptiveRamGrowthGuardError::InvalidActiveMemoryLimit);
+        if active_memory_ceiling_bytes == 0 {
+            return Err(AdaptiveRamGrowthGuardError::InvalidActiveMemoryCeiling);
         }
-        self.active_memory_limit_bytes = active_memory_limit_bytes;
+        self.active_memory_ceiling_bytes = active_memory_ceiling_bytes;
         Ok(())
     }
 
     /// Returns whether this phase has at least one retained exact-context observation.
     #[must_use]
-    pub fn has_completed_growth_observation(
-        &self,
-        adaptive_ram_growth_phase: AdaptiveRamGrowthPhase,
-    ) -> bool {
+    pub fn has_completed_growth_observation(&self, memory_phase: MemoryPhase) -> bool {
         self.observed_transient_high_water_bytes_by_context
             .keys()
             .any(|adaptive_ram_growth_context| {
-                adaptive_ram_growth_context.adaptive_ram_growth_phase() == adaptive_ram_growth_phase
+                adaptive_ram_growth_context.memory_phase() == memory_phase
             })
     }
 
     /// Returns the phase maximum for phase-specific telemetry.
     #[must_use]
-    pub fn observed_transient_high_water_bytes(
-        &self,
-        adaptive_ram_growth_phase: AdaptiveRamGrowthPhase,
-    ) -> usize {
+    pub fn observed_transient_high_water_bytes(&self, memory_phase: MemoryPhase) -> usize {
         self.observed_transient_high_water_bytes_by_context
             .iter()
             .filter_map(
                 |(adaptive_ram_growth_context, observed_transient_high_water_bytes)| {
-                    (adaptive_ram_growth_context.adaptive_ram_growth_phase()
-                        == adaptive_ram_growth_phase)
+                    (adaptive_ram_growth_context.memory_phase() == memory_phase)
                         .then_some(*observed_transient_high_water_bytes)
                 },
             )
@@ -379,9 +365,9 @@ impl AdaptiveRamGrowthGuard {
             .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
         // P is the repository's approved temporary allowance. Stable ownership
         // must fit C; a short-lived peak may use C + 1 percent.
-        let transient_allowance_bytes = self.active_memory_limit_bytes / 100;
+        let transient_allowance_bytes = self.active_memory_ceiling_bytes / 100;
         let allowed_active_memory_bytes = self
-            .active_memory_limit_bytes
+            .active_memory_ceiling_bytes
             .checked_add(transient_allowance_bytes)
             .unwrap_or(usize::MAX);
         Ok(AdaptiveRamGrowthProjection {
@@ -393,7 +379,7 @@ impl AdaptiveRamGrowthGuard {
             stable_projected_bytes,
             peak_projected_bytes,
             recovery_projected_bytes,
-            active_memory_limit_bytes: self.active_memory_limit_bytes,
+            active_memory_ceiling_bytes: self.active_memory_ceiling_bytes,
             allowed_active_memory_bytes,
         })
     }
@@ -437,7 +423,7 @@ impl AdaptiveRamGrowthGuard {
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum AdaptiveRamGrowthGuardError {
     #[error("adaptive RAM growth requires a positive active-memory limit")]
-    InvalidActiveMemoryLimit,
+    InvalidActiveMemoryCeiling,
     #[error("adaptive RAM growth memory projection overflowed")]
     MemoryProjectionOverflow,
 }

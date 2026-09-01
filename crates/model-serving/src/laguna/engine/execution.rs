@@ -11,8 +11,8 @@ use crate::laguna::{
     LagunaPromptProcessingChunkSizer, LagunaTargetContract, LagunaTensorContract,
 };
 use crate::{
-    AdaptiveRamGrowthGuard, AdaptiveRamGrowthPhase, EngineGenerationStart, EngineLoadResult,
-    GeneratedToken, GenerationFinalization, InferenceEngineError, MlxInferenceExecution,
+    AdaptiveRamGrowthGuard, EngineGenerationStart, EngineLoadResult, GeneratedToken,
+    GenerationFinalization, InferenceEngineError, MemoryPhase, MlxInferenceExecution,
     MlxMemoryLimitAdjustment, MlxRamBudget, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceCounter, PersistentPromptCacheCounters, PersistentPromptCacheDiskStore,
     PersistentPromptCacheDiskStoreConfig, build_persistent_prompt_cache_stats_event,
@@ -345,7 +345,7 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                         &active_request.decoder_state,
                         1,
                         0,
-                        AdaptiveRamGrowthPhase::Decode,
+                        MemoryPhase::Decode,
                         active_request.context_token_count.saturating_add(1),
                         performance_attribution,
                     )?;

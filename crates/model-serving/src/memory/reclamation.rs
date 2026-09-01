@@ -145,13 +145,13 @@ pub fn should_retry_fixed_forward_after_expert_reclamation(
 
 /// Exact expert-retention reclamation required by one request operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ExpertRetentionReclamationPlan {
+pub struct ExpertReclamationPlan {
     required_reclamation_bytes: usize,
     reclamation_target_bytes: usize,
     unresolved_shortfall_bytes: usize,
 }
 
-impl ExpertRetentionReclamationPlan {
+impl ExpertReclamationPlan {
     /// Computes the largest deficit across every mandatory memory boundary.
     ///
     /// Reclaiming one retained expert byte lowers stable, peak, and recovery

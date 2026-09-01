@@ -4,9 +4,7 @@
 //! readable: this file explains how completed forwards teach reusable transient
 //! evidence, while `adaptive_ram_growth_guard.rs` covers projection boundaries.
 
-use astronomical_model_serving::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthPhase,
-};
+use astronomical_model_serving::{AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, MemoryPhase};
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, false, false);
@@ -36,13 +34,11 @@ fn should_keep_prefill_and_decode_transient_high_water_values_independent() {
     );
 
     assert_eq!(
-        adaptive_ram_growth_guard
-            .observed_transient_high_water_bytes(AdaptiveRamGrowthPhase::Prefill),
+        adaptive_ram_growth_guard.observed_transient_high_water_bytes(MemoryPhase::Prefill),
         8_000
     );
     assert_eq!(
-        adaptive_ram_growth_guard
-            .observed_transient_high_water_bytes(AdaptiveRamGrowthPhase::Decode),
+        adaptive_ram_growth_guard.observed_transient_high_water_bytes(MemoryPhase::Decode),
         500
     );
 }
@@ -52,13 +48,8 @@ fn should_record_a_completed_zero_transient_prefill_observation() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
         .expect("a positive active-memory limit should create a guard");
 
-    assert!(
-        !adaptive_ram_growth_guard
-            .has_completed_growth_observation(AdaptiveRamGrowthPhase::Prefill)
-    );
-    assert!(
-        !adaptive_ram_growth_guard.has_completed_growth_observation(AdaptiveRamGrowthPhase::Decode)
-    );
+    assert!(!adaptive_ram_growth_guard.has_completed_growth_observation(MemoryPhase::Prefill));
+    assert!(!adaptive_ram_growth_guard.has_completed_growth_observation(MemoryPhase::Decode));
 
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         DEFAULT_PREFILL_CONTEXT,
@@ -70,16 +61,15 @@ fn should_record_a_completed_zero_transient_prefill_observation() {
     );
 
     assert!(
-        adaptive_ram_growth_guard.has_completed_growth_observation(AdaptiveRamGrowthPhase::Prefill),
+        adaptive_ram_growth_guard.has_completed_growth_observation(MemoryPhase::Prefill),
         "a completed prefill must count as observed even when it used no transient bytes"
     );
     assert!(
-        !adaptive_ram_growth_guard.has_completed_growth_observation(AdaptiveRamGrowthPhase::Decode),
+        !adaptive_ram_growth_guard.has_completed_growth_observation(MemoryPhase::Decode),
         "prefill evidence must not mark decode as observed"
     );
     assert_eq!(
-        adaptive_ram_growth_guard
-            .observed_transient_high_water_bytes(AdaptiveRamGrowthPhase::Prefill),
+        adaptive_ram_growth_guard.observed_transient_high_water_bytes(MemoryPhase::Prefill),
         0
     );
 }
@@ -98,19 +88,18 @@ fn should_preserve_adaptive_high_water_observations_when_the_limit_changes() {
     );
 
     adaptive_ram_growth_guard
-        .update_active_memory_limit_bytes(8_000)
+        .update_active_memory_ceiling_bytes(8_000)
         .expect("a positive live limit should be accepted");
 
     assert_eq!(
-        adaptive_ram_growth_guard
-            .observed_transient_high_water_bytes(AdaptiveRamGrowthPhase::Decode),
+        adaptive_ram_growth_guard.observed_transient_high_water_bytes(MemoryPhase::Decode),
         1_000
     );
     assert_eq!(
         adaptive_ram_growth_guard
             .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 6_000, 500, 0, 0)
             .expect("the updated guard should project growth")
-            .active_memory_limit_bytes(),
+            .active_memory_ceiling_bytes(),
         8_000
     );
     assert_eq!(
@@ -170,8 +159,7 @@ fn should_not_subtract_stable_expert_growth_twice_from_prefill_headroom() {
     );
 
     assert_eq!(
-        adaptive_ram_growth_guard
-            .observed_transient_high_water_bytes(AdaptiveRamGrowthPhase::Prefill),
+        adaptive_ram_growth_guard.observed_transient_high_water_bytes(MemoryPhase::Prefill),
         3_000
     );
 }

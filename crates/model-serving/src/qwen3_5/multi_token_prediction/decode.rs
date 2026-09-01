@@ -340,7 +340,7 @@ pub(in crate::qwen3_5) fn disable_prediction_after_memory_admission_failure(
     active_request.clear_optional_prediction_session();
     active_request
         .performance_attribution_mut()
-        .record_counter(PerformanceCounter::MtpMemoryAdmissionFallbackCount, 1);
+        .record_counter(PerformanceCounter::MtpDepthSelectionFallbackCount, 1);
 }
 
 pub(in crate::qwen3_5) fn forward_initial_target_token_with_prediction_state(

@@ -1,4 +1,11 @@
 //! Policy for changing the live MLX active-memory ceiling.
+//!
+//! Question answered: may the worker raise or lower the ceiling right now, and
+//! what ownership must demote or reclaim first? Families supply the current
+//! owner facts; this module returns a `MemoryCeilingChangeDecision` that the
+//! family enacts against the MLX native limit. Raising and lowering are not
+//! symmetric: raising lets MLX accept capacity before Rust publishes a larger
+//! budget, lowering reclaims before MLX enforces the smaller limit.
 
 use super::MemoryBoundary;
 
