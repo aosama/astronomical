@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(astronomical_runtime_integration LANGUAGES C CXX)
 
 include(FetchContent)
-include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-v0.32.1.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-v0.32.2.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-c-v0.6.0.cmake")
 find_program(PATCH_EXECUTABLE patch REQUIRED)
 
@@ -94,27 +94,23 @@ FetchContent_Declare(
     PATCH_COMMAND
         "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.1-nax-head-dim-256-attention.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.2-stable-prefill-split-k.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.1-stable-prefill-split-k.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.2-jit-qmv-template-arity.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.1-jit-qmv-template-arity.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.2-astronomical-active-memory-ceiling.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.1-astronomical-active-memory-ceiling.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.2-adaptive-io-thread-pool.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.1-adaptive-io-thread-pool.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.1-streaming-safetensors-writer.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.2-streaming-safetensors-writer.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 FetchContent_Declare(
@@ -128,11 +124,15 @@ FetchContent_Declare(
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.6.0-mlx-0.32.1-fft-compatibility.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.6.0-mlx-0.32.2-fft-compatibility.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.6.0-mlx-0.32.1-compile-cache-compatibility.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.6.0-mlx-0.32.2-compile-cache-compatibility.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.6.0-mlx-0.32.2-fast-force-fused-compatibility.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 

@@ -7,13 +7,13 @@ index a9379c307..ebbb2a85d 100644
  #include <limits>
  #include <sstream>
 +#include <thread>
-
+ 
  // Used by pread implementation.
  #ifdef _WIN32
 @@ -334,9 +335,20 @@ array load(std::string file, StreamOrDevice s) {
-
+ 
  namespace io {
-
+ 
 +size_t io_thread_count() {
 +  constexpr size_t minimum_io_thread_count = 4;
 +  constexpr size_t maximum_io_thread_count = 8;
@@ -31,3 +31,4 @@ index a9379c307..ebbb2a85d 100644
 +  static ThreadPool* pool_ = new ThreadPool{io_thread_count()};
    return *pool_;
  }
+ 
