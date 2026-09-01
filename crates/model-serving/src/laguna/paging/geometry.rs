@@ -1,7 +1,7 @@
 use crate::memory::rotating_prefill_transient_token_count;
 use crate::memory::{
     CompleteResidencyDecision, CompleteResidencyRequirements, CurrentExpertLayerResidency,
-    ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, plan_phase_aware_expert_residency,
+    ExpertResidencyPlan, MemoryPhase, plan_expert_residency,
     required_complete_residency_activation_headroom_bytes,
 };
 
@@ -88,12 +88,12 @@ impl LagunaExpertPagingPlan {
     /// Plans complete-layer versus routed overlay ownership through the existing policy.
     pub fn plan_phase_aware_residency(
         &self,
-        phase: ExpertResidencyPhase,
+        phase: MemoryPhase,
         retained_expert_ceiling_bytes: u64,
         current_residencies: &[CurrentExpertLayerResidency],
-    ) -> Result<PhaseAwareExpertResidencyPlan, LagunaPagingError> {
+    ) -> Result<ExpertResidencyPlan, LagunaPagingError> {
         let layer_geometries = self.layer_geometries()?;
-        plan_phase_aware_expert_residency(
+        plan_expert_residency(
             phase,
             retained_expert_ceiling_bytes,
             &layer_geometries,

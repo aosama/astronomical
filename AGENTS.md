@@ -6,7 +6,7 @@
 
 - All commands and tests must emit a live progress indicator instead of leaving the user with silent output.
 
-- NEVER pipe long-running commands through | tail -30, | head, | rg, | grep, or any filter at all. Show the raw output live; if a copy is needed for forensics, pipe through `tee` to a file and nothing else. The user must be able to observe progress as it happens.
+- NEVER pipe long-running commands through | tail -30, | head, | rg, | grep, or any filter at all. Show the raw output live; if a copy is needed for forensics, pipe through `tee` to a file and nothing else. The user must be able to observe progress as it happens. "Just for the summary" is not an exception: filtering the live stream is exactly the silent-output failure this rule exists to prevent. Wrong: `scripts/run-ignored-serving-acceptance.sh serving | grep "status=failed"`. Right: `scripts/run-ignored-serving-acceptance.sh serving 2>&1 | tee /tmp/serving.log` — raw lines stream live; grep the saved file afterwards, after the run has finished.
 
 - When overseeing GitHub Actions builds (CI runs, PR checks, post-merge verification), poll at intervals of at most 10 seconds so the result is noticed the moment it lands instead of waiting on a long sleep between checks. Use a bounded number of polls so a stuck run still reports back.
 

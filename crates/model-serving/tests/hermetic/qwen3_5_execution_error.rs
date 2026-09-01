@@ -1,5 +1,5 @@
 use astronomical_model_serving::{
-    ExpertPagingError, MemoryBoundary, MlxAllocationBudgetError, Qwen3_5ExecutionError,
+    ExpertPagingError, MemoryBoundary, MlxAllocationAdmissionError, Qwen3_5ExecutionError,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
 
@@ -35,7 +35,7 @@ fn should_classify_direct_and_paged_native_capacity_errors_as_the_same_recoverab
 fn should_classify_rust_expert_budget_rejection_as_recoverable_capacity_pressure() {
     let expected_capacity_evidence = (29_151_197_454, 855_638_016, 30_000_000_000);
     let paged_budget_error = Qwen3_5ExecutionError::from(ExpertPagingError::MemoryBudget(
-        MlxAllocationBudgetError::Rejected {
+        MlxAllocationAdmissionError::Rejected {
             stage: "rust_streamed_expert_layer_39".to_owned(),
             boundary: MemoryBoundary::AllocationProjection,
             shortfall_bytes: 6_835_470,

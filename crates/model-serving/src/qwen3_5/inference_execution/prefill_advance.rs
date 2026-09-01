@@ -21,8 +21,8 @@ use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use crate::{
-    ExpertResidencyPhase, GeneratedToken, InferenceEngineError, PerformanceCounter,
-    PerformanceOperation, persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
+    GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceCounter, PerformanceOperation,
+    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
@@ -100,7 +100,7 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .refresh_phase_aware_expert_residency_plan(
-                ExpertResidencyPhase::Prefill,
+                MemoryPhase::Prefill,
                 u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX),
                 &mut active_request.performance_attribution,
             )

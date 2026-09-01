@@ -4,7 +4,7 @@ use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::{
     InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
-    MlxMemoryLimitAdjustment, MlxRamBudgetPhase, PerformanceAttribution,
+    MemoryPhase, MlxMemoryLimitAdjustment, PerformanceAttribution,
 };
 
 use super::execution::LagunaInferenceExecution;
@@ -117,7 +117,7 @@ impl LagunaInferenceExecution {
                 reason: "the requested Laguna memory ceiling exceeds this platform".to_owned(),
             })?;
         updated_adaptive_ram_growth_guard
-            .update_active_memory_limit_bytes(active_memory_limit_bytes)
+            .update_active_memory_ceiling_bytes(active_memory_limit_bytes)
             .map_err(|guard_error| InferenceEngineError::MlxMemoryLimitRejected {
                 requested_mlx_memory_ceiling_bytes,
                 minimum_mlx_memory_ceiling_bytes,
@@ -129,7 +129,7 @@ impl LagunaInferenceExecution {
             .map_or(0, |active_request| active_request.context_token_count);
         let updated_retained_expert_ceiling_bytes = laguna_ram_budget_snapshot(
             &updated_mlx_ram_budget,
-            MlxRamBudgetPhase::Prefill,
+            MemoryPhase::Prefill,
             context_token_count,
         )
         .retained_expert_budget_bytes;

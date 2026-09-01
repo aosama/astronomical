@@ -33,7 +33,7 @@
 use astronomical_ipc_protocol::RequestId;
 
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
-use crate::{ExpertResidencyPhase, InferenceEngineError, PerformanceOperation};
+use crate::{InferenceEngineError, MemoryPhase, PerformanceOperation};
 
 use super::{Qwen3_5EngineState, fatal_engine_error};
 
@@ -84,7 +84,7 @@ impl Qwen3_5EngineState {
                 PerformanceOperation::GenerationPreparation,
                 |performance_attribution| {
                     model.refresh_phase_aware_expert_residency_plan(
-                        ExpertResidencyPhase::GenerationPreparation,
+                        MemoryPhase::GenerationPreparation,
                         context_token_count,
                         performance_attribution,
                     )

@@ -1,6 +1,7 @@
 //! Whether a planned residency release may run in the current request phase.
 
-use super::{ExpertLayerResidencyTarget, ExpertResidencyPhase};
+use super::ExpertLayerResidencyTarget;
+use crate::memory::MemoryPhase;
 
 /// Returns whether execution may drop the named layer now.
 ///
@@ -10,20 +11,17 @@ use super::{ExpertLayerResidencyTarget, ExpertResidencyPhase};
 /// topology. Partial pages stay elastic in every phase.
 #[must_use]
 pub const fn should_enact_planned_expert_release(
-    phase: ExpertResidencyPhase,
+    phase: MemoryPhase,
     target: ExpertLayerResidencyTarget,
 ) -> bool {
     match target {
         ExpertLayerResidencyTarget::ReleasePartial => {
             // Prefill may drop a cold routed page to finish the prompt. Generation
             // must keep the experts that prompt already streamed.
-            matches!(
-                phase,
-                ExpertResidencyPhase::Prefill | ExpertResidencyPhase::Idle
-            )
+            matches!(phase, MemoryPhase::Prefill | MemoryPhase::Idle)
         }
         ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit => {
-            matches!(phase, ExpertResidencyPhase::Idle)
+            matches!(phase, MemoryPhase::Idle)
         }
         ExpertLayerResidencyTarget::PreserveComplete
         | ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead

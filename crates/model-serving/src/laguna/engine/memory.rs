@@ -5,9 +5,9 @@ use astronomical_runtime_integration::{MlxMemorySnapshot, MlxRuntime};
 use crate::laguna::{LagunaDecoderState, LagunaModel};
 use crate::memory::context_token_bucket;
 use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthPhase, InferenceEngineError,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxActiveMemoryBreakdown, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetMeasurement,
-    MlxRamBudgetPhase, MlxRamBudgetSnapshot, PerformanceAttribution, PerformanceOperation,
+    MlxRamBudgetSnapshot, PerformanceAttribution, PerformanceOperation,
     measured_non_expert_forward_growth_bytes,
 };
 
@@ -28,7 +28,7 @@ pub(super) fn admit_laguna_forward_memory(
     decoder_state: &LagunaDecoderState,
     forward_token_count: usize,
     operation_temporary_workspace_bytes: usize,
-    adaptive_ram_growth_phase: AdaptiveRamGrowthPhase,
+    memory_phase: MemoryPhase,
     context_token_count_after_forward: u64,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(AdaptiveRamGrowthContext, LagunaForwardMemoryBaseline), InferenceEngineError> {
@@ -36,15 +36,19 @@ pub(super) fn admit_laguna_forward_memory(
         model.expert_memory_mode(),
         astronomical_ipc_protocol::ExpertMemoryMode::Resident
     );
-    let adaptive_ram_growth_context = match adaptive_ram_growth_phase {
-        AdaptiveRamGrowthPhase::Prefill => AdaptiveRamGrowthContext::prefill(
+    let adaptive_ram_growth_context = match memory_phase {
+        MemoryPhase::Prefill => AdaptiveRamGrowthContext::prefill(
             forward_token_count,
             context_token_bucket(context_token_count_after_forward),
             false,
             false,
             sparse_experts_are_paged,
         ),
-        AdaptiveRamGrowthPhase::Decode => {
+        // The growth guard only observes prefill and decode windows.
+        // GenerationPreparation shares the decode window (mapping contract in
+        // memory/phase.rs), and Idle never reaches forward observation because
+        // a completed forward always belongs to a work phase.
+        MemoryPhase::GenerationPreparation | MemoryPhase::Idle | MemoryPhase::Decode => {
             AdaptiveRamGrowthContext::decode(forward_token_count, false, sparse_experts_are_paged)
         }
     };
@@ -223,10 +227,7 @@ pub(super) fn complete_laguna_forward_memory_observation(
     );
     let observed_transient_high_water_bytes = adaptive_ram_growth_guard
         .observed_transient_high_water_bytes_for_context(adaptive_ram_growth_context);
-    let phase = match adaptive_ram_growth_context.adaptive_ram_growth_phase() {
-        AdaptiveRamGrowthPhase::Prefill => MlxRamBudgetPhase::Prefill,
-        AdaptiveRamGrowthPhase::Decode => MlxRamBudgetPhase::Decode,
-    };
+    let phase = adaptive_ram_growth_context.memory_phase();
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase,
         context_token_count: context_token_count_after_forward,
@@ -331,7 +332,7 @@ impl LagunaInferenceExecution {
 /// Composes Laguna geometry through the shared model-core, context, activation, and page budget.
 pub(super) fn laguna_ram_budget_snapshot(
     mlx_ram_budget: &MlxRamBudget,
-    phase: MlxRamBudgetPhase,
+    phase: MemoryPhase,
     context_token_count: u64,
 ) -> MlxRamBudgetSnapshot {
     mlx_ram_budget.plan(phase, context_token_count, 0)

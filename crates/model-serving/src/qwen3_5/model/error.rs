@@ -72,7 +72,7 @@ impl Qwen3_5ExecutionError {
     pub fn active_memory_limit_exceeded_evidence(&self) -> Option<(usize, usize, usize)> {
         if let Self::ExpertPaging(
             crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
-                crate::MlxAllocationBudgetError::Rejected {
+                crate::MlxAllocationAdmissionError::Rejected {
                     active_memory_bytes,
                     pending_allocation_bytes,
                     active_memory_ceiling_bytes,
@@ -148,7 +148,7 @@ impl From<Qwen3_5ExecutionError> for InferenceEngineError {
             Qwen3_5ExecutionError::ExpertPaging(
                 crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
                     memory_budget_error
-                    @ crate::MlxAllocationBudgetError::Rejected {
+                    @ crate::MlxAllocationAdmissionError::Rejected {
                         ..
                     },
                 ),

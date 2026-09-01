@@ -1,4 +1,10 @@
-//! Policy for one unchanged forward retry after typed allocation pressure.
+//! Recovery policy: what happens after an allocation failure mid-forward?
+//!
+//! Question answered: which failed forward may be retried unchanged after
+//! expert reclamation, and what workspace the retry needs. Families supply the
+//! failure's boundary and shortfall; this module answers whether the retry is
+//! legal or the request must fail. Reclamation arithmetic lives in
+//! `reclamation.rs`; this module only decides the retry path.
 
 use super::{
     MemoryBoundary, expert_reclamation_bytes_to_fit_fixed_forward,

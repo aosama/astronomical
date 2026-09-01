@@ -5,9 +5,9 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use crate::expert_paging::RetainedExpertReclamation;
 use crate::laguna::normalization::LagunaFeedForwardDescriptor;
-use crate::memory::ExpertResidencyPhase;
+use crate::memory::MemoryPhase;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use crate::{AllocationAdmissionDecision, MlxAllocationBudget, MlxAllocationBudgetError};
+use crate::{AllocationAdmissionDecision, MlxAllocationAdmission, MlxAllocationAdmissionError};
 
 use super::error::LagunaExecutionError;
 use super::model::LagunaModel;
@@ -32,14 +32,14 @@ impl LagunaModel {
 
     pub(in crate::laguna) fn prepare_generation_expert_residency(&self) {
         self.residency
-            .refresh_explicit_phase_plan(ExpertResidencyPhase::GenerationPreparation);
+            .refresh_explicit_phase_plan(MemoryPhase::GenerationPreparation);
     }
 
     #[must_use]
     pub(in crate::laguna) fn maximum_expert_page_bytes(&self) -> u64 {
         self.expert_allocation_budget
             .as_ref()
-            .map_or(0, MlxAllocationBudget::maximum_expert_page_bytes)
+            .map_or(0, MlxAllocationAdmission::maximum_expert_page_bytes)
     }
 
     pub(in crate::laguna) fn update_expert_allocation_ceiling(
@@ -172,14 +172,14 @@ impl LagunaModel {
 }
 
 fn laguna_allocation_budget_error(
-    allocation_error: MlxAllocationBudgetError,
+    allocation_error: MlxAllocationAdmissionError,
     pending_allocation_bytes: u64,
 ) -> LagunaExecutionError {
     match allocation_error {
-        MlxAllocationBudgetError::MlxRuntime(runtime_error) => {
+        MlxAllocationAdmissionError::MlxRuntime(runtime_error) => {
             LagunaExecutionError::Runtime(runtime_error)
         }
-        MlxAllocationBudgetError::Rejected {
+        MlxAllocationAdmissionError::Rejected {
             shortfall_bytes, ..
         } => LagunaExecutionError::ExpertAllocationRejected {
             pending_allocation_bytes,

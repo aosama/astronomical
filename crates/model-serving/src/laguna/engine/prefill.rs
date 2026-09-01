@@ -11,8 +11,8 @@ use super::memory::complete_laguna_forward_memory_observation;
 use crate::laguna::{LagunaModel, laguna_decoder_cache_layout};
 use crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end;
 use crate::{
-    AdaptiveRamGrowthPhase, GeneratedToken, InferenceEngineError, MlxRamBudget,
-    PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
+    GeneratedToken, InferenceEngineError, MemoryPhase, MlxRamBudget, PerformanceOperation,
+    PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
 };
 
 impl LagunaInferenceExecution {
@@ -254,7 +254,7 @@ fn forward_one_prompt_chunk(
             decoder_state,
             chunk_token_ids.len(),
             prompt_cache_publication_workspace_bytes,
-            AdaptiveRamGrowthPhase::Prefill,
+            MemoryPhase::Prefill,
             u64::try_from(chunk_end_token_position_exclusive).unwrap_or(u64::MAX),
             performance_attribution,
         )?;

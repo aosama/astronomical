@@ -1,7 +1,7 @@
 use astronomical_model_serving::{
-    ExpertResidencyPhase, LagunaArtifactValidator, LagunaCanonicalTensorAssemblyKind,
-    LagunaExpertPagingPlan, LagunaExpertProjection, LagunaLayerTensorRole, LagunaPagingError,
-    LagunaTensorComponent, LagunaTensorId, PerformanceAttribution, PerformanceOperation,
+    LagunaArtifactValidator, LagunaCanonicalTensorAssemblyKind, LagunaExpertPagingPlan,
+    LagunaExpertProjection, LagunaLayerTensorRole, LagunaPagingError, LagunaTensorComponent,
+    LagunaTensorId, MemoryPhase, PerformanceAttribution, PerformanceOperation,
     laguna_sliding_prefill_transient_token_count,
     required_complete_residency_activation_headroom_bytes, rotating_prefill_transient_token_count,
 };
@@ -261,7 +261,7 @@ fn should_translate_laguna_geometry_into_phase_aware_residency_and_sliding_trans
 
     let residency_plan = plan
         .plan_phase_aware_residency(
-            ExpertResidencyPhase::Prefill,
+            MemoryPhase::Prefill,
             requirements.complete_expert_payload_bytes(),
             &[],
         )
@@ -320,7 +320,7 @@ fn should_remap_a_trailing_sparse_layer_onto_paging_slot_zero() {
     assert_eq!(geometry[0].layer_index, 0);
     let residency_plan = plan
         .plan_phase_aware_residency(
-            ExpertResidencyPhase::Prefill,
+            MemoryPhase::Prefill,
             sparse_layer
                 .complete_layer_payload_byte_count()
                 .expect("complete payload"),

@@ -50,7 +50,9 @@ impl Qwen3_5EngineState {
         let (minimum_mlx_memory_ceiling_bytes, updated_mlx_memory_limits) =
             model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
         self.adaptive_ram_growth_guard
-            .update_active_memory_limit_bytes(updated_mlx_memory_limits.active_memory_limit_bytes())
+            .update_active_memory_ceiling_bytes(
+                updated_mlx_memory_limits.active_memory_limit_bytes(),
+            )
             .map_err(|adaptive_ram_growth_guard_error| {
                 super::fatal_engine_error(adaptive_ram_growth_guard_error.to_string())
             })?;

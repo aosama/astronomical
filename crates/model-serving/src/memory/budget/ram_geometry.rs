@@ -7,8 +7,8 @@
 
 use thiserror::Error;
 
-use super::expert_memory_admission::required_complete_residency_activation_headroom_bytes;
-use super::mlx_ram_budget::MlxRamBudgetModelGeometry;
+use super::ram::MlxRamBudgetModelGeometry;
+use crate::memory::reclamation::required_complete_residency_activation_headroom_bytes;
 
 /// Why RAM-budget geometry could not be composed from measured layer facts.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]

@@ -43,7 +43,7 @@ pub enum PerformanceOperation {
     PersistentPromptCacheAtomicCommit,
     PagedRouterGraphConstruction,
     RetainedExpertPagePlanning,
-    PhaseAwareExpertResidencyPlanning,
+    ExpertResidencyPlanning,
     RustExpertStreamingLayerPreparation,
     MandatoryPrefillCompleteLayerMaterializationWait,
     MandatoryDecodeRoutePageMaterializationWait,
@@ -166,7 +166,7 @@ impl PerformanceOperation {
         Self::PersistentPromptCacheAtomicCommit,
         Self::PagedRouterGraphConstruction,
         Self::RetainedExpertPagePlanning,
-        Self::PhaseAwareExpertResidencyPlanning,
+        Self::ExpertResidencyPlanning,
         Self::RustExpertStreamingLayerPreparation,
         Self::MandatoryPrefillCompleteLayerMaterializationWait,
         Self::MandatoryDecodeRoutePageMaterializationWait,
@@ -316,7 +316,7 @@ impl PerformanceOperation {
             Self::PersistentPromptCacheAtomicCommit => "persistent_prompt_cache_atomic_commit",
             Self::PagedRouterGraphConstruction => "paged_router_graph_construction",
             Self::RetainedExpertPagePlanning => "retained_expert_page_planning",
-            Self::PhaseAwareExpertResidencyPlanning => "phase_aware_expert_residency_planning",
+            Self::ExpertResidencyPlanning => "phase_aware_expert_residency_planning",
             Self::RustExpertStreamingLayerPreparation => "rust_expert_streaming_layer_preparation",
             Self::MandatoryPrefillCompleteLayerMaterializationWait => {
                 "mandatory_prefill_complete_layer_materialization_wait"

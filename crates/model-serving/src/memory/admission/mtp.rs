@@ -11,9 +11,13 @@ use super::mtp_draft_depth::MtpDraftDepth;
 /// Why one request temporarily executes below its resolved MTP depth.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MtpDepthDowngradeReason {
+    /// The response output window cannot fit the requested depth's proposals.
     OutputWindow,
+    /// The remaining context window cannot fit the requested depth's rows.
     ContextWindow,
+    /// The thinking budget cannot cover the requested depth's verification.
     ThinkingWindow,
+    /// The projected bytes for the deepest depth do not fit the allowance.
     Memory,
 }
 
@@ -108,12 +112,12 @@ impl MtpMemoryCandidate {
 
 /// Pure depth selection result; `None` means target-only remains safe.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MtpMemoryAdmission {
+pub struct MtpDepthSelection {
     effective_depth: Option<MtpDraftDepth>,
     downgrade_reason: Option<MtpDepthDowngradeReason>,
 }
 
-impl MtpMemoryAdmission {
+impl MtpDepthSelection {
     #[must_use]
     pub const fn effective_depth(self) -> Option<MtpDraftDepth> {
         self.effective_depth
@@ -188,7 +192,7 @@ impl MtpAdmission {
     pub fn select_effective_depth(
         descending_candidates: &[MtpMemoryCandidate],
         available_bytes: usize,
-    ) -> MtpMemoryAdmission {
+    ) -> MtpDepthSelection {
         let requested_depth = descending_candidates
             .first()
             .map(|candidate| candidate.depth);
@@ -196,7 +200,7 @@ impl MtpAdmission {
             .iter()
             .find(|candidate| candidate.required_bytes <= available_bytes)
             .map(|candidate| candidate.depth);
-        MtpMemoryAdmission {
+        MtpDepthSelection {
             effective_depth,
             downgrade_reason: if effective_depth == requested_depth {
                 None

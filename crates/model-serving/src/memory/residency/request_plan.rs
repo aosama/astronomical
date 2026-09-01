@@ -7,8 +7,9 @@
 
 use super::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, RetainedExpertPageClass,
+    ExpertResidencyPlan, RetainedExpertPageClass,
 };
+use crate::memory::MemoryPhase;
 
 /// Role of one sparse layer for the rest of this request's Prefill.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -28,7 +29,7 @@ pub struct RequestExpertResidency {
 impl RequestExpertResidency {
     /// Pins every complete-layer target from the opening leftover plan.
     #[must_use]
-    pub fn open_prefill(candidate_plan: &PhaseAwareExpertResidencyPlan) -> Self {
+    pub fn open_prefill(candidate_plan: &ExpertResidencyPlan) -> Self {
         let mut layer_roles =
             vec![RequestExpertLayerRole::Streamed; candidate_plan.layer_targets.len()];
         for layer_index in &candidate_plan.complete_layer_targets {
@@ -92,9 +93,9 @@ impl RequestExpertResidency {
     #[must_use]
     pub fn stabilize_prefill_plan(
         &self,
-        mut candidate_plan: PhaseAwareExpertResidencyPlan,
+        mut candidate_plan: ExpertResidencyPlan,
         current_residencies: &[CurrentExpertLayerResidency],
-    ) -> PhaseAwareExpertResidencyPlan {
+    ) -> ExpertResidencyPlan {
         let mut layer_is_currently_complete = vec![false; self.layer_roles.len()];
         for current_residency in current_residencies {
             if current_residency.layer_index < layer_is_currently_complete.len()
@@ -174,18 +175,15 @@ pub const fn retained_complete_layer_ceiling_after_prefill_budget_refresh(
 /// the Prefill contract and keep the leftover candidate unchanged.
 #[must_use]
 pub fn publish_request_stable_residency_plan(
-    phase: ExpertResidencyPhase,
+    phase: MemoryPhase,
     existing_request_residency: Option<&RequestExpertResidency>,
-    candidate_plan: PhaseAwareExpertResidencyPlan,
+    candidate_plan: ExpertResidencyPlan,
     current_residencies: &[CurrentExpertLayerResidency],
     released_complete_payload_bytes: u64,
     layer_geometries: &[ExpertLayerGeometry],
-) -> (
-    Option<RequestExpertResidency>,
-    PhaseAwareExpertResidencyPlan,
-) {
+) -> (Option<RequestExpertResidency>, ExpertResidencyPlan) {
     match phase {
-        ExpertResidencyPhase::Prefill => {
+        MemoryPhase::Prefill => {
             let mut request_residency = existing_request_residency
                 .cloned()
                 .unwrap_or_else(|| RequestExpertResidency::open_prefill(&candidate_plan));
@@ -199,8 +197,8 @@ pub fn publish_request_stable_residency_plan(
                 request_residency.stabilize_prefill_plan(candidate_plan, current_residencies);
             (Some(request_residency), stabilized_plan)
         }
-        ExpertResidencyPhase::GenerationPreparation
-        | ExpertResidencyPhase::Decode
-        | ExpertResidencyPhase::Idle => (None, candidate_plan),
+        MemoryPhase::GenerationPreparation | MemoryPhase::Decode | MemoryPhase::Idle => {
+            (None, candidate_plan)
+        }
     }
 }

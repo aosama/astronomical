@@ -5,7 +5,7 @@
 
 use crate::qwen3_5::model::memory_admission::invalid_request_error;
 use crate::{
-    InferenceEngineError, MlxRamBudgetPhase, PerformanceAttribution, PerformanceAttributionOutcome,
+    InferenceEngineError, MemoryPhase, PerformanceAttribution, PerformanceAttributionOutcome,
     PerformanceCounter, persistent_context_restore_workspace_bytes,
     request_context_temporary_workspace_bytes,
 };
@@ -100,12 +100,13 @@ impl Qwen3_5EngineState {
                 (0, 0, true)
             } else {
                 let ram_budget = model.mlx_ram_budget();
-                let prefill_activation_workspace_bytes = usize::try_from(
-                    ram_budget.activation_headroom_bytes(MlxRamBudgetPhase::Prefill),
-                )
-                .map_err(|_| {
-                    invalid_request_error("prefill activation workspace exceeds the platform range")
-                })?;
+                let prefill_activation_workspace_bytes =
+                    usize::try_from(ram_budget.activation_headroom_bytes(MemoryPhase::Prefill))
+                        .map_err(|_| {
+                            invalid_request_error(
+                                "prefill activation workspace exceeds the platform range",
+                            )
+                        })?;
                 let complete_layer_scratch_bytes = usize::try_from(
                     ram_budget
                         .model_geometry()

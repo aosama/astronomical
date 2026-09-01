@@ -48,7 +48,7 @@ pub enum PerformanceCounter {
     RetainedRouteAssignmentHitCount,
     RetainedRouteAssignmentMissCount,
     ExpertResidencyCommitRejectionCount,
-    MtpMemoryAdmissionFallbackCount,
+    MtpDepthSelectionFallbackCount,
     MtpAdmittedAttemptCount,
     SpeculativePrefillTargetOnlyPrefixChunkCount,
     SpeculativePrefillTargetOnlyPrefixTokenCount,
@@ -139,7 +139,7 @@ impl PerformanceCounter {
         Self::RetainedRouteAssignmentHitCount,
         Self::RetainedRouteAssignmentMissCount,
         Self::ExpertResidencyCommitRejectionCount,
-        Self::MtpMemoryAdmissionFallbackCount,
+        Self::MtpDepthSelectionFallbackCount,
         Self::MtpAdmittedAttemptCount,
         Self::SpeculativePrefillTargetOnlyPrefixChunkCount,
         Self::SpeculativePrefillTargetOnlyPrefixTokenCount,
@@ -273,7 +273,7 @@ impl PerformanceCounter {
             Self::RetainedRouteAssignmentHitCount => "retained_route_assignment_hit_count",
             Self::RetainedRouteAssignmentMissCount => "retained_route_assignment_miss_count",
             Self::ExpertResidencyCommitRejectionCount => "expert_residency_commit_rejection_count",
-            Self::MtpMemoryAdmissionFallbackCount => "mtp_memory_admission_fallback_count",
+            Self::MtpDepthSelectionFallbackCount => "mtp_memory_admission_fallback_count",
             Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
             Self::SpeculativePrefillTargetOnlyPrefixChunkCount => {
                 "speculative_prefill_target_only_prefix_chunk_count"

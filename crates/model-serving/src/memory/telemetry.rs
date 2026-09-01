@@ -1,3 +1,11 @@
+//! What did the MLX runtime actually measure and reconcile?
+//!
+//! This module observes; it decides nothing. It reconciles MLX active-memory
+//! counters into the ownership view (`Resident`/`Hybrid`/`Paged` payload
+//! breakdowns) that status endpoints and memory policy consumers read. The
+//! `Mlx` prefix is deliberate: these types exist because the numbers come from
+//! the MLX runtime, not from policy arithmetic.
+
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
 /// Reconciled ownership view of one MLX active-memory measurement.

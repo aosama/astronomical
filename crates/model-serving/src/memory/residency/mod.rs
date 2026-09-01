@@ -6,12 +6,27 @@
 //! They must not invent a second answer to those questions.
 //!
 //! Prefill uses `RequestExpertResidency`. Generation discards that contract.
+//!
+//! Submodules, by question: `page_commit.rs` (may this page be committed to
+//! retained RAM now?), `release.rs` (may the planned release run in this
+//! phase?), `request_plan.rs` (which layers does prefill need stable?),
+//! `validation.rs` (are the supplied plan inputs internally consistent?),
+//! `ownership_mode.rs` (the single Resident/Hybrid/Paged classification),
+//! `decode_seating.rs` (which complete layers must be seated before the first
+//! decode token?), and `complete_headroom.rs` (the ceiling below which paging
+//! is mandatory despite complete residency).
 
+mod complete_headroom;
+mod decode_seating;
+mod ownership_mode;
 mod page_commit;
 mod release;
 mod request_plan;
 mod validation;
 
+pub use complete_headroom::CompleteResidencyHeadroomBoundary;
+pub use decode_seating::complete_layer_indexes_required_before_decode;
+pub use ownership_mode::classify_expert_memory_mode;
 pub use page_commit::{
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
 };
@@ -21,23 +36,20 @@ pub use request_plan::{
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
 };
 
+use crate::memory::MemoryPhase;
 use thiserror::Error;
 
 use validation::{checked_sum, routed_floor_payload_bytes, validate_inputs};
 
-/// Request lifecycle phase whose retained topology is being planned.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ExpertResidencyPhase {
-    Prefill,
-    GenerationPreparation,
-    Decode,
-    Idle,
-}
-
 /// Lifetime and eviction priority of one retained expert page.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RetainedExpertPageClass {
+    /// A complete decoder layer's experts, pinned for the request's lifetime.
+    /// Decode never streams it; reclamation may only release it by exact
+    /// deficit, never opportunistically.
     StableCompleteLayer,
+    /// Routed-expert pages retained opportunistically; first to yield when a
+    /// later phase needs the budget back.
     ElasticRoutedExperts,
 }
 
@@ -62,21 +74,34 @@ pub struct CurrentExpertLayerResidency {
 }
 
 /// Planned behavior for one decoder layer.
+///
+/// One target per sparse decoder layer per plan; the family enacts exactly the
+/// named target and invents no second disposition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ExpertLayerResidencyTarget {
+    /// The layer's complete expert payload is already resident and stays.
     PreserveComplete,
+    /// The layer is not resident, but this operation must read it anyway:
+    /// promote the complete payload to retained RAM rather than streaming it.
     PromoteCompleteOnMandatoryRead,
+    /// A partial page set is already retained and stays for this operation.
     PreservePartial,
+    /// A partial layer is admitted because this operation's routes demand it;
+    /// the admission charges the admitted pages to the retained budget.
     AdmitPartialOnMandatoryRouteRead,
+    /// The layer is streamed for this operation only and retained by nobody.
     StreamOperationLocal,
+    /// The layer's partial retention yields (fully or partly) to free budget.
     ReleasePartial,
+    /// The layer's complete retention yields by exactly the computed deficit,
+    /// leaving the rest of the layer retained.
     ReleaseCompleteForExactDeficit,
 }
 
 /// One deterministic topology plan that never commands eager source reads.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PhaseAwareExpertResidencyPlan {
-    pub phase: ExpertResidencyPhase,
+pub struct ExpertResidencyPlan {
+    pub phase: MemoryPhase,
     pub retained_expert_ceiling_bytes: u64,
     pub complete_layer_targets: Vec<usize>,
     pub layer_targets: Vec<ExpertLayerResidencyTarget>,
@@ -89,7 +114,7 @@ pub struct PhaseAwareExpertResidencyPlan {
 
 /// Structural input defect that must stop planning before ownership changes.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
-pub enum PhaseAwareExpertResidencyPlanError {
+pub enum ExpertResidencyPlanError {
     #[error("expert geometry must contain at least one layer")]
     EmptyGeometry,
     #[error("expected contiguous layer index {expected_layer_index}, found {actual_layer_index}")]
@@ -128,12 +153,12 @@ pub enum PhaseAwareExpertResidencyPlanError {
 }
 
 /// Produces a deterministic complete-foundation plus routed-overlay plan.
-pub fn plan_phase_aware_expert_residency(
-    phase: ExpertResidencyPhase,
+pub fn plan_expert_residency(
+    phase: MemoryPhase,
     retained_expert_ceiling_bytes: u64,
     layer_geometries: &[ExpertLayerGeometry],
     current_residencies: &[CurrentExpertLayerResidency],
-) -> Result<PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError> {
+) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
     let current_by_layer = validate_inputs(
         retained_expert_ceiling_bytes,
         layer_geometries,
@@ -146,7 +171,7 @@ pub fn plan_phase_aware_expert_residency(
     // gigabytes of leftover sit unused.
     if matches!(
         phase,
-        ExpertResidencyPhase::GenerationPreparation | ExpertResidencyPhase::Decode
+        MemoryPhase::GenerationPreparation | MemoryPhase::Decode
     ) && !current_residencies.is_empty()
     {
         return preserve_existing_expert_pages_for_generation(
@@ -195,12 +220,12 @@ pub fn plan_phase_aware_expert_residency(
 }
 
 fn complete_model_plan(
-    phase: ExpertResidencyPhase,
+    phase: MemoryPhase,
     ceiling_bytes: u64,
     geometries: &[ExpertLayerGeometry],
     current_by_layer: &[Option<&CurrentExpertLayerResidency>],
     complete_model_payload_bytes: u64,
-) -> Result<PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError> {
+) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
     let mut preserved_bytes = 0_u64;
     let mut layer_targets = Vec::with_capacity(geometries.len());
     for current_residency in current_by_layer {
@@ -214,10 +239,10 @@ fn complete_model_plan(
         if let Some(residency) = current_residency {
             preserved_bytes = preserved_bytes
                 .checked_add(residency.payload_bytes)
-                .ok_or(PhaseAwareExpertResidencyPlanError::ByteCountOverflow)?;
+                .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
     }
-    Ok(PhaseAwareExpertResidencyPlan {
+    Ok(ExpertResidencyPlan {
         phase,
         retained_expert_ceiling_bytes: ceiling_bytes,
         complete_layer_targets: (0..geometries.len()).collect(),
@@ -231,11 +256,11 @@ fn complete_model_plan(
 }
 
 fn preserve_existing_expert_pages_for_generation(
-    phase: ExpertResidencyPhase,
+    phase: MemoryPhase,
     ceiling_bytes: u64,
     geometries: &[ExpertLayerGeometry],
     current_by_layer: &[Option<&CurrentExpertLayerResidency>],
-) -> Result<PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError> {
+) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
     let mut candidate_layers = current_by_layer
         .iter()
         .enumerate()
@@ -249,7 +274,7 @@ fn preserve_existing_expert_pages_for_generation(
             selected[layer_index] = true;
             preserved_bytes = preserved_bytes
                 .checked_add(residency.payload_bytes)
-                .ok_or(PhaseAwareExpertResidencyPlanError::ByteCountOverflow)?;
+                .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
     }
     let layer_targets = current_by_layer
@@ -273,7 +298,7 @@ fn preserve_existing_expert_pages_for_generation(
             },
         )
         .collect();
-    Ok(PhaseAwareExpertResidencyPlan {
+    Ok(ExpertResidencyPlan {
         phase,
         retained_expert_ceiling_bytes: ceiling_bytes,
         complete_layer_targets: selected
@@ -297,11 +322,11 @@ fn preserve_existing_expert_pages_for_generation(
 }
 
 fn low_budget_partial_plan(
-    phase: ExpertResidencyPhase,
+    phase: MemoryPhase,
     ceiling_bytes: u64,
     geometries: &[ExpertLayerGeometry],
     current_by_layer: &[Option<&CurrentExpertLayerResidency>],
-) -> Result<PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError> {
+) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
     let mut candidate_layers = current_by_layer
         .iter()
         .enumerate()
@@ -315,7 +340,7 @@ fn low_budget_partial_plan(
             selected[layer_index] = true;
             preserved_bytes = preserved_bytes
                 .checked_add(residency.payload_bytes)
-                .ok_or(PhaseAwareExpertResidencyPlanError::ByteCountOverflow)?;
+                .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
     }
     let layer_targets = current_by_layer
@@ -339,7 +364,7 @@ fn low_budget_partial_plan(
             },
         )
         .collect();
-    Ok(PhaseAwareExpertResidencyPlan {
+    Ok(ExpertResidencyPlan {
         phase,
         retained_expert_ceiling_bytes: ceiling_bytes,
         complete_layer_targets: selected
@@ -363,13 +388,13 @@ fn low_budget_partial_plan(
 }
 
 fn foundation_and_overlay_plan(
-    phase: ExpertResidencyPhase,
+    phase: MemoryPhase,
     ceiling_bytes: u64,
     geometries: &[ExpertLayerGeometry],
     current_by_layer: &[Option<&CurrentExpertLayerResidency>],
     routed_floor_bytes: &[u64],
     all_layer_routed_floor_bytes: u64,
-) -> Result<PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError> {
+) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
     let mut complete_targets = vec![false; geometries.len()];
     let mut foundation_and_floor_bytes = all_layer_routed_floor_bytes;
     let mut complete_candidates = geometries
@@ -393,7 +418,7 @@ fn foundation_and_overlay_plan(
             complete_targets[layer_index] = true;
             foundation_and_floor_bytes = foundation_and_floor_bytes
                 .checked_add(incremental_bytes)
-                .ok_or(PhaseAwareExpertResidencyPlanError::ByteCountOverflow)?;
+                .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
     }
 
@@ -455,7 +480,7 @@ fn foundation_and_overlay_plan(
         {
             preserved_bytes = preserved_bytes
                 .checked_add(residency.payload_bytes)
-                .ok_or(PhaseAwareExpertResidencyPlanError::ByteCountOverflow)?;
+                .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
         layer_targets.push(target);
     }
@@ -471,9 +496,9 @@ fn foundation_and_overlay_plan(
         }
     }))?;
     if target_capacity_bytes > ceiling_bytes {
-        return Err(PhaseAwareExpertResidencyPlanError::PlannedResidencyExceedsCeiling);
+        return Err(ExpertResidencyPlanError::PlannedResidencyExceedsCeiling);
     }
-    Ok(PhaseAwareExpertResidencyPlan {
+    Ok(ExpertResidencyPlan {
         phase,
         retained_expert_ceiling_bytes: ceiling_bytes,
         complete_layer_targets: complete_targets

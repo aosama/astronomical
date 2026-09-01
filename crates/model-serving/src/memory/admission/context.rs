@@ -1,6 +1,12 @@
-//! Pure context-growth requirements and admission projections.
+//! Admission: may this request's context growth begin?
+//!
+//! Families measure the live MLX active bytes and the exact decoder-state
+//! growth; `ContextAdmissionRequirements::decide()` returns the shared
+//! `MemoryAdmissionDecision`. The workspace byte functions here are the exact
+//! persistent/temporary accounting that prefill, persistent-cache restore,
+//! and complete-resident seating charge.
 
-use super::{MemoryAdmissionDecision, MemoryBoundary};
+use crate::memory::{MemoryAdmissionDecision, MemoryBoundary};
 
 /// Exact context and workspace categories supplied by execution owners.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

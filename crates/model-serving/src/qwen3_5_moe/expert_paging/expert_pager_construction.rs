@@ -8,7 +8,7 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
-use crate::MlxAllocationBudget;
+use crate::MlxAllocationAdmission;
 use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::expert_paging::safetensors_header::SafetensorsHeader;
 use crate::qwen3_5::Qwen3_5Config;
@@ -85,7 +85,7 @@ impl Qwen3_5ExpertPager {
                 Ok(maximum_expert_page_bytes.max(layer_plan.complete_expert_payload_byte_count()?))
             },
         )?;
-        let memory_budget = MlxAllocationBudget::new(
+        let memory_budget = MlxAllocationAdmission::new(
             maximum_expert_page_bytes,
             configured_mlx_memory_cap_bytes as u64,
         );

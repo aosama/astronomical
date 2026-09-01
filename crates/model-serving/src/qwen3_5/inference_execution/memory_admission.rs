@@ -24,7 +24,7 @@ use crate::qwen3_5::model::adaptive_ram_growth_logging::{
 use crate::qwen3_5::model::memory_admission::invalid_request_error;
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthPhase, InferenceEngineError, PerformanceAttribution,
+    AdaptiveRamGrowthContext, InferenceEngineError, MemoryPhase, PerformanceAttribution,
     PerformanceOperation, combined_persistent_growth_bytes,
 };
 
@@ -177,8 +177,8 @@ impl Qwen3_5EngineState {
 
         if should_log_memory_decision
             && matches!(
-                adaptive_ram_growth_context.adaptive_ram_growth_phase(),
-                AdaptiveRamGrowthPhase::Prefill
+                adaptive_ram_growth_context.memory_phase(),
+                MemoryPhase::Prefill
             )
             && first_forward_projection.fits_stable_and_peak_limits()
             && !first_forward_projection.has_full_recovery_reserve()
@@ -296,7 +296,7 @@ impl Qwen3_5EngineState {
                                 first_forward_projection.stable_projected_bytes(),
                                 first_forward_projection.peak_projected_bytes(),
                                 first_forward_projection.recovery_projected_bytes(),
-                                first_forward_projection.active_memory_limit_bytes(),
+                                first_forward_projection.active_memory_ceiling_bytes(),
                                 first_forward_projection.allowed_active_memory_bytes(),
                             ),
                         },
@@ -350,7 +350,7 @@ impl Qwen3_5EngineState {
                                 projection_after_expert_reclamation.stable_projected_bytes(),
                                 projection_after_expert_reclamation.peak_projected_bytes(),
                                 projection_after_expert_reclamation.recovery_projected_bytes(),
-                                projection_after_expert_reclamation.active_memory_limit_bytes(),
+                                projection_after_expert_reclamation.active_memory_ceiling_bytes(),
                                 projection_after_expert_reclamation.allowed_active_memory_bytes(),
                             ),
                         },

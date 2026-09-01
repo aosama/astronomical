@@ -1,6 +1,13 @@
-//! Replacement-aware complete expert residency policy.
+//! Admission: may complete expert residency be promoted now?
+//!
+//! Complete experts replace paged retention instead of coexisting with it.
+//! Families supply the current active bytes, the retained paged payload being
+//! replaced, and the exact complete payload; `decide()` projects the resulting
+//! active memory plus activation headroom against the ceiling and returns a
+//! typed `CompleteResidencyDecision` whose arithmetic the execution never
+//! re-derives.
 
-use super::{
+use crate::memory::{
     ExpertMemoryAdmissionError, MemoryBoundary,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     projected_active_memory_after_complete_expert_replacement,

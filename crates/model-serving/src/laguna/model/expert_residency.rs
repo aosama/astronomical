@@ -12,7 +12,7 @@ use crate::expert_paging::{
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetContract};
 use crate::laguna::paging::{LagunaExpertPagingPlan, LagunaExpertWeightPage};
 use crate::memory::{
-    ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, RequestExpertResidency,
+    ExpertResidencyPlan, MemoryPhase, RequestExpertResidency,
     publish_request_stable_residency_plan, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page,
 };
@@ -48,7 +48,7 @@ pub(in crate::laguna) enum LagunaLastExpertForward {
 /// Phase-aware plan plus last-forward grain used by Laguna status.
 pub(super) struct LagunaExpertResidencyState {
     paging_plan: Option<LagunaExpertPagingPlan>,
-    active_plan: RefCell<Option<PhaseAwareExpertResidencyPlan>>,
+    active_plan: RefCell<Option<ExpertResidencyPlan>>,
     request_residency: RefCell<Option<RequestExpertResidency>>,
     last_forward: RefCell<LagunaLastExpertForward>,
     retained_layers: RefCell<Option<RetainedExpertPageCache<LagunaExpertWeightPage>>>,
@@ -107,7 +107,7 @@ impl LagunaExpertResidencyState {
         }
     }
 
-    pub(super) fn refresh_explicit_phase_plan(&self, phase: ExpertResidencyPhase) {
+    pub(super) fn refresh_explicit_phase_plan(&self, phase: MemoryPhase) {
         let Some(paging_plan) = self.paging_plan.as_ref() else {
             self.active_plan.replace(None);
             return;
@@ -147,7 +147,7 @@ impl LagunaExpertResidencyState {
                 );
                 self.request_residency.replace(next_request_residency);
                 self.active_plan.replace(Some(active_plan));
-                if phase == ExpertResidencyPhase::GenerationPreparation
+                if phase == MemoryPhase::GenerationPreparation
                     && let Some(retained_layers) = self.retained_layers.borrow_mut().as_mut()
                 {
                     retained_layers.clear_expert_demand();
@@ -331,7 +331,7 @@ impl LagunaExpertResidencyState {
         Ok(())
     }
 
-    pub(super) fn active_plan(&self) -> Ref<'_, Option<PhaseAwareExpertResidencyPlan>> {
+    pub(super) fn active_plan(&self) -> Ref<'_, Option<ExpertResidencyPlan>> {
         self.active_plan.borrow()
     }
 

@@ -5,7 +5,7 @@
 //! addends that crossed the ceiling, instead of reconstructing the formula from
 //! code after the fact.
 
-use super::{ContextAdmissionRequirements, MemoryAdmissionDecision};
+use crate::memory::{ContextAdmissionRequirements, MemoryAdmissionDecision};
 
 pub(crate) fn log_generation_context_workspace_reservation(
     total_context_token_count: usize,

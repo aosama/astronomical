@@ -14,7 +14,7 @@ use crate::expert_paging::{
     ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, SafetensorsHeaderError,
 };
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::{MlxAllocationBudget, MlxAllocationBudgetError};
+use crate::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 
 /// Typed failures during expert streaming and resident-source handling.
 #[derive(Debug, Error)]
@@ -24,7 +24,7 @@ pub enum ExpertPagingError {
     #[error("safetensors header parsing failed: {0}")]
     SafetensorsHeader(#[from] SafetensorsHeaderError),
     #[error("memory budget exceeded: {0}")]
-    MemoryBudget(#[from] MlxAllocationBudgetError),
+    MemoryBudget(#[from] MlxAllocationAdmissionError),
     #[error("native MLX runtime error during expert loading: {0}")]
     NativeRuntime(#[from] MlxRuntimeError),
     #[error("invalid expert streaming plan: {description}")]
@@ -56,7 +56,7 @@ pub enum ExpertPagingError {
 #[derive(Debug)]
 pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
-    pub(super) memory_budget: MlxAllocationBudget,
+    pub(super) memory_budget: MlxAllocationAdmission,
     pub(super) resident_expert_source_files: Vec<(PathBuf, File)>,
 }
 

@@ -8,11 +8,11 @@ use std::cell::Cell;
 use astronomical_runtime_integration::MlxRuntime;
 use thiserror::Error;
 
-use super::{AllocationAdmissionDecision, AllocationAdmissionObservation, MemoryBoundary};
+use crate::memory::{AllocationAdmissionDecision, AllocationAdmissionObservation, MemoryBoundary};
 
 /// Typed failure while sampling or rejecting an MLX allocation.
 #[derive(Debug, Error)]
-pub enum MlxAllocationBudgetError {
+pub enum MlxAllocationAdmissionError {
     #[error(
         "MLX allocation rejected at {stage}: boundary={boundary:?}, shortfall={shortfall_bytes}, active={active_memory_bytes}, pending={pending_allocation_bytes}, ceiling={active_memory_ceiling_bytes}"
     )]
@@ -30,13 +30,13 @@ pub enum MlxAllocationBudgetError {
 
 /// Runtime-backed policy state shared by expert allocation boundaries.
 #[derive(Debug)]
-pub struct MlxAllocationBudget {
+pub struct MlxAllocationAdmission {
     maximum_expert_page_bytes: u64,
     active_memory_ceiling_bytes: u64,
     observed_transient_high_water_bytes: Cell<u64>,
 }
 
-impl MlxAllocationBudget {
+impl MlxAllocationAdmission {
     #[must_use]
     pub fn new(maximum_expert_page_bytes: u64, active_memory_ceiling_bytes: u64) -> Self {
         Self {
@@ -78,7 +78,7 @@ impl MlxAllocationBudget {
         &self,
         runtime: &MlxRuntime,
         pending_allocation_bytes: u64,
-    ) -> Result<AllocationAdmissionObservation, MlxAllocationBudgetError> {
+    ) -> Result<AllocationAdmissionObservation, MlxAllocationAdmissionError> {
         let memory_snapshot = runtime.memory_snapshot()?;
         Ok(AllocationAdmissionObservation::new(
             memory_snapshot.active_memory_bytes() as u64,
@@ -94,13 +94,13 @@ impl MlxAllocationBudget {
         runtime: &MlxRuntime,
         stage: &str,
         pending_allocation_bytes: u64,
-    ) -> Result<AllocationAdmissionDecision, MlxAllocationBudgetError> {
+    ) -> Result<AllocationAdmissionDecision, MlxAllocationAdmissionError> {
         let observation = self.observe(runtime, pending_allocation_bytes)?;
         match observation.decide() {
             AllocationAdmissionDecision::Reject {
                 boundary,
                 shortfall_bytes,
-            } => Err(MlxAllocationBudgetError::Rejected {
+            } => Err(MlxAllocationAdmissionError::Rejected {
                 stage: stage.to_owned(),
                 boundary,
                 shortfall_bytes,

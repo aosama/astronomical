@@ -12,8 +12,8 @@ use crate::qwen3_5_moe::{
     Qwen3_5ResidentExpertWeights, RetainedExpertCache,
 };
 use crate::{
-    DecoderCacheLayout, DecoderCacheState, MlxRamBudget, PerformanceAttribution,
-    PhaseAwareExpertResidencyPlan, RequestExpertResidency,
+    DecoderCacheLayout, DecoderCacheState, ExpertResidencyPlan, MlxRamBudget,
+    PerformanceAttribution, RequestExpertResidency,
 };
 
 use super::decoder_layer_weights::{Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeights};
@@ -44,7 +44,7 @@ pub struct Qwen3_5Model {
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
     /// Pure target published at load and refreshed before mandatory expert reads.
-    pub(crate) active_expert_residency_plan: RefCell<Option<PhaseAwareExpertResidencyPlan>>,
+    pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,
     /// Prefill pin/stream contract for the active request. Generation clears it.
     pub(crate) request_expert_residency: RefCell<Option<RequestExpertResidency>>,
 

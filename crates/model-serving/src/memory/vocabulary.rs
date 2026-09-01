@@ -1,4 +1,9 @@
 //! Shared vocabulary for cross-component memory-policy decisions.
+//!
+//! Every admission decision in this package carries a `MemoryBoundary` when it
+//! rejects: the named wall that stopped the operation plus the byte shortfall.
+//! Execution owners surface that boundary to users and logs; they never invent
+//! a second reason vocabulary.
 
 /// The memory boundary that prevented an operation from being admitted.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

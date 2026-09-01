@@ -1,5 +1,5 @@
 use astronomical_model_serving::{
-    AllocationAdmissionDecision, AllocationAdmissionObservation, MlxAllocationBudget,
+    AllocationAdmissionDecision, AllocationAdmissionObservation, MlxAllocationAdmission,
     retained_expert_payload_capacity_bytes, safe_minimum_mlx_memory_ceiling_bytes,
 };
 
@@ -65,7 +65,7 @@ fn should_calculate_safe_minimum_from_non_evictable_memory_and_one_expert_page()
 
 #[test]
 fn should_use_the_updated_ceiling_for_later_allocation_decisions() {
-    let mut allocation_budget = MlxAllocationBudget::new(1_500, 10_000);
+    let mut allocation_budget = MlxAllocationAdmission::new(1_500, 10_000);
 
     allocation_budget.update_active_memory_ceiling_bytes(8_000);
 
