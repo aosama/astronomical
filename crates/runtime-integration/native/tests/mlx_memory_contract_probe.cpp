@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdlib>
 #include <exception>
 #include <functional>
 #include <iostream>
@@ -11,6 +12,7 @@
 
 #include "mlx/device.h"
 #include "mlx/backend/metal/allocator.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/memory.h"
 #include "mlx/ops.h"
 #include "mlx/stream.h"
@@ -455,6 +457,14 @@ void require_policy_round_trips() {
 }
 
 void run_probe() {
+  // The native build store removes its staging directory immediately after
+  // publication, so the metallib path baked into libmlx at build time dies
+  // with it. The spawning test owns the published metallib location and
+  // forwards it through the same override variable the Rust runtime honors.
+  if (const char* metallib_path_override = std::getenv("ASTRONOMICAL_MLX_METALLIB_PATH");
+      metallib_path_override != nullptr && *metallib_path_override != '\0') {
+    metal::set_metallib_path(std::string(metallib_path_override));
+  }
   require_condition(is_available(Device{Device::gpu}), "MLX GPU device is unavailable");
   const auto gpu_stream = default_stream(Device{Device::gpu});
   clear_cache();

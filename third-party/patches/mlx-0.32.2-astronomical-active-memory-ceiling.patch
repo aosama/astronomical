@@ -8,13 +8,13 @@ index 903cce218..81c610e60 100644
  #include <cstdlib>
 +#include <limits>
 +#include <sstream>
-
+ 
  namespace mlx::core {
-
+ 
 @@ -42,6 +44,40 @@ bool can_reuse_alien_buffer(void* ptr) {
-
+ 
  namespace metal {
-
+ 
 +constexpr size_t astronomical_transient_allowance_divisor = 100;
 +constexpr const char* astronomical_active_memory_limit_error_marker =
 +    "ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED";
@@ -73,7 +73,7 @@ index 903cce218..81c610e60 100644
 +  }
    if (!buf) {
      size_t mem_required = get_active_memory() + get_cache_memory() + size;
-
+ 
 @@ -144,6 +195,12 @@ Buffer MetalAllocator::malloc(size_t size) {
            << ") exceeded.";
        throw std::runtime_error(msg.str());
@@ -112,7 +112,7 @@ index 903cce218..81c610e60 100644
        residency_sets_.insert(buf);
 @@ -205,11 +278,36 @@ size_t MetalAllocator::size(Buffer buffer) const {
  }
-
+ 
  Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
 +  {
 +    std::unique_lock lk(mutex_);

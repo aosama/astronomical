@@ -1,0 +1,12 @@
+diff --git a/mlx/c/fast.cpp b/mlx/c/fast.cpp
+index ac17d54..c23bd1f 100644
+--- a/mlx/c/fast.cpp
++++ b/mlx/c/fast.cpp
+@@ -624,6 +624,7 @@ extern "C" int mlx_fast_scaled_dot_product_attention(
+                           : std::nullopt),
+             (sinks.ctx ? std::make_optional(mlx_array_get_(sinks))
+                        : std::nullopt),
++            /* force_fused */ false,
+             mlx_stream_get_(s)));
+   } catch (std::exception& e) {
+     mlx_error(e.what());

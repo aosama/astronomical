@@ -18,7 +18,7 @@ fn should_install_the_runtime_and_expose_enforced_memory_limits() {
     let mut runtime = MlxRuntime::initialize(memory_limits)
         .expect("the pinned MLX runtime should initialize without terminating the process");
 
-    assert_eq!(runtime.version(), "0.32.1");
+    assert_eq!(runtime.version(), "0.32.2");
     assert_eq!(
         runtime
             .configured_memory_limit_bytes()

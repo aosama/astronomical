@@ -1,5 +1,5 @@
 diff --git a/mlx/backend/metal/quantized.cpp b/mlx/backend/metal/quantized.cpp
-index 5db389322..c406aad9a 100644
+index 8671db84d..f07de2570 100644
 --- a/mlx/backend/metal/quantized.cpp
 +++ b/mlx/backend/metal/quantized.cpp
 @@ -502,17 +502,31 @@ void qmv(
@@ -42,6 +42,6 @@ index 5db389322..c406aad9a 100644
 +            bits,
 +            B > 1,
 +            global_scale.has_value());
-
+ 
    auto& compute_encoder = metal::get_command_encoder(s);
    compute_encoder.set_compute_pipeline_state(kernel);
