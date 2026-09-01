@@ -2,7 +2,7 @@
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{AdaptiveRamGrowthPhase, InferenceEngineError};
+use crate::{InferenceEngineError, MemoryPhase};
 
 use super::execution::LagunaInferenceExecution;
 use super::memory::complete_laguna_forward_memory_observation;
@@ -69,7 +69,7 @@ pub(super) fn inject_input_tokens(
             &active_request.decoder_state,
             input_token_ids.len(),
             0,
-            AdaptiveRamGrowthPhase::Prefill,
+            MemoryPhase::Prefill,
             context_token_count_after_forward,
             &mut active_request.performance_attribution,
         )?;

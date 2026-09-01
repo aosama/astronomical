@@ -1,5 +1,5 @@
 use astronomical_model_serving::{
-    ExpertMemoryAdmissionError, ExpertRetentionReclamationPlan,
+    ExpertMemoryAdmissionError, ExpertReclamationPlan,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure,
@@ -91,7 +91,7 @@ fn should_retry_once_only_after_the_reclamation_target_was_released() {
 
 #[test]
 fn should_choose_the_largest_memory_boundary_deficit() {
-    let plan = ExpertRetentionReclamationPlan::for_projected_memory(110, 130, 125, 100, 120, 15);
+    let plan = ExpertReclamationPlan::for_projected_memory(110, 130, 125, 100, 120, 15);
     assert_eq!(plan.required_reclamation_bytes(), 10);
     assert_eq!(plan.reclamation_target_bytes(), 10);
     assert_eq!(plan.unresolved_shortfall_bytes(), 0);
@@ -100,7 +100,7 @@ fn should_choose_the_largest_memory_boundary_deficit() {
 
 #[test]
 fn should_report_unresolved_reclamation_shortfall() {
-    let plan = ExpertRetentionReclamationPlan::for_projected_memory(140, 150, 145, 100, 120, 20);
+    let plan = ExpertReclamationPlan::for_projected_memory(140, 150, 145, 100, 120, 20);
     assert_eq!(plan.required_reclamation_bytes(), 40);
     assert_eq!(plan.reclamation_target_bytes(), 20);
     assert_eq!(plan.unresolved_shortfall_bytes(), 20);

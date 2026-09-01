@@ -1,9 +1,9 @@
-//! MLX allocation admission and retained-expert capacity policy.
+//! Admission: does one pending allocation fit beside current ownership?
 //!
 //! This module decides what should happen. Callers remain responsible for
 //! synchronizing streams, clearing allocator storage, and performing allocations.
 
-use super::MemoryBoundary;
+use crate::memory::MemoryBoundary;
 
 /// One internally consistent observation at an allocation boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

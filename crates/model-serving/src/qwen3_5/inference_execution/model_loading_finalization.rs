@@ -66,12 +66,10 @@ impl Qwen3_5EngineState {
                 model_revision,
                 prefill_transient_observation_completed: self
                     .adaptive_ram_growth_guard
-                    .has_completed_growth_observation(crate::AdaptiveRamGrowthPhase::Prefill),
+                    .has_completed_growth_observation(crate::MemoryPhase::Prefill),
                 prefill_observed_transient_high_water_bytes: u64::try_from(
                     self.adaptive_ram_growth_guard
-                        .observed_transient_high_water_bytes(
-                            crate::AdaptiveRamGrowthPhase::Prefill,
-                        ),
+                        .observed_transient_high_water_bytes(crate::MemoryPhase::Prefill),
                 )
                 .unwrap_or(u64::MAX),
                 total_artifact_payload_bytes,

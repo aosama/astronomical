@@ -1,7 +1,7 @@
 use astronomical_model_serving::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPhase, PhaseAwareExpertResidencyPlanError, RetainedExpertPageClass,
-    complete_layer_indexes_required_before_decode, plan_phase_aware_expert_residency,
+    ExpertResidencyPlanError, MemoryPhase, RetainedExpertPageClass,
+    complete_layer_indexes_required_before_decode, plan_expert_residency,
 };
 
 fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
@@ -42,13 +42,8 @@ fn complete_residency(layer_index: usize) -> CurrentExpertLayerResidency {
 
 #[test]
 fn should_target_every_layer_complete_when_the_composed_budget_fits_the_model() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Prefill,
-        120,
-        &uniform_geometry(3),
-        &[],
-    )
-    .expect("complete model geometry should fit");
+    let plan = plan_expert_residency(MemoryPhase::Prefill, 120, &uniform_geometry(3), &[])
+        .expect("complete model geometry should fit");
 
     assert_eq!(plan.complete_layer_targets, vec![0, 1, 2]);
     assert!(
@@ -61,8 +56,8 @@ fn should_target_every_layer_complete_when_the_composed_budget_fits_the_model() 
 
 #[test]
 fn should_preserve_existing_complete_layers_before_selecting_new_targets() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
         80,
         &uniform_geometry(3),
         &[complete_residency(1)],
@@ -83,8 +78,8 @@ fn should_preserve_existing_complete_layers_before_selecting_new_targets() {
 
 #[test]
 fn should_reserve_one_model_derived_routed_page_for_each_incomplete_layer() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Decode,
+    let plan = plan_expert_residency(
+        MemoryPhase::Decode,
         80,
         &uniform_geometry(3),
         &[complete_residency(0)],
@@ -117,17 +112,16 @@ fn should_select_additional_complete_layers_by_incremental_payload_then_layer_in
             experts_per_token: 2,
         },
     ];
-    let plan =
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 80, &geometries, &[])
-            .expect("one incremental complete target should fit");
+    let plan = plan_expert_residency(MemoryPhase::Prefill, 80, &geometries, &[])
+        .expect("one incremental complete target should fit");
 
     assert_eq!(plan.complete_layer_targets, vec![0]);
 }
 
 #[test]
 fn should_use_low_budget_partial_mode_when_routed_floors_do_not_fit() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Decode,
+    let plan = plan_expert_residency(
+        MemoryPhase::Decode,
         10,
         &uniform_geometry(3),
         &[partial_residency(1, &[2], 4)],
@@ -147,8 +141,8 @@ fn should_use_low_budget_partial_mode_when_routed_floors_do_not_fit() {
 #[test]
 fn should_preserve_a_fitting_partial_page_without_exact_set_equality() {
     let current_page = partial_residency(1, &[0, 3], 8);
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
         60,
         &uniform_geometry(3),
         &[current_page],
@@ -164,13 +158,8 @@ fn should_preserve_a_fitting_partial_page_without_exact_set_equality() {
 
 #[test]
 fn should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Decode,
-        60,
-        &uniform_geometry(3),
-        &[],
-    )
-    .expect("routed floors should fit exactly");
+    let plan = plan_expert_residency(MemoryPhase::Decode, 60, &uniform_geometry(3), &[])
+        .expect("routed floors should fit exactly");
 
     assert!(
         plan.layer_targets.iter().all(|target| {
@@ -182,8 +171,8 @@ fn should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence() 
 
 #[test]
 fn should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_them() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
         80,
         &uniform_geometry(3),
         &[],
@@ -221,8 +210,8 @@ fn should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_mod
         })
         .collect::<Vec<_>>();
     let leftover_expert_budget_bytes = 21_051_596_626;
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
         leftover_expert_budget_bytes,
         &layer_geometries,
         &[],
@@ -239,8 +228,8 @@ fn should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_mod
 
 #[test]
 fn should_require_unseated_complete_layers_to_be_loaded_before_decode() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
         80,
         &uniform_geometry(3),
         &[],
@@ -254,8 +243,8 @@ fn should_require_unseated_complete_layers_to_be_loaded_before_decode() {
 
 #[test]
 fn should_not_require_already_preserved_complete_layers_to_be_loaded_again() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::GenerationPreparation,
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
         80,
         &uniform_geometry(3),
         &[complete_residency(1)],
@@ -273,8 +262,8 @@ fn should_release_low_coverage_partial_pages_before_any_complete_layer() {
         partial_residency(1, &[1], 1),
         complete_residency(2),
     ];
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Idle,
+    let plan = plan_expert_residency(
+        MemoryPhase::Idle,
         60,
         &uniform_geometry(3),
         &current_residencies,
@@ -286,8 +275,8 @@ fn should_release_low_coverage_partial_pages_before_any_complete_layer() {
 
 #[test]
 fn should_release_complete_layers_only_for_the_remaining_exact_deficit() {
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Prefill,
+    let plan = plan_expert_residency(
+        MemoryPhase::Prefill,
         60,
         &uniform_geometry(3),
         &[complete_residency(2)],
@@ -305,20 +294,20 @@ fn should_release_complete_layers_only_for_the_remaining_exact_deficit() {
 fn should_fail_closed_for_invalid_geometry_residency_and_overflow() {
     let duplicate_residencies = vec![complete_residency(0), complete_residency(0)];
     assert!(matches!(
-        plan_phase_aware_expert_residency(
-            ExpertResidencyPhase::Prefill,
+        plan_expert_residency(
+            MemoryPhase::Prefill,
             80,
             &uniform_geometry(2),
             &duplicate_residencies,
         ),
-        Err(PhaseAwareExpertResidencyPlanError::DuplicateOrUnorderedCurrentLayer { .. })
+        Err(ExpertResidencyPlanError::DuplicateOrUnorderedCurrentLayer { .. })
     ));
 
     let mut zero_geometry = uniform_geometry(1);
     zero_geometry[0].expert_capacity = 0;
     assert!(matches!(
-        plan_phase_aware_expert_residency(ExpertResidencyPhase::Prefill, 0, &zero_geometry, &[],),
-        Err(PhaseAwareExpertResidencyPlanError::ZeroGeometry { .. })
+        plan_expert_residency(MemoryPhase::Prefill, 0, &zero_geometry, &[],),
+        Err(ExpertResidencyPlanError::ZeroGeometry { .. })
     ));
 
     let overflowing_geometry = [ExpertLayerGeometry {
@@ -329,21 +318,16 @@ fn should_fail_closed_for_invalid_geometry_residency_and_overflow() {
         experts_per_token: 1,
     }];
     assert_eq!(
-        plan_phase_aware_expert_residency(
-            ExpertResidencyPhase::Prefill,
-            u64::MAX,
-            &overflowing_geometry,
-            &[],
-        ),
-        Err(PhaseAwareExpertResidencyPlanError::ByteCountOverflow)
+        plan_expert_residency(MemoryPhase::Prefill, u64::MAX, &overflowing_geometry, &[],),
+        Err(ExpertResidencyPlanError::ByteCountOverflow)
     );
 }
 
 #[test]
 fn should_keep_every_planned_owner_and_reservation_within_the_retained_budget() {
     let geometries = uniform_geometry(4);
-    let plan = plan_phase_aware_expert_residency(
-        ExpertResidencyPhase::Decode,
+    let plan = plan_expert_residency(
+        MemoryPhase::Decode,
         100,
         &geometries,
         &[partial_residency(3, &[0, 2], 12)],

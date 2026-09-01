@@ -171,26 +171,25 @@ pub use laguna::{
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthPhase, AdaptiveRamGrowthProjection, AllocationAdmissionDecision,
-    AllocationAdmissionObservation, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
-    CompleteResidencyDecision, CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements,
-    ContextAdmissionRequirements, CurrentExpertLayerResidency, ExpertLayerGeometry,
-    ExpertLayerResidencyTarget, ExpertMemoryAdmissionError, ExpertResidencyPhase,
-    ExpertRetentionReclamationPlan, ForwardRecoveryDecision, ForwardRecoveryPolicy,
+    AdaptiveRamGrowthProjection, AllocationAdmissionDecision, AllocationAdmissionObservation,
+    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, CompleteResidencyDecision,
+    CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements, ContextAdmissionRequirements,
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
+    ExpertMemoryAdmissionError, ExpertReclamationPlan, ExpertResidencyPlan,
+    ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryPolicy,
     ForwardRecoveryRequirements, MeasuredExpertLayerPayload, MemoryAdmissionDecision,
-    MemoryBoundary, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
+    MemoryBoundary, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, MemoryPhase,
     MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, MlxRamBudget,
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetPhase,
-    MlxRamBudgetSnapshot, MtpAdmission, MtpDepthDowngradeReason, MtpDraftDepth, MtpDraftDepthError,
-    MtpMemoryAdmission, MtpMemoryCandidate, MtpMemoryProjection, MtpMemoryProjectionError,
-    PhaseAwareExpertResidencyPlan, PhaseAwareExpertResidencyPlanError, RamBudgetGeometryError,
+    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
+    MtpAdmission, MtpDepthDowngradeReason, MtpDepthSelection, MtpDraftDepth, MtpDraftDepthError,
+    MtpMemoryCandidate, MtpMemoryProjection, MtpMemoryProjectionError, RamBudgetGeometryError,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
     RotatingAdmissionError, SpeculativePrefillAdmission, classify_expert_memory_mode,
     combined_persistent_growth_bytes, complete_layer_indexes_required_before_decode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure, measured_non_expert_forward_growth_bytes,
-    persistent_context_restore_workspace_bytes, plan_phase_aware_expert_residency,
+    persistent_context_restore_workspace_bytes, plan_expert_residency,
     projected_active_memory_after_complete_expert_replacement,
     publish_request_stable_residency_plan, request_context_temporary_workspace_bytes,
     required_complete_residency_activation_headroom_bytes,
@@ -203,7 +202,7 @@ pub use memory::{
     should_enact_planned_expert_release, should_retry_fixed_forward_after_expert_reclamation,
 };
 #[cfg(feature = "direct-mlx")]
-pub use memory::{MlxAllocationBudget, MlxAllocationBudgetError};
+pub use memory::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 #[cfg(feature = "direct-mlx")]
 pub use model_family_runtime::ModelFamilyInferenceEngine;
 pub use model_family_runtime::{

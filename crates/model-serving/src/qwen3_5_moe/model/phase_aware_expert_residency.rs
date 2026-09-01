@@ -3,10 +3,9 @@
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError;
 use crate::{
-    ExpertLayerGeometry, ExpertLayerResidencyTarget, ExpertResidencyPhase, MlxRamBudgetPhase,
-    PerformanceAttribution, PerformanceCounter, PerformanceOperation, RetainedExpertPageClass,
-    RetainedExpertReclamation, plan_phase_aware_expert_residency,
-    publish_request_stable_residency_plan,
+    ExpertLayerGeometry, ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution,
+    PerformanceCounter, PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,
+    plan_expert_residency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     should_enact_planned_expert_release,
 };
@@ -67,7 +66,7 @@ impl Qwen3_5Model {
     /// Refreshes the no-I/O target after memory policy has established a phase budget.
     pub(crate) fn refresh_phase_aware_expert_residency_plan(
         &self,
-        phase: ExpertResidencyPhase,
+        phase: MemoryPhase,
         context_token_count: u64,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
@@ -76,7 +75,7 @@ impl Qwen3_5Model {
             return Ok(());
         };
         if self.resident_expert_weights.is_some() {
-            if phase == ExpertResidencyPhase::GenerationPreparation {
+            if phase == MemoryPhase::GenerationPreparation {
                 let resident_statistics = self.expert_weight_memory_cache_statistics();
                 performance_attribution.record_counter(
                     PerformanceCounter::ExpertResidencyPlanCompleteLayerCount,
@@ -99,11 +98,9 @@ impl Qwen3_5Model {
             return Ok(());
         }
         let budget_phase = match phase {
-            ExpertResidencyPhase::Prefill => MlxRamBudgetPhase::Prefill,
-            ExpertResidencyPhase::GenerationPreparation | ExpertResidencyPhase::Decode => {
-                MlxRamBudgetPhase::Decode
-            }
-            ExpertResidencyPhase::Idle => MlxRamBudgetPhase::Idle,
+            MemoryPhase::Prefill => MemoryPhase::Prefill,
+            MemoryPhase::GenerationPreparation | MemoryPhase::Decode => MemoryPhase::Decode,
+            MemoryPhase::Idle => MemoryPhase::Idle,
         };
         let budget_snapshot =
             self.mlx_ram_budget
@@ -159,7 +156,7 @@ impl Qwen3_5Model {
         // reserve grew. Planning and cache eviction against that smaller number
         // discards a complete layer this request already paid to read. Floor at
         // current complete payload so only a real capacity failure may shrink.
-        let retained_page_ceiling_bytes = if phase == ExpertResidencyPhase::Prefill {
+        let retained_page_ceiling_bytes = if phase == MemoryPhase::Prefill {
             retained_complete_layer_ceiling_after_prefill_budget_refresh(
                 retained_expert_ceiling_bytes,
                 current_complete_layer_payload_bytes,
@@ -183,9 +180,9 @@ impl Qwen3_5Model {
         );
         let residency_plan = performance_attribution
             .measure_operation(
-                PerformanceOperation::PhaseAwareExpertResidencyPlanning,
+                PerformanceOperation::ExpertResidencyPlanning,
                 |_performance_attribution| {
-                    plan_phase_aware_expert_residency(
+                    plan_expert_residency(
                         phase,
                         retained_page_ceiling_bytes,
                         &layer_geometries,
@@ -205,7 +202,7 @@ impl Qwen3_5Model {
             &layer_geometries,
         );
         *self.request_expert_residency.borrow_mut() = next_request_residency;
-        if phase == ExpertResidencyPhase::GenerationPreparation {
+        if phase == MemoryPhase::GenerationPreparation {
             performance_attribution.record_counter(
                 PerformanceCounter::ExpertResidencyPlanCompleteLayerCount,
                 u64::try_from(residency_plan.complete_layer_targets.len()).unwrap_or(u64::MAX),

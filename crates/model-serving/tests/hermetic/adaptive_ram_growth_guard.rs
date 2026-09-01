@@ -5,8 +5,7 @@
 //! estimates rather than measured production frequencies.
 
 use astronomical_model_serving::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthPhase,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError, MemoryPhase,
 };
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
@@ -19,7 +18,7 @@ fn should_reject_a_zero_active_memory_limit() {
 
     assert_eq!(
         guard_creation_error,
-        AdaptiveRamGrowthGuardError::InvalidActiveMemoryLimit
+        AdaptiveRamGrowthGuardError::InvalidActiveMemoryCeiling
     );
 }
 
@@ -102,8 +101,7 @@ fn should_keep_exact_context_evidence_separate_from_phase_admission_maximum() {
         50
     );
     assert_eq!(
-        adaptive_ram_growth_guard
-            .observed_transient_high_water_bytes(AdaptiveRamGrowthPhase::Prefill),
+        adaptive_ram_growth_guard.observed_transient_high_water_bytes(MemoryPhase::Prefill),
         200
     );
 }
@@ -338,7 +336,7 @@ fn should_admit_growth_without_expert_reclamation_when_only_the_recovery_reserve
     assert_eq!(projection.observed_transient_high_water_bytes(), 150);
     assert_eq!(projection.peak_projected_bytes(), 900);
     assert_eq!(projection.recovery_projected_bytes(), 1_050);
-    assert_eq!(projection.active_memory_limit_bytes(), 1_000);
+    assert_eq!(projection.active_memory_ceiling_bytes(), 1_000);
     assert_eq!(projection.operation_reclamation_required_bytes(), 0);
     assert_eq!(projection.recovery_reserve_shortfall_bytes(), 40);
     assert_eq!(

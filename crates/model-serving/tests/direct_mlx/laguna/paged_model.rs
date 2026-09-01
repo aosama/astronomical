@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{
-    ExpertLayerResidencyTarget, ExpertMemoryMode, ExpertResidencyPhase, LagunaAttentionProjection,
-    LagunaDecoderState, LagunaExpertProjection, LagunaGlobalTensorRole, LagunaLayerTensorRole,
-    LagunaModel, LagunaNativeWeights, LagunaTensorComponent, LagunaTensorId,
+    ExpertLayerResidencyTarget, ExpertMemoryMode, LagunaAttentionProjection, LagunaDecoderState,
+    LagunaExpertProjection, LagunaGlobalTensorRole, LagunaLayerTensorRole, LagunaModel,
+    LagunaNativeWeights, LagunaTensorComponent, LagunaTensorId, MemoryPhase,
     PerformanceAttribution, PerformanceOperation,
 };
 
@@ -192,7 +192,7 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
     let prefill_plan = model
         .active_expert_residency_plan()
         .expect("paged prefill should publish a phase-aware plan");
-    assert_eq!(prefill_plan.phase, ExpertResidencyPhase::Prefill);
+    assert_eq!(prefill_plan.phase, MemoryPhase::Prefill);
     assert_eq!(
         prefill_plan.layer_targets[0],
         ExpertLayerResidencyTarget::StreamOperationLocal
@@ -233,7 +233,7 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
     let decode_plan = model
         .active_expert_residency_plan()
         .expect("paged decode should publish a phase-aware plan");
-    assert_eq!(decode_plan.phase, ExpertResidencyPhase::Decode);
+    assert_eq!(decode_plan.phase, MemoryPhase::Decode);
 }
 
 #[tokio::test]

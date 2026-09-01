@@ -9,7 +9,7 @@ use crate::laguna::moe::{
     route_laguna_layer_experts, unique_routed_expert_ids,
 };
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaLayerDescriptor};
-use crate::memory::ExpertResidencyPhase;
+use crate::memory::MemoryPhase;
 use crate::performance_attribution::PerformanceAttribution;
 
 use super::attention::{LagunaAttentionMaskCache, forward_attention};
@@ -26,7 +26,7 @@ pub(super) fn forward_decoder_layer(
     layer_descriptor: &LagunaLayerDescriptor,
     decoder_state: &mut LagunaDecoderState,
     attention_mask_cache: &mut LagunaAttentionMaskCache,
-    expert_residency_phase: ExpertResidencyPhase,
+    memory_phase: MemoryPhase,
     rms_norm_epsilon: f32,
     router_logit_softcap: f64,
     sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
@@ -77,7 +77,7 @@ pub(super) fn forward_decoder_layer(
                 model,
                 moe_descriptor,
                 layer_index,
-                expert_residency_phase,
+                memory_phase,
                 router_logit_softcap,
                 sorted_expert_reduction_kernel,
                 performance_attribution,
@@ -94,7 +94,7 @@ fn forward_sparse_feed_forward(
     model: &LagunaModel,
     moe_descriptor: &crate::laguna::normalization::LagunaMoeDescriptor,
     layer_index: usize,
-    expert_residency_phase: ExpertResidencyPhase,
+    memory_phase: MemoryPhase,
     router_logit_softcap: f64,
     reduction_kernel: Option<&MlxMetalKernel>,
     performance_attribution: &mut PerformanceAttribution,
@@ -181,7 +181,7 @@ fn forward_sparse_feed_forward(
             },
         );
     }
-    let should_stream_complete_layer = expert_residency_phase == ExpertResidencyPhase::Prefill;
+    let should_stream_complete_layer = memory_phase == MemoryPhase::Prefill;
     let pending_page_payload_bytes = if should_stream_complete_layer {
         sparse_layer_plan.complete_layer_payload_byte_count()?
     } else {
