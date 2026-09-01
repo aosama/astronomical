@@ -10,7 +10,11 @@ use super::{
 
 const REPRESENTATIVE_SOURCE_PROMPT_TOKEN_COUNT: usize = 8_192;
 const INITIAL_CHAT_PROMPT_TOKEN_COUNT: usize = 8_192;
-const FOLLOW_UP_MESSAGE_TOKEN_COUNT: usize = 512;
+// The follow-up appends enough new tokens that the remaining suffix after the
+// sparse target-state restore (the initial prompt minus its final generation-start
+// token) still meets the speculative-prefill minimum prompt floor. A short suffix
+// is correctly declined by eligibility and never reaches the drafter SSD prefix.
+const FOLLOW_UP_MESSAGE_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test]
 #[ignore = "proves SpecPrefill SSD reuse on a follow-up chat under the configured MLX ceiling"]
