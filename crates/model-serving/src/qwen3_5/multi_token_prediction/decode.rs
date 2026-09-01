@@ -1,6 +1,7 @@
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::MlxArray;
 
+use crate::memory::{MtpDepthDowngradeReason, MtpDraftDepth};
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5::inference_execution::{fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::model::Qwen3_5Model;
@@ -10,9 +11,8 @@ use super::accepted_prefix_commit::commit_accepted_mtp_prefix;
 use super::sampled_verification::MtpSampledSamplingSettings;
 use super::target_verification::forward_target_verification_window_with_performance_attribution;
 use super::{
-    MtpDepthDowngradeReason, MtpDraftDepth, MtpVerificationDecision,
-    qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
-    qwen3_5_mtp_verification_decision,
+    MtpVerificationDecision, qwen3_5_mtp_effective_depth_and_reason_for_windows,
+    qwen3_5_mtp_effective_depth_for_windows, qwen3_5_mtp_verification_decision,
 };
 use crate::qwen3_5::Qwen3_5SamplingStrategy;
 
@@ -88,7 +88,7 @@ pub(in crate::qwen3_5) fn verification_transient_array_bytes(
     active_request: &Qwen3_5EngineRequest,
     effective_depth: MtpDraftDepth,
 ) -> Result<usize, InferenceEngineError> {
-    super::qwen3_5_mtp_verification_transient_array_bytes(
+    crate::memory::MtpAdmission::verification_transient_array_bytes(
         effective_depth,
         model.config().vocabulary_size() as usize,
         model.config().hidden_size() as usize,

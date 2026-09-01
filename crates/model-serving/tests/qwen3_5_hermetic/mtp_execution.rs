@@ -1,8 +1,7 @@
 use astronomical_model_serving::{
-    MtpDepthDowngradeReason, MtpDraftDepth, MtpMemoryCandidate, MtpMemoryProjection,
+    MtpAdmission, MtpDepthDowngradeReason, MtpDraftDepth, MtpMemoryCandidate, MtpMemoryProjection,
     qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
-    qwen3_5_mtp_memory_admission, qwen3_5_mtp_verification_decision,
-    qwen3_5_mtp_verification_transient_array_bytes,
+    qwen3_5_mtp_verification_decision,
 };
 
 #[test]
@@ -180,7 +179,7 @@ fn should_fall_back_from_depth_three_to_target_only_at_exact_memory_boundaries()
     for (available_bytes, expected_depth) in
         [(300, Some(3)), (299, Some(2)), (199, Some(1)), (99, None)]
     {
-        let admission = qwen3_5_mtp_memory_admission(&candidates, available_bytes);
+        let admission = MtpAdmission::select_effective_depth(&candidates, available_bytes);
         assert_eq!(
             admission.effective_depth().map(MtpDraftDepth::get),
             expected_depth
@@ -216,9 +215,9 @@ fn should_reject_verification_vectors_that_do_not_match_the_effective_depth() {
 #[test]
 fn should_keep_verification_transient_arrays_independent_of_boundary_snapshots() {
     let depth_one =
-        qwen3_5_mtp_verification_transient_array_bytes(MtpDraftDepth::DEPTH_ONE, 8, 4, false)
+        MtpAdmission::verification_transient_array_bytes(MtpDraftDepth::DEPTH_ONE, 8, 4, false)
             .expect("depth-one transient arrays should not overflow");
-    let depth_two = qwen3_5_mtp_verification_transient_array_bytes(
+    let depth_two = MtpAdmission::verification_transient_array_bytes(
         MtpDraftDepth::new(2).expect("depth two should be valid"),
         8,
         4,

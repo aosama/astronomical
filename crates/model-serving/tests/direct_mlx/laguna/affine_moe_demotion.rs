@@ -8,7 +8,6 @@ use astronomical_model_serving::{
     CustomKernelVerdict, CustomMetalKernelFamily, KernelUnsupportedReason, LagunaDecoderState,
     LagunaModel, PerformanceAttribution, WorkerKernelCapabilities,
 };
-use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::direct_mlx_test_guard;
 use crate::direct_mlx::laguna::affine_moe::{

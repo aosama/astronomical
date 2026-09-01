@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::{MtpDepthDowngradeReason, MtpDraftDepth};
+use crate::memory::{MtpDepthDowngradeReason, MtpDraftDepth};
 /// Target-authoritative outcome of one fixed-depth MTP verification window.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MtpVerificationDecision {

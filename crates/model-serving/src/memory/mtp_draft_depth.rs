@@ -1,3 +1,8 @@
+//! Validated multi-token-prediction draft depth owned beside memory admission.
+//!
+//! MTP memory admission projects per-depth byte growth, so the depth type it
+//! selects among must live in the same package and stay free of family imports.
+
 use thiserror::Error;
 
 /// Validated fixed MTP proposal depth supported by Astronomical.

@@ -1,4 +1,4 @@
-use crate::attention::rotating_prefill_transient_token_count;
+use crate::memory::rotating_prefill_transient_token_count;
 use crate::memory::{
     CompleteResidencyDecision, CompleteResidencyRequirements, CurrentExpertLayerResidency,
     ExpertResidencyPhase, PhaseAwareExpertResidencyPlan, plan_phase_aware_expert_residency,

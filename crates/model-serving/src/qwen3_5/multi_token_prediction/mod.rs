@@ -9,12 +9,10 @@ mod artifact;
 #[cfg(feature = "direct-mlx")]
 mod decode;
 mod dense_tensor_spec;
-mod depth;
 #[cfg(feature = "direct-mlx")]
 mod forward;
 #[cfg(feature = "direct-mlx")]
 mod injected_input;
-mod memory_admission;
 #[cfg(feature = "direct-mlx")]
 mod model;
 mod moe_tensor_spec;
@@ -50,7 +48,6 @@ pub(in crate::qwen3_5) use decode::{
     projected_verification_window_memory_growth_bytes, take_queued_prediction_token,
     verification_boundary_snapshot_bytes, verification_transient_array_bytes,
 };
-pub use depth::{MtpDraftDepth, MtpDraftDepthError};
 #[cfg(feature = "direct-mlx")]
 pub use forward::Qwen3_5MtpForwardOutput;
 #[cfg(feature = "direct-mlx")]
@@ -58,11 +55,6 @@ pub(in crate::qwen3_5) use injected_input::restore_queued_prediction_prefix_befo
 #[cfg(feature = "direct-mlx")]
 pub(in crate::qwen3_5) use injected_input::{
     disable_prediction_after_optional_injection_failure, projected_injected_prediction_growth_bytes,
-};
-pub use memory_admission::{
-    MtpDepthDowngradeReason, MtpMemoryAdmission, MtpMemoryCandidate, MtpMemoryProjection,
-    MtpMemoryProjectionError, qwen3_5_mtp_memory_admission,
-    qwen3_5_mtp_verification_transient_array_bytes,
 };
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::{Qwen3_5MtpWeights, bind_optional_weights, materialize_optional_weights};

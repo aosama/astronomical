@@ -3,7 +3,8 @@ use std::fmt;
 
 use crate::qwen3_5::{Qwen3_5Config, Qwen3_5MtpContract, Qwen3_5ShardIndex};
 
-use super::{MtpDraftDepth, tensor_namespace::qwen3_5_mtp_tensor_names};
+use super::tensor_namespace::qwen3_5_mtp_tensor_names;
+use crate::memory::MtpDraftDepth;
 
 /// Bounded artifact reason that keeps optional MTP target-only.
 #[derive(Clone, Debug, Eq, PartialEq)]

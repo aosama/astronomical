@@ -15,7 +15,8 @@ use crate::{InferenceEngineError, PerformanceCounter};
 use super::accepted_prefix_commit::commit_accepted_mtp_prefix;
 use super::decode::{record_mtp_outcome, restore_complete_attempt_state};
 use super::sampled_verification::MtpSampledSamplingSettings;
-use super::{MtpDraftDepth, MtpVerificationDecision, qwen3_5_mtp_sampled_verification_decision};
+use super::{MtpVerificationDecision, qwen3_5_mtp_sampled_verification_decision};
+use crate::memory::MtpDraftDepth;
 
 #[allow(clippy::too_many_arguments)]
 pub(in crate::qwen3_5) fn attempt_sampled_prediction_proposal_and_verification(

@@ -1,8 +1,9 @@
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::MlxArray;
 
+use crate::memory::{MtpDepthDowngradeReason, MtpDraftDepth};
 use crate::qwen3_5::multi_token_prediction::{
-    MtpDraftDepth, attempt_prediction_proposal_and_verification,
+    attempt_prediction_proposal_and_verification,
     disable_prediction_after_memory_admission_failure, effective_prediction_depth,
     projected_verification_window_memory_growth_bytes, verification_boundary_snapshot_bytes,
     verification_transient_array_bytes,
@@ -39,18 +40,16 @@ impl Qwen3_5EngineState {
             effective_prediction_depth(active_request, self.maximum_position_count);
         if let Some(window_downgrade_reason) = window_downgrade_reason {
             let downgrade_counter = match window_downgrade_reason {
-                crate::qwen3_5::MtpDepthDowngradeReason::OutputWindow => {
+                MtpDepthDowngradeReason::OutputWindow => {
                     PerformanceCounter::MtpOutputDepthDowngradeCount
                 }
-                crate::qwen3_5::MtpDepthDowngradeReason::ContextWindow => {
+                MtpDepthDowngradeReason::ContextWindow => {
                     PerformanceCounter::MtpContextDepthDowngradeCount
                 }
-                crate::qwen3_5::MtpDepthDowngradeReason::ThinkingWindow => {
+                MtpDepthDowngradeReason::ThinkingWindow => {
                     PerformanceCounter::MtpThinkingDepthDowngradeCount
                 }
-                crate::qwen3_5::MtpDepthDowngradeReason::Memory => {
-                    PerformanceCounter::MtpMemoryDepthDowngradeCount
-                }
+                MtpDepthDowngradeReason::Memory => PerformanceCounter::MtpMemoryDepthDowngradeCount,
             };
             // Window clamping occurs before graph construction, so this counter attributes the
             // avoided deeper attempt without charging an MTP operational fallback.
