@@ -4,32 +4,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.26</title>
-            <pubDate>Sun, 30 Aug 2026 22:24:59 -0400</pubDate>
-            <sparkle:version>387</sparkle:version>
-            <sparkle:shortVersionString>0.2.26</sparkle:shortVersionString>
+            <title>0.2.27</title>
+            <pubDate>Tue, 01 Sep 2026 00:35:48 -0400</pubDate>
+            <sparkle:version>394</sparkle:version>
+            <sparkle:shortVersionString>0.2.27</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.26
+            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.27
 
-### Fixed
+## Highlights
 
-- Tool calls from quantized Qwen3.5 models now survive generations that quote tool-call syntax inside reasoning or summary prose. A think-close marker inside a buffered tool-call body is treated as proof the opener was quoted; the quoted span returns to its origin channel (reasoning or visible text) and the model's real tool call that follows arrives as a structured tool call instead of literal text. (#346)
-- Salvaging an unclosed tool call now emits a bounded warning diagnostic, so unstructured output is observable instead of silent. (#346)
+- Sampled multi-token prediction at temperature one: opt-in artifacts can now serve distribution-correct sampled draft verification, with measurements and defaults documented alongside the feature; target-only execution remains the default.
+- The pinned native MLX runtime upgrades from v0.32.1 to v0.32.2 with the same verified-archive and retained-patch contract. The previously local fused head-dimension-256 attention path is replaced by its upstream implementation, and a paired serving measurement on this version shows decoder parity and a faster cache-warm prefill with no regression measured.
 
-### Compatibility
+## Compatibility
 
-- No REST API, configuration, or model-catalog changes. Client behavior is unchanged for generations that do not quote tool-call markers.
-- Saved conversations, model library state, and prompt caches are preserved by this update.
+- Requires macOS 26.0 or later on Apple Silicon, unchanged from the previous release.
+- Existing local state, model directories, prompt-cache contents, and configuration carry forward unchanged.
 
-### Distribution
+## Distribution
 
-- Signed, notarized macOS arm64 DMG with Hardened Runtime; Sparkle-signed update feed with Ed25519 enclosure signatures.
-]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.26/Astronomical-0.2.26-macOS-arm64.dmg" length="15771441" type="application/octet-stream" sparkle:edSignature="JBSLQX2RD8xe51gqwiwp+aqAafQboDKJVAD6bA3aHAv1N2GJ+WOJkEhDUXBTLgXpOEtcNVkhivK31cbCjMZDAw=="></enclosure>
+- This release is Developer ID signed with hardened runtime and timestamping, notarized and stapled by Apple, and distributed through the GitHub release channel and the signed Sparkle update feed.]]></description>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.27/Astronomical-0.2.27-macOS-arm64.dmg" length="15829334" type="application/octet-stream" sparkle:edSignature="iXMwfjf8EVF5XePBGhwrvIoIQEgtaYv0Mnzxlh3rWKTMCqaylw3oyc23QmIEvxE0uE5Kg/C5sZGA1GPZTxHwAw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: KDsNAgGZXGvr4/dlZwWFmzTGLkrAFhcRV5oOaF0rpXJQqENahVVg5+OC4m5wWSUmvuOFTWuYVDCZZWUVoK3aBQ==
-length: 2200
+edSignature: 6nSxQmo9xbJ8sUxMpoofWk+ZvpnA6gsCvOm7jS4OyoAHy4ag/hLBXbRpBu1e++wl+HQNISG5E++Vx/oZQDHHDg==
+length: 2293
 -->
