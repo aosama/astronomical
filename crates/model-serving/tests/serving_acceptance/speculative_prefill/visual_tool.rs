@@ -17,9 +17,17 @@ use super::{
     RepresentativePrompt, SPECULATIVE_PREFILL_KEEP_PERCENTAGE, run_representative_generation,
 };
 
-const VISUAL_TOOL_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
-const VISUAL_TOOL_MINIMUM_PROMPT_TOKEN_COUNT: usize = 256;
-const VISUAL_TOOL_OUTPUT_TOKEN_COUNT: u16 = 256;
+// Exception to the repository's 120-second default test-process boundary,
+// approved for these visual journeys: each leg loads the large sparse MoE target
+// into wired GPU memory, prefills a visual prompt above the speculative-prefill
+// floor, and generates a capped output budget, so the journey legitimately needs
+// more than two minutes on machines slower than the development workstation.
+const VISUAL_TOOL_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(240);
+// The visual prompts must exceed the speculative-prefill minimum prompt floor
+// (8,192 tokens) so the protected journeys genuinely engage drafter scoring;
+// a prompt below the floor makes every SpecPrefill measurement structurally zero.
+const VISUAL_TOOL_MINIMUM_PROMPT_TOKEN_COUNT: usize = 8_704;
+const VISUAL_TOOL_OUTPUT_TOKEN_COUNT: u16 = 512;
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
@@ -159,17 +167,17 @@ async fn should_preserve_a_visual_tool_call_and_reject_prior_state_for_a_changed
         eprintln!("[speculative-prefill-visual-tool] status=success");
     })
     .await
-    .expect("the visual tool acceptance should finish within 115 seconds");
+    .expect("the visual tool acceptance should finish within the acceptance timeout");
 }
 
 #[tokio::test]
-#[ignore = "proves ordinary target-only visual processing when the configured compatible drafter is text-only"]
-async fn should_use_ordinary_target_only_processing_for_a_text_only_visual_drafter() {
+#[ignore = "proves a visual prompt serves without fallback and the compatible drafter scores it"]
+async fn should_score_a_visual_prompt_with_the_compatible_drafter() {
     tokio::time::timeout(VISUAL_TOOL_ACCEPTANCE_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let target_model_directory = crate::common::configured_large_sparse_moe_model_directory();
         let (text_only_draft_model_directory, text_only_draft_model_id) =
-            configured_text_only_compatible_draft(&target_model_directory);
+            configured_compatible_draft(&target_model_directory);
         let validated_target_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&target_model_directory, 1)
             .expect("the target-only visual target artifact should validate");
@@ -235,14 +243,14 @@ async fn should_use_ordinary_target_only_processing_for_a_text_only_visual_draft
             );
         }
         eprintln!(
-            "[speculative-prefill-visual-tool] status=success journey=text_only_drafter_target_only"
+            "[speculative-prefill-visual-tool] status=success journey=compatible_drafter_target_only"
         );
     })
     .await
-    .expect("the text-only-drafter visual journey should finish within 115 seconds");
+    .expect("the compatible-drafter visual journey should finish within the acceptance timeout");
 }
 
-fn configured_text_only_compatible_draft(
+fn configured_compatible_draft(
     _target_model_directory: &std::path::Path,
 ) -> (std::path::PathBuf, String) {
     let draft_model_id = crate::common::small_dense_model_id().to_owned();
@@ -286,7 +294,9 @@ fn prepare_visual_tool_prompt(
                         temperature_thousandths: None,
                         top_p_thousandths: None,
                         seed: None,
-                        thinking_budget: Some(256),
+                        // A short thinking budget keeps the reasoning channel from
+                        // consuming the output budget before the tool call is emitted.
+                        thinking_budget: Some(64),
                     },
                     qwen_thinking_channel_seed: None,
                 },
