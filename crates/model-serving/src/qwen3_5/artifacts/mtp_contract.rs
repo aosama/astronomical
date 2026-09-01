@@ -1,7 +1,7 @@
 use serde_json::{Map, Value};
 use thiserror::Error;
 
-use crate::qwen3_5::multi_token_prediction::MtpDraftDepth;
+use crate::memory::MtpDraftDepth;
 
 pub const MAXIMUM_MTPLX_RUNTIME_BYTES: usize = 64 * 1024;
 const MAXIMUM_SELECTED_STRING_BYTES: usize = 64;

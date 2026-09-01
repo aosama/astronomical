@@ -1,2 +1,2 @@
-- If you change code here, prove it with the model-memory journeys under `apps/inference-worker/tests/model_ssd_streaming/acceptance/`; add a focused journey there when the existing coverage is insufficient.
+- If you change code here, prove it with the model-memory acceptance test journeys.
 - Logging is very important for the code in this folder so you can introspect the logs and understand what was the memory and/or streaming behaviour given the change you made.

@@ -2,7 +2,8 @@
 
 use astronomical_ipc_protocol::{MtpDepthResolutionReason, MtpDepthStatus};
 
-use super::{MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5MtpUnavailableReason};
+use super::{Qwen3_5MtpArtifactCapability, Qwen3_5MtpUnavailableReason};
+use crate::memory::MtpDraftDepth;
 
 /// Runtime execution state of native MTP, distinct from the user preference.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

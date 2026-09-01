@@ -3,7 +3,8 @@ use astronomical_runtime_integration::MlxArray;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::{MtpDraftDepth, Qwen3_5MtpRequestState};
+use super::Qwen3_5MtpRequestState;
+use crate::memory::MtpDraftDepth;
 
 /// Evaluated bounded proposal IDs produced by one lazy autoregressive MTP chain.
 pub(crate) struct MtpProposalChain {

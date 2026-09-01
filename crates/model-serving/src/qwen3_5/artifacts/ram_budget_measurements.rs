@@ -1,20 +1,27 @@
-//! Disk-only MLX RAM geometry for a validated Qwen3.5 artifact.
+//! Artifact-side RAM-budget measurements for a validated Qwen3.5 artifact.
 //!
-//! Reads SafeTensors headers through the existing expert-layer planner. Does not
-//! load weights onto the GPU and does not invent gigabyte souvenirs.
+//! This adapter reads SafeTensors headers through the existing expert-layer
+//! planner and maps the plans into the measured layer facts that
+//! `memory/mlx_ram_budget_geometry.rs` consumes. The byte arithmetic itself is
+//! owned by `memory`; this file only measures. It does not load weights onto
+//! the GPU and does not invent gigabyte souvenirs.
 
 use std::collections::HashMap;
 use std::path::Path;
 
 use thiserror::Error;
 
+use crate::MlxRamBudgetModelGeometry;
 use crate::artifact_validation::TensorDeclarationOrigin;
 use crate::expert_paging::QuantizedExpertLayerPlan;
+use crate::memory::{
+    MeasuredExpertLayerPayload, RamBudgetGeometryError,
+    mlx_ram_budget_model_geometry_from_measured_layer_facts,
+};
 use crate::qwen3_5::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
 use crate::qwen3_5_moe::expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
-use crate::{MlxRamBudgetModelGeometry, required_complete_residency_activation_headroom_bytes};
 
-/// Why disk-only RAM geometry could not be composed for this artifact.
+/// Why disk-only RAM measurements could not be composed for this artifact.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum Qwen3_5RamBudgetGeometryError {
     #[error("this Qwen3.5 artifact has no sparse expert payload")]
@@ -37,39 +44,69 @@ pub fn mlx_ram_budget_model_geometry_from_validated_artifact(
     }
     let layer_plans =
         expert_layer_plans_from_validated_artifact(validated_artifact, model_directory)?;
-    let mut complete_expert_payload_bytes = 0_u64;
-    let mut largest_complete_expert_layer_bytes = 0_u64;
-    for layer_plan in &layer_plans {
-        let layer_payload_bytes = layer_plan
-            .complete_expert_payload_byte_count()
-            .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?;
-        complete_expert_payload_bytes = complete_expert_payload_bytes
-            .checked_add(layer_payload_bytes)
-            .ok_or(Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?;
-        largest_complete_expert_layer_bytes =
-            largest_complete_expert_layer_bytes.max(layer_payload_bytes);
-    }
-    if complete_expert_payload_bytes == 0 {
-        return Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts);
-    }
-    let largest_routed_expert_page_bytes = largest_routed_expert_page_bytes(
-        &layer_plans,
+    let measured_layer_payloads = measured_layer_payloads(&layer_plans)?;
+    let complete_residency_transient_bytes = complete_residency_transient_bytes(&layer_plans)?;
+    mlx_ram_budget_model_geometry_from_measured_layer_facts(
+        &measured_layer_payloads,
+        validated_artifact.total_payload_bytes(),
         usize::try_from(validated_artifact.config().experts_per_token()).unwrap_or(usize::MAX),
-    )?;
-    let model_core_payload_bytes = validated_artifact
-        .total_payload_bytes()
-        .saturating_sub(complete_expert_payload_bytes);
-    let required_headroom_bytes = startup_complete_residency_headroom_bytes(&layer_plans)?;
-    Ok((
-        MlxRamBudgetModelGeometry {
-            model_core_payload_bytes,
-            complete_expert_payload_bytes,
-            largest_complete_expert_layer_bytes,
-            largest_routed_expert_page_bytes,
-            sequence_state_bytes_per_token: 0,
-        },
-        required_headroom_bytes,
-    ))
+        complete_residency_transient_bytes,
+    )
+    .map_err(map_composer_error)
+}
+
+fn measured_layer_payloads(
+    layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<Vec<MeasuredExpertLayerPayload>, Qwen3_5RamBudgetGeometryError> {
+    layer_plans
+        .iter()
+        .map(|layer_plan| {
+            Ok(MeasuredExpertLayerPayload::new(
+                layer_plan
+                    .complete_expert_payload_byte_count()
+                    .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?,
+                layer_plan.expert_capacity,
+            ))
+        })
+        .collect()
+}
+
+/// Transient payload expected to coexist with complete residency at startup.
+///
+/// With MLX linked, the gate-up fusion transient is the observed worst case;
+/// without it, the largest complete layer stands in so hermetic tests still
+/// reserve a meaningful floor.
+fn complete_residency_transient_bytes(
+    layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<u64, Qwen3_5RamBudgetGeometryError> {
+    #[cfg(feature = "direct-mlx")]
+    {
+        crate::qwen3_5_moe::maximum_resident_gate_up_fusion_transient_payload_bytes(layer_plans)
+            .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)
+    }
+    #[cfg(not(feature = "direct-mlx"))]
+    {
+        layer_plans
+            .iter()
+            .try_fold(0_u64, |largest_layer_bytes, layer_plan| {
+                Ok(largest_layer_bytes.max(
+                    layer_plan
+                        .complete_expert_payload_byte_count()
+                        .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?,
+                ))
+            })
+    }
+}
+
+fn map_composer_error(composer_error: RamBudgetGeometryError) -> Qwen3_5RamBudgetGeometryError {
+    match composer_error {
+        RamBudgetGeometryError::NotSparseMixtureOfExperts => {
+            Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts
+        }
+        RamBudgetGeometryError::ExpertPayloadOverflow => {
+            Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow
+        }
+    }
 }
 
 fn expert_layer_plans_from_validated_artifact(
@@ -144,56 +181,4 @@ fn expert_layer_plans_from_validated_artifact(
         layer_plans.push(mtp_layer_plan);
     }
     Ok(layer_plans)
-}
-
-fn largest_routed_expert_page_bytes(
-    layer_plans: &[QuantizedExpertLayerPlan],
-    experts_per_token: usize,
-) -> Result<u64, Qwen3_5RamBudgetGeometryError> {
-    layer_plans
-        .iter()
-        .try_fold(0_u64, |largest_page_bytes, layer_plan| {
-            let complete_layer_payload_bytes = layer_plan
-                .complete_expert_payload_byte_count()
-                .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?;
-            let routed_expert_count = experts_per_token.min(layer_plan.expert_capacity);
-            let routed_page_bytes = u128::from(complete_layer_payload_bytes)
-                .saturating_mul(routed_expert_count as u128)
-                / (layer_plan.expert_capacity.max(1) as u128);
-            Ok(largest_page_bytes.max(u64::try_from(routed_page_bytes).unwrap_or(u64::MAX)))
-        })
-}
-
-fn startup_complete_residency_headroom_bytes(
-    layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<u64, Qwen3_5RamBudgetGeometryError> {
-    #[cfg(feature = "direct-mlx")]
-    {
-        let fusion_transient_payload_bytes =
-            crate::qwen3_5_moe::maximum_resident_gate_up_fusion_transient_payload_bytes(
-                layer_plans,
-            )
-            .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)?;
-        Ok(required_complete_residency_activation_headroom_bytes(
-            fusion_transient_payload_bytes,
-            0,
-        ))
-    }
-    #[cfg(not(feature = "direct-mlx"))]
-    {
-        let largest_complete_expert_layer_bytes =
-            layer_plans
-                .iter()
-                .try_fold(0_u64, |largest_layer_bytes, layer_plan| {
-                    Ok(largest_layer_bytes.max(
-                        layer_plan
-                            .complete_expert_payload_byte_count()
-                            .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?,
-                    ))
-                })?;
-        Ok(required_complete_residency_activation_headroom_bytes(
-            largest_complete_expert_layer_bytes,
-            0,
-        ))
-    }
 }
