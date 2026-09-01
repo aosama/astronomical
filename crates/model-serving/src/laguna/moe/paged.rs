@@ -27,7 +27,7 @@ pub(in crate::laguna) fn forward_paged_mixture_of_experts(
     sparse_layer_plan: &LagunaSparseLayerPagingPlan,
     should_stream_complete_layer: bool,
     router_logit_softcap: f64,
-    sorted_expert_reduction_kernel: &MlxMetalKernel,
+    sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<
     (
@@ -109,7 +109,7 @@ pub(in crate::laguna) fn execute_paged_mixture_on_page(
     expert_page: &crate::laguna::paging::LagunaExpertWeightPage,
     selected_indices: &MlxArray,
     selected_scores: &MlxArray,
-    sorted_expert_reduction_kernel: &MlxMetalKernel,
+    sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
     let routed_output = forward_paged_routed_swiglu(
@@ -146,7 +146,7 @@ pub(in crate::laguna) fn forward_retained_complete_mixture_of_experts(
     layer_index: usize,
     expert_page: &crate::laguna::paging::LagunaExpertWeightPage,
     router_logit_softcap: f64,
-    sorted_expert_reduction_kernel: &MlxMetalKernel,
+    sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
     let (selected_indices, selected_scores) = route_laguna_layer_experts(

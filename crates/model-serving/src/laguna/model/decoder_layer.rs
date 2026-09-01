@@ -69,11 +69,8 @@ pub(super) fn forward_decoder_layer(
             performance_attribution,
         )?,
         LagunaFeedForwardDescriptor::Moe(moe_descriptor) => {
-            let reduction_kernel = sorted_expert_reduction_kernel.ok_or_else(|| {
-                LagunaExecutionError::invalid_geometry(
-                    "a sparse Laguna layer requires the retained sorted-expert reduction kernel",
-                )
-            })?;
+            // A capability-demoted reduction kernel is expected: the sparse
+            // forward falls back to the unsorted MLX route instead of failing.
             forward_sparse_feed_forward(
                 runtime,
                 &normalized_after_attention,
@@ -82,7 +79,7 @@ pub(super) fn forward_decoder_layer(
                 layer_index,
                 expert_residency_phase,
                 router_logit_softcap,
-                reduction_kernel,
+                sorted_expert_reduction_kernel,
                 performance_attribution,
             )?
         }
@@ -99,7 +96,7 @@ fn forward_sparse_feed_forward(
     layer_index: usize,
     expert_residency_phase: ExpertResidencyPhase,
     router_logit_softcap: f64,
-    reduction_kernel: &MlxMetalKernel,
+    reduction_kernel: Option<&MlxMetalKernel>,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, LagunaExecutionError> {
     if model.weights().has_routed_experts(layer_index) {

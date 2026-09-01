@@ -11,6 +11,7 @@ mod flux2_klein;
 mod gpu_token_sampling;
 mod image_generation_engine;
 mod inference_engine;
+mod kernel_capability;
 mod laguna;
 mod memory;
 mod model_family_runtime;
@@ -118,6 +119,14 @@ pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError, MlxInferenceEngine,
     MlxInferenceExecution, PreparedInferenceRequest,
+};
+#[cfg(feature = "direct-mlx")]
+pub use kernel_capability::SortedExpertWeightedSumProbe;
+#[cfg(feature = "direct-mlx")]
+pub use kernel_capability::worker_process_kernel_capabilities;
+pub use kernel_capability::{
+    CustomKernelVerdict, CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError,
+    KernelUnsupportedReason, WorkerKernelCapabilities, validate_probe_outputs,
 };
 pub use laguna::{
     LagunaAffineProfile, LagunaArtifactValidationError, LagunaArtifactValidator,
@@ -287,10 +296,11 @@ pub use qwen3_5::{
     qwen3_5_aggregate_speculative_prefill_attention_weights, qwen3_5_apply_top_p_mask,
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_full_attention_step,
     qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
-    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
-    qwen3_5_gated_delta_step, qwen3_5_inject_visual_embeddings,
-    qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
-    qwen3_5_select_speculative_prefill_token_positions,
+    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback, qwen3_5_gated_delta_step,
+    qwen3_5_inject_visual_embeddings, qwen3_5_mtp_runtime_configuration_after_load,
+    qwen3_5_mtp_runtime_state_after_load, qwen3_5_select_speculative_prefill_token_positions,
     qwen3_5_select_speculative_prefill_token_positions_on_gpu,
     qwen3_5_selected_speculative_prefill_positions_for_range,
     qwen3_5_target_verification_quantized_linear, safe_minimum_mlx_memory_ceiling_bytes,
@@ -311,6 +321,7 @@ pub use qwen3_5_moe::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     build_quantized_expert_layer_plan,
 };
+pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
     ExpertAssignmentOrder, SortedExpertAssignments, StackedExpertProjection,

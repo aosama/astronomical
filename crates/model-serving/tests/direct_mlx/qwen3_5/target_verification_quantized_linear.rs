@@ -49,8 +49,8 @@ async fn should_match_repeated_one_token_projection_across_supported_geometries(
         let projection_inputs = projection_inputs(&runtime, projection_geometry);
         let optimized_projection = qwen3_5_target_verification_quantized_linear(
             &runtime,
-            &target_verification_kernel,
-            &four_row_split_k_kernel,
+            Some(&target_verification_kernel),
+            Some(&four_row_split_k_kernel),
             &projection_inputs.activations,
             &projection_inputs.packed_weight,
             &projection_inputs.quantization_scales,
@@ -103,8 +103,8 @@ async fn should_keep_four_row_split_k_argmax_aligned_with_token_local_projection
     let projection_inputs = projection_inputs(&runtime, projection_geometry);
     let four_row_projection = qwen3_5_target_verification_quantized_linear(
         &runtime,
-        &target_verification_kernel,
-        &four_row_split_k_kernel,
+        Some(&target_verification_kernel),
+        Some(&four_row_split_k_kernel),
         &projection_inputs.activations,
         &projection_inputs.packed_weight,
         &projection_inputs.quantization_scales,
@@ -196,8 +196,8 @@ async fn should_use_token_local_mlx_for_each_unsupported_dispatch_geometry() {
         let projection_inputs = projection_inputs(&runtime, projection_geometry);
         let fallback_projection = qwen3_5_target_verification_quantized_linear(
             &runtime,
-            &target_verification_kernel,
-            &four_row_split_k_kernel,
+            Some(&target_verification_kernel),
+            Some(&four_row_split_k_kernel),
             &projection_inputs.activations,
             &projection_inputs.packed_weight,
             &projection_inputs.quantization_scales,
@@ -337,4 +337,79 @@ fn test_runtime() -> MlxRuntime {
         .expect("target-verification test memory limits should be valid"),
     )
     .expect("the direct MLX runtime should initialize")
+}
+
+#[tokio::test]
+async fn should_use_token_local_mlx_when_both_target_verification_kernels_are_demoted() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let projection_geometry = ProjectionGeometry {
+        token_count: 4,
+        input_dimension: 512,
+        output_dimension: 24,
+        activation_dtype: MlxDtype::BFloat16,
+        quantization_bits: 4,
+        quantization_group_size: 64,
+    };
+    let projection_inputs = projection_inputs(&runtime, projection_geometry);
+    let demoted_projection = qwen3_5_target_verification_quantized_linear(
+        &runtime,
+        None,
+        None,
+        &projection_inputs.activations,
+        &projection_inputs.packed_weight,
+        &projection_inputs.quantization_scales,
+        &projection_inputs.quantization_biases,
+        projection_geometry.quantization_group_size,
+        projection_geometry.quantization_bits,
+    )
+    .expect("demoted target-verification geometry should use the MLX fallback");
+    assert_eq!(
+        demoted_projection.dispatch(),
+        Qwen3_5TargetVerificationProjectionDispatch::TokenLocalMlxFallback
+    );
+    let token_local_projection =
+        repeated_one_token_projection(&runtime, &projection_inputs, projection_geometry);
+    assert_eq!(
+        float32_values(
+            &runtime,
+            &demoted_projection.into_projected_activations(),
+            "demoted projection",
+        ),
+        float32_values(&runtime, &token_local_projection, "token-local projection"),
+    );
+}
+
+#[tokio::test]
+async fn should_keep_the_optimized_kernel_when_only_the_four_row_kernel_is_demoted() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let target_verification_kernel = target_verification_quantized_linear_kernel()
+        .expect("the target-verification kernel should initialize");
+    let projection_geometry = ProjectionGeometry {
+        token_count: 4,
+        input_dimension: 512,
+        output_dimension: 24,
+        activation_dtype: MlxDtype::BFloat16,
+        quantization_bits: 4,
+        quantization_group_size: 64,
+    };
+    let projection_inputs = projection_inputs(&runtime, projection_geometry);
+    let projection = qwen3_5_target_verification_quantized_linear(
+        &runtime,
+        Some(&target_verification_kernel),
+        None,
+        &projection_inputs.activations,
+        &projection_inputs.packed_weight,
+        &projection_inputs.quantization_scales,
+        &projection_inputs.quantization_biases,
+        projection_geometry.quantization_group_size,
+        projection_geometry.quantization_bits,
+    )
+    .expect("an eligible geometry with a retained optimized kernel should project");
+    assert_eq!(
+        projection.dispatch(),
+        Qwen3_5TargetVerificationProjectionDispatch::OptimizedMetal,
+        "demoting the four-row kernel must never demote an independently supported kernel"
+    );
 }

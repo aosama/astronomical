@@ -135,10 +135,14 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
-    let model = LagunaModel::new(contract, weights)
-        .expect("a core-only model should construct")
-        .with_paging_plan(plan)
-        .expect("a paging plan should attach to a core-only model");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a core-only model should construct")
+    .with_paging_plan(plan)
+    .expect("a paging plan should attach to a core-only model");
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Paged);
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
@@ -242,8 +246,12 @@ async fn should_reject_a_core_only_model_without_a_paging_plan() {
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
-    let model = LagunaModel::new(contract, weights)
-        .expect("a core-only model should construct before paging is required");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a core-only model should construct before paging is required");
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     let mut performance_attribution = PerformanceAttribution::disabled();
@@ -269,10 +277,14 @@ async fn should_keep_a_fully_bound_model_resident_even_with_a_paging_plan() {
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, true)
         .expect("stacked Laguna experts should bind");
-    let model = LagunaModel::new(contract, weights)
-        .expect("a resident model should construct")
-        .with_paging_plan(plan)
-        .expect("a resident model may still own a paging plan");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a resident model should construct")
+    .with_paging_plan(plan)
+    .expect("a resident model may still own a paging plan");
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Resident);
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
@@ -319,12 +331,16 @@ async fn should_retain_a_complete_layer_when_the_ceiling_fits_and_reuse_it() {
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
-    let model = LagunaModel::new(contract, weights)
-        .expect("a core-only model should construct")
-        .with_paging_plan(plan)
-        .expect("a paging plan should attach")
-        .with_retained_expert_ceiling(complete_layer_payload_bytes)
-        .expect("a fitting ceiling should install");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a core-only model should construct")
+    .with_paging_plan(plan)
+    .expect("a paging plan should attach")
+    .with_retained_expert_ceiling(complete_layer_payload_bytes)
+    .expect("a fitting ceiling should install");
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Paged);
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
@@ -396,12 +412,16 @@ async fn should_evict_a_retained_layer_when_the_ceiling_drops_to_zero() {
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
-    let model = LagunaModel::new(contract, weights)
-        .expect("a core-only model should construct")
-        .with_paging_plan(plan)
-        .expect("a paging plan should attach")
-        .with_retained_expert_ceiling(complete_layer_payload_bytes)
-        .expect("a fitting ceiling should install");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a core-only model should construct")
+    .with_paging_plan(plan)
+    .expect("a paging plan should attach")
+    .with_retained_expert_ceiling(complete_layer_payload_bytes)
+    .expect("a fitting ceiling should install");
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     let mut performance_attribution = PerformanceAttribution::disabled();
@@ -453,12 +473,16 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
-    let model = LagunaModel::new(contract, weights)
-        .expect("a core-only model should construct")
-        .with_paging_plan(plan)
-        .expect("a paging plan should attach")
-        .with_retained_expert_ceiling(routed_page_payload_bytes)
-        .expect("a routed-page ceiling should install");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a core-only model should construct")
+    .with_paging_plan(plan)
+    .expect("a paging plan should attach")
+    .with_retained_expert_ceiling(routed_page_payload_bytes)
+    .expect("a routed-page ceiling should install");
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     let mut performance_attribution = PerformanceAttribution::enabled();
@@ -540,10 +564,14 @@ async fn should_restore_decoder_allocation_ownership_after_a_failed_prefill_atte
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
-    let model = LagunaModel::new(contract, weights)
-        .expect("a checkpoint model should construct")
-        .with_paging_plan(plan)
-        .expect("a checkpoint model needs paging");
+    let model = LagunaModel::new(
+        contract,
+        weights,
+        crate::common::test_worker_kernel_capabilities(&runtime),
+    )
+    .expect("a checkpoint model should construct")
+    .with_paging_plan(plan)
+    .expect("a checkpoint model needs paging");
     let mut decoder_state =
         LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
     let allocation_checkpoint = decoder_state

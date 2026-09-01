@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{
+    CustomKernelVerdict, CustomMetalKernelFamily, KernelUnsupportedReason,
     LagunaAttentionProjection, LagunaDecoderState, LagunaExpertProjection, LagunaGlobalTensorRole,
     LagunaLayerTensorRole, LagunaModel, LagunaNativeWeights, LagunaTargetNormalizer,
     LagunaTensorComponent, LagunaTensorId, PerformanceAttribution, PerformanceOperation,
+    WorkerKernelCapabilities,
 };
 use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
 use serde_json::json;
@@ -12,7 +14,7 @@ use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
 
-fn test_runtime() -> MlxRuntime {
+pub(crate) fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
@@ -85,9 +87,10 @@ fn with_component(tensor_id: LagunaTensorId, component: LagunaTensorComponent) -
     }
 }
 
-fn affine_sparse_contract(
+pub(crate) fn affine_sparse_contract(
     bits: u32,
     group_size: u32,
+    max_position_embeddings: u32,
 ) -> astronomical_model_serving::LagunaTargetContract {
     let config = json!({
         "architectures": ["LagunaForCausalLM"],
@@ -99,7 +102,7 @@ fn affine_sparse_contract(
         "num_attention_heads": 4,
         "num_key_value_heads": 2,
         "head_dim": 8,
-        "max_position_embeddings": 32,
+        "max_position_embeddings": max_position_embeddings,
         "rms_norm_eps": 0.00001,
         "tie_word_embeddings": false,
         "torch_dtype": "float32",
@@ -126,7 +129,7 @@ fn affine_sparse_contract(
         .expect("affine sparse contract should normalize")
 }
 
-fn bind_affine_sparse_model(
+pub(crate) fn bind_affine_sparse_model(
     runtime: &MlxRuntime,
     bits: i32,
     group_size: i32,
@@ -138,7 +141,7 @@ fn bind_affine_sparse_model(
     ),
     astronomical_model_serving::LagunaExecutionError,
 > {
-    let contract = affine_sparse_contract(bits as u32, group_size as u32);
+    let contract = affine_sparse_contract(bits as u32, group_size as u32, 32);
     let mut tensors = HashMap::new();
     tensors.insert(
         weight_id(LagunaGlobalTensorRole::TokenEmbedding),
@@ -342,7 +345,12 @@ async fn should_execute_affine_sparse_prefill_for_supported_bit_widths() {
     for bits in [2, 3, 4, 6, 8] {
         let (contract, weights) = bind_affine_sparse_model(&runtime, bits, 32, true)
             .unwrap_or_else(|_| panic!("{bits}-bit affine weights should bind"));
-        let model = LagunaModel::new(contract, weights).expect("affine model should construct");
+        let model = LagunaModel::new(
+            contract,
+            weights,
+            crate::common::test_worker_kernel_capabilities(&runtime),
+        )
+        .expect("affine model should construct");
         let mut decoder_state =
             LagunaDecoderState::empty(model.contract()).expect("decoder state should allocate");
         let mut performance_attribution = PerformanceAttribution::enabled();

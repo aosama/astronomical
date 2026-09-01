@@ -34,6 +34,15 @@ pub(crate) mod qwen3_5_moe;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
+pub(crate) fn test_worker_kernel_capabilities(
+    runtime: &astronomical_runtime_integration::MlxRuntime,
+) -> &'static astronomical_model_serving::WorkerKernelCapabilities {
+    use astronomical_model_serving::{PerformanceAttribution, worker_process_kernel_capabilities};
+    worker_process_kernel_capabilities(runtime, &mut PerformanceAttribution::disabled())
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
 pub(crate) fn standard_worker_chunking_configuration()
 -> astronomical_ipc_protocol::WorkerChunkingConfiguration {
     astronomical_ipc_protocol::WorkerChunkingConfiguration {

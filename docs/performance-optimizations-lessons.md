@@ -83,6 +83,14 @@
 - Match upstream grid, threadgroup, pointer arithmetic, data types, state layout, and grouped-head mapping exactly.
 - Keep an operation-based implementation as a numerical reference test, not as the production path.
 
+## Custom kernel capability and MLX fallbacks
+
+- Measured custom kernels stay in the tree. MLX public APIs are the compatibility path, not the replacement: a GPU that cannot compile or execute a custom kernel still serves the same request through the equivalent MLX route with the same output precision.
+- Capability is proven by compile plus a bounded execution probe with expected-value validation — never by a chip name, architecture string, or marketing generation. A compile pass can still return silent zeros when the driver drops a dispatch, so the probe must validate actual values against a fixed reference, and a probe that cannot validate fails the request visibly rather than returning wrong tokens.
+- Probe once per worker process, at first model load, and retain the verdicts. Never inspect capability inside per-layer or per-token decode; the probe cost lands on the model-load critical path and carries performance attribution for exactly that reason.
+- Every MLX pin bump triggers a paper triage of retained custom kernels and native patches against upstream changes. Retire a kernel or patch only with paired A/B end-to-end evidence, symmetric to the rule that protects retired native paths from restoration. When upstream lands the same design, drop the patch — the v0.32.1 to v0.32.2 upgrade retired the NAX head-dim-256 attention patch that way.
+- Fallback selection is a constructor-time route decision, not a hot-path branch: models resolve routes once at build from the retained verdicts, and unprobed families fail closed rather than assuming support.
+
 ## Runtime T versus template constants
 
 - T is the current sequence token count.

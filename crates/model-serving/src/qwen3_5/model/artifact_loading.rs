@@ -9,6 +9,7 @@ use astronomical_runtime_integration::{
 };
 
 use crate::artifact_validation::TensorDeclarationOrigin;
+use crate::kernel_capability::{CustomMetalKernelFamily, worker_process_kernel_capabilities};
 use crate::qwen3_5_moe::{Qwen3_5ExpertPager, qwen3_5_moe_sorted_expert_weighted_sum_kernel};
 use crate::{
     MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
@@ -198,75 +199,91 @@ impl Qwen3_5Model {
                 Ok((weights, vision_model, mtp_weights))
             },
         )?;
-        let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) =
-            match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
-                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
-                    let tensor_name_to_shard_file_name: HashMap<String, String> = shard_index
-                        .language_tensor_name_to_shard_file_name()
-                        .iter()
-                        .chain(shard_index.mtp_tensor_name_to_shard_file_name())
-                        .map(|(tensor_name, shard_file_name)| {
-                            (tensor_name.clone(), shard_file_name.clone())
-                        })
-                        .collect();
-                    let mut tensor_name_to_shard_file_name = tensor_name_to_shard_file_name;
-                    if let Some(sidecar_file_name) = mtp_sidecar_file_name.as_ref() {
-                        for location in tensor_inventory.locations().filter(|location| {
-                            location.declaration_origin()
-                                == TensorDeclarationOrigin::ArchitectureSidecar
-                        }) {
-                            tensor_name_to_shard_file_name.insert(
-                                location.canonical_name().to_owned(),
-                                sidecar_file_name.clone(),
-                            );
-                        }
+        let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) = match config
+            .feed_forward_architecture()
+        {
+            Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
+            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
+                let tensor_name_to_shard_file_name: HashMap<String, String> = shard_index
+                    .language_tensor_name_to_shard_file_name()
+                    .iter()
+                    .chain(shard_index.mtp_tensor_name_to_shard_file_name())
+                    .map(|(tensor_name, shard_file_name)| {
+                        (tensor_name.clone(), shard_file_name.clone())
+                    })
+                    .collect();
+                let mut tensor_name_to_shard_file_name = tensor_name_to_shard_file_name;
+                if let Some(sidecar_file_name) = mtp_sidecar_file_name.as_ref() {
+                    for location in tensor_inventory.locations().filter(|location| {
+                        location.declaration_origin()
+                            == TensorDeclarationOrigin::ArchitectureSidecar
+                    }) {
+                        tensor_name_to_shard_file_name.insert(
+                            location.canonical_name().to_owned(),
+                            sidecar_file_name.clone(),
+                        );
                     }
-                    let stored_tensor_name_by_canonical_name = tensor_inventory
-                        .locations()
-                        .map(|location| {
-                            (
-                                location.canonical_name().to_owned(),
-                                location.stored_name().to_owned(),
-                            )
-                        })
-                        .collect::<HashMap<_, _>>();
-                    let mtp_has_packed_sparse_experts =
-                        tensor_name_to_shard_file_name.keys().any(|tensor_name| {
-                            tensor_name.contains("language_model.mtp.layers.0.mlp.switch_mlp.")
-                        });
-                    let expert_pager = performance_attribution.measure_operation(
-                        PerformanceOperation::ExpertPagerPlanConstruction,
-                        |_performance_attribution| {
-                            Qwen3_5ExpertPager::new(
-                                &runtime,
-                                model_directory.to_path_buf(),
-                                &tensor_name_to_shard_file_name,
-                                &stored_tensor_name_by_canonical_name,
-                                &config,
-                                // The live configurable MLX active-memory ceiling is the only
-                                // paging budget. Reading the runtime policy here lets reloads
-                                // apply on every machine without copying a stale wired limit.
-                                runtime.memory_limits().active_memory_limit_bytes(),
-                                // Packed resident MTP reuses the pager plan for switch_mlp
-                                // tensors. SSD-paged requests stay target-only. Sidecars
-                                // that store per-expert 2D tensors never enter the pager.
-                                mtp_weights.is_some() && mtp_has_packed_sparse_experts,
-                            )
-                        },
-                    )?;
-                    let sorted_expert_weighted_sum_kernel =
-                        qwen3_5_moe_sorted_expert_weighted_sum_kernel()?;
-                    let retained_experts = RefCell::new(
-                        crate::qwen3_5_moe::RetainedExpertCache::new(expert_pager.layer_count()),
-                    );
-                    (
-                        Some(expert_pager),
-                        Some(retained_experts),
-                        Some(sorted_expert_weighted_sum_kernel),
-                    )
                 }
-            };
+                let stored_tensor_name_by_canonical_name = tensor_inventory
+                    .locations()
+                    .map(|location| {
+                        (
+                            location.canonical_name().to_owned(),
+                            location.stored_name().to_owned(),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>();
+                let mtp_has_packed_sparse_experts =
+                    tensor_name_to_shard_file_name.keys().any(|tensor_name| {
+                        tensor_name.contains("language_model.mtp.layers.0.mlp.switch_mlp.")
+                    });
+                let expert_pager = performance_attribution.measure_operation(
+                    PerformanceOperation::ExpertPagerPlanConstruction,
+                    |_performance_attribution| {
+                        Qwen3_5ExpertPager::new(
+                            &runtime,
+                            model_directory.to_path_buf(),
+                            &tensor_name_to_shard_file_name,
+                            &stored_tensor_name_by_canonical_name,
+                            &config,
+                            // The live configurable MLX active-memory ceiling is the only
+                            // paging budget. Reading the runtime policy here lets reloads
+                            // apply on every machine without copying a stale wired limit.
+                            runtime.memory_limits().active_memory_limit_bytes(),
+                            // Packed resident MTP reuses the pager plan for switch_mlp
+                            // tensors. SSD-paged requests stay target-only. Sidecars
+                            // that store per-expert 2D tensors never enter the pager.
+                            mtp_weights.is_some() && mtp_has_packed_sparse_experts,
+                        )
+                    },
+                )?;
+                // The GPU capability verdict decides whether this worker
+                // process retains the measured sorted-reduction kernel. A
+                // demoted kernel leaves None and every MoE forward takes the
+                // unsorted MLX route for the worker's lifetime.
+                let sorted_expert_weighted_sum_kernel = if worker_process_kernel_capabilities(
+                    &runtime,
+                    performance_attribution,
+                )
+                .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
+                {
+                    Some(qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
+                } else {
+                    tracing::info!(
+                        "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
+                    );
+                    None
+                };
+                let retained_experts = RefCell::new(crate::qwen3_5_moe::RetainedExpertCache::new(
+                    expert_pager.layer_count(),
+                ));
+                (
+                    Some(expert_pager),
+                    Some(retained_experts),
+                    sorted_expert_weighted_sum_kernel,
+                )
+            }
+        };
         // Cache geometry cannot be finalized before weights and sparse plans are
         // bound: their source dtypes determine MLX result-type promotion. Derive
         // the persistence contract at that boundary without evaluating tensors.
@@ -295,13 +312,72 @@ impl Qwen3_5Model {
                 })
             },
         )?;
-        let gated_delta_kernel = super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?;
-        let gated_delta_checkpoint_kernel =
-            super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?;
-        let target_verification_quantized_linear_kernel =
-            super::target_verification_quantized_linear::target_verification_quantized_linear_kernel()?;
+        // The two gated-delta kernels are independent capability families. A
+        // demoted kernel is None and the gated-delta dispatch falls back to
+        // the ops-based public MLX route for the worker's lifetime — the
+        // checkpoint fallback preserves the prompt-cache boundary contract.
+        let gated_delta_kernel = if worker_process_kernel_capabilities(
+            &runtime,
+            performance_attribution,
+        )
+        .is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaSequence)
+        {
+            Some(super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?)
+        } else {
+            tracing::info!(
+                "fused gated-delta kernel demoted to the MLX ops fallback for this worker process"
+            );
+            None
+        };
+        let gated_delta_checkpoint_kernel = if worker_process_kernel_capabilities(
+            &runtime,
+            performance_attribution,
+        )
+        .is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint)
+        {
+            Some(super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?)
+        } else {
+            tracing::info!(
+                "gated-delta checkpoint kernel demoted to the MLX ops fallback for this worker process"
+            );
+            None
+        };
+        // Each target-verification kernel is an independent capability family:
+        // a GPU may retain one while demoting the other. A demoted kernel is
+        // None and the projection dispatch falls back to the token-local MLX
+        // route for the worker's lifetime.
+        let target_verification_quantized_linear_kernel = if worker_process_kernel_capabilities(
+            &runtime,
+            performance_attribution,
+        )
+        .is_custom_kernel_supported(CustomMetalKernelFamily::TargetVerificationQuantizedLinear)
+        {
+            Some(
+                super::target_verification_quantized_linear::target_verification_quantized_linear_kernel(
+                )?,
+            )
+        } else {
+            tracing::info!(
+                "target-verification quantized-linear kernel demoted to the MLX fallback for this worker process"
+            );
+            None
+        };
         let target_verification_four_row_quantized_linear_kernel =
-            super::target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel()?;
+            if worker_process_kernel_capabilities(&runtime, performance_attribution)
+                .is_custom_kernel_supported(
+                    CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
+                )
+            {
+                Some(
+                super::target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel(
+                )?,
+            )
+            } else {
+                tracing::info!(
+                    "four-row split-K target-verification kernel demoted to the MLX fallback for this worker process"
+                );
+                None
+            };
         let compiled_swiglu = MlxCompiledSwiGlu::new()?;
         let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
         // Qwen3.5 config validation accepts BF16 activations only. Construct

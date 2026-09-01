@@ -226,14 +226,15 @@ pub fn target_verification_quantized_linear_kernel() -> Result<MlxMetalKernel, M
 }
 
 /// Projects one multi-token target-verification window through the specialized
-/// Metal route when its geometry is supported. Every other valid affine shape
+/// Metal route when its geometry is supported and this GPU retained the
+/// kernel. A capability-demoted kernel — or any other valid affine shape —
 /// uses repeated one-token MLX quantized matrix multiplication so fallback
 /// arithmetic remains identical to ordinary decode.
 #[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_target_verification_quantized_linear(
     runtime: &MlxRuntime,
-    target_verification_kernel: &MlxMetalKernel,
-    four_row_split_k_kernel: &MlxMetalKernel,
+    target_verification_kernel: Option<&MlxMetalKernel>,
+    four_row_split_k_kernel: Option<&MlxMetalKernel>,
     activations: &MlxArray,
     packed_weight: &MlxArray,
     quantization_scales: &MlxArray,
@@ -261,20 +262,24 @@ pub fn qwen3_5_target_verification_quantized_linear(
         input_dimension,
         output_dimension,
     ) {
-        let projected_activations =
-            super::target_verification_four_row_quantized_linear::project_four_row_split_k(
-                runtime,
-                four_row_split_k_kernel,
-                activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                quantization_group_size,
-            )?;
-        return Ok(Qwen3_5TargetVerificationProjection {
-            projected_activations,
-            dispatch: Qwen3_5TargetVerificationProjectionDispatch::FourRowSplitK,
-        });
+        if let Some(four_row_split_k_kernel) = four_row_split_k_kernel {
+            let projected_activations =
+                super::target_verification_four_row_quantized_linear::project_four_row_split_k(
+                    runtime,
+                    four_row_split_k_kernel,
+                    activations,
+                    packed_weight,
+                    quantization_scales,
+                    quantization_biases,
+                    quantization_group_size,
+                )?;
+            return Ok(Qwen3_5TargetVerificationProjection {
+                projected_activations,
+                dispatch: Qwen3_5TargetVerificationProjectionDispatch::FourRowSplitK,
+            });
+        }
+        // An eligible geometry without a retained four-row kernel falls
+        // through to the optimized route or the token-local MLX reference.
     }
     if target_verification_uses_optimized_dispatch(
         activations,
@@ -285,56 +290,58 @@ pub fn qwen3_5_target_verification_quantized_linear(
         input_dimension,
         output_dimension,
     ) {
-        let mut kernel_outputs = runtime.apply_metal_kernel(
-            target_verification_kernel,
-            &[
-                activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-            ],
-            &[MlxMetalKernelOutput::new(
-                vec![activation_shape[0], activation_shape[1], output_dimension],
-                activations.dtype(),
-            )],
-            [32, 2 * (output_dimension / 8), activation_shape[0]],
-            [32, 2, 1],
-            &[
-                MlxMetalKernelTemplateArgument::Dtype {
-                    name: "T",
-                    dtype: activations.dtype(),
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "BITS",
-                    integer_template_argument: quantization_bits,
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "GS",
-                    integer_template_argument: quantization_group_size,
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "VERIFY_T",
-                    integer_template_argument: activation_shape[1],
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "K_SIZE",
-                    integer_template_argument: input_dimension,
-                },
-                MlxMetalKernelTemplateArgument::Integer {
-                    name: "N_SIZE",
-                    integer_template_argument: output_dimension,
-                },
-            ],
-        )?;
-        let projected_activations = kernel_outputs.pop().ok_or_else(|| {
-            target_verification_projection_error(
-                "target-verification Metal kernel returned no projected activations",
-            )
-        })?;
-        return Ok(Qwen3_5TargetVerificationProjection {
-            projected_activations,
-            dispatch: Qwen3_5TargetVerificationProjectionDispatch::OptimizedMetal,
-        });
+        if let Some(target_verification_kernel) = target_verification_kernel {
+            let mut kernel_outputs = runtime.apply_metal_kernel(
+                target_verification_kernel,
+                &[
+                    activations,
+                    packed_weight,
+                    quantization_scales,
+                    quantization_biases,
+                ],
+                &[MlxMetalKernelOutput::new(
+                    vec![activation_shape[0], activation_shape[1], output_dimension],
+                    activations.dtype(),
+                )],
+                [32, 2 * (output_dimension / 8), activation_shape[0]],
+                [32, 2, 1],
+                &[
+                    MlxMetalKernelTemplateArgument::Dtype {
+                        name: "T",
+                        dtype: activations.dtype(),
+                    },
+                    MlxMetalKernelTemplateArgument::Integer {
+                        name: "BITS",
+                        integer_template_argument: quantization_bits,
+                    },
+                    MlxMetalKernelTemplateArgument::Integer {
+                        name: "GS",
+                        integer_template_argument: quantization_group_size,
+                    },
+                    MlxMetalKernelTemplateArgument::Integer {
+                        name: "VERIFY_T",
+                        integer_template_argument: activation_shape[1],
+                    },
+                    MlxMetalKernelTemplateArgument::Integer {
+                        name: "K_SIZE",
+                        integer_template_argument: input_dimension,
+                    },
+                    MlxMetalKernelTemplateArgument::Integer {
+                        name: "N_SIZE",
+                        integer_template_argument: output_dimension,
+                    },
+                ],
+            )?;
+            let projected_activations = kernel_outputs.pop().ok_or_else(|| {
+                target_verification_projection_error(
+                    "target-verification Metal kernel returned no projected activations",
+                )
+            })?;
+            return Ok(Qwen3_5TargetVerificationProjection {
+                projected_activations,
+                dispatch: Qwen3_5TargetVerificationProjectionDispatch::OptimizedMetal,
+            });
+        }
     }
 
     let projected_activations = token_local_quantized_linear(
@@ -500,8 +507,9 @@ impl Qwen3_5Model {
         };
         Ok(qwen3_5_target_verification_quantized_linear(
             &self.runtime,
-            &self.target_verification_quantized_linear_kernel,
-            &self.target_verification_four_row_quantized_linear_kernel,
+            self.target_verification_quantized_linear_kernel.as_ref(),
+            self.target_verification_four_row_quantized_linear_kernel
+                .as_ref(),
             activations,
             packed_weight,
             quantization_scales,
