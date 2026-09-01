@@ -44,6 +44,22 @@ acceptance_skip_reason() {
     esac
 }
 
+# Per-test execution boundary. Visual SpecPrefill journeys load the large sparse
+# MoE target once per leg and prefill visual prompts above the eligibility floor,
+# which legitimately exceeds the repository's 120-second default; every other
+# acceptance test keeps the default boundary.
+acceptance_test_timeout_seconds() {
+    acceptance_test_name="$1"
+    case "$acceptance_test_name" in
+        *speculative_prefill::visual_tool::*)
+            printf '%s\n' "300"
+            ;;
+        *)
+            printf '%s\n' "120"
+            ;;
+    esac
+}
+
 run_selected_suite() {
     selected_suite="$1"
     case "$selected_suite" in
@@ -111,7 +127,8 @@ run_selected_suite() {
         fi
         test_started_at_seconds="$(date +%s)"
         printf '%s\n' "[ignored-acceptance-suite] suite=${selected_suite} test=${completed_test_count}/${acceptance_test_count} status=start name=${acceptance_test_name} started_at=$(date '+%Y-%m-%dT%H:%M:%S%z')"
-        if "$bounded_test_runner" cargo test "$@" "$acceptance_test_name" -- --ignored --nocapture --exact --test-threads 1; then
+        if TEST_TIMEOUT_SECONDS="$(acceptance_test_timeout_seconds "$acceptance_test_name")" \
+            "$bounded_test_runner" cargo test "$@" "$acceptance_test_name" -- --ignored --nocapture --exact --test-threads 1; then
             test_status="success"
         else
             test_status="failed"
