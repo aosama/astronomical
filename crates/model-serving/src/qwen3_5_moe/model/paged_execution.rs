@@ -14,9 +14,10 @@ use super::cached_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination::combine_sparse_and_shared_experts;
 use super::routing::{
-    MINIMUM_SORTED_EXPERT_ASSIGNMENTS, qwen3_5_moe_sort_expert_assignments,
-    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_unsorted_expert_weighted_sum,
+    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
+    qwen3_5_moe_unsorted_expert_weighted_sum,
 };
+use crate::sparse_experts::should_use_sorted_expert_reduction;
 
 impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
@@ -155,16 +156,18 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        let sorted_assignments =
-            if selected_expert_indices.element_count() >= MINIMUM_SORTED_EXPERT_ASSIGNMENTS {
-                Some(qwen3_5_moe_sort_expert_assignments(
-                    &self.runtime,
-                    &expanded_states,
-                    selected_expert_indices,
-                )?)
-            } else {
-                None
-            };
+        let sorted_assignments = if should_use_sorted_expert_reduction(
+            selected_expert_indices.element_count(),
+            self.sorted_expert_weighted_sum_kernel.is_some(),
+        ) {
+            Some(qwen3_5_moe_sort_expert_assignments(
+                &self.runtime,
+                &expanded_states,
+                selected_expert_indices,
+            )?)
+        } else {
+            None
+        };
         let (expert_inputs, expert_indices, indices_are_sorted) = match sorted_assignments.as_ref()
         {
             Some((sorted_states, sorted_indices, _)) => (sorted_states, sorted_indices, true),

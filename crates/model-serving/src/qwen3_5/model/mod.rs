@@ -77,9 +77,13 @@ pub use gated_delta::qwen3_5_gated_delta_step;
 pub use gated_delta_boundary_checkpoints::{
     Qwen3_5GatedDeltaBoundaryCheckpointResult, qwen3_5_gated_delta_checkpoint_kernel,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
 };
 #[cfg(feature = "direct-mlx")]
-pub use gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
+pub use gated_delta_sequence::{
+    qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
+    qwen3_5_gated_delta_sequence_ops_fallback,
+};
 #[cfg(feature = "direct-mlx")]
 pub use model::Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]

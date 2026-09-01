@@ -144,7 +144,7 @@ async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() 
         qwen3_5_gated_delta_kernel().expect("the fused gated-delta kernel should construct");
     let (fused_outputs, fused_recurrent_state) = qwen3_5_gated_delta_sequence(
         &runtime,
-        &gated_delta_kernel,
+        Some(&gated_delta_kernel),
         &queries,
         &keys,
         &values,
@@ -425,7 +425,7 @@ fn apply_fused_gated_delta_chunk(
 
     qwen3_5_gated_delta_sequence(
         runtime,
-        gated_delta_kernel,
+        Some(gated_delta_kernel),
         &queries,
         &keys,
         &values,

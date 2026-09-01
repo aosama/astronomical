@@ -125,10 +125,11 @@ pub enum PerformanceOperation {
     ImageComponentRelease,
     ImageFinalCleanup,
     FinalizedMlxMemorySnapshot,
+    CustomKernelCapabilityProbe,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::FinalizedMlxMemorySnapshot as usize + 1;
+    pub(super) const COUNT: usize = Self::CustomKernelCapabilityProbe as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -247,6 +248,7 @@ impl PerformanceOperation {
         Self::ImageComponentRelease,
         Self::ImageFinalCleanup,
         Self::FinalizedMlxMemorySnapshot,
+        Self::CustomKernelCapabilityProbe,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -442,6 +444,7 @@ impl PerformanceOperation {
             Self::ImageComponentRelease => "image_component_release",
             Self::ImageFinalCleanup => "image_final_cleanup",
             Self::FinalizedMlxMemorySnapshot => "finalized_mlx_memory_snapshot",
+            Self::CustomKernelCapabilityProbe => "custom_kernel_capability_probe",
         }
     }
 

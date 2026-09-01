@@ -66,11 +66,13 @@ Prompts, responses, model files, and persistent prompt state stay on the local M
 
 Astronomical is experimental and deliberately focused:
 
-- Apple Silicon M5 and later.
+- Any Apple silicon M-series Mac.
 - macOS 26 and later.
 - Validated Qwen3.5/Qwen3.6 and Laguna artifacts supported by the repository.
 - One local user and one active generation at a time.
 - OpenAI-compatible chat completions, responses, model discovery, and server-sent event streaming over loopback only.
+
+A supported model runs on every Apple silicon M-series Mac that meets the operating-system floor. Measured custom Metal kernels keep capable GPUs on their fastest path; where a GPU cannot run one, the same request completes through public MLX APIs with the output precision the model artifact specifies. Throughput still depends on the GPU generation, the memory ceiling, the model, and storage speed.
 
 Astronomical does not bundle or redistribute model weights. Observatory can download curated public Hugging Face catalog entries directly onto this Mac; each payload is verified before it becomes discoverable. Model licenses remain separate and must permit the intended use.
 
