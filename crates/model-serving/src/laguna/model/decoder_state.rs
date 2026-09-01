@@ -2,7 +2,6 @@
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
-use crate::attention::rotating_prefill_transient_token_count;
 use crate::decoder_cache::{
     FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,
     RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
@@ -10,6 +9,7 @@ use crate::decoder_cache::{
 use crate::laguna::normalization::{
     LagunaCacheDescriptor, LagunaExecutionDtype, LagunaTargetContract,
 };
+use crate::memory::rotating_prefill_transient_token_count;
 use crate::performance_attribution::PerformanceAttribution;
 
 use super::error::LagunaExecutionError;

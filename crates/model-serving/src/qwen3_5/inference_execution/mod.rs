@@ -63,8 +63,9 @@ pub use self::speculative_prefill::{
     qwen3_5_selected_speculative_prefill_positions_for_range,
     qwen3_5_speculative_prefill_chunk_mode, qwen3_5_speculative_prefill_sparse_target_is_active,
 };
+use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
-use super::{MtpDraftDepth, ValidatedQwen3_5Artifact};
+use crate::memory::MtpDraftDepth;
 
 pub use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRuntimeState;
 pub use crate::qwen3_5::multi_token_prediction::qwen3_5_depth_one_mtp_window_fits;

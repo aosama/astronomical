@@ -15,7 +15,11 @@ mod forward_recovery;
 mod live_allocation_budget;
 mod mlx_memory_telemetry;
 mod mlx_ram_budget;
+mod mlx_ram_budget_geometry;
+mod mtp_admission;
+mod mtp_draft_depth;
 mod residency_admission;
+mod rotating_admission;
 mod speculative_prefill_admission;
 
 pub use allocation_admission::{
@@ -76,5 +80,17 @@ pub use mlx_ram_budget::{
     MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetPhase, MlxRamBudgetSnapshot,
     measured_non_expert_forward_growth_bytes,
 };
+pub use mlx_ram_budget_geometry::{
+    MeasuredExpertLayerPayload, RamBudgetGeometryError,
+    mlx_ram_budget_model_geometry_from_measured_layer_facts,
+};
+pub use mtp_admission::{
+    MtpAdmission, MtpDepthDowngradeReason, MtpMemoryAdmission, MtpMemoryCandidate,
+    MtpMemoryProjection, MtpMemoryProjectionError,
+};
+pub use mtp_draft_depth::{MtpDraftDepth, MtpDraftDepthError};
 pub use residency_admission::{CompleteResidencyDecision, CompleteResidencyRequirements};
+pub use rotating_admission::{
+    RotatingAdmissionError, rotating_committed_token_count, rotating_prefill_transient_token_count,
+};
 pub use speculative_prefill_admission::SpeculativePrefillAdmission;

@@ -20,7 +20,8 @@ use super::{
         qwen3_5_speculative_prefill_request_eligibility,
     },
 };
-use crate::qwen3_5::multi_token_prediction::{MtpDraftDepth, create_optional_prediction_session};
+use crate::memory::MtpDraftDepth;
+use crate::qwen3_5::multi_token_prediction::create_optional_prediction_session;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 impl Qwen3_5EngineState {

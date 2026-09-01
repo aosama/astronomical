@@ -32,12 +32,12 @@ use crate::qwen3_5::model::{
 };
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::MtpDraftDepth;
 use super::request_state::Qwen3_5MtpRequestState;
 use super::target_verification::{
     MtpVerificationWindow, completed_verification_prefix_boundaries,
     forward_mtp_verification_window_with_performance_attribution,
 };
+use crate::memory::MtpDraftDepth;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::qwen3_5) struct MtpSampledSamplingSettings {

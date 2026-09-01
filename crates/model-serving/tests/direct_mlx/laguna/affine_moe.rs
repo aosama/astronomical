@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{
-    CustomKernelVerdict, CustomMetalKernelFamily, KernelUnsupportedReason,
     LagunaAttentionProjection, LagunaDecoderState, LagunaExpertProjection, LagunaGlobalTensorRole,
     LagunaLayerTensorRole, LagunaModel, LagunaNativeWeights, LagunaTargetNormalizer,
     LagunaTensorComponent, LagunaTensorId, PerformanceAttribution, PerformanceOperation,
-    WorkerKernelCapabilities,
 };
 use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
 use serde_json::json;
