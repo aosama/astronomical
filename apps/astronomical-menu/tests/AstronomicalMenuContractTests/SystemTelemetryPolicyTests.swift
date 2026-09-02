@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
 
 final class SystemTelemetryPolicyTests: XCTestCase {
   func test_should_sample_system_telemetry_only_for_a_visible_popover_or_active_request() {

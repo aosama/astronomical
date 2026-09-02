@@ -4,7 +4,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
 
 final class SupervisorStatusJourneyTests: XCTestCase {
   @MainActor
