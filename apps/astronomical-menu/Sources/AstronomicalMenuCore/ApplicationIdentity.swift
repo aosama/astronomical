@@ -1,6 +1,6 @@
 import Foundation
 
-enum ApplicationChannel: String, Equatable, Sendable {
+public enum ApplicationChannel: String, Equatable, Sendable {
   case stable
   case development
 

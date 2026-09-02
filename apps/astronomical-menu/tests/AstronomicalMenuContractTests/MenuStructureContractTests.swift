@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
 
 final class MenuStructureContractTests: XCTestCase {
   func test_should_expose_open_observatory_as_a_direct_popover_action() throws {
@@ -11,7 +11,7 @@ final class MenuStructureContractTests: XCTestCase {
       .deletingLastPathComponent()
     let popoverSourceURL =
       packageDirectoryURL
-      .appendingPathComponent("Sources/AstronomicalMenu/OrbitalTelemetryPopover.swift")
+      .appendingPathComponent("Sources/AstronomicalMenuCore/OrbitalTelemetryPopover.swift")
     let popoverSource = try String(contentsOf: popoverSourceURL, encoding: .utf8)
 
     let openObservatoryButtonStart = try XCTUnwrap(
@@ -29,7 +29,7 @@ final class MenuStructureContractTests: XCTestCase {
       .deletingLastPathComponent()
     let popoverSourceURL =
       packageDirectoryURL
-      .appendingPathComponent("Sources/AstronomicalMenu/OrbitalTelemetryPopover.swift")
+      .appendingPathComponent("Sources/AstronomicalMenuCore/OrbitalTelemetryPopover.swift")
     let popoverSource = try String(contentsOf: popoverSourceURL, encoding: .utf8)
     let restartButtonStart = try XCTUnwrap(
       popoverSource.range(of: "Button(\"Restart server\", action: restartServer)"))
@@ -47,7 +47,7 @@ final class MenuStructureContractTests: XCTestCase {
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let popoverSource = try String(
       contentsOf: packageDirectoryURL.appendingPathComponent(
-        "Sources/AstronomicalMenu/OrbitalTelemetryPopover.swift"),
+        "Sources/AstronomicalMenuCore/OrbitalTelemetryPopover.swift"),
       encoding: .utf8)
     let downloadActionStart = try XCTUnwrap(popoverSource.range(of: "\"Download a model\""))
     let overflowMenuStart = try XCTUnwrap(popoverSource.range(of: "Menu {"))
