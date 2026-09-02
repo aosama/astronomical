@@ -64,6 +64,11 @@ pub struct Qwen3_5Model {
     pub(crate) inverse_square_root_linear_head_dimension_scale: MlxArray,
     /// Deferred GPU missing-route roots collected during one paged forward.
     pub(crate) paged_forward_missing_route_collector: PagedForwardMissingRouteCollector,
+    /// Warm-table slot capacity for decode-time hot-expert warming; zero
+    /// disables warming. The decode handoff derives it from the adaptive
+    /// growth guard's headroom so warming only claims memory the guard can
+    /// spare (issue #372).
+    pub(crate) hot_expert_warm_slot_count: std::cell::Cell<usize>,
 }
 
 impl Qwen3_5Model {
@@ -131,6 +136,16 @@ impl Qwen3_5Model {
             expert_pager
                 .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
         }
+    }
+
+    /// Sets the warm-table slot capacity for decode-time hot-expert warming.
+    pub(crate) fn set_hot_expert_warm_slot_count(&self, warm_slot_count: usize) {
+        self.hot_expert_warm_slot_count.set(warm_slot_count);
+    }
+
+    /// Returns the warm-table slot capacity (zero disables warming).
+    pub(crate) fn hot_expert_warm_slot_count(&self) -> usize {
+        self.hot_expert_warm_slot_count.get()
     }
 
     /// Returns phase-correct sparse loading workspace for forward admission.
