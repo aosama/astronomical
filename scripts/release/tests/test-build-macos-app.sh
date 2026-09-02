@@ -137,6 +137,9 @@ main() {
         "${sandbox_internal_scripts_directory}/build-macos-app.sh"
     cp "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
         "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
+    mkdir -p "${sandbox_internal_scripts_directory}/entitlements"
+    cp "${repository_root}/scripts/internal/entitlements/"*.entitlements \
+        "${sandbox_internal_scripts_directory}/entitlements/"
     chmod +x "${sandbox_internal_scripts_directory}/build-macos-app.sh" \
         "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
     printf '%s\n' fixture > "${sandbox_repository}/LICENSE"
@@ -147,6 +150,7 @@ main() {
 
     cat > "${fake_command_directory}/cargo" <<'CARGO'
 #!/usr/bin/env sh
+printf '%s\n' "$*" >> "${FAKE_CARGO_ARGS_LOG:?}"
 if [ "${1:-}" = "metadata" ]; then
     printf '%s\n' '{"packages":[{"name":"astronomical-supervisor","version":"0.2.0","repository":"https://github.com/example/astronomical"}]}'
     exit 0
@@ -213,9 +217,17 @@ while [ "$#" -gt 0 ]; do
     fi
     shift
 done
+menu_product="astronomical-menu"
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--product" ]; then
+        menu_product="$2"
+        break
+    fi
+    shift
+done
 mkdir -p "${package_path:?package path is required}/.build/release"
-printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > "${package_path}/.build/release/astronomical-menu"
-chmod +x "${package_path}/.build/release/astronomical-menu"
+printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > "${package_path}/.build/release/${menu_product}"
+chmod +x "${package_path}/.build/release/${menu_product}"
 SWIFT
     cat > "${fake_command_directory}/iconutil" <<'ICONUTIL'
 #!/usr/bin/env sh
@@ -267,6 +279,8 @@ CODESIGN
     mkdir -p "$cargo_lane_root"
     fixture_metallib="${SANDBOX_DIRECTORY}/mlx.metallib"
     printf '%s\n' 'fixture-metallib' > "$fixture_metallib"
+    : > "${SANDBOX_DIRECTORY}/fake-cargo-args.log"
+    export FAKE_CARGO_ARGS_LOG="${SANDBOX_DIRECTORY}/fake-cargo-args.log"
 
     printf '%s\n' '[app-builder-test] case=missing-metallib-source-is-rejected status=start'
     if (CDPATH='' cd -- "$sandbox_repository" && \
@@ -348,6 +362,87 @@ CODESIGN
         exit 1
     }
     printf '%s\n' '[app-builder-test] case=stable-output-is-noindex status=success'
+
+    printf '%s\n' '[app-builder-test] case=app-store-output-is-sandbox-clean status=start'
+    app_store_cargo_target_record="${SANDBOX_DIRECTORY}/app-store-cargo-target"
+    (CDPATH='' cd -- "$sandbox_repository" && \
+        FAKE_CODESIGN_LOG="${SANDBOX_DIRECTORY}/app-store-codesign.log" \
+            FAKE_CARGO_TARGET_RECORD="$app_store_cargo_target_record" \
+            ASTRONOMICAL_CARGO_LANE_ROOT="$cargo_lane_root" \
+            ASTRONOMICAL_MLX_METALLIB_PATH="$fixture_metallib" \
+            PATH="${fake_command_directory}:${PATH}" timeout "$SUBJECT_TIMEOUT_SECONDS" \
+            "${sandbox_internal_scripts_directory}/build-macos-app.sh" --channel app-store \
+                --signing-identity "Apple Distribution: Example (ABCDE12345)")
+    app_store_app_bundle="${sandbox_repository}/target/astronomical-macos-app-store.noindex/Astronomical.app"
+    [ -x "${app_store_app_bundle}/Contents/MacOS/astronomical-menu" ] || {
+        print_error "App Store bundle lacks the menu executable"
+        exit 1
+    }
+    [ ! -d "${app_store_app_bundle}/Contents/Frameworks/Sparkle.framework" ] || {
+        print_error "App Store bundle unexpectedly embeds the Sparkle framework"
+        exit 1
+    }
+    [ ! -s "${app_store_app_bundle}/Contents/Resources/SPARKLE_LICENSE" ] || {
+        print_error "App Store bundle unexpectedly carries the Sparkle license"
+        exit 1
+    }
+    for sparkle_plist_key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks AstronomicalStateDirectoryName; do
+        if grep -F "<key>${sparkle_plist_key}</key>" \
+            "${app_store_app_bundle}/Contents/Info.plist" >/dev/null 2>&1; then
+            print_error "App Store bundle unexpectedly embeds ${sparkle_plist_key}"
+            exit 1
+        fi
+    done
+    grep -F '<key>AstronomicalChannel</key><string>app-store</string>' \
+        "${app_store_app_bundle}/Contents/Info.plist" >/dev/null || {
+        print_error "App Store bundle does not declare the app-store channel"
+        exit 1
+    }
+    grep -F '<key>CFBundleIdentifier</key><string>dev.astronomical.app.appstore</string>' \
+        "${app_store_app_bundle}/Contents/Info.plist" >/dev/null || {
+        print_error "App Store bundle does not carry the app-store bundle identifier"
+        exit 1
+    }
+    if otool -L "${app_store_app_bundle}/Contents/MacOS/astronomical-menu" 2>/dev/null | grep -qi sparkle; then
+        print_error "App Store menu binary unexpectedly links Sparkle"
+        exit 1
+    fi
+    # The fake codesign only records its arguments, so the entitlement contract
+    # is asserted from the signing log: the main executable and the bundle seal
+    # carry the sandbox profile; helpers join it through inheritance.
+    app_store_entitlements_log="${SANDBOX_DIRECTORY}/app-store-codesign.log"
+    for pair in \
+        "app-store-application.entitlements astronomical-menu" \
+        "app-store-inherited.entitlements astronomicald" \
+        "app-store-inherited.entitlements astronomical-inference-worker" \
+        "app-store-application.entitlements Astronomical.app"
+    do
+        set -- $pair
+        entitlements_file_name="$1"
+        code_object_name="$2"
+        grep -E -- "--entitlements .*${entitlements_file_name}.*${code_object_name}" \
+            "$app_store_entitlements_log" >/dev/null || {
+            print_error "App Store ${code_object_name} was not signed with ${entitlements_file_name}"
+            exit 1
+        }
+    done
+    grep -F -- '--features astronomical-supervisor/app-store-state-root' \
+        "${SANDBOX_DIRECTORY}/fake-cargo-args.log" >/dev/null || {
+        print_error "App Store build did not enable the app-store-state-root feature"
+        exit 1
+    }
+    stable_cargo_args_count=$(grep -cF -- '--features astronomical-supervisor/app-store-state-root' \
+        "${SANDBOX_DIRECTORY}/fake-cargo-args.log" || true)
+    [ "$stable_cargo_args_count" = "1" ] || {
+        print_error "the app-store-state-root feature must be enabled only for the App Store build"
+        exit 1
+    }
+    app_store_cargo_target="$(cat "$app_store_cargo_target_record")"
+    [ ! -e "$app_store_cargo_target" ] || {
+        print_error "App Store build retained its disposable Cargo target"
+        exit 1
+    }
+    printf '%s\n' '[app-builder-test] case=app-store-output-is-sandbox-clean status=success'
 }
 
 main "$@"

@@ -149,7 +149,7 @@ finish_phase() {
 remove_previous_app_bundle() {
     bundle_path="$1"
     case "$bundle_path" in
-        *"/target/astronomical-macos-development.noindex/Astronomical Development.app"|*"/target/astronomical-macos-stable.noindex/Astronomical.app")
+        *"/target/astronomical-macos-development.noindex/Astronomical Development.app"|*"/target/astronomical-macos-stable.noindex/Astronomical.app"|*"/target/astronomical-macos-app-store.noindex/Astronomical.app")
             rm -rf "$bundle_path"
             ;;
         *)
@@ -181,6 +181,7 @@ github_pages_feed_url() {
 
 sign_code_object() {
     code_object_path="$1"
+    entitlements_file="${2:-}"
     [ -e "$code_object_path" ] || {
         print_error "required code object is unavailable: ${code_object_path}"
         exit 1
@@ -189,7 +190,17 @@ sign_code_object() {
     signing_started_at="$(date +%s)"
     printf '%s operation=code-sign object="%s" status=start\n' \
         "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$code_object_name"
-    if [ -n "$SIGNING_IDENTITY" ]; then
+    if [ -n "$entitlements_file" ]; then
+        # Store-channel signing: every Mach-O carries its sandbox entitlements
+        # explicitly, because the App Sandbox is established from signature
+        # entitlements rather than bundle layout.
+        if [ -n "$SIGNING_IDENTITY" ]; then
+            codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
+                --entitlements "$entitlements_file" "$code_object_path"
+        else
+            codesign --force --sign - --entitlements "$entitlements_file" "$code_object_path"
+        fi
+    elif [ -n "$SIGNING_IDENTITY" ]; then
         codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
             --preserve-metadata=entitlements "$code_object_path"
     else
@@ -277,6 +288,9 @@ main() {
             bundle_identifier="dev.astronomical.app.development"
             supervisor_port="6733"
             state_directory_name=".astronomical-dev"
+            icon_channel="development"
+            menu_swift_product="astronomical-menu"
+            supervisor_cargo_features=""
             ;;
         stable)
             # Only the promoted ~/Applications copy should appear in Spotlight.
@@ -286,14 +300,37 @@ main() {
             bundle_identifier="dev.astronomical.app"
             supervisor_port="6732"
             state_directory_name=".astronomical"
+            icon_channel="stable"
+            menu_swift_product="astronomical-menu"
+            supervisor_cargo_features=""
+            ;;
+        app-store)
+            # The Mac App Store distribution variant of the Stable product.
+            # Sparkle is structurally absent, every Mach-O carries sandbox
+            # entitlements, and state derives from Application Support (the
+            # app-store-state-root feature), so no state directory name is
+            # embedded in the bundle.
+            release_directory="${repository_root}/target/astronomical-macos-app-store.noindex"
+            app_bundle_path="${release_directory}/Astronomical.app"
+            bundle_name="Astronomical"
+            bundle_identifier="dev.astronomical.app.appstore"
+            supervisor_port="6732"
+            state_directory_name=""
+            icon_channel="stable"
+            menu_swift_product="astronomical-menu-app-store"
+            supervisor_cargo_features="--features astronomical-supervisor/app-store-state-root"
             ;;
         *)
-            print_error "channel must be development or stable"
+            print_error "channel must be development, stable, or app-store"
             exit 2
             ;;
     esac
-    if [ -n "$SIGNING_IDENTITY" ] && [ "$APPLICATION_CHANNEL" != "stable" ]; then
+    if [ -n "$SIGNING_IDENTITY" ] && [ "$APPLICATION_CHANNEL" != "stable" ] && [ "$APPLICATION_CHANNEL" != "app-store" ]; then
         print_error "Developer ID signing is reserved for Stable release bundles"
+        exit 2
+    fi
+    if [ "$APPLICATION_CHANNEL" = "app-store" ] && [ -z "$SIGNING_IDENTITY" ]; then
+        print_error "App Store builds require --signing-identity because every executable must carry sandbox entitlements over a real signature"
         exit 2
     fi
     cargo_workspace_metadata="$(cargo metadata --no-deps --format-version 1)"
@@ -310,8 +347,8 @@ main() {
     else
         build_dirty="false"
     fi
-    if [ "$APPLICATION_CHANNEL" = "stable" ] && [ "$build_dirty" = "true" ]; then
-        print_error "Stable builds require a clean worktree; build Development or commit the intended changes"
+    if [ "$APPLICATION_CHANNEL" != "development" ] && [ "$build_dirty" = "true" ]; then
+        print_error "${APPLICATION_CHANNEL} builds require a clean worktree; build Development or commit the intended changes"
         exit 1
     fi
     export ASTRONOMICAL_BUILD_COMMIT="$build_commit"
@@ -345,8 +382,10 @@ main() {
     # Cargo prints its own live compilation progress to stderr.
     cargo build --release --target "$host_target_triple" \
         -p astronomical-inference-worker --bin astronomical-inference-worker \
-        -p astronomical-supervisor --bin astronomicald
-    swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu"
+        -p astronomical-supervisor --bin astronomicald \
+        $supervisor_cargo_features
+    swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu" \
+        --product "$menu_swift_product"
     finish_phase "success"
 
     # ── Phase 4: Assemble and sign app bundle ────────────────────────────
@@ -370,19 +409,23 @@ main() {
         printf '  <key>CFBundleShortVersionString</key><string>%s</string>\n' "$application_version"
         printf '  <key>LSMinimumSystemVersion</key><string>26.0</string>\n'
         printf '%s\n' '  <key>CFBundleIconFile</key><string>Astronomical.icns</string>'
-        printf '  <key>SUFeedURL</key><string>%s</string>\n' "$sparkle_update_feed_url"
-        printf '  <key>SUPublicEDKey</key><string>%s</string>\n' "$SPARKLE_PUBLIC_ED25519_KEY"
-        printf '%s\n' '  <key>SUVerifyUpdateBeforeExtraction</key><true/>'
-        printf '%s\n' '  <key>SURequireSignedFeed</key><true/>'
-        printf '%s\n' '  <key>SUSignedFeedFailureExpirationInterval</key><integer>0</integer>'
-        printf '%s\n' '  <key>SUEnableAutomaticChecks</key><true/>'
-        printf '%s\n' '  <key>SUScheduledCheckInterval</key><integer>86400</integer>'
-        printf '%s\n' '  <key>SUAutomaticallyUpdate</key><false/>'
-        printf '%s\n' '  <key>SUEnableSystemProfiling</key><false/>'
+        if [ "$APPLICATION_CHANNEL" != "app-store" ]; then
+            printf '  <key>SUFeedURL</key><string>%s</string>\n' "$sparkle_update_feed_url"
+            printf '  <key>SUPublicEDKey</key><string>%s</string>\n' "$SPARKLE_PUBLIC_ED25519_KEY"
+            printf '%s\n' '  <key>SUVerifyUpdateBeforeExtraction</key><true/>'
+            printf '%s\n' '  <key>SURequireSignedFeed</key><true/>'
+            printf '%s\n' '  <key>SUSignedFeedFailureExpirationInterval</key><integer>0</integer>'
+            printf '%s\n' '  <key>SUEnableAutomaticChecks</key><true/>'
+            printf '%s\n' '  <key>SUScheduledCheckInterval</key><integer>86400</integer>'
+            printf '%s\n' '  <key>SUAutomaticallyUpdate</key><false/>'
+            printf '%s\n' '  <key>SUEnableSystemProfiling</key><false/>'
+        fi
         printf '  <key>AstronomicalChannel</key><string>%s</string>\n' "$APPLICATION_CHANNEL"
         printf '  <key>AstronomicalBuildDate</key><string>%s</string>\n' "$build_date_utc"
         printf '  <key>AstronomicalSupervisorPort</key><integer>%s</integer>\n' "$supervisor_port"
-        printf '  <key>AstronomicalStateDirectoryName</key><string>%s</string>\n' "$state_directory_name"
+        if [ -n "$state_directory_name" ]; then
+            printf '  <key>AstronomicalStateDirectoryName</key><string>%s</string>\n' "$state_directory_name"
+        fi
         printf '  <key>AstronomicalBuildCommit</key><string>%s</string>\n' "$build_commit"
         if [ "$build_dirty" = "true" ]; then
             printf '%s\n' '  <key>AstronomicalBuildDirty</key><true/>'
@@ -395,7 +438,7 @@ main() {
         printf '%s\n' '</plist>'
     } > "${app_bundle_path}/Contents/Info.plist"
 
-    cp "${repository_root}/apps/astronomical-menu/.build/release/astronomical-menu" \
+    cp "${repository_root}/apps/astronomical-menu/.build/release/${menu_swift_product}" \
        "${app_bundle_path}/Contents/MacOS/astronomical-menu"
     cargo_release_directory="${CARGO_TARGET_DIR}/${host_target_triple}/release"
     cp "${cargo_release_directory}/astronomicald" \
@@ -409,26 +452,31 @@ main() {
     cp "${repository_root}/third-party/RUST_DEPENDENCY_NOTICES" \
        "${app_bundle_path}/Contents/Resources/RUST_DEPENDENCY_NOTICES"
     sparkle_license_source="${repository_root}/apps/astronomical-menu/.build/checkouts/Sparkle/LICENSE"
-    [ -s "$sparkle_license_source" ] || {
-        print_error "Sparkle license is unavailable after the Swift package build: ${sparkle_license_source}"
-        exit 1
-    }
-    cp "$sparkle_license_source" "${app_bundle_path}/Contents/Resources/SPARKLE_LICENSE"
+    if [ "$APPLICATION_CHANNEL" != "app-store" ]; then
+        [ -s "$sparkle_license_source" ] || {
+            print_error "Sparkle license is unavailable after the Swift package build: ${sparkle_license_source}"
+            exit 1
+        }
+        cp "$sparkle_license_source" "${app_bundle_path}/Contents/Resources/SPARKLE_LICENSE"
+    fi
     package_mlx_metallib "$repository_root" "$app_bundle_path" "$host_target_triple"
-    sparkle_framework_source="${repository_root}/apps/astronomical-menu/.build/release/Sparkle.framework"
-    sparkle_framework_destination="${app_bundle_path}/Contents/Frameworks/Sparkle.framework"
-    [ -d "$sparkle_framework_source" ] || {
-        print_error "Sparkle framework is unavailable after the Swift package build: ${sparkle_framework_source}"
-        exit 1
-    }
-    ditto "$sparkle_framework_source" "$sparkle_framework_destination"
+    if [ "$APPLICATION_CHANNEL" != "app-store" ]; then
+        sparkle_framework_source="${repository_root}/apps/astronomical-menu/.build/release/Sparkle.framework"
+        sparkle_framework_destination="${app_bundle_path}/Contents/Frameworks/Sparkle.framework"
+        [ -d "$sparkle_framework_source" ] || {
+            print_error "Sparkle framework is unavailable after the Swift package build: ${sparkle_framework_source}"
+            exit 1
+        }
+        ditto "$sparkle_framework_source" "$sparkle_framework_destination"
+    fi
 
-    # Stable keeps one timeless product identity; Development remains visibly distinct.
+    # Stable keeps one timeless product identity; Development remains visibly distinct;
+    # the App Store channel ships the Stable product identity as well.
     iconset_directory="${app_bundle_path}/Contents/Resources/Astronomical.iconset"
     icon_resource="${app_bundle_path}/Contents/Resources/Astronomical.icns"
     swift "${repository_root}/scripts/internal/render-macos-app-icon.swift" \
         --output-directory "$iconset_directory" \
-        --channel "$APPLICATION_CHANNEL"
+        --channel "$icon_channel"
     iconutil --convert icns --output "$icon_resource" "$iconset_directory"
     case "$iconset_directory" in
         "${app_bundle_path}/Contents/Resources/Astronomical.iconset") rm -rf "$iconset_directory" ;;
@@ -441,29 +489,48 @@ main() {
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-menu"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomicald"
     chmod +x "${app_bundle_path}/Contents/MacOS/astronomical-inference-worker"
-    # Swift Package Manager links Sparkle through @loader_path. The packaged
-    # application keeps frameworks in Contents/Frameworks, so add the standard
-    # bundle rpath before signing the executable and enclosing bundle.
-    install_name_tool -add_rpath "@executable_path/../Frameworks" \
-        "${app_bundle_path}/Contents/MacOS/astronomical-menu"
+    if [ "$APPLICATION_CHANNEL" != "app-store" ]; then
+        # Swift Package Manager links Sparkle through @loader_path. The packaged
+        # application keeps frameworks in Contents/Frameworks, so add the standard
+        # bundle rpath before signing the executable and enclosing bundle. Store
+        # builds link no framework and need no rpath.
+        install_name_tool -add_rpath "@executable_path/../Frameworks" \
+            "${app_bundle_path}/Contents/MacOS/astronomical-menu"
+    fi
 
-    printf '  signing embedded Sparkle code inside-out...\n'
-    sparkle_version_directory="${sparkle_framework_destination}/Versions/B"
-    sign_code_object "${sparkle_version_directory}/Autoupdate"
-    sign_code_object "${sparkle_version_directory}/Updater.app"
-    sign_code_object "${sparkle_version_directory}/XPCServices/Downloader.xpc"
-    sign_code_object "${sparkle_version_directory}/XPCServices/Installer.xpc"
-    sign_code_object "$sparkle_framework_destination"
+    if [ "$APPLICATION_CHANNEL" != "app-store" ]; then
+        printf '  signing embedded Sparkle code inside-out...\n'
+        sparkle_version_directory="${sparkle_framework_destination}/Versions/B"
+        sign_code_object "${sparkle_version_directory}/Autoupdate"
+        sign_code_object "${sparkle_version_directory}/Updater.app"
+        sign_code_object "${sparkle_version_directory}/XPCServices/Downloader.xpc"
+        sign_code_object "${sparkle_version_directory}/XPCServices/Installer.xpc"
+        sign_code_object "$sparkle_framework_destination"
+    fi
 
     printf '  signing Astronomical executables...\n'
     # Leaf-first signing keeps every executable attributable before the app seal is created.
-    for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
-        sign_code_object "${app_bundle_path}/Contents/MacOS/${bundled_executable_name}"
-    done
+    if [ "$APPLICATION_CHANNEL" = "app-store" ]; then
+        # The main executable carries the sandbox profile; the spawned daemon and
+        # worker join it through inherited-sandbox entitlements.
+        application_entitlements="${repository_root}/scripts/internal/entitlements/app-store-application.entitlements"
+        inherited_entitlements="${repository_root}/scripts/internal/entitlements/app-store-inherited.entitlements"
+        sign_code_object "${app_bundle_path}/Contents/MacOS/astronomical-menu" "$application_entitlements"
+        sign_code_object "${app_bundle_path}/Contents/MacOS/astronomicald" "$inherited_entitlements"
+        sign_code_object "${app_bundle_path}/Contents/MacOS/astronomical-inference-worker" "$inherited_entitlements"
+    else
+        for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
+            sign_code_object "${app_bundle_path}/Contents/MacOS/${bundled_executable_name}"
+        done
+    fi
 
     printf '  signing app bundle...\n'
     plutil -lint "${app_bundle_path}/Contents/Info.plist"
-    sign_code_object "$app_bundle_path"
+    if [ "$APPLICATION_CHANNEL" = "app-store" ]; then
+        sign_code_object "$app_bundle_path" "$application_entitlements"
+    else
+        sign_code_object "$app_bundle_path"
+    fi
     codesign --verify --deep --strict "$app_bundle_path"
     finish_phase "success"
 
@@ -473,7 +540,7 @@ main() {
     validate_script="${repository_root}/scripts/internal/validate-macos-app.sh"
     if [ -x "$validate_script" ]; then
         validation_exit_code=0
-        if [ "$APPLICATION_CHANNEL" = "stable" ]; then
+        if [ "$APPLICATION_CHANNEL" = "stable" ] || [ "$APPLICATION_CHANNEL" = "app-store" ]; then
             "$validate_script" --app-bundle "$app_bundle_path" --bundle-only || validation_exit_code=$?
         else
             "$validate_script" --app-bundle "$app_bundle_path" || validation_exit_code=$?
