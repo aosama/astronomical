@@ -4,31 +4,39 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.27</title>
-            <pubDate>Tue, 01 Sep 2026 00:35:48 -0400</pubDate>
-            <sparkle:version>394</sparkle:version>
-            <sparkle:shortVersionString>0.2.27</sparkle:shortVersionString>
+            <title>0.2.28</title>
+            <pubDate>Wed, 02 Sep 2026 08:18:10 -0400</pubDate>
+            <sparkle:version>402</sparkle:version>
+            <sparkle:shortVersionString>0.2.28</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.27
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.28
 
 ## Highlights
 
-- Sampled multi-token prediction at temperature one: opt-in artifacts can now serve distribution-correct sampled draft verification, with measurements and defaults documented alongside the feature; target-only execution remains the default.
-- The pinned native MLX runtime upgrades from v0.32.1 to v0.32.2 with the same verified-archive and retained-patch contract. The previously local fused head-dimension-256 attention path is replaced by its upstream implementation, and a paired serving measurement on this version shows decoder parity and a faster cache-warm prefill with no regression measured.
+- **Serve on any M-series Mac.** Astronomical now probes the GPU's real kernel capabilities when a model loads and falls back to supported MLX execution paths when an optimized kernel is unavailable, so more Apple Silicon machines can serve the same artifacts correctly.
+- **Hot-expert decode caching.** Experts routed repeatedly during sustained generation stay resident under an adaptive warm-capacity guard, cutting repeated expert page reads on the decode hot path.
+- **Tighter retained-memory discipline.** Decode warm capacity now respects the plan-composed retained-expert ceiling — the tighter of the growth-guard and plan ceilings — so warm tables cannot arm above the composed memory plan on memory-tight machines.
+- **Fixed three SpecPrefill drafter acceptance journeys** that could never reach green, restoring full regression coverage of the speculative prefill pipeline.
+
+## Details
+
+- Memory policy ownership is consolidated into the memory package with one shared vocabulary across admission, residency, and budget decisions. This is an internal restructuring; the enforcement above is its user-visible effect.
+- The performance research record in the repository documentation was extended with the Apple Neural Engine closure verdict and a verified study of hand-written Metal kernels versus MLX defaults. No runtime behavior change.
 
 ## Compatibility
 
-- Requires macOS 26.0 or later on Apple Silicon, unchanged from the previous release.
-- Existing local state, model directories, prompt-cache contents, and configuration carry forward unchanged.
+- Requires macOS 26.0 or later on Apple Silicon.
+- Existing model caches, prompt caches, and user state are preserved.
+- The local REST API surface is unchanged.
 
 ## Distribution
 
-- This release is Developer ID signed with hardened runtime and timestamping, notarized and stapled by Apple, and distributed through the GitHub release channel and the signed Sparkle update feed.]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.27/Astronomical-0.2.27-macOS-arm64.dmg" length="15829334" type="application/octet-stream" sparkle:edSignature="iXMwfjf8EVF5XePBGhwrvIoIQEgtaYv0Mnzxlh3rWKTMCqaylw3oyc23QmIEvxE0uE5Kg/C5sZGA1GPZTxHwAw=="></enclosure>
+This release is distributed as a Developer ID–signed, notarized DMG. The Sparkle update feed is Ed25519-signed; the appcast enclosure and release asset carry matching SHA-256 digests recorded in the release manifest.]]></description>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.28/Astronomical-0.2.28-macOS-arm64.dmg" length="15878281" type="application/octet-stream" sparkle:edSignature="ysF5hxJq20nmWwbnw/VBrvNsD1OpSIaqWAZQk01mxNoVP4wi50Gm4BP8YWJxxMcBWAtlC5nDWyajgm9WhqyjBg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 6nSxQmo9xbJ8sUxMpoofWk+ZvpnA6gsCvOm7jS4OyoAHy4ag/hLBXbRpBu1e++wl+HQNISG5E++Vx/oZQDHHDg==
-length: 2293
+edSignature: /b5Ot9y3NzsH79aBCHZVrS8JgN0kS7RaYIIdDsVaN76dujcSF6S5ooSJaoZd/cD1YmugNCfWdaGEdIDW1n56AQ==
+length: 3037
 -->
