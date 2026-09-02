@@ -246,12 +246,27 @@ impl Qwen3_5Model {
                                 == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                             performance_attribution,
                         )?
+                    } else if let Some((cached_weights, cached_manifest)) = self
+                        .hot_expert_partial_page(
+                            layer_index,
+                            expert_capacity,
+                            routed_expert_ids,
+                            performance_attribution,
+                        )
+                    {
+                        // Hot-expert cache hit: the warm table covers every
+                        // routed expert of this token, so the routed set is
+                        // served from retained RAM with no storage read
+                        // (issue #372).
+                        (cached_weights, cached_manifest)
                     } else {
                         self.stream_operation_local_routed_experts(
                             expert_pager,
                             layer_index,
                             token_count,
                             routed_expert_ids,
+                            paged_prefill_execution_mode
+                                == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                             performance_attribution,
                         )?
                     };

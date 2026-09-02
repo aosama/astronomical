@@ -10,14 +10,17 @@ use std::collections::HashMap;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::expert_paging::{
-    ExpertWeightMemoryCacheStatistics, ExpertWeightPage, QuantizedExpertPageManifest,
-    RetainedExpertReclamation,
+    ExpertWeightPage, QuantizedExpertPageManifest, RetainedExpertReclamation,
 };
 use crate::memory::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 
+mod reclamation;
 mod slot_writes;
-use slot_writes::{RetainedReferenceOk, write_expert_into_slot};
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod tests;
+use slot_writes::{RetainedReferenceOk, create_warm_table_weights, write_expert_into_slot};
 
 /// One layer's slot table: a preallocated weight tensor and its slot map.
 #[derive(Debug)]
@@ -48,6 +51,9 @@ struct PendingSlotInsert {
     layer_index: usize,
     expert_ids: Vec<usize>,
     weights: Qwen3_5PagedExpertWeights,
+    /// Slot capacity for the table created by this insert, decided by the
+    /// memory package's warm-capacity policy at queue time.
+    warm_slot_count: usize,
 }
 
 /// RAM-resident expert slot tables keyed by decoder index.
@@ -63,6 +69,8 @@ pub struct RetainedExpertCache {
     eviction_count: u64,
     disk_page_load_count: u64,
     disk_batch_load_count: u64,
+    /// Routed experts written into warm tables (hot-expert caching evidence).
+    warm_expert_insert_count: u64,
 }
 
 impl RetainedExpertCache {
@@ -79,6 +87,7 @@ impl RetainedExpertCache {
             eviction_count: 0,
             disk_page_load_count: 0,
             disk_batch_load_count: 0,
+            warm_expert_insert_count: 0,
         }
     }
 
@@ -121,8 +130,12 @@ impl RetainedExpertCache {
     }
 
     /// Inserts streamed experts into the layer's slot table. The first insert
-    /// adopts the streamed unique-expert page as-is. Later inserts write each
-    /// new expert into a free or least-read unprotected slot via `slice_update`.
+    /// creates the table at the warm-slot capacity (zero-padded beyond the
+    /// routed rows) when the policy capacity exceeds the routed set, so later
+    /// decode tokens can accumulate hot experts without churning; a routed set
+    /// at or above the capacity adopts the streamed page as-is. Later inserts
+    /// write each new expert into a free or least-read unprotected slot via
+    /// `slice_update`. Returns how many experts were newly written.
     pub fn insert_streamed_experts(
         &mut self,
         runtime: &MlxRuntime,
@@ -130,41 +143,71 @@ impl RetainedExpertCache {
         expert_ids: &[usize],
         streamed_weights: &Qwen3_5PagedExpertWeights,
         protected_expert_ids: &[usize],
-        _expert_capacity: usize,
-    ) -> Result<bool, MlxRuntimeError> {
+        warm_slot_count: usize,
+    ) -> Result<usize, MlxRuntimeError> {
         if expert_ids.is_empty() {
-            return Ok(true);
+            return Ok(0);
         }
         if self
             .tables_by_layer
             .get(layer_index)
             .is_none_or(|table| table.is_none())
         {
-            let weights = Qwen3_5PagedExpertWeights {
-                gate_projection: streamed_weights.gate_projection.retained_reference()?,
-                up_projection: streamed_weights.up_projection.retained_reference()?,
-                down_projection: streamed_weights.down_projection.retained_reference()?,
-            };
-            let capacity = expert_ids.len();
+            // A warm capacity above the routed set needs a zero-padded table
+            // so later decode tokens can accumulate hot experts without
+            // churning; a routed set filling the capacity adopts as-is.
+            let capacity = warm_slot_count.max(expert_ids.len());
             let per_expert_payload_bytes = streamed_weights
                 .resident_payload_byte_count()
                 .checked_div(u64::try_from(expert_ids.len()).unwrap_or(1))
                 .unwrap_or(0);
-            let payload_bytes = streamed_weights.resident_payload_byte_count();
-            let full_padded_payload_bytes = weights.resident_payload_byte_count();
-            if !self.can_admit(full_padded_payload_bytes) {
+            let needs_padding = capacity > expert_ids.len();
+            let estimated_full_padded_payload_bytes = if needs_padding {
+                // Budget gate before allocation: refusing keeps the stream
+                // operation-local without allocating the padded table first.
+                per_expert_payload_bytes.saturating_mul(u64::try_from(capacity).unwrap_or(u64::MAX))
+            } else {
+                streamed_weights.resident_payload_byte_count()
+            };
+            if !self.can_admit(estimated_full_padded_payload_bytes) {
                 // Leave the streamed page operation-local. Evicting another complete
                 // layer to seat this one would thrash the sequential decoder order.
-                return Ok(false);
+                return Ok(0);
             }
+            let mut weights = if needs_padding {
+                create_warm_table_weights(runtime, streamed_weights, capacity)?
+            } else {
+                streamed_weights.retained_reference_ok()
+            };
+            if needs_padding {
+                // The padded table starts zero-filled: copy each streamed
+                // routed row into its leading slot. Without this write the
+                // slot map would claim experts the tensor never received.
+                for expert_row in 0..expert_ids.len() {
+                    write_expert_into_slot(
+                        runtime,
+                        &mut weights,
+                        streamed_weights,
+                        expert_row,
+                        expert_row,
+                    )?;
+                }
+            }
+            let payload_bytes = streamed_weights.resident_payload_byte_count();
+            let full_padded_payload_bytes = weights.resident_payload_byte_count();
             self.resident_payload_bytes = self
                 .resident_payload_bytes
                 .saturating_add(full_padded_payload_bytes);
+            // Every slot must exist in the map: free slots are `None` so the
+            // insert path can find them, and occupied slots map their expert.
             let mut slot_by_expert_id = HashMap::with_capacity(capacity);
             let mut expert_id_by_slot = Vec::with_capacity(capacity);
-            for (slot, expert_id) in expert_ids.iter().copied().enumerate() {
-                slot_by_expert_id.insert(expert_id, slot);
-                expert_id_by_slot.push(Some(expert_id));
+            for slot in 0..capacity {
+                let maybe_expert_id = expert_ids.get(slot).copied();
+                expert_id_by_slot.push(maybe_expert_id);
+                if let Some(expert_id) = maybe_expert_id {
+                    slot_by_expert_id.insert(expert_id, slot);
+                }
             }
             let table = ExpertSlotTable {
                 weights,
@@ -179,7 +222,14 @@ impl RetainedExpertCache {
             if let Some(slot) = self.tables_by_layer.get_mut(layer_index) {
                 *slot = Some(table);
             }
-            return Ok(true);
+            // Warm-insert evidence counts only hot-expert warming (a nonzero
+            // warm capacity); complete-layer adoption is whole-layer caching.
+            if warm_slot_count > 0 {
+                self.warm_expert_insert_count = self
+                    .warm_expert_insert_count
+                    .saturating_add(u64::try_from(expert_ids.len()).unwrap_or(u64::MAX));
+            }
+            return Ok(expert_ids.len());
         }
         let table = self
             .tables_by_layer
@@ -189,25 +239,62 @@ impl RetainedExpertCache {
         let mut protected_expert_ids = protected_expert_ids.to_vec();
         protected_expert_ids.sort_unstable();
         protected_expert_ids.dedup();
-        let new_expert_count = expert_ids
+        // Plan every slot before writing: free slots first, then least-read
+        // victims. Planning up front keeps experts inserted by the same flush
+        // from evicting each other — with equal (zero) read counts a naive
+        // pick-lowest-slot loop would let the second insert evict the first.
+        // Victims also exclude slots holding any incoming routed expert: such
+        // an expert is contained now, and an eviction would demote it to a
+        // late surprise miss that exhausts the plan.
+        let new_expert_rows: Vec<(usize, usize)> = expert_ids
             .iter()
-            .filter(|expert_id| !table.slot_by_expert_id.contains_key(expert_id))
-            .count();
-        let evictable_slot_count = (0..table.slot_count())
-            .filter(|slot| {
-                table.expert_id_by_slot[*slot]
-                    .is_none_or(|expert_id| protected_expert_ids.binary_search(&expert_id).is_err())
-            })
-            .count();
-        if new_expert_count > evictable_slot_count {
-            return Ok(false);
+            .copied()
+            .enumerate()
+            .filter(|(_, expert_id)| !table.slot_by_expert_id.contains_key(expert_id))
+            .collect();
+        let new_expert_count = new_expert_rows.len();
+        if new_expert_count == 0 {
+            return Ok(0);
         }
-        for (expert_row, expert_id) in expert_ids.iter().copied().enumerate() {
-            if table.slot_by_expert_id.contains_key(&expert_id) {
-                continue;
+        let free_slots: Vec<usize> = (0..table.slot_count())
+            .filter(|slot| table.expert_id_by_slot[*slot].is_none())
+            .collect();
+        let mut evictable_slots: Vec<usize> = (0..table.slot_count())
+            .filter(|slot| {
+                table.expert_id_by_slot[*slot].is_some_and(|retained_expert_id| {
+                    !expert_ids.contains(&retained_expert_id)
+                        && protected_expert_ids
+                            .binary_search(&retained_expert_id)
+                            .is_err()
+                })
+            })
+            .collect();
+        if new_expert_count > free_slots.len() + evictable_slots.len() {
+            return Ok(0);
+        }
+        let mut planned_slots: Vec<usize> =
+            free_slots.iter().copied().take(new_expert_count).collect();
+        if planned_slots.len() < new_expert_count {
+            evictable_slots.sort_unstable_by_key(|slot| {
+                table
+                    .read_count_by_slot
+                    .get(*slot)
+                    .copied()
+                    .unwrap_or(u64::MAX)
+            });
+            for victim_slot in evictable_slots {
+                if planned_slots.len() == new_expert_count {
+                    break;
+                }
+                planned_slots.push(victim_slot);
             }
-            let slot = Self::select_slot_for_insert(table, &protected_expert_ids)
-                .expect("evictable slot was counted before insert");
+        }
+        let mut planned_slot_iter = planned_slots.into_iter();
+        let mut written_expert_count = 0_usize;
+        for (expert_row, expert_id) in new_expert_rows {
+            let slot = planned_slot_iter
+                .next()
+                .expect("planned slots match the counted new expert set");
             let evicted = table.expert_id_by_slot[slot].take();
             if let Some(evicted_id) = evicted {
                 table.slot_by_expert_id.remove(&evicted_id);
@@ -245,8 +332,14 @@ impl RetainedExpertCache {
             table.expert_id_by_slot[slot] = Some(expert_id);
             table.slot_by_expert_id.insert(expert_id, slot);
             table.read_count_by_slot[slot] = 0;
+            written_expert_count += 1;
         }
-        Ok(true)
+        if warm_slot_count > 0 {
+            self.warm_expert_insert_count = self
+                .warm_expert_insert_count
+                .saturating_add(u64::try_from(written_expert_count).unwrap_or(u64::MAX));
+        }
+        Ok(written_expert_count)
     }
 
     /// Seats a complete expert layer if it fits leftover budget. Returns false
@@ -276,6 +369,7 @@ impl RetainedExpertCache {
         }
         self.remove_layer(layer_index);
         self.insert_streamed_experts(runtime, layer_index, expert_ids, streamed_weights, &[], 0)
+            .map(|written_count| written_count > 0)
     }
 
     #[must_use]
@@ -286,26 +380,68 @@ impl RetainedExpertCache {
         expert_capacity > 0 && table.occupied_slot_count == expert_capacity
     }
 
-    /// Writes queued miss experts into their layer tables after GPU evaluation.
-    pub fn flush_pending_inserts(&mut self, runtime: &MlxRuntime) -> Result<(), MlxRuntimeError> {
+    /// Queues the streamed routed experts of one decode forward for hot-expert
+    /// retention. The queue drains after the forward's arrays are evaluated, so
+    /// warming never stalls the token that produced the experts. Whole routed
+    /// sets are queued even when the table already holds some of them; the
+    /// insert skips contained experts and the rows stay aligned with the
+    /// streamed page.
+    pub fn queue_pending_routed_expert_insert(
+        &mut self,
+        layer_index: usize,
+        expert_ids: &[usize],
+        streamed_weights: &Qwen3_5PagedExpertWeights,
+        warm_slot_count: usize,
+    ) -> Result<(), MlxRuntimeError> {
+        if expert_ids.is_empty() {
+            return Ok(());
+        }
+        self.pending_inserts.push(PendingSlotInsert {
+            layer_index,
+            expert_ids: expert_ids.to_vec(),
+            weights: streamed_weights.retained_reference_ok(),
+            warm_slot_count,
+        });
+        Ok(())
+    }
+
+    /// Counts one served read for each routed expert present in the layer's
+    /// table, feeding the least-frequently-used eviction order so a stable hot
+    /// set outlives one-off routing noise.
+    pub fn record_routed_reads(&mut self, layer_index: usize, expert_ids: &[usize]) {
+        let Some(Some(table)) = self.tables_by_layer.get_mut(layer_index) else {
+            return;
+        };
+        for expert_id in expert_ids {
+            if let Some(slot) = table.slot_by_expert_id.get(expert_id)
+                && let Some(read_count) = table.read_count_by_slot.get_mut(*slot)
+            {
+                *read_count = read_count.saturating_add(1);
+            }
+        }
+    }
+
+    /// Writes queued miss experts into their layer tables after GPU evaluation
+    /// and returns how many experts were newly written.
+    pub fn flush_pending_inserts(&mut self, runtime: &MlxRuntime) -> Result<u64, MlxRuntimeError> {
         let flush_started_at = std::time::Instant::now();
         let pending_inserts = std::mem::take(&mut self.pending_inserts);
         let pending_count = pending_inserts.len();
         let total_expert_count: usize = pending_inserts.iter().map(|pi| pi.expert_ids.len()).sum();
+        let mut written_expert_count = 0_u64;
         for pending_insert in pending_inserts {
             let insert_started_at = std::time::Instant::now();
             let expert_count = pending_insert.expert_ids.len();
-            self.insert_streamed_experts(
+            let written_count = self.insert_streamed_experts(
                 runtime,
                 pending_insert.layer_index,
                 &pending_insert.expert_ids,
                 &pending_insert.weights,
                 &[],
-                // expert_capacity is only used when creating a new table. By the
-                // time flush runs, the table already exists from a prior insert,
-                // so this value is unused.
-                0,
+                pending_insert.warm_slot_count,
             )?;
+            written_expert_count = written_expert_count
+                .saturating_add(u64::try_from(written_count).unwrap_or(u64::MAX));
             let insert_elapsed = insert_started_at.elapsed();
             if insert_elapsed > std::time::Duration::from_millis(10) {
                 tracing::info!(
@@ -325,7 +461,7 @@ impl RetainedExpertCache {
                 "flushed pending expert slot inserts"
             );
         }
-        Ok(())
+        Ok(written_expert_count)
     }
 
     pub fn remove_layer(&mut self, layer_index: usize) -> bool {
@@ -397,12 +533,19 @@ impl RetainedExpertCache {
                 } else {
                     RetainedExpertPageClass::ElasticRoutedExperts
                 };
+                let covered_weighted_demand = expert_ids
+                    .iter()
+                    .filter_map(|expert_id| {
+                        self.expert_demand_counts_by_layer[layer_index].get(*expert_id)
+                    })
+                    .copied()
+                    .fold(0_u64, u64::saturating_add);
                 Some(CurrentExpertLayerResidency {
                     layer_index,
                     class,
                     retained_expert_ids: expert_ids,
                     payload_bytes: table.payload_bytes,
-                    covered_weighted_demand: 0,
+                    covered_weighted_demand,
                 })
             })
             .collect()
@@ -418,152 +561,5 @@ impl RetainedExpertCache {
         // residency planning.
         self.request_pressure_maximum_resident_payload_bytes = None;
         self.reclaim_to_effective_ceiling()
-    }
-
-    pub fn limit_for_request_pressure(&mut self, reclamation_target_bytes: u64) -> bool {
-        let pressure_maximum = self
-            .resident_payload_bytes
-            .saturating_sub(reclamation_target_bytes);
-        self.limit_for_request_pressure_to_maximum(pressure_maximum)
-    }
-
-    pub fn limit_for_request_pressure_to_maximum(
-        &mut self,
-        pressure_maximum_resident_payload_bytes: u64,
-    ) -> bool {
-        self.request_pressure_maximum_resident_payload_bytes =
-            Some(pressure_maximum_resident_payload_bytes);
-        self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
-    }
-
-    pub fn resume_after_request_pressure(&mut self) -> bool {
-        self.request_pressure_maximum_resident_payload_bytes
-            .take()
-            .is_some()
-    }
-
-    pub fn release_all(&mut self) -> bool {
-        let had_experts = self.resident_payload_bytes > 0;
-        for layer_index in 0..self.tables_by_layer.len() {
-            self.remove_layer(layer_index);
-        }
-        had_experts
-    }
-
-    #[must_use]
-    pub fn statistics(&self) -> ExpertWeightMemoryCacheStatistics {
-        let occupied_layer_count = self
-            .tables_by_layer
-            .iter()
-            .filter(|table| table.is_some())
-            .count();
-        let total_expert_count = self
-            .tables_by_layer
-            .iter()
-            .filter_map(|table| table.as_ref())
-            .map(|table| table.occupied_slot_count)
-            .sum::<usize>();
-        ExpertWeightMemoryCacheStatistics {
-            entry_count: total_expert_count,
-            resident_payload_byte_count: self.resident_payload_bytes,
-            maximum_resident_payload_byte_count: self.effective_maximum_resident_payload_bytes(),
-            eviction_count: self.eviction_count,
-            disk_page_load_count: self.disk_page_load_count,
-            disk_batch_load_count: self.disk_batch_load_count,
-            complete_layer_count: 0,
-            complete_layer_payload_byte_count: 0,
-            partial_layer_count: occupied_layer_count,
-            partial_layer_payload_byte_count: self.resident_payload_bytes,
-            mandatory_read_promotion_count: 0,
-            complete_layer_eviction_count: 0,
-            partial_layer_eviction_count: self.eviction_count,
-        }
-    }
-
-    fn select_slot_for_insert(
-        table: &ExpertSlotTable,
-        protected_expert_ids: &[usize],
-    ) -> Option<usize> {
-        // Prefer a free slot; otherwise evict the least-read unprotected expert.
-        if let Some(slot) =
-            (0..table.slot_count()).find(|slot| table.expert_id_by_slot[*slot].is_none())
-        {
-            return Some(slot);
-        }
-        (0..table.slot_count())
-            .filter(|slot| {
-                table.expert_id_by_slot[*slot]
-                    .is_none_or(|expert_id| protected_expert_ids.binary_search(&expert_id).is_err())
-            })
-            .min_by_key(|slot| {
-                table
-                    .read_count_by_slot
-                    .get(*slot)
-                    .copied()
-                    .unwrap_or(u64::MAX)
-            })
-    }
-
-    fn can_admit(&self, new_payload_bytes: u64) -> bool {
-        self.resident_payload_bytes
-            .saturating_add(new_payload_bytes)
-            <= self.effective_maximum_resident_payload_bytes()
-    }
-
-    fn evict_least_used_table(&mut self) -> bool {
-        let mut fewest: Option<(usize, usize)> = None;
-        for (layer_index, table) in self.tables_by_layer.iter().enumerate() {
-            if let Some(table) = table.as_ref() {
-                let is_smaller = fewest
-                    .is_none_or(|(_, smallest_count)| table.occupied_slot_count < smallest_count);
-                if is_smaller {
-                    fewest = Some((layer_index, table.occupied_slot_count));
-                }
-            }
-        }
-        let Some((layer_index, _)) = fewest else {
-            return false;
-        };
-        self.remove_layer(layer_index)
-    }
-
-    fn reclaim_to_effective_ceiling(&mut self) -> RetainedExpertReclamation {
-        let mut released_bytes = 0_u64;
-        let mut released_count = 0_usize;
-        tracing::debug!(
-            resident_payload_bytes = self.resident_payload_bytes,
-            effective_maximum = self.effective_maximum_resident_payload_bytes(),
-            table_count = self.tables_by_layer.iter().filter(|t| t.is_some()).count(),
-            "reclaim_to_effective_ceiling starting"
-        );
-        while self.resident_payload_bytes > self.effective_maximum_resident_payload_bytes() {
-            let before = self.resident_payload_bytes;
-            if !self.evict_least_used_table() {
-                break;
-            }
-            released_bytes =
-                released_bytes.saturating_add(before.saturating_sub(self.resident_payload_bytes));
-            released_count += 1;
-        }
-        if released_count > 0 {
-            tracing::info!(
-                released_count,
-                released_bytes,
-                resident_payload_bytes = self.resident_payload_bytes,
-                table_count = self.tables_by_layer.iter().filter(|t| t.is_some()).count(),
-                "reclaim_to_effective_ceiling evicted tables"
-            );
-        }
-        RetainedExpertReclamation {
-            released_partial_layer_count: released_count,
-            released_partial_payload_bytes: released_bytes,
-            released_complete_layer_count: 0,
-            released_complete_payload_bytes: 0,
-        }
-    }
-
-    fn effective_maximum_resident_payload_bytes(&self) -> u64 {
-        self.request_pressure_maximum_resident_payload_bytes
-            .unwrap_or(self.normal_maximum_resident_payload_bytes)
     }
 }

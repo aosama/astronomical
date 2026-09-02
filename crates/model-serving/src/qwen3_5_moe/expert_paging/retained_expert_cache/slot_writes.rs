@@ -23,6 +23,97 @@ impl RetainedReferenceOk for Qwen3_5PagedExpertWeights {
     }
 }
 
+/// Builds a zero-padded warm-table owner with `warm_slot_count` expert rows.
+///
+/// Decode warm tables must hold more slots than one token's routed set, or
+/// every new token would churn the table. The streamed page has exactly the
+/// routed rows, so the table is allocated zero-filled at the policy capacity
+/// and the routed rows are written into the leading slots afterward. Every
+/// projection component (packed weight, scales, biases) needs its own padded
+/// twin; quantization metadata is copied verbatim from the streamed page
+/// because the slots must stay bit-compatible with future streamed rows.
+pub(super) fn create_warm_table_weights(
+    runtime: &MlxRuntime,
+    streamed_weights: &Qwen3_5PagedExpertWeights,
+    warm_slot_count: usize,
+) -> Result<Qwen3_5PagedExpertWeights, MlxRuntimeError> {
+    let slot_count_i32 =
+        i32::try_from(warm_slot_count).map_err(|_| MlxRuntimeError::RuntimeOperation {
+            operation: "create warm table weights",
+            description: "warm slot count exceeds the MLX shape range".to_owned(),
+        })?;
+    Ok(Qwen3_5PagedExpertWeights {
+        gate_projection: pad_projection_to_warm_capacity(
+            runtime,
+            &streamed_weights.gate_projection,
+            slot_count_i32,
+        )?,
+        up_projection: pad_projection_to_warm_capacity(
+            runtime,
+            &streamed_weights.up_projection,
+            slot_count_i32,
+        )?,
+        down_projection: pad_projection_to_warm_capacity(
+            runtime,
+            &streamed_weights.down_projection,
+            slot_count_i32,
+        )?,
+    })
+}
+
+fn pad_projection_to_warm_capacity(
+    runtime: &MlxRuntime,
+    streamed: &Qwen3_5AffineWeights,
+    slot_count_i32: i32,
+) -> Result<Qwen3_5AffineWeights, MlxRuntimeError> {
+    match streamed {
+        Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
+            Ok(Qwen3_5AffineWeights::NativeBfloat16 {
+                weight: pad_array_to_warm_capacity(runtime, weight, slot_count_i32)?,
+            })
+        }
+        Qwen3_5AffineWeights::Quantized {
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            quantization_bits,
+            quantization_group_size,
+        } => Ok(Qwen3_5AffineWeights::Quantized {
+            packed_weight: pad_array_to_warm_capacity(runtime, packed_weight, slot_count_i32)?,
+            quantization_scales: pad_array_to_warm_capacity(
+                runtime,
+                quantization_scales,
+                slot_count_i32,
+            )?,
+            quantization_biases: pad_array_to_warm_capacity(
+                runtime,
+                quantization_biases,
+                slot_count_i32,
+            )?,
+            quantization_bits: *quantization_bits,
+            quantization_group_size: *quantization_group_size,
+        }),
+    }
+}
+
+/// Replaces the leading (expert-axis) dimension of one projection array with
+/// `slot_count_i32` zero-filled rows, keeping every other axis and the dtype.
+fn pad_array_to_warm_capacity(
+    runtime: &MlxRuntime,
+    streamed_array: &MlxArray,
+    slot_count_i32: i32,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let mut warm_shape = streamed_array.shape();
+    let Some(expert_axis) = warm_shape.first_mut() else {
+        return Err(MlxRuntimeError::RuntimeOperation {
+            operation: "create warm table weights",
+            description: "expert weight arrays must have at least one dimension".to_owned(),
+        });
+    };
+    *expert_axis = slot_count_i32;
+    runtime.zeros(&warm_shape, streamed_array.dtype())
+}
+
 /// Writes one expert row from `streamed_weights` into `slot` of the table's
 /// preallocated weights. Each projection's expert axis is 0, so the slice spans
 /// `[slot, 0.., 0..]` to `[slot+1, end, end]`. `slice_update` donates the

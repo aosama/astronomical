@@ -141,6 +141,113 @@ impl Qwen3_5EngineState {
             resident_expert_payload_bytes = expert_statistics.resident_payload_byte_count,
             "generation preparation seated leftover complete layers before decode"
         );
+        // Hot-expert warming (issue #372) sizes its warm tables from the
+        // adaptive growth guard's headroom: the memory left after current
+        // active ownership, the learned transients, and one routed page,
+        // divided across the sparse layers that warming may cover. Rich
+        // machines warm at the full policy capacity; memory-tight machines
+        // warm narrower or not at all, because on them the warm tables would
+        // compete with the paging machinery for the same bytes and the
+        // eviction/re-stream cycle is net-negative.
+        let hot_expert_warm_slot_count = if self.adaptive_ram_growth_guard_enabled {
+            model
+                .runtime()
+                .memory_snapshot()
+                .map(|memory_snapshot| {
+                    let routed_expert_page_reservation_bytes = model
+                        .expert_page_reservation_bytes_for_forward(1)
+                        .unwrap_or(u64::MAX);
+                    let warm_retention_ceiling_bytes = self
+                        .adaptive_ram_growth_guard
+                        .hot_expert_retention_ceiling_bytes(
+                            memory_snapshot.active_memory_bytes(),
+                            expert_statistics.resident_payload_byte_count,
+                            usize::try_from(routed_expert_page_reservation_bytes)
+                                .unwrap_or(usize::MAX),
+                        );
+                    let warm_budget_bytes = warm_retention_ceiling_bytes
+                        .saturating_sub(expert_statistics.resident_payload_byte_count);
+                    let (expert_capacity, per_expert_payload_bytes, sparse_layer_count) = model
+                        .expert_pager
+                        .as_ref()
+                        .and_then(|expert_pager| expert_pager.layer_plans().first())
+                        .and_then(|layer_plan| {
+                            let expert_capacity = layer_plan.expert_capacity;
+                            let per_expert_payload_bytes = layer_plan
+                                .complete_expert_payload_byte_count()
+                                .ok()
+                                .and_then(|complete_layer_payload_bytes| {
+                                    u64::try_from(expert_capacity)
+                                        .ok()
+                                        .filter(|capacity| *capacity > 0)
+                                        .map(|capacity| complete_layer_payload_bytes / capacity)
+                                })?;
+                            Some((expert_capacity, per_expert_payload_bytes))
+                        })
+                        .map_or((0, 0, 0), |(expert_capacity, per_expert_payload_bytes)| {
+                            (
+                                expert_capacity,
+                                per_expert_payload_bytes,
+                                model
+                                    .expert_pager
+                                    .as_ref()
+                                    .map_or(0, |expert_pager| expert_pager.layer_count()),
+                            )
+                        });
+                    if expert_capacity == 0 || per_expert_payload_bytes == 0 {
+                        return 0;
+                    }
+                    let warm_capacity = crate::hot_expert_warm_slot_count(
+                        expert_capacity,
+                        usize::try_from(model.config.experts_per_token()).unwrap_or(usize::MAX),
+                    );
+                    // The real expert capacity decides the elastic/complete
+                    let complete_layer_count =
+                        model
+                            .retained_experts
+                            .as_ref()
+                            .map_or(0, |retained_experts| {
+                                retained_experts
+                                    .borrow()
+                                    .topology_snapshot(expert_capacity)
+                                    .into_iter()
+                                    .filter(|residency| {
+                                        residency.class
+                                            == crate::RetainedExpertPageClass::StableCompleteLayer
+                                    })
+                                    .count()
+                            });
+                    let unseated_sparse_layer_count =
+                        sparse_layer_count.saturating_sub(complete_layer_count);
+                    // The warm capacity scales down to what the guard's headroom
+                    // affords across the unseated layers; zero disables warming.
+                    let budget_affordable_capacity = if unseated_sparse_layer_count == 0
+                        || per_expert_payload_bytes == 0
+                    {
+                        0
+                    } else {
+                        let per_layer_warm_bytes = u128::try_from(per_expert_payload_bytes)
+                            .unwrap_or(u128::MAX)
+                            .saturating_mul(
+                                u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX),
+                            );
+                        let affordable_slots = u128::from(warm_budget_bytes)
+                            .checked_div(per_layer_warm_bytes)
+                            .unwrap_or(0);
+                        usize::try_from(affordable_slots).unwrap_or(usize::MAX)
+                    };
+                    warm_capacity.min(budget_affordable_capacity)
+                })
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
+        tracing::info!(
+            request_id = request_id.value(),
+            hot_expert_warm_slot_count,
+            "decode hot-expert warm capacity decided at handoff"
+        );
         Ok(())
     }
 }

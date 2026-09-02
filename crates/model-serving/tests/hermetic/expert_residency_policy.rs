@@ -1,8 +1,8 @@
 use astronomical_model_serving::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryPhase,
-    RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass, plan_expert_residency,
-    publish_request_stable_residency_plan,
+    RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
+    hot_expert_warm_slot_count, plan_expert_residency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
     should_enact_planned_expert_release,
@@ -80,10 +80,25 @@ fn should_seat_complete_layers_on_mandatory_prefill_reads() {
         true,
         Some(ExpertLayerResidencyTarget::StreamOperationLocal),
     ));
-    assert!(should_commit_mandatory_routed_page(
+    // The active plan is the phase's will for the layer: a layer the plan
+    // streams operation-local keeps streaming, and a layer the plan is
+    // releasing is not refilled behind the plan's back.
+    assert!(!should_commit_mandatory_routed_page(
         2_048,
         true,
         Some(ExpertLayerResidencyTarget::StreamOperationLocal),
+        false,
+    ));
+    assert!(!should_commit_mandatory_routed_page(
+        1,
+        true,
+        Some(ExpertLayerResidencyTarget::ReleasePartial),
+        false,
+    ));
+    assert!(!should_commit_mandatory_routed_page(
+        1,
+        true,
+        Some(ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit),
         false,
     ));
     assert!(should_commit_mandatory_routed_page(
@@ -92,12 +107,33 @@ fn should_seat_complete_layers_on_mandatory_prefill_reads() {
         Some(ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead),
         true,
     ));
+    assert!(should_commit_mandatory_routed_page(
+        1,
+        true,
+        Some(ExpertLayerResidencyTarget::PreservePartial),
+        false,
+    ));
+    assert!(should_commit_mandatory_routed_page(1, true, None, false));
     assert!(!should_commit_mandatory_routed_page(
         2_048,
         false,
         Some(ExpertLayerResidencyTarget::StreamOperationLocal),
         true,
     ));
+    assert!(!should_commit_mandatory_routed_page(1, false, None, false));
+}
+
+#[test]
+fn should_size_hot_expert_warm_tables_to_eight_routing_sets_within_the_layer_capacity() {
+    // Eight routing sets give the least-frequently-used eviction enough
+    // samples to separate a stable hot set from one-off routing noise.
+    assert_eq!(hot_expert_warm_slot_count(512, 8), 64);
+    // Small layers never grow beyond their own capacity.
+    assert_eq!(hot_expert_warm_slot_count(4, 2), 4);
+    // Wide routing sets scale the warm window with the routing set.
+    assert_eq!(hot_expert_warm_slot_count(512, 16), 128);
+    // The layer capacity caps an oversized routing set.
+    assert_eq!(hot_expert_warm_slot_count(6, 4), 6);
 }
 
 #[test]

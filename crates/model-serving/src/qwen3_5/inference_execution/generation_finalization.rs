@@ -107,6 +107,14 @@ impl Qwen3_5EngineState {
         // Otherwise newly admitted pages could compete with memory that is only
         // logically dead but still owned by this request.
         drop(active_request);
+        // Hot-expert warmed tables are request-scoped (issue #372): releasing
+        // them here keeps one request's decode warming from crowding the next
+        // request's prefill admission under a tight memory ceiling. Pinned
+        // complete layers survive; only elastic tables yield.
+        let released_elastic_payload_bytes = self
+            .model
+            .as_ref()
+            .map_or(0, |model| model.release_elastic_routed_tables());
         let resumed_after_request_memory_pressure = self
             .model
             .as_ref()
@@ -117,6 +125,7 @@ impl Qwen3_5EngineState {
             tracing::info!(
                 request_id = request_id.value(),
                 resumed_after_request_memory_pressure,
+                released_elastic_payload_bytes,
                 expert_memory_mode = ?model.expert_memory_mode(),
                 retained_expert_payload_bytes =
                     expert_weight_memory_cache_statistics.resident_payload_byte_count,

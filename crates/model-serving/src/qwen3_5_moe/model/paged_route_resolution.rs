@@ -10,7 +10,7 @@
 use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
 #[derive(Debug, Default)]
 pub(crate) struct PagedForwardMissingRouteCollector;
@@ -61,7 +61,13 @@ impl Qwen3_5Model {
             );
         }
         let flush_started_at = std::time::Instant::now();
-        self.flush_pending_expert_slot_inserts()?;
+        let written_expert_count = self.flush_pending_expert_slot_inserts_internal()?;
+        if written_expert_count > 0 {
+            performance_attribution.record_counter(
+                PerformanceCounter::HotExpertWarmInsertCount,
+                written_expert_count,
+            );
+        }
         let flush_elapsed = flush_started_at.elapsed();
         if flush_elapsed > std::time::Duration::from_millis(100) {
             tracing::info!(
@@ -74,13 +80,20 @@ impl Qwen3_5Model {
     }
 
     /// Writes queued miss experts into the slot table after GPU evaluation so
-    /// `slice_update` can donate instead of copying a live gather buffer.
-    pub(crate) fn flush_pending_expert_slot_inserts(&self) -> Result<(), Qwen3_5ExecutionError> {
+    /// `slice_update` can donate instead of copying a live gather buffer, and
+    /// returns how many experts were newly written.
+    pub(crate) fn flush_pending_expert_slot_inserts(&self) -> Result<u64, Qwen3_5ExecutionError> {
+        self.flush_pending_expert_slot_inserts_internal()
+    }
+
+    /// Counted variant of the post-evaluation warm insert flush.
+    fn flush_pending_expert_slot_inserts_internal(&self) -> Result<u64, Qwen3_5ExecutionError> {
         if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts
+            return retained_experts
                 .borrow_mut()
-                .flush_pending_inserts(&self.runtime)?;
+                .flush_pending_inserts(&self.runtime)
+                .map_err(Qwen3_5ExecutionError::from);
         }
-        Ok(())
+        Ok(0)
     }
 }

@@ -103,7 +103,7 @@ pub use residency::{
     ExpertLayerResidencyTarget, ExpertResidencyPlan, ExpertResidencyPlanError,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
     classify_expert_memory_mode, complete_layer_indexes_required_before_decode,
-    plan_expert_residency, publish_request_stable_residency_plan,
+    hot_expert_warm_slot_count, plan_expert_residency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
     should_enact_planned_expert_release,

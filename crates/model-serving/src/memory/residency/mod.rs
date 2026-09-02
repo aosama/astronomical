@@ -28,7 +28,8 @@ pub use complete_headroom::CompleteResidencyHeadroomBoundary;
 pub use decode_seating::complete_layer_indexes_required_before_decode;
 pub use ownership_mode::classify_expert_memory_mode;
 pub use page_commit::{
-    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
+    hot_expert_warm_slot_count, should_commit_mandatory_complete_layer,
+    should_commit_mandatory_routed_page,
 };
 pub use release::should_enact_planned_expert_release;
 pub use request_plan::{

@@ -151,6 +151,20 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "decode must keep leftover complete layers or reuse retained routed pages; expert_payload_bytes={final_expert_payload_bytes} retained_route_assignment_hit_count={retained_route_assignment_hit_count}"
     );
 
+    // --- Measured assertion 4b: the routed-reuse branch is live (issue #372) ---
+    // Unseated layers must warm routed experts during decode and serve later
+    // tokens from the hot set instead of re-reading storage every token.
+    let hot_expert_partial_route_hit_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "hot_expert_partial_route_hit_count",
+    );
+    let hot_expert_warm_insert_count =
+        generation_attribution_counter(isolated_worker_home.path(), "hot_expert_warm_insert_count");
+    assert!(
+        hot_expert_partial_route_hit_count > 0 && hot_expert_warm_insert_count > 0,
+        "decode must warm routed experts and reuse them; hot_expert_partial_route_hit_count={hot_expert_partial_route_hit_count} hot_expert_warm_insert_count={hot_expert_warm_insert_count}"
+    );
+
     // --- Measured assertion 5: throughput remains portable evidence ---
     let average_generation_tokens_per_second =
         memory_evidence.final_status["serving_session"]["average_generation_tok_per_second"]
@@ -186,6 +200,8 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          peak_memory_gb={:.2} \
          expert_source_read_gb={:.2} \
          retained_route_hits={retained_route_assignment_hit_count} \
+         hot_expert_partial_route_hits={hot_expert_partial_route_hit_count} \
+         hot_expert_warm_insert_count={hot_expert_warm_insert_count} \
          decode_streamed_layer_count={} \
          retained_payload_increments={} \
          average_prefill_tok_per_second={average_prefill_tokens_per_second:.2} \
