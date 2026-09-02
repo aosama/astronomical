@@ -100,14 +100,14 @@ impl AstronomicalConfig {
 
     /// Loads the Stable user configuration used by the installed application.
     pub fn load_from_default_location() -> Result<Self, AstronomicalConfigError> {
-        Self::load_from_instance_paths(AstronomicalInstancePaths::for_current_user(
+        Self::load_from_instance_paths(AstronomicalInstancePaths::default_location_instance_paths(
             AstronomicalRuntimeInstance::Stable,
         )?)
     }
 
     /// Loads the Development configuration used by direct repository workflows.
     pub fn load_from_development_location() -> Result<Self, AstronomicalConfigError> {
-        Self::load_from_instance_paths(AstronomicalInstancePaths::for_current_user(
+        Self::load_from_instance_paths(AstronomicalInstancePaths::default_location_instance_paths(
             AstronomicalRuntimeInstance::Development,
         )?)
     }

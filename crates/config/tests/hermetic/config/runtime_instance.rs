@@ -260,3 +260,95 @@ fn should_resolve_thinking_markdown_under_the_instance_state_directory() {
         fictional_home_directory.join(".astronomical/thinking.md")
     );
 }
+
+#[test]
+fn should_resolve_app_store_state_beneath_the_application_support_directory() {
+    let fictional_application_support_directory =
+        PathBuf::from("/Users/example/Library/Application Support");
+
+    let stable_paths = AstronomicalInstancePaths::for_application_support_directory(
+        &fictional_application_support_directory,
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert_eq!(
+        stable_paths.state_directory(),
+        fictional_application_support_directory.join("Astronomical")
+    );
+    assert_eq!(
+        stable_paths.models_directory(),
+        fictional_application_support_directory.join("Astronomical/models")
+    );
+    assert_eq!(
+        stable_paths.prompt_cache_directory(),
+        fictional_application_support_directory.join("Astronomical/cache")
+    );
+    assert_eq!(
+        stable_paths.logging_directory(),
+        fictional_application_support_directory.join("Astronomical/logs")
+    );
+    assert_eq!(
+        stable_paths.config_file_path(),
+        fictional_application_support_directory.join("Astronomical/config.json")
+    );
+    // Standard-instance endpoint guards must carry over so the store build
+    // keeps the same loopback discipline as the direct channel.
+    assert!(stable_paths.is_standard_state_directory());
+    assert_eq!(
+        stable_paths.default_bind_address().to_string(),
+        "127.0.0.1:6732"
+    );
+}
+
+#[test]
+fn should_keep_app_store_stable_and_development_state_separate() {
+    let fictional_application_support_directory =
+        PathBuf::from("/Users/example/Library/Application Support");
+
+    let stable_paths = AstronomicalInstancePaths::for_application_support_directory(
+        &fictional_application_support_directory,
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let development_paths = AstronomicalInstancePaths::for_application_support_directory(
+        &fictional_application_support_directory,
+        AstronomicalRuntimeInstance::Development,
+    );
+
+    assert_eq!(
+        stable_paths.state_directory(),
+        fictional_application_support_directory.join("Astronomical")
+    );
+    assert_eq!(
+        development_paths.state_directory(),
+        fictional_application_support_directory.join("Astronomical Development")
+    );
+    assert_ne!(
+        stable_paths.state_directory(),
+        development_paths.state_directory()
+    );
+    assert_ne!(
+        stable_paths.default_bind_address(),
+        development_paths.default_bind_address()
+    );
+}
+
+#[test]
+fn should_never_share_app_store_state_with_the_home_dot_folder_channel() {
+    let fictional_home_directory = PathBuf::from("/Users/example");
+    let fictional_application_support_directory =
+        PathBuf::from("/Users/example/Library/Application Support");
+
+    let direct_paths = AstronomicalInstancePaths::for_home_directory(
+        &fictional_home_directory,
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let app_store_paths = AstronomicalInstancePaths::for_application_support_directory(
+        &fictional_application_support_directory,
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert_ne!(
+        direct_paths.state_directory(),
+        app_store_paths.state_directory()
+    );
+}

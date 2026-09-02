@@ -92,7 +92,9 @@ impl DaemonArguments {
                 state_directory,
                 self.runtime_instance,
             )),
-            None => AstronomicalInstancePaths::for_current_user(self.runtime_instance),
+            None => {
+                AstronomicalInstancePaths::default_location_instance_paths(self.runtime_instance)
+            }
         }
     }
 }

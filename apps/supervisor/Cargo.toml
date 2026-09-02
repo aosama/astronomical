@@ -62,6 +62,12 @@ test = false
 [lints]
 workspace = true
 
+[features]
+# App Store channel: forwards the config crate's Application Support state-root
+# resolution so store builds derive all state from the container-mapped
+# location. Direct-channel builds stay on the home-directory dot-folder.
+app-store-state-root = ["astronomical-config/app-store-state-root"]
+
 [dependencies]
 astronomical-config = { path = "../../crates/config" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }

@@ -6,6 +6,12 @@ const STABLE_STATE_DIRECTORY_NAME: &str = ".astronomical";
 const DEVELOPMENT_STATE_DIRECTORY_NAME: &str = ".astronomical-dev";
 const STABLE_BIND_ADDRESS: &str = "127.0.0.1:6732";
 const DEVELOPMENT_BIND_ADDRESS: &str = "127.0.0.1:6733";
+// App Store channel state roots. Sandboxed apps may write only inside their
+// container, and the platform-standard Application Support directory is mapped
+// into that container automatically, so the store build derives all state from
+// it instead of a home-directory dot-folder (App Review guideline 2.4.5(ii)).
+const APPLICATION_SUPPORT_STABLE_DIRECTORY_NAME: &str = "Astronomical";
+const APPLICATION_SUPPORT_DEVELOPMENT_DIRECTORY_NAME: &str = "Astronomical Development";
 
 /// User-visible runtime identity that keeps Stable and Development state apart.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -94,6 +100,31 @@ impl AstronomicalInstancePaths {
         ))
     }
 
+    /// Instance paths for the default user location of `runtime_instance`.
+    ///
+    /// This is the single channel switch point. Direct-channel builds resolve
+    /// beneath the home-directory dot-folder; builds compiled with the
+    /// `app-store-state-root` feature resolve beneath the platform-standard
+    /// macOS Application Support directory, which the sandbox maps into the
+    /// app container. Every default-location caller delegates here so the two
+    /// channels cannot disagree about state placement.
+    pub fn default_location_instance_paths(
+        runtime_instance: AstronomicalRuntimeInstance,
+    ) -> Result<Self, AstronomicalConfigError> {
+        #[cfg(feature = "app-store-state-root")]
+        {
+            let application_support_directory = Self::macos_application_support_directory()?;
+            Ok(Self::for_application_support_directory(
+                application_support_directory,
+                runtime_instance,
+            ))
+        }
+        #[cfg(not(feature = "app-store-state-root"))]
+        {
+            Self::for_current_user(runtime_instance)
+        }
+    }
+
     #[must_use]
     pub fn for_home_directory(
         home_directory: impl Into<PathBuf>,
@@ -103,6 +134,67 @@ impl AstronomicalInstancePaths {
             AstronomicalRuntimeInstance::Stable => STABLE_STATE_DIRECTORY_NAME,
             AstronomicalRuntimeInstance::Development => DEVELOPMENT_STATE_DIRECTORY_NAME,
         };
+        Self::for_state_directory_with_standard_endpoint(
+            home_directory.into().join(state_directory_name),
+            runtime_instance,
+        )
+    }
+
+    /// Resolves the platform-standard macOS Application Support directory for
+    /// the active user. Inside the App Sandbox this path is mapped into the
+    /// app container on every file operation, so the same resolution serves
+    /// both the direct and the App Store channel.
+    pub fn macos_application_support_directory() -> Result<PathBuf, AstronomicalConfigError> {
+        let home_directory = env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or(AstronomicalConfigError::HomeDirectoryRequired)?;
+        if !home_directory.is_absolute() {
+            return Err(AstronomicalConfigError::PathMustBeAbsolute {
+                field_name: "HOME".to_owned(),
+                configured_path: home_directory,
+            });
+        }
+        let canonical_home_directory = home_directory.canonicalize().map_err(|source| {
+            AstronomicalConfigError::ResolveHomeDirectory {
+                home_directory,
+                source,
+            }
+        })?;
+        Ok(canonical_home_directory.join("Library/Application Support"))
+    }
+
+    /// Resolves instance state beneath the platform-standard macOS Application
+    /// Support directory. The App Store channel uses this instead of the
+    /// home-directory dot-folder because sandboxed store builds may write only
+    /// inside their container, and Application Support is the container-mapped
+    /// location Apple's file-system requirements name for persistent state.
+    /// Standard-instance semantics (loopback endpoint guards) carry over
+    /// unchanged so the store build keeps the same endpoint discipline as the
+    /// direct channel.
+    #[must_use]
+    pub fn for_application_support_directory(
+        application_support_directory: impl Into<PathBuf>,
+        runtime_instance: AstronomicalRuntimeInstance,
+    ) -> Self {
+        let state_directory_name = match runtime_instance {
+            AstronomicalRuntimeInstance::Stable => APPLICATION_SUPPORT_STABLE_DIRECTORY_NAME,
+            AstronomicalRuntimeInstance::Development => {
+                APPLICATION_SUPPORT_DEVELOPMENT_DIRECTORY_NAME
+            }
+        };
+        Self::for_state_directory_with_standard_endpoint(
+            application_support_directory
+                .into()
+                .join(state_directory_name),
+            runtime_instance,
+        )
+    }
+
+    #[must_use]
+    fn for_state_directory_with_standard_endpoint(
+        state_directory: PathBuf,
+        runtime_instance: AstronomicalRuntimeInstance,
+    ) -> Self {
         let default_bind_address = match runtime_instance {
             AstronomicalRuntimeInstance::Stable => STABLE_BIND_ADDRESS,
             AstronomicalRuntimeInstance::Development => DEVELOPMENT_BIND_ADDRESS,
@@ -111,7 +203,7 @@ impl AstronomicalInstancePaths {
         .expect("built-in Astronomical loopback addresses must remain valid");
         Self {
             runtime_instance: Some(runtime_instance),
-            state_directory: home_directory.into().join(state_directory_name),
+            state_directory,
             default_bind_address,
             is_standard_state_directory: true,
         }
