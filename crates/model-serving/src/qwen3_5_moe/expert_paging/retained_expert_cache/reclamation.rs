@@ -68,6 +68,15 @@ impl RetainedExpertCache {
         }
     }
 
+    /// Returns the plan-composed long-lived ceiling (without any request-
+    /// pressure override). Hot-expert warming must respect this too: the
+    /// composer already subtracted activation workspace, context reserve, and
+    /// the stream slot from the active ceiling when composing it.
+    #[must_use]
+    pub(crate) fn normal_maximum_resident_payload_bytes(&self) -> u64 {
+        self.normal_maximum_resident_payload_bytes
+    }
+
     pub(super) fn can_admit(&self, new_payload_bytes: u64) -> bool {
         self.resident_payload_bytes
             .saturating_add(new_payload_bytes)

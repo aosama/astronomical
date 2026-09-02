@@ -51,6 +51,19 @@ impl Qwen3_5Model {
             })
     }
 
+    /// Returns the plan-composed long-lived retained ceiling (no request-
+    /// pressure override). The decode warming cap takes the minimum of this
+    /// and the adaptive growth guard's headroom-derived ceiling.
+    pub(crate) fn retained_expert_normal_ceiling_bytes(&self) -> u64 {
+        self.retained_experts
+            .as_ref()
+            .map_or(0, |retained_experts| {
+                retained_experts
+                    .borrow()
+                    .normal_maximum_resident_payload_bytes()
+            })
+    }
+
     /// Releases every elastic (hot-expert warmed) retained table without
     /// touching pinned complete layers. Request finalization uses this so one
     /// request's decode warming cannot crowd the next request's prefill
