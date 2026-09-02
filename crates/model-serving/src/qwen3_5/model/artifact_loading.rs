@@ -469,6 +469,7 @@ impl Qwen3_5Model {
             inverse_square_root_linear_head_dimension_scale,
             paged_forward_missing_route_collector:
                 crate::qwen3_5_moe::PagedForwardMissingRouteCollector::default(),
+            hot_expert_warm_slot_count: std::cell::Cell::new(0),
         })
     }
 }

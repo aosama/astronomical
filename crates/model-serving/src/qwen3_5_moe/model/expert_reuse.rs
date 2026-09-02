@@ -5,7 +5,10 @@ use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::expert_paging::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
 };
-use crate::{PerformanceAttribution, should_commit_mandatory_complete_layer};
+use crate::{
+    PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
+    should_commit_mandatory_routed_page,
+};
 
 /// How one forward should execute one mixture-of-experts layer.
 pub(super) enum ExpertPageDisposition {
@@ -116,16 +119,21 @@ impl Qwen3_5Model {
     }
 
     /// Decode-only: stream the unique routed experts for this token without
-    /// displacing a seated complete layer.
+    /// displacing a seated complete layer, then offer them for hot-expert
+    /// retention so a later token can hit the warm table instead of re-reading
+    /// storage (issue #372). The offer honors the active residency plan: a
+    /// layer the plan streams operation-local or is releasing stays unwarmed.
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
         route_token_count: i32,
         routed_expert_ids: &[usize],
+        production_default_paging: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
     {
+        let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         let (streamed_weights, streamed_manifest) = expert_pager.load_rust_streamed_experts(
             &self.runtime,
             layer_index,
@@ -141,7 +149,56 @@ impl Qwen3_5Model {
                 routed_expert_ids.len(),
                 streamed_manifest.source_manifests.len(),
             );
+            let warm_slot_count = self.hot_expert_warm_slot_count();
+            if warm_slot_count > 0
+                && !retained_experts
+                    .borrow()
+                    .has_complete_layer(layer_index, expert_capacity)
+                && should_commit_mandatory_routed_page(
+                    route_token_count,
+                    production_default_paging,
+                    self.expert_residency_target(layer_index),
+                    false,
+                )
+            {
+                retained_experts
+                    .borrow_mut()
+                    .queue_pending_routed_expert_insert(
+                        layer_index,
+                        routed_expert_ids,
+                        &streamed_weights,
+                        warm_slot_count.min(expert_capacity),
+                    )?;
+            }
         }
         Ok((streamed_weights, streamed_manifest))
+    }
+
+    /// Returns the warm-table page when it covers every routed expert of this
+    /// decode token (hot-expert cache hit), counting the served reads for the
+    /// least-frequently-used eviction order. Complete layers are excluded:
+    /// they were already served by the upstream full-hit disposition.
+    pub(super) fn hot_expert_partial_page(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+        routed_expert_ids: &[usize],
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
+        let retained_experts = self.retained_experts.as_ref()?;
+        {
+            let cache = retained_experts.borrow();
+            if cache.has_complete_layer(layer_index, expert_capacity) {
+                return None;
+            }
+            let packed_page = cache.packed_page(layer_index, routed_expert_ids, expert_capacity)?;
+            drop(cache);
+            retained_experts
+                .borrow_mut()
+                .record_routed_reads(layer_index, routed_expert_ids);
+            performance_attribution
+                .record_counter(PerformanceCounter::HotExpertPartialRouteHitCount, 1);
+            Some(packed_page)
+        }
     }
 }

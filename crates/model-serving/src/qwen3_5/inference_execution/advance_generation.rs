@@ -311,9 +311,37 @@ impl Qwen3_5EngineState {
         let current_generated_token_id =
             synchronize_generated_token_id(active_request, &current_generated_token)?;
         if let Some(model) = self.model.as_ref() {
-            model
+            // Hot-expert warming (issue #372) must never take the adaptive
+            // growth guard's headroom: the learned transient reserve is what
+            // the next forward's admission needs. Bound retained ownership to
+            // retained bytes plus unclaimed headroom, so warming self-regulates
+            // and yields tables back under pressure.
+            if self.adaptive_ram_growth_guard_enabled
+                && let Ok(memory_snapshot) = model.runtime().memory_snapshot()
+            {
+                let routed_expert_page_reservation_bytes = model
+                    .expert_page_reservation_bytes_for_forward(1)
+                    .unwrap_or(u64::MAX);
+                let warm_retention_ceiling_bytes = self
+                    .adaptive_ram_growth_guard
+                    .hot_expert_retention_ceiling_bytes(
+                        memory_snapshot.active_memory_bytes(),
+                        model
+                            .expert_weight_memory_cache_statistics()
+                            .resident_payload_byte_count,
+                        usize::try_from(routed_expert_page_reservation_bytes).unwrap_or(usize::MAX),
+                    );
+                model.limit_retained_experts_to(warm_retention_ceiling_bytes);
+            }
+            let written_expert_count = model
                 .flush_pending_expert_slot_inserts()
                 .map_err(InferenceEngineError::from)?;
+            if written_expert_count > 0 {
+                active_request.performance_attribution.record_counter(
+                    crate::PerformanceCounter::HotExpertWarmInsertCount,
+                    written_expert_count,
+                );
+            }
         }
         if let Some(first_decode_forward_started_at) = first_decode_forward_started_at {
             active_request.first_decode_forward_elapsed_millis = Some(

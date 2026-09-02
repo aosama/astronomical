@@ -329,6 +329,41 @@ impl AdaptiveRamGrowthGuard {
             .unwrap_or(0)
     }
 
+    /// Returns the retained-payload ceiling that keeps the adaptive growth
+    /// guard's peak projection inside its limits: the active ceiling plus its
+    /// transient allowance, minus current active memory, the learned transient
+    /// reserve, and one routed-page reservation for the next forward, expressed
+    /// relative to current retained ownership.
+    ///
+    /// Decode warming allocates persistent tables that the next forward's
+    /// admission would otherwise count against the peak limit. Capping warming
+    /// at this headroom — and reclaiming tables when the headroom is negative —
+    /// keeps the hot-expert cache from taking memory the adaptive growth guard
+    /// must hold for transients and KV growth.
+    #[must_use]
+    pub fn hot_expert_retention_ceiling_bytes(
+        &self,
+        current_active_memory_bytes: usize,
+        current_retained_payload_bytes: u64,
+        routed_expert_page_reservation_bytes: usize,
+    ) -> u64 {
+        let transient_allowance_bytes = self.active_memory_ceiling_bytes / 100;
+        let allowed_active_memory_bytes =
+            self.active_memory_ceiling_bytes + transient_allowance_bytes;
+        let signed_headroom_bytes = i128::try_from(allowed_active_memory_bytes)
+            .unwrap_or(i128::MAX)
+            .saturating_sub(i128::try_from(current_active_memory_bytes).unwrap_or(i128::MAX))
+            .saturating_sub(
+                i128::try_from(self.admission_transient_high_water_bytes()).unwrap_or(i128::MAX),
+            )
+            .saturating_sub(
+                i128::try_from(routed_expert_page_reservation_bytes).unwrap_or(i128::MAX),
+            );
+        let signed_ceiling_bytes =
+            i128::from(current_retained_payload_bytes) + signed_headroom_bytes;
+        signed_ceiling_bytes.clamp(0, i128::from(u64::MAX)) as u64
+    }
+
     /// Builds a checked C-stable and P-peak projection from exact-context evidence.
     pub fn project_growth_for_context(
         &self,
