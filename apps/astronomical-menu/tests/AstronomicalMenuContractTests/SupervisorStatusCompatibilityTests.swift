@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
 
 final class SupervisorStatusCompatibilityTests: XCTestCase {
   func test_should_decode_image_generation_progress_from_the_public_status_contract() throws {

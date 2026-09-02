@@ -2,12 +2,17 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+  // The adaptor instantiates the delegate from the executable module, so the
+  // default initializer must be publicly reachable.
+  public override init() {}
+
   private let applicationIdentity = ApplicationIdentity.current()
   private lazy var supervisorClient = LocalSupervisorClient(applicationIdentity: applicationIdentity)
   private lazy var telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
-  private lazy var applicationUpdateController = ApplicationUpdateController(
-    applicationChannel: applicationIdentity.channel)
+  private lazy var applicationUpdateController: any ApplicationUpdateChecking =
+    ApplicationUpdateControllerInstaller.makeController(
+      applicationChannel: applicationIdentity.channel)
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     supervisorClient: supervisorClient, applicationIdentity: applicationIdentity)
   private var statusItem: NSStatusItem?
@@ -15,11 +20,11 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
   private var latestMenuBarTitle = ""
   private var daemonMaintenanceTask: Task<Void, Never>?
 
-  nonisolated func applicationWillFinishLaunching(_ notification: Notification) {
+  public nonisolated func applicationWillFinishLaunching(_ notification: Notification) {
     DispatchQueue.main.async { NSApp.setActivationPolicy(.regular) }
   }
 
-  func applicationDidFinishLaunching(_ notification: Notification) {
+  public func applicationDidFinishLaunching(_ notification: Notification) {
     let menuBarStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     menuBarStatusItem.button?.target = self
     menuBarStatusItem.button?.action = #selector(toggleTelemetryPopover)
@@ -57,6 +62,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
             self?.applicationUpdateController.selectUpdateChannel(updateChannel)
           }
         ),
+        updatesSupported: applicationUpdateController.supportsUserUpdateControls,
         revealConfiguration: revealConfiguration,
         quitApplication: { NSApp.terminate(nil) }
       )
@@ -86,7 +92,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
     DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
   }
 
-  func applicationWillTerminate(_ notification: Notification) {
+  public func applicationWillTerminate(_ notification: Notification) {
     daemonMaintenanceTask?.cancel()
     daemonMaintenanceTask = nil
     telemetryStore.stopPolling()
@@ -111,7 +117,7 @@ final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopo
     telemetryStore.setPopoverVisible(true)
   }
 
-  func popoverDidClose(_ notification: Notification) {
+  public func popoverDidClose(_ notification: Notification) {
     telemetryStore.setPopoverVisible(false)
     statusItem?.length = menuBarStatusItemLength(
       popoverIsShown: false,

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
 
 final class StatusPresentationContractTests: XCTestCase {
   func test_should_present_combined_target_and_drafter_avoided_prompt_work() throws {

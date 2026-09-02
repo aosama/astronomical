@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
 
 final class SupervisorClientContractTests: XCTestCase {
   func test_should_keep_stable_and_development_endpoints_and_state_separate() throws {

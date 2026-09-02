@@ -2,7 +2,8 @@
 
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
+@testable import AstronomicalMenuSparkleUpdateController
 
 @MainActor
 final class ApplicationUpdateControllerTests: XCTestCase {
@@ -47,9 +48,50 @@ final class ApplicationUpdateControllerTests: XCTestCase {
 }
 
 @MainActor
+final class AppStoreUpdateControllerTests: XCTestCase {
+  func test_should_report_that_store_builds_do_not_surface_update_controls() {
+    let updateController = AppStoreUpdateController()
+
+    XCTAssertFalse(updateController.supportsUserUpdateControls)
+  }
+
+  func test_should_never_offer_an_update_check_on_store_builds() {
+    let updateController = AppStoreUpdateController()
+
+    XCTAssertFalse(updateController.canCheckForUpdates)
+  }
+
+  func test_should_ignore_manual_and_automatic_update_actions_on_store_builds() {
+    let updateController = AppStoreUpdateController()
+
+    requestManualApplicationUpdateCheck(using: updateController)
+    setAutomaticApplicationUpdateChecks(true, using: updateController)
+
+    XCTAssertFalse(updateController.automaticallyChecksForUpdates)
+  }
+
+  func test_should_keep_the_default_update_channel_fixed_to_stable_on_store_builds() {
+    let updateController = AppStoreUpdateController()
+
+    updateController.selectUpdateChannel(.development)
+
+    XCTAssertEqual(updateController.selectedChannel, .stable)
+  }
+
+  func test_should_default_the_controller_to_store_semantics_without_an_installer() {
+    let updateController = ApplicationUpdateControllerInstaller.makeController(
+      applicationChannel: .stable)
+
+    XCTAssertFalse(updateController.supportsUserUpdateControls)
+  }
+}
+
+@MainActor
 private final class RecordingApplicationUpdateChecker: ApplicationUpdateChecking {
+  let supportsUserUpdateControls = true
   let canCheckForUpdates: Bool
   var automaticallyChecksForUpdates = true
+  private(set) var selectedChannel = ApplicationUpdateChannel.stable
   private(set) var updateCheckRequestCount = 0
 
   init(canCheckForUpdates: Bool) {
@@ -59,4 +101,8 @@ private final class RecordingApplicationUpdateChecker: ApplicationUpdateChecking
   func checkForUpdates() {
     updateCheckRequestCount += 1
   }
+
+  func start() {}
+
+  func selectUpdateChannel(_: ApplicationUpdateChannel) {}
 }

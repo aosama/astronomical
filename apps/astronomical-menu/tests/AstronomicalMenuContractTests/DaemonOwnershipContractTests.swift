@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenu
+@testable import AstronomicalMenuCore
 
 final class DaemonOwnershipContractTests: XCTestCase {
   func test_should_reject_an_ownership_record_for_another_executable() {
