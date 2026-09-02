@@ -165,7 +165,13 @@ impl Qwen3_5EngineState {
                             usize::try_from(routed_expert_page_reservation_bytes)
                                 .unwrap_or(usize::MAX),
                         );
+                    // The plan-composed ceiling already subtracted the
+                    // composer's activation workspace and context reserve;
+                    // the warm budget is what remains under the tighter of
+                    // the two ceilings.
+                    let plan_retained_ceiling_bytes = model.retained_expert_normal_ceiling_bytes();
                     let warm_budget_bytes = warm_retention_ceiling_bytes
+                        .min(plan_retained_ceiling_bytes)
                         .saturating_sub(expert_statistics.resident_payload_byte_count);
                     let (expert_capacity, per_expert_payload_bytes, sparse_layer_count) = model
                         .expert_pager

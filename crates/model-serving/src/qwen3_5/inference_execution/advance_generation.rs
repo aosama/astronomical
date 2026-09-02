@@ -331,7 +331,13 @@ impl Qwen3_5EngineState {
                             .resident_payload_byte_count,
                         usize::try_from(routed_expert_page_reservation_bytes).unwrap_or(usize::MAX),
                     );
-                model.limit_retained_experts_to(warm_retention_ceiling_bytes);
+                // The plan-composed ceiling already subtracted the composer's
+                // activation workspace, context reserve, and stream slot;
+                // warming must respect whichever ceiling is tighter.
+                let plan_retained_ceiling_bytes = model.retained_expert_normal_ceiling_bytes();
+                model.limit_retained_experts_to(
+                    warm_retention_ceiling_bytes.min(plan_retained_ceiling_bytes),
+                );
             }
             let written_expert_count = model
                 .flush_pending_expert_slot_inserts()
