@@ -129,6 +129,17 @@ read_plist_value() {
     plutil -extract "$1" raw -o - "${APP_BUNDLE_PATH}/Contents/Info.plist"
 }
 
+assert_sandbox_entitlement() {
+    executable_path="$1"
+    entitlement_key="$2"
+    executable_label="$3"
+    if codesign -d --entitlements - "$executable_path" 2>/dev/null         | grep -F "<key>${entitlement_key}</key>" >/dev/null 2>&1; then
+        return 0
+    fi
+    print_error "App Store executable ${executable_label} is missing the ${entitlement_key} entitlement"
+    exit 1
+}
+
 validate_real_model() {
     start_step "real-model-romeo-and-juliet"
     printf '%s\n' "  Shared GPU and wired memory are not isolated; this explicit journey may affect Stable latency."
@@ -210,13 +221,39 @@ main() {
     for bundled_executable in "$daemon_executable" "$menu_executable" "$worker_executable"; do
         [ -x "$bundled_executable" ] || { print_error "bundled executable is unavailable: ${bundled_executable}"; exit 1; }
     done
-    [ -d "$sparkle_framework" ] || { print_error "bundled Sparkle framework is unavailable: ${sparkle_framework}"; exit 1; }
-    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES SPARKLE_LICENSE Astronomical.icns; do
+    application_channel_early="$(read_plist_value AstronomicalChannel)"
+    if [ "$application_channel_early" = "app-store" ]; then
+        # Store builds are structurally Sparkle-free: no framework, no update
+        # keys, no Sparkle license. Their absence is the contract.
+        [ ! -e "$sparkle_framework" ] || { print_error "App Store bundle must not embed the Sparkle framework"; exit 1; }
+        [ ! -s "${APP_BUNDLE_PATH}/Contents/Resources/SPARKLE_LICENSE" ] || {
+            print_error "App Store bundle must not carry the Sparkle license resource"; exit 1
+        }
+        for sparkle_plist_key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks; do
+            if grep -F "<key>${sparkle_plist_key}</key>" "${APP_BUNDLE_PATH}/Contents/Info.plist" >/dev/null 2>&1; then
+                print_error "App Store bundle must not contain the ${sparkle_plist_key} update key"
+                exit 1
+            fi
+        done
+        if otool -L "$menu_executable" | grep -qi sparkle; then
+            print_error "App Store menu executable must not link the Sparkle framework"
+            exit 1
+        fi
+    else
+        [ -d "$sparkle_framework" ] || { print_error "bundled Sparkle framework is unavailable: ${sparkle_framework}"; exit 1; }
+    fi
+    for packaged_resource in LICENSE THIRD_PARTY_NOTICES RUST_DEPENDENCY_NOTICES Astronomical.icns; do
         [ -s "${APP_BUNDLE_PATH}/Contents/Resources/${packaged_resource}" ] || {
             print_error "required bundled resource is unavailable: ${packaged_resource}"
             exit 1
         }
     done
+    if [ "$application_channel_early" != "app-store" ]; then
+        [ -s "${APP_BUNDLE_PATH}/Contents/Resources/SPARKLE_LICENSE" ] || {
+            print_error "required bundled resource is unavailable: SPARKLE_LICENSE"
+            exit 1
+        }
+    fi
     bundled_metallib_path="${APP_BUNDLE_PATH}/Contents/Resources/share/mlx/mlx.metallib"
     if [ -L "$bundled_metallib_path" ] || [ ! -s "$bundled_metallib_path" ]; then
         print_error "required bundled MLX AOT metallib is unavailable"
@@ -233,7 +270,7 @@ main() {
     bundle_identifier="$(read_plist_value CFBundleIdentifier)"
     bundle_icon_file="$(read_plist_value CFBundleIconFile)"
     supervisor_port="$(read_plist_value AstronomicalSupervisorPort)"
-    state_directory_name="$(read_plist_value AstronomicalStateDirectoryName)"
+    state_directory_name=""
     case "$application_channel" in
         stable)
             expected_supervisor_port="6732"
@@ -246,6 +283,17 @@ main() {
             expected_state_directory_name=".astronomical-dev"
             expected_bundle_identifier="dev.astronomical.app.development"
             ;;
+        app-store)
+            expected_supervisor_port="6732"
+            expected_bundle_identifier="dev.astronomical.app.appstore"
+            # App Store bundles carry no state-directory name: state derives from
+            # Application Support. A present key is the failure, so its absence
+            # is proven by the extraction itself failing.
+            if read_plist_value AstronomicalStateDirectoryName >/dev/null 2>&1; then
+                print_error "App Store bundle must not embed a state directory name; state derives from Application Support"
+                exit 1
+            fi
+            ;;
         *) print_error "invalid bundle channel"; exit 1 ;;
     esac
     case "$supervisor_port" in ''|*[!0-9]*) print_error "invalid bundle supervisor port"; exit 1 ;; esac
@@ -257,8 +305,21 @@ main() {
     [ "$bundle_icon_file" = "Astronomical.icns" ] || { print_error "bundle icon identity is invalid"; exit 1; }
     case "$application_is_dirty" in true|false) ;; *) print_error "invalid bundle dirty marker"; exit 1 ;; esac
     [ "$supervisor_port" = "$expected_supervisor_port" ] || { print_error "bundle channel and supervisor port disagree"; exit 1; }
-    [ "$state_directory_name" = "$expected_state_directory_name" ] || { print_error "bundle channel and state directory disagree"; exit 1; }
+    if [ "$application_channel" != "app-store" ]; then
+        state_directory_name="$(read_plist_value AstronomicalStateDirectoryName)"
+        [ "$state_directory_name" = "$expected_state_directory_name" ] || {
+            print_error "bundle channel and state directory disagree"; exit 1
+        }
+    fi
     [ "$bundle_identifier" = "$expected_bundle_identifier" ] || { print_error "bundle channel and identifier disagree"; exit 1; }
+    if [ "$application_channel" = "app-store" ]; then
+        assert_sandbox_entitlement "$menu_executable" "com.apple.security.app-sandbox" "menu"
+        assert_sandbox_entitlement "$menu_executable" "com.apple.security.network.client" "menu"
+        assert_sandbox_entitlement "$menu_executable" "com.apple.security.network.server" "menu"
+        for inherited_executable in "$daemon_executable" "$worker_executable"; do
+            assert_sandbox_entitlement "$inherited_executable" "com.apple.security.inherit" "$(basename "$inherited_executable")"
+        done
+    fi
     codesign --verify --deep --strict "$APP_BUNDLE_PATH"
     codesign --verify --deep --strict "$sparkle_framework"
     daemon_version_output="$("$daemon_executable" --version)"

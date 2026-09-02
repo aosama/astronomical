@@ -196,7 +196,7 @@ struct OrbitalTelemetryPopover: View {
             .font(.caption)
             .foregroundStyle(.orange)
         }
-        Text("Config: ~/\(applicationIdentity.stateDirectoryName)/config.json · Port \(applicationIdentity.supervisorPort)")
+        Text("Config: \(applicationIdentity.expectedConfigurationFile) · Port \(applicationIdentity.supervisorPort)")
           .font(.caption)
           .foregroundStyle(.secondary)
       }
