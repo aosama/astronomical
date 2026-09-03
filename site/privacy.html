@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Privacy Policy | Astronomical</title>
+    <meta name="description" content="Astronomical runs every model locally on your Mac. This policy describes the few network requests the app makes and the data it does not collect.">
+    <meta name="theme-color" content="#10120f">
+    <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <style>
+      .doc { padding-block: 96px; }
+      .doc-body { max-width: 720px; margin-inline: auto; }
+      .doc-body h1 { font-size: 2rem; margin: 0 0 8px; }
+      .doc-body h2 { font-size: 1.2rem; margin-block: 32px 8px; }
+      .doc-body p, .doc-body li { color: var(--paper-muted); line-height: 1.65; }
+      .doc-body ul { padding-left: 20px; }
+      .doc-body strong { color: var(--paper); }
+      .doc-meta { color: var(--paper-muted); font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Astronomical home">
+        <img src="./assets/mark.svg" alt="" width="36" height="36">
+        <span>Astronomical</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="./index.html">Home</a>
+        <a href="./support.html">Support</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="doc shell">
+        <div class="doc-body">
+          <p class="eyebrow">Privacy policy</p>
+          <h1>Privacy Policy</h1>
+          <p class="doc-meta">Effective: September 2, 2026 · Applies to the Astronomical macOS application.</p>
+
+          <h2>The short version</h2>
+          <p>Astronomical runs language, vision, and image models entirely on your Mac. Your prompts, conversations, documents, and images are processed on your device and are never sent to us — we operate no servers that receive them. The app has no accounts, no sign-in, no advertising, and no in-app analytics.</p>
+
+          <h2>What never leaves your Mac</h2>
+          <ul>
+            <li>Every inference request: prompts, model outputs, images, and documents you work with.</li>
+            <li>Your configuration, including the memory ceiling you set.</li>
+            <li>Prompt caches and model caches stored on your disk.</li>
+          </ul>
+
+          <h2>Network requests the app makes</h2>
+          <p>The app makes a small number of network requests, none of which involve your content:</p>
+          <ul>
+            <li><strong>Model downloads.</strong> When you choose to install a model, the app downloads model files from public model repositories, such as Hugging Face. The repository sees a standard request for publicly published files. Downloading a model is always an action you initiate.</li>
+            <li><strong>Update checks.</strong> Builds distributed outside the Mac App Store check a signed update feed to tell you when a new version exists. The feed operator sees standard web requests for the update description. App Store builds receive updates exclusively through the App Store and make no such request.</li>
+            <li><strong>Local API.</strong> The app serves a local interface on this Mac only, at a loopback address. Requests to it never leave your machine.</li>
+          </ul>
+
+          <h2>Diagnostics and crash reports</h2>
+          <p>The app itself contains no crash reporting and no usage analytics.</p>
+          <ul>
+            <li><strong>Mac App Store builds.</strong> If you have opted in (in System Settings) to sharing diagnostics and analytics with developers, Apple collects crash reports and aggregated usage statistics through Apple's own systems and shares them with us under Apple's privacy protections. We never receive your content, and individual identification is prevented by Apple's aggregation.</li>
+            <li><strong>Direct-distribution builds.</strong> Crash reports stay on your machine in the system crash reporter. They are sent nowhere unless you choose to attach one yourself when contacting support.</li>
+          </ul>
+
+          <h2>What we do not do</h2>
+          <ul>
+            <li>We do not collect, sell, or share personal data. There is no data to sell: no accounts exist.</li>
+            <li>We do not use advertising identifiers, device fingerprinting, or cross-app tracking.</li>
+            <li>We do not read files outside the locations the app uses for models, caches, logs, and your saved outputs.</li>
+          </ul>
+
+          <h2>Data stored on your Mac</h2>
+          <p>The app stores downloaded model files, caches, logs, and your configuration on your disk in its designated application-support locations. You can remove everything by deleting the app's data locations or uninstalling the app; nothing is retained remotely.</p>
+
+          <h2>Third-party components</h2>
+          <p>Astronomical is open source. Direct-distribution builds embed the open-source Sparkle update framework, described above. App Store builds use Apple's built-in update mechanism. The full component list ships inside the application under Third-Party Notices.</p>
+
+          <h2>Changes to this policy</h2>
+          <p>If Astronomical's data practices ever change — for example, if an opt-in analytics feature ships — this page will be updated first, and the App Store privacy label will be updated in the same release.</p>
+
+          <h2>Contact</h2>
+          <p>Questions about this policy: <a href="./support.html">Support</a>.</p>
+          <p class="doc-meta">Privacy policy for the Astronomical macOS application, distributed on the Mac App Store and directly. Last updated: September 2, 2026.</p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <a class="brand" href="./index.html">
+        <img src="./assets/mark.svg" alt="" width="30" height="30">
+        <span>Astronomical</span>
+      </a>
+      <p>Local language, vision, and image serving for Apple silicon.</p>
+      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./support.html">Support</a><a href="./index.html">Home</a></div>
+    </footer>
+  </body>
+</html>
