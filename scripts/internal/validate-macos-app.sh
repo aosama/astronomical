@@ -324,7 +324,9 @@ main() {
         done
     fi
     codesign --verify --deep --strict "$APP_BUNDLE_PATH"
-    codesign --verify --deep --strict "$sparkle_framework"
+    if [ "$application_channel" != "app-store" ]; then
+        codesign --verify --deep --strict "$sparkle_framework"
+    fi
     daemon_version_output="$("$daemon_executable" --version)"
     case "$daemon_version_output" in
         *"${application_version}"*"${application_commit}"*) ;;
