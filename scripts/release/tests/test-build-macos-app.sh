@@ -398,7 +398,7 @@ CODESIGN
         print_error "App Store bundle does not declare the app-store channel"
         exit 1
     }
-    grep -F '<key>CFBundleIdentifier</key><string>dev.astronomical.app.appstore</string>' \
+    grep -F '<key>CFBundleIdentifier</key><string>app.astronomical.appstore</string>' \
         "${app_store_app_bundle}/Contents/Info.plist" >/dev/null || {
         print_error "App Store bundle does not carry the app-store bundle identifier"
         exit 1

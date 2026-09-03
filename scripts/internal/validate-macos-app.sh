@@ -288,7 +288,7 @@ main() {
             ;;
         app-store)
             expected_supervisor_port="6732"
-            expected_bundle_identifier="dev.astronomical.app.appstore"
+            expected_bundle_identifier="app.astronomical.appstore"
             # App Store bundles carry no state-directory name: state derives from
             # Application Support. A present key is the failure, so its absence
             # is proven by the extraction itself failing.
