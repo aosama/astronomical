@@ -19,6 +19,12 @@ use crate::{WorkerControlError, worker_stderr_tail::WorkerStderrTail};
 
 const WORKER_STDERR_READ_BYTES: usize = 1_024;
 const WORKER_EXIT_DIAGNOSTIC_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
+// A worker that just closed its stdout is milliseconds from exiting. The
+// exit diagnostic waits this long for the natural exit before falling back
+// to the "still running" snapshot, so the reported status is the real exit
+// code even when the kernel has not reaped the child at the instant of the
+// first check.
+const WORKER_NATURAL_EXIT_GRACE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Outcome reported after a worker process is terminated and reaped.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -393,10 +399,23 @@ impl WorkerProcess {
                 }
             }
         }
-        let process_exit_status = match self.worker_process.try_wait() {
-            Ok(Some(worker_exit_status)) => worker_exit_status_description(worker_exit_status),
-            Ok(None) => "process still running after closing stdout".to_owned(),
-            Err(wait_error) => format!("failed to inspect process exit status: {wait_error}"),
+        let process_exit_status = match timeout(
+            WORKER_NATURAL_EXIT_GRACE_TIMEOUT,
+            self.worker_process.wait(),
+        )
+        .await
+        {
+            Ok(Ok(worker_exit_status)) => worker_exit_status_description(worker_exit_status),
+            Ok(Err(wait_error)) => {
+                format!("failed to inspect process exit status: {wait_error}")
+            }
+            Err(_) => match self.worker_process.try_wait() {
+                Ok(Some(worker_exit_status)) => worker_exit_status_description(worker_exit_status),
+                Ok(None) => "process still running after closing stdout".to_owned(),
+                Err(wait_error) => {
+                    format!("failed to inspect process exit status: {wait_error}")
+                }
+            },
         };
         WorkerControlError::WorkerProcessExited {
             process_exit_status,
