@@ -133,7 +133,10 @@ assert_sandbox_entitlement() {
     executable_path="$1"
     entitlement_key="$2"
     executable_label="$3"
-    if codesign -d --entitlements - "$executable_path" 2>/dev/null         | grep -F "<key>${entitlement_key}</key>" >/dev/null 2>&1; then
+    # codesign renders DER entitlements in its decoded [Key] form rather than
+    # the XML source form, so match the bare key name against either shape.
+    if codesign -d --entitlements - "$executable_path" 2>/dev/null \
+        | grep -F "${entitlement_key}" >/dev/null 2>&1; then
         return 0
     fi
     print_error "App Store executable ${executable_label} is missing the ${entitlement_key} entitlement"
