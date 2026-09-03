@@ -313,7 +313,7 @@ main() {
             release_directory="${repository_root}/target/astronomical-macos-app-store.noindex"
             app_bundle_path="${release_directory}/Astronomical.app"
             bundle_name="Astronomical"
-            bundle_identifier="dev.astronomical.app.appstore"
+            bundle_identifier="app.astronomical.appstore"
             supervisor_port="6732"
             state_directory_name=""
             icon_channel="stable"
