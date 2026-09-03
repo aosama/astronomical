@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Support | Astronomical</title>
+    <meta name="description" content="Support for Astronomical, the local Mac app for language, vision, and image models. Get help, report bugs, and find answers to common questions.">
+    <meta name="theme-color" content="#10120f">
+    <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <style>
+      .doc { padding-block: 96px; }
+      .doc-body { max-width: 720px; margin-inline: auto; }
+      .doc-body h1 { font-size: 2rem; margin: 0 0 8px; }
+      .doc-body h2 { font-size: 1.2rem; margin-block: 32px 8px; }
+      .doc-body p, .doc-body li { color: var(--paper-muted); line-height: 1.65; }
+      .doc-body ul, .doc-body ol { padding-left: 20px; }
+      .doc-body strong { color: var(--paper); }
+      .doc-body code { color: var(--paper); }
+      .support-cta { margin-block: 24px; }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Astronomical home">
+        <img src="./assets/mark.svg" alt="" width="36" height="36">
+        <span>Astronomical</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="./index.html">Home</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="doc shell">
+        <div class="doc-body">
+          <p class="eyebrow">Support</p>
+          <h1>Support</h1>
+          <p>Astronomical is actively developed and used daily. If something does not work, we want to hear about it — most issues are answered or fixed quickly.</p>
+
+          <div class="hero-actions support-cta">
+            <a class="button button-primary" href="https://github.com/aosama/astronomical/issues/new/choose">Report an issue on GitHub</a>
+            <a class="button button-secondary" href="https://github.com/aosama/astronomical/issues">Browse existing issues</a>
+          </div>
+
+          <h2>Before you report</h2>
+          <ul>
+            <li><strong>System requirements.</strong> Astronomical needs an Apple silicon Mac (M1 or later) running macOS 26 or later. Memory needs depend on the model you load; the app shows a recommended ceiling before a model is admitted.</li>
+            <li><strong>Check your version.</strong> The menu-bar popover shows the app version and build number. Mention both when reporting.</li>
+            <li><strong>Try the obvious fix.</strong> A stuck model download recovers by retrying the download; a wedged server responds to "Restart server" in the popover.</li>
+          </ul>
+
+          <h2>What to include in a report</h2>
+          <ol>
+            <li>The app version and build number from the popover.</li>
+            <li>Your Mac model and installed memory.</li>
+            <li>What you did, what you expected, and what happened.</li>
+            <li>For serving problems: the response you received and the relevant lines from the app's log file, stored in the app's data location under <code>logs/</code>.</li>
+            <li>For crashes on Mac App Store builds: whether you have diagnostics sharing enabled, and the crash report time if Apple showed you one.</li>
+          </ol>
+          <p>Please do not paste model outputs, documents, or images you meant to keep private — a description of the behavior is enough, and logs can be reviewed locally before you attach anything.</p>
+
+          <h2>Common questions</h2>
+          <ul>
+            <li><strong>A model will not download.</strong> Model files come from public model repositories. Check your connection, then retry the download from the model library. Corporate and school networks sometimes block these repositories.</li>
+            <li><strong>The app says there is not enough memory.</strong> The memory ceiling is a safety boundary, not a bug. Pick a smaller quantization of the same model, or free wired memory and retry. The recommendation in the popover accounts for your installed memory.</li>
+            <li><strong>How do I use the local API?</strong> The app serves an OpenAI-compatible interface on this Mac at a loopback address; the popover shows the port. Point any local client at it. Requests never leave this machine.</li>
+            <li><strong>Where are my models stored?</strong> In the app's designated application-support location. App Store builds keep everything inside their sandbox container; you can remove all of it by deleting the app's data.</li>
+          </ul>
+
+          <h2>Contact</h2>
+          <p>The fastest route is <a href="https://github.com/aosama/astronomical/issues/new/choose">a GitHub issue</a> — it reaches the developer directly and keeps the answer searchable for everyone.</p>
+          <!-- CONTACT EMAIL PLACEHOLDER: an optional direct email address can be
+               added here for App Review's support-contact check. Decision and
+               address belong to the site owner; do not publish any address
+               without explicit approval. -->
+          <p class="doc-meta">Astronomical is open source under its repository license. Privacy policy: <a href="./privacy.html">privacy.html</a>.</p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <a class="brand" href="./index.html">
+        <img src="./assets/mark.svg" alt="" width="30" height="30">
+        <span>Astronomical</span>
+      </a>
+      <p>Local language, vision, and image serving for Apple silicon.</p>
+      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./privacy.html">Privacy</a><a href="./index.html">Home</a></div>
+    </footer>
+  </body>
+</html>
