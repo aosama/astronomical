@@ -9,6 +9,14 @@ extension SupervisorStatusDocument {
       || activity == "generating" || activity == "image_generation"
   }
 
+  // Prompt-processing activity is published as soon as the request starts, but
+  // the first PrefillProgress event arrives only after prompt-cache restore
+  // returns. Missing progress in that window is restore work, not idle and not
+  // expert SSD streaming.
+  private var isRestoringPromptCache: Bool {
+    activity == "prompt_processing" && progress == nil
+  }
+
   // The status endpoint supplies request-elapsed time during prompt processing and phase-elapsed
   // time during generation, so only token progress can produce a meaningful token rate.
   var currentPhaseTokensPerSecond: Double? {
@@ -32,6 +40,7 @@ extension SupervisorStatusDocument {
         : "Image · \(progress.shortImagePhaseTitle)"
     }
     if activity == "generation_preparation" { return "Preparing…" }
+    if isRestoringPromptCache { return "Restoring…" }
     guard activity == "prompt_processing", let progress else { return "" }
     let completionPercentageTitle = progress.completionPercentageTitle
     if progress.phase == "drafter" { return "Drafting…" }
@@ -52,6 +61,7 @@ extension SupervisorStatusDocument {
         : progress.imagePhaseTitle
     }
     if activity == "generation_preparation" { return "Preparing generation…" }
+    if isRestoringPromptCache { return "Restoring prompt cache" }
     guard let progress else { return phaseTitle }
     if progress.phase == "drafter" { return "Drafting…" }
     guard let currentPhaseTokensPerSecond else {
@@ -64,7 +74,9 @@ extension SupervisorStatusDocument {
     switch activity {
     case "generating": "Generating"
     case "generation_preparation": "Preparing generation"
-    case "prompt_processing": progress?.phase == "drafter" ? "Drafting…" : "Prompt processing"
+    case "prompt_processing" where isRestoringPromptCache: "Restoring prompt cache"
+    case "prompt_processing" where progress?.phase == "drafter": "Drafting…"
+    case "prompt_processing": "Prompt processing"
     case "image_generation": progress?.imagePhaseTitle ?? "Generating image"
     default:
       switch status {
@@ -99,7 +111,9 @@ extension SupervisorStatusDocument {
   }
 
   var progressTitle: String {
-    guard let progress else { return "Standing by" }
+    guard let progress else {
+      return isRestoringPromptCache ? "Restoring prompt cache" : "Standing by"
+    }
     if progress.unit == .steps {
       guard progress.phase == "denoising" else { return progress.imagePhaseTitle }
       if progress.hasCompletedDenoising { return "Denoising complete" }
@@ -120,6 +134,7 @@ extension SupervisorStatusDocument {
   }
 
   var elapsedTimeTitle: String {
+    if isRestoringPromptCache { return "Calculating" }
     guard let progress else { return "Not active" }
     let elapsedSeconds = Double(progress.elapsedMilliseconds) / 1_000
     guard progress.unit != .steps && progress.phase != "generation"
@@ -139,6 +154,7 @@ extension SupervisorStatusDocument {
   }
 
   var hasDeterminateProgress: Bool {
+    if isRestoringPromptCache { return false }
     guard let progress else { return true }
     return progress.unit != .steps || progress.phase == "denoising"
   }
