@@ -4,25 +4,24 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.28</title>
-            <pubDate>Wed, 02 Sep 2026 08:18:10 -0400</pubDate>
-            <sparkle:version>402</sparkle:version>
-            <sparkle:shortVersionString>0.2.28</sparkle:shortVersionString>
+            <title>0.2.29</title>
+            <pubDate>Sat, 05 Sep 2026 07:20:46 -0400</pubDate>
+            <sparkle:version>417</sparkle:version>
+            <sparkle:shortVersionString>0.2.29</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.28
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.29
 
 ## Highlights
 
-- **Serve on any M-series Mac.** Astronomical now probes the GPU's real kernel capabilities when a model loads and falls back to supported MLX execution paths when an optimized kernel is unavailable, so more Apple Silicon machines can serve the same artifacts correctly.
-- **Hot-expert decode caching.** Experts routed repeatedly during sustained generation stay resident under an adaptive warm-capacity guard, cutting repeated expert page reads on the decode hot path.
-- **Tighter retained-memory discipline.** Decode warm capacity now respects the plan-composed retained-expert ceiling — the tighter of the growth-guard and plan ceilings — so warm tables cannot arm above the composed memory plan on memory-tight machines.
-- **Fixed three SpecPrefill drafter acceptance journeys** that could never reach green, restoring full regression coverage of the speculative prefill pipeline.
+- **Library catalog.** Observatory Library now offers Ornith 1.5 35B A3B OptiQ 4bit, the public mixed-precision vision-language artifact with a bf16 vision sidecar and an int4 multi-token-prediction head. The previous static 5.5bpw 35B catalog card is no longer listed. The 9B vision and FLUX.2 Klein offers remain.
+- **Prompt-cache restore.** Restored prompt-cache key/value state is assembled at final length, and Observatory shows Restoring… until prefill progress is available, so a cache hit is no longer mistaken for an idle or failed start.
+- **Worker-exit diagnostics.** An owned daemon death is classified as an early exit rather than a readiness timeout, and exit diagnostics wait for the natural worker exit so failure reports match the process that actually stopped.
 
 ## Details
 
-- Memory policy ownership is consolidated into the memory package with one shared vocabulary across admission, residency, and budget decisions. This is an internal restructuring; the enforcement above is its user-visible effect.
-- The performance research record in the repository documentation was extended with the Apple Neural Engine closure verdict and a verified study of hand-written Metal kernels versus MLX defaults. No runtime behavior change.
+- The macOS menu application is packaged as a Sparkle-linked executable plus a Sparkle-free App Store executable that share one core. Existing Stable users continue to update through the signed Sparkle feed.
+- Public privacy and support pages for the App Store channel are published on the project site. They do not change the Developer ID update journey.
 
 ## Compatibility
 
@@ -32,11 +31,12 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 
 ## Distribution
 
-This release is distributed as a Developer ID–signed, notarized DMG. The Sparkle update feed is Ed25519-signed; the appcast enclosure and release asset carry matching SHA-256 digests recorded in the release manifest.]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.28/Astronomical-0.2.28-macOS-arm64.dmg" length="15878281" type="application/octet-stream" sparkle:edSignature="ysF5hxJq20nmWwbnw/VBrvNsD1OpSIaqWAZQk01mxNoVP4wi50Gm4BP8YWJxxMcBWAtlC5nDWyajgm9WhqyjBg=="></enclosure>
+This release is distributed as a Developer ID–signed, notarized DMG. The Sparkle update feed is Ed25519-signed; the appcast enclosure and release asset carry matching SHA-256 digests recorded in the release manifest.
+]]></description>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.29/Astronomical-0.2.29-macOS-arm64.dmg" length="15887312" type="application/octet-stream" sparkle:edSignature="yi/Dy0P+AueepXgLom8jUfL/mpXVem9CcHIs83PzxRND2jns0jiTawP/ac6GrPrJP61adpG2mc4JvRym3GBiDQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: /b5Ot9y3NzsH79aBCHZVrS8JgN0kS7RaYIIdDsVaN76dujcSF6S5ooSJaoZd/cD1YmugNCfWdaGEdIDW1n56AQ==
-length: 3037
+edSignature: 6kR64g3E9RsNgssnBSWXSYxMfiauf1QdHgh5yAikhhNRLyb5SfRRvEO4+Rmk0mlvnNq19O0NaivRXnwyOy70Cw==
+length: 2833
 -->
