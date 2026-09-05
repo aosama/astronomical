@@ -281,6 +281,7 @@ fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
             thinking_budget: Some(0),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     let inference_request = tokenizer
@@ -367,6 +368,7 @@ fn should_reject_a_thinking_budget_that_cannot_fit_its_transition_and_visible_an
                     thinking_budget: Some(1),
                 },
                 qwen_thinking_channel_seed: None,
+                structured_generation: None,
             },
             true,
         )
@@ -466,6 +468,7 @@ fn should_prepare_chat_tokens_that_include_the_seeded_thinking_channel_text() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: Some(ROMEO_AND_JULIET_THINKING_CHANNEL_SEED.to_owned()),
+        structured_generation: None,
     };
     let rendered_prompt = Qwen3_5PromptRenderer::render(
         &[user_turn],

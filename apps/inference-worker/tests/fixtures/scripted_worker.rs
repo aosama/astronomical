@@ -40,6 +40,7 @@ async fn main() {
                 ChatGenerationCompletionReason::EndOfSequence,
             ),
             WorkerCommand::GenerateImage(_) => continue,
+            WorkerCommand::GenerateEmbeddings(_) => continue,
             WorkerCommand::Cancel { request_id } => {
                 (request_id, ChatGenerationCompletionReason::Cancelled)
             }

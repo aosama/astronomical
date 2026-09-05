@@ -187,6 +187,7 @@ fn chat_command(request_number: u64) -> ChatGenerationCommand {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }
 

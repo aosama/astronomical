@@ -135,7 +135,7 @@ impl ResolvedRuntimeConfigResolver {
                 ModelCapabilities::Chat(capabilities) => {
                     Some((model.model_id.clone(), capabilities.context_window))
                 }
-                ModelCapabilities::ImageGeneration(_) => None,
+                ModelCapabilities::ImageGeneration(_) | ModelCapabilities::Embeddings(_) => None,
             })
             .collect::<HashMap<_, _>>();
         let unmatched_model_config_ids = user_config

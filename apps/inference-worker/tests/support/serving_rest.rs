@@ -272,6 +272,42 @@ pub(crate) async fn launch_serving_rest_server_for_model_with_memory_limit(
     performance_log_directory: Option<&Path>,
     maximum_mlx_memory_bytes: Option<u64>,
 ) -> ServingRestServer {
+    launch_serving_rest_server_for_artifact_with_memory_limit(
+        super::discovered_model_artifact(model_id, &model_directory, 20_480),
+        isolated_worker_home_directory,
+        performance_log_directory,
+        maximum_mlx_memory_bytes,
+    )
+    .await
+}
+
+/// Launches the serving REST surface with the target model advertised as an embedding model.
+pub(crate) async fn launch_serving_rest_server_for_embedding_model(
+    model_id: &str,
+    model_directory: PathBuf,
+    vector_width: u32,
+    max_input_tokens: u32,
+) -> ServingRestServer {
+    launch_serving_rest_server_for_artifact_with_memory_limit(
+        super::discovered_embedding_model_artifact(
+            model_id,
+            &model_directory,
+            vector_width,
+            max_input_tokens,
+        ),
+        None,
+        None,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn launch_serving_rest_server_for_artifact_with_memory_limit(
+    discovered_model_artifact: astronomical_config::DiscoveredModel,
+    isolated_worker_home_directory: Option<&Path>,
+    performance_log_directory: Option<&Path>,
+    maximum_mlx_memory_bytes: Option<u64>,
+) -> ServingRestServer {
     let production_worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
             .expect("Cargo should provide the production inference-worker executable path"),
@@ -338,11 +374,7 @@ pub(crate) async fn launch_serving_rest_server_for_model_with_memory_limit(
         }
         None => build_application_with_discovered_models(
             worker_handle.clone(),
-            vec![super::discovered_model_artifact(
-                model_id,
-                &model_directory,
-                20_480,
-            )],
+            vec![discovered_model_artifact],
         ),
     };
     let server = axum::serve(listener, application).with_graceful_shutdown(async {

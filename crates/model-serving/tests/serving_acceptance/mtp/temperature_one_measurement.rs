@@ -223,6 +223,7 @@ fn romeo_and_juliet_prompt_token_ids(artifact_directory: &std::path::Path) -> Ve
                     thinking_budget: None,
                 },
                 qwen_thinking_channel_seed: None,
+                structured_generation: None,
             },
             false,
         )

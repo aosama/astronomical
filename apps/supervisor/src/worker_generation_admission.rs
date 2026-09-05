@@ -1,18 +1,18 @@
-//! Owns the one bounded FIFO admission path shared by chat and image requests.
+//! Owns the one bounded FIFO admission path shared by chat, image, and embedding requests.
 //!
-//! Both modalities reserve the same queue and active permits before dispatch,
+//! All modalities reserve the same queue and active permits before dispatch,
 //! preserving serial execution, cancellation-by-future-drop, and capacity limits.
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use astronomical_ipc_protocol::{ChatGenerationCommand, ImageGenerationCommand};
+use astronomical_ipc_protocol::{ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::worker_loop_types::WorkerLoopCommand;
 use crate::{
-    ChatGenerationStreamEvent, GenerationStartError, ImageGenerationExecutionError,
-    ImageGenerationOutput, WorkerHandle,
+    ChatGenerationStreamEvent, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
+    ImageGenerationExecutionError, ImageGenerationOutput, WorkerHandle,
 };
 
 // One slot for every possible 128-token prefill progress boundary plus the
@@ -129,6 +129,61 @@ impl WorkerHandle {
                 .map_err(|_| GenerationStartError::WorkerUnavailable)??;
 
             Ok(image_result_receiver)
+        })
+    }
+
+    pub(super) fn start_embeddings_generation_with_queue_admission(
+        &self,
+        embeddings_command: EmbeddingsCommand,
+        admission_sender: Option<oneshot::Sender<()>>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            let command_sender = self
+                .command_sender
+                .as_ref()
+                .ok_or(GenerationStartError::WorkerUnavailable)?;
+            let generation_queue_permit = Arc::clone(&self.generation_queue_permits)
+                .try_acquire_owned()
+                .map_err(|_| GenerationStartError::CapacityUnavailable)?;
+            let admitted_at = Instant::now();
+            if let Some(admission_sender) = admission_sender {
+                let _admission_signal_result = admission_sender.send(());
+            }
+            let active_generation_permit = Arc::clone(&self.active_generation_permits)
+                .acquire_owned()
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            let queue_wait_elapsed = admitted_at.elapsed();
+            drop(generation_queue_permit);
+
+            let (embeddings_result_sender, embeddings_result_receiver) = mpsc::channel(1);
+            let (start_sender, start_receiver) = oneshot::channel();
+            command_sender
+                .send(WorkerLoopCommand::GenerateEmbeddings {
+                    active_generation_permit,
+                    embeddings_command,
+                    start_sender,
+                    embeddings_result_sender,
+                    admitted_at,
+                    queue_wait_elapsed,
+                })
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            start_receiver
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)??;
+
+            Ok(embeddings_result_receiver)
         })
     }
 }

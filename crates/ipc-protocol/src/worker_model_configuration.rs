@@ -51,6 +51,26 @@ pub enum WorkerImageGenerationModelFamily {
     Flux2Klein,
 }
 
+/// Typed embedding profile identifier carried without autoregressive placeholders.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerEmbeddingModelFamily {
+    ModernBert,
+}
+
+/// Exact embedding artifact identity required by the selected profile.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerEmbeddingModelConfiguration {
+    pub model_id: String,
+    pub model_family: WorkerEmbeddingModelFamily,
+    pub artifact_revision: String,
+    /// Native vector width produced by the loaded artifact.
+    pub vector_width: u32,
+    /// Maximum accepted prompt tokens per embedding input.
+    pub maximum_input_tokens: u32,
+}
+
 /// Exact FLUX artifact identity required by the selected image profile.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -71,6 +91,7 @@ pub struct WorkerFlux2KleinModelConfiguration {
 pub enum WorkerModelConfiguration {
     Autoregressive(WorkerAutoregressiveModelConfiguration),
     Flux2Klein(WorkerFlux2KleinModelConfiguration),
+    Embeddings(WorkerEmbeddingModelConfiguration),
 }
 
 /// Path-free loaded-model policy acknowledged to the supervisor and local status API.
@@ -84,6 +105,7 @@ pub enum WorkerModelConfiguration {
 pub enum WorkerLoadedModelRuntimeConfiguration {
     Autoregressive(WorkerLoadedAutoregressiveModelRuntimeConfiguration),
     Flux2Klein(WorkerFlux2KleinModelConfiguration),
+    Embeddings(WorkerEmbeddingModelConfiguration),
 }
 
 impl WorkerModelConfiguration {
@@ -93,6 +115,7 @@ impl WorkerModelConfiguration {
         match self {
             Self::Autoregressive(configuration) => &configuration.model_id,
             Self::Flux2Klein(configuration) => &configuration.model_id,
+            Self::Embeddings(configuration) => &configuration.model_id,
         }
     }
 
@@ -101,7 +124,7 @@ impl WorkerModelConfiguration {
     pub const fn autoregressive(&self) -> Option<&WorkerAutoregressiveModelConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_) => None,
+            Self::Flux2Klein(_) | Self::Embeddings(_) => None,
         }
     }
 
@@ -112,7 +135,7 @@ impl WorkerModelConfiguration {
     ) -> Option<&mut WorkerAutoregressiveModelConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_) => None,
+            Self::Flux2Klein(_) | Self::Embeddings(_) => None,
         }
     }
 
@@ -151,6 +174,9 @@ impl WorkerModelConfiguration {
             Self::Flux2Klein(configuration) => {
                 WorkerLoadedModelRuntimeConfiguration::Flux2Klein(configuration.clone())
             }
+            Self::Embeddings(configuration) => {
+                WorkerLoadedModelRuntimeConfiguration::Embeddings(configuration.clone())
+            }
         }
     }
 }
@@ -162,6 +188,7 @@ impl WorkerLoadedModelRuntimeConfiguration {
         match self {
             Self::Autoregressive(configuration) => &configuration.model_id,
             Self::Flux2Klein(configuration) => &configuration.model_id,
+            Self::Embeddings(configuration) => &configuration.model_id,
         }
     }
 
@@ -172,7 +199,7 @@ impl WorkerLoadedModelRuntimeConfiguration {
     ) -> Option<&WorkerLoadedAutoregressiveModelRuntimeConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_) => None,
+            Self::Flux2Klein(_) | Self::Embeddings(_) => None,
         }
     }
 }

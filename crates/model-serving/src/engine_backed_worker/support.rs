@@ -12,15 +12,23 @@ use thiserror::Error;
 use crate::{ImageGenerationUnavailableEngine, InferenceEngineError};
 
 /// Unloaded runtime selected by the model factory for one typed model configuration.
-pub enum ModelFactoryRuntime<Processor, Engine, ImageEngine = ImageGenerationUnavailableEngine> {
+pub enum ModelFactoryRuntime<
+    Processor,
+    Engine,
+    ImageEngine = ImageGenerationUnavailableEngine,
+    EmbeddingEngine = crate::EmbeddingUnavailableEngine,
+> {
     Autoregressive {
         processor: Processor,
         engine: Engine,
     },
     Image(ImageEngine),
+    Embeddings(EmbeddingEngine),
 }
 
-impl<Processor, Engine, ImageEngine> ModelFactoryRuntime<Processor, Engine, ImageEngine> {
+impl<Processor, Engine, ImageEngine, EmbeddingsEngine>
+    ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>
+{
     #[must_use]
     pub fn autoregressive(processor: Processor, engine: Engine) -> Self {
         Self::Autoregressive { processor, engine }
@@ -28,8 +36,12 @@ impl<Processor, Engine, ImageEngine> ModelFactoryRuntime<Processor, Engine, Imag
 }
 
 /// Factory that creates a new processor and engine for a selected model directory.
-pub trait ModelFactory<Processor, Engine, ImageEngine = ImageGenerationUnavailableEngine>:
-    Send + Sync + 'static
+pub trait ModelFactory<
+    Processor,
+    Engine,
+    ImageEngine = ImageGenerationUnavailableEngine,
+    EmbeddingsEngine = crate::EmbeddingUnavailableEngine,
+>: Send + Sync + 'static
 {
     /// Creates one unloaded runtime for the exact tagged model configuration.
     ///
@@ -40,7 +52,10 @@ pub trait ModelFactory<Processor, Engine, ImageEngine = ImageGenerationUnavailab
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<
-        Output = Result<ModelFactoryRuntime<Processor, Engine, ImageEngine>, String>,
+        Output = Result<
+            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+            String,
+        >,
     > + Send;
 
     /// Updates the complete process-global limit pair used by a future lazy model load.
@@ -66,12 +81,14 @@ pub trait ModelFactory<Processor, Engine, ImageEngine = ImageGenerationUnavailab
     }
 }
 
-impl<Processor, Engine, ImageEngine> ModelFactory<Processor, Engine, ImageEngine> for () {
+impl<Processor, Engine, ImageEngine, EmbeddingsEngine>
+    ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> for ()
+{
     async fn create(
         &self,
         _model_directory: &str,
         _model_configuration: WorkerModelConfiguration,
-    ) -> Result<ModelFactoryRuntime<Processor, Engine, ImageEngine>, String> {
+    ) -> Result<ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>, String> {
         Err("model swapping is unavailable because no model factory was configured".to_owned())
     }
 }

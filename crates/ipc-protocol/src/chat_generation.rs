@@ -26,6 +26,9 @@ pub struct ChatGenerationCommand {
     /// Laguna ignores this field. Absent or empty means ordinary thinking.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub qwen_thinking_channel_seed: Option<String>,
+    /// Token-masked structured generation. Absent means ordinary sampling.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structured_generation: Option<StructuredGenerationConstraint>,
 }
 
 /// One chat message crossing the supervisor-to-worker trust boundary.
@@ -140,6 +143,16 @@ pub struct ChatGenerationSettings {
     /// freely up to `max_output_tokens`.
     #[serde(default)]
     pub thinking_budget: Option<u16>,
+}
+
+/// Worker-enforced structured generation. The supervisor never sends a variant
+/// the worker cannot mask at sample time.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
+pub enum StructuredGenerationConstraint {
+    JsonObject,
+    JsonSchema { schema_json: String },
+    Choice { choices: Vec<String> },
 }
 
 /// Structured-chat capabilities reported by one ready worker model.

@@ -5,12 +5,12 @@
 
 use std::{future::Future, pin::Pin};
 
-use astronomical_ipc_protocol::ImageGenerationCommand;
+use astronomical_ipc_protocol::{EmbeddingsCommand, ImageGenerationCommand};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    GenerationStartError, ImageGenerationExecutionError, ImageGenerationExecutor,
-    ImageGenerationOutput, WorkerHandle,
+    EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
+    ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput, WorkerHandle,
 };
 
 impl ImageGenerationExecutor for WorkerHandle {
@@ -52,6 +52,44 @@ impl ImageGenerationExecutor for WorkerHandle {
     > {
         self.start_image_generation_with_queue_admission(
             image_generation_command,
+            Some(admission_sender),
+        )
+    }
+
+    fn start_embeddings_generation(
+        &self,
+        embeddings_command: EmbeddingsCommand,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        self.start_embeddings_generation_with_queue_admission(embeddings_command, None)
+    }
+
+    fn start_embeddings_generation_with_admission_signal(
+        &self,
+        embeddings_command: EmbeddingsCommand,
+        admission_sender: oneshot::Sender<()>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        self.start_embeddings_generation_with_queue_admission(
+            embeddings_command,
             Some(admission_sender),
         )
     }

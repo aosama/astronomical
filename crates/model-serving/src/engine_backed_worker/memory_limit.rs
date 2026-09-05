@@ -11,13 +11,14 @@ use crate::{
 
 use super::{EngineBackedWorker, LoadedRuntime};
 
-impl<Processor, Engine, Factory, ImageEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
+    EmbeddingsEngine: crate::EmbeddingEngine,
 {
     pub(crate) async fn update_mlx_memory_limit<WriteTransport>(
         &mut self,
@@ -92,6 +93,9 @@ where
                         reason: format!("image memory-limit update failed: {other:?}"),
                     },
                 }),
+            LoadedRuntime::Embeddings(_embedding_engine) => Err(InferenceEngineError::Fatal {
+                reason: "this embedding engine does not support live MLX memory limits".to_owned(),
+            }),
         };
         match memory_limit_adjustment {
             Ok(mlx_memory_limit_adjustment) => {

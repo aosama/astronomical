@@ -236,6 +236,7 @@ fn generate_token_ids(
             thinking_budget: Some(0),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
     let prepared_generation = generation_processor
         .prepare_chat(&command)

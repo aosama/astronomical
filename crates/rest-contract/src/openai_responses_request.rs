@@ -5,12 +5,13 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::{
-    DEFAULT_OPENAI_OUTPUT_TOKENS, MAX_OPENAI_OUTPUT_TOKENS, OpenAiResponseFormat,
-    OpenAiResponseFunctionTool, OpenAiResponseInput, OpenAiResponseInputParts,
-    OpenAiResponseRequestConfiguration, OpenAiResponseToolChoice, OpenAiResponseToolChoiceParts,
-    OpenAiResponseToolDefinition, OpenAiResponseToolDefinitionParts, OpenAiStructuredOutput,
-    OpenAiStructuredOutputValidationError, merge_structured_output_requests,
-    structured_output_from_responses_text_format,
+    DEFAULT_OPENAI_OUTPUT_TOKENS, EnforcedStructuredGeneration, MAX_OPENAI_OUTPUT_TOKENS,
+    OpenAiResponseFormat, OpenAiResponseFunctionTool, OpenAiResponseInput,
+    OpenAiResponseInputParts, OpenAiResponseRequestConfiguration, OpenAiResponseToolChoice,
+    OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition, OpenAiResponseToolDefinitionParts,
+    OpenAiStructuredOutput, OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
+    OpenAiStructuredOutputsValidationError, enforced_generation_from_extra_body,
+    merge_structured_output_requests, structured_output_from_responses_text_format,
 };
 
 /// One bounded request to the local OpenAI-compatible Responses endpoint.
@@ -78,6 +79,10 @@ pub struct OpenAiResponsesRequest {
     thinking_budget: Option<u32>,
     #[serde(default)]
     response_format: Option<OpenAiResponseFormat>,
+    #[serde(default)]
+    structured_outputs: Option<OpenAiStructuredOutputs>,
+    #[serde(default)]
+    guided_grammar: Option<String>,
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
 }
@@ -113,6 +118,10 @@ impl OpenAiResponsesRequest {
                 .flatten(),
             structured_output_from_responses_text_format(self.text.as_ref())?,
         )?;
+        let enforced_structured_generation = enforced_generation_from_extra_body(
+            self.structured_outputs.clone(),
+            self.guided_grammar.as_deref(),
+        )?;
         validate_compatibility_fields(&self)?;
         let tools = self
             .tools
@@ -138,6 +147,7 @@ impl OpenAiResponsesRequest {
             stream: self.stream,
             thinking_budget: self.thinking_budget,
             structured_output,
+            enforced_structured_generation,
         })
     }
 }
@@ -158,6 +168,7 @@ pub struct OpenAiResponsesRequestParts {
     pub stream: bool,
     pub thinking_budget: Option<u32>,
     pub structured_output: Option<OpenAiStructuredOutput>,
+    pub enforced_structured_generation: Option<EnforcedStructuredGeneration>,
 }
 
 impl OpenAiResponsesRequestParts {
@@ -235,6 +246,8 @@ pub enum OpenAiResponsesValidationError {
     UnknownField { field_name: String },
     #[error(transparent)]
     StructuredOutput(#[from] OpenAiStructuredOutputValidationError),
+    #[error(transparent)]
+    StructuredOutputs(#[from] OpenAiStructuredOutputsValidationError),
 }
 
 fn validate_compatibility_fields(

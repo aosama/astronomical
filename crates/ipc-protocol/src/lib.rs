@@ -3,6 +3,7 @@
 mod base64_bytes;
 mod chat_generation;
 mod chat_generation_validation;
+mod embeddings;
 mod image_generation;
 mod message_codec;
 mod persistent_prompt_cache_diagnostics;
@@ -19,14 +20,17 @@ pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatImageInput, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    ChatToolDefinition, MAX_QWEN_THINKING_CHANNEL_SEED_BYTES,
+    ChatToolDefinition, MAX_QWEN_THINKING_CHANNEL_SEED_BYTES, StructuredGenerationConstraint,
 };
 pub use chat_generation_validation::ChatGenerationValidationError;
+pub use embeddings::{
+    EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, EmbeddingsValidationError,
+};
 pub use image_generation::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationCompletionValidationError, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, ImageGenerationSettings, ImageGenerationValidationError,
-    WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
+    WorkerEmbeddingCapabilities, WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
 };
 pub use message_codec::{decode_command, decode_event, encode_command, encode_event};
 pub use persistent_prompt_cache_diagnostics::{
@@ -48,7 +52,8 @@ pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
 };
 pub use worker_model_configuration::{
-    WorkerAutoregressiveModelConfiguration, WorkerFlux2KleinModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerEmbeddingModelConfiguration,
+    WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
     WorkerLoadedModelRuntimeConfiguration, WorkerModelConfiguration,
     WorkerSpeculativePrefillRuntimeConfiguration,

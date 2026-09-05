@@ -10,13 +10,14 @@ use crate::{
 
 use super::{EngineBackedWorker, LoadedRuntime};
 
-impl<Processor, Engine, Factory, ImageEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
+    EmbeddingsEngine: crate::EmbeddingEngine,
 {
     pub(super) async fn start_generation<WriteTransport>(
         &mut self,

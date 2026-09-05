@@ -123,6 +123,8 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) first_decode_forward_elapsed_millis: Option<u64>,
     /// Ensures the worker observes generation preparation before blocking handoff work.
     pub(super) generation_preparation_announced: bool,
+    pub(super) structured_generation:
+        Option<crate::structured_generation::StructuredTokenConstraint>,
 }
 
 impl Qwen3_5EngineRequest {
@@ -253,6 +255,20 @@ impl Qwen3_5EngineRequest {
     ) -> Result<MlxArray, InferenceEngineError> {
         let sampling_strategy = self.sampling_strategy;
         let mut sampling_random_state = self.random_state.take();
+        let masked_logits = if let Some(structured_generation) = self.structured_generation.as_ref()
+            && !self.is_inside_thinking()
+            && !self.is_forcing_thinking_transition()
+        {
+            let logit_bias_values = structured_generation.logit_bias_values();
+            Some(crate::gpu_token_sampling::add_token_logit_bias(
+                &model.runtime,
+                logits,
+                &logit_bias_values,
+            )?)
+        } else {
+            None
+        };
+        let logits = masked_logits.as_ref().unwrap_or(logits);
         let generated_token_outcome = self.performance_attribution.measure_operation(
             PerformanceOperation::TokenSamplingGraphConstruction,
             |_performance_attribution| match sampling_strategy {

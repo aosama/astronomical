@@ -49,6 +49,7 @@ pub(crate) fn translate_openai_responses_request_parts(
             }
         })?;
     let structured_output = request_parts.structured_output;
+    let enforced_structured_generation = request_parts.enforced_structured_generation;
     let mut chat_generation_command = ChatGenerationCommand {
         request_id,
         model: request_parts.model,
@@ -87,6 +88,9 @@ pub(crate) fn translate_openai_responses_request_parts(
                 .map_err(|_| OpenAiResponsesTranslationError::ThinkingBudgetTooLarge)?,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: crate::structured_output::ipc_constraint_from_enforced(
+            enforced_structured_generation,
+        ),
     };
     crate::structured_output::apply_structured_output_instruction(
         &mut chat_generation_command.messages,

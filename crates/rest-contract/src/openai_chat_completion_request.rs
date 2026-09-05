@@ -5,9 +5,11 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::{
-    OpenAiChatMessage, OpenAiChatMessageParts, OpenAiResponseFormat, OpenAiStopSequences,
-    OpenAiStreamOptions, OpenAiStructuredOutput, OpenAiStructuredOutputValidationError,
-    OpenAiToolChoice, OpenAiToolChoiceMode, OpenAiToolDefinition, OpenAiToolDefinitionParts,
+    EnforcedStructuredGeneration, OpenAiChatMessage, OpenAiChatMessageParts, OpenAiResponseFormat,
+    OpenAiStopSequences, OpenAiStreamOptions, OpenAiStructuredOutput,
+    OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
+    OpenAiStructuredOutputsValidationError, OpenAiToolChoice, OpenAiToolChoiceMode,
+    OpenAiToolDefinition, OpenAiToolDefinitionParts, enforced_generation_from_extra_body,
 };
 
 /// The maximum accepted nesting depth of a function JSON Schema.
@@ -58,6 +60,10 @@ pub struct OpenAiChatCompletionRequest {
     stream_options: Option<OpenAiStreamOptions>,
     #[serde(default)]
     response_format: Option<OpenAiResponseFormat>,
+    #[serde(default)]
+    structured_outputs: Option<OpenAiStructuredOutputs>,
+    #[serde(default)]
+    guided_grammar: Option<String>,
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
 }
@@ -93,6 +99,10 @@ impl OpenAiChatCompletionRequest {
         if let Some(response_format) = &self.response_format {
             response_format.clone().into_structured_output()?;
         }
+        enforced_generation_from_extra_body(
+            self.structured_outputs.clone(),
+            self.guided_grammar.as_deref(),
+        )?;
 
         Ok(())
     }
@@ -155,6 +165,10 @@ impl OpenAiChatCompletionRequest {
             .map(OpenAiResponseFormat::into_structured_output)
             .transpose()?
             .flatten();
+        let enforced_structured_generation = crate::enforced_generation_from_extra_body(
+            self.structured_outputs.clone(),
+            self.guided_grammar.as_deref(),
+        )?;
         Ok(OpenAiChatCompletionRequestParts {
             model: self.model,
             messages: self
@@ -180,6 +194,7 @@ impl OpenAiChatCompletionRequest {
             stream: self.stream,
             includes_usage_in_stream,
             structured_output,
+            enforced_structured_generation,
         })
     }
 
@@ -290,6 +305,8 @@ pub struct OpenAiChatCompletionRequestParts {
     pub includes_usage_in_stream: bool,
     /// Validated OpenAI structured-output request, when the client asked for JSON.
     pub structured_output: Option<OpenAiStructuredOutput>,
+    /// Extra-body constraint that must be token-masked or the request fails.
+    pub enforced_structured_generation: Option<EnforcedStructuredGeneration>,
 }
 
 /// A request rejected before worker admission by the public OpenAI contract.
@@ -389,6 +406,8 @@ pub enum OpenAiChatCompletionValidationError {
     /// `response_format` failed public structured-output validation.
     #[error(transparent)]
     StructuredOutput(#[from] OpenAiStructuredOutputValidationError),
+    #[error(transparent)]
+    StructuredOutputs(#[from] OpenAiStructuredOutputsValidationError),
 }
 
 fn validate_non_empty_string(

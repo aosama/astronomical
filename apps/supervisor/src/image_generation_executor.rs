@@ -8,7 +8,9 @@ use astronomical_ipc_protocol::{
 };
 use tokio::sync::mpsc;
 
-use crate::{ChatGenerationExecutor, GenerationStartError};
+use crate::{
+    ChatGenerationExecutor, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
+};
 
 /// One completed worker image and its reproducibility metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -90,6 +92,48 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
             let _admission_signal_result = admission_sender.send(());
             self.start_image_generation(image_generation_command).await
         })
+    }
+
+    /// Starts one native embeddings request on this executor.
+    ///
+    /// Embeddings share this trait so chat, image, and embeddings keep one
+    /// supervisor executor object; default methods leave chat-only test
+    /// executors compiling without an embeddings impl.
+    fn start_embeddings_generation(
+        &self,
+        _embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
+    }
+
+    /// Signals once an embeddings request owns a place in the immutable FIFO queue.
+    fn start_embeddings_generation_with_admission_signal(
+        &self,
+        embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
+        admission_sender: tokio::sync::oneshot::Sender<()>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        let _admission_signal_result = admission_sender.send(());
+        self.start_embeddings_generation(embeddings_command)
     }
 }
 

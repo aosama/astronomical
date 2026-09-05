@@ -13,8 +13,8 @@ use crate::{
 
 use super::LoadedRuntime;
 
-impl<Processor, Engine, Factory, ImageEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
@@ -392,6 +392,7 @@ where
                 .map(|mlx_memory_telemetry| {
                     worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
                 }),
+            Some(LoadedRuntime::Embeddings(_)) => None,
             None => None,
         };
         let Some((mlx_memory_snapshot, expert_residency)) = mlx_memory_observation else {

@@ -67,6 +67,7 @@ async fn should_round_trip_an_unversioned_chat_command() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     });
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
@@ -292,6 +293,7 @@ async fn should_send_a_large_chat_command_as_one_bounded_frame() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     });
     let serialized_command_bytes = serde_json::to_vec(&worker_command)
         .expect("the large typed command should serialize")
@@ -341,6 +343,7 @@ async fn should_round_trip_a_fifty_thousand_word_command_without_material_delay(
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     });
     let serialized_command_bytes = serde_json::to_vec(&worker_command)
         .expect("the 50K command should serialize")

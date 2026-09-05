@@ -4,8 +4,9 @@ use crate::application::ApplicationState;
 use astronomical_config::{DiscoveredModel, ModelCapabilities, resolve_model_id};
 use astronomical_ipc_protocol::WorkerModelCapabilities;
 use astronomical_rest_contract::{
-    OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
-    OpenAiModelValidationError, STRUCTURED_OUTPUT_ENFORCEMENT_NONE,
+    OpenAiEmbeddingModelParts, OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel,
+    OpenAiModelList, OpenAiModelParts, OpenAiModelValidationError,
+    STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK,
 };
 use axum::{
     Json,
@@ -114,8 +115,18 @@ fn openai_model_from_ready_worker_capabilities(
     let WorkerModelCapabilities {
         chat,
         image_generation,
+        embeddings,
     } = ready_model_capabilities;
     let Some(chat_capabilities) = chat else {
+        if let Some(embedding_capabilities) = embeddings {
+            return OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
+                model_id: ready_model_id,
+                created: model_advertisement_created_at_unix_seconds,
+                owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+                vector_width: embedding_capabilities.vector_width,
+                max_input_tokens: embedding_capabilities.max_input_tokens,
+            });
+        }
         return OpenAiModel::from_image_parts(OpenAiImageModelParts {
             model_id: ready_model_id,
             created: model_advertisement_created_at_unix_seconds,
@@ -143,7 +154,7 @@ fn openai_model_from_ready_worker_capabilities(
         tool_call_format: tool_call_format_for_model(chat_capabilities.supports_tool_calls),
         supported_endpoints: supported_generation_endpoint_paths(),
         supports_structured_outputs: true,
-        structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_NONE.to_owned()),
+        structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK.to_owned()),
     })
 }
 
@@ -171,6 +182,15 @@ fn openai_model_from_discovered_model(
                     .unwrap_or_default(),
             })
         }
+        ModelCapabilities::Embeddings(capabilities) => {
+            OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
+                model_id: discovered_model.model_id.clone(),
+                created: model_advertisement_created_at_unix_seconds,
+                owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+                vector_width: capabilities.vector_width,
+                max_input_tokens: capabilities.max_input_tokens,
+            })
+        }
     }
 }
 
@@ -195,7 +215,7 @@ fn openai_model_from_discovered_chat_model(
         tool_call_format: tool_call_format_for_model(capabilities.supports_tool_calls),
         supported_endpoints: supported_generation_endpoint_paths(),
         supports_structured_outputs: true,
-        structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_NONE.to_owned()),
+        structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK.to_owned()),
     })
 }
 

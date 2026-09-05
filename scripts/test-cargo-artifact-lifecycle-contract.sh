@@ -483,6 +483,7 @@ expected_journeys = {
     "accept-thinking-seed",
     "accept-hard-thinking-budget",
     "accept-structured-output",
+    "accept-embeddings",
     "accept-speculative-prefill",
     "accept-prompt-cache",
     "test-model-ssd-streaming-support",

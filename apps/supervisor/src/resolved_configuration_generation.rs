@@ -91,6 +91,7 @@ fn model_family_identity(model_family: ModelFamily) -> &'static str {
         ModelFamily::Laguna => "laguna",
         ModelFamily::DeepSeekV4 => "deepseek_v4",
         ModelFamily::Flux2Klein => "flux2_klein",
+        ModelFamily::ModernBert => "modernbert",
     }
 }
 
@@ -116,6 +117,11 @@ fn update_model_capabilities(
                 generation_digest,
                 capabilities.supports_multiple_reference_images,
             );
+        }
+        ModelCapabilities::Embeddings(capabilities) => {
+            update_text(generation_digest, "embeddings");
+            update_number(generation_digest, capabilities.vector_width);
+            update_number(generation_digest, capabilities.max_input_tokens);
         }
     }
 }

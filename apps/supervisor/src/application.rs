@@ -455,6 +455,11 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         post(crate::openai_image_generation_endpoint::create_image_generation)
             .layer(DefaultBodyLimit::max(MAX_OPENAI_CHAT_REQUEST_BODY_BYTES)),
     );
+    let router = router.route(
+        "/v1/embeddings",
+        post(crate::openai_embeddings_endpoint::create_embeddings)
+            .layer(DefaultBodyLimit::max(MAX_OPENAI_CHAT_REQUEST_BODY_BYTES)),
+    );
     let router = if supports_config_reload {
         router.route(
             "/v1/config/reload",

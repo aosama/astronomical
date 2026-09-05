@@ -48,6 +48,7 @@ fn should_serialize_one_structured_chat_generation_command_without_rest_types() 
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -118,6 +119,7 @@ fn should_round_trip_one_chat_command_with_a_user_message_image() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     let serialized_json = serde_json::to_string(&chat_generation_command)
@@ -187,5 +189,6 @@ fn chat_generation_command_with_seed(qwen_thinking_channel_seed: String) -> Chat
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: Some(qwen_thinking_channel_seed),
+        structured_generation: None,
     }
 }
