@@ -7,7 +7,7 @@ import PackageDescription
 // dual-target pattern required by App Review guideline 2.4.5(vii).
 let package = Package(
     name: "AstronomicalMenu",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     products: [
         .executable(name: "astronomical-menu", targets: ["AstronomicalMenu"]),
         .executable(name: "astronomical-menu-app-store", targets: ["AstronomicalMenuAppStore"]),
