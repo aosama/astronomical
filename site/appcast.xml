@@ -4,39 +4,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.29</title>
-            <pubDate>Sat, 05 Sep 2026 07:20:46 -0400</pubDate>
-            <sparkle:version>417</sparkle:version>
-            <sparkle:shortVersionString>0.2.29</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <title>0.2.30</title>
+            <pubDate>Sat, 05 Sep 2026 19:39:41 -0400</pubDate>
+            <sparkle:version>423</sparkle:version>
+            <sparkle:shortVersionString>0.2.30</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.29
+            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.30
 
-## Highlights
+User-visible changes:
 
-- **Library catalog.** Observatory Library now offers Ornith 1.5 35B A3B OptiQ 4bit, the public mixed-precision vision-language artifact with a bf16 vision sidecar and an int4 multi-token-prediction head. The previous static 5.5bpw 35B catalog card is no longer listed. The 9B vision and FLUX.2 Klein offers remain.
-- **Prompt-cache restore.** Restored prompt-cache key/value state is assembled at final length, and Observatory shows Restoring… until prefill progress is available, so a cache hit is no longer mistaken for an idle or failed start.
-- **Worker-exit diagnostics.** An owned daemon death is classified as an early exit rather than a readiness timeout, and exit diagnostics wait for the natural worker exit so failure reports match the process that actually stopped.
+- Structured responses. Chat Completions and Responses now accept OpenAI `response_format` (`text`, `json_object`, `json_schema`) on any chat-capable discovered model. Generated JSON is extracted from visible text when present, and every response discloses an HTTP `Warning` that grammar-constrained decoding was not applied.
+- Native OpenAI embeddings endpoint. `POST /v1/embeddings` is served entirely by Astronomical's own worker through 8-bit affine ModernBERT embedding artifacts. Responses follow the OpenAI embeddings list shape with `float` or `base64` encoding, and optional `dimensions` truncation returns a unit-norm vector. `GET /v1/models` advertises embedding capability and the embeddings endpoint for executable artifacts.
+- Enforced structured outputs. The `structured_outputs` extra-body constraint enforces `json`, `json_schema`, `choice`, and `regex` at sample time with token masking, so a schema-constrained request returns schema-conforming output instead of relying on prompt compliance. Reasoning tokens stay unconstrained, and constraints that the running worker cannot mask, including EBNF grammars, fail closed with HTTP 400.
+- Broader platform support. Astronomical now supports macOS 14 and later on any M-series Mac with best-effort disclosure of features that require newer system components.
 
-## Details
+Notes:
 
-- The macOS menu application is packaged as a Sparkle-linked executable plus a Sparkle-free App Store executable that share one core. Existing Stable users continue to update through the signed Sparkle feed.
-- Public privacy and support pages for the App Store channel are published on the project site. They do not change the Developer ID update journey.
+- Chat, Responses, and image-generation surfaces keep their existing contracts; the embeddings endpoint is additive.
+- One model remains resident in GPU memory at a time. Requests that change identity or modality hot-swap through the existing path, including embeddings.
+- Your existing configuration, Library, and prompt-cache state are preserved across the update.
 
-## Compatibility
-
-- Requires macOS 26.0 or later on Apple Silicon.
-- Existing model caches, prompt caches, and user state are preserved.
-- The local REST API surface is unchanged.
-
-## Distribution
-
-This release is distributed as a Developer ID–signed, notarized DMG. The Sparkle update feed is Ed25519-signed; the appcast enclosure and release asset carry matching SHA-256 digests recorded in the release manifest.
+Astronomical Stable is code-signed with Developer ID, notarized by Apple, and distributed as a notarized disk image. The Sparkle update feed is signed, and this release activates it through the ordinary update channel.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.29/Astronomical-0.2.29-macOS-arm64.dmg" length="15887312" type="application/octet-stream" sparkle:edSignature="yi/Dy0P+AueepXgLom8jUfL/mpXVem9CcHIs83PzxRND2jns0jiTawP/ac6GrPrJP61adpG2mc4JvRym3GBiDQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.30/Astronomical-0.2.30-macOS-arm64.dmg" length="15942199" type="application/octet-stream" sparkle:edSignature="u9J3iWlQTfW95X/BY2YjOGK0rqN7c7YPIcrjvSTL4BrUN6KX387xbkNcGDI6WjIDarMQx7S7vCCZcM7c/E7uCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 6kR64g3E9RsNgssnBSWXSYxMfiauf1QdHgh5yAikhhNRLyb5SfRRvEO4+Rmk0mlvnNq19O0NaivRXnwyOy70Cw==
-length: 2833
+edSignature: lwOBcS+xSFRXYtfoe/5c7MUGZnnjsQKq0NCstxBiBiy3s8tV6ohSObncGRvdAix/0ZZmwzR/kBVi4cfy8yqoAQ==
+length: 3192
 -->
