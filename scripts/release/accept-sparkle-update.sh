@@ -91,7 +91,7 @@ create_information_plist() {
     plutil -insert CFBundlePackageType -string "APPL" "$information_plist"
     plutil -insert CFBundleVersion -string "$bundle_version" "$information_plist"
     plutil -insert CFBundleShortVersionString -string "$display_version" "$information_plist"
-    plutil -insert LSMinimumSystemVersion -string "26.0" "$information_plist"
+    plutil -insert LSMinimumSystemVersion -string "14.0" "$information_plist"
     plutil -insert LSUIElement -bool true "$information_plist"
     plutil -insert SUFeedURL -string "$feed_url" "$information_plist"
     plutil -insert SUPublicEDKey -string "$SPARKLE_PUBLIC_ED25519_KEY" "$information_plist"

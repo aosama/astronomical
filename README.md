@@ -67,7 +67,7 @@ Prompts, responses, model files, and persistent prompt state stay on the local M
 Astronomical is experimental and deliberately focused:
 
 - Any Apple silicon M-series Mac.
-- macOS 26 and later.
+- macOS 14 (Sonoma) and later is the declared support spectrum; the current Stable release still requires macOS 26, and Sonoma support begins with the next Stable cut. Capability probes and public MLX fallbacks protect correctness across the range; combinations outside the tested set are supported best-effort.
 - Validated Qwen3.5/Qwen3.6 and Laguna artifacts supported by the repository.
 - One local user and one active generation at a time.
 - OpenAI-compatible chat completions, responses, model discovery, and server-sent event streaming over loopback only.

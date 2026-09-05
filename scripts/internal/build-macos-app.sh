@@ -407,7 +407,7 @@ main() {
         printf '  <key>CFBundleIdentifier</key><string>%s</string>\n' "$bundle_identifier"
         printf '  <key>CFBundleVersion</key><string>%s</string>\n' "$build_number"
         printf '  <key>CFBundleShortVersionString</key><string>%s</string>\n' "$application_version"
-        printf '  <key>LSMinimumSystemVersion</key><string>26.0</string>\n'
+        printf '  <key>LSMinimumSystemVersion</key><string>14.0</string>\n'
         printf '%s\n' '  <key>CFBundleIconFile</key><string>Astronomical.icns</string>'
         if [ "$APPLICATION_CHANNEL" != "app-store" ]; then
             printf '  <key>SUFeedURL</key><string>%s</string>\n' "$sparkle_update_feed_url"
