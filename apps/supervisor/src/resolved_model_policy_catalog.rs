@@ -11,7 +11,8 @@ use astronomical_config::{
     ModelCapabilities, ResolvedModelConfig, SpeculativePrefillConfig,
 };
 use astronomical_ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerFlux2KleinModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerEmbeddingModelConfiguration,
+    WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
     WorkerSpeculativePrefillConfiguration,
 };
@@ -54,6 +55,9 @@ impl ResolvedModelPolicyCatalog {
                         &discovered_model_directories,
                     )?,
                     ModelCapabilities::ImageGeneration(_) => Self::image_policy(discovered_model),
+                    ModelCapabilities::Embeddings(embedding_capabilities) => {
+                        Self::embeddings_policy(discovered_model, embedding_capabilities)
+                    }
                 };
                 Ok((discovered_model.model_id.clone(), runtime_model_policy))
             })
@@ -171,6 +175,35 @@ impl ResolvedModelPolicyCatalog {
                     model_id: discovered_model.model_id.clone(),
                     model_family: WorkerImageGenerationModelFamily::Flux2Klein,
                     artifact_revision: discovered_model.revision.clone(),
+                },
+            ),
+        }
+    }
+
+    fn embeddings_policy(
+        discovered_model: &DiscoveredModel,
+        embedding_capabilities: &astronomical_config::EmbeddingModelCapabilities,
+    ) -> RuntimeModelPolicy {
+        RuntimeModelPolicy {
+            model_directory: discovered_model.model_directory.clone(),
+            // Chat request defaults remain inert for a typed embedding worker policy.
+            generation_defaults: RuntimeModelGenerationDefaults {
+                maximum_output_tokens: 0,
+                configured_maximum_output_tokens: None,
+                temperature_thousandths: None,
+                top_p_thousandths: None,
+            },
+            configured_maximum_context_tokens: None,
+            default_maximum_context_tokens: 0,
+            configured_chunking_fields: Default::default(),
+            acceleration_availability: Default::default(),
+            worker_model_configuration: WorkerModelConfiguration::Embeddings(
+                WorkerEmbeddingModelConfiguration {
+                    model_id: discovered_model.model_id.clone(),
+                    model_family: WorkerEmbeddingModelFamily::ModernBert,
+                    artifact_revision: discovered_model.revision.clone(),
+                    vector_width: embedding_capabilities.vector_width,
+                    maximum_input_tokens: embedding_capabilities.max_input_tokens,
                 },
             ),
         }

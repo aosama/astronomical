@@ -42,6 +42,7 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
         stream: _,
         includes_usage_in_stream: _,
         structured_output,
+        enforced_structured_generation,
     } = request_parts;
     let maximum_output_tokens = u16::try_from(maximum_output_tokens).map_err(|_| {
         OpenAiChatTranslationError::OutputTokenCountTooLarge {
@@ -66,6 +67,9 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
             thinking_budget,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: crate::structured_output::ipc_constraint_from_enforced(
+            enforced_structured_generation,
+        ),
     };
     crate::structured_output::apply_structured_output_instruction(
         &mut chat_generation_command.messages,

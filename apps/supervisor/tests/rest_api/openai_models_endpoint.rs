@@ -123,7 +123,10 @@ async fn should_list_complete_capabilities_for_a_ready_worker_model() {
         serde_json::json!(["/v1/chat/completions", "/v1/responses"])
     );
     assert_eq!(advertised_model["supports_structured_outputs"], true);
-    assert_eq!(advertised_model["structured_output_enforcement"], "none");
+    assert_eq!(
+        advertised_model["structured_output_enforcement"],
+        "logits_mask"
+    );
 }
 
 #[tokio::test]

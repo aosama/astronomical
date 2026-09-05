@@ -467,3 +467,17 @@ fn sampling_failure(reason: impl Into<String>) -> InferenceEngineError {
         reason: reason.into(),
     }
 }
+
+pub(crate) fn add_token_logit_bias(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    logit_bias_values: &[f32],
+) -> Result<MlxArray, InferenceEngineError> {
+    let vocabulary_size = i32::try_from(logit_bias_values.len()).map_err(|_| {
+        sampling_failure("structured-generation vocabulary exceeds the MLX shape range")
+    })?;
+    let bias = runtime
+        .array_from_f32(logit_bias_values, &[1, 1, vocabulary_size])
+        .map_err(sampling_runtime_error)?;
+    runtime.add(logits, &bias).map_err(sampling_runtime_error)
+}

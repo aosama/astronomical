@@ -165,6 +165,7 @@ pub(super) fn configured_mtp_artifact_test_inputs(
                     thinking_budget: Some(256),
                 },
                 qwen_thinking_channel_seed: None,
+                structured_generation: None,
             },
             false,
         )

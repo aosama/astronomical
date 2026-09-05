@@ -254,6 +254,7 @@ fn representative_visual_request_with_optional_later_image(
                         thinking_budget: None,
                     },
                     qwen_thinking_channel_seed: None,
+                    structured_generation: None,
                 },
                 false,
             )

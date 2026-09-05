@@ -164,6 +164,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             thinking_budget: Some(256),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     eprintln!("[model-ssd-streaming-prefill-{prefill_chunk_tokens}] sending generate command");

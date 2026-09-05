@@ -12,6 +12,7 @@ mod config_reload_response;
 mod config_reveal_endpoint;
 mod configuration_status;
 mod console_assets;
+mod embeddings_executor;
 mod generation_performance_log;
 mod image_generation_executor;
 mod instance_lock;
@@ -24,6 +25,7 @@ mod openai_chat_completion;
 mod openai_chat_endpoint;
 mod openai_chat_stream;
 mod openai_chat_translation;
+mod openai_embeddings_endpoint;
 mod openai_image_generation_endpoint;
 mod openai_models_endpoint;
 mod openai_responses_assembly;
@@ -50,6 +52,8 @@ mod worker_cache_clear;
 mod worker_completion_event;
 mod worker_containment;
 mod worker_control_error;
+mod worker_embeddings_event;
+mod worker_embeddings_request;
 mod worker_event_handler;
 mod worker_generate;
 mod worker_generation_admission;
@@ -98,6 +102,7 @@ pub use config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,
     ResolvedRuntimeConfigResolver,
 };
+pub use embeddings_executor::{EmbeddingsExecutionError, EmbeddingsOutput};
 pub use generation_performance_log::{
     GenerationPerformanceLog, GenerationPerformanceRecord, ImageGenerationPerformanceRecord,
 };

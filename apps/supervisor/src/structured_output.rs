@@ -1,7 +1,7 @@
 //! Applies OpenAI structured-output fallback while grammar masking is unavailable.
 
-use astronomical_ipc_protocol::ChatMessage;
-use astronomical_rest_contract::OpenAiStructuredOutput;
+use astronomical_ipc_protocol::{ChatMessage, StructuredGenerationConstraint};
+use astronomical_rest_contract::{EnforcedStructuredGeneration, OpenAiStructuredOutput};
 use axum::{
     http::{HeaderValue, header::WARNING},
     response::Response,
@@ -25,6 +25,22 @@ fn insert_json_output_instruction(
             },
         ),
     }
+}
+
+pub(crate) fn ipc_constraint_from_enforced(
+    enforced_structured_generation: Option<EnforcedStructuredGeneration>,
+) -> Option<StructuredGenerationConstraint> {
+    Some(match enforced_structured_generation? {
+        EnforcedStructuredGeneration::JsonObject => StructuredGenerationConstraint::JsonObject,
+        EnforcedStructuredGeneration::JsonSchema { schema } => {
+            StructuredGenerationConstraint::JsonSchema {
+                schema_json: schema.to_string(),
+            }
+        }
+        EnforcedStructuredGeneration::Choice { choices } => {
+            StructuredGenerationConstraint::Choice { choices }
+        }
+    })
 }
 
 pub(crate) fn apply_structured_output_instruction(

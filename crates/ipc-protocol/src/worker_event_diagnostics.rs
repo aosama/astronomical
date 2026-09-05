@@ -33,6 +33,15 @@ impl WorkerEvent {
                 "image_generation_finalized request_id={}",
                 request_id.value()
             ),
+            Self::EmbeddingsCompleted { request_id, .. } => {
+                format!("embeddings_completed request_id={}", request_id.value())
+            }
+            Self::EmbeddingsFailed { request_id, .. } => {
+                format!("embeddings_failed request_id={}", request_id.value())
+            }
+            Self::EmbeddingsFinalized { request_id, .. } => {
+                format!("embeddings_finalized request_id={}", request_id.value())
+            }
             Self::Ready { .. } => "ready".to_owned(),
             Self::Output { request_id, .. } => {
                 format!("output request_id={}", request_id.value())

@@ -149,6 +149,12 @@ pub enum OpenAiModelValidationError {
     /// At least one generation endpoint must be advertised.
     #[error("supported endpoints must not be empty")]
     SupportedEndpointsMustNotBeEmpty,
+    /// A loaded embedding artifact must report a positive vector width.
+    #[error("embedding vector width must be positive")]
+    EmbeddingVectorWidthMustBePositive,
+    /// A loaded embedding artifact must report a positive input budget.
+    #[error("embedding input token budget must be positive")]
+    EmbeddingInputBudgetMustBePositive,
     /// Structured-output enforcement must be present exactly when structured outputs are supported.
     #[error(
         "structured-output enforcement must be present exactly when structured outputs are supported"
@@ -314,6 +320,53 @@ impl OpenAiModel {
             structured_output_enforcement: None,
         })
     }
+
+    /// Builds one non-streaming embedding model without fabricating token limits.
+    pub fn from_embedding_parts(
+        embedding_model_parts: OpenAiEmbeddingModelParts,
+    ) -> Result<Self, OpenAiModelValidationError> {
+        if embedding_model_parts.vector_width == 0 {
+            return Err(OpenAiModelValidationError::EmbeddingVectorWidthMustBePositive);
+        }
+        if embedding_model_parts.max_input_tokens == 0 {
+            return Err(OpenAiModelValidationError::EmbeddingInputBudgetMustBePositive);
+        }
+
+        Ok(Self {
+            id: embedding_model_parts.model_id,
+            object_kind: "model",
+            created: embedding_model_parts.created,
+            owned_by: embedding_model_parts.owned_by,
+            context_window: None,
+            max_input_tokens: None,
+            max_output_tokens: None,
+            input_modalities: Some(vec!["text".to_owned()]),
+            output_modalities: Some(vec!["embedding".to_owned()]),
+            supports_streaming: Some(false),
+            supports_reasoning: Some(false),
+            reasoning_format: None,
+            supports_tool_calls: Some(false),
+            tool_call_format: None,
+            supported_endpoints: Some(vec!["/v1/embeddings".to_owned()]),
+            supports_structured_outputs: Some(false),
+            structured_output_enforcement: None,
+        })
+    }
+}
+
+/// Capability metadata for an embedding model without autoregressive token limits.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpenAiEmbeddingModelParts {
+    /// Model identifier advertised by the local server.
+    pub model_id: String,
+    /// Unix timestamp associated with this server's model advertisement.
+    pub created: u64,
+    /// Local owner label for the advertised model.
+    pub owned_by: String,
+    /// Native vector width returned by the loaded embedding artifact.
+    pub vector_width: u32,
+    /// Maximum accepted prompt tokens per embedding input.
+    pub max_input_tokens: u32,
 }
 
 /// A standard OpenAI-compatible error response.

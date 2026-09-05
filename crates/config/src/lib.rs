@@ -46,10 +46,11 @@ pub use maximum_mlx_memory::{
 };
 pub use model_discovery::{
     ChatModelCapabilities, ClassifiedModelArtifact, DiscoveredModel, DiscoveredModelError,
-    Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError, ImageGenerationCapabilities,
-    ModelCapabilities, ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode,
-    ModelDiscoveryDirectoryScan, ModelDiscoveryReport, ModelFamily, ModelFamilyClassificationError,
-    ModelLicense, classify_model_directory, discover_classified_model_artifacts, discover_models,
+    EmbeddingModelCapabilities, Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError,
+    ImageGenerationCapabilities, ModelCapabilities, ModelDiscoveryDiagnostic,
+    ModelDiscoveryDiagnosticCode, ModelDiscoveryDirectoryScan, ModelDiscoveryReport, ModelFamily,
+    ModelFamilyClassificationError, ModelLicense, classify_model_directory,
+    discover_classified_model_artifacts, discover_models,
     discover_models_excluding_ambiguous_identities, requestable_model_id,
     verify_flux2_klein_model_directory,
 };

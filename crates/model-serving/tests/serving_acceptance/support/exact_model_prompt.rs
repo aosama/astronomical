@@ -44,6 +44,7 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids_for_model(
             thinking_budget: Some(256),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
     let rendered_prompt = Qwen3_5PromptRenderer::render(
         &chat_generation_command.messages,

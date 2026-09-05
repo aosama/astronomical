@@ -5,6 +5,7 @@ mod classified_artifacts;
 mod family_classification;
 mod flux2_klein;
 mod laguna;
+mod modernbert;
 mod qwen3_5;
 mod traversal;
 

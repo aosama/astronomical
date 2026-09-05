@@ -23,6 +23,7 @@ fn should_reject_an_empty_model_id_before_worker_preprocessing() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -50,6 +51,7 @@ fn should_accept_a_large_model_id_when_the_ipc_frame_fits() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     chat_generation_command
@@ -76,6 +78,7 @@ fn should_reject_a_temperature_above_the_supported_sampling_range() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -106,6 +109,7 @@ fn should_reject_a_top_p_above_the_supported_sampling_range() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -143,6 +147,7 @@ fn should_reject_malformed_assistant_tool_call_arguments() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -181,6 +186,7 @@ fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_objec
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -216,6 +222,7 @@ fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -265,6 +272,7 @@ fn should_reject_a_duplicate_assistant_tool_call_id() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -332,6 +340,7 @@ fn should_accept_a_reused_tool_call_id_after_its_previous_result() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(chat_generation_command.validate(), Ok(()));
@@ -361,6 +370,7 @@ fn should_reject_a_system_message_after_conversation_history_begins() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(
@@ -394,6 +404,7 @@ fn should_reject_a_tool_result_without_a_prior_assistant_tool_call() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     assert_eq!(

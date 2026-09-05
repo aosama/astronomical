@@ -125,6 +125,8 @@ pub enum PerformanceOperation {
     ImageComponentRelease,
     ImageFinalCleanup,
     FinalizedMlxMemorySnapshot,
+    EmbeddingsTokenization,
+    EmbeddingsForwardSpan,
     CustomKernelCapabilityProbe,
 }
 
@@ -248,6 +250,8 @@ impl PerformanceOperation {
         Self::ImageComponentRelease,
         Self::ImageFinalCleanup,
         Self::FinalizedMlxMemorySnapshot,
+        Self::EmbeddingsTokenization,
+        Self::EmbeddingsForwardSpan,
         Self::CustomKernelCapabilityProbe,
     ];
 
@@ -444,6 +448,8 @@ impl PerformanceOperation {
             Self::ImageComponentRelease => "image_component_release",
             Self::ImageFinalCleanup => "image_final_cleanup",
             Self::FinalizedMlxMemorySnapshot => "finalized_mlx_memory_snapshot",
+            Self::EmbeddingsTokenization => "embeddings_tokenization",
+            Self::EmbeddingsForwardSpan => "embeddings_forward_span",
             Self::CustomKernelCapabilityProbe => "custom_kernel_capability_probe",
         }
     }

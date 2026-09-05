@@ -112,5 +112,6 @@ fn cache_diagnostics_command() -> ChatGenerationCommand {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }

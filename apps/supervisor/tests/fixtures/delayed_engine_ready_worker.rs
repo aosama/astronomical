@@ -43,6 +43,9 @@ async fn main() {
             WorkerCommand::GenerateImage(_) => {
                 panic!("the chat-only fixture must not receive image generation")
             }
+            WorkerCommand::GenerateEmbeddings(_) => {
+                panic!("the chat-only fixture must not receive embeddings generation")
+            }
             WorkerCommand::Generate(generation_command) => {
                 let _send_outcome = event_writer
                     .send_event(&WorkerEvent::Completed {

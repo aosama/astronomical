@@ -242,6 +242,7 @@ fn cold_tool_request_body(target_model_id: &str, target_model_directory: &Path) 
                         thinking_budget: Some(256),
                     },
                     qwen_thinking_channel_seed: None,
+                    structured_generation: None,
                 },
                 false,
             )

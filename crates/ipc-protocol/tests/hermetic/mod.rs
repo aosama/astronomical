@@ -1,6 +1,7 @@
 mod chat_generation;
 mod chat_generation_validation;
 mod chat_generation_validation_limits;
+mod embeddings;
 mod graph_submission_layer_interval;
 mod image_generation;
 mod minimal_protocol;

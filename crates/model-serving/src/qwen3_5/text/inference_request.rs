@@ -21,6 +21,8 @@ pub struct Qwen3_5InferenceRequest {
     forced_thinking_transition_token_ids: Vec<u32>,
     natural_reasoning_end_token_ids: Vec<u32>,
     performance_attribution: PerformanceAttribution,
+    #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
+    structured_generation: Option<crate::structured_generation::StructuredTokenConstraint>,
 }
 
 impl PreparedInferenceRequest for Qwen3_5InferenceRequest {
@@ -100,6 +102,7 @@ impl Qwen3_5InferenceRequest {
             forced_thinking_transition_token_ids: Vec::new(),
             natural_reasoning_end_token_ids: Vec::new(),
             performance_attribution: PerformanceAttribution::disabled(),
+            structured_generation: None,
         }
     }
 
@@ -172,6 +175,26 @@ impl Qwen3_5InferenceRequest {
         };
         self.natural_reasoning_end_token_ids = natural_reasoning_end_token_ids;
         self
+    }
+
+    pub(crate) fn with_structured_generation(
+        mut self,
+        structured_generation: crate::structured_generation::StructuredTokenConstraint,
+    ) -> Self {
+        self.structured_generation = Some(structured_generation);
+        self
+    }
+
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn has_structured_generation(&self) -> bool {
+        self.structured_generation.is_some()
+    }
+
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn take_structured_generation(
+        &mut self,
+    ) -> Option<crate::structured_generation::StructuredTokenConstraint> {
+        self.structured_generation.take()
     }
 
     /// Attaches the request-local critical-path performance accumulator.

@@ -4,6 +4,7 @@ mod artifact_validation;
 mod attention;
 mod decoder_cache;
 mod deepseek_v4;
+mod embedding_engine;
 mod engine_backed_worker;
 mod expert_paging;
 mod flux2_klein;
@@ -16,6 +17,8 @@ mod laguna;
 mod memory;
 mod model_family_runtime;
 mod model_generation_processor;
+#[cfg(feature = "direct-mlx")]
+mod modernbert;
 mod performance_attribution;
 mod persistent_cache;
 mod qwen3_5;
@@ -24,6 +27,8 @@ mod safetensors;
 mod sampling_seed;
 mod sparse_experts;
 mod strict_json;
+#[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
+mod structured_generation;
 
 #[doc(hidden)]
 pub use artifact_validation::validate_required_file_for_tests;
@@ -61,6 +66,9 @@ pub use deepseek_v4::{
     DeepSeekV4UnavailableGenerationProcessor, DeepSeekV4UnavailableInferenceEngine,
     DeepSeekV4UnavailableInferenceRequest, DeepSeekV4UnavailableRequestOutput,
     deepseek_v4_unavailable_reason,
+};
+pub use embedding_engine::{
+    EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,
 };
 pub use engine_backed_worker::{
     EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
@@ -212,6 +220,8 @@ pub use model_generation_processor::{
     MalformedModelOutputDiagnostic, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
     ModelGenerationProcessor, PreparedModelGeneration,
 };
+#[cfg(feature = "direct-mlx")]
+pub use modernbert::ModernBertEmbeddingEngine;
 pub use performance_attribution::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
