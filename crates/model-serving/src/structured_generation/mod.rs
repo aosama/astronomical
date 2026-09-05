@@ -4,15 +4,19 @@
 //! must mask illegal logits or the request must fail before generation.
 
 mod json_prefix;
+mod regex_mask;
+
+use std::sync::Arc;
 
 use astronomical_ipc_protocol::StructuredGenerationConstraint;
 
 use json_prefix::JsonPrefixStatus;
+use regex_mask::RegexTokenMask;
 
 /// Compiled constraint used while sampling visible (non-thinking) tokens.
 #[derive(Clone, Debug)]
 pub(crate) struct StructuredTokenConstraint {
-    vocabulary_pieces: Vec<String>,
+    vocabulary_pieces: Arc<Vec<String>>,
     end_of_sequence_token_ids: Vec<u32>,
     kind: ConstraintKind,
 }
@@ -25,15 +29,20 @@ enum ConstraintKind {
     Json {
         decoded_text: String,
     },
+    Regex(RegexTokenMask),
 }
 
 impl StructuredTokenConstraint {
+    /// Compiles one supervisor-validated constraint or explains why this
+    /// worker cannot mask it. A compile failure is request-scoped, so the
+    /// loaded worker stays reusable for later requests.
     pub(crate) fn compile(
         constraint: &StructuredGenerationConstraint,
         vocabulary_pieces: Vec<String>,
         end_of_sequence_token_ids: Vec<u32>,
         encoded_choice_sequences: Vec<Vec<u32>>,
-    ) -> Self {
+    ) -> Result<Self, String> {
+        let vocabulary_pieces = Arc::new(vocabulary_pieces);
         let kind = match constraint {
             StructuredGenerationConstraint::Choice { .. } => ConstraintKind::Choice {
                 remaining_token_suffixes: encoded_choice_sequences,
@@ -42,18 +51,21 @@ impl StructuredTokenConstraint {
             | StructuredGenerationConstraint::JsonSchema { .. } => ConstraintKind::Json {
                 decoded_text: String::new(),
             },
+            StructuredGenerationConstraint::Regex { pattern } => ConstraintKind::Regex(
+                RegexTokenMask::compile(pattern, Arc::clone(&vocabulary_pieces))?,
+            ),
         };
-        Self {
+        Ok(Self {
             vocabulary_pieces,
             end_of_sequence_token_ids,
             kind,
-        }
+        })
     }
 
-    pub(crate) fn logit_bias_values(&self) -> Vec<f32> {
-        let vocabulary_size = self.vocabulary_size();
+    pub(crate) fn logit_bias_values(&mut self) -> Vec<f32> {
+        let vocabulary_size = self.vocabulary_pieces.len();
         let mut biases = vec![f32::NEG_INFINITY; vocabulary_size];
-        match &self.kind {
+        match &mut self.kind {
             ConstraintKind::Choice {
                 remaining_token_suffixes,
             } => {
@@ -70,6 +82,13 @@ impl StructuredTokenConstraint {
                     let normalized_piece = normalize_token_piece(token_piece);
                     if self.piece_is_allowed(&normalized_piece) {
                         biases[token_id] = 0.0;
+                    }
+                }
+            }
+            ConstraintKind::Regex(regex_token_mask) => {
+                for allowed_token_id in regex_token_mask.allowed_token_ids().iter() {
+                    if let Some(bias) = biases.get_mut(*allowed_token_id as usize) {
+                        *bias = 0.0;
                     }
                 }
             }
@@ -90,10 +109,6 @@ impl StructuredTokenConstraint {
             }
         }
         biases
-    }
-
-    fn vocabulary_size(&self) -> usize {
-        self.vocabulary_pieces.len()
     }
 
     pub(crate) fn accept_visible_token(&mut self, token_id: u32) {
@@ -120,6 +135,9 @@ impl StructuredTokenConstraint {
             ConstraintKind::Json { decoded_text } => {
                 decoded_text.push_str(&normalized_piece);
             }
+            ConstraintKind::Regex(regex_token_mask) => {
+                regex_token_mask.accept_token_piece(&normalized_piece);
+            }
         }
     }
 
@@ -136,6 +154,7 @@ impl StructuredTokenConstraint {
                 candidate.push_str(normalized_piece);
                 json_prefix::status(&candidate) != JsonPrefixStatus::Invalid
             }
+            ConstraintKind::Regex(_) => false,
         }
     }
 
@@ -149,23 +168,40 @@ impl StructuredTokenConstraint {
             ConstraintKind::Json { decoded_text } => {
                 json_prefix::status(decoded_text) == JsonPrefixStatus::Complete
             }
+            ConstraintKind::Regex(regex_token_mask) => regex_token_mask.is_complete(),
         }
     }
 }
 
-fn normalize_token_piece(token_piece: &str) -> String {
+pub(crate) fn normalize_token_piece(token_piece: &str) -> String {
     token_piece.replace('\u{0120}', " ").replace('▁', " ")
 }
 
 #[cfg(test)]
 mod tests {
+
     use astronomical_ipc_protocol::StructuredGenerationConstraint;
 
-    use super::StructuredTokenConstraint;
+    use super::normalize_token_piece;
+
+    fn compile_regex(
+        pattern: &str,
+        vocabulary_pieces: Vec<String>,
+    ) -> super::StructuredTokenConstraint {
+        super::StructuredTokenConstraint::compile(
+            &StructuredGenerationConstraint::Regex {
+                pattern: pattern.to_owned(),
+            },
+            vocabulary_pieces,
+            vec![99],
+            Vec::new(),
+        )
+        .expect("the test regex must compile")
+    }
 
     #[test]
     fn should_mask_choice_tokens_to_juliet_or_romeo() {
-        let constraint = StructuredTokenConstraint::compile(
+        let mut constraint = super::StructuredTokenConstraint::compile(
             &StructuredGenerationConstraint::Choice {
                 choices: vec!["Juliet".to_owned(), "Romeo".to_owned()],
             },
@@ -176,7 +212,8 @@ mod tests {
             ],
             vec![99],
             vec![vec![0], vec![1]],
-        );
+        )
+        .expect("choice compiles");
         let biases = constraint.logit_bias_values();
         assert_eq!(biases[0], 0.0);
         assert_eq!(biases[1], 0.0);
@@ -185,14 +222,15 @@ mod tests {
 
     #[test]
     fn should_complete_choice_after_its_token_sequence() {
-        let mut constraint = StructuredTokenConstraint::compile(
+        let mut constraint = super::StructuredTokenConstraint::compile(
             &StructuredGenerationConstraint::Choice {
                 choices: vec!["Juliet".to_owned()],
             },
             vec!["Jul".to_owned(), "iet".to_owned(), "Romeo".to_owned()],
             vec![99],
             vec![vec![0, 1]],
-        );
+        )
+        .expect("choice compiles");
         assert_eq!(constraint.logit_bias_values()[0], 0.0);
         assert_eq!(constraint.logit_bias_values()[1], f32::NEG_INFINITY);
         constraint.accept_visible_token(0);
@@ -206,12 +244,13 @@ mod tests {
     #[test]
     fn should_allow_json_object_prefixes_and_reject_prose() {
         let vocabulary_pieces = vec!["{".to_owned(), "Two".to_owned(), "}".to_owned()];
-        let mut constraint = StructuredTokenConstraint::compile(
+        let mut constraint = super::StructuredTokenConstraint::compile(
             &StructuredGenerationConstraint::JsonObject,
             vocabulary_pieces,
             vec![99],
             Vec::new(),
-        );
+        )
+        .expect("json compiles");
         let biases = constraint.logit_bias_values();
         assert_eq!(biases[0], 0.0);
         assert_eq!(biases[1], f32::NEG_INFINITY);
@@ -219,5 +258,74 @@ mod tests {
         let biases_after_open = constraint.logit_bias_values();
         assert_eq!(biases_after_open[2], 0.0);
         assert_eq!(biases_after_open[1], f32::NEG_INFINITY);
+    }
+
+    #[test]
+    fn should_mask_regex_to_one_alternative_per_step() {
+        let mut constraint = compile_regex(
+            "Romeo|Juliet",
+            vec![
+                "Romeo".to_owned(),
+                "Juliet".to_owned(),
+                "Mercutio".to_owned(),
+            ],
+        );
+        let biases = constraint.logit_bias_values();
+        assert_eq!(biases[0], 0.0);
+        assert_eq!(biases[1], 0.0);
+        assert_eq!(biases[2], f32::NEG_INFINITY);
+        constraint.accept_visible_token(0);
+        assert!(constraint.is_complete());
+        let completed_biases = constraint.logit_bias_values();
+        assert_eq!(completed_biases[2], f32::NEG_INFINITY);
+    }
+
+    #[test]
+    fn should_keep_longer_alternatives_reachable() {
+        let mut constraint = compile_regex(
+            "Romeo|Romeo and Juliet",
+            vec!["Romeo".to_owned(), " and".to_owned(), " Juliet".to_owned()],
+        );
+        let biases = constraint.logit_bias_values();
+        assert_eq!(biases[0], 0.0);
+        assert_eq!(biases[1], 0.0);
+        constraint.accept_visible_token(0);
+        assert_eq!(constraint.logit_bias_values()[1], 0.0);
+        constraint.accept_visible_token(1);
+        assert_eq!(constraint.logit_bias_values()[2], 0.0);
+        constraint.accept_visible_token(2);
+        assert!(constraint.is_complete());
+    }
+
+    #[test]
+    fn should_fail_open_to_end_of_text_on_a_dead_state() {
+        let mut compiled = compile_regex("[0-9]+", vec!["abc".to_owned(), "!".to_owned()]);
+        compiled.end_of_sequence_token_ids = vec![1];
+        let biases = compiled.logit_bias_values();
+        // No content token is viable, so the mask must still expose EOS
+        // instead of a zero-mass categorical row.
+        assert_eq!(biases[0], f32::NEG_INFINITY);
+        assert_eq!(biases[1], 0.0);
+    }
+
+    #[test]
+    fn should_normalize_byte_order_marks_of_space_in_regex_pieces() {
+        assert_eq!(normalize_token_piece("Ġhello"), " hello");
+    }
+
+    #[test]
+    fn should_reject_an_unsupported_regex_pattern() {
+        let compiled = super::StructuredTokenConstraint::compile(
+            &StructuredGenerationConstraint::Regex {
+                pattern: "([".to_owned(),
+            },
+            Vec::new(),
+            vec![99],
+            Vec::new(),
+        );
+        assert!(
+            compiled.is_err(),
+            "an unparseable regex must fail request-scoped"
+        );
     }
 }

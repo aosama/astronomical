@@ -40,7 +40,7 @@ async fn run_structured_output_gpu_journey() {
     .await;
     let server_address = rest_server.server_address;
 
-    eprintln!("[structured-output-rest 1/6] status=progress phase=models_capability");
+    eprintln!("[structured-output-rest 1/7] status=progress phase=models_capability");
     let models_response = get_endpoint(server_address, "/v1/models").await;
     assert_http_ok(&models_response);
     let models_document = http_json_body(&models_response);
@@ -50,36 +50,36 @@ async fn run_structured_output_gpu_journey() {
         advertised_model["structured_output_enforcement"],
         "logits_mask"
     );
-    eprintln!("[structured-output-rest 1/6] status=success phase=models_capability");
+    eprintln!("[structured-output-rest 1/7] status=success phase=models_capability");
 
-    eprintln!("[structured-output-rest 2/6] status=progress phase=chat_json_schema");
+    eprintln!("[structured-output-rest 2/7] status=progress phase=chat_json_schema");
     let chat_schema_response = post_chat_completion(
         server_address,
         chat_json_schema_request_body(&selected_model.model_id, false),
     )
     .await;
     assert_structured_json_http_response(&chat_schema_response, chat_visible_content);
-    eprintln!("[structured-output-rest 2/6] status=success phase=chat_json_schema");
+    eprintln!("[structured-output-rest 2/7] status=success phase=chat_json_schema");
 
-    eprintln!("[structured-output-rest 3/6] status=progress phase=chat_json_object");
+    eprintln!("[structured-output-rest 3/7] status=progress phase=chat_json_object");
     let chat_object_response = post_chat_completion(
         server_address,
         chat_json_object_request_body(&selected_model.model_id),
     )
     .await;
     assert_structured_json_http_response(&chat_object_response, chat_visible_content);
-    eprintln!("[structured-output-rest 3/6] status=success phase=chat_json_object");
+    eprintln!("[structured-output-rest 3/7] status=success phase=chat_json_object");
 
-    eprintln!("[structured-output-rest 4/6] status=progress phase=responses_json_schema");
+    eprintln!("[structured-output-rest 4/7] status=progress phase=responses_json_schema");
     let responses_schema_response = post_responses_completion(
         server_address,
         responses_json_schema_request_body(&selected_model.model_id),
     )
     .await;
     assert_structured_json_http_response(&responses_schema_response, responses_visible_content);
-    eprintln!("[structured-output-rest 4/6] status=success phase=responses_json_schema");
+    eprintln!("[structured-output-rest 4/7] status=success phase=responses_json_schema");
 
-    eprintln!("[structured-output-rest 5/6] status=progress phase=chat_json_schema_stream");
+    eprintln!("[structured-output-rest 5/7] status=progress phase=chat_json_schema_stream");
     let chat_stream_response = post_chat_completion(
         server_address,
         chat_json_schema_request_body(&selected_model.model_id, true),
@@ -91,9 +91,9 @@ async fn run_structured_output_gpu_journey() {
         chat_stream_response.contains("data: [DONE]"),
         "streaming structured chat must finish cleanly: {chat_stream_response}"
     );
-    eprintln!("[structured-output-rest 5/6] status=success phase=chat_json_schema_stream");
+    eprintln!("[structured-output-rest 5/7] status=success phase=chat_json_schema_stream");
 
-    eprintln!("[structured-output-rest 6/6] status=progress phase=chat_choice_mask");
+    eprintln!("[structured-output-rest 6/7] status=progress phase=chat_choice_mask");
     let choice_response = post_chat_completion(
         server_address,
         chat_choice_request_body(&selected_model.model_id),
@@ -106,7 +106,22 @@ async fn run_structured_output_gpu_journey() {
         choice_text == "Juliet" || choice_text == "Romeo",
         "choice masking must emit an allowed name, got {choice_text:?} body={choice_document}"
     );
-    eprintln!("[structured-output-rest 6/6] status=success phase=chat_choice_mask");
+    eprintln!("[structured-output-rest 6/7] status=success phase=chat_choice_mask");
+
+    eprintln!("[structured-output-rest 7/7] status=progress phase=chat_regex_mask");
+    let regex_response = post_chat_completion(
+        server_address,
+        chat_regex_request_body(&selected_model.model_id),
+    )
+    .await;
+    assert_http_ok(&regex_response);
+    let regex_document = http_json_body(&regex_response);
+    let regex_text = chat_visible_content(&regex_document).trim();
+    assert!(
+        regex_text == "Romeo" || regex_text == "Juliet",
+        "regex masking must emit exactly one allowed name, got {regex_text:?} body={regex_document}"
+    );
+    eprintln!("[structured-output-rest 7/7] status=success phase=chat_regex_mask");
 
     stop_serving_rest_server(rest_server).await;
     eprintln!(
@@ -167,6 +182,24 @@ fn chat_json_schema_request_body(model_id: &str, stream: bool) -> String {
             },
         },
         "stream": stream,
+        "temperature": 1,
+        "thinking_budget": THINKING_TOKEN_BUDGET,
+        "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
+    })
+    .to_string()
+}
+
+fn chat_regex_request_body(model_id: &str) -> String {
+    json!({
+        "model": model_id,
+        "messages": [{
+            "role": "user",
+            "content": format!(
+                "Who speaks this Romeo and Juliet line? {ROMEO_AND_JULIET_LINE} Answer with one name."
+            ),
+        }],
+        "structured_outputs": {"regex": "Romeo|Juliet"},
+        "stream": false,
         "temperature": 1,
         "thinking_budget": THINKING_TOKEN_BUDGET,
         "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,

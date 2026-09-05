@@ -156,7 +156,7 @@ fn should_accept_structured_outputs_choice() {
 }
 
 #[test]
-fn should_reject_structured_outputs_regex_until_enforced() {
+fn should_enforce_structured_outputs_regex() {
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
         r#"{
             "model": "mlx-community/Qwen3.5-2B-4bit",
@@ -165,10 +165,52 @@ fn should_reject_structured_outputs_regex_until_enforced() {
         }"#,
     )
     .expect("regex extra body should deserialize");
+    let request_parts = request
+        .into_parts()
+        .expect("a compilable regex must be enforced, not rejected");
+    assert_eq!(
+        request_parts.enforced_structured_generation,
+        Some(
+            astronomical_rest_contract::EnforcedStructuredGeneration::Regex {
+                pattern: "[A-Z]+".to_owned(),
+            }
+        )
+    );
+}
+
+#[test]
+fn should_reject_an_uncompilable_regex_pattern() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "structured_outputs": {"regex": "(["}
+        }"#,
+    )
+    .expect("an uncompilable regex extra body should deserialize");
     let validation_error = request
         .into_parts()
-        .expect_err("unenforced regex must fail closed");
+        .expect_err("an uncompilable regex must fail closed");
     assert!(validation_error.to_string().contains("regex"));
+}
+
+#[test]
+fn should_reject_an_oversized_regex_pattern() {
+    let oversized_pattern =
+        "a".repeat(astronomical_rest_contract::MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES + 1);
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(&format!(
+        r#"{{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}}],
+            "structured_outputs": {{"regex": "{}"}}
+        }}"#,
+        oversized_pattern
+    ))
+    .expect("an oversized regex extra body should deserialize");
+    let validation_error = request
+        .into_parts()
+        .expect_err("an oversized regex pattern must fail closed");
+    assert!(validation_error.to_string().contains("bounded"));
 }
 
 #[test]
