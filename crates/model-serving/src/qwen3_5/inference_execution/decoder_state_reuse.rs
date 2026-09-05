@@ -209,6 +209,11 @@ impl Qwen3_5EngineState {
                          but load returned None",
                     )
                 })?;
+            let sequence_start_tokens = block_index
+                .checked_mul(persistent_prompt_cache_block_token_count)
+                .ok_or_else(|| {
+                    fatal_engine_error("persistent prompt-cache restore sequence offset overflowed")
+                })?;
             performance_attribution
                 .measure_operation(
                     PerformanceOperation::PersistentPromptCacheStateReconstruction,
@@ -216,6 +221,8 @@ impl Qwen3_5EngineState {
                         request_decoder_state.absorb_persistent_prompt_cache_kv_block(
                             model.runtime(),
                             &mut loaded_kv_block_tensors,
+                            sequence_start_tokens,
+                            restored_token_count,
                         )
                     },
                 )

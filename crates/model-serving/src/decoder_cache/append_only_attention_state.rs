@@ -294,9 +294,23 @@ impl FullAttentionKeyValueState {
         Ok(())
     }
 
+    /// Releases unique ownership of the K/V slabs so `slice_update` can donate
+    /// the destination buffer. Restore keeps `offset_tokens` because the logical
+    /// prefix length is already the restored sequence length.
+    pub(crate) fn take_key_value_storage(&mut self) -> Option<(MlxArray, MlxArray)> {
+        match (self.keys.take(), self.values.take()) {
+            (Some(keys), Some(values)) => Some((keys, values)),
+            (keys, values) => {
+                self.keys = keys;
+                self.values = values;
+                None
+            }
+        }
+    }
+
     /// Replaces the K and V storage from a restored SSD prompt-cache prefix.
-    /// Called by the SSD bridge after it has concatenated the block tensors
-    /// into a single slab; the owner takes ownership and updates its offset.
+    /// Called by the SSD bridge after it has written block tensors into a
+    /// final-length slab; the owner takes ownership and updates its offset.
     pub fn restore_from_blocks(
         &mut self,
         restored_keys: MlxArray,

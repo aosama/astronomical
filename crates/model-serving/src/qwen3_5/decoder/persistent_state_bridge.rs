@@ -115,96 +115,6 @@ impl RequestDecoderStateStack {
         Ok(recurrent_snapshot_tensors)
     }
 
-    /// Restores the live request decoder state from split persistent prompt-cache tensors.
-    ///
-    /// Each KV block is absorbed and materialized before the next block is
-    /// required. Holding every loaded block until one terminal concatenation
-    /// would pin a full-prefix source copy beside the seated model.
-    pub fn restore_from_persistent_prompt_cache_blocks(
-        &mut self,
-        runtime: &MlxRuntime,
-        persistent_prompt_cache_kv_block_tensors: &mut [HashMap<String, MlxArray>],
-        persistent_prompt_cache_recurrent_snapshot_tensors: &mut HashMap<String, MlxArray>,
-    ) -> Result<(), PersistentPromptCacheStateBridgeError> {
-        if persistent_prompt_cache_kv_block_tensors.is_empty() {
-            return Ok(());
-        }
-        for kv_block_tensors in persistent_prompt_cache_kv_block_tensors.iter_mut() {
-            self.absorb_persistent_prompt_cache_kv_block(runtime, kv_block_tensors)?;
-        }
-        self.absorb_persistent_prompt_cache_recurrent_snapshot(
-            runtime,
-            persistent_prompt_cache_recurrent_snapshot_tensors,
-        )
-    }
-
-    /// Absorbs one sequence-state block, then materializes the growing dest.
-    pub fn absorb_persistent_prompt_cache_kv_block(
-        &mut self,
-        runtime: &MlxRuntime,
-        persistent_prompt_cache_kv_block_tensors: &mut HashMap<String, MlxArray>,
-    ) -> Result<(), PersistentPromptCacheStateBridgeError> {
-        for layer_index in 0..self.layer_count() {
-            match self.layer_mut(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
-                    let incoming_keys = take_named_block_tensor(
-                        persistent_prompt_cache_kv_block_tensors,
-                        layer_index,
-                        format!("layer_{layer_index}_attention.keys"),
-                    )?;
-                    let incoming_values = take_named_block_tensor(
-                        persistent_prompt_cache_kv_block_tensors,
-                        layer_index,
-                        format!("layer_{layer_index}_attention.values"),
-                    )?;
-                    let (restored_keys, restored_values) =
-                        match (attention.keys_state(), attention.values_state()) {
-                            (Some(existing_keys), Some(existing_values)) => (
-                                concatenate_full_attention_extension(
-                                    runtime,
-                                    layer_index,
-                                    "keys",
-                                    existing_keys,
-                                    &incoming_keys,
-                                )?,
-                                concatenate_full_attention_extension(
-                                    runtime,
-                                    layer_index,
-                                    "values",
-                                    existing_values,
-                                    &incoming_values,
-                                )?,
-                            ),
-                            _ => (incoming_keys, incoming_values),
-                        };
-                    attention
-                        .restore_from_blocks(restored_keys, restored_values)
-                        .map_err(|source| {
-                            PersistentPromptCacheStateBridgeError::RestoreFullAttentionState {
-                                layer_index,
-                                source,
-                            }
-                        })?;
-                    materialize_restored_layer_tensors(
-                        runtime,
-                        layer_index,
-                        attention.keys_state(),
-                        attention.values_state(),
-                        "keys",
-                        "values",
-                    )?;
-                }
-                Some(DecoderCacheState::Composite { .. }) => {}
-                None => {
-                    return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
-                        layer_index,
-                    });
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Installs the newest complete recurrent snapshot after KV blocks are live.
     pub fn absorb_persistent_prompt_cache_recurrent_snapshot(
         &mut self,
@@ -308,7 +218,7 @@ impl RequestDecoderStateStack {
     }
 }
 
-fn take_named_block_tensor(
+pub(super) fn take_named_block_tensor(
     block_tensors: &mut HashMap<String, MlxArray>,
     layer_index: usize,
     tensor_name: String,
@@ -319,25 +229,6 @@ fn take_named_block_tensor(
             tensor_name,
         },
     )
-}
-
-fn concatenate_full_attention_extension(
-    runtime: &MlxRuntime,
-    layer_index: usize,
-    tensor_role: &'static str,
-    existing_tensor: &MlxArray,
-    incoming_tensor: &MlxArray,
-) -> Result<MlxArray, PersistentPromptCacheStateBridgeError> {
-    let tensor_name = format!("layer_{layer_index}_attention.{tensor_role}");
-    runtime
-        .concatenate_axis(&[existing_tensor, incoming_tensor], 2)
-        .map_err(
-            |source| PersistentPromptCacheStateBridgeError::ConcatenateBlockTensors {
-                layer_index,
-                tensor_name,
-                source,
-            },
-        )
 }
 
 fn materialize_restored_layer_tensors(
@@ -543,9 +434,37 @@ pub enum PersistentPromptCacheStateBridgeError {
         source: MlxRuntimeError,
     },
     #[error(
-        "failed to concatenate qwen3.5-moe persistent prompt-cache block tensor {tensor_name} for layer {layer_index}"
+        "qwen3.5-moe persistent prompt-cache KV restore destination token count {restored_token_count} is invalid"
     )]
-    ConcatenateBlockTensors {
+    InvalidRestoredSequenceTokenCount { restored_token_count: usize },
+    #[error(
+        "qwen3.5-moe persistent prompt-cache KV block at token offset {sequence_start_tokens} does not fit the restored destination of {destination_token_count} tokens"
+    )]
+    KvBlockDoesNotFitRestoreDestination {
+        sequence_start_tokens: usize,
+        destination_token_count: usize,
+    },
+    #[error(
+        "qwen3.5-moe persistent prompt-cache KV block layer {layer_index} {tensor_role} shape {actual_shape:?} does not match restore destination {expected_shape:?}"
+    )]
+    KvBlockShapeDoesNotMatchRestoreDestination {
+        layer_index: usize,
+        tensor_role: &'static str,
+        actual_shape: Vec<i32>,
+        expected_shape: Vec<i32>,
+    },
+    #[error(
+        "failed to allocate the qwen3.5-moe persistent prompt-cache KV restore destination for layer {layer_index}"
+    )]
+    AllocateRestoreDestination {
+        layer_index: usize,
+        #[source]
+        source: MlxRuntimeError,
+    },
+    #[error(
+        "failed to write qwen3.5-moe persistent prompt-cache block tensor {tensor_name} into the restore destination for layer {layer_index}"
+    )]
+    WriteRestoreDestination {
         layer_index: usize,
         tensor_name: String,
         #[source]
