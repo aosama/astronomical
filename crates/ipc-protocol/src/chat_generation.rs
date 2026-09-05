@@ -151,8 +151,24 @@ pub struct ChatGenerationSettings {
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum StructuredGenerationConstraint {
     JsonObject,
-    JsonSchema { schema_json: String },
-    Choice { choices: Vec<String> },
+    JsonSchema {
+        schema_json: String,
+    },
+    Choice {
+        choices: Vec<String>,
+    },
+    /// The complete visible answer must match this regular expression.
+    Regex {
+        pattern: String,
+    },
+}
+
+/// Wraps a caller regex so its DFA matches only from the first answer byte.
+/// The end stays anchored to end of text so completion and viability share one
+/// automaton. The public boundary and the worker compile this identical shape.
+#[must_use]
+pub fn structured_regex_dfa_pattern(regex_pattern: &str) -> String {
+    format!(r"\A(?:{regex_pattern})\z")
 }
 
 /// Structured-chat capabilities reported by one ready worker model.

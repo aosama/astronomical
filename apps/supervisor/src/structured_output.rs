@@ -40,6 +40,9 @@ pub(crate) fn ipc_constraint_from_enforced(
         EnforcedStructuredGeneration::Choice { choices } => {
             StructuredGenerationConstraint::Choice { choices }
         }
+        EnforcedStructuredGeneration::Regex { pattern } => {
+            StructuredGenerationConstraint::Regex { pattern }
+        }
     })
 }
 

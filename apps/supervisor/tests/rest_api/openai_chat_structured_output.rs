@@ -128,8 +128,19 @@ async fn should_keep_original_text_when_json_cannot_be_extracted() {
 }
 
 #[tokio::test]
-async fn should_reject_structured_outputs_regex_before_generation() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+async fn should_forward_enforced_regex_constraint_to_the_worker() {
+    let executor = ScriptedExecutor::ready(vec![
+        ChatGenerationStreamEvent::TextFragment("Romeo".to_owned()),
+        ChatGenerationStreamEvent::Completed {
+            prompt_token_count: 8,
+            generated_token_count: 1,
+            reasoning_token_count: 0,
+            cached_token_count: 0,
+            reason: ChatGenerationCompletionReason::EndOfSequence,
+        },
+    ]);
+    let received_constraint = executor.received_structured_constraint_handle();
+    let application = build_application(executor);
 
     let chat_response = application
         .oneshot(
@@ -140,8 +151,8 @@ async fn should_reject_structured_outputs_regex_before_generation() {
                 .body(Body::from(
                     r#"{
                         "model":"astronomical/non-streaming-test-model",
-                        "messages":[{"role":"user","content":"O Romeo, Romeo, wherefore art thou Romeo?"}],
-                        "structured_outputs":{"regex":"[A-Z]+"},
+                        "messages":[{"role":"user","content":"Who answers?"}],
+                        "structured_outputs":{"regex":"Romeo|Juliet"},
                         "stream":false
                     }"#,
                 ))
@@ -150,25 +161,32 @@ async fn should_reject_structured_outputs_regex_before_generation() {
         .await
         .expect("the application should return a chat response");
 
-    assert_eq!(chat_response.status(), StatusCode::BAD_REQUEST);
-    let response_body = to_bytes(chat_response.into_body(), 16 * 1024)
-        .await
-        .expect("the error body should be readable");
-    let response_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the error body should be JSON");
-    assert_eq!(response_document["error"]["code"], "invalid_request");
-    let error_message = response_document["error"]["message"]
-        .as_str()
-        .expect("error message should be text");
+    assert_eq!(chat_response.status(), StatusCode::OK);
+    let received_constraint = received_constraint
+        .lock()
+        .expect("the structured constraint log should not be poisoned")
+        .clone();
+    assert_eq!(
+        received_constraint,
+        Some(
+            astronomical_ipc_protocol::StructuredGenerationConstraint::Regex {
+                pattern: "Romeo|Juliet".to_owned(),
+            }
+        )
+    );
+    let warning_header = chat_response.headers().get(header::WARNING);
     assert!(
-        error_message.contains("regex"),
-        "regex extra-body must fail closed, got {error_message}"
+        warning_header.is_none(),
+        "an enforced extra-body constraint must not carry the unenforced degradation warning"
     );
 }
 
 struct ScriptedExecutor {
     health_snapshot: WorkerHealthSnapshot,
     stream_events: Vec<ChatGenerationStreamEvent>,
+    received_structured_constraint: std::sync::Arc<
+        std::sync::Mutex<Option<astronomical_ipc_protocol::StructuredGenerationConstraint>>,
+    >,
 }
 
 impl ScriptedExecutor {
@@ -188,14 +206,23 @@ impl ScriptedExecutor {
                 None,
             ),
             stream_events,
+            received_structured_constraint: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
+    }
+
+    fn received_structured_constraint_handle(
+        &self,
+    ) -> std::sync::Arc<
+        std::sync::Mutex<Option<astronomical_ipc_protocol::StructuredGenerationConstraint>>,
+    > {
+        std::sync::Arc::clone(&self.received_structured_constraint)
     }
 }
 
 impl ChatGenerationExecutor for ScriptedExecutor {
     fn start_chat_generation(
         &self,
-        _generation_command: ChatGenerationCommand,
+        generation_command: ChatGenerationCommand,
     ) -> Pin<
         Box<
             dyn Future<
@@ -208,6 +235,11 @@ impl ChatGenerationExecutor for ScriptedExecutor {
         >,
     > {
         Box::pin(async move {
+            *self
+                .received_structured_constraint
+                .lock()
+                .expect("the structured constraint log should not be poisoned") =
+                generation_command.structured_generation.clone();
             let (stream_event_sender, stream_event_receiver) =
                 mpsc::channel(self.stream_events.len().max(1));
             for stream_event in &self.stream_events {

@@ -417,14 +417,20 @@ impl Qwen3_5Tokenizer {
             self.natural_reasoning_end_token_ids.clone(),
         );
         if let Some(structured_generation) = &chat_generation_command.structured_generation {
-            inference_request = inference_request.with_structured_generation(
+            let structured_token_constraint =
                 crate::structured_generation::StructuredTokenConstraint::compile(
                     structured_generation,
                     self.vocabulary_pieces(),
                     vec![self.end_of_text_token_id(), self.im_end_token_id()],
                     self.encoded_choice_token_sequences(structured_generation),
-                ),
-            );
+                )
+                .map_err(|compile_reason| {
+                    Qwen3_5TokenizerError::StructuredConstraintCompile {
+                        reason: compile_reason,
+                    }
+                })?;
+            inference_request =
+                inference_request.with_structured_generation(structured_token_constraint);
         }
         if !prepared_chat_images.processed_visual_images.is_empty() {
             inference_request = inference_request
