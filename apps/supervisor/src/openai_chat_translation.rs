@@ -41,6 +41,7 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
         thinking_budget,
         stream: _,
         includes_usage_in_stream: _,
+        structured_output,
     } = request_parts;
     let maximum_output_tokens = u16::try_from(maximum_output_tokens).map_err(|_| {
         OpenAiChatTranslationError::OutputTokenCountTooLarge {
@@ -51,7 +52,7 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
         .map(u16::try_from)
         .transpose()
         .map_err(|_| OpenAiChatTranslationError::ThinkingBudgetTooLarge)?;
-    let chat_generation_command = ChatGenerationCommand {
+    let mut chat_generation_command = ChatGenerationCommand {
         request_id,
         model,
         messages: translate_messages(messages),
@@ -66,6 +67,10 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
         },
         qwen_thinking_channel_seed: None,
     };
+    crate::structured_output::apply_structured_output_instruction(
+        &mut chat_generation_command.messages,
+        structured_output.as_ref(),
+    );
     chat_generation_command
         .validate()
         .map_err(OpenAiChatTranslationError::IpcValidation)?;

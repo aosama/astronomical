@@ -164,8 +164,8 @@ fn should_parse_recognized_behavior_changing_fields_before_rejecting_them() {
             "previous_response_id",
         ),
         (
-            r#"{"model":"ornith","input":"hello","text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"object"}}}}"#,
-            "text",
+            r#"{"model":"ornith","input":"hello","text":{"verbosity":"high"}}"#,
+            "text.verbosity",
         ),
         (
             r#"{"model":"ornith","input":"hello","tools":[{"type":"web_search"}]}"#,

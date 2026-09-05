@@ -20,6 +20,7 @@ print_journeys() {
         accept-laguna-family-swap \
         accept-thinking-seed \
         accept-hard-thinking-budget \
+        accept-structured-output \
         accept-speculative-prefill \
         accept-prompt-cache \
         test-model-ssd-streaming-support \
@@ -92,6 +93,10 @@ main() {
         accept-hard-thinking-budget)
             lane_name="small-dense-hard-thinking-budget-rest"
             set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_commit_the_hard_thinking_budget_before_visible_answer_content -- --ignored --nocapture
+            ;;
+        accept-structured-output)
+            lane_name="structured-output-rest"
+            set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_serve_structured_json_from_romeo_and_juliet_on_chat_and_responses -- --ignored --nocapture
             ;;
         accept-speculative-prefill)
             lane_name="speculative-prefill-rest"

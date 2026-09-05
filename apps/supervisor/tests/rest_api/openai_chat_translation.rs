@@ -275,3 +275,25 @@ fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dto
         }
     );
 }
+
+#[test]
+fn should_inject_a_json_instruction_when_response_format_is_json_object() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "response_format": {"type": "json_object"}
+        }"#,
+    )
+    .expect("json_object chat request should deserialize");
+
+    let chat_command = translate_openai_chat_completion_request(RequestId::new(399), request)
+        .expect("json_object should translate with a JSON instruction");
+
+    match chat_command.messages.as_slice() {
+        [ChatMessage::System { content }, ChatMessage::User { .. }] => {
+            assert!(content.contains("JSON"));
+        }
+        other_messages => panic!("expected a leading system instruction, got {other_messages:?}"),
+    }
+}

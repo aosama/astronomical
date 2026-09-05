@@ -5,10 +5,12 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::{
-    DEFAULT_OPENAI_OUTPUT_TOKENS, MAX_OPENAI_OUTPUT_TOKENS, OpenAiResponseFunctionTool,
-    OpenAiResponseInput, OpenAiResponseInputParts, OpenAiResponseRequestConfiguration,
-    OpenAiResponseToolChoice, OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition,
-    OpenAiResponseToolDefinitionParts,
+    DEFAULT_OPENAI_OUTPUT_TOKENS, MAX_OPENAI_OUTPUT_TOKENS, OpenAiResponseFormat,
+    OpenAiResponseFunctionTool, OpenAiResponseInput, OpenAiResponseInputParts,
+    OpenAiResponseRequestConfiguration, OpenAiResponseToolChoice, OpenAiResponseToolChoiceParts,
+    OpenAiResponseToolDefinition, OpenAiResponseToolDefinitionParts, OpenAiStructuredOutput,
+    OpenAiStructuredOutputValidationError, merge_structured_output_requests,
+    structured_output_from_responses_text_format,
 };
 
 /// One bounded request to the local OpenAI-compatible Responses endpoint.
@@ -72,6 +74,10 @@ pub struct OpenAiResponsesRequest {
     top_p: Option<f32>,
     #[serde(default)]
     stream: bool,
+    #[serde(default)]
+    thinking_budget: Option<u32>,
+    #[serde(default)]
+    response_format: Option<OpenAiResponseFormat>,
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
 }
@@ -99,6 +105,14 @@ impl OpenAiResponsesRequest {
         }
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;
         validate_sampling_parameter("top_p", self.top_p, 0.0, 1.0)?;
+        let structured_output = merge_structured_output_requests(
+            self.response_format
+                .clone()
+                .map(OpenAiResponseFormat::into_structured_output)
+                .transpose()?
+                .flatten(),
+            structured_output_from_responses_text_format(self.text.as_ref())?,
+        )?;
         validate_compatibility_fields(&self)?;
         let tools = self
             .tools
@@ -122,6 +136,8 @@ impl OpenAiResponsesRequest {
             temperature: self.temperature,
             top_p: self.top_p,
             stream: self.stream,
+            thinking_budget: self.thinking_budget,
+            structured_output,
         })
     }
 }
@@ -140,6 +156,8 @@ pub struct OpenAiResponsesRequestParts {
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
     pub stream: bool,
+    pub thinking_budget: Option<u32>,
+    pub structured_output: Option<OpenAiStructuredOutput>,
 }
 
 impl OpenAiResponsesRequestParts {
@@ -215,6 +233,8 @@ pub enum OpenAiResponsesValidationError {
     },
     #[error("request field '{field_name}' is unknown")]
     UnknownField { field_name: String },
+    #[error(transparent)]
+    StructuredOutput(#[from] OpenAiStructuredOutputValidationError),
 }
 
 fn validate_compatibility_fields(
@@ -260,15 +280,13 @@ fn validate_compatibility_fields(
             option_name: "top_logprobs",
         });
     }
-    if request.text.as_ref().is_some_and(|text_configuration| {
-        text_configuration
-            .pointer("/format/type")
-            .and_then(Value::as_str)
-            .is_some_and(|format_type| format_type != "text")
-            || text_configuration.get("verbosity").is_some()
-    }) {
+    if request
+        .text
+        .as_ref()
+        .is_some_and(|text_configuration| text_configuration.get("verbosity").is_some())
+    {
         return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "text",
+            option_name: "text.verbosity",
         });
     }
     if request.background == Some(true) {

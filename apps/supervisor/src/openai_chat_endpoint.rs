@@ -140,6 +140,7 @@ pub(crate) async fn create_chat_completion(
                 .into_response();
         }
     };
+    let structured_output = request_parts.structured_output.clone();
     let settings_presence = crate::request_generation_defaults::RequestGenerationSettingsPresence {
         maximum_output_tokens: request_parts.requested_maximum_output_tokens.is_some(),
         temperature: request_parts.temperature.is_some(),
@@ -286,23 +287,30 @@ pub(crate) async fn create_chat_completion(
         application_state.completion_id_namespace
     );
     if !should_stream_response {
-        return create_non_streaming_chat_completion(
-            chat_stream_event_receiver,
-            completion_id,
-            created_at_unix_seconds,
-            model_id,
-        )
-        .await;
+        return crate::structured_output::attach_unenforced_structured_output_warning(
+            create_non_streaming_chat_completion(
+                chat_stream_event_receiver,
+                completion_id,
+                created_at_unix_seconds,
+                model_id,
+                structured_output.as_ref(),
+            )
+            .await,
+            structured_output.as_ref(),
+        );
     }
-    create_streaming_response(
-        chat_stream_event_receiver,
-        OpenAiChatStreamEncoder::new(
-            request_id,
-            completion_id,
-            created_at_unix_seconds,
-            model_id,
-            includes_usage,
+    crate::structured_output::attach_unenforced_structured_output_warning(
+        create_streaming_response(
+            chat_stream_event_receiver,
+            OpenAiChatStreamEncoder::new(
+                request_id,
+                completion_id,
+                created_at_unix_seconds,
+                model_id,
+                includes_usage,
+            ),
         ),
+        structured_output.as_ref(),
     )
 }
 

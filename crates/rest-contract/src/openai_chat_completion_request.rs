@@ -5,7 +5,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::{
-    OpenAiChatMessage, OpenAiChatMessageParts, OpenAiStopSequences, OpenAiStreamOptions,
+    OpenAiChatMessage, OpenAiChatMessageParts, OpenAiResponseFormat, OpenAiStopSequences,
+    OpenAiStreamOptions, OpenAiStructuredOutput, OpenAiStructuredOutputValidationError,
     OpenAiToolChoice, OpenAiToolChoiceMode, OpenAiToolDefinition, OpenAiToolDefinitionParts,
 };
 
@@ -55,6 +56,8 @@ pub struct OpenAiChatCompletionRequest {
     stream: bool,
     #[serde(default)]
     stream_options: Option<OpenAiStreamOptions>,
+    #[serde(default)]
+    response_format: Option<OpenAiResponseFormat>,
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
 }
@@ -86,6 +89,9 @@ impl OpenAiChatCompletionRequest {
         self.validate_unsupported_options()?;
         if self.stop.is_some() {
             return Err(OpenAiChatCompletionValidationError::UnsupportedStopSequences);
+        }
+        if let Some(response_format) = &self.response_format {
+            response_format.clone().into_structured_output()?;
         }
 
         Ok(())
@@ -143,6 +149,12 @@ impl OpenAiChatCompletionRequest {
         let maximum_output_tokens = self.maximum_output_tokens();
         let requested_maximum_output_tokens = self.max_completion_tokens.or(self.max_tokens);
         let includes_usage_in_stream = self.includes_usage_in_stream();
+        let structured_output = self
+            .response_format
+            .clone()
+            .map(OpenAiResponseFormat::into_structured_output)
+            .transpose()?
+            .flatten();
         Ok(OpenAiChatCompletionRequestParts {
             model: self.model,
             messages: self
@@ -167,6 +179,7 @@ impl OpenAiChatCompletionRequest {
             thinking_budget: self.thinking_budget,
             stream: self.stream,
             includes_usage_in_stream,
+            structured_output,
         })
     }
 
@@ -275,6 +288,8 @@ pub struct OpenAiChatCompletionRequestParts {
     pub stream: bool,
     /// Whether the stream's terminal event must carry usage.
     pub includes_usage_in_stream: bool,
+    /// Validated OpenAI structured-output request, when the client asked for JSON.
+    pub structured_output: Option<OpenAiStructuredOutput>,
 }
 
 /// A request rejected before worker admission by the public OpenAI contract.
@@ -371,6 +386,9 @@ pub enum OpenAiChatCompletionValidationError {
     /// An unrecognized request field was supplied.
     #[error("request field '{field_name}' is unknown")]
     UnknownField { field_name: String },
+    /// `response_format` failed public structured-output validation.
+    #[error(transparent)]
+    StructuredOutput(#[from] OpenAiStructuredOutputValidationError),
 }
 
 fn validate_non_empty_string(

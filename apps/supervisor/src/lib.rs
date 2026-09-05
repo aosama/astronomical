@@ -39,6 +39,7 @@ mod runtime_model_policy;
 mod serving_session_snapshot;
 mod shutdown_control;
 mod status_endpoint;
+mod structured_output;
 mod supervisor_download_attribution;
 mod supervisor_performance_attribution;
 mod supervisor_performance_measurement;
