@@ -48,7 +48,8 @@ pub(crate) fn translate_openai_responses_request_parts(
                 actual_output_tokens: request_parts.maximum_output_tokens,
             }
         })?;
-    let chat_generation_command = ChatGenerationCommand {
+    let structured_output = request_parts.structured_output;
+    let mut chat_generation_command = ChatGenerationCommand {
         request_id,
         model: request_parts.model,
         messages: chat_messages,
@@ -77,10 +78,20 @@ pub(crate) fn translate_openai_responses_request_parts(
             )?,
             top_p_thousandths: translate_thousandths(request_parts.top_p, "top_p")?,
             seed: None,
-            thinking_budget: None,
+            // Thinking-enabled Qwen otherwise spends max_output_tokens inside reasoning
+            // and never emits the JSON object structured output asked for.
+            thinking_budget: request_parts
+                .thinking_budget
+                .map(u16::try_from)
+                .transpose()
+                .map_err(|_| OpenAiResponsesTranslationError::ThinkingBudgetTooLarge)?,
         },
         qwen_thinking_channel_seed: None,
     };
+    crate::structured_output::apply_structured_output_instruction(
+        &mut chat_generation_command.messages,
+        structured_output.as_ref(),
+    );
     chat_generation_command
         .validate()
         .map_err(OpenAiResponsesTranslationError::IpcValidation)?;
@@ -256,4 +267,6 @@ pub enum OpenAiResponsesTranslationError {
     ToolSchemaSerialization(#[source] serde_json::Error),
     #[error("translated Responses IPC command failed validation: {0}")]
     IpcValidation(#[source] ChatGenerationValidationError),
+    #[error("thinking_budget does not fit the worker representation")]
+    ThinkingBudgetTooLarge,
 }

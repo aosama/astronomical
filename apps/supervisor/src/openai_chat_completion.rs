@@ -1,7 +1,7 @@
 use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use astronomical_rest_contract::{
     OpenAiAssistantMessage, OpenAiChatCompletionResponse, OpenAiErrorResponse, OpenAiFinishReason,
-    OpenAiResponseToolCall, OpenAiTokenUsage,
+    OpenAiResponseToolCall, OpenAiStructuredOutput, OpenAiTokenUsage, compact_extracted_json_text,
 };
 use axum::{
     Json,
@@ -18,6 +18,7 @@ pub(crate) async fn create_non_streaming_chat_completion(
     completion_id: String,
     created_at_unix_seconds: u64,
     model_id: String,
+    structured_output: Option<&OpenAiStructuredOutput>,
 ) -> Response {
     let mut chat_completion_collector =
         OpenAiChatCompletionCollector::new(completion_id, created_at_unix_seconds, model_id);
@@ -30,6 +31,9 @@ pub(crate) async fn create_non_streaming_chat_completion(
                 reason,
                 ..
             } => {
+                if structured_output.is_some() {
+                    chat_completion_collector.replace_visible_text_with_extracted_json();
+                }
                 return match chat_completion_collector.into_response(
                     prompt_token_count,
                     generated_token_count,
@@ -116,6 +120,15 @@ impl OpenAiChatCompletionCollector {
             text_content: String::new(),
             reasoning_content: String::new(),
             tool_calls: Vec::new(),
+        }
+    }
+
+    pub(crate) fn replace_visible_text_with_extracted_json(&mut self) {
+        if !self.tool_calls.is_empty() {
+            return;
+        }
+        if let Some(compact_json) = compact_extracted_json_text(&self.text_content) {
+            self.text_content = compact_json;
         }
     }
 

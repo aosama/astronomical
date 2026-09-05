@@ -482,6 +482,7 @@ expected_journeys = {
     "accept-laguna-family-swap",
     "accept-thinking-seed",
     "accept-hard-thinking-budget",
+    "accept-structured-output",
     "accept-speculative-prefill",
     "accept-prompt-cache",
     "test-model-ssd-streaming-support",

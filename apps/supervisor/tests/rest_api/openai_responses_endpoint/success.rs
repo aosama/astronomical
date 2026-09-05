@@ -130,3 +130,55 @@ async fn should_return_non_streaming_responses_reasoning_without_visible_output_
         "reasoning-only responses must not fabricate a visible message: {response_document}"
     );
 }
+
+#[tokio::test]
+async fn should_return_extracted_json_and_a_warning_for_text_format_json_schema() {
+    let application = build_application(ScriptedResponsesExecutor::new(vec![
+        ChatGenerationStreamEvent::TextFragment(
+            "```json\n{\"speaker\":\"Juliet\",\"play\":\"Romeo and Juliet\"}\n```".to_owned(),
+        ),
+        ChatGenerationStreamEvent::Completed {
+            prompt_token_count: 12,
+            generated_token_count: 8,
+            reasoning_token_count: 0,
+            cached_token_count: 0,
+            reason: ChatGenerationCompletionReason::EndOfSequence,
+        },
+    ]));
+    let http_response = post_response_body(
+        application,
+        r#"{
+            "model":"astronomical/responses-endpoint-test-model",
+            "input":"O Romeo, Romeo, wherefore art thou Romeo?",
+            "text":{"format":{"type":"json_schema","name":"romeo_line","schema":{"type":"object"}}},
+            "stream":false
+        }"#,
+    )
+    .await;
+
+    assert_eq!(http_response.status(), StatusCode::OK);
+    let warning_header = http_response
+        .headers()
+        .get(header::WARNING)
+        .and_then(|header_value| header_value.to_str().ok())
+        .expect("unenforced json_schema must disclose a Warning header");
+    assert_eq!(
+        warning_header,
+        astronomical_rest_contract::UNENFORCED_RESPONSE_FORMAT_WARNING
+    );
+    let response_body = to_bytes(http_response.into_body(), 16 * 1024)
+        .await
+        .expect("the Responses body should be readable");
+    let response_document: Value =
+        serde_json::from_slice(&response_body).expect("the response should be JSON");
+    let extracted_json: Value = serde_json::from_str(
+        response_document["output_text"]
+            .as_str()
+            .expect("output_text should be a string"),
+    )
+    .expect("output_text should be JSON");
+    assert_eq!(
+        extracted_json,
+        serde_json::json!({"speaker": "Juliet", "play": "Romeo and Juliet"})
+    );
+}

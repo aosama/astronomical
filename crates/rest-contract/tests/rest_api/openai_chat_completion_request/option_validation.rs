@@ -135,7 +135,7 @@ fn should_reject_an_unknown_openai_field_explicitly() {
     {
         "model": "astronomical/fake-mixture-of-experts",
         "messages": [{"role": "user", "content": "Inspect the repository."}],
-        "response_format": {"type": "json_object"}
+        "logit_bias": {"13": -100}
     }
     "#;
     let chat_completion_request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
@@ -144,7 +144,7 @@ fn should_reject_an_unknown_openai_field_explicitly() {
     assert_eq!(
         chat_completion_request.validate(),
         Err(OpenAiChatCompletionValidationError::UnknownField {
-            field_name: "response_format".to_owned(),
+            field_name: "logit_bias".to_owned(),
         })
     );
 }

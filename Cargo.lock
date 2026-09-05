@@ -72,6 +72,7 @@ dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
  "astronomical-model-serving",
+ "astronomical-rest-contract",
  "astronomical-runtime-integration",
  "astronomical-supervisor",
  "async-openai",

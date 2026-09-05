@@ -5,7 +5,7 @@ use astronomical_config::{DiscoveredModel, ModelCapabilities, resolve_model_id};
 use astronomical_ipc_protocol::WorkerModelCapabilities;
 use astronomical_rest_contract::{
     OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
-    OpenAiModelValidationError,
+    OpenAiModelValidationError, STRUCTURED_OUTPUT_ENFORCEMENT_NONE,
 };
 use axum::{
     Json,
@@ -142,6 +142,8 @@ fn openai_model_from_ready_worker_capabilities(
         supports_tool_calls: chat_capabilities.supports_tool_calls,
         tool_call_format: tool_call_format_for_model(chat_capabilities.supports_tool_calls),
         supported_endpoints: supported_generation_endpoint_paths(),
+        supports_structured_outputs: true,
+        structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_NONE.to_owned()),
     })
 }
 
@@ -192,6 +194,8 @@ fn openai_model_from_discovered_chat_model(
         supports_tool_calls: capabilities.supports_tool_calls,
         tool_call_format: tool_call_format_for_model(capabilities.supports_tool_calls),
         supported_endpoints: supported_generation_endpoint_paths(),
+        supports_structured_outputs: true,
+        structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_NONE.to_owned()),
     })
 }
 

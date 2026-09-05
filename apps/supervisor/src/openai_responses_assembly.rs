@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use astronomical_rest_contract::{
     OpenAiResponse, OpenAiResponseOutputItem, OpenAiResponseRequestConfiguration,
-    OpenAiResponseUsage,
+    OpenAiResponseUsage, compact_extracted_json_text,
 };
 use thiserror::Error;
 
@@ -45,6 +45,15 @@ impl OpenAiResponsesCollector {
             reasoning_text: String::new(),
             output_text: String::new(),
             function_calls: Vec::new(),
+        }
+    }
+
+    pub(crate) fn replace_output_text_with_extracted_json(&mut self) {
+        if !self.function_calls.is_empty() {
+            return;
+        }
+        if let Some(compact_json) = compact_extracted_json_text(&self.output_text) {
+            self.output_text = compact_json;
         }
     }
 

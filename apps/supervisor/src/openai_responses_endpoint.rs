@@ -79,6 +79,7 @@ pub(crate) async fn create_response(
         );
     }
     let should_stream_response = request_parts.stream;
+    let structured_output = request_parts.structured_output.clone();
     let response_instructions = request_parts.instructions.clone();
     let response_request_configuration = request_parts.response_configuration();
     let settings_presence = crate::request_generation_defaults::RequestGenerationSettingsPresence {
@@ -212,25 +213,32 @@ pub(crate) async fn create_response(
         application_state.completion_id_namespace
     );
     if !should_stream_response {
-        return create_non_streaming_response(
-            stream_event_receiver,
-            response_id,
-            created_at_unix_seconds,
-            model_id,
-            response_instructions,
-            response_request_configuration,
-        )
-        .await;
+        return crate::structured_output::attach_unenforced_structured_output_warning(
+            create_non_streaming_response(
+                stream_event_receiver,
+                response_id,
+                created_at_unix_seconds,
+                model_id,
+                response_instructions,
+                response_request_configuration,
+                structured_output.as_ref(),
+            )
+            .await,
+            structured_output.as_ref(),
+        );
     }
-    create_streaming_response(
-        stream_event_receiver,
-        OpenAiResponsesStreamEncoder::new(
-            response_id,
-            created_at_unix_seconds,
-            model_id,
-            response_instructions,
-            response_request_configuration,
+    crate::structured_output::attach_unenforced_structured_output_warning(
+        create_streaming_response(
+            stream_event_receiver,
+            OpenAiResponsesStreamEncoder::new(
+                response_id,
+                created_at_unix_seconds,
+                model_id,
+                response_instructions,
+                response_request_configuration,
+            ),
         ),
+        structured_output.as_ref(),
     )
 }
 
@@ -241,6 +249,7 @@ async fn create_non_streaming_response(
     model_id: String,
     instructions: Option<String>,
     request_configuration: OpenAiResponseRequestConfiguration,
+    structured_output: Option<&astronomical_rest_contract::OpenAiStructuredOutput>,
 ) -> Response {
     let mut response_collector = OpenAiResponsesCollector::new(
         response_id,
@@ -274,6 +283,9 @@ async fn create_non_streaming_response(
             reason,
         } = stream_event
         {
+            if structured_output.is_some() {
+                response_collector.replace_output_text_with_extracted_json();
+            }
             return match response_collector.into_response(
                 prompt_token_count,
                 generated_token_count,
