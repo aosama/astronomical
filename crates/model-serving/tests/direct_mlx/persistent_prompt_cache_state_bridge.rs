@@ -129,6 +129,7 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
     let full_attention_layer = restored_request_decoder_state
         .layer(3)
         .expect("layer 3 should be present in the restored request decoder state");
+    assert!(kv_block_tensors.iter().all(HashMap::is_empty));
     match full_attention_layer {
         DecoderCacheState::AppendOnlyAttention { attention } => {
             let restored_keys = attention
@@ -137,6 +138,7 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
             let restored_values = attention
                 .values_state()
                 .expect("full-attention values should be restored");
+            assert_eq!(attention.offset_tokens(), 4);
             assert_eq!(restored_keys.shape(), vec![1, 1, 4, 1]);
             assert_eq!(
                 restored_keys
@@ -180,6 +182,50 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
             );
         }
         DecoderCacheState::AppendOnlyAttention { .. } => panic!("layer 0 should be linear"),
+    }
+}
+
+#[tokio::test]
+async fn should_restore_three_kv_blocks_in_sequence_order_at_final_length() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = shared_runtime();
+    let mut kv_block_tensors = vec![
+        tiny_persistent_prompt_cache_kv_block_tensors(&runtime, 10.0),
+        tiny_persistent_prompt_cache_kv_block_tensors(&runtime, 20.0),
+        tiny_persistent_prompt_cache_kv_block_tensors(&runtime, 30.0),
+    ];
+    let mut recurrent_snapshot_tensors =
+        tiny_persistent_prompt_cache_recurrent_snapshot_tensors(&runtime, 40.0);
+
+    let mut restored_request_decoder_state =
+        crate::common::standard_request_decoder_state(&frozen_ornith_1_0_config());
+    restored_request_decoder_state
+        .restore_from_persistent_prompt_cache_blocks(
+            &runtime,
+            &mut kv_block_tensors,
+            &mut recurrent_snapshot_tensors,
+        )
+        .expect("three prompt-cache blocks should restore in sequence order");
+
+    assert!(kv_block_tensors.iter().all(HashMap::is_empty));
+    let full_attention_layer = restored_request_decoder_state
+        .layer(3)
+        .expect("layer 3 should be present in the restored request decoder state");
+    match full_attention_layer {
+        DecoderCacheState::AppendOnlyAttention { attention } => {
+            let restored_keys = attention
+                .keys_state()
+                .expect("full-attention keys should be restored");
+            assert_eq!(attention.offset_tokens(), 6);
+            assert_eq!(restored_keys.shape(), vec![1, 1, 6, 1]);
+            assert_eq!(
+                restored_keys
+                    .to_vec_f32()
+                    .expect("keys should copy back to the test"),
+                vec![10.0, 11.0, 20.0, 21.0, 30.0, 31.0]
+            );
+        }
+        DecoderCacheState::Composite { .. } => panic!("layer 3 should be full attention"),
     }
 }
 
