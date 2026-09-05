@@ -189,6 +189,7 @@ final class DaemonLifecycleController {
       return
     }
     try startOwnedDaemon(menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
+    try throwIfOwnedDaemonExited()
     try await waitForExpectedInstanceReadiness()
   }
 
@@ -212,6 +213,7 @@ final class DaemonLifecycleController {
       throw DaemonLifecycleError.bundledDaemonUnavailable
     }
     try startOwnedDaemon(menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
+    try throwIfOwnedDaemonExited()
     try await waitForExpectedInstanceReadiness()
     return "Server restarted"
   }
@@ -258,22 +260,39 @@ final class DaemonLifecycleController {
     let readinessClock = ContinuousClock()
     let readinessDeadline = readinessClock.now.advanced(by: readinessTimeout)
     while readinessClock.now < readinessDeadline {
+      // A dead child must win over a health poll. Otherwise a fast exit can be
+      // reported as a readiness timeout after SIGTERM reaps a zombie.
+      try throwIfOwnedDaemonExited()
       if await supervisorClient.expectedInstanceIsHealthy() { return }
-      if ownedDaemonProcess?.reapIfExited() == true {
-        clearOwnedDaemonState()
-        throw DaemonLifecycleError.daemonExitedBeforeReady(
-          applicationIdentity.expectedConfigurationFile)
-      }
+      try throwIfOwnedDaemonExited()
       try await Task.sleep(for: readinessPollInterval)
     }
     if await supervisorClient.expectedInstanceIsHealthy() { return }
-    if ownedDaemonProcess?.reapIfExited() == true {
-      clearOwnedDaemonState()
-      throw DaemonLifecycleError.daemonExitedBeforeReady(
-        applicationIdentity.expectedConfigurationFile)
+    try throwIfOwnedDaemonExited()
+    if reapOwnedDaemonWithin(.milliseconds(50)) {
+      try throwIfOwnedDaemonExited()
     }
     await stopUnreadyOwnedDaemon()
     throw DaemonLifecycleError.readinessTimedOut(applicationIdentity.expectedConfigurationFile)
+  }
+
+  private func throwIfOwnedDaemonExited() throws {
+    guard ownedDaemonProcess?.reapIfExited() == true else { return }
+    clearOwnedDaemonState()
+    throw DaemonLifecycleError.daemonExitedBeforeReady(
+      applicationIdentity.expectedConfigurationFile)
+  }
+
+  private func reapOwnedDaemonWithin(_ gracePeriod: Duration) -> Bool {
+    guard let ownedDaemonProcess else { return false }
+    if ownedDaemonProcess.reapIfExited() { return true }
+    let reapClock = ContinuousClock()
+    let reapDeadline = reapClock.now.advanced(by: gracePeriod)
+    while reapClock.now < reapDeadline {
+      if ownedDaemonProcess.reapIfExited() { return true }
+      usleep(1_000)
+    }
+    return ownedDaemonProcess.reapIfExited()
   }
 
   private func waitForExistingInstanceReadiness() async throws {
