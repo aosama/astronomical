@@ -12,6 +12,7 @@ mod library_process;
 mod openai_chat_completion_non_streaming;
 mod openai_chat_endpoint_negative;
 mod openai_chat_streaming;
+mod openai_chat_structured_output;
 mod openai_chat_translation;
 mod openai_image_generation;
 mod openai_models_endpoint;

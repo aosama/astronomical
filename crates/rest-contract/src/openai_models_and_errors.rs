@@ -34,6 +34,10 @@ pub struct OpenAiModelParts {
     pub tool_call_format: Option<String>,
     /// Generation endpoints supported by this model.
     pub supported_endpoints: Vec<String>,
+    /// Whether Chat Completions and Responses accept `response_format`.
+    pub supports_structured_outputs: bool,
+    /// How structured output is enforced, when supported.
+    pub structured_output_enforcement: Option<String>,
 }
 
 /// Capability metadata for an image-output model without autoregressive token limits.
@@ -95,6 +99,9 @@ impl OpenAiModelParts {
         if self.supports_tool_calls != self.tool_call_format.is_some() {
             return Err(OpenAiModelValidationError::ToolCallFormatMustMatchSupport);
         }
+        if self.supports_structured_outputs != self.structured_output_enforcement.is_some() {
+            return Err(OpenAiModelValidationError::StructuredOutputEnforcementMustMatchSupport);
+        }
         if self.supported_endpoints.is_empty() {
             return Err(OpenAiModelValidationError::SupportedEndpointsMustNotBeEmpty);
         }
@@ -142,6 +149,11 @@ pub enum OpenAiModelValidationError {
     /// At least one generation endpoint must be advertised.
     #[error("supported endpoints must not be empty")]
     SupportedEndpointsMustNotBeEmpty,
+    /// Structured-output enforcement must be present exactly when structured outputs are supported.
+    #[error(
+        "structured-output enforcement must be present exactly when structured outputs are supported"
+    )]
+    StructuredOutputEnforcementMustMatchSupport,
 }
 
 /// A standard OpenAI-compatible list of the exact models ready in the local worker.
@@ -221,6 +233,12 @@ pub struct OpenAiModel {
     /// Generation endpoints that support this model.
     #[serde(skip_serializing_if = "Option::is_none")]
     supported_endpoints: Option<Vec<String>>,
+    /// Whether Chat Completions and Responses accept `response_format`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    supports_structured_outputs: Option<bool>,
+    /// How structured output is enforced (`none` until sample-time grammar exists).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    structured_output_enforcement: Option<String>,
 }
 
 impl OpenAiModel {
@@ -249,6 +267,8 @@ impl OpenAiModel {
             supports_tool_calls: Some(model_parts.supports_tool_calls),
             tool_call_format: model_parts.tool_call_format,
             supported_endpoints: Some(model_parts.supported_endpoints),
+            supports_structured_outputs: Some(model_parts.supports_structured_outputs),
+            structured_output_enforcement: model_parts.structured_output_enforcement,
         })
     }
 
@@ -290,6 +310,8 @@ impl OpenAiModel {
             supports_tool_calls: Some(false),
             tool_call_format: None,
             supported_endpoints: Some(image_model_parts.supported_endpoints),
+            supports_structured_outputs: Some(false),
+            structured_output_enforcement: None,
         })
     }
 }

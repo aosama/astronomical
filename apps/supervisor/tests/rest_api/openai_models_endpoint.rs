@@ -122,6 +122,8 @@ async fn should_list_complete_capabilities_for_a_ready_worker_model() {
         advertised_model["supported_endpoints"],
         serde_json::json!(["/v1/chat/completions", "/v1/responses"])
     );
+    assert_eq!(advertised_model["supports_structured_outputs"], true);
+    assert_eq!(advertised_model["structured_output_enforcement"], "none");
 }
 
 #[tokio::test]
@@ -238,6 +240,12 @@ async fn should_list_image_model_metadata_without_autoregressive_token_limits() 
     assert_eq!(
         advertised_model["supported_endpoints"],
         serde_json::json!(["/v1/images/generations"])
+    );
+    assert_eq!(advertised_model["supports_structured_outputs"], false);
+    assert!(
+        advertised_model
+            .get("structured_output_enforcement")
+            .is_none()
     );
     assert!(advertised_model.get("context_window").is_none());
     assert!(advertised_model.get("max_input_tokens").is_none());

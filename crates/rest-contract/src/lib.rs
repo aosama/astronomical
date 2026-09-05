@@ -7,6 +7,7 @@ mod openai_chat_types;
 mod openai_image_generation_request;
 mod openai_image_generation_response;
 mod openai_models_and_errors;
+mod openai_response_format;
 mod openai_responses_input;
 mod openai_responses_request;
 mod openai_responses_response;
@@ -43,6 +44,14 @@ pub use openai_image_generation_response::{
 pub use openai_models_and_errors::{
     OpenAiError, OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList,
     OpenAiModelParts, OpenAiModelValidationError,
+};
+pub use openai_response_format::{
+    MAX_STRUCTURED_OUTPUT_SCHEMA_BYTES, OpenAiJsonSchemaSpec, OpenAiResponseFormat,
+    OpenAiStructuredOutput, OpenAiStructuredOutputValidationError,
+    STRUCTURED_OUTPUT_ENFORCEMENT_NONE, UNENFORCED_RESPONSE_FORMAT_WARNING,
+    UNENFORCED_STRICT_RESPONSE_FORMAT_WARNING, compact_extracted_json_text,
+    extract_json_value_from_text, merge_structured_output_requests,
+    structured_output_from_responses_text_format,
 };
 pub use openai_responses_input::{
     OpenAiResponseInput, OpenAiResponseInputItem, OpenAiResponseInputItemParts,
