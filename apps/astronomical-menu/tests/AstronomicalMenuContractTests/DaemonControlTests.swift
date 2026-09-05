@@ -214,6 +214,28 @@ final class DaemonControlTests: XCTestCase {
   }
 
   @MainActor
+  func test_should_classify_an_immediate_daemon_exit_as_early_exit_when_readiness_timeout_is_short()
+    async throws
+  {
+    let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/usr/bin/false")
+    defer { testContext.removeTemporaryDirectory() }
+    let daemonLifecycleController = testContext.makeController(
+      supervisorClient: DelayedReadinessSupervisorClient(readyAfterCheckCount: .max),
+      readinessTimeout: .milliseconds(10))
+
+    do {
+      try await daemonLifecycleController.startDaemonIfNeeded()
+      XCTFail("An exited daemon must not be reported as ready")
+    } catch let lifecycleError as DaemonLifecycleError {
+      guard case let .daemonExitedBeforeReady(configurationFileLabel) = lifecycleError else {
+        return XCTFail("Expected an early-exit error, received \(lifecycleError)")
+      }
+      XCTAssertEqual(configurationFileLabel, "~/.astronomical/config.json")
+    }
+    XCTAssertFalse(daemonLifecycleController.ownsDaemon)
+  }
+
+  @MainActor
   func test_should_keep_stable_and_development_configuration_labels_isolated() async throws {
     for (applicationIdentity, expectedConfigurationLabel, otherConfigurationLabel) in [
       (
