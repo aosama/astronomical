@@ -2,23 +2,6 @@
   "schema_version": 1,
   "entries": [
     {
-      "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
-      "revision": "5eec9f738580bca48a13054e1e3966bc239db0e9",
-      "display_name": "Ornith 1.5 35B A3B OptiQ Static 5.5bpw",
-      "family": "qwen3_5",
-      "approximate_size_bytes": 27559063009,
-      "public": true,
-      "description": "A static mixed-precision OptiQ quant of the Ornith 1.5 35B-A3B mixture-of-experts vision-language model, targeted and achieved at 5.5 BPW (group 64, affine). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. Attention, router, shared experts, embeddings, lm_head, and the bf16 vision tower keep the static high-bit recipe; image input and MTP require mlx-optiq.",
-      "capabilities": {
-        "supports_reasoning": true,
-        "supports_vision": true,
-        "supports_tool_calls": true
-      },
-      "quantization_label": "OptiQ static 5.5bpw (mixed-precision affine, group 64)",
-      "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed",
-      "upstream_license": "MIT"
-    },
-    {
       "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
       "revision": "27ea26a6175ead91d1067f020be41318d045849b",
       "display_name": "Ornith 1.5 9B Vision OptiQ Static 4.5bpw",
@@ -58,6 +41,24 @@
       ],
       "architecture_summary": "FLUX.2 Klein, 4B parameters, BF16 weights",
       "upstream_license": "Apache-2.0"
+    },
+    {
+      "huggingface_id": "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
+      "revision": "5f31fcd089ce6f47f1073d3ae43dcb3a0bd1869f",
+      "display_name": "Ornith 1.5 35B A3B OptiQ 4bit",
+      "family": "qwen3_5",
+      "approximate_size_bytes": 23565955947,
+      "public": true,
+      "description": "A mixed-precision OptiQ quant of the Ornith 1.5 35B-A3B mixture-of-experts vision-language model, per-layer 4/8-bit affine (group 64). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. The MoE architecture registers through OptiQ; the bf16 vision tower stays in a separate vision sidecar and the int4 MTP head stays in optiq/mtp.safetensors; image input and MTP require mlx-optiq.",
+      "capabilities": {
+        "supports_reasoning": true,
+        "supports_vision": true,
+        "supports_tool_calls": true,
+        "context_window": 262144
+      },
+      "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
+      "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
+      "upstream_license": "MIT"
     }
   ]
 }
