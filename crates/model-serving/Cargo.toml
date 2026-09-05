@@ -22,6 +22,7 @@ fs4.workspace = true
 image.workspace = true
 libc.workspace = true
 minijinja.workspace = true
+regex-automata = "0.4"
 safetensors.workspace = true
 serde.workspace = true
 serde_json.workspace = true

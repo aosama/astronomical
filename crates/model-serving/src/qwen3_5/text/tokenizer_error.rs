@@ -70,6 +70,8 @@ pub enum Qwen3_5TokenizerError {
     InvalidChatCommand(#[source] ChatGenerationValidationError),
     #[error("structured chat model '{actual_model_id}' does not match the loaded model")]
     ModelIdMismatch { actual_model_id: String },
+    #[error("structured generation constraint failed to compile: {reason}")]
+    StructuredConstraintCompile { reason: String },
     #[error("failed to render the fixed chat prompt")]
     RenderPrompt(#[source] Qwen3_5PromptError),
     #[error("failed to process chat image input through the vision pipeline: {0}")]

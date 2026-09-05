@@ -255,11 +255,14 @@ impl Qwen3_5EngineRequest {
     ) -> Result<MlxArray, InferenceEngineError> {
         let sampling_strategy = self.sampling_strategy;
         let mut sampling_random_state = self.random_state.take();
-        let masked_logits = if let Some(structured_generation) = self.structured_generation.as_ref()
-            && !self.is_inside_thinking()
-            && !self.is_forcing_thinking_transition()
+        let outside_thinking = !self.is_inside_thinking() && !self.is_forcing_thinking_transition();
+        let masked_logits = if outside_thinking
+            && let Some(structured_generation) = self.structured_generation.as_mut()
         {
-            let logit_bias_values = structured_generation.logit_bias_values();
+            let logit_bias_values = self.performance_attribution.measure_operation(
+                PerformanceOperation::StructuredLogitMaskComputation,
+                |_performance_attribution| structured_generation.logit_bias_values(),
+            );
             Some(crate::gpu_token_sampling::add_token_logit_bias(
                 &model.runtime,
                 logits,

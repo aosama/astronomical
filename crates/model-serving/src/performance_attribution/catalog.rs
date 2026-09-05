@@ -80,6 +80,7 @@ pub enum PerformanceOperation {
     ExpertPagingDiagnosticLogging,
     DecodeAsyncEvaluationSubmission,
     GeneratedTokenItemSynchronizationWait,
+    StructuredLogitMaskComputation,
     CompletedForwardMemorySnapshot,
     PromptPrefillAdvanceSpan,
     DecodeAdvanceSpan,
@@ -205,6 +206,7 @@ impl PerformanceOperation {
         Self::ExpertPagingDiagnosticLogging,
         Self::DecodeAsyncEvaluationSubmission,
         Self::GeneratedTokenItemSynchronizationWait,
+        Self::StructuredLogitMaskComputation,
         Self::CompletedForwardMemorySnapshot,
         Self::PromptPrefillAdvanceSpan,
         Self::DecodeAdvanceSpan,
@@ -391,7 +393,9 @@ impl PerformanceOperation {
             Self::GeneratedTokenItemSynchronizationWait => {
                 "generated_token_item_synchronization_wait"
             }
+            Self::StructuredLogitMaskComputation => "structured_logit_mask_computation",
             Self::CompletedForwardMemorySnapshot => "completed_forward_memory_snapshot",
+
             Self::PromptPrefillAdvanceSpan => "prompt_prefill_advance_span",
             Self::DecodeAdvanceSpan => "decode_advance_span",
             Self::AttentionForwardSpan => "attention_forward_span",

@@ -82,6 +82,7 @@ pub use openai_responses_tools::{
     OpenAiResponseToolDefinitionParts,
 };
 pub use openai_structured_outputs::{
-    EnforcedStructuredGeneration, OpenAiStructuredOutputs, OpenAiStructuredOutputsValidationError,
-    enforced_generation_from_extra_body, guided_grammar_to_enforced_generation,
+    EnforcedStructuredGeneration, MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES, OpenAiStructuredOutputs,
+    OpenAiStructuredOutputsValidationError, enforced_generation_from_extra_body,
+    guided_grammar_to_enforced_generation,
 };

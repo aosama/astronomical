@@ -7,6 +7,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
+/// Bounds one regex pattern so DFA compilation stays bounded and predictable.
+pub const MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES: usize = 2_048;
+
 /// vLLM-style extra body for constrained decoding.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct OpenAiStructuredOutputs {
@@ -29,6 +32,8 @@ pub enum EnforcedStructuredGeneration {
     JsonSchema { schema: Value },
     /// Exact one of these UTF-8 strings.
     Choice { choices: Vec<String> },
+    /// The complete visible answer must match this regular expression.
+    Regex { pattern: String },
 }
 
 /// Why extra-body structured generation was rejected.
@@ -38,8 +43,12 @@ pub enum OpenAiStructuredOutputsValidationError {
     MultipleOrEmptyFields,
     #[error("structured_outputs.choice must contain at least one non-empty string")]
     EmptyChoice,
-    #[error("structured_outputs.regex cannot be enforced yet")]
-    RegexNotEnforced,
+    #[error(
+        "structured_outputs.regex pattern exceeds the bounded {maximum_pattern_bytes}-byte limit"
+    )]
+    RegexPatternTooLarge { maximum_pattern_bytes: usize },
+    #[error("structured_outputs.regex pattern is not a supported regular expression: {reason}")]
+    RegexNotCompilable { reason: String },
     #[error("structured_outputs.grammar cannot be enforced yet")]
     GrammarNotEnforced,
     #[error("guided_grammar cannot be enforced yet")]
@@ -64,9 +73,27 @@ impl OpenAiStructuredOutputs {
         }
         if let Some(regex_pattern) = self.regex {
             if regex_pattern.is_empty() {
-                return Err(OpenAiStructuredOutputsValidationError::RegexNotEnforced);
+                return Err(OpenAiStructuredOutputsValidationError::RegexNotCompilable {
+                    reason: "pattern is empty".to_owned(),
+                });
             }
-            return Err(OpenAiStructuredOutputsValidationError::RegexNotEnforced);
+            if regex_pattern.len() > MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES {
+                return Err(
+                    OpenAiStructuredOutputsValidationError::RegexPatternTooLarge {
+                        maximum_pattern_bytes: MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES,
+                    },
+                );
+            }
+            // Failing the DFA build here means the request cannot be enforced,
+            // so it must fail closed at the public boundary instead of at the worker.
+            regex_automata::dfa::dense::DFA::new(&regex_pattern).map_err(|build_error| {
+                OpenAiStructuredOutputsValidationError::RegexNotCompilable {
+                    reason: build_error.to_string(),
+                }
+            })?;
+            return Ok(EnforcedStructuredGeneration::Regex {
+                pattern: regex_pattern,
+            });
         }
         if self.grammar.is_some() {
             return Err(OpenAiStructuredOutputsValidationError::GrammarNotEnforced);

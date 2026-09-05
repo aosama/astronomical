@@ -21,6 +21,7 @@ pub use chat_generation::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatImageInput, ChatMessage, ChatModelCapabilities, ChatToolChoice,
     ChatToolDefinition, MAX_QWEN_THINKING_CHANNEL_SEED_BYTES, StructuredGenerationConstraint,
+    structured_regex_dfa_pattern,
 };
 pub use chat_generation_validation::ChatGenerationValidationError;
 pub use embeddings::{
