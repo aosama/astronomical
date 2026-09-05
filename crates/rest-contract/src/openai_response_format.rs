@@ -1,8 +1,8 @@
 //! OpenAI `response_format` for chat and Responses.
 //!
-//! Sample-time grammar masking is not active yet, so JSON mode is honored by a
-//! bounded prompt instruction plus best-effort extraction. Callers learn that
-//! the schema was not token-masked through the HTTP Warning header.
+//! Extra-body `structured_outputs` masks illegal logits. OpenAI `response_format`
+//! still uses a bounded prompt instruction plus best-effort extraction, disclosed
+//! through the HTTP Warning header.
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -12,8 +12,8 @@ use crate::MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH;
 
 /// Maximum serialized JSON Schema accepted on `response_format`.
 pub const MAX_STRUCTURED_OUTPUT_SCHEMA_BYTES: usize = 65_536;
-/// Advertised enforcement while sample-time grammar masking is unavailable.
-pub const STRUCTURED_OUTPUT_ENFORCEMENT_NONE: &str = "none";
+/// Advertised when extra-body structured_outputs can mask illegal logits.
+pub const STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK: &str = "logits_mask";
 
 /// RFC 7234 Warning when json_object / json_schema cannot be grammar-enforced.
 pub const UNENFORCED_RESPONSE_FORMAT_WARNING: &str = concat!(

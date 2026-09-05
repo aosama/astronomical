@@ -14,6 +14,7 @@ mod openai_chat_endpoint_negative;
 mod openai_chat_streaming;
 mod openai_chat_structured_output;
 mod openai_chat_translation;
+mod openai_embeddings;
 mod openai_image_generation;
 mod openai_models_endpoint;
 mod openai_responses_assembly;

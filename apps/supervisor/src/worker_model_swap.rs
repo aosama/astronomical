@@ -190,6 +190,11 @@ fn validate_model_swap_event(
         WorkerLoadedModelRuntimeConfiguration::Flux2Klein(_) => {
             capabilities.chat.is_none() && capabilities.image_generation.is_some()
         }
+        WorkerLoadedModelRuntimeConfiguration::Embeddings(_) => {
+            capabilities.chat.is_none()
+                && capabilities.image_generation.is_none()
+                && capabilities.embeddings.is_some()
+        }
     };
     if !capabilities_match_policy {
         return Err(WorkerControlError::WorkerProtocolViolation {

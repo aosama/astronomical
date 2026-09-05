@@ -292,20 +292,58 @@ impl ImageGenerationCapabilities {
     }
 }
 
-/// Independently represents the chat and image surfaces exposed by one model.
+/// Embedding inference capability advertised by one loaded worker model.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerEmbeddingCapabilities {
+    /// Native vector width produced by the loaded artifact.
+    pub vector_width: u32,
+    /// Maximum accepted prompt tokens per embedding input.
+    pub max_input_tokens: u32,
+}
+
+impl WorkerEmbeddingCapabilities {
+    /// Enforces positive geometry before the supervisor can advertise the endpoint.
+    pub fn validate(&self) -> Result<(), WorkerModelCapabilitiesValidationError> {
+        if self.vector_width == 0 {
+            return Err(WorkerModelCapabilitiesValidationError::ZeroEmbeddingVectorWidth);
+        }
+        if self.max_input_tokens < 2 {
+            return Err(
+                WorkerModelCapabilitiesValidationError::EmbeddingContextTooSmall {
+                    actual_context_tokens: self.max_input_tokens,
+                },
+            );
+        }
+        Ok(())
+    }
+}
+
+/// Independently represents the chat, image, and embedding surfaces exposed by one model.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerModelCapabilities {
     pub chat: Option<ChatModelCapabilities>,
     pub image_generation: Option<ImageGenerationCapabilities>,
+    pub embeddings: Option<WorkerEmbeddingCapabilities>,
 }
 
 impl WorkerModelCapabilities {
+    #[must_use]
+    pub fn embeddings(embedding: WorkerEmbeddingCapabilities) -> Self {
+        Self {
+            chat: None,
+            image_generation: None,
+            embeddings: Some(embedding),
+        }
+    }
+
     #[must_use]
     pub fn image_generation(image_generation: ImageGenerationCapabilities) -> Self {
         Self {
             chat: None,
             image_generation: Some(image_generation),
+            embeddings: None,
         }
     }
 
@@ -317,16 +355,20 @@ impl WorkerModelCapabilities {
         Self {
             chat: Some(chat),
             image_generation: Some(image_generation),
+            embeddings: None,
         }
     }
 
     /// A loaded model must advertise at least one usable operation surface.
     pub fn validate(&self) -> Result<(), WorkerModelCapabilitiesValidationError> {
-        if self.chat.is_none() && self.image_generation.is_none() {
+        if self.chat.is_none() && self.image_generation.is_none() && self.embeddings.is_none() {
             return Err(WorkerModelCapabilitiesValidationError::NoCapabilities);
         }
         if let Some(image_generation) = &self.image_generation {
             image_generation.validate()?;
+        }
+        if let Some(embeddings) = &self.embeddings {
+            embeddings.validate()?;
         }
         Ok(())
     }
@@ -337,6 +379,7 @@ impl From<ChatModelCapabilities> for WorkerModelCapabilities {
         Self {
             chat: Some(chat),
             image_generation: None,
+            embeddings: None,
         }
     }
 }
@@ -422,6 +465,10 @@ pub enum ImageGenerationCompletionValidationError {
 pub enum WorkerModelCapabilitiesValidationError {
     #[error("worker model must advertise at least one capability")]
     NoCapabilities,
+    #[error("embedding vector width must be positive")]
+    ZeroEmbeddingVectorWidth,
+    #[error("embedding context must hold at least two positions, got {actual_context_tokens}")]
+    EmbeddingContextTooSmall { actual_context_tokens: u32 },
     #[error("image dimension alignment must be positive")]
     ZeroImageDimensionAlignment,
     #[error(

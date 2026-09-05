@@ -184,6 +184,46 @@ impl Qwen3_5Tokenizer {
         self.token_ids.im_end_token_id
     }
 
+    pub(crate) fn vocabulary_pieces(&self) -> Vec<String> {
+        let mut vocabulary_pieces = vec![String::new(); self.model_vocabulary_size as usize];
+        for (token_content, token_id) in self.tokenizer.get_vocab(true) {
+            if let Some(vocabulary_piece) = vocabulary_pieces.get_mut(token_id as usize) {
+                *vocabulary_piece = token_content;
+            }
+        }
+        vocabulary_pieces
+    }
+
+    fn encoded_choice_token_sequences(
+        &self,
+        structured_generation: &astronomical_ipc_protocol::StructuredGenerationConstraint,
+    ) -> Vec<Vec<u32>> {
+        let astronomical_ipc_protocol::StructuredGenerationConstraint::Choice { choices } =
+            structured_generation
+        else {
+            return Vec::new();
+        };
+        let mut encoded_choice_sequences = Vec::new();
+        for choice in choices {
+            for choice_text in [choice.clone(), format!(" {choice}")] {
+                let Ok(encoding) = self.tokenizer.encode(choice_text, false) else {
+                    continue;
+                };
+                let token_ids = encoding.get_ids().to_vec();
+                if token_ids.is_empty() {
+                    continue;
+                }
+                if !encoded_choice_sequences
+                    .iter()
+                    .any(|existing_token_ids| existing_token_ids == &token_ids)
+                {
+                    encoded_choice_sequences.push(token_ids);
+                }
+            }
+        }
+        encoded_choice_sequences
+    }
+
     #[must_use]
     pub const fn think_start_token_id(&self) -> u32 {
         self.token_ids.think_start_token_id
@@ -376,6 +416,16 @@ impl Qwen3_5Tokenizer {
             self.forced_thinking_transition_token_ids.clone(),
             self.natural_reasoning_end_token_ids.clone(),
         );
+        if let Some(structured_generation) = &chat_generation_command.structured_generation {
+            inference_request = inference_request.with_structured_generation(
+                crate::structured_generation::StructuredTokenConstraint::compile(
+                    structured_generation,
+                    self.vocabulary_pieces(),
+                    vec![self.end_of_text_token_id(), self.im_end_token_id()],
+                    self.encoded_choice_token_sequences(structured_generation),
+                ),
+            );
+        }
         if !prepared_chat_images.processed_visual_images.is_empty() {
             inference_request = inference_request
                 .with_processed_visual_images(prepared_chat_images.processed_visual_images);

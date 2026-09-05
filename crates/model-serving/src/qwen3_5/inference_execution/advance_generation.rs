@@ -409,6 +409,24 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        // Prefetch samples the successor before this token is accepted. A live
+        // mask must see the commit first or Juliet/Romeo prefixes stay allowed.
+        let mut generated_token_emission = if active_request.structured_generation.is_some() {
+            let generated_token_emission = self.build_generated_token_emission(
+                model,
+                active_request,
+                current_generated_token_id,
+                None,
+            )?;
+            if generated_token_emission.is_terminal {
+                return Ok(ActiveRequestAdvance::Complete(
+                    generated_token_emission.generated_token,
+                ));
+            }
+            Some(generated_token_emission)
+        } else {
+            None
+        };
         let next_generated_token = if let Some(prediction_token) =
             forward_next_target_token_with_prediction_state(
                 model,
@@ -454,12 +472,15 @@ impl Qwen3_5EngineState {
             &mut active_request.performance_attribution,
         )?;
 
-        let generated_token_emission = self.build_generated_token_emission(
-            model,
-            active_request,
-            current_generated_token_id,
-            Some(&completed_forward_memory),
-        )?;
+        let generated_token_emission = match generated_token_emission.take() {
+            Some(generated_token_emission) => generated_token_emission,
+            None => self.build_generated_token_emission(
+                model,
+                active_request,
+                current_generated_token_id,
+                Some(&completed_forward_memory),
+            )?,
+        };
         if generated_token_emission.is_terminal {
             Ok(ActiveRequestAdvance::Complete(
                 generated_token_emission.generated_token,

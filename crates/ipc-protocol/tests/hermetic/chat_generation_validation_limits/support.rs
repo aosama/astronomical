@@ -19,6 +19,7 @@ pub(super) fn command_with_tool_schema(
         tool_choice: ChatToolChoice::Auto,
         settings: standard_settings(),
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }
 pub(super) fn standard_settings() -> ChatGenerationSettings {

@@ -38,8 +38,15 @@ impl Qwen3_5EngineState {
             .performance_attribution
             .record_counter(PerformanceCounter::GeneratedTokenCount, 1);
 
+        let was_already_in_visible_answer = !active_request.is_inside_thinking();
         let is_reasoning_token =
             active_request.observe_committed_thinking_token(generated_token_id)?;
+        if was_already_in_visible_answer
+            && !is_reasoning_token
+            && let Some(structured_generation) = active_request.structured_generation.as_mut()
+        {
+            structured_generation.accept_visible_token(generated_token_id);
+        }
 
         let is_terminal = self.end_of_sequence_token_ids.contains(&generated_token_id)
             || active_request.generated_token_count >= active_request.maximum_output_tokens;

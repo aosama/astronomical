@@ -270,6 +270,12 @@ impl ModelGenerationProcessor for LagunaGenerationProcessor {
         PreparedModelGeneration<Self::InferenceRequest, Self::RequestOutput>,
         ChatGenerationFailureReason,
     > {
+        if chat_generation_command.structured_generation.is_some() {
+            return Err(ChatGenerationFailureReason::InvalidRequest {
+                reason: "structured_outputs token masking is not available for this model family"
+                    .to_owned(),
+            });
+        }
         let (prepared_generation, request_output) = self
             .prepare_chat_and_output(chat_generation_command)
             .map_err(translate_preparation_error)?;

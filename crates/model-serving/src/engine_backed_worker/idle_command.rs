@@ -9,13 +9,14 @@ use crate::{ImageGenerationEngine, InferenceEngine};
 
 use super::EngineBackedWorker;
 
-impl<Processor, Engine, Factory, ImageEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
+    EmbeddingsEngine: crate::EmbeddingEngine,
 {
     pub(crate) async fn serve_idle_command<WriteTransport>(
         &mut self,
@@ -39,6 +40,11 @@ where
                 .start_image_generation(generation_command, event_writer)
                 .await
                 .map(|generation| generation.map(ActiveWorkerRequest::Image)),
+            WorkerCommand::GenerateEmbeddings(embeddings_command) => {
+                self.start_embeddings(embeddings_command, event_writer)
+                    .await?;
+                Ok(None)
+            }
             WorkerCommand::Cancel { .. } => Ok(None),
             WorkerCommand::SampleMlxMemory => {
                 self.emit_mlx_memory_sample(MlxMemorySnapshotSource::IdlePoll, event_writer)

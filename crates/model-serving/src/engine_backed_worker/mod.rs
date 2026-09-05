@@ -1,12 +1,14 @@
-use crate::ImageGenerationUnavailableEngine;
+use crate::{EmbeddingUnavailableEngine, ImageGenerationUnavailableEngine};
 
 pub struct EngineBackedWorker<
     Processor,
     Engine,
     Factory = (),
     ImageEngine = ImageGenerationUnavailableEngine,
+    EmbeddingEngine = EmbeddingUnavailableEngine,
 > {
-    pub(crate) loaded_runtime: Option<LoadedRuntime<Processor, Engine, ImageEngine>>,
+    pub(crate) loaded_runtime:
+        Option<LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine>>,
     pub(crate) model_factory: Option<Factory>,
     pub(crate) machine_mlx_memory_ceiling_bytes: u64,
     pub(crate) effective_mlx_memory_ceiling_bytes: u64,
@@ -15,9 +17,10 @@ pub struct EngineBackedWorker<
         Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
 }
 
-pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine> {
+pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine> {
     Autoregressive(LoadedModel<Processor, Engine>),
     Image(ImageEngine),
+    Embeddings(EmbeddingEngine),
 }
 
 pub(crate) struct LoadedModel<Processor, Engine> {
@@ -26,6 +29,7 @@ pub(crate) struct LoadedModel<Processor, Engine> {
 }
 
 mod construction;
+mod embeddings;
 mod fatal;
 mod generation_advance;
 mod generation_start;

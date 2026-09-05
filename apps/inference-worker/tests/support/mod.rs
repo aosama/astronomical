@@ -70,13 +70,39 @@ pub(crate) fn discovered_model_artifact(
     }
 }
 
+/// Fabricates one embedding-capability discovered model for serving-acceptance harnesses.
+#[allow(dead_code)]
+pub(crate) fn discovered_embedding_model_artifact(
+    model_id: &str,
+    model_directory: &std::path::Path,
+    vector_width: u32,
+    max_input_tokens: u32,
+) -> astronomical_config::DiscoveredModel {
+    astronomical_config::DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id: None,
+        model_family: astronomical_config::ModelFamily::ModernBert,
+        revision: "local-model-artifact-test".to_owned(),
+        model_directory: model_directory.to_path_buf(),
+        capabilities: astronomical_config::ModelCapabilities::Embeddings(
+            astronomical_config::EmbeddingModelCapabilities {
+                vector_width,
+                max_input_tokens,
+            },
+        ),
+        license: None,
+        model_size_bytes: 0,
+    }
+}
+
 #[allow(dead_code)]
 pub(crate) fn chat_capabilities(
     discovered_model: &astronomical_config::DiscoveredModel,
 ) -> Option<&astronomical_config::ChatModelCapabilities> {
     match &discovered_model.capabilities {
         astronomical_config::ModelCapabilities::Chat(chat_capabilities) => Some(chat_capabilities),
-        astronomical_config::ModelCapabilities::ImageGeneration(_) => None,
+        astronomical_config::ModelCapabilities::ImageGeneration(_)
+        | astronomical_config::ModelCapabilities::Embeddings(_) => None,
     }
 }
 

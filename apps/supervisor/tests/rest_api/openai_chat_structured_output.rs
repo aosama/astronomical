@@ -127,6 +127,45 @@ async fn should_keep_original_text_when_json_cannot_be_extracted() {
     );
 }
 
+#[tokio::test]
+async fn should_reject_structured_outputs_regex_before_generation() {
+    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+
+    let chat_response = application
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    r#"{
+                        "model":"astronomical/non-streaming-test-model",
+                        "messages":[{"role":"user","content":"O Romeo, Romeo, wherefore art thou Romeo?"}],
+                        "structured_outputs":{"regex":"[A-Z]+"},
+                        "stream":false
+                    }"#,
+                ))
+                .expect("the regex extra-body request should be valid JSON"),
+        )
+        .await
+        .expect("the application should return a chat response");
+
+    assert_eq!(chat_response.status(), StatusCode::BAD_REQUEST);
+    let response_body = to_bytes(chat_response.into_body(), 16 * 1024)
+        .await
+        .expect("the error body should be readable");
+    let response_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the error body should be JSON");
+    assert_eq!(response_document["error"]["code"], "invalid_request");
+    let error_message = response_document["error"]["message"]
+        .as_str()
+        .expect("error message should be text");
+    assert!(
+        error_message.contains("regex"),
+        "regex extra-body must fail closed, got {error_message}"
+    );
+}
+
 struct ScriptedExecutor {
     health_snapshot: WorkerHealthSnapshot,
     stream_events: Vec<ChatGenerationStreamEvent>,

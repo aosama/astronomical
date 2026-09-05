@@ -337,6 +337,15 @@ pub(super) fn handle_worker_event(
                 performance_log,
             )?;
         }
+        embeddings_event @ (WorkerEvent::EmbeddingsCompleted { .. }
+        | WorkerEvent::EmbeddingsFailed { .. }
+        | WorkerEvent::EmbeddingsFinalized { .. }) => {
+            crate::worker_embeddings_event::handle_worker_embeddings_event(
+                embeddings_event,
+                health_snapshot,
+                active_request,
+            )?;
+        }
     }
     Ok(())
 }

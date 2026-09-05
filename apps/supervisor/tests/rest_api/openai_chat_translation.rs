@@ -1,6 +1,7 @@
 use astronomical_ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition, RequestId,
+    StructuredGenerationConstraint,
 };
 use astronomical_rest_contract::OpenAiChatCompletionRequest;
 use astronomical_supervisor::translate_openai_chat_completion_request;
@@ -112,6 +113,7 @@ fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
                 thinking_budget: None,
             },
             qwen_thinking_channel_seed: None,
+            structured_generation: None,
         }
     );
 }
@@ -272,6 +274,7 @@ fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dto
                 thinking_budget: None,
             },
             qwen_thinking_channel_seed: None,
+            structured_generation: None,
         }
     );
 }
@@ -296,4 +299,26 @@ fn should_inject_a_json_instruction_when_response_format_is_json_object() {
         }
         other_messages => panic!("expected a leading system instruction, got {other_messages:?}"),
     }
+}
+
+#[test]
+fn should_translate_structured_outputs_choice_into_an_ipc_mask() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "structured_outputs": {"choice": ["Juliet", "Romeo"]}
+        }"#,
+    )
+    .expect("choice extra body should deserialize");
+
+    let chat_command = translate_openai_chat_completion_request(RequestId::new(410), request)
+        .expect("choice extra body should translate to an IPC mask");
+
+    assert_eq!(
+        chat_command.structured_generation,
+        Some(StructuredGenerationConstraint::Choice {
+            choices: vec!["Juliet".to_owned(), "Romeo".to_owned()],
+        })
+    );
 }

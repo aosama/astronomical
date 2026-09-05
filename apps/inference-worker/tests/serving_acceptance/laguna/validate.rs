@@ -167,6 +167,7 @@ fn validate_reference_artifact() {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
     let prepared_generation = generation_processor
         .prepare_chat(&chat_command)

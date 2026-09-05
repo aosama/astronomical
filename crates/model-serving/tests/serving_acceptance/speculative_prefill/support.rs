@@ -80,6 +80,7 @@ fn prepare_romeo_and_juliet_summary_prompt(
                         thinking_budget,
                     },
                     qwen_thinking_channel_seed: None,
+                    structured_generation: None,
                 },
                 enable_thinking,
             )
@@ -174,6 +175,7 @@ pub(crate) fn prepare_representative_prompt(model_directory: &Path) -> Represent
                         thinking_budget: Some(256),
                     },
                     qwen_thinking_channel_seed: None,
+                    structured_generation: None,
                 },
                 false,
             )

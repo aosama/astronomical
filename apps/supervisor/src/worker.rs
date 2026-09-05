@@ -16,6 +16,7 @@ use tokio::time::{Instant, MissedTickBehavior, interval};
 use crate::worker_cache_clear::{
     apply_pending_prompt_cache_clear_if_idle, handle_prompt_cache_clear_command,
 };
+use crate::worker_embeddings_request::handle_generate_embeddings_command;
 use crate::worker_generate::handle_generate_command;
 use crate::worker_image_request::handle_generate_image_command;
 use crate::worker_memory_limit::{
@@ -124,7 +125,16 @@ pub(crate) async fn run_worker(
                     ActiveWorkerRequest::Image(image_request) => {
                         Some(image_request.image_result_sender.clone())
                     }
-                    ActiveWorkerRequest::Chat(_) => None,
+                    ActiveWorkerRequest::Chat(_) | ActiveWorkerRequest::Embeddings(_) => None,
+                });
+        let embeddings_result_sender =
+            active_generation
+                .as_ref()
+                .and_then(|active_request| match active_request {
+                    ActiveWorkerRequest::Embeddings(embeddings_request) => {
+                        Some(embeddings_request.embeddings_result_sender.clone())
+                    }
+                    ActiveWorkerRequest::Chat(_) | ActiveWorkerRequest::Image(_) => None,
                 });
         let is_worker_running = worker_process.process_id().is_some();
         let has_loaded_model = health_snapshot
@@ -207,6 +217,45 @@ pub(crate) async fn run_worker(
                             model_load_timeout,
                             cancellation_acknowledgement_timeout,
                             image_generation_timeouts,
+                        ).await {
+                            contain_worker_failure(
+                                &mut worker_process,
+                                &health_snapshot,
+                                &mut active_generation,
+                                control_error,
+                            ).await;
+                            is_ready = false;
+                        }
+                    }
+                    WorkerLoopCommand::GenerateEmbeddings {
+                        active_generation_permit,
+                        embeddings_command,
+                        start_sender,
+                        embeddings_result_sender,
+                        admitted_at,
+                        queue_wait_elapsed,
+                    } => {
+                        if !is_ready || !is_worker_running {
+                            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
+                            continue;
+                        }
+                        if let Err(control_error) = handle_generate_embeddings_command(
+                            &mut worker_process,
+                            active_generation_permit,
+                            embeddings_command,
+                            start_sender,
+                            embeddings_result_sender,
+                            admitted_at,
+                            queue_wait_elapsed,
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                            &mut completion_log,
+                            &model_policy_catalog,
+                            model_load_timeout,
+                            cancellation_acknowledgement_timeout,
                         ).await {
                             contain_worker_failure(
                                 &mut worker_process,
@@ -429,6 +478,28 @@ pub(crate) async fn run_worker(
                     &mut is_ready,
                 ).await;
             }
+            () = crate::embeddings_executor::wait_for_embeddings_disconnect(embeddings_result_sender),
+                if matches!(active_generation, Some(ActiveWorkerRequest::Embeddings(_))) => {
+                cancel_active_generation(
+                    &mut worker_process,
+                    &health_snapshot,
+                    &mut active_generation,
+                    cancellation_acknowledgement_timeout,
+                    model_load_timeout,
+                    &mut is_ready,
+                ).await;
+            }
+            () = wait_for_embeddings_execution_deadline(&active_generation),
+                if matches!(active_generation, Some(ActiveWorkerRequest::Embeddings(_))) => {
+                cancel_active_generation(
+                    &mut worker_process,
+                    &health_snapshot,
+                    &mut active_generation,
+                    cancellation_acknowledgement_timeout,
+                    model_load_timeout,
+                    &mut is_ready,
+                ).await;
+            }
             () = wait_for_image_execution_deadline(&active_generation),
                 if matches!(active_generation, Some(ActiveWorkerRequest::Image(_))) => {
                 if let Some(ActiveWorkerRequest::Image(active_image)) = active_generation.as_ref() {
@@ -468,4 +539,12 @@ async fn wait_for_image_execution_deadline(active_request: &Option<ActiveWorkerR
         .execution_deadline
         .min(active_image.progress_stall_deadline);
     tokio::time::sleep_until(next_deadline).await;
+}
+
+async fn wait_for_embeddings_execution_deadline(active_request: &Option<ActiveWorkerRequest>) {
+    let Some(ActiveWorkerRequest::Embeddings(active_embeddings)) = active_request else {
+        std::future::pending::<()>().await;
+        return;
+    };
+    tokio::time::sleep_until(active_embeddings.execution_deadline).await;
 }

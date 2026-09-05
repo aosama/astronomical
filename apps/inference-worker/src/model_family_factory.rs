@@ -10,7 +10,8 @@ use astronomical_ipc_protocol::{
 use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine, LagunaServingSettings,
     ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
-    deepseek_v4_unavailable_reason, initialize_laguna_model_with_serving_settings,
+    ModernBertEmbeddingEngine, deepseek_v4_unavailable_reason,
+    initialize_laguna_model_with_serving_settings,
 };
 
 use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
@@ -31,6 +32,7 @@ pub(crate) type InferenceWorker = EngineBackedWorker<
     ModelFamilyInferenceEngine,
     ModelFamilyFactory,
     Flux2KleinImageEngine,
+    ModernBertEmbeddingEngine,
 >;
 
 impl ModelFamilyFactory {
@@ -70,8 +72,13 @@ fn disabled_speculative_prefill() -> WorkerSpeculativePrefillConfiguration {
     }
 }
 
-impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, Flux2KleinImageEngine>
-    for ModelFamilyFactory
+impl
+    ModelFactory<
+        ModelFamilyGenerationProcessor,
+        ModelFamilyInferenceEngine,
+        Flux2KleinImageEngine,
+        ModernBertEmbeddingEngine,
+    > for ModelFamilyFactory
 {
     async fn create(
         &self,
@@ -82,6 +89,7 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, Fl
             ModelFamilyGenerationProcessor,
             ModelFamilyInferenceEngine,
             Flux2KleinImageEngine,
+            ModernBertEmbeddingEngine,
         >,
         String,
     > {
@@ -221,6 +229,41 @@ impl ModelFactory<ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, Fl
             }
             (Some(ModelFamily::DeepSeekV4), WorkerModelConfiguration::Autoregressive(_)) => {
                 Err(deepseek_v4_unavailable_reason().to_owned())
+            }
+            (
+                Some(ModelFamily::ModernBert),
+                WorkerModelConfiguration::Embeddings(model_configuration),
+            ) => {
+                let verification_directory_path = model_directory_path.clone();
+                let classified_provider_model_id = tokio::task::spawn_blocking(move || {
+                    classify_model_directory(&verification_directory_path)
+                        .ok()
+                        .flatten()
+                        .filter(|family| *family == ModelFamily::ModernBert)
+                })
+                .await
+                .map_err(|_| "embedding-family classification task failed".to_owned())?;
+                if classified_provider_model_id.is_none() {
+                    return Err(
+                        "selected model configuration does not match its classified model family"
+                            .to_owned(),
+                    );
+                }
+                // The unloaded engine only reads config and tokenizer bytes; MLX
+                // runtime initialization stays inside load() on the worker runtime
+                // thread because MLX handles are not Send across task boundaries.
+                let embedding_engine = ModernBertEmbeddingEngine::new(
+                    model_configuration.model_id,
+                    &model_directory_path,
+                    effective_mlx_memory_ceiling_bytes,
+                    allocator_cache_memory_limit_bytes,
+                    performance_attribution_enabled,
+                    performance_attribution_log_path,
+                )
+                .map_err(|failure_reason| {
+                    format!("selected embedding artifact failed initialization: {failure_reason:?}")
+                })?;
+                Ok(ModelFactoryRuntime::Embeddings(embedding_engine))
             }
             (Some(_), _) => Err(
                 "selected model configuration does not match its classified model family"

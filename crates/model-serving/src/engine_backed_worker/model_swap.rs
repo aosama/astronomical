@@ -11,13 +11,14 @@ use super::support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
 
-impl<Processor, Engine, Factory, ImageEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
+    EmbeddingsEngine: crate::EmbeddingEngine,
 {
     pub(super) async fn swap_model<WriteTransport>(
         &mut self,
@@ -150,6 +151,44 @@ where
                     model_configuration.runtime_configuration(),
                 )
             }
+            ModelFactoryRuntime::Embeddings(mut embedding_engine) => {
+                let embedding_load_result = embedding_engine.load().map_err(|failure_reason| {
+                    tracing::error!(model_directory, reason = ?failure_reason, "embedding engine load failed after swap creation");
+                    WorkerRuntimeError::ModelSwapFailed {
+                        model_load_failure_reason: bounded_embedding_engine_load_failure(
+                            failure_reason,
+                        ),
+                    }
+                })?;
+                if embedding_load_result.model_id() != model_configuration.model_id() {
+                    return Err(WorkerRuntimeError::ModelSwapFailed {
+                        model_load_failure_reason:
+                            "loaded embedding identity does not match the selected model".to_owned(),
+                    });
+                }
+                let minimum = embedding_load_result.minimum_mlx_memory_ceiling_bytes();
+                let event = WorkerEvent::ModelSwapped {
+                    model_id: embedding_load_result.model_id().to_owned(),
+                    capabilities: WorkerModelCapabilities::embeddings(
+                        *embedding_load_result.capabilities(),
+                    ),
+                    expert_memory_mode: None,
+                    minimum_mlx_memory_ceiling_bytes: minimum,
+                    mtp_runtime_state: MtpRuntimeState::Disabled,
+                    mtp_unavailable_reason: None,
+                    mtp_depth_status: Default::default(),
+                    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+                    speculative_prefill_unavailable_reason: None,
+                    speculative_prefill_draft_model_id: None,
+                    speculative_prefill_draft_model_revision: None,
+                };
+                (
+                    LoadedRuntime::Embeddings(embedding_engine),
+                    event,
+                    minimum,
+                    model_configuration.runtime_configuration(),
+                )
+            }
         };
 
         self.loaded_runtime = Some(replacement_runtime);
@@ -190,8 +229,33 @@ fn bounded_image_engine_load_failure(failure_reason: ImageGenerationFailureReaso
         .collect()
 }
 
-fn factory_runtime_matches_configuration<Processor, Engine, ImageEngine>(
-    factory_runtime: &ModelFactoryRuntime<Processor, Engine, ImageEngine>,
+fn bounded_embedding_engine_load_failure(
+    failure_reason: astronomical_ipc_protocol::EmbeddingsFailureReason,
+) -> String {
+    let failure_detail = match failure_reason {
+        astronomical_ipc_protocol::EmbeddingsFailureReason::InvalidRequest { reason }
+        | astronomical_ipc_protocol::EmbeddingsFailureReason::FatalExecution { reason } => reason,
+        astronomical_ipc_protocol::EmbeddingsFailureReason::MalformedModelOutput => {
+            "the embedding engine produced a malformed output".to_owned()
+        }
+        astronomical_ipc_protocol::EmbeddingsFailureReason::ContextLengthExceeded {
+            actual_total_context_tokens,
+            maximum_context_tokens,
+        } => format!(
+            "embedding input has {actual_total_context_tokens} tokens, exceeding the {maximum_context_tokens}-token encoder context"
+        ),
+        astronomical_ipc_protocol::EmbeddingsFailureReason::EngineBusy => {
+            "the embedding engine is busy".to_owned()
+        }
+    };
+    format!("embedding engine initialization failed: {failure_detail}")
+        .chars()
+        .take(512)
+        .collect()
+}
+
+fn factory_runtime_matches_configuration<Processor, Engine, ImageEngine, EmbeddingsEngine>(
+    factory_runtime: &ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
     model_configuration: &WorkerModelConfiguration,
 ) -> bool {
     matches!(
@@ -202,6 +266,9 @@ fn factory_runtime_matches_configuration<Processor, Engine, ImageEngine>(
         ) | (
             ModelFactoryRuntime::Image(_),
             WorkerModelConfiguration::Flux2Klein(_)
+        ) | (
+            ModelFactoryRuntime::Embeddings(_),
+            WorkerModelConfiguration::Embeddings(_)
         )
     )
 }

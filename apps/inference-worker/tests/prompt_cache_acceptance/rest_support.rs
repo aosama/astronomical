@@ -280,6 +280,7 @@ fn prepared_chat_token_count(
                     thinking_budget: Some(THINKING_BUDGET_TOKEN_COUNT),
                 },
                 qwen_thinking_channel_seed: None,
+                structured_generation: None,
             },
             true,
         )

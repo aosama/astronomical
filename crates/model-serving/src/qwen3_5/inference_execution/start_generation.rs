@@ -398,7 +398,8 @@ impl Qwen3_5EngineState {
                 .is_some_and(|loaded_model| loaded_model.sparse_experts_are_paged());
             let optional_prediction_session = create_optional_prediction_session(
                 self.mtp_enabled,
-                self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active,
+                self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active
+                    && !inference_request.has_structured_generation(),
                 model_has_optional_prediction_head,
                 has_precomputed_visual_embeddings,
                 has_processed_visual_images,
@@ -505,6 +506,7 @@ impl Qwen3_5EngineState {
                 generation_residency_preparation_attempted: false,
                 first_decode_forward_elapsed_millis: None,
                 generation_preparation_announced: false,
+                structured_generation: inference_request.take_structured_generation(),
             });
             let restored_prompt_prefix_token_count = u32::try_from(prefill_cursor)
                 .map_err(|_| fatal_engine_error("restored prompt prefix exceeds the u32 range"))?;

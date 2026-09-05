@@ -105,6 +105,7 @@ fn prepared_prompt_from_messages(
                 tool_choice: ChatToolChoice::Auto,
                 settings: process_pass_generation_settings(),
                 qwen_thinking_channel_seed: None,
+                structured_generation: None,
             },
             false,
         )

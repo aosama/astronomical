@@ -55,6 +55,7 @@ pub enum PerformanceAttributionReport {
     ModelLoading(ModelLoadingPerformanceAttributionReport),
     Generation(GenerationPerformanceAttributionReport),
     ImageGeneration(ImageGenerationPerformanceAttributionReport),
+    Embeddings(EmbeddingsPerformanceAttributionReport),
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -106,6 +107,18 @@ pub struct ImageGenerationPerformanceAttributionReport {
     seed: u64,
     encoded_bytes: Option<u64>,
     memory_snapshots: [ImageGenerationMemorySnapshot; 2],
+    failure_description: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct EmbeddingsPerformanceAttributionReport {
+    #[serde(flatten)]
+    common: CommonPerformanceAttributionReport,
+    request_id: u64,
+    model_id: String,
+    input_count: usize,
+    total_input_tokens: u32,
+    vector_width: u32,
     failure_description: Option<String>,
 }
 
@@ -273,6 +286,31 @@ impl PerformanceAttribution {
                     image_memory_snapshot("request_start", request_start_memory),
                     image_memory_snapshot("final_cleanup", final_cleanup_memory),
                 ],
+                failure_description,
+            },
+        ))
+    }
+
+    #[must_use]
+    pub fn finish_embeddings(
+        self,
+        outcome: PerformanceAttributionOutcome,
+        request_id: u64,
+        model_id: String,
+        input_count: usize,
+        total_input_tokens: u32,
+        vector_width: u32,
+        failure_description: Option<String>,
+    ) -> Option<PerformanceAttributionReport> {
+        let enabled_attribution = self.enabled_attribution?;
+        Some(PerformanceAttributionReport::Embeddings(
+            EmbeddingsPerformanceAttributionReport {
+                common: enabled_attribution.finish_common_report(outcome),
+                request_id,
+                model_id,
+                input_count,
+                total_input_tokens,
+                vector_width,
                 failure_description,
             },
         ))

@@ -15,6 +15,7 @@ mod flux2_klein;
 mod flux2_klein_documents;
 mod laguna;
 mod model_family;
+mod modernbert;
 mod qwen3_5;
 
 pub use classified_artifacts::{
@@ -31,6 +32,7 @@ pub use model_family::{ModelFamily, ModelFamilyClassificationError, classify_mod
 pub enum ModelCapabilities {
     Chat(ChatModelCapabilities),
     ImageGeneration(ImageGenerationCapabilities),
+    Embeddings(EmbeddingModelCapabilities),
 }
 
 /// Token-streaming capabilities advertised by a chat model.
@@ -50,6 +52,15 @@ pub struct ImageGenerationCapabilities {
     pub supports_text_to_image: bool,
     pub supports_image_editing: bool,
     pub supports_multiple_reference_images: bool,
+}
+
+/// Embedding inference advertised without inventing autoregressive token limits.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmbeddingModelCapabilities {
+    /// Native vector width produced by the loaded artifact.
+    pub vector_width: u32,
+    /// Maximum accepted prompt tokens per embedding input.
+    pub max_input_tokens: u32,
 }
 
 /// SPDX model-license identities accepted by executable discovery.
@@ -460,6 +471,32 @@ fn try_discover_model_with_id(model_directory: &Path, model_id: &str) -> Option<
                 capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
                 license: Some(verified_evidence.license),
                 model_size_bytes: verified_evidence.model_size_bytes,
+            })
+        }
+        ModelFamily::ModernBert => {
+            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
+            let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
+            let family_metadata =
+                modernbert::discover_model_metadata(model_directory, &config_value)?;
+            let immutable_provenance =
+                classified_artifacts::immutable_model_provenance(model_directory);
+            Some(DiscoveredModel {
+                model_id: model_id.to_owned(),
+                provider_model_id: immutable_provenance
+                    .as_ref()
+                    .map(|(provider_model_id, _)| provider_model_id.clone()),
+                model_family,
+                revision: immutable_provenance.map_or_else(
+                    || derive_revision_from_config_bytes(&config_bytes),
+                    |(_, revision)| revision,
+                ),
+                model_directory: model_directory.to_path_buf(),
+                capabilities: ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
+                    vector_width: family_metadata.vector_width,
+                    max_input_tokens: family_metadata.max_input_tokens,
+                }),
+                license: None,
+                model_size_bytes: family_metadata.model_size_bytes,
             })
         }
         // Classification is intentionally broader than executable discovery.

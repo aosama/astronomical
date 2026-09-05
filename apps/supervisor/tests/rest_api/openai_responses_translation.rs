@@ -40,6 +40,7 @@ fn should_translate_string_input_into_one_user_chat_message() {
                 thinking_budget: None,
             },
             qwen_thinking_channel_seed: None,
+            structured_generation: None,
         }
     );
 }

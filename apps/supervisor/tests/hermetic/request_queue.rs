@@ -222,6 +222,7 @@ fn command_with_request_id(model_id: &str, request_id_value: u64) -> ChatGenerat
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }
 

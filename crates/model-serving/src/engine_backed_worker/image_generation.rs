@@ -12,13 +12,14 @@ use crate::{
     ImageGenerationEngine, ImageGenerationEngineStep, InferenceEngine, ModelGenerationProcessor,
 };
 
-impl<Processor, Engine, Factory, ImageEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
+    EmbeddingsEngine: crate::EmbeddingEngine,
 {
     pub(crate) async fn start_image_generation<WriteTransport>(
         &mut self,
@@ -44,7 +45,7 @@ where
             Some(LoadedRuntime::Image(image_engine)) => {
                 image_engine.start_generation(generation_command)
             }
-            Some(LoadedRuntime::Autoregressive(_)) | None => {
+            Some(LoadedRuntime::Autoregressive(_)) | Some(LoadedRuntime::Embeddings(_)) | None => {
                 Err(ImageGenerationFailureReason::ModelDoesNotSupportImageGeneration)
             }
         };
@@ -81,7 +82,7 @@ where
         let request_id = active_generation.request_id;
         let engine_step = match self.loaded_runtime.as_mut() {
             Some(LoadedRuntime::Image(image_engine)) => image_engine.advance_generation(request_id),
-            Some(LoadedRuntime::Autoregressive(_)) | None => {
+            Some(LoadedRuntime::Autoregressive(_)) | Some(LoadedRuntime::Embeddings(_)) | None => {
                 Err(ImageGenerationFailureReason::FatalExecution {
                     reason: "the loaded image runtime was removed during generation".to_owned(),
                 })
@@ -173,7 +174,9 @@ where
         let request_id = active_generation.request_id;
         let cancellation = match self.loaded_runtime.as_mut() {
             Some(LoadedRuntime::Image(image_engine)) => image_engine.cancel_generation(request_id),
-            Some(LoadedRuntime::Autoregressive(_)) | None => Ok(()),
+            Some(LoadedRuntime::Autoregressive(_)) | Some(LoadedRuntime::Embeddings(_)) | None => {
+                Ok(())
+            }
         };
         cancellation.map_err(|cleanup_failure| image_cleanup_error(request_id, cleanup_failure))?;
         self.emit_image_failure_and_finalization(
@@ -239,7 +242,9 @@ where
                         memory_telemetry,
                     )
                 }),
-            Some(LoadedRuntime::Autoregressive(_)) | None => None,
+            Some(LoadedRuntime::Autoregressive(_)) | Some(LoadedRuntime::Embeddings(_)) | None => {
+                None
+            }
         };
         event_writer
             .send_event(&WorkerEvent::ImageGenerationFinalized {

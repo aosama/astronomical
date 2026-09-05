@@ -70,6 +70,7 @@ async fn should_start_a_laguna_engine_from_a_validated_artifact_and_generate_tok
             thinking_budget: Some(0),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
     let prepared_generation = generation_processor
         .prepare_chat(&chat_command)
@@ -244,6 +245,7 @@ fn romeo_and_juliet_cache_command(
             thinking_budget: Some(0),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }
 

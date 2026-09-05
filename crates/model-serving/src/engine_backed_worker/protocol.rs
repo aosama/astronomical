@@ -1,10 +1,10 @@
 //! Protocol startup and command-loop orchestration for the engine-backed worker.
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationFailureReason, ImageGenerationFailureReason,
-    MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter,
-    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent, WorkerModelCapabilities,
-    WorkerRuntimeFeatureConfiguration,
+    ChatGenerationCompletionReason, ChatGenerationFailureReason, EmbeddingsFailureReason,
+    ImageGenerationFailureReason, MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader,
+    ProtocolWriter, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
+    WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -12,13 +12,14 @@ use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
 
-impl<Processor, Engine, Factory, ImageEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
+    EmbeddingsEngine: crate::EmbeddingEngine,
 {
     /// Loads the engine, reports readiness, and serves commands until stdin closes.
     pub async fn run<ReadTransport, WriteTransport>(
@@ -124,6 +125,37 @@ where
                 )
                 .await?;
             }
+            Some(LoadedRuntime::Embeddings(embedding_engine)) => {
+                let embedding_load_result = embedding_engine.load().map_err(|failure_reason| {
+                    WorkerRuntimeError::InferenceEngineInitializationFailed {
+                        reason: format!(
+                            "embedding engine initialization failed: {failure_reason:?}"
+                        ),
+                    }
+                })?;
+                self.minimum_mlx_memory_ceiling_bytes =
+                    embedding_load_result.minimum_mlx_memory_ceiling_bytes();
+                event_writer
+                    .send_event(&WorkerEvent::Ready {
+                        model_id: embedding_load_result.model_id().to_owned(),
+                        capabilities: WorkerModelCapabilities::embeddings(
+                            *embedding_load_result.capabilities(),
+                        ),
+                        mtp_runtime_state: MtpRuntimeState::Disabled,
+                        mtp_unavailable_reason: None,
+                        mtp_depth_status: Default::default(),
+                        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
+                        speculative_prefill_unavailable_reason: None,
+                        speculative_prefill_draft_model_id: None,
+                        speculative_prefill_draft_model_revision: None,
+                    })
+                    .await?;
+                self.emit_mlx_memory_sample(
+                    MlxMemorySnapshotSource::ModelLoaded,
+                    &mut event_writer,
+                )
+                .await?;
+            }
             None => {
                 event_writer
                     .send_event(&WorkerEvent::Idle {
@@ -197,6 +229,11 @@ where
                                 self.emit_image_failure_and_finalization(generation_command.request_id, ImageGenerationFailureReason::EngineBusy, 0, &mut event_writer).await?;
                                 active_request = Some(ActiveWorkerRequest::Autoregressive(current_generation));
                             }
+                            WorkerCommand::GenerateEmbeddings(embeddings_command) => {
+                                event_writer.send_event(&WorkerEvent::EmbeddingsFailed { request_id: embeddings_command.request_id, reason: EmbeddingsFailureReason::EngineBusy }).await?;
+                                event_writer.send_event(&WorkerEvent::EmbeddingsFinalized { request_id: embeddings_command.request_id, elapsed_millis: 0, mlx_memory_snapshot: None }).await?;
+                                active_request = Some(ActiveWorkerRequest::Autoregressive(current_generation));
+                            }
                             WorkerCommand::SwapModel { .. } => {
                                 tracing::warn!(request_id = current_generation.request_id.value(), "received SwapModel command while generation is active; ignoring");
                                 active_request = Some(ActiveWorkerRequest::Autoregressive(current_generation));
@@ -249,6 +286,11 @@ where
                             }
                             WorkerCommand::GenerateImage(generation_command) => {
                                 self.emit_image_failure_and_finalization(generation_command.request_id, ImageGenerationFailureReason::EngineBusy, 0, &mut event_writer).await?;
+                                active_request = Some(ActiveWorkerRequest::Image(current_generation));
+                            }
+                            WorkerCommand::GenerateEmbeddings(embeddings_command) => {
+                                event_writer.send_event(&WorkerEvent::EmbeddingsFailed { request_id: embeddings_command.request_id, reason: EmbeddingsFailureReason::EngineBusy }).await?;
+                                event_writer.send_event(&WorkerEvent::EmbeddingsFinalized { request_id: embeddings_command.request_id, elapsed_millis: 0, mlx_memory_snapshot: None }).await?;
                                 active_request = Some(ActiveWorkerRequest::Image(current_generation));
                             }
                             WorkerCommand::UpdateMlxMemoryLimit { effective_mlx_memory_ceiling_bytes, configuration_generation: _ } => {

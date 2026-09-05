@@ -548,5 +548,6 @@ fn chat_command(model: &str, request_id: u64) -> ChatGenerationCommand {
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }

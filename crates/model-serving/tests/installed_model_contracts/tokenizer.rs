@@ -116,6 +116,7 @@ fn should_prepare_a_validated_structured_chat_command_for_prefill() {
             thinking_budget: Some(256),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     let engine_request = tokenizer
@@ -172,6 +173,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
             thinking_budget: Some(0),
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     };
 
     let engine_request = tokenizer

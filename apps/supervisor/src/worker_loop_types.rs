@@ -2,16 +2,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ImageGenerationCommand, ImageGenerationFailureReason,
-    ImageGenerationPhase, RequestId, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
+    ChatGenerationCommand, EmbeddingsFailureReason, ImageGenerationCommand,
+    ImageGenerationFailureReason, ImageGenerationPhase, RequestId,
+    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::{
-    ChatGenerationStreamEvent, CompletedToolCall, GenerationStartError,
-    ImageGenerationExecutionError, ImageGenerationOutput, MlxMemoryLimitUpdateOutcome,
-    PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerTerminationOutcome,
+    ChatGenerationStreamEvent, CompletedToolCall, EmbeddingsExecutionError, EmbeddingsOutput,
+    GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput,
+    MlxMemoryLimitUpdateOutcome, PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError,
+    WorkerTerminationOutcome,
 };
 
 pub(crate) enum WorkerLoopCommand {
@@ -27,6 +29,14 @@ pub(crate) enum WorkerLoopCommand {
         start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
         image_result_sender:
             mpsc::Sender<Result<ImageGenerationOutput, ImageGenerationExecutionError>>,
+        admitted_at: Instant,
+        queue_wait_elapsed: std::time::Duration,
+    },
+    GenerateEmbeddings {
+        active_generation_permit: OwnedSemaphorePermit,
+        embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
+        start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
+        embeddings_result_sender: mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
         admitted_at: Instant,
         queue_wait_elapsed: std::time::Duration,
     },
@@ -60,6 +70,7 @@ pub(crate) enum WorkerLoopCommand {
 pub(crate) enum ActiveWorkerRequest {
     Chat(ActiveGeneration),
     Image(ActiveImageGeneration),
+    Embeddings(ActiveEmbeddingsGeneration),
 }
 
 impl ActiveWorkerRequest {
@@ -67,27 +78,35 @@ impl ActiveWorkerRequest {
         match self {
             Self::Chat(request) => request.request_id,
             Self::Image(request) => request.request_id,
+            Self::Embeddings(request) => request.request_id,
         }
     }
 
     pub(crate) fn chat(&self) -> Option<&ActiveGeneration> {
         match self {
             Self::Chat(request) => Some(request),
-            Self::Image(_) => None,
+            Self::Image(_) | Self::Embeddings(_) => None,
         }
     }
 
     pub(crate) fn chat_mut(&mut self) -> Option<&mut ActiveGeneration> {
         match self {
             Self::Chat(request) => Some(request),
-            Self::Image(_) => None,
+            Self::Image(_) | Self::Embeddings(_) => None,
         }
     }
 
     pub(crate) fn image_mut(&mut self) -> Option<&mut ActiveImageGeneration> {
         match self {
             Self::Image(request) => Some(request),
-            Self::Chat(_) => None,
+            Self::Chat(_) | Self::Embeddings(_) => None,
+        }
+    }
+
+    pub(crate) fn embeddings_mut(&mut self) -> Option<&mut ActiveEmbeddingsGeneration> {
+        match self {
+            Self::Embeddings(request) => Some(request),
+            Self::Chat(_) | Self::Image(_) => None,
         }
     }
 }
@@ -112,6 +131,16 @@ pub(crate) struct ActiveImageGeneration {
         mpsc::Sender<Result<ImageGenerationOutput, ImageGenerationExecutionError>>,
     pub(crate) terminal_outcome:
         Option<Result<ImageGenerationOutput, ImageGenerationFailureReason>>,
+}
+
+pub(crate) struct ActiveEmbeddingsGeneration {
+    pub(crate) _active_generation_permit: OwnedSemaphorePermit,
+    pub(crate) request_id: RequestId,
+    pub(crate) terminal_received_at: Option<tokio::time::Instant>,
+    pub(crate) execution_deadline: Instant,
+    pub(crate) embeddings_result_sender:
+        mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
+    pub(crate) terminal_outcome: Option<Result<EmbeddingsOutput, EmbeddingsFailureReason>>,
 }
 
 pub(crate) struct ActiveGeneration {

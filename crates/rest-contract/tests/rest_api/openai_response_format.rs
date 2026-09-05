@@ -135,3 +135,90 @@ fn should_name_unenforced_grammar_in_the_warning_header() {
         UNENFORCED_RESPONSE_FORMAT_WARNING.contains("grammar-constrained decoding unavailable")
     );
 }
+
+#[test]
+fn should_accept_structured_outputs_choice() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "structured_outputs": {"choice": ["Juliet", "Romeo"]}
+        }"#,
+    )
+    .expect("choice extra body should deserialize");
+    let request_parts = request
+        .into_parts()
+        .expect("choice extra body should validate");
+    assert!(matches!(
+        request_parts.enforced_structured_generation,
+        Some(astronomical_rest_contract::EnforcedStructuredGeneration::Choice { .. })
+    ));
+}
+
+#[test]
+fn should_reject_structured_outputs_regex_until_enforced() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "structured_outputs": {"regex": "[A-Z]+"}
+        }"#,
+    )
+    .expect("regex extra body should deserialize");
+    let validation_error = request
+        .into_parts()
+        .expect_err("unenforced regex must fail closed");
+    assert!(validation_error.to_string().contains("regex"));
+}
+
+#[test]
+fn should_reject_guided_grammar_until_enforced() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "guided_grammar": "root ::= \"Juliet\" | \"Romeo\""
+        }"#,
+    )
+    .expect("guided_grammar should deserialize");
+    let validation_error = request
+        .validate()
+        .expect_err("unenforced guided_grammar must fail closed");
+    assert!(validation_error.to_string().contains("guided_grammar"));
+}
+
+#[test]
+fn should_reject_structured_outputs_and_guided_grammar_together() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "structured_outputs": {"choice": ["Juliet"]},
+            "guided_grammar": "root ::= \"Juliet\""
+        }"#,
+    )
+    .expect("conflicting extra body should deserialize");
+    let validation_error = request
+        .validate()
+        .expect_err("both extra-body fields must fail closed");
+    assert!(validation_error.to_string().contains("only one"));
+}
+
+#[test]
+fn should_accept_structured_outputs_json_object() {
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        r#"{
+            "model": "mlx-community/Qwen3.5-2B-4bit",
+            "messages": [{"role": "user", "content": "O Romeo, Romeo, wherefore art thou Romeo?"}],
+            "structured_outputs": {"json": {}}
+        }"#,
+    )
+    .expect("json extra body should deserialize");
+    let request_parts = request
+        .into_parts()
+        .expect("empty json extra body should compile to json_object");
+    assert_eq!(
+        request_parts.enforced_structured_generation,
+        Some(astronomical_rest_contract::EnforcedStructuredGeneration::JsonObject)
+    );
+}

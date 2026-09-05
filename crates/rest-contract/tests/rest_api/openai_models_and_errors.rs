@@ -25,13 +25,13 @@ fn should_serialize_complete_ready_model_capability_metadata_without_losing_open
             "/v1/responses".to_owned(),
         ],
         supports_structured_outputs: true,
-        structured_output_enforcement: Some("none".to_owned()),
+        structured_output_enforcement: Some("logits_mask".to_owned()),
     })
     .expect("complete model capability metadata should be valid");
 
     assert_eq!(
         serde_json::to_string(&model_list).expect("the OpenAI model list should serialize"),
-        r#"{"object":"list","data":[{"id":"astronomical/fake-mixture-of-experts","object":"model","created":1784231803,"owned_by":"astronomical","context_window":262144,"max_input_tokens":241664,"max_output_tokens":20480,"input_modalities":["text","image"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":true,"reasoning_format":"openai_chat_reasoning_content_and_responses_reasoning_summary_text","supports_tool_calls":true,"tool_call_format":"openai_function_call","supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"none"}]}"#
+        r#"{"object":"list","data":[{"id":"astronomical/fake-mixture-of-experts","object":"model","created":1784231803,"owned_by":"astronomical","context_window":262144,"max_input_tokens":241664,"max_output_tokens":20480,"input_modalities":["text","image"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":true,"reasoning_format":"openai_chat_reasoning_content_and_responses_reasoning_summary_text","supports_tool_calls":true,"tool_call_format":"openai_function_call","supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"logits_mask"}]}"#
     );
 }
 
@@ -56,13 +56,13 @@ fn should_omit_reasoning_and_tool_formats_when_model_does_not_support_them() {
             "/v1/responses".to_owned(),
         ],
         supports_structured_outputs: true,
-        structured_output_enforcement: Some("none".to_owned()),
+        structured_output_enforcement: Some("logits_mask".to_owned()),
     })
     .expect("text-only model capability metadata should be valid");
 
     assert_eq!(
         serde_json::to_string(&model_list).expect("the OpenAI model list should serialize"),
-        r#"{"object":"list","data":[{"id":"mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit","object":"model","created":1784231803,"owned_by":"astronomical","context_window":131072,"max_input_tokens":110592,"max_output_tokens":20480,"input_modalities":["text"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":false,"supports_tool_calls":false,"supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"none"}]}"#
+        r#"{"object":"list","data":[{"id":"mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit","object":"model","created":1784231803,"owned_by":"astronomical","context_window":131072,"max_input_tokens":110592,"max_output_tokens":20480,"input_modalities":["text"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":false,"supports_tool_calls":false,"supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"logits_mask"}]}"#
     );
 }
 
@@ -84,7 +84,7 @@ fn should_accept_independent_input_and_output_maxima_that_share_one_context_wind
         tool_call_format: None,
         supported_endpoints: vec!["/v1/chat/completions".to_owned()],
         supports_structured_outputs: true,
-        structured_output_enforcement: Some("none".to_owned()),
+        structured_output_enforcement: Some("logits_mask".to_owned()),
     });
 
     assert!(
@@ -111,7 +111,7 @@ fn should_reject_an_independent_maximum_that_leaves_no_position_for_the_other_si
         tool_call_format: None,
         supported_endpoints: vec!["/v1/chat/completions".to_owned()],
         supports_structured_outputs: true,
-        structured_output_enforcement: Some("none".to_owned()),
+        structured_output_enforcement: Some("logits_mask".to_owned()),
     });
 
     assert!(
@@ -144,7 +144,7 @@ fn should_reject_an_output_maximum_that_leaves_no_prompt_position() {
         tool_call_format: None,
         supported_endpoints: vec!["/v1/chat/completions".to_owned()],
         supports_structured_outputs: true,
-        structured_output_enforcement: Some("none".to_owned()),
+        structured_output_enforcement: Some("logits_mask".to_owned()),
     });
 
     assert!(

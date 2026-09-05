@@ -215,6 +215,7 @@ pub(super) fn prepare_representative_tool_prompt(
                         thinking_budget: Some(256),
                     },
                     qwen_thinking_channel_seed: None,
+                    structured_generation: None,
                 },
                 false,
             )

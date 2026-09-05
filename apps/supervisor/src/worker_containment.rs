@@ -405,6 +405,11 @@ pub(super) fn fail_active_generation(
                 .image_result_sender
                 .try_send(Err(crate::ImageGenerationExecutionError::WorkerUnavailable));
         }
+        Some(ActiveWorkerRequest::Embeddings(failed_embeddings)) => {
+            let _send_outcome = failed_embeddings
+                .embeddings_result_sender
+                .try_send(Err(crate::EmbeddingsExecutionError::WorkerUnavailable));
+        }
         None => {}
     }
 }

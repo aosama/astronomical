@@ -222,6 +222,23 @@ fn should_accept_the_include_field_as_a_harmless_noop() {
 }
 
 #[test]
+fn should_reject_responses_guided_grammar_until_enforced() {
+    let request = serde_json::from_str::<OpenAiResponsesRequest>(
+        r#"{
+            "model":"mlx-community/Qwen3.5-2B-4bit",
+            "input":"O Romeo, Romeo, wherefore art thou Romeo?",
+            "guided_grammar":"root ::= \"Juliet\" | \"Romeo\""
+        }"#,
+    )
+    .expect("guided_grammar Responses request should deserialize");
+
+    let validation_error = request
+        .into_parts()
+        .expect_err("unenforced guided_grammar must fail closed on Responses");
+    assert!(validation_error.to_string().contains("guided_grammar"));
+}
+
+#[test]
 fn should_accept_copilot_reasoning_effort_as_a_harmless_noop() {
     let request = serde_json::from_str::<OpenAiResponsesRequest>(
         r#"{

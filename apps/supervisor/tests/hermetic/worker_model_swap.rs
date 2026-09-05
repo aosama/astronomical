@@ -498,5 +498,6 @@ pub(super) fn chat_command(model_id: &str, request_id: u64) -> ChatGenerationCom
             thinking_budget: None,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }

@@ -176,6 +176,7 @@ pub(super) fn romeo_and_juliet_command(
             thinking_budget,
         },
         qwen_thinking_channel_seed: None,
+        structured_generation: None,
     }
 }
 

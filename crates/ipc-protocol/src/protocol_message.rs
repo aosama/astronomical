@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason,
-    ImageGenerationPhase, ImageGenerationResultMetadata, WorkerModelCapabilities,
-    WorkerModelConfiguration, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
+    ChatGenerationOutput, EmbeddingsCommand, EmbeddingsFailureReason, GeneratedImage,
+    ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
+    ImageGenerationResultMetadata, WorkerModelCapabilities, WorkerModelConfiguration,
+    WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
+    WorkerStartupConfiguration,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -191,6 +192,8 @@ pub enum WorkerCommand {
     Generate(ChatGenerationCommand),
     /// Starts one bounded text-to-image generation.
     GenerateImage(ImageGenerationCommand),
+    /// Starts one bounded text-embedding request.
+    GenerateEmbeddings(EmbeddingsCommand),
     /// Stops the active generation with this request identifier.
     Cancel { request_id: RequestId },
     /// Swaps the loaded model to a different model directory.
@@ -224,7 +227,7 @@ pub enum WorkerCommand {
 }
 
 /// An event emitted by the inference worker.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerEvent {
     /// Confirms the feature settings applied by the currently running worker.
@@ -310,6 +313,25 @@ pub enum WorkerEvent {
         request_id: RequestId,
         elapsed_millis: u64,
         /// Present when the image engine observed MLX after releasing request arrays and cache.
+        mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    },
+    /// Delivers one completed embedding vector per input, in request order.
+    EmbeddingsCompleted {
+        request_id: RequestId,
+        embeddings: Vec<Vec<f32>>,
+        input_token_counts: Vec<u32>,
+        elapsed_millis: u64,
+    },
+    /// Reports a request-scoped embeddings failure that leaves the worker responsive.
+    EmbeddingsFailed {
+        request_id: RequestId,
+        reason: EmbeddingsFailureReason,
+    },
+    /// Confirms that embeddings request state has been released after any outcome.
+    EmbeddingsFinalized {
+        request_id: RequestId,
+        elapsed_millis: u64,
+        /// Present when the embedding engine observed MLX after releasing request arrays and cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Reports that the configured model finished loading.
