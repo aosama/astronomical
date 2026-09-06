@@ -1,64 +1,75 @@
 {
-  "schema_version": 1,
-  "entries": [
-    {
-      "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
-      "revision": "27ea26a6175ead91d1067f020be41318d045849b",
-      "display_name": "Ornith 1.5 9B Vision OptiQ Static 4.5bpw",
-      "family": "qwen3_5",
-      "approximate_size_bytes": 7286495182,
-      "public": true,
-      "description": "A static mixed-precision OptiQ quant of the Ornith 1.5 9B dense vision-language model, targeted at 4.5 BPW and achieved at 4.63 BPW (group 64, affine). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. Language tensors are a 4/5/6/8-bit mix; the vision tower stays bf16. Image input and MTP require mlx-optiq.",
-      "capabilities": {
-        "supports_reasoning": true,
-        "supports_vision": true,
-        "supports_tool_calls": true,
-        "context_window": 262144
-      },
-      "quantization_label": "OptiQ static 4.5bpw (mixed-precision affine, group 64)",
-      "architecture_summary": "Qwen3.5 dense VLM, 9B params, 32 layers, 27-layer vision tower",
-      "upstream_license": "MIT"
-    },
-    {
-      "huggingface_id": "black-forest-labs/FLUX.2-klein-4B",
-      "revision": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
-      "display_name": "FLUX.2 Klein 4B",
-      "family": "flux2_klein",
-      "approximate_size_bytes": 15980141329,
-      "public": true,
-      "description": "A local text-to-image model that creates one lossless PNG from a prompt.",
-      "capabilities": {
-        "supports_image_generation": true
-      },
-      "included_paths": [
-        "LICENSE.md",
-        "model_index.json",
-        "scheduler/",
-        "text_encoder/",
-        "tokenizer/",
-        "transformer/",
-        "vae/"
-      ],
-      "architecture_summary": "FLUX.2 Klein, 4B parameters, BF16 weights",
-      "upstream_license": "Apache-2.0"
-    },
-    {
-      "huggingface_id": "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
-      "revision": "5f31fcd089ce6f47f1073d3ae43dcb3a0bd1869f",
-      "display_name": "Ornith 1.5 35B A3B OptiQ 4bit",
-      "family": "qwen3_5",
-      "approximate_size_bytes": 23565955947,
-      "public": true,
-      "description": "A mixed-precision OptiQ quant of the Ornith 1.5 35B-A3B mixture-of-experts vision-language model, per-layer 4/8-bit affine (group 64). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. The MoE architecture registers through OptiQ; the bf16 vision tower stays in a separate vision sidecar and the int4 MTP head stays in optiq/mtp.safetensors; image input and MTP require mlx-optiq.",
-      "capabilities": {
-        "supports_reasoning": true,
-        "supports_vision": true,
-        "supports_tool_calls": true,
-        "context_window": 262144
-      },
-      "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
-      "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
-      "upstream_license": "MIT"
-    }
-  ]
+    "schema_version": 2,
+    "entries": [
+        {
+            "huggingface_id": "mlx-community/nomicai-modernbert-embed-base-8bit",
+            "revision": "1b353387163e225681db8580046c445de54a63bb",
+            "display_name": "Nomic AI ModernBERT Embed Base 8-bit",
+            "family": "modernbert",
+            "approximate_size_bytes": 162580729,
+            "public": true,
+            "description": "A sentence-embedding encoder that turns text into 768-dimensional unit-norm vectors served natively through the embeddings endpoint. The 8-bit affine quantization (group 64) keeps the whole model resident in about 0.16 GB of wired GPU memory, and each input is capped at 8192 tokens.",
+            "capabilities": {"supports_embeddings": true},
+            "quantization_label": "8-bit affine (group 64)",
+            "architecture_summary": "ModernBERT base encoder, 149M parameters, 22 layers, hidden 768, 8192-token input",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "mlx-community/Qwen3.5-2B-4bit",
+            "revision": "674aaa7240b91e8012fcad5d791b7dfe5ba90207",
+            "display_name": "Qwen 3.5 2B 4-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 1749081857,
+            "public": true,
+            "description": "The smallest member of the Qwen 3.5 family as a 4-bit affine MLX quant. Chat, reasoning, tool calls, and image understanding in about 1.75 GB of wired GPU memory, with a 262144-token context window and enforced structured outputs.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "4-bit affine (group 64), bf16 vision tower",
+            "architecture_summary": "Qwen3.5 dense VLM, 2B parameters, 24 layers, hidden 2048, 297-tensor vision tower",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
+            "revision": "27ea26a6175ead91d1067f020be41318d045849b",
+            "display_name": "Ornith 1.5 9B Vision OptiQ Static 4.5bpw",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 7286495182,
+            "public": true,
+            "description": "A static mixed-precision OptiQ quant of the Ornith 1.5 9B dense vision-language model, targeted at 4.5 BPW and achieved at 4.63 BPW (group 64, affine). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. Language tensors are a 4/5/6/8-bit mix; the vision tower stays bf16. Image input and MTP require mlx-optiq.",
+            "capabilities": {"supports_reasoning": true, "supports_vision": true, "supports_tool_calls": true, "context_window": 262144},
+            "quantization_label": "OptiQ static 4.5bpw (mixed-precision affine, group 64)",
+            "architecture_summary": "Qwen3.5 dense VLM, 9B params, 32 layers, 27-layer vision tower",
+            "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "black-forest-labs/FLUX.2-klein-4B",
+            "revision": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
+            "display_name": "FLUX.2 Klein 4B",
+            "family": "flux2_klein",
+            "approximate_size_bytes": 15980141329,
+            "public": true,
+            "description": "A local text-to-image model that creates one lossless PNG from a prompt.",
+            "capabilities": {"supports_image_generation": true},
+            "included_paths": ["LICENSE.md", "model_index.json", "scheduler/", "text_encoder/", "tokenizer/", "transformer/", "vae/"],
+            "architecture_summary": "FLUX.2 Klein, 4B parameters, BF16 weights",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
+            "revision": "5f31fcd089ce6f47f1073d3ae43dcb3a0bd1869f",
+            "display_name": "Ornith 1.5 35B A3B OptiQ 4bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 23565955947,
+            "public": true,
+            "description": "A mixed-precision OptiQ quant of the Ornith 1.5 35B-A3B mixture-of-experts vision-language model, per-layer 4/8-bit affine (group 64). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. The MoE architecture registers through OptiQ; the bf16 vision tower stays in a separate vision sidecar and the int4 MTP head stays in optiq/mtp.safetensors; image input and MTP require mlx-optiq.",
+            "capabilities": {"supports_reasoning": true, "supports_vision": true, "supports_tool_calls": true, "context_window": 262144},
+            "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
+            "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
+            "upstream_license": "MIT"
+        }
+    ]
 }

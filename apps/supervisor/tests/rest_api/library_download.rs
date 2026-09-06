@@ -40,7 +40,7 @@ async fn should_download_publish_and_report_ready_through_the_library_rest_journ
         let test_directory = tempfile::tempdir().expect("temporary directory should be available");
         let download_catalog = Arc::new(
             DownloadCatalog::parse_json(&format!(
-                "{{\"schema_version\":1,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
+                "{{\"schema_version\":2,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
                 repository_bytes()
             ))
             .expect("fictional catalog should parse"),
@@ -402,7 +402,7 @@ fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Route
 fn test_catalog() -> Arc<DownloadCatalog> {
     Arc::new(
         DownloadCatalog::parse_json(&format!(
-            "{{\"schema_version\":1,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
+            "{{\"schema_version\":2,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
             repository_bytes()
         ))
         .expect("fictional catalog should parse"),

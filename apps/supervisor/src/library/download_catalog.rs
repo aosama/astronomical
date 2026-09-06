@@ -7,7 +7,10 @@ use thiserror::Error;
 
 use super::DownloadPathSelection;
 
-const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 1;
+// Version 2 extends the closed executable-family set with ModernBERT
+// embedding artifacts. There are no downstream catalog consumers, so the
+// schema moves forward without compatibility shims.
+const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 2;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
 const MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT: usize = 1_024;
 const MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH: usize = 96;
@@ -53,15 +56,19 @@ pub struct DownloadCatalogCapabilities {
     pub context_window: Option<u32>,
     pub max_output_tokens: Option<u32>,
     pub supports_image_generation: bool,
+    pub supports_embeddings: bool,
 }
 
-/// Executable model families intentionally supported by catalog version 1.
+/// Executable model families intentionally supported by catalog version 2.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum DownloadCatalogFamily {
     Qwen3_5,
     Laguna,
     Flux2Klein,
+    /// The wire name matches the discovery model_type, which has no underscore.
+    #[serde(rename = "modernbert")]
+    ModernBert,
 }
 
 impl DownloadCatalogFamily {
@@ -71,6 +78,7 @@ impl DownloadCatalogFamily {
             Self::Qwen3_5 => "qwen3_5",
             Self::Laguna => "laguna",
             Self::Flux2Klein => "flux2_klein",
+            Self::ModernBert => "modernbert",
         }
     }
 }
@@ -152,6 +160,8 @@ struct DownloadCatalogCapabilitiesDocument {
     max_output_tokens: Option<u32>,
     #[serde(default)]
     supports_image_generation: bool,
+    #[serde(default)]
+    supports_embeddings: bool,
 }
 
 impl DownloadCatalog {
@@ -222,6 +232,7 @@ impl DownloadCatalog {
                         || capabilities_document.context_window.is_some()
                         || capabilities_document.max_output_tokens.is_some()
                         || capabilities_document.supports_image_generation
+                        || capabilities_document.supports_embeddings
                     {
                         Ok(DownloadCatalogCapabilities {
                             supports_reasoning: capabilities_document.supports_reasoning,
@@ -231,6 +242,7 @@ impl DownloadCatalog {
                             max_output_tokens: capabilities_document.max_output_tokens,
                             supports_image_generation: capabilities_document
                                 .supports_image_generation,
+                            supports_embeddings: capabilities_document.supports_embeddings,
                         })
                     } else {
                         Err(DownloadCatalogError::InvalidCapabilities { entry_index })
@@ -307,7 +319,7 @@ impl DownloadCatalog {
 
     /// Supplies a validated empty catalog to test-focused application builders.
     #[must_use]
-    pub const fn empty_v1() -> Self {
+    pub const fn empty() -> Self {
         Self {
             schema_version: DOWNLOAD_CATALOG_SCHEMA_VERSION,
             entries: Vec::new(),

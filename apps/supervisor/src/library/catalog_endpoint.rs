@@ -99,6 +99,7 @@ struct LibraryCatalogCapabilitiesResponse {
     supports_vision: bool,
     supports_tool_calls: bool,
     supports_image_generation: bool,
+    supports_embeddings: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     context_window: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -138,6 +139,7 @@ impl LibraryCatalogEntryResponse {
                 supports_vision: capabilities.supports_vision,
                 supports_tool_calls: capabilities.supports_tool_calls,
                 supports_image_generation: capabilities.supports_image_generation,
+                supports_embeddings: capabilities.supports_embeddings,
                 context_window: capabilities.context_window,
                 max_output_tokens: capabilities.max_output_tokens,
             },
