@@ -2,7 +2,7 @@
 
 **Run bigger local language and vision models on Apple Silicon without requiring every sparse expert to live in RAM.**
 
-Astronomical is a performance-first local model runner for Mac users who want serious models, private inference, and direct control over memory. Set the maximum model RAM your laptop can spare and Astronomical automatically balances hot expert weights, live context, runtime work, and solid-state-drive streaming under that ceiling.
+You set the model RAM your laptop can spare. Astronomical is a local model runner for Mac users who want serious models, private inference, and direct control over memory: it automatically balances hot expert weights, live context, runtime work, and solid-state-drive streaming under that ceiling.
 
 Read the product story and public engineering reports at [aosama.github.io/astronomical](https://aosama.github.io/astronomical/).
 
@@ -67,10 +67,10 @@ Prompts, responses, model files, and persistent prompt state stay on the local M
 Astronomical is experimental and deliberately focused:
 
 - Any Apple silicon M-series Mac.
-- macOS 14 (Sonoma) and later is the declared support spectrum; the current Stable release still requires macOS 26, and Sonoma support begins with the next Stable cut. Capability probes and public MLX fallbacks protect correctness across the range; combinations outside the tested set are supported best-effort.
-- Validated Qwen3.5/Qwen3.6 and Laguna artifacts supported by the repository.
+- macOS 14 (Sonoma) and later on any Apple silicon M-series Mac, declared best-effort. Capability probes and public MLX fallbacks protect correctness across the range; combinations outside the tested set are supported best-effort.
+- Validated Qwen3.5/Qwen3.6, Laguna, FLUX.2 Klein, and ModernBERT embedding artifacts supported by the repository.
 - One local user and one active generation at a time.
-- OpenAI-compatible chat completions, responses, model discovery, and server-sent event streaming over loopback only.
+- OpenAI-compatible chat completions, responses, embeddings, image generation, model discovery, and server-sent event streaming over loopback only.
 
 A supported model runs on every Apple silicon M-series Mac that meets the operating-system floor. Measured custom Metal kernels keep capable GPUs on their fastest path; where a GPU cannot run one, the same request completes through public MLX APIs with the output precision the model artifact specifies. Throughput still depends on the GPU generation, the memory ceiling, the model, and storage speed.
 
