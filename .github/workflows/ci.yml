@@ -241,7 +241,7 @@ jobs:
         run: scripts/test-macos-menu-contracts.sh
         timeout-minutes: 2
       - name: Run Observatory contracts
-        run: node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js
+        run: node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js
         timeout-minutes: 2
       - name: Install verification tools
         env:

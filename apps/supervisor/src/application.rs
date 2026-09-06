@@ -138,7 +138,7 @@ pub fn build_application_with_discovered_models(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
-        download_catalog: Arc::new(DownloadCatalog::empty_v1()),
+        download_catalog: Arc::new(DownloadCatalog::empty()),
         library_download_coordinator: None,
         discovered_models,
         reloadable_config: None,
@@ -192,7 +192,7 @@ pub fn build_application_with_shutdown(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
-        download_catalog: Arc::new(DownloadCatalog::empty_v1()),
+        download_catalog: Arc::new(DownloadCatalog::empty()),
         library_download_coordinator: None,
         discovered_models: Vec::new(),
         reloadable_config: None,
@@ -239,7 +239,7 @@ pub fn build_development_application_with_reload(
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         generation_executor: Arc::new(generation_executor),
         worker_control: None,
-        download_catalog: Arc::new(DownloadCatalog::empty_v1()),
+        download_catalog: Arc::new(DownloadCatalog::empty()),
         library_download_coordinator: None,
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
@@ -379,7 +379,7 @@ pub fn build_application_with_full_control(
         reloadable_config,
         runtime_config_resolver,
         shutdown_controller,
-        DownloadCatalog::empty_v1(),
+        DownloadCatalog::empty(),
     )
 }
 

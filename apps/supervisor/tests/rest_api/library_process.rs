@@ -36,7 +36,7 @@ async fn should_serve_the_library_and_discover_instance_models_without_configure
         let catalog_document: serde_json::Value =
             serde_json::from_str(http_response_body(&catalog_response))
                 .expect("the process catalog response should contain JSON");
-        assert_eq!(catalog_document["schema_version"], 1);
+        assert_eq!(catalog_document["schema_version"], 2);
         assert!(catalog_document["entries"].is_array());
         let library_response = get_endpoint(daemon_address, "/library").await;
         assert!(library_response.starts_with("HTTP/1.1 200 OK"));

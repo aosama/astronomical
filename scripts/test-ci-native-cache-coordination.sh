@@ -257,6 +257,7 @@ assert_workflow_contract() {
           "node", "--test", "--test-reporter=spec",
           "apps/supervisor/console/console.test.js",
           "apps/supervisor/console/library.test.js",
+          "apps/supervisor/console/library-fetch.test.js",
         ]
         raise "Observatory required-CI command changed" unless Shellwords.split(observatory_step.fetch("run")) == expected_observatory_command
         raise "Observatory contracts exceeded their bounded timeout" unless observatory_step.fetch("timeout-minutes") <= 2

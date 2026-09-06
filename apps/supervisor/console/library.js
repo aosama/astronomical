@@ -156,7 +156,7 @@ function filterLibraryRows(catalogRows) {
 
 function libraryCatalogRowsFromDocument(catalogDocument) {
     if (!catalogDocument
-        || catalogDocument.schema_version !== 1
+        || catalogDocument.schema_version !== 2
         || !Array.isArray(catalogDocument.entries)) {
         return null;
     }
@@ -196,6 +196,7 @@ function libraryCatalogRowsFromDocument(catalogDocument) {
             supportsVision: capabilities.supports_vision === true,
             supportsToolCalls: capabilities.supports_tool_calls === true,
             supportsImageGeneration: capabilities.supports_image_generation === true,
+            supportsEmbeddings: capabilities.supports_embeddings === true,
             contextWindow: typeof capabilities.context_window === "number"
                 ? capabilities.context_window
                 : null,

@@ -7,6 +7,7 @@ function libraryFamilyLabel(family) {
     if (family === "qwen3_5") return "Qwen 3.5";
     if (family === "laguna") return "Laguna";
     if (family === "flux2_klein") return "FLUX.2 Klein";
+    if (family === "modernbert") return "ModernBERT";
     return family;
 }
 
@@ -178,6 +179,7 @@ function createLibraryCapabilityBadges(catalogRow) {
     if (catalogRow.supportsVision) badges.push("Vision");
     if (catalogRow.supportsToolCalls) badges.push("Tools");
     if (catalogRow.supportsImageGeneration) badges.push("Image generation");
+    if (catalogRow.supportsEmbeddings) badges.push("Embeddings");
     const contextLabel = formatLibraryContextTokens(catalogRow.contextWindow);
     if (contextLabel) badges.push(contextLabel);
     for (const badgeText of badges) {

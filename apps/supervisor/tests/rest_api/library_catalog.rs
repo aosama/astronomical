@@ -13,7 +13,7 @@ use tower::ServiceExt;
 use crate::common::ScriptedExecutor;
 
 const VALID_CATALOG_JSON: &str = r#"{
-    "schema_version": 1,
+    "schema_version": 2,
     "entries": [
         {
             "huggingface_id": "astronomical-test/example-qwen",
@@ -30,6 +30,15 @@ const VALID_CATALOG_JSON: &str = r#"{
             "family": "laguna",
             "approximate_size_bytes": 5000000000,
             "public": true
+        },
+        {
+            "huggingface_id": "astronomical-test/example-embedder",
+            "revision": "fedcba9876543210fedcba9876543210fedcba98",
+            "display_name": "Example Embedder",
+            "family": "modernbert",
+            "approximate_size_bytes": 200000000,
+            "public": true,
+            "capabilities": {"supports_embeddings": true}
         }
     ]
 }"#;
@@ -70,7 +79,7 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
         assert_eq!(
             catalog_document,
             serde_json::json!({
-                "schema_version": 1,
+                "schema_version": 2,
                 "entries": [
                     {
                         "huggingface_id": "astronomical-test/example-qwen",
@@ -85,7 +94,8 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
                             "supports_reasoning": false,
                             "supports_vision": false,
                             "supports_tool_calls": false,
-                            "supports_image_generation": false
+                            "supports_image_generation": false,
+                            "supports_embeddings": false
                         }
                     },
                     {
@@ -101,7 +111,25 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
                             "supports_reasoning": false,
                             "supports_vision": false,
                             "supports_tool_calls": false,
-                            "supports_image_generation": false
+                            "supports_image_generation": false,
+                            "supports_embeddings": false
+                        }
+                    },
+                    {
+                        "huggingface_id": "astronomical-test/example-embedder",
+                        "revision": "fedcba9876543210fedcba9876543210fedcba98",
+                        "display_name": "Example Embedder",
+                        "family": "modernbert",
+                        "approximate_size_bytes": 200_000_000_u64,
+                        "public": true,
+                        "ready_on_this_mac": false,
+                        "download_state": null,
+                        "capabilities": {
+                            "supports_reasoning": false,
+                            "supports_vision": false,
+                            "supports_tool_calls": false,
+                            "supports_image_generation": false,
+                            "supports_embeddings": true
                         }
                     }
                 ]
