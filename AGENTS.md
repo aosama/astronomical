@@ -65,6 +65,11 @@
 - There is no requirement for Backward compatibility for the REST API surface. There are no downstream consumers of these surfaces so compatibility is not an issue.
 - There is no requirement for backward compatibility shims.
 
+## Prohibited Terminology: "qualification"
+
+- Self-instruction for the coding agent (Jack): the term "qualification" and all of its variants ("qualify", "qualified", "qualifier", etc.) are prohibited in this repository and in all our discourse. Never use them in code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies to the user.
+- Describe the activity with the repository's own vocabulary instead: run the acceptance journeys and check the acceptance criteria that prove a model or feature is fit for its purpose.
+
 ## Requirements for Performance Profiling and Attribution
 
 - This codebase needs to be performance optimized, to achieve that, all our code, regardless which part, needs to have performance logging and attribution that can be switched on and off through config parameter. The performance logging needs to capture start time and end time of each operation. this will allow us to ATTRIBUTE performance issues to specific code parts. Without attribution we will be guessing why we are observing a slow down, which is a bad state to be in, hence it is imperative that when you are editing code or refactoring or creating new code that they follow a unified performance logging and attribution pattern.

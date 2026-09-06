@@ -40,7 +40,7 @@ async fn should_build_an_exact_manifest_from_only_release_selected_payload_paths
         ),
     ]);
     let catalog = DownloadCatalog::parse_json(&format!(
-        "{{\"schema_version\":1,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example\",\"family\":\"flux2_klein\",\"approximate_size_bytes\":9,\"public\":true,\"included_paths\":[\"model_index.json\",\"transformer/\"]}}]}}"
+        "{{\"schema_version\":2,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example\",\"family\":\"flux2_klein\",\"approximate_size_bytes\":9,\"public\":true,\"included_paths\":[\"model_index.json\",\"transformer/\"]}}]}}"
     ))
     .expect("the selected fixture catalog should parse");
     let hub = HuggingFaceHub::new(transport);

@@ -47,20 +47,93 @@ fn should_package_flux_with_only_its_executable_diffusers_graph() {
 }
 
 #[test]
+fn should_package_the_modernbert_embedding_entry_for_its_embedding_purpose() {
+    let download_catalog = DownloadCatalog::load_bundled()
+        .expect("the bundled production catalog should remain valid");
+    let embeddings_entry = download_catalog
+        .entries()
+        .iter()
+        .find(|entry| entry.family() == DownloadCatalogFamily::ModernBert)
+        .expect("the release catalog should include the executable ModernBERT embedding profile");
+
+    // The pinned revision is the contract: it must match the reviewed 8-bit
+    // affine conversion, not whatever the repository head happens to be.
+    assert_eq!(
+        embeddings_entry.huggingface_id(),
+        "mlx-community/nomicai-modernbert-embed-base-8bit"
+    );
+    assert_eq!(
+        embeddings_entry.revision(),
+        "1b353387163e225681db8580046c445de54a63bb"
+    );
+    assert!(embeddings_entry.capabilities().supports_embeddings);
+    assert!(!embeddings_entry.capabilities().supports_reasoning);
+    assert!(
+        embeddings_entry
+            .quantization_label()
+            .is_some_and(|label| label.contains("8-bit"))
+    );
+    // Keep the authored size within a decimal band so re-quantizations do not
+    // silently invalidate the preflight disk estimate.
+    assert!(embeddings_entry.approximate_size_bytes() > 100_000_000);
+    assert!(embeddings_entry.approximate_size_bytes() < 200_000_000);
+    assert!(
+        embeddings_entry
+            .download_path_selection()
+            .includes("config.json")
+    );
+    assert!(
+        embeddings_entry
+            .download_path_selection()
+            .includes("model.safetensors")
+    );
+    assert!(
+        embeddings_entry
+            .download_path_selection()
+            .includes("tokenizer.json")
+    );
+}
+
+#[test]
+fn should_package_the_structured_response_entry_for_chat_and_structured_purposes() {
+    let download_catalog = DownloadCatalog::load_bundled()
+        .expect("the bundled production catalog should remain valid");
+    let structured_entry = download_catalog
+        .entries()
+        .iter()
+        .find(|entry| entry.huggingface_id() == "mlx-community/Qwen3.5-2B-4bit")
+        .expect("the release catalog should include the structured-response chat model");
+
+    // The pinned revision keeps the acceptance journeys and the shipped
+    // download byte-identical until a deliberate catalog bump re-pins them.
+    assert_eq!(
+        structured_entry.revision(),
+        "674aaa7240b91e8012fcad5d791b7dfe5ba90207"
+    );
+    assert_eq!(structured_entry.family(), DownloadCatalogFamily::Qwen3_5);
+    assert!(structured_entry.capabilities().supports_reasoning);
+    assert!(structured_entry.capabilities().supports_tool_calls);
+    assert!(structured_entry.capabilities().context_window.is_some());
+    assert!(structured_entry.approximate_size_bytes() > 1_000_000_000);
+    assert!(structured_entry.approximate_size_bytes() < 2_000_000_000);
+}
+
+#[test]
 fn should_accept_complete_entries_for_all_executable_families_in_authored_order() {
     let catalog_json = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "entries": [
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-laguna", "laguna"),
             valid_entry("astronomical-test/example-flux", "flux2_klein"),
+            valid_entry("astronomical-test/example-embedder", "modernbert"),
         ]
     });
 
     let download_catalog = DownloadCatalog::parse_json(&catalog_json.to_string())
         .expect("complete fictional entries should be accepted");
 
-    assert_eq!(download_catalog.entries().len(), 3);
+    assert_eq!(download_catalog.entries().len(), 4);
     assert_eq!(
         download_catalog.entries()[0].huggingface_id(),
         "astronomical-test/example-qwen"
@@ -72,6 +145,10 @@ fn should_accept_complete_entries_for_all_executable_families_in_authored_order(
     assert_eq!(
         download_catalog.entries()[2].huggingface_id(),
         "astronomical-test/example-flux"
+    );
+    assert_eq!(
+        download_catalog.entries()[3].huggingface_id(),
+        "astronomical-test/example-embedder"
     );
 }
 
@@ -107,12 +184,12 @@ fn should_accept_bounded_executable_payload_selection_and_reject_unsafe_rules() 
 fn should_reject_invalid_catalog_document_shapes() {
     for invalid_catalog_json in [
         r#"{"entries":[]}"#,
-        r#"{"schema_version":2,"entries":[]}"#,
-        r#"{"schema_version":1}"#,
-        r#"{"schema_version":1,"entries":{}}"#,
-        r#"{"schema_version":1,"entries":[],"unexpected":true}"#,
-        r#"{"schema_version":1,"schema_version":1,"entries":[]}"#,
-        r#"{"schema_version":1,"entries":[]} trailing"#,
+        r#"{"schema_version":3,"entries":[]}"#,
+        r#"{"schema_version":2}"#,
+        r#"{"schema_version":2,"entries":{}}"#,
+        r#"{"schema_version":2,"entries":[],"unexpected":true}"#,
+        r#"{"schema_version":2,"schema_version":2,"entries":[]}"#,
+        r#"{"schema_version":2,"entries":[]} trailing"#,
     ] {
         DownloadCatalog::parse_json(invalid_catalog_json)
             .expect_err("an invalid catalog document shape must fail closed");
@@ -126,7 +203,7 @@ fn should_reject_catalog_metadata_that_exceeds_startup_resource_bounds() {
         .expect_err("catalog metadata beyond the startup byte bound must fail closed");
 
     let oversized_entry_count_catalog = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "entries": (0..1_025)
             .map(|entry_index| valid_entry(
                 &format!("astronomical-test/example-{entry_index}"),
@@ -205,7 +282,7 @@ fn should_reject_invalid_revision_family_visibility_size_and_display_name() {
     }
 
     DownloadCatalog::parse_json(&format!(
-        r#"{{"schema_version":1,"entries":[{{"huggingface_id":"astronomical-test/example-qwen","revision":"{VALID_REVISION}","display_name":"Example","family":"qwen3_5","approximate_size_bytes":4000000000}}]}}"#
+        r#"{{"schema_version":2,"entries":[{{"huggingface_id":"astronomical-test/example-qwen","revision":"{VALID_REVISION}","display_name":"Example","family":"qwen3_5","approximate_size_bytes":4000000000}}]}}"#
     ))
     .expect_err("public must remain a required field");
 }
@@ -233,14 +310,14 @@ fn should_reject_unknown_duplicate_and_case_colliding_entries() {
 
     let duplicated_entry = valid_entry("astronomical-test/example-qwen", "qwen3_5");
     let duplicate_catalog = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "entries": [duplicated_entry.clone(), duplicated_entry]
     });
     DownloadCatalog::parse_json(&duplicate_catalog.to_string())
         .expect_err("exact duplicate identities must fail closed");
 
     let case_collision_catalog = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "entries": [
             valid_entry("Astronomical-Test/Example-Qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
@@ -259,7 +336,7 @@ fn should_leave_the_supervisor_attribution_file_absent_when_disabled() {
     let measured_catalog = attribution_log
         .measure_operation(
             SupervisorPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":1,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
                 Ok(download_catalog) => SupervisorPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
@@ -288,7 +365,7 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let successful_catalog = attribution_log
         .measure_operation(
             SupervisorPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":1,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
                 Ok(download_catalog) => SupervisorPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
@@ -302,7 +379,7 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let failed_catalog = attribution_log
         .measure_operation(
             SupervisorPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":3,"entries":[]}"#),
             |_| SupervisorPerformanceMeasurement::failure(),
         )
         .expect("failed operation attribution should still be written");
@@ -346,7 +423,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_write_fails() {
     let attribution_error = attribution_log
         .measure_operation(
             SupervisorPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":1,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
             |_| SupervisorPerformanceMeasurement::successful_catalog_load(0),
         )
         .expect_err("required attribution write failures must remain typed");
@@ -379,7 +456,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_timestamp_fails() 
             SupervisorPerformanceOperation::LibraryCatalogLoad,
             || {
                 measured_operation_executed_for_operation.store(true, Ordering::SeqCst);
-                DownloadCatalog::parse_json(r#"{"schema_version":1,"entries":[]}"#)
+                DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#)
             },
             |_| SupervisorPerformanceMeasurement::successful_catalog_load(0),
         )
@@ -433,5 +510,5 @@ fn entry_with_overrides(overrides: serde_json::Value) -> serde_json::Value {
 }
 
 fn catalog_with_entry(catalog_entry: serde_json::Value) -> serde_json::Value {
-    serde_json::json!({"schema_version": 1, "entries": [catalog_entry]})
+    serde_json::json!({"schema_version": 2, "entries": [catalog_entry]})
 }

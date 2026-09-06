@@ -245,7 +245,7 @@ main() {
         exit 1
     }
     grep -Fx -- '--test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js' "$node_log" >/dev/null
-    grep -Fx -- '--test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js' "$node_log" >/dev/null
+    grep -Fx -- '--test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js' "$node_log" >/dev/null
     for expected_script_name in \
         generate-rust-dependency-notices.sh \
         test-rust-dependency-notices-contract.sh \
