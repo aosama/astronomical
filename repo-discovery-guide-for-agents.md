@@ -4,11 +4,11 @@ Agent orientation map for non-obvious repository facts; this is not user-facing 
 
 ## Maintenance mandate
 
-Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old. Last verified: 2026-09-06 (catalog schema 2 adds ModernBERT embeddings entries; native `POST /v1/embeddings` on ModernBERT 8-bit; MLX pin v0.32.2).
+Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old. Last verified: 2026-09-06 (product identity is local model runner, not local model server; catalog schema 2; native embeddings; MLX pin v0.32.2).
 
 ## Project overview
 
-Astronomical is an Apple Silicon local model server. The active architecture is a localhost Rust HTTP/SSE process plus one Rust worker subprocess; the worker owns MLX, artifact validation, model state, and chat, image, or embedding inference. Only one model is resident in GPU memory at a time; the supervisor hot-swaps to a different discovered model when a request changes identity or modality.
+Astronomical is an Apple Silicon local model runner. The active architecture is a localhost Rust HTTP/SSE process plus one Rust worker subprocess; the worker owns MLX, artifact validation, model state, and chat, image, or embedding inference. Only one model is resident in GPU memory at a time; the supervisor hot-swaps to a different discovered model when a request changes identity or modality.
 
 ## Known gotchas
 
@@ -124,7 +124,7 @@ Astronomical is an Apple Silicon local model server. The active architecture is 
 - docs/expert-paging-cpu-gpu-ssd-execution-flow.md - verified map of Rust bounded expert streaming, ordinary Machine Learning framework for Apple silicon gathered projections, and SafeTensors source reads. Update it whenever those boundaries change.
 - apps/supervisor/ - localhost astronomicald, Axum REST/SSE, one WorkerHandle, one shared chat/image/embeddings FIFO, one concrete worker loop, and one WorkerProcess. `src/library/` owns catalog, durable download controls, publication, and discovery refresh; `src/supervisor_performance_attribution.rs` owns supervisor operation records. Image and embeddings request, event, and endpoint owners remain separate from chat streaming while sharing model swap, cancellation, containment, memory controls, and status. The embedded Astronomical Observatory serves named deep links including `/library`; GET /v1/system/telemetry exposes local GPU utilization and nullable macOS memory pressure.
 - apps/inference-worker/ - private worker executable; owns model startup and direct MLX serving.
-- apps/astronomical-menu/ - standalone macOS 26 Swift Package menu-bar application. Its bundle identity injects the expected channel, endpoint, state directory, version, and commit. It owns only that instance's bundled astronomicald, consumes the enriched /v1/status document, and renders the Astronomical-specific Orbital Telemetry popover. Build/test it with Swift Package Manager, not Cargo.
+- apps/astronomical-menu/ - standalone Swift Package menu-bar application (macOS 14 deployment target). Its bundle identity injects the expected channel, endpoint, state directory, version, and commit. It owns only that instance's bundled astronomicald, consumes the enriched /v1/status document, and renders the Astronomical-specific Orbital Telemetry popover. Build/test it with Swift Package Manager, not Cargo.
 - crates/config/ - strict standard-user configuration loader used by the daemon and supervisor resolver; workers receive resolved startup settings through IPC.
 - crates/rest-contract/ - public OpenAI-compatible REST/SSE DTOs.
 - crates/ipc-protocol/ - bounded supervisor/worker command and event DTOs.

@@ -3,7 +3,7 @@
 - Status: proposed — accepted on merge (2026-09-05)
 - Origin: repository issue #406 — "Align M-series and macOS spectrum support with baseline correctness and probe-gated boosters"
 
-> Deployment note: the pins below apply to future builds. The current Stable release (0.2.29) still requires macOS 26; public copy states this transition explicitly, and the downloadable floor changes when the next Stable cut regenerates the Sparkle appcast with the 14.0 floor.
+> Deployment note: Stable 0.2.30 and later declare `minimumSystemVersion` 14.0 on the signed Sparkle feed. Earlier Stable cuts (through 0.2.29) required macOS 26.
 
 ## Decision
 
