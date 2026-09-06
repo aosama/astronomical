@@ -4,33 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.30</title>
-            <pubDate>Sat, 05 Sep 2026 19:39:41 -0400</pubDate>
-            <sparkle:version>423</sparkle:version>
-            <sparkle:shortVersionString>0.2.30</sparkle:shortVersionString>
+            <title>0.2.31</title>
+            <pubDate>Sun, 06 Sep 2026 09:09:04 -0400</pubDate>
+            <sparkle:version>426</sparkle:version>
+            <sparkle:shortVersionString>0.2.31</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.30
+            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.31
 
 User-visible changes:
 
-- Structured responses. Chat Completions and Responses now accept OpenAI `response_format` (`text`, `json_object`, `json_schema`) on any chat-capable discovered model. Generated JSON is extracted from visible text when present, and every response discloses an HTTP `Warning` that grammar-constrained decoding was not applied.
-- Native OpenAI embeddings endpoint. `POST /v1/embeddings` is served entirely by Astronomical's own worker through 8-bit affine ModernBERT embedding artifacts. Responses follow the OpenAI embeddings list shape with `float` or `base64` encoding, and optional `dimensions` truncation returns a unit-norm vector. `GET /v1/models` advertises embedding capability and the embeddings endpoint for executable artifacts.
-- Enforced structured outputs. The `structured_outputs` extra-body constraint enforces `json`, `json_schema`, `choice`, and `regex` at sample time with token masking, so a schema-constrained request returns schema-conforming output instead of relying on prompt compliance. Reasoning tokens stay unconstrained, and constraints that the running worker cannot mask, including EBNF grammars, fail closed with HTTP 400.
-- Broader platform support. Astronomical now supports macOS 14 and later on any M-series Mac with best-effort disclosure of features that require newer system components.
+- Downloadable model catalog. The Library catalog (schema version 2) now ships two additional accepted model entries pinned to immutable Hugging Face revisions: the 8-bit affine ModernBERT embedding encoder (about 0.163 GB) for the native embeddings endpoint, and the 4-bit Qwen3.5 2B vision-language chat model (about 1.75 GB) with enforced structured outputs, reasoning, tool calls, and a 262144-token context window. The Observatory Library renders the ModernBERT family with a dedicated Embeddings capability badge.
 
 Notes:
 
-- Chat, Responses, and image-generation surfaces keep their existing contracts; the embeddings endpoint is additive.
-- One model remains resident in GPU memory at a time. Requests that change identity or modality hot-swap through the existing path, including embeddings.
-- Your existing configuration, Library, and prompt-cache state are preserved across the update.
+- No REST API changes in this release; chat, responses, image-generation, and embeddings contracts are unchanged.
+- Existing configuration, Library, and prompt-cache state are preserved across the update.
 
 Astronomical Stable is code-signed with Developer ID, notarized by Apple, and distributed as a notarized disk image. The Sparkle update feed is signed, and this release activates it through the ordinary update channel.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.30/Astronomical-0.2.30-macOS-arm64.dmg" length="15942199" type="application/octet-stream" sparkle:edSignature="u9J3iWlQTfW95X/BY2YjOGK0rqN7c7YPIcrjvSTL4BrUN6KX387xbkNcGDI6WjIDarMQx7S7vCCZcM7c/E7uCQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.31/Astronomical-0.2.31-macOS-arm64.dmg" length="15943623" type="application/octet-stream" sparkle:edSignature="gq0dY7SOZKuTVd4HVM5ItE2IrQgzGY+f7hrH9nndGKOxlgp/no7rXpngcyTbkI4PeswxQ+zX0TqkFcQvzmRnAw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: lwOBcS+xSFRXYtfoe/5c7MUGZnnjsQKq0NCstxBiBiy3s8tV6ohSObncGRvdAix/0ZZmwzR/kBVi4cfy8yqoAQ==
-length: 3192
+edSignature: m6I9UdwCAnAbIHiXvKdDwJklCZOmuKYRpkrMf7c/2tMV68rJj5JCYR0ssm/98Wvlx4DvZVSDxABRI56PhvwADw==
+length: 2225
 -->
