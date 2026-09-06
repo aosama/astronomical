@@ -4,7 +4,7 @@ use astronomical_config::{
     AstronomicalConfigError, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
 };
 
-const HELP_TEXT: &str = "Astronomical local model server\n\nUsage: astronomicald [--instance stable|development] [--state-directory PATH]\n       astronomicald --help\n       astronomicald --version\n\nOptions:\n  --instance INSTANCE      Runtime instance (default: development)\n  --state-directory PATH   Absolute writable state root for this invocation\n  -h, --help               Show this help\n  --version                Show exact build identity\n";
+const HELP_TEXT: &str = "Astronomical local model runner\n\nUsage: astronomicald [--instance stable|development] [--state-directory PATH]\n       astronomicald --help\n       astronomicald --version\n\nOptions:\n  --instance INSTANCE      Runtime instance (default: development)\n  --state-directory PATH   Absolute writable state root for this invocation\n  -h, --help               Show this help\n  --version                Show exact build identity\n";
 
 pub(crate) enum DaemonCommand {
     Run(DaemonArguments),
