@@ -4,29 +4,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.31</title>
-            <pubDate>Sun, 06 Sep 2026 09:09:04 -0400</pubDate>
-            <sparkle:version>426</sparkle:version>
-            <sparkle:shortVersionString>0.2.31</sparkle:shortVersionString>
+            <title>0.2.32</title>
+            <pubDate>Mon, 07 Sep 2026 13:29:37 -0400</pubDate>
+            <sparkle:version>434</sparkle:version>
+            <sparkle:shortVersionString>0.2.32</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.31
+            <description sparkle:format="markdown"><![CDATA[## Highlights
 
-User-visible changes:
+- **K2 Horizon MoVA model family support**: discovery, artifact validation, resident generation, quantized KV state, prompt cache, and fused expert decode served end to end, with decode-lever defaults measured before adoption.
+- **Per-expert streaming revisions**: a converted Qwen3.5-MoE artifact is now a standalone executable model identity — one `.apack` file per (layer, expert), all non-expert tensors in one standard `resident.safetensors`, with pack-read provenance recorded in streaming summaries. Full residency materializes through the packs.
+- Tool calls in replayed model history never fail a request; the strict tool-call grammar stays on caller-declared tool definitions.
+- Model size shown on disk counts every stored weight byte, including per-expert pack files.
 
-- Downloadable model catalog. The Library catalog (schema version 2) now ships two additional accepted model entries pinned to immutable Hugging Face revisions: the 8-bit affine ModernBERT embedding encoder (about 0.163 GB) for the native embeddings endpoint, and the 4-bit Qwen3.5 2B vision-language chat model (about 1.75 GB) with enforced structured outputs, reasoning, tool calls, and a 262144-token context window. The Observatory Library renders the ModernBERT family with a dedicated Embeddings capability badge.
+## Compatibility
 
-Notes:
+- Model support is driven by each model's config, quantization, and index; the streaming path activates only for on-disk format version 3 revisions, and classic shard artifacts keep loading.
+- No REST API compatibility shims; the OpenAI-compatible surface is unchanged.
 
-- No REST API changes in this release; chat, responses, image-generation, and embeddings contracts are unchanged.
-- Existing configuration, Library, and prompt-cache state are preserved across the update.
+## Distribution
 
-Astronomical Stable is code-signed with Developer ID, notarized by Apple, and distributed as a notarized disk image. The Sparkle update feed is signed, and this release activates it through the ordinary update channel.
+- Signed with the Developer ID identity (Hardened Runtime, timestamps), notarized by Apple, stapled, and validated.
+- Artifacts are digest-bound to `release-manifest.json`; the Sparkle update feed is Ed25519-signed and activated only after the public release is verified.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.31/Astronomical-0.2.31-macOS-arm64.dmg" length="15943623" type="application/octet-stream" sparkle:edSignature="gq0dY7SOZKuTVd4HVM5ItE2IrQgzGY+f7hrH9nndGKOxlgp/no7rXpngcyTbkI4PeswxQ+zX0TqkFcQvzmRnAw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.32/Astronomical-0.2.32-macOS-arm64.dmg" length="16125382" type="application/octet-stream" sparkle:edSignature="AvVnLexosoYVxhDPxdouPFd1O5Yp53/qTRmu0mE+NogDsSz4+CTNkOfv/AJlck2FfchxGW1sCX6/4OVr6Oy+Bg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: m6I9UdwCAnAbIHiXvKdDwJklCZOmuKYRpkrMf7c/2tMV68rJj5JCYR0ssm/98Wvlx4DvZVSDxABRI56PhvwADw==
-length: 2225
+edSignature: 4wev5yVCXoA4QKpcgrVpeWOzAytT19EMTDgRzkgdpH8+eQ9dXXV+kvV5p87h/OGBxPj3XQpc/erMvhGdtNDkCQ==
+length: 2603
 -->
