@@ -20,9 +20,9 @@ pub(crate) mod serving_rest;
 mod e2e_test_model_names;
 #[allow(unused_imports)]
 pub(crate) use e2e_test_model_names::{
-    dense_mtp_model_id, e2e_test_model_ids, flux2_klein_model_id, laguna_xs_model_id,
-    large_sparse_moe_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
-    small_dense_model_id,
+    dense_mtp_model_id, e2e_test_model_ids, flux2_klein_model_id, k2_horizon_mova_model_id,
+    laguna_xs_model_id, large_sparse_moe_model_id, required_e2e_test_model_ids,
+    resident_sparse_moe_model_id, small_dense_model_id,
 };
 
 pub(crate) fn isolated_development_home_from_user_config() -> tempfile::TempDir {

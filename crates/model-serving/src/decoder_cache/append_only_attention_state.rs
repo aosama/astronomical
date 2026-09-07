@@ -316,22 +316,65 @@ impl FullAttentionKeyValueState {
         restored_keys: MlxArray,
         restored_values: MlxArray,
     ) -> Result<(), MlxRuntimeError> {
-        let restored_key_shape = restored_keys.shape();
-        let restored_value_shape = restored_values.shape();
-        if restored_key_shape.len() != 4
-            || restored_key_shape != restored_value_shape
-            || restored_key_shape[STATE_DIMENSION_TOKEN_AXIS] <= 0
-        {
-            return Err(full_attention_error(
-                "restored K and V slabs must have identical rank-four nonempty shapes",
-            ));
-        }
+        let restored_key_shape =
+            validate_restored_key_value_slabs(&restored_keys, &restored_values)?;
         let restored_token_count = restored_key_shape[STATE_DIMENSION_TOKEN_AXIS];
         self.keys = Some(restored_keys);
         self.values = Some(restored_values);
         self.offset_tokens = restored_token_count;
         Ok(())
     }
+
+    /// Restores a K/V prefix and reserves one growth step of capacity beyond
+    /// the restored length. A restored slab otherwise has capacity exactly
+    /// equal to its logical length, so the first update after restore would
+    /// copy the complete multi-gigabyte prefix once per request.
+    pub fn restore_from_blocks_with_growth_headroom(
+        &mut self,
+        runtime: &MlxRuntime,
+        restored_keys: MlxArray,
+        restored_values: MlxArray,
+    ) -> Result<(), MlxRuntimeError> {
+        let restored_key_shape =
+            validate_restored_key_value_slabs(&restored_keys, &restored_values)?;
+        let restored_token_count = restored_key_shape[STATE_DIMENSION_TOKEN_AXIS];
+        let mut key_extension_shape = restored_key_shape.clone();
+        key_extension_shape[STATE_DIMENSION_TOKEN_AXIS] =
+            self.full_attention_kv_state_growth_tokens;
+        let key_extension = runtime.zeros(&key_extension_shape, restored_keys.dtype())?;
+        let mut value_extension_shape = restored_values.shape();
+        value_extension_shape[STATE_DIMENSION_TOKEN_AXIS] =
+            self.full_attention_kv_state_growth_tokens;
+        let value_extension = runtime.zeros(&value_extension_shape, restored_values.dtype())?;
+        let headroom_keys = runtime.concatenate_axis(
+            &[&restored_keys, &key_extension],
+            STATE_DIMENSION_TOKEN_AXIS as i32,
+        )?;
+        let headroom_values = runtime.concatenate_axis(
+            &[&restored_values, &value_extension],
+            STATE_DIMENSION_TOKEN_AXIS as i32,
+        )?;
+        self.keys = Some(headroom_keys);
+        self.values = Some(headroom_values);
+        self.offset_tokens = restored_token_count;
+        Ok(())
+    }
+}
+
+fn validate_restored_key_value_slabs(
+    restored_keys: &MlxArray,
+    restored_values: &MlxArray,
+) -> Result<Vec<i32>, MlxRuntimeError> {
+    let restored_key_shape = restored_keys.shape();
+    if restored_key_shape.len() != 4
+        || restored_key_shape != restored_values.shape()
+        || restored_key_shape[STATE_DIMENSION_TOKEN_AXIS] <= 0
+    {
+        return Err(full_attention_error(
+            "restored K and V slabs must have identical rank-four nonempty shapes",
+        ));
+    }
+    Ok(restored_key_shape)
 }
 
 fn validate_key_value_update(

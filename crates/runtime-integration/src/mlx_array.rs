@@ -229,7 +229,13 @@ impl MlxArray {
         check_status(status, "evaluate an MLX array")
     }
 
-    /// Evaluates and copies a float32 array into Rust-owned memory.
+    /// Evaluates and copies a contiguous float32 array into Rust-owned memory.
+    ///
+    /// MLX keeps a slice of an evaluated parent as a strided view over the
+    /// parent's buffer, and the raw data pointer ignores those strides, so
+    /// this readout is only valid for contiguous arrays. Read a strided view
+    /// through `MlxRuntime::array_to_vec_f32`, whose flat reshape forces one
+    /// contiguous materialization.
     pub fn to_vec_f32(&self) -> Result<Vec<f32>, MlxRuntimeError> {
         if self.dtype() != MlxDtype::Float32 {
             return Err(MlxRuntimeError::RuntimeOperation {

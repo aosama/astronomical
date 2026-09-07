@@ -90,6 +90,7 @@ fn model_family_identity(model_family: ModelFamily) -> &'static str {
         ModelFamily::Qwen3_5 => "qwen3_5",
         ModelFamily::Laguna => "laguna",
         ModelFamily::DeepSeekV4 => "deepseek_v4",
+        ModelFamily::K2HorizonMoVA => "k2_horizon_mova",
         ModelFamily::Flux2Klein => "flux2_klein",
         ModelFamily::ModernBert => "modernbert",
     }
