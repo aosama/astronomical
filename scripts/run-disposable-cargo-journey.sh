@@ -20,6 +20,7 @@ print_journeys() {
         accept-laguna-family-swap \
         accept-thinking-seed \
         accept-hard-thinking-budget \
+        accept-client-thinking-budget \
         accept-structured-output \
         accept-embeddings \
         accept-speculative-prefill \
@@ -94,6 +95,10 @@ main() {
         accept-hard-thinking-budget)
             lane_name="small-dense-hard-thinking-budget-rest"
             set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_commit_the_hard_thinking_budget_before_visible_answer_content -- --ignored --nocapture
+            ;;
+        accept-client-thinking-budget)
+            lane_name="small-dense-client-thinking-budget-rest"
+            set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_enforce_the_coding_agent_thinking_budget_field_before_visible_answer_content -- --ignored --nocapture
             ;;
         accept-structured-output)
             lane_name="structured-output-rest"
