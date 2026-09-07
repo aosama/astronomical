@@ -309,6 +309,8 @@ pub(crate) fn write_synthetic_expert_source_for_layer(
     layer_index: usize,
 ) -> QuantizedExpertLayerPlan {
     const EXPERT_CAPACITY: usize = 4;
+    // Payload-relative tensor offsets, identical to the raw layout the
+    // expert-pack tests were originally built on.
     let tensor_layouts = [
         (
             "gate_proj",
@@ -326,21 +328,69 @@ pub(crate) fn write_synthetic_expert_source_for_layer(
         ("down_proj", "scales", SafetensorsDtype::BFloat16, 4, 1_024),
         ("down_proj", "biases", SafetensorsDtype::BFloat16, 4, 1_152),
     ];
-    let mut source_bytes = vec![0_u8; 1_280];
+    const PAYLOAD_BYTE_COUNT: u64 = 1_280;
+    // One always-resident tensor per layer source so the streaming preparer's
+    // resident-bundle extraction has something to move out of every shard.
+    const RESIDENT_TENSOR_RELATIVE_OFFSET: u64 = 0;
+    const RESIDENT_TENSOR_BYTE_COUNT: u64 = 64;
+
+    let mut header_mapping = serde_json::Map::new();
+    header_mapping.insert(
+        format!("layer.{layer_index}.attention.weight"),
+        serde_json::json!({
+            "dtype": "BF16",
+            "shape": [32_usize],
+            "data_offsets": [
+                RESIDENT_TENSOR_RELATIVE_OFFSET,
+                RESIDENT_TENSOR_RELATIVE_OFFSET + RESIDENT_TENSOR_BYTE_COUNT,
+            ],
+        }),
+    );
+    for (projection_name, parameter_name, dtype, bytes_per_expert, payload_offset_bytes) in
+        tensor_layouts
+    {
+        let tensor_byte_count = bytes_per_expert
+            .checked_mul(EXPERT_CAPACITY)
+            .expect("the synthetic tensor size should fit usize");
+        header_mapping.insert(
+            format!("layer.{layer_index}.switch_mlp.{projection_name}.{parameter_name}"),
+            serde_json::json!({
+                "dtype": dtype.as_str(),
+                "shape": [EXPERT_CAPACITY, bytes_per_expert / dtype.byte_width()],
+                "data_offsets": [
+                    payload_offset_bytes,
+                    payload_offset_bytes + tensor_byte_count as u64,
+                ],
+            }),
+        );
+    }
+    let mut header_json_bytes = serde_json::to_vec(&serde_json::Value::Object(header_mapping))
+        .expect("the synthetic safetensors header should serialize");
+    let header_padding_byte_count = (8 - header_json_bytes.len() % 8) % 8;
+    header_json_bytes.extend(std::iter::repeat_n(b' ', header_padding_byte_count));
+    let payload_start_offset = 8 + header_json_bytes.len() as u64;
+
+    let mut source_bytes = vec![0_u8; (payload_start_offset + PAYLOAD_BYTE_COUNT) as usize];
+    source_bytes[..8].copy_from_slice(&(header_json_bytes.len() as u64).to_le_bytes());
+    source_bytes[8..8 + header_json_bytes.len()].copy_from_slice(&header_json_bytes);
+    for source_byte_position in 0..RESIDENT_TENSOR_BYTE_COUNT {
+        source_bytes[(payload_start_offset + RESIDENT_TENSOR_RELATIVE_OFFSET + source_byte_position)
+            as usize] =
+            u8::try_from(128 + source_byte_position).expect("the resident byte should fit u8");
+    }
     let mut tensor_sources = Vec::with_capacity(tensor_layouts.len());
     for (
         tensor_position,
-        (projection_name, parameter_name, dtype, bytes_per_expert, source_payload_offset_bytes),
+        (projection_name, parameter_name, dtype, bytes_per_expert, relative_payload_offset_bytes),
     ) in tensor_layouts.into_iter().enumerate()
     {
         let tensor_byte_count = bytes_per_expert
             .checked_mul(EXPERT_CAPACITY)
             .expect("the synthetic tensor size should fit usize");
-        let source_start_offset = usize::try_from(source_payload_offset_bytes)
-            .expect("the synthetic source offset should fit usize");
-        for source_byte_position in 0..tensor_byte_count {
-            source_bytes[source_start_offset + source_byte_position] =
-                u8::try_from(tensor_position * 17 + source_byte_position)
+        let absolute_start_offset = payload_start_offset + relative_payload_offset_bytes;
+        for source_byte_position in 0..tensor_byte_count as u64 {
+            source_bytes[(absolute_start_offset + source_byte_position) as usize] =
+                u8::try_from(tensor_position * 17 + source_byte_position as usize)
                     .expect("the synthetic byte value should fit u8");
         }
         tensor_sources.push(QuantizedTensorSource {
@@ -356,7 +406,7 @@ pub(crate) fn write_synthetic_expert_source_for_layer(
                 .expect("the synthetic source length should fit u64"),
             dtype,
             full_shape: vec![EXPERT_CAPACITY, bytes_per_expert / dtype.byte_width()],
-            tensor_payload_offset: source_payload_offset_bytes,
+            tensor_payload_offset: absolute_start_offset,
             bytes_per_expert,
             expert_capacity: EXPERT_CAPACITY,
         });

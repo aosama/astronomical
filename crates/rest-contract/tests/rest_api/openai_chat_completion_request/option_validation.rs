@@ -148,3 +148,93 @@ fn should_reject_an_unknown_openai_field_explicitly() {
         })
     );
 }
+
+#[test]
+fn should_accept_history_tool_calls_with_model_invented_names() {
+    // The Qwen output parser deliberately fail-opens closed tool-call envelopes
+    // with unknown or malformed names to the harness. A follow-up request
+    // echoes that model output as assistant history; rejecting the replayed
+    // name would strand the whole conversation (issue #430 field report:
+    // a model-invented "r=bash" tool call returned invalid_request on the
+    // next turn).
+    let request_json = r#"
+    {
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [
+            {"role": "user", "content": "Inspect the repository."},
+            {"role": "assistant", "content": "", "tool_calls": [{
+                "id": "call-model-invented-1",
+                "type": "function",
+                "function": {"name": "r=bash", "arguments": "{\"command\": \"git status\"}"}
+            }]},
+            {"role": "tool", "tool_call_id": "call-model-invented-1", "content": "clean working tree"},
+            {"role": "user", "content": "Summarize what you learned."}
+        ],
+        "tools": [{
+            "type": "function",
+            "function": {"name": "bash", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}}}
+        }]
+    }
+    "#;
+    let chat_completion_request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
+        .expect("the replayed history should decode");
+
+    chat_completion_request
+        .validate()
+        .expect("model-invented history tool-call names must round-trip");
+}
+
+#[test]
+fn should_still_reject_invalid_tool_definition_names() {
+    let request_json = r#"
+    {
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [{"role": "user", "content": "write a function"}],
+        "tools": [{
+            "type": "function",
+            "function": {"name": "r=bash", "parameters": {"type": "object", "properties": {}}}
+        }]
+    }
+    "#;
+    let chat_completion_request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
+        .expect("the tool definition should decode before validation");
+
+    let validation_error = chat_completion_request
+        .validate()
+        .expect_err("caller-declared tool definitions must keep the portable name grammar");
+
+    assert_eq!(
+        validation_error,
+        OpenAiChatCompletionValidationError::InvalidToolName {
+            tool_name: "r=bash".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn should_reject_empty_history_tool_call_names() {
+    let request_json = r#"
+    {
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [
+            {"role": "user", "content": "Inspect the repository."},
+            {"role": "assistant", "content": "", "tool_calls": [{
+                "id": "call-1",
+                "type": "function",
+                "function": {"name": "", "arguments": "{}"}
+            }]}
+        ]
+    }
+    "#;
+    let chat_completion_request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
+        .expect("the empty history tool-call name should decode before validation");
+
+    let validation_error = chat_completion_request
+        .validate()
+        .expect_err("an empty history tool-call name carries no round-trip identity");
+
+    assert!(matches!(
+        validation_error,
+        OpenAiChatCompletionValidationError::EmptyString { .. }
+    ));
+}

@@ -28,6 +28,12 @@ pub(super) fn discover_model_metadata(
     model_directory: &Path,
     config_value: &serde_json::Value,
 ) -> Option<Qwen3_5DiscoveredModelMetadata> {
+    // A converted per-expert streaming revision declares itself with
+    // manifest.json (format version 3) and carries no shard index; it
+    // discovers through its manifest and resident weight bundle.
+    if model_directory.join("manifest.json").is_file() {
+        return discover_streaming_model_metadata(model_directory, config_value);
+    }
     if !model_directory
         .join("model.safetensors.index.json")
         .is_file()
@@ -98,6 +104,51 @@ fn contains_mtp_component(tensor_name: &str) -> bool {
         .any(|tensor_name_component| tensor_name_component == "mtp")
 }
 
+/// Discovers a converted per-expert streaming revision from its manifest and
+/// resident weight bundle. The manifest replaces the shard index; the vision
+/// bundle travels beside the resident weights unchanged.
+fn discover_streaming_model_metadata(
+    model_directory: &Path,
+    config_value: &serde_json::Value,
+) -> Option<Qwen3_5DiscoveredModelMetadata> {
+    #[derive(serde::Deserialize)]
+    struct StreamingManifestProbe {
+        format_version: u32,
+    }
+    let manifest: StreamingManifestProbe =
+        serde_json::from_slice(&fs::read(model_directory.join("manifest.json")).ok()?).ok()?;
+    if manifest.format_version != 3 || !model_directory.join("tokenizer.json").is_file() {
+        return None;
+    }
+    if !model_directory.join("resident.safetensors").is_file() {
+        return None;
+    }
+    let has_vision = model_directory
+        .join("optiq/optiq_vision.safetensors")
+        .is_file();
+
+    let context_window = config_value
+        .get("text_config")
+        .and_then(|text_config| text_config.get("max_position_embeddings"))
+        .or_else(|| config_value.get("max_position_embeddings"))
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0) as u32;
+    if context_window < 2 {
+        return None;
+    }
+    let protocol_maximum_output_tokens = u32::from(u16::MAX).min(context_window - 1);
+
+    Some(Qwen3_5DiscoveredModelMetadata {
+        context_window,
+        max_input_tokens: context_window - 1,
+        max_output_tokens: protocol_maximum_output_tokens,
+        has_vision,
+        supports_reasoning: true,
+        supports_tool_calls: true,
+        model_size_bytes: measure_model_safetensors_bytes(model_directory)?,
+    })
+}
+
 fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
     let mut pending_directories = vec![model_directory.to_path_buf()];
     let mut measured_safetensors_paths = HashSet::new();
@@ -111,12 +162,16 @@ fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
                 pending_directories.push(entry_path);
                 continue;
             }
-            if entry_path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                != Some("safetensors")
-                || !entry_path.is_file()
-            {
+            // Converted per-expert streaming revisions store expert weights in
+            // `.apack` pack files beside the resident safetensors bundles; a
+            // model's measured disk size must include every weight payload.
+            let is_weight_payload_file = matches!(
+                entry_path
+                    .extension()
+                    .and_then(|extension| extension.to_str()),
+                Some("safetensors") | Some("apack")
+            );
+            if !is_weight_payload_file || !entry_path.is_file() {
                 continue;
             }
             let canonical_safetensors_path = fs::canonicalize(&entry_path).ok()?;

@@ -83,6 +83,18 @@ pub enum AlignedExpertPackPreparationError {
     Io(#[from] std::io::Error),
     #[error("aligned expert-pack construction failed: {0}")]
     Pack(#[from] AlignedExpertPackError),
+    #[error("aligned expert-pack shard header parsing failed: {0}")]
+    ShardHeader(#[from] astronomical_model_serving::SafetensorsHeaderError),
+    #[error("resident weight bundle header serialization failed: {0}")]
+    ResidentHeader(#[from] serde_json::Error),
+    #[error(
+        "resident tensor {tensor_name:?} was truncated while copying into the resident bundle: expected {expected_byte_count} bytes, copied {copied_byte_count}"
+    )]
+    ResidentTensorTruncated {
+        tensor_name: String,
+        expected_byte_count: u64,
+        copied_byte_count: u64,
+    },
     #[error("model artifact validation failed: {0}")]
     Artifact(#[from] Qwen3_5ArtifactValidationError),
     #[error("expert layer planning failed: {0}")]
