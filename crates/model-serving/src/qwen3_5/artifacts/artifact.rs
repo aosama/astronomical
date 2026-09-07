@@ -63,6 +63,13 @@ impl Qwen3_5ArtifactValidator {
             .into());
         }
 
+        // A converted per-expert streaming revision declares itself with
+        // manifest.json (format version 3) and carries no shard index; it
+        // validates against its own manifest and resident weight bundle.
+        if model_directory.join("manifest.json").is_file() {
+            return Self::validate_streaming_revision(model_directory, max_output_tokens);
+        }
+
         // Build required file profiles for the core config files.
         // Shard files are discovered later from the safetensors index.
         let mut required_file_profiles = vec![
@@ -387,7 +394,7 @@ impl Qwen3_5ArtifactValidator {
     }
 }
 
-fn parse_optional_mtp_contract(
+pub(super) fn parse_optional_mtp_contract(
     model_directory: &Path,
     config_bytes: &[u8],
 ) -> Result<Qwen3_5MtpContract, Qwen3_5MtpContractError> {
@@ -429,7 +436,7 @@ impl From<&Qwen3_5MtpContractError> for Qwen3_5MtpTargetOnlyReason {
 
 /// Derives a 12-character hex revision string from the SHA-256 hash of config.json bytes.
 /// This ensures prompt cache blocks are invalidated when the model config changes.
-fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
+pub(super) fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
     let mut sha256_hasher = Sha256::new();
     sha256_hasher.update(config_bytes);
     let config_hash = sha256_hasher.finalize();

@@ -449,7 +449,7 @@ pub fn build_quantized_expert_page_manifest_from_plan(
     })
 }
 
-fn build_page_slot_by_global_expert_id(
+pub(crate) fn build_page_slot_by_global_expert_id(
     normalized_expert_ids: &[usize],
     expert_capacity: usize,
 ) -> Result<Vec<u32>, ExpertManifestError> {

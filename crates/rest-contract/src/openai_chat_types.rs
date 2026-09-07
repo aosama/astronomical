@@ -388,7 +388,13 @@ impl OpenAiAssistantToolCall {
         if self.tool_type != OpenAiToolType::Function {
             return Err(OpenAiChatCompletionValidationError::UnsupportedToolType);
         }
-        validate_function_name(&self.function.name)?;
+        // History tool calls echo model output back. The output parser
+        // deliberately fail-opens closed envelopes with unknown or sloppy
+        // names to the harness, so clients replay arbitrary model-invented
+        // names in subsequent requests; only a non-empty name is required to
+        // round-trip. The strict portable grammar remains enforced on the
+        // caller-declared `tools` definitions that drive the renderer.
+        validate_non_empty_string("assistant tool-call name", &self.function.name)?;
         Ok(())
     }
 

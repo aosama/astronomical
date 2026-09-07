@@ -6,12 +6,14 @@ use astronomical_runtime_integration::{
     MlxArray, MlxDtype, MlxRuntime, MlxSafetensors, PositionalFileReadMetrics,
 };
 
+use crate::PerformanceAttribution;
 use crate::expert_paging::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::ExpertPagingError;
+use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 
 use super::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,
@@ -19,6 +21,106 @@ use super::{
 
 type ResidentSourceTensorKey = (PathBuf, String);
 type ResidentSourceTensorMap = HashMap<ResidentSourceTensorKey, MlxArray>;
+
+impl Qwen3_5ResidentExpertWeights {
+    /// Materializes the complete resident candidate through the per-expert
+    /// pack streaming path, one full layer at a time.
+    ///
+    /// Streaming revisions retain `.apack` pack files as their pager source
+    /// descriptors, so the shard-source promotion route (which opens each
+    /// descriptor as a SafeTensors map) does not apply. Each streamed page
+    /// already carries the full `[expert_capacity, ...]` arrays in normalized
+    /// expert order; fusion and per-tensor validation are identical to the
+    /// shard path. Any failed layer drops the local candidate without changing
+    /// the model's externally visible `Paged` state.
+    fn load_from_streaming_packs(model: &Qwen3_5Model) -> Result<Self, Qwen3_5ExecutionError> {
+        let expert_pager =
+            model
+                .expert_pager
+                .as_ref()
+                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "resident expert loading requires a sparse model pager",
+                })?;
+        let layer_plans = expert_pager.layer_plans();
+        let complete_model_payload_bytes = expert_pager.complete_expert_payload_byte_count()?;
+        let complete_model_expert_entry_count = expert_pager.complete_expert_entry_count();
+        let mut resident_layers = Vec::with_capacity(layer_plans.len());
+        let mut fused_gate_up_layer_count = 0_usize;
+        let mut separate_gate_up_layer_count = 0_usize;
+        // Startup materialization is not a user request; attribution stays
+        // disabled so these loads never enter request-phase summaries.
+        let mut startup_attribution = PerformanceAttribution::disabled();
+        for (layer_index, layer_plan) in layer_plans.iter().enumerate() {
+            let complete_layer_payload_bytes = layer_plan
+                .complete_expert_payload_byte_count()
+                .map_err(ExpertPagingError::from)?;
+            tracing::info!(
+                layer_index,
+                total_layer_count = layer_plans.len(),
+                layer_prefix = layer_plan.layer_prefix,
+                complete_layer_payload_bytes,
+                "started materializing one complete resident expert layer from expert packs"
+            );
+            let (streamed_weights, _streamed_manifest) = expert_pager
+                .load_complete_streaming_expert_layer(
+                    &model.runtime,
+                    layer_index,
+                    &mut startup_attribution,
+                )
+                .map_err(ExpertPagingError::from)?;
+            let Qwen3_5PagedExpertWeights {
+                gate_projection,
+                up_projection,
+                down_projection,
+            } = streamed_weights;
+            let resident_layer = Qwen3_5ResidentExpertLayerWeights::new(
+                Qwen3_5ResidentGateUpWeights::build(
+                    &model.runtime,
+                    layer_plan,
+                    gate_projection,
+                    up_projection,
+                )?,
+                down_projection,
+            );
+            let gate_up_fusion_applied = resident_layer.gate_up_weights.is_fused();
+            let gate_up_fusion_transient_payload_bytes = resident_layer
+                .gate_up_weights
+                .materialization_transient_payload_bytes();
+            let gate_up_fusion_incompatibility_reason =
+                resident_layer.gate_up_weights.incompatibility_reason();
+            let mut complete_layer_arrays = Vec::new();
+            resident_layer.append_array_references(&mut complete_layer_arrays);
+            model.runtime.evaluate_arrays(&complete_layer_arrays)?;
+            if gate_up_fusion_applied {
+                model.runtime.clear_allocator_cache()?;
+                fused_gate_up_layer_count = fused_gate_up_layer_count.saturating_add(1);
+            } else {
+                separate_gate_up_layer_count = separate_gate_up_layer_count.saturating_add(1);
+            }
+            tracing::info!(
+                completed_layer_count = layer_index + 1,
+                total_layer_count = layer_plans.len(),
+                complete_layer_payload_bytes,
+                gate_up_fusion_applied,
+                gate_up_fusion_transient_payload_bytes,
+                gate_up_fusion_incompatibility_reason,
+                "materialized one complete resident expert layer from expert packs"
+            );
+            resident_layers.push(resident_layer);
+        }
+        tracing::info!(
+            total_layer_count = layer_plans.len(),
+            fused_gate_up_layer_count,
+            separate_gate_up_layer_count,
+            "completed resident expert gate/up materialization"
+        );
+        Ok(Self::new(
+            resident_layers,
+            complete_model_expert_entry_count,
+            complete_model_payload_bytes,
+        ))
+    }
+}
 
 impl Qwen3_5ResidentExpertWeights {
     /// Builds a private complete-model candidate from startup-validated plans.
@@ -38,6 +140,9 @@ impl Qwen3_5ResidentExpertWeights {
                 .ok_or(Qwen3_5ExecutionError::InvalidInput {
                     description: "resident expert loading requires a sparse model pager",
                 })?;
+        if expert_pager.has_streaming_expert_pack_sources() {
+            return Self::load_from_streaming_packs(model);
+        }
         let layer_plans = expert_pager.layer_plans();
         let complete_model_payload_bytes = expert_pager.complete_expert_payload_byte_count()?;
         let complete_model_expert_entry_count = expert_pager.complete_expert_entry_count();
