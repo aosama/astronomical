@@ -6,9 +6,9 @@ use super::*;
 fn should_aggregate_expert_source_plans_by_phase_and_layer_without_expert_ids() {
     let mut performance_attribution = PerformanceAttribution::enabled();
 
-    performance_attribution.record_expert_streaming_source_plan(7, 2_048, 8, 256, 3, 900);
-    performance_attribution.record_expert_streaming_source_plan(7, 417, 7, 256, 3, 900);
-    performance_attribution.record_expert_streaming_source_plan(7, 1, 8, 8, 2, 30);
+    performance_attribution.record_expert_streaming_source_plan(7, 2_048, 8, 256, 3, 900, false);
+    performance_attribution.record_expert_streaming_source_plan(7, 417, 7, 256, 3, 900, false);
+    performance_attribution.record_expert_streaming_source_plan(7, 1, 8, 8, 2, 30, false);
 
     assert_eq!(
         performance_attribution
@@ -46,9 +46,9 @@ fn should_aggregate_expert_source_plans_by_phase_and_layer_without_expert_ids() 
 fn should_bound_expert_source_summaries_to_one_row_per_phase_and_layer() {
     let mut performance_attribution = PerformanceAttribution::enabled();
 
-    performance_attribution.record_expert_streaming_source_plan(2, 128, 8, 256, 1, 100);
-    performance_attribution.record_expert_streaming_source_plan(4, 128, 8, 256, 1, 100);
-    performance_attribution.record_expert_streaming_source_plan(2, 128, 8, 256, 1, 100);
+    performance_attribution.record_expert_streaming_source_plan(2, 128, 8, 256, 1, 100, false);
+    performance_attribution.record_expert_streaming_source_plan(4, 128, 8, 256, 1, 100, false);
+    performance_attribution.record_expert_streaming_source_plan(2, 128, 8, 256, 1, 100, false);
 
     let report = serialize_generation_report(
         performance_attribution,

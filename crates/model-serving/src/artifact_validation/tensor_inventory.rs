@@ -173,6 +173,20 @@ impl TensorInventory {
                     .contains_key(canonical_name)
             });
     }
+
+    /// Removes locations by canonical name. Streaming revisions carry expert
+    /// tensors in per-expert pack files instead of the indexed weight sources;
+    /// stripping their locations keeps source validation and binding honest
+    /// without weakening the remaining inventory contracts.
+    pub fn remove_canonical_names(&mut self, canonical_names: &std::collections::BTreeSet<String>) {
+        self.locations_by_canonical_name
+            .retain(|canonical_name, _| !canonical_names.contains(canonical_name));
+        self.canonical_name_by_physical_location
+            .retain(|_, canonical_name| {
+                self.locations_by_canonical_name
+                    .contains_key(canonical_name)
+            });
+    }
 }
 
 /// Inventory ambiguity detected before runtime tensor allocation.

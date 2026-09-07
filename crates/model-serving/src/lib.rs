@@ -76,6 +76,8 @@ pub use engine_backed_worker::{
     EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
 };
 #[cfg(feature = "direct-mlx")]
+pub use expert_paging::assemble_streaming_expert_page_tensors;
+#[cfg(feature = "direct-mlx")]
 pub use expert_paging::load_quantized_expert_page;
 pub use expert_paging::{
     ExpertManifestError, ExpertPageRoutePartition, ExpertWeightMemoryCacheStatistics,
@@ -84,9 +86,11 @@ pub use expert_paging::{
     QuantizedTensorSource, RetainedExpertLayerCommit, RetainedExpertLayerCommitDelta,
     RetainedExpertLayerCommitError, RetainedExpertLayerCommitOutcome, RetainedExpertPageCache,
     RetainedExpertReclamation, SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError,
-    TensorHeaderEntry, build_quantized_expert_page_manifest_from_plan,
-    last_prefill_chunk_demand_weight, parse_safetensors_header, validate_expert_ids,
-    validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
+    StreamingExpertPackError, StreamingExpertPackSources, TensorHeaderEntry,
+    build_quantized_expert_page_manifest_from_plan, build_streaming_expert_page_manifest,
+    detect_streaming_expert_pack_sources, last_prefill_chunk_demand_weight,
+    parse_safetensors_header, validate_expert_ids, validate_quantization_contract,
+    validate_source_intervals, validate_virtual_intervals,
 };
 pub use flux2_klein::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION,

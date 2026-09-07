@@ -6,7 +6,8 @@ use crate::small_dense_model::configured_deployment_litmus_model;
 use crate::support::http::send_http_request;
 
 pub(crate) use crate::support::serving_rest::{
-    ServingRestServer, launch_serving_rest_server_for_model, stop_serving_rest_server,
+    ServingRestServer, launch_serving_rest_server_for_model,
+    launch_serving_rest_server_for_model_with_memory_limit, stop_serving_rest_server,
 };
 
 pub(crate) const E2E_TIMEOUT: Duration = Duration::from_secs(115);
