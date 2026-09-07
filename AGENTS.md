@@ -6,16 +6,6 @@
 
 - All commands and tests must emit a live progress indicator instead of leaving the user with silent output.
 
-- NEVER pipe long-running commands through | tail -30, | head, | rg, | grep, or any filter at all. Show the raw output live; if a copy is needed for forensics, pipe through `tee` to a file and nothing else. The user must be able to observe progress as it happens. "Just for the summary" is not an exception: filtering the live stream is exactly the silent-output failure this rule exists to prevent. Wrong: `scripts/run-ignored-serving-acceptance.sh serving | grep "status=failed"`. Right: `scripts/run-ignored-serving-acceptance.sh serving 2>&1 | tee /tmp/serving.log` — raw lines stream live; grep the saved file afterwards, after the run has finished.
-
-- Self-instruction for the coding agent (Jack): this rule binds your own command construction too. Appending `| tail -N` (or any other filter) AFTER a `tee` still hides the live stream from the user — the transcript they watch must receive the raw, untruncated lines while the command runs. Never end a long-running command in a filter to keep your transcript small; accept the long transcript, `tee` the copy, and inspect the saved file only after the command has finished.
-
-- The filter ban applies to EVERY user-visible command regardless of duration — app builds included. `scripts/build-development-app.sh | tail -5` is the same silent-output failure as filtering a test run: the user watches nothing while the build runs. Show raw output live, or `tee` to a file and nothing else.
-
-- Size command timeouts to the command's known duration plus modest headroom, never an arbitrary value. The app build finishes in about one minute; giving it a 3,600-second ceiling is unreasonable — a runaway timeout hides a hang for an hour instead of surfacing the failure. If a command's real duration is unknown, measure it once, then set the timeout from the measurement.
-
-- When overseeing GitHub Actions builds (CI runs, PR checks, post-merge verification), poll at intervals of at most 10 seconds so the result is noticed the moment it lands instead of waiting on a long sleep between checks. Use a bounded number of polls so a stuck run still reports back.
-
 - MLX/GPU acceptance journeys must never run in parallel. Each journey loads model weights into wired GPU memory, so concurrent journeys multiply that demand past the machine's physical limit and can hard-panic the whole system (watchdog starvation → forced power-off). This is enforced structurally: `scripts/run-bounded-cargo-test.sh` rejects any ignored-test invocation that asks for more than one test thread and injects `--test-threads=1` otherwise, so callers cannot parallelize real-model journeys. Confirm no other Astronomical instance is holding a resident model before starting. Test threads = 1 is not applicable for hermetic tests, those can be parallelized safely since they use CPU only.
 
 - All and any tests must have a built in timeout with a maximum of 120 seconds. Exceptions can be made for tests that deal with performance endurance tests and/or reproducing OOM issues.

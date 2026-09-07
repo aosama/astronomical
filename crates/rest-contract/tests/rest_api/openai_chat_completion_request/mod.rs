@@ -7,4 +7,5 @@ use serde_json::json;
 mod image_content;
 mod option_validation;
 mod standard_request;
+mod thinking_budget_spellings;
 mod transport_boundaries;
