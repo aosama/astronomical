@@ -14,12 +14,16 @@ use std::sync::OnceLock;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 #[cfg(feature = "direct-mlx")]
+pub mod fused_expert_decode_probe;
+#[cfg(feature = "direct-mlx")]
 pub mod gated_delta_probes;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_weighted_sum_probe;
 #[cfg(feature = "direct-mlx")]
 pub mod target_verification_probes;
 
+#[cfg(feature = "direct-mlx")]
+pub use fused_expert_decode_probe::FusedQuantizedExpertDecodeProbe;
 #[cfg(feature = "direct-mlx")]
 pub use gated_delta_probes::{GatedDeltaBoundaryCheckpointProbe, GatedDeltaSequenceProbe};
 #[cfg(feature = "direct-mlx")]
@@ -36,6 +40,8 @@ pub use target_verification_probes::{
 pub enum CustomMetalKernelFamily {
     /// Sorted mixture-of-experts weighted reduction, shared by Qwen and Laguna.
     SortedExpertWeightedSum,
+    /// Fused single-token quantized expert decode for K2 Horizon MoVA.
+    FusedQuantizedExpertDecode,
     /// Fused Qwen3.5 gated-delta sequence recurrence.
     GatedDeltaSequence,
     /// Boundary-checkpoint variant of the fused gated-delta recurrence.
@@ -218,6 +224,7 @@ pub fn worker_process_kernel_capabilities(
     static WORKER_PROCESS_KERNEL_CAPABILITIES: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
     WORKER_PROCESS_KERNEL_CAPABILITIES.get_or_init(|| {
         let sorted_expert_weighted_sum_probe = SortedExpertWeightedSumProbe::new(runtime);
+        let fused_expert_decode_probe = FusedQuantizedExpertDecodeProbe::new(runtime);
         let target_verification_probe = TargetVerificationProjectionProbe::new(runtime);
         let target_verification_four_row_probe = TargetVerificationFourRowProbe::new(runtime);
         let gated_delta_probe = GatedDeltaSequenceProbe::new(runtime);
@@ -225,6 +232,7 @@ pub fn worker_process_kernel_capabilities(
         WorkerKernelCapabilities::probe_custom_kernels(
             &[
                 &sorted_expert_weighted_sum_probe,
+                &fused_expert_decode_probe,
                 &target_verification_probe,
                 &target_verification_four_row_probe,
                 &gated_delta_probe,

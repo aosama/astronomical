@@ -14,6 +14,8 @@ mod layout_error;
 mod live_state;
 mod persistence_layouts;
 #[cfg(feature = "direct-mlx")]
+mod quantized_full_attention_state;
+#[cfg(feature = "direct-mlx")]
 mod rotating_attention_state;
 mod rotating_layout;
 mod storage_geometry;
@@ -38,6 +40,10 @@ pub use layout_error::DecoderCacheLayoutError;
 #[cfg(feature = "direct-mlx")]
 pub use live_state::{
     DecoderCacheState, DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint,
+};
+#[cfg(feature = "direct-mlx")]
+pub use quantized_full_attention_state::{
+    QuantizedFullAttentionKeyValueState, QuantizedKeyValueViews, QuantizedTensorViews,
 };
 #[cfg(feature = "direct-mlx")]
 pub use rotating_attention_state::{
