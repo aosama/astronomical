@@ -5,6 +5,7 @@ mod mtp_contract;
 mod ram_budget_measurements;
 mod shard_index;
 mod sidecar_declaration;
+pub(crate) mod streaming_revision;
 pub(crate) mod tensor_spec;
 mod validated_artifact;
 mod vision_validation;
