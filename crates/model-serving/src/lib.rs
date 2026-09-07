@@ -12,6 +12,7 @@ mod flux2_klein;
 mod gpu_token_sampling;
 mod image_generation_engine;
 mod inference_engine;
+mod k2_horizon_mova;
 mod kernel_capability;
 mod laguna;
 mod memory;
@@ -56,6 +57,7 @@ pub use decoder_cache::{
     ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, DecoderCacheState,
     DecoderCacheStateAllocationCheckpoint, FullAttentionKeyValueState,
     FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
+    QuantizedFullAttentionKeyValueState, QuantizedKeyValueViews, QuantizedTensorViews,
     RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
 };
 pub use decoder_cache::{
@@ -125,6 +127,27 @@ pub use inference_engine::{
     EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError, MlxInferenceEngine,
     MlxInferenceExecution, PreparedInferenceRequest,
+};
+pub use k2_horizon_mova::K2HorizonMoVAServingSettings;
+#[cfg(feature = "direct-mlx")]
+pub use k2_horizon_mova::{
+    FusedExpertDecodeKernels, K2HorizonMoVAAffineLinear, K2HorizonMoVAEngine,
+    K2HorizonMoVAInferenceExecution, K2HorizonMoVAStartupError, gathered_fused_swiglu,
+    gathered_value_experts, initialize_k2_horizon_mova_execution,
+    initialize_k2_horizon_mova_execution_with_serving_settings, initialize_k2_horizon_mova_model,
+    initialize_k2_horizon_mova_model_with_serving_settings,
+};
+pub use k2_horizon_mova::{
+    K2HorizonMoVAAffineProfile, K2HorizonMoVAArtifactValidationError,
+    K2HorizonMoVAArtifactValidator, K2HorizonMoVAAttentionGateFunc, K2HorizonMoVAConfig,
+    K2HorizonMoVAConfigError, K2HorizonMoVAExpertGeometryError, K2HorizonMoVAGenerationProcessor,
+    K2HorizonMoVAInferenceRequest, K2HorizonMoVALayerKind, K2HorizonMoVAOutputParser,
+    K2HorizonMoVAPromptRenderer, K2HorizonMoVAQuantizationContract, K2HorizonMoVARequestOutput,
+    K2HorizonMoVAShardIndex, K2HorizonMoVASparseLayerExpertPayload,
+    K2HorizonMoVAThinkingBudgetError, K2HorizonMoVAThinkingBudgetState, K2HorizonMoVATokenizer,
+    K2HorizonMoVATokenizerError, K2HorizonMoVAWeightDialect, ValidatedK2HorizonMoVAArtifact,
+    expected_stacked_affine_tensor_names, k2_horizon_mova_decoder_cache_layout,
+    k2_horizon_mova_expert_layer_geometries, resolve_k2_horizon_mova_thinking_budget,
 };
 #[cfg(feature = "direct-mlx")]
 pub use kernel_capability::SortedExpertWeightedSumProbe;

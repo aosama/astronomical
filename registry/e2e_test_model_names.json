@@ -4,5 +4,6 @@
   "laguna_xs": "Laguna-XS-2.1-6bit",
   "dense_mtp": "Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
   "small_dense": "Qwen3.5-0.8B-MLX-4bit",
-  "flux2_klein": "FLUX.2-klein-4B"
+  "flux2_klein": "FLUX.2-klein-4B",
+  "k2_horizon_mova": "K2-Horizon-MoVA-36B-A4B-MLX-4bit"
 }

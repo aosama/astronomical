@@ -7,6 +7,7 @@ fn should_load_a_discovered_leaf_model_id_for_every_e2e_test_role() {
         crate::common::dense_mtp_model_id(),
         crate::common::small_dense_model_id(),
         crate::common::flux2_klein_model_id(),
+        crate::common::k2_horizon_mova_model_id(),
     ];
     assert_eq!(e2e_test_model_ids, crate::common::e2e_test_model_ids());
     assert!(

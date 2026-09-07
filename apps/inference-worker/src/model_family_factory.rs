@@ -8,9 +8,10 @@ use astronomical_ipc_protocol::{
     WorkerSpeculativePrefillConfiguration,
 };
 use astronomical_model_serving::{
-    EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine, LagunaServingSettings,
-    ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
-    ModernBertEmbeddingEngine, deepseek_v4_unavailable_reason,
+    EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
+    K2HorizonMoVAServingSettings, LagunaServingSettings, ModelFactory, ModelFactoryRuntime,
+    ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, ModernBertEmbeddingEngine,
+    deepseek_v4_unavailable_reason, initialize_k2_horizon_mova_model_with_serving_settings,
     initialize_laguna_model_with_serving_settings,
 };
 
@@ -225,6 +226,58 @@ impl
                         performance_attribution_enabled,
                         performance_attribution_log_path,
                     ),
+                ))
+            }
+            (
+                Some(ModelFamily::K2HorizonMoVA),
+                WorkerModelConfiguration::Autoregressive(model_configuration),
+            ) => {
+                let (generation_processor, k2_engine) = tokio::task::spawn_blocking(move || {
+                    let (generation_processor, k2_engine) =
+                        initialize_k2_horizon_mova_model_with_serving_settings(
+                            &model_directory_path,
+                            effective_mlx_memory_ceiling_bytes,
+                            allocator_cache_memory_limit_bytes,
+                            performance_attribution_enabled,
+                            K2HorizonMoVAServingSettings {
+                                maximum_context_tokens: Some(
+                                    model_configuration.maximum_context_tokens,
+                                ),
+                                maximum_output_tokens: Some(
+                                    model_configuration.maximum_output_tokens,
+                                ),
+                                prompt_processing_chunk_tokens: model_configuration
+                                    .chunking
+                                    .fixed_prompt_processing_chunk_size_tokens,
+                                chunking: Some(model_configuration.chunking.clone()),
+                                persistent_prompt_cache_enabled,
+                                prompt_cache_config: persistent_prompt_cache_enabled
+                                    .then_some(prompt_cache_config),
+                                performance_attribution_log_path: Some(
+                                    performance_attribution_log_path,
+                                ),
+                                full_attention_kv_state_growth_tokens: model_configuration
+                                    .chunking
+                                    .full_attention_key_value_growth_tokens,
+                                decode_stage_attribution_enabled: model_configuration
+                                    .chunking
+                                    .experimental_decode_stage_attribution_enabled,
+                                quantized_kv_cache_enabled: model_configuration
+                                    .chunking
+                                    .experimental_quantized_kv_cache_enabled,
+                                fused_expert_decode_enabled: model_configuration
+                                    .chunking
+                                    .experimental_fused_moe_decode_enabled,
+                            },
+                        )
+                        .map_err(|startup_error| startup_error.to_string())?;
+                    Ok::<_, String>((generation_processor, k2_engine))
+                })
+                .await
+                .map_err(|_| "K2 Horizon MoVA initialization task failed".to_owned())??;
+                Ok(ModelFactoryRuntime::autoregressive(
+                    ModelFamilyGenerationProcessor::K2HorizonMoVA(generation_processor),
+                    ModelFamilyInferenceEngine::K2HorizonMoVA(k2_engine),
                 ))
             }
             (Some(ModelFamily::DeepSeekV4), WorkerModelConfiguration::Autoregressive(_)) => {

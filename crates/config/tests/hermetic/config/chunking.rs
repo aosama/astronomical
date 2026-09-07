@@ -89,6 +89,37 @@ fn should_default_omitted_graph_submission_intervals() {
 }
 
 #[test]
+fn should_default_the_decode_levers_off_so_the_measured_fast_path_serves() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "chunking": {}
+        }"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("omitted experimental decode levers should load");
+    let chunking = astronomical_config
+        .chunking()
+        .expect("chunking configuration should resolve");
+
+    assert!(
+        !chunking.experimental_quantized_kv_cache_enabled(),
+        "the 8-bit KV slab measured slower than bfloat16 and must stay opt-in"
+    );
+    assert!(
+        !chunking.experimental_fused_moe_decode_enabled(),
+        "the fused expert decode kernels measured slower than the gathered chain and must stay opt-in"
+    );
+    assert!(
+        !chunking.experimental_decode_stage_attribution_enabled(),
+        "attribution-gated stage evaluations roughly double decode time and must stay diagnostic-only"
+    );
+}
+
+#[test]
 fn should_keep_resident_and_ssd_prefill_graph_intervals_independent() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
