@@ -110,6 +110,18 @@ impl MlxRuntime {
         })
     }
 
+    /// Evaluates and copies a float32 array into Rust-owned memory, including
+    /// strided views.
+    ///
+    /// `MlxArray::to_vec_f32` reads the raw data pointer, which ignores the
+    /// strides of a slice view over an evaluated parent. The flat reshape
+    /// forces one contiguous materialization for strided views and is a
+    /// zero-copy view for arrays that are already contiguous.
+    pub fn array_to_vec_f32(&self, array: &MlxArray) -> Result<Vec<f32>, MlxRuntimeError> {
+        let flat = self.reshape(array, &[-1])?;
+        flat.to_vec_f32()
+    }
+
     /// Slices an array with one static start, stop, and stride per axis.
     pub fn slice(
         &self,

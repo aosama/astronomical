@@ -84,6 +84,13 @@ pub enum PerformanceOperation {
     CompletedForwardMemorySnapshot,
     PromptPrefillAdvanceSpan,
     DecodeAdvanceSpan,
+    DecodeAttentionGraphicsProcessorCompletionWait,
+    DecodeMixtureOfValuesGraphicsProcessorCompletionWait,
+    DecodeFeedForwardGraphicsProcessorCompletionWait,
+    DecodeSharedExpertGraphicsProcessorCompletionWait,
+    DecodeFusedValueExpertDecode,
+    DecodeFusedRoutedExpertDecode,
+    DecodeSamplingSpan,
     AttentionForwardSpan,
     SlidingWindowMaskConstruction,
     RotaryEmbeddingApplication,
@@ -210,6 +217,13 @@ impl PerformanceOperation {
         Self::CompletedForwardMemorySnapshot,
         Self::PromptPrefillAdvanceSpan,
         Self::DecodeAdvanceSpan,
+        Self::DecodeAttentionGraphicsProcessorCompletionWait,
+        Self::DecodeMixtureOfValuesGraphicsProcessorCompletionWait,
+        Self::DecodeFeedForwardGraphicsProcessorCompletionWait,
+        Self::DecodeSharedExpertGraphicsProcessorCompletionWait,
+        Self::DecodeFusedValueExpertDecode,
+        Self::DecodeFusedRoutedExpertDecode,
+        Self::DecodeSamplingSpan,
         Self::AttentionForwardSpan,
         Self::SlidingWindowMaskConstruction,
         Self::RotaryEmbeddingApplication,
@@ -398,6 +412,21 @@ impl PerformanceOperation {
 
             Self::PromptPrefillAdvanceSpan => "prompt_prefill_advance_span",
             Self::DecodeAdvanceSpan => "decode_advance_span",
+            Self::DecodeAttentionGraphicsProcessorCompletionWait => {
+                "decode_attention_graphics_processor_completion_wait"
+            }
+            Self::DecodeMixtureOfValuesGraphicsProcessorCompletionWait => {
+                "decode_mixture_of_values_graphics_processor_completion_wait"
+            }
+            Self::DecodeFeedForwardGraphicsProcessorCompletionWait => {
+                "decode_feed_forward_graphics_processor_completion_wait"
+            }
+            Self::DecodeSharedExpertGraphicsProcessorCompletionWait => {
+                "decode_shared_expert_graphics_processor_completion_wait"
+            }
+            Self::DecodeFusedValueExpertDecode => "decode_fused_value_expert_decode",
+            Self::DecodeFusedRoutedExpertDecode => "decode_fused_routed_expert_decode",
+            Self::DecodeSamplingSpan => "decode_sampling_span",
             Self::AttentionForwardSpan => "attention_forward_span",
             Self::SlidingWindowMaskConstruction => "sliding_window_mask_construction",
             Self::RotaryEmbeddingApplication => "rotary_embedding_application",

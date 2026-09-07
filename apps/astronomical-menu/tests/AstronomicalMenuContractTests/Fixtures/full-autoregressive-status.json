@@ -203,6 +203,9 @@
           "prompt_cache_block_tokens": null,
           "prompt_cache_common_prefix_stride_blocks": 4,
           "speculative_prefill_draft_forward_tokens": 2048,
+          "experimental_decode_stage_attribution_enabled": false,
+          "experimental_quantized_kv_cache_enabled": false,
+          "experimental_fused_moe_decode_enabled": false,
           "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048
         },
         "maximum_context_tokens": 65536,
