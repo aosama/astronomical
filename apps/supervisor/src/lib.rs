@@ -124,7 +124,7 @@ pub use library::{
     HubPayloadRequest, HubPayloadResponse, HubPayloadTransport, HubTransport, HubTransportError,
     HubTransportFuture, HuggingFaceHub, HuggingFaceHubError, HuggingFaceHubLimits,
     HuggingFaceManifest, LibraryDownloadCoordinator, LibraryDownloadCoordinatorError,
-    ReqwestHubTransport, ReqwestHubTransportBuildError,
+    MAXIMUM_CONCURRENT_PAYLOAD_FILE_TRANSFERS, ReqwestHubTransport, ReqwestHubTransportBuildError,
 };
 pub use library_model_discovery_refresh::LibraryModelDiscoveryRefresh;
 pub use openai_chat_translation::{
