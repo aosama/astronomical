@@ -11,17 +11,14 @@ use bytes::Bytes;
 use futures_util::{StreamExt, stream};
 use tempfile::TempDir;
 
-mod support;
+use super::download_payload_support as support;
 
 use support::{
-    FailingRefresh, RecordingRefresh, ScriptedPayloadTransport, disabled_attribution, git_blob_job,
-    git_blob_sha1_hex, parse_job_with_size, payload_response, sha256_hex, sha256_job,
-    staged_file_path,
+    FailingRefresh, RELATIVE_PATH, REPOSITORY_ID, REVISION, RecordingRefresh,
+    ScriptedPayloadTransport, disabled_attribution, git_blob_job, git_blob_sha1_hex,
+    parse_job_with_size, payload_response, sha256_hex, sha256_job, staged_file_path,
 };
 
-const REPOSITORY_ID: &str = "astronomical-test/example-qwen";
-const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
-const RELATIVE_PATH: &str = "weights/romeo-and-juliet.txt";
 const ROMEO_AND_JULIET: &[u8] = b"Romeo and Juliet";
 
 #[tokio::test]

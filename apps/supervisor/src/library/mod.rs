@@ -16,6 +16,7 @@ mod download_manifest_preflight;
 mod download_path_selection;
 mod download_payload_response;
 mod download_payload_transfer;
+mod download_payload_transfer_window;
 mod download_payload_verification;
 mod download_progress_snapshot;
 mod download_publication;
@@ -51,6 +52,7 @@ pub use download_payload_transfer::{
     DownloadPayloadTransfer, DownloadPayloadTransferError, DownloadPayloadTransferOutcome,
     DownloadTransferControl,
 };
+pub use download_payload_transfer_window::MAXIMUM_CONCURRENT_PAYLOAD_FILE_TRANSFERS;
 pub use download_progress_snapshot::DownloadProgressSnapshot;
 pub use download_publication::{
     DownloadPublication, DownloadPublicationError, DownloadPublicationRefresh,

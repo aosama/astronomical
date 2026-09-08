@@ -17,6 +17,7 @@ use super::{
     DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadRequest, HubPayloadTransport,
     HubTransportError,
     download_payload_response::{payload_url, validate_payload_response},
+    download_payload_transfer_window::{ObservedTransferProgress, TransferWindowStop},
     download_payload_verification::verify_download_job,
     download_publication_reconciliation::reconcile_publication_intent,
     download_staged_file::open_staged_file_for_append,
@@ -139,76 +140,27 @@ impl DownloadPayloadTransfer {
         self.replace_job(download_job.clone()).await?;
         self.progress_snapshot.publish(download_job.clone());
 
-        for file_index in 0..download_job.files().len() {
-            let download_file = download_job.files()[file_index].clone();
-            if download_file.bytes_on_disk() == download_file.expected_bytes() {
-                continue;
-            }
-            if self.transfer_control.is_pause_requested() {
+        self.replace_job(download_job.clone()).await?;
+        self.progress_snapshot.publish(download_job.clone());
+
+        match self
+            .download_pending_files_within_bounded_window(&mut download_job, updated_at_unix_millis)
+            .await
+        {
+            Ok(()) => {}
+            Err(TransferWindowStop::Paused) => {
                 return self.pause(updated_at_unix_millis).await;
             }
-            download_job
-                .select_download_file(download_file.relative_path(), updated_at_unix_millis)
-                .map_err(DownloadJobStoreError::from)?;
-            self.replace_job(download_job.clone()).await?;
-            self.progress_snapshot.publish(download_job.clone());
-            let resume_offset_bytes = download_file.bytes_on_disk();
-            let huggingface_id = download_job.huggingface_id().to_owned();
-            let revision = download_job.revision().to_owned();
-            let relative_path = download_file.relative_path().to_owned();
-            let transfer_outcome = self
-                .attribution_log
-                .measure_async_operation(
-                    SupervisorPerformanceOperation::FileTransfer,
-                    || self.transfer_file(&download_job, &download_file, updated_at_unix_millis),
-                    |transfer_outcome| {
-                        let measurement = if transfer_outcome.is_ok() {
-                            SupervisorPerformanceMeasurement::success()
-                        } else {
-                            SupervisorPerformanceMeasurement::failure()
-                        };
-                        measurement
-                            .with_file_transfer(
-                                &huggingface_id,
-                                &revision,
-                                &relative_path,
-                                resume_offset_bytes,
-                                transfer_outcome.as_ref().copied().unwrap_or(0),
-                            )
-                            .unwrap_or_else(|_| SupervisorPerformanceMeasurement::failure())
-                    },
-                )
-                .await
-                .map_err(DownloadPayloadTransferError::Attribution);
-            let transferred_bytes = match transfer_outcome {
-                Ok(Ok(transferred_bytes)) => transferred_bytes,
-                Ok(Err(transfer_error)) => {
-                    let public_error_code =
-                        if matches!(transfer_error, DownloadPayloadTransferError::DownloadGated) {
-                            DownloadJobPublicErrorCode::DownloadGated
-                        } else {
-                            DownloadJobPublicErrorCode::DownloadFailed
-                        };
-                    self.persist_failure(public_error_code, updated_at_unix_millis)
-                        .await?;
-                    return Err(transfer_error);
-                }
-                Err(attribution_error) => return Err(attribution_error),
-            };
-            let completed_file_bytes = resume_offset_bytes
-                .checked_add(transferred_bytes)
-                .ok_or(DownloadPayloadTransferError::InvalidPayloadLength)?;
-            download_job
-                .record_file_progress(
-                    download_file.relative_path(),
-                    completed_file_bytes,
-                    updated_at_unix_millis,
-                )
-                .map_err(DownloadJobStoreError::from)?;
-            self.replace_job(download_job.clone()).await?;
-            self.progress_snapshot.publish(download_job.clone());
-            if self.transfer_control.is_pause_requested() {
-                return self.pause(updated_at_unix_millis).await;
+            Err(TransferWindowStop::TransferFailed(transfer_error)) => {
+                let public_error_code =
+                    if matches!(transfer_error, DownloadPayloadTransferError::DownloadGated) {
+                        DownloadJobPublicErrorCode::DownloadGated
+                    } else {
+                        DownloadJobPublicErrorCode::DownloadFailed
+                    };
+                self.persist_failure(public_error_code, updated_at_unix_millis)
+                    .await?;
+                return Err(transfer_error);
             }
         }
 
@@ -286,11 +238,15 @@ impl DownloadPayloadTransfer {
         Ok(DownloadPayloadTransferOutcome::ReadyToPublish(download_job))
     }
 
-    async fn transfer_file(
+    /// Streams one file's remaining bytes into its staged file while publishing live progress.
+    /// Each file appends contiguously from its recorded offset, which keeps the staged file's
+    /// synchronized length equal to its received bytes for pause and restart reconciliation.
+    pub(super) async fn transfer_file(
         &self,
         download_job: &DownloadJob,
         download_file: &super::DownloadJobFile,
         updated_at_unix_millis: u64,
+        observed_transfer_progress: &ObservedTransferProgress,
     ) -> Result<u64, DownloadPayloadTransferError> {
         let resume_offset_bytes = download_file.bytes_on_disk();
         let payload_url = payload_url(
@@ -326,7 +282,6 @@ impl DownloadPayloadTransfer {
         let expected_transfer_bytes = download_file.expected_bytes() - resume_offset_bytes;
         let mut transferred_bytes = 0_u64;
         let mut last_progress_publication_at = None;
-        let mut observed_download_job = download_job.clone();
         let mut deferred_transfer_error = None;
         let mut payload_stream = payload_response.into_byte_stream();
         while let Some(payload_chunk) = payload_stream.next().await {
@@ -358,15 +313,13 @@ impl DownloadPayloadTransfer {
                     last_publication_at.elapsed() >= LIVE_PROGRESS_PUBLICATION_INTERVAL
                 });
             if should_publish_progress {
-                observed_download_job
-                    .record_file_progress(
+                observed_transfer_progress
+                    .record_received_bytes(
                         download_file.relative_path(),
                         resume_offset_bytes + transferred_bytes,
                         updated_at_unix_millis,
                     )
                     .map_err(DownloadJobStoreError::from)?;
-                self.progress_snapshot
-                    .publish(observed_download_job.clone());
                 last_progress_publication_at = Some(Instant::now());
             }
             if self.transfer_control.is_pause_requested() {
@@ -409,6 +362,61 @@ impl DownloadPayloadTransfer {
         tokio::task::spawn_blocking(move || job_store.replace_current(&download_job))
             .await
             .map_err(DownloadPayloadTransferError::Task)??;
+        Ok(())
+    }
+
+    pub(super) fn attribution_log(&self) -> &SupervisorPerformanceAttributionLog {
+        &self.attribution_log
+    }
+
+    pub(super) fn progress_snapshot(&self) -> &DownloadProgressSnapshot {
+        &self.progress_snapshot
+    }
+
+    pub(super) fn is_pause_requested(&self) -> bool {
+        self.transfer_control.is_pause_requested()
+    }
+
+    pub(super) fn request_pause(&self) {
+        self.transfer_control.request_pause();
+    }
+
+    pub(super) async fn select_pending_file_durably(
+        &self,
+        download_job: &mut DownloadJob,
+        pending_file: &super::DownloadJobFile,
+        updated_at_unix_millis: u64,
+        observed_transfer_progress: &ObservedTransferProgress,
+    ) -> Result<(), DownloadPayloadTransferError> {
+        download_job
+            .select_download_file(pending_file.relative_path(), updated_at_unix_millis)
+            .map_err(DownloadJobStoreError::from)?;
+        self.replace_job(download_job.clone()).await?;
+        observed_transfer_progress
+            .select_file(pending_file.relative_path(), updated_at_unix_millis)
+            .map_err(|_| DownloadPayloadTransferError::InvalidJobState)
+    }
+
+    pub(super) async fn record_file_progress_durably(
+        &self,
+        download_job: &mut DownloadJob,
+        pending_file: &super::DownloadJobFile,
+        transferred_bytes: u64,
+        updated_at_unix_millis: u64,
+    ) -> Result<(), DownloadPayloadTransferError> {
+        let completed_file_bytes = pending_file
+            .bytes_on_disk()
+            .checked_add(transferred_bytes)
+            .ok_or(DownloadPayloadTransferError::InvalidPayloadLength)?;
+        download_job
+            .record_file_progress(
+                pending_file.relative_path(),
+                completed_file_bytes,
+                updated_at_unix_millis,
+            )
+            .map_err(DownloadJobStoreError::from)?;
+        self.replace_job(download_job.clone()).await?;
+        self.progress_snapshot.publish(download_job.clone());
         Ok(())
     }
 
