@@ -138,7 +138,7 @@ async fn should_transfer_incomplete_files_concurrently_within_the_bounded_window
 #[tokio::test]
 async fn should_cap_concurrent_payload_requests_at_the_bounded_window() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        const SCENE_FILE_PATHS: [&str; 7] = [
+        const SCENE_FILE_PATHS: [&str; 12] = [
             "weights/scene-one.txt",
             "weights/scene-two.txt",
             "weights/scene-three.txt",
@@ -146,6 +146,11 @@ async fn should_cap_concurrent_payload_requests_at_the_bounded_window() {
             "weights/scene-five.txt",
             "weights/scene-six.txt",
             "weights/scene-seven.txt",
+            "weights/scene-eight.txt",
+            "weights/scene-nine.txt",
+            "weights/scene-ten.txt",
+            "weights/scene-eleven.txt",
+            "weights/scene-twelve.txt",
         ];
         let file_payloads: Vec<(&str, &[u8])> = SCENE_FILE_PATHS
             .iter()

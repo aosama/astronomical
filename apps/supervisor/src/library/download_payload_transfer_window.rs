@@ -18,8 +18,9 @@ use crate::{SupervisorPerformanceMeasurement, SupervisorPerformanceOperation};
 
 /// Concurrent in-flight file transfers per journey. The bound is deliberately network-scoped:
 /// stream count does not scale with model size or machine hardware, so one value serves every
-/// laptop without configuration.
-pub const MAXIMUM_CONCURRENT_PAYLOAD_FILE_TRANSFERS: usize = 4;
+/// laptop without configuration. Measured endpoint behavior shows aggregate throughput scales
+/// with stream count, and the previous four-stream window left link capacity unused.
+pub const MAXIMUM_CONCURRENT_PAYLOAD_FILE_TRANSFERS: usize = 8;
 
 /// Why the bounded window stopped launching and streaming pending files.
 #[derive(Debug)]
@@ -83,16 +84,17 @@ fn pending_files_largest_remaining_first(download_job: &DownloadJob) -> Vec<Down
         .filter(|download_file| download_file.bytes_on_disk() < download_file.expected_bytes())
         .cloned()
         .collect();
-    // Largest remaining first: the longest pole starts before shorter files can delay it, and the
-    // stable sort keeps manifest order for equal sizes.
+    // ascending remaining so the scheduling pop() pulls the largest remaining file first: the
+    // longest pole starts before short files can consume the window, and the stable sort keeps
+    // manifest order for equal sizes.
     pending_files.sort_by(|left_file, right_file| {
-        right_file
+        left_file
             .expected_bytes()
-            .checked_sub(right_file.bytes_on_disk())
+            .checked_sub(left_file.bytes_on_disk())
             .cmp(
-                &left_file
+                &right_file
                     .expected_bytes()
-                    .checked_sub(left_file.bytes_on_disk()),
+                    .checked_sub(right_file.bytes_on_disk()),
             )
     });
     pending_files
