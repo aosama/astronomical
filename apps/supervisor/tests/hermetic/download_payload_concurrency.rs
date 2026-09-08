@@ -4,8 +4,8 @@ use std::{fs, sync::Arc, time::Duration};
 
 use astronomical_supervisor::{
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadPayloadTransfer,
-    DownloadPayloadTransferOutcome, DownloadTransferControl, HubPayloadResponse,
-    MAXIMUM_CONCURRENT_PAYLOAD_FILE_TRANSFERS,
+    DownloadPayloadTransferOutcome, DownloadTransferControl, HubPayloadRequest, HubPayloadResponse,
+    MAXIMUM_CONCURRENT_PAYLOAD_TRANSFERS,
 };
 use bytes::Bytes;
 use futures_util::stream;
@@ -30,8 +30,9 @@ fn path_keyed_transport(file_payloads: &[(&str, &[u8])]) -> support::PathKeyedPa
                 let owned_payload_bytes = payload_bytes.to_vec();
                 (
                     (*relative_path).to_owned(),
-                    Box::new(move || payload_response(200, None, [&owned_payload_bytes]))
-                        as ScriptedResponseFactory,
+                    Box::new(move |_request: &HubPayloadRequest| {
+                        payload_response(200, None, [&owned_payload_bytes])
+                    }) as ScriptedResponseFactory,
                 )
             })
             .collect::<Vec<_>>(),
@@ -53,8 +54,9 @@ fn resume_offset_factories(
             let owned_payload_bytes = payload_bytes.to_vec();
             (
                 (*relative_path).to_owned(),
-                Box::new(move || resume_payload_response(&owned_payload_bytes, resume_offset_bytes))
-                    as ScriptedResponseFactory,
+                Box::new(move |_request: &HubPayloadRequest| {
+                    resume_payload_response(&owned_payload_bytes, resume_offset_bytes)
+                }) as ScriptedResponseFactory,
             )
         })
         .collect()
@@ -182,7 +184,7 @@ async fn should_cap_concurrent_payload_requests_at_the_bounded_window() {
         );
         assert_eq!(
             transport.maximum_active_request_count(),
-            MAXIMUM_CONCURRENT_PAYLOAD_FILE_TRANSFERS,
+            MAXIMUM_CONCURRENT_PAYLOAD_TRANSFERS,
             "the in-flight width must never exceed the bounded window"
         );
     })
@@ -214,7 +216,7 @@ async fn should_pause_across_every_in_flight_file_and_resume_without_progress_mi
                     let pause_control = pause_control.clone();
                     (
                         (*relative_path).to_owned(),
-                        Box::new(move || {
+                        Box::new(move |_request: &HubPayloadRequest| {
                             let owned_payload = owned_payload_bytes.clone();
                             let owned_pause_control = pause_control.clone();
                             let pausing_stream = stream::once(async move {
@@ -323,13 +325,15 @@ async fn should_keep_sibling_progress_durable_when_one_concurrent_file_fails() {
         let transport = Arc::new(support::PathKeyedPayloadTransport::new([
             (
                 "weights/romeo-and-juliet.txt".to_owned(),
-                Box::new(move || payload_response(200, None, [romeo_payload]))
-                    as support::ScriptedResponseFactory,
+                Box::new(move |_request: &HubPayloadRequest| {
+                    payload_response(200, None, [romeo_payload])
+                }) as support::ScriptedResponseFactory,
             ),
             (
                 "weights/hamlet.txt".to_owned(),
-                Box::new(move || payload_response(200, None, [short_payload]))
-                    as support::ScriptedResponseFactory,
+                Box::new(move |_request: &HubPayloadRequest| {
+                    payload_response(200, None, [short_payload])
+                }) as support::ScriptedResponseFactory,
             ),
         ]));
         let transfer = DownloadPayloadTransfer::new(

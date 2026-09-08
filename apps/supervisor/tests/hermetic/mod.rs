@@ -9,6 +9,7 @@ mod download_job_store;
 mod download_manifest_preflight;
 mod download_payload;
 mod download_payload_concurrency;
+mod download_payload_segments;
 mod download_payload_support;
 mod generation_performance_log;
 mod hugging_face_hub;
