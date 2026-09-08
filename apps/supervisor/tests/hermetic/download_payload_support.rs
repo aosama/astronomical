@@ -62,7 +62,8 @@ impl HubPayloadTransport for ScriptedPayloadTransport {
     }
 }
 
-pub(super) type ScriptedResponseFactory = Box<dyn Fn() -> HubPayloadResponse + Send + Sync>;
+pub(super) type ScriptedResponseFactory =
+    Box<dyn Fn(&HubPayloadRequest) -> HubPayloadResponse + Send + Sync>;
 
 /// Serves one scripted response factory per relative file path and tracks how many payload
 /// requests are concurrently in flight, so a journey can prove its parallelism stayed bounded.
@@ -121,7 +122,7 @@ impl HubPayloadTransport for PathKeyedPayloadTransport {
                 .ok_or_else(|| {
                     HubTransportError::new("unexpected payload request for this file")
                 })?;
-            Ok(response_factory())
+            Ok(response_factory(&request))
         })
     }
 }
