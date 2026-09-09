@@ -43,6 +43,59 @@ pub(crate) fn test_worker_kernel_capabilities(
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
+pub(crate) fn forced_unsupported_worker_kernel_capabilities()
+-> astronomical_model_serving::WorkerKernelCapabilities {
+    // Every family the Qwen3.5 loader consults is demoted with a distinct
+    // unsupported reason so one serving request exercises each fallback
+    // route; the K2-only fused expert decode stays unprobed and fail-closed.
+    use astronomical_model_serving::{CustomKernelVerdict, CustomMetalKernelFamily};
+    let forced_demotion_description = "forced demotion for the serving fallback journey";
+    astronomical_model_serving::WorkerKernelCapabilities::with_forced_verdicts_for_tests([
+        (
+            CustomMetalKernelFamily::SortedExpertWeightedSum,
+            CustomKernelVerdict::Unsupported(
+                astronomical_model_serving::KernelUnsupportedReason::Compilation {
+                    description: forced_demotion_description.to_owned(),
+                },
+            ),
+        ),
+        (
+            CustomMetalKernelFamily::GatedDeltaSequence,
+            CustomKernelVerdict::Unsupported(
+                astronomical_model_serving::KernelUnsupportedReason::Execution {
+                    description: forced_demotion_description.to_owned(),
+                },
+            ),
+        ),
+        (
+            CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
+            CustomKernelVerdict::Unsupported(
+                astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
+                    description: forced_demotion_description.to_owned(),
+                },
+            ),
+        ),
+        (
+            CustomMetalKernelFamily::TargetVerificationQuantizedLinear,
+            CustomKernelVerdict::Unsupported(
+                astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
+                    description: forced_demotion_description.to_owned(),
+                },
+            ),
+        ),
+        (
+            CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
+            CustomKernelVerdict::Unsupported(
+                astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
+                    description: forced_demotion_description.to_owned(),
+                },
+            ),
+        ),
+    ])
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
 pub(crate) fn standard_worker_chunking_configuration()
 -> astronomical_ipc_protocol::WorkerChunkingConfiguration {
     astronomical_ipc_protocol::WorkerChunkingConfiguration {

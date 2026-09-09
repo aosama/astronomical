@@ -204,7 +204,7 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
         let down_biases = self
             .runtime
             .array_from_f32(
-                &vec![0.0; PROBE_EXPERT_COUNT * PROBE_DOWN_OUTPUT_DIMENSION],
+                &[0.0; PROBE_EXPERT_COUNT * PROBE_DOWN_OUTPUT_DIMENSION],
                 &[2, PROBE_DOWN_OUTPUT_DIMENSION as i32, 1],
             )
             .map_err(probe_execution)?;
@@ -237,12 +237,14 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
         let mut expected = vec![0.0_f32; PROBE_DOWN_OUTPUT_DIMENSION];
         for score in assignment_scores.iter() {
             let mut assignment_hidden = vec![0.0_f32; PROBE_INTERMEDIATE_DIMENSION];
-            for output_index in 0..PROBE_INTERMEDIATE_DIMENSION {
+            for (output_index, assignment_hidden_element) in
+                assignment_hidden.iter_mut().enumerate()
+            {
                 let gate_row = output_index;
                 let up_row = PROBE_INTERMEDIATE_DIMENSION + output_index;
                 let gate_dot = probe_row_dot(gate_row, row_scale(gate_row), 1.0);
                 let up_dot = probe_row_dot(up_row, row_scale(up_row), 1.0);
-                assignment_hidden[output_index] = silu(gate_dot) * up_dot;
+                *assignment_hidden_element = silu(gate_dot) * up_dot;
             }
             for (output_index, expected_value) in expected.iter_mut().enumerate() {
                 let dot = arbitrary_row_dot(
@@ -275,7 +277,7 @@ fn hidden_values() -> Vec<f32> {
 }
 
 fn row_scale(row: usize) -> f32 {
-    if row % 2 == 0 { 2.0 } else { 3.0 }
+    if row.is_multiple_of(2) { 2.0 } else { 3.0 }
 }
 
 /// Dots the fixed probe hidden vector with one probe weight row:

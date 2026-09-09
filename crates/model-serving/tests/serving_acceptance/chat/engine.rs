@@ -9,16 +9,11 @@ use astronomical_model_serving::{
 };
 use tokio::time::timeout;
 
-use crate::serving_acceptance::support::IMAGE_PAD_TOKEN_ID;
+use crate::serving_acceptance::support::{IMAGE_PAD_TOKEN_ID, LOCAL_AI_PROMPT_TOKEN_IDS};
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
-
-const LOCAL_AI_PROMPT_TOKEN_IDS: [u32; 20] = [
-    248_045, 846, 198, 657, 799, 14_542, 8_495, 314, 2_136, 14_791, 13, 248_046, 198, 248_045,
-    74_455, 198, 248_068, 271, 248_069, 271,
-];
 
 const ROMEO_CONTINUATION_MAX_TOKENS: usize = 20;
 

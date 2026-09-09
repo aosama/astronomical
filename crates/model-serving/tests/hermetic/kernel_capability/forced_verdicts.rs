@@ -39,3 +39,52 @@ fn should_force_a_supported_verdict() {
 
     assert!(capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaSequence));
 }
+
+#[test]
+fn should_honor_every_forced_reason_for_every_family() {
+    // Families are data, not tests: one loop proves the fail-closed verdict
+    // contract across the whole family catalogue, so a new family is covered
+    // by adding an enum variant, not a new test.
+    let reason_cases = [
+        KernelUnsupportedReason::Compilation {
+            description: "forced compilation failure".to_owned(),
+        },
+        KernelUnsupportedReason::Execution {
+            description: "forced execution failure".to_owned(),
+        },
+        KernelUnsupportedReason::OutputMismatch {
+            description: "forced output mismatch".to_owned(),
+        },
+    ];
+    let every_family = [
+        CustomMetalKernelFamily::SortedExpertWeightedSum,
+        CustomMetalKernelFamily::FusedQuantizedExpertDecode,
+        CustomMetalKernelFamily::GatedDeltaSequence,
+        CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
+        CustomMetalKernelFamily::TargetVerificationQuantizedLinear,
+        CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
+    ];
+
+    for unsupported_reason in &reason_cases {
+        let forced_verdicts = every_family.map(|family| {
+            (
+                family,
+                CustomKernelVerdict::Unsupported(unsupported_reason.clone()),
+            )
+        });
+        let capabilities =
+            WorkerKernelCapabilities::with_forced_verdicts_for_tests(forced_verdicts);
+
+        for family in every_family {
+            assert_eq!(
+                capabilities.verdict(family),
+                CustomKernelVerdict::Unsupported(unsupported_reason.clone()),
+                "family {family:?} must honor the forced {unsupported_reason:?} verdict",
+            );
+            assert!(
+                !capabilities.is_custom_kernel_supported(family),
+                "a forced-unsupported family must never dispatch the custom kernel",
+            );
+        }
+    }
+}
