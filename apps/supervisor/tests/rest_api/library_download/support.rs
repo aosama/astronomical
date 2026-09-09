@@ -113,8 +113,18 @@ impl ScriptedHub {
 }
 
 impl HubTransport for ScriptedHub {
-    fn execute(&self, _request: HubHttpRequest) -> HubTransportFuture<'_> {
+    fn execute(&self, request: HubHttpRequest) -> HubTransportFuture<'_> {
         Box::pin(async move {
+            // The preflight executable gate reads small Git files through `/raw/` origin
+            // endpoints, which the real Hub routes by URL. Mirror that routing so scripted
+            // journeys exercise the gate instead of failing on an exhausted response queue.
+            let request_url = request.url();
+            if request_url.ends_with(&format!("/raw/{REVISION}/config.json")) {
+                return Ok(ok_bytes(MODEL_CONFIG));
+            }
+            if request_url.ends_with(&format!("/raw/{REVISION}/model.safetensors.index.json")) {
+                return Ok(ok_bytes(MODEL_INDEX));
+            }
             self.metadata_responses
                 .lock()
                 .map_err(|_| HubTransportError::new("metadata lock was poisoned"))?
@@ -122,6 +132,11 @@ impl HubTransport for ScriptedHub {
                 .ok_or_else(|| HubTransportError::new("unexpected metadata request"))
         })
     }
+}
+
+fn ok_bytes(body: &'static [u8]) -> HubHttpResponse {
+    HubHttpResponse::try_new(200, [], [body.to_vec()])
+        .expect("scripted raw file response should be valid")
 }
 
 impl HubPayloadTransport for ScriptedHub {
