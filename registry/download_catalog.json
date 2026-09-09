@@ -17,6 +17,24 @@
             "upstream_license": "Apache-2.0"
         },
         {
+            "huggingface_id": "mlx-community/Qwen3.5-0.8B-MLX-4bit",
+            "revision": "5d894f8cc4ef3e6c88537bf3746ed262f549da6a",
+            "display_name": "Qwen 3.5 0.8B 4-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 652031020,
+            "public": true,
+            "description": "The smallest Qwen 3.5 dense VLM as a 4-bit affine MLX quant. Chat, reasoning, tool calls, and image understanding in about 0.65 GB of wired GPU memory, with a 262144-token context window and enforced structured outputs. Also the compact drafter for speculative prefill acceptance journeys.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "4-bit affine (group 64), bf16 vision tower",
+            "architecture_summary": "Qwen3.5 dense VLM, 0.8B parameters, 24 layers, hidden 1024, 12-layer vision tower",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "mlx-community/Qwen3.5-2B-4bit",
             "revision": "674aaa7240b91e8012fcad5d791b7dfe5ba90207",
             "display_name": "Qwen 3.5 2B 4-bit",
