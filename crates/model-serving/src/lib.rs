@@ -156,6 +156,8 @@ pub use k2_horizon_mova::{
 #[cfg(feature = "direct-mlx")]
 pub use kernel_capability::SortedExpertWeightedSumProbe;
 #[cfg(feature = "direct-mlx")]
+pub use kernel_capability::install_forced_worker_verdicts_for_tests;
+#[cfg(feature = "direct-mlx")]
 pub use kernel_capability::worker_process_kernel_capabilities;
 pub use kernel_capability::{
     CustomKernelVerdict, CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError,
