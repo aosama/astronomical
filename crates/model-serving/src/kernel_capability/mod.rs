@@ -207,6 +207,31 @@ impl WorkerKernelCapabilities {
     }
 }
 
+/// Test-only installation point for forced worker verdicts.
+///
+/// CI hardware cannot make a real kernel fail, so a serving journey seeds the
+/// worker-process verdicts before constructing an engine; the production
+/// consultation path then observes the forced verdicts through the same
+/// `OnceLock` it always uses. Production code must never call this. The
+/// process-global seed means one journey per test process, which matches the
+/// bounded serial execution rule for real-model journeys.
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub fn install_forced_worker_verdicts_for_tests(forced_verdicts: WorkerKernelCapabilities) {
+    if FORCED_WORKER_VERDICTS_FOR_TESTS
+        .set(forced_verdicts)
+        .is_err()
+    {
+        panic!(
+            "forced worker kernel verdicts were already installed for this process; \
+             each serving journey must run in its own process"
+        );
+    }
+}
+
+#[cfg(feature = "direct-mlx")]
+static FORCED_WORKER_VERDICTS_FOR_TESTS: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
+
 /// Returns the retained kernel-capability verdicts for this worker process.
 ///
 /// Verdicts depend only on the GPU and operating system, so the first model
@@ -223,6 +248,9 @@ pub fn worker_process_kernel_capabilities(
 ) -> &'static WorkerKernelCapabilities {
     static WORKER_PROCESS_KERNEL_CAPABILITIES: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
     WORKER_PROCESS_KERNEL_CAPABILITIES.get_or_init(|| {
+        if let Some(forced_verdicts) = FORCED_WORKER_VERDICTS_FOR_TESTS.get() {
+            return forced_verdicts.clone();
+        }
         let sorted_expert_weighted_sum_probe = SortedExpertWeightedSumProbe::new(runtime);
         let fused_expert_decode_probe = FusedQuantizedExpertDecodeProbe::new(runtime);
         let target_verification_probe = TargetVerificationProjectionProbe::new(runtime);

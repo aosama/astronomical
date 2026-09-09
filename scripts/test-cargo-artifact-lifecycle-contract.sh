@@ -485,6 +485,8 @@ expected_journeys = {
     "accept-client-thinking-budget",
     "accept-structured-output",
     "accept-embeddings",
+    "accept-kernel-fallback-qwen",
+    "accept-kernel-fallback-k2",
     "accept-speculative-prefill",
     "accept-prompt-cache",
     "test-model-ssd-streaming-support",
