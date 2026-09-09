@@ -2,6 +2,7 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
+use reqwest::Url;
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -35,6 +36,7 @@ pub struct HuggingFaceHubLimits {
     maximum_job_metadata_bytes: usize,
 }
 /// Public Hub metadata and recursive tree owner.
+#[derive(Clone)]
 pub struct HuggingFaceHub {
     transport: Arc<dyn HubTransport>,
     limits: HuggingFaceHubLimits,
@@ -366,6 +368,41 @@ impl HuggingFaceHub {
             401 | 403 => Err(HuggingFaceHubError::DownloadGated),
             status => Err(HuggingFaceHubError::UnexpectedStatus { status }),
         }
+    }
+
+    /// Fetches one small immutable repository text file through the metadata transport.
+    ///
+    /// The `/raw/` origin endpoint serves regular Git files directly, so preflight metadata
+    /// checks stay on the trusted Hugging Face origin instead of following payload redirects to
+    /// content-delivery hosts. The metadata body byte bound applies unchanged.
+    pub async fn fetch_bounded_repository_file(
+        &self,
+        repository_id: &str,
+        revision: &str,
+        relative_path: &str,
+    ) -> Result<Vec<u8>, HuggingFaceHubError> {
+        if !is_valid_huggingface_id(repository_id) {
+            return Err(HuggingFaceHubError::InvalidRepositoryId);
+        }
+        if !is_valid_immutable_revision(revision) {
+            return Err(HuggingFaceHubError::InvalidRevision);
+        }
+        let mut file_url = Url::parse(HUGGING_FACE_ORIGIN)
+            .map_err(|_| HuggingFaceHubError::InvalidRepositoryId)?;
+        {
+            let mut path_segments = file_url
+                .path_segments_mut()
+                .map_err(|_| HuggingFaceHubError::InvalidRepositoryId)?;
+            for repository_component in repository_id.split('/') {
+                path_segments.push(repository_component);
+            }
+            path_segments.push("raw").push(revision);
+            for file_component in relative_path.split('/') {
+                path_segments.push(file_component);
+            }
+        }
+        let file_response = self.execute_metadata_get(file_url.to_string()).await?;
+        Ok(file_response.body_bytes())
     }
 }
 

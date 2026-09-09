@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::{deepseek_v4, flux2_klein, laguna, modernbert, qwen3_5};
+use super::{deepseek_v4, flux2_klein, k2_horizon_mova, laguna, modernbert, qwen3_5};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -15,6 +15,7 @@ pub enum ModelFamily {
     Qwen3_5,
     Laguna,
     DeepSeekV4,
+    K2HorizonMoVA,
     Flux2Klein,
     ModernBert,
 }
@@ -29,6 +30,8 @@ impl ModelFamily {
             Some(Self::Laguna)
         } else if deepseek_v4::recognizes_model_type(model_type) {
             Some(Self::DeepSeekV4)
+        } else if k2_horizon_mova::recognizes_model_type(model_type) {
+            Some(Self::K2HorizonMoVA)
         } else if modernbert::recognizes_model_type(model_type) {
             Some(Self::ModernBert)
         } else {
@@ -176,6 +179,18 @@ fn classify_pipeline_directory(
             }
         })?;
     Ok(is_flux2_klein.then_some(ModelFamily::Flux2Klein))
+}
+
+/// Classifies a Diffusers pipeline index document without a file-system read, reusing the exact
+/// production pipeline classifier so download preflight cannot drift from disk discovery.
+///
+/// # Errors
+/// Returns the pipeline document parse failure verbatim.
+pub fn classify_pipeline_index_bytes(
+    pipeline_index_bytes: &[u8],
+) -> Result<Option<ModelFamily>, serde_json::Error> {
+    flux2_klein::classifies_pipeline_index(pipeline_index_bytes)
+        .map(|is_flux2_klein| is_flux2_klein.then_some(ModelFamily::Flux2Klein))
 }
 
 /// Minimal duplicate-aware projection keeps family dispatch independent from full config shape.

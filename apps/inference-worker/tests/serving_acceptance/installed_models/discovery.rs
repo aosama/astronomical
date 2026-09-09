@@ -26,22 +26,32 @@ fn should_discover_required_installed_models() {
         "Development model_directories must discover every required e2e role; missing={missing_model_ids:?}"
     );
 
-    let flux_model_id = crate::support::flux2_klein_model_id();
-    let flux_is_discovered = discovered_models
-        .iter()
-        .any(|discovered_model| discovered_model.model_id == flux_model_id);
-    if flux_is_discovered {
-        eprintln!(
-            "[model-fixture-discovery] status=progress model={flux_model_id} optional=present"
-        );
-    } else {
-        eprintln!(
-            "[model-fixture-discovery] status=progress model={flux_model_id} optional=absent"
-        );
-    }
+    report_optional_discovered_model(&discovered_models, crate::support::flux2_klein_model_id());
+    report_optional_discovered_model(
+        &discovered_models,
+        crate::support::k2_horizon_mova_model_id(),
+    );
 
     eprintln!(
         "[model-fixture-discovery] status=success required_role_count={}",
         required_model_ids.len()
     );
+}
+
+fn report_optional_discovered_model(
+    discovered_models: &[astronomical_config::DiscoveredModel],
+    optional_model_id: &str,
+) {
+    let optional_model_is_discovered = discovered_models
+        .iter()
+        .any(|discovered_model| discovered_model.model_id == optional_model_id);
+    if optional_model_is_discovered {
+        eprintln!(
+            "[model-fixture-discovery] status=progress model={optional_model_id} optional=present"
+        );
+    } else {
+        eprintln!(
+            "[model-fixture-discovery] status=progress model={optional_model_id} optional=absent"
+        );
+    }
 }

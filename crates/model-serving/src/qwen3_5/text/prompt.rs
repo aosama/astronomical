@@ -286,15 +286,23 @@ fn render_assistant_tool_call(
     rendered_prompt: &mut String,
     tool_call: &ChatAssistantToolCall,
 ) -> Result<(), Qwen3_5PromptError> {
-    let argument_values = serde_json::from_str::<Value>(&tool_call.function.arguments_json)
-        .map_err(|source| Qwen3_5PromptError::InvalidToolArguments {
-            function_name: tool_call.function.name.clone(),
-            source,
-        })?;
-    let Value::Object(argument_values) = argument_values else {
-        return Err(Qwen3_5PromptError::ToolArgumentsMustBeObject {
-            function_name: tool_call.function.name.clone(),
-        });
+    // History is a fidelity path, never a validation gate. The output parser
+    // fail-opens malformed model tool calls to the harness, and clients replay
+    // that history verbatim, so arguments here can be anything the model or a
+    // third-party client produced. Render best-effort and let the model
+    // observe and correct its own malformed call; never strand the request.
+    let Ok(serde_json::Value::Object(argument_values)) =
+        serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments_json)
+    else {
+        rendered_prompt.push_str(TOOL_CALL_START);
+        rendered_prompt.push('\n');
+        rendered_prompt.push_str("<function=");
+        append_template_safe_content(rendered_prompt, &tool_call.function.name);
+        rendered_prompt.push_str(">\n");
+        append_template_safe_content(rendered_prompt, &tool_call.function.arguments_json);
+        rendered_prompt.push_str("\n</function>\n");
+        rendered_prompt.push_str(TOOL_CALL_END);
+        return Ok(());
     };
 
     rendered_prompt.push_str(TOOL_CALL_START);

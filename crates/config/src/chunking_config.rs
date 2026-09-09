@@ -27,6 +27,12 @@ pub(crate) struct ChunkingConfigFile {
     pub(crate) prompt_cache_block_tokens: Option<Option<u32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) prompt_cache_common_prefix_stride_blocks: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_decode_stage_attribution_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_quantized_kv_cache_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_fused_moe_decode_enabled: Option<bool>,
 }
 
 /// Presence map for advanced chunking fields after global/model inheritance.
@@ -41,6 +47,9 @@ pub struct ConfiguredChunkingFields {
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
     pub prompt_cache_block_tokens: bool,
     pub prompt_cache_common_prefix_stride_blocks: bool,
+    pub experimental_decode_stage_attribution_enabled: bool,
+    pub experimental_quantized_kv_cache_enabled: bool,
+    pub experimental_fused_moe_decode_enabled: bool,
 }
 
 fn deserialize_present_nullable_u32<'de, Deserializer>(
@@ -80,6 +89,15 @@ impl ChunkingConfigFile {
             prompt_cache_common_prefix_stride_blocks: self
                 .prompt_cache_common_prefix_stride_blocks
                 .is_some(),
+            experimental_decode_stage_attribution_enabled: self
+                .experimental_decode_stage_attribution_enabled
+                .is_some(),
+            experimental_quantized_kv_cache_enabled: self
+                .experimental_quantized_kv_cache_enabled
+                .is_some(),
+            experimental_fused_moe_decode_enabled: self
+                .experimental_fused_moe_decode_enabled
+                .is_some(),
         }
     }
 
@@ -115,6 +133,15 @@ impl ChunkingConfigFile {
             prompt_cache_common_prefix_stride_blocks: model
                 .prompt_cache_common_prefix_stride_blocks
                 .or(global.prompt_cache_common_prefix_stride_blocks),
+            experimental_decode_stage_attribution_enabled: model
+                .experimental_decode_stage_attribution_enabled
+                .or(global.experimental_decode_stage_attribution_enabled),
+            experimental_quantized_kv_cache_enabled: model
+                .experimental_quantized_kv_cache_enabled
+                .or(global.experimental_quantized_kv_cache_enabled),
+            experimental_fused_moe_decode_enabled: model
+                .experimental_fused_moe_decode_enabled
+                .or(global.experimental_fused_moe_decode_enabled),
         }
     }
 }
@@ -146,6 +173,9 @@ pub struct ChunkingConfig {
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     prompt_cache_block_tokens: Option<u32>,
     prompt_cache_common_prefix_stride_blocks: u32,
+    experimental_decode_stage_attribution_enabled: bool,
+    experimental_quantized_kv_cache_enabled: bool,
+    experimental_fused_moe_decode_enabled: bool,
 }
 
 impl ChunkingConfig {
@@ -184,6 +214,15 @@ impl ChunkingConfig {
             prompt_cache_common_prefix_stride_blocks: configured
                 .prompt_cache_common_prefix_stride_blocks
                 .unwrap_or(DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
+            experimental_decode_stage_attribution_enabled: configured
+                .experimental_decode_stage_attribution_enabled
+                .unwrap_or(false),
+            experimental_quantized_kv_cache_enabled: configured
+                .experimental_quantized_kv_cache_enabled
+                .unwrap_or(false),
+            experimental_fused_moe_decode_enabled: configured
+                .experimental_fused_moe_decode_enabled
+                .unwrap_or(false),
         };
         resolved.validate()?;
         Ok(resolved)
@@ -283,11 +322,37 @@ impl ChunkingConfig {
     pub const fn prompt_cache_common_prefix_stride_blocks(&self) -> u32 {
         self.prompt_cache_common_prefix_stride_blocks
     }
+
+    /// Returns whether decode forwards may run stage-split evaluations for
+    /// deep attribution. This diagnostic mode roughly doubles decode time and
+    /// must never be enabled in normal serving.
+    #[must_use]
+    pub const fn experimental_decode_stage_attribution_enabled(&self) -> bool {
+        self.experimental_decode_stage_attribution_enabled
+    }
+
+    /// Returns whether the KV cache stores quantized slabs for long-context
+    /// decode bandwidth. Changes attention numerics; quality-gated.
+    #[must_use]
+    pub const fn experimental_quantized_kv_cache_enabled(&self) -> bool {
+        self.experimental_quantized_kv_cache_enabled
+    }
+
+    /// Returns whether single-token decode uses the fused quantized expert
+    /// Metal kernels. Changes expert numerics slightly; quality-gated and
+    /// capability-probed.
+    #[must_use]
+    pub const fn experimental_fused_moe_decode_enabled(&self) -> bool {
+        self.experimental_fused_moe_decode_enabled
+    }
 }
 
 impl Default for ChunkingConfig {
     fn default() -> Self {
         Self {
+            experimental_decode_stage_attribution_enabled: false,
+            experimental_quantized_kv_cache_enabled: false,
+            experimental_fused_moe_decode_enabled: false,
             fixed_prompt_processing_chunk_size_tokens:
                 DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens:

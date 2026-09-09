@@ -31,6 +31,16 @@ pub struct WorkerChunkingConfiguration {
     pub prompt_cache_block_tokens: Option<u32>,
     /// Number of cache blocks between retained branch restart checkpoints.
     pub prompt_cache_common_prefix_stride_blocks: u32,
+    /// Diagnostic mode that runs decode forwards as stage-split evaluations
+    /// for deep attribution. Roughly doubles decode time; never for serving.
+    #[serde(default)]
+    pub experimental_decode_stage_attribution_enabled: bool,
+    /// Diagnostic/quality-gated mode that stores the KV slab quantized.
+    #[serde(default)]
+    pub experimental_quantized_kv_cache_enabled: bool,
+    /// Fused single-token quantized expert decode kernels for capable MoE families.
+    #[serde(default)]
+    pub experimental_fused_moe_decode_enabled: bool,
 }
 
 /// Returns the command-buffer submission interval for one forward.

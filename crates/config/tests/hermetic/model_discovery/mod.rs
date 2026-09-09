@@ -4,6 +4,7 @@ use std::path::Path;
 mod classified_artifacts;
 mod family_classification;
 mod flux2_klein;
+mod k2_horizon_mova;
 mod laguna;
 mod modernbert;
 mod qwen3_5;

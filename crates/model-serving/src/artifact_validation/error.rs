@@ -15,6 +15,52 @@ pub enum ArtifactValidationError {
         model_directory: PathBuf,
     },
 
+    /// A streaming revision manifest is not valid JSON.
+    #[error("streaming revision manifest is not valid JSON: {source}")]
+    InvalidStreamingManifest {
+        /// JSON parse failure.
+        source: serde_json::Error,
+    },
+
+    /// The streaming revision's resident weight bundle is not a valid safetensors file.
+    #[error("streaming revision resident weight bundle is not a valid safetensors file: {source}")]
+    InvalidResidentBundle {
+        /// safetensors header failure.
+        source: crate::expert_paging::SafetensorsHeaderError,
+    },
+
+    /// A streaming revision manifest declares an unsupported format version.
+    #[error(
+        "streaming revision manifest declares unsupported format version {actual_format_version} (expected 3)"
+    )]
+    UnsupportedStreamingManifestVersion {
+        /// Version the manifest carried.
+        actual_format_version: u32,
+    },
+
+    /// A streaming revision manifest declares a file that is missing on disk.
+    #[error("streaming revision manifest declares missing file {file_name}")]
+    StreamingDeclaredFileMissing {
+        /// Declared file name.
+        file_name: String,
+        /// Underlying filesystem error.
+        #[source]
+        source: io::Error,
+    },
+
+    /// A streaming revision manifest file disagrees with its declared size.
+    #[error(
+        "streaming revision file {file_name} has {actual_bytes} bytes, manifest declares {expected_bytes}"
+    )]
+    StreamingDeclaredFileSize {
+        /// Declared file name.
+        file_name: String,
+        /// Size the manifest declares.
+        expected_bytes: u64,
+        /// Size observed on disk.
+        actual_bytes: u64,
+    },
+
     /// The artifact profile does not include a file needed by validation.
     #[error("artifact profile is missing required file {file_name}")]
     ProfileMissingRequiredFile {

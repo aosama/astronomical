@@ -77,6 +77,15 @@ pub struct OpenAiResponsesRequest {
     stream: bool,
     #[serde(default)]
     thinking_budget: Option<u32>,
+    /// Coding-agent spelling of the thinking budget: the agent resolves this
+    /// field name from its provider compatibility configuration and falls back
+    /// to it when the server declares thinking-budget support.
+    #[serde(default)]
+    thinking_token_budget: Option<u32>,
+    /// Documented OpenAI-compatible alias for the thinking budget used by
+    /// coding-agent traffic alongside `thinking_token_budget`.
+    #[serde(default)]
+    thinking_budget_tokens: Option<u32>,
     #[serde(default)]
     response_format: Option<OpenAiResponseFormat>,
     #[serde(default)]
@@ -88,6 +97,33 @@ pub struct OpenAiResponsesRequest {
 }
 
 impl OpenAiResponsesRequest {
+    /// Resolves the thinking budget across the canonical spelling and the
+    /// coding-agent aliases, mirroring the output-token budget rule: several
+    /// spellings are fine while they agree, and disagreement is a caller bug
+    /// that must fail loudly instead of silently picking one.
+    fn thinking_budget_resolution(&self) -> Result<Option<u32>, OpenAiResponsesValidationError> {
+        let mut resolved_budget: Option<u32> = None;
+        for budget_spelling in [
+            self.thinking_budget,
+            self.thinking_token_budget,
+            self.thinking_budget_tokens,
+        ] {
+            match (resolved_budget, budget_spelling) {
+                (None, budget) => resolved_budget = budget,
+                (Some(agreed_budget), Some(budget)) if agreed_budget == budget => {}
+                (Some(_), Some(_)) => {
+                    return Err(OpenAiResponsesValidationError::ConflictingThinkingBudgets {
+                        thinking_budget: self.thinking_budget,
+                        thinking_token_budget: self.thinking_token_budget,
+                        thinking_budget_tokens: self.thinking_budget_tokens,
+                    });
+                }
+                (Some(_), None) => {}
+            }
+        }
+        Ok(resolved_budget)
+    }
+
     /// Validates and consumes this public request into protocol-neutral parts.
     pub fn into_parts(self) -> Result<OpenAiResponsesRequestParts, OpenAiResponsesValidationError> {
         if let Some((field_name, _)) = self.unknown_fields.first_key_value() {
@@ -110,6 +146,7 @@ impl OpenAiResponsesRequest {
         }
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;
         validate_sampling_parameter("top_p", self.top_p, 0.0, 1.0)?;
+        let thinking_budget = self.thinking_budget_resolution()?;
         let structured_output = merge_structured_output_requests(
             self.response_format
                 .clone()
@@ -145,7 +182,7 @@ impl OpenAiResponsesRequest {
             temperature: self.temperature,
             top_p: self.top_p,
             stream: self.stream,
-            thinking_budget: self.thinking_budget,
+            thinking_budget,
             structured_output,
             enforced_structured_generation,
         })
@@ -208,6 +245,15 @@ pub enum OpenAiResponsesValidationError {
     EmptyContentParts,
     #[error("image input is supported only in user messages")]
     ImageInputOutsideUserMessage,
+    /// Two or more thinking-budget spellings were supplied and disagreed.
+    #[error(
+        "thinking_budget ({thinking_budget:?}) conflicts with thinking_token_budget ({thinking_token_budget:?}) and thinking_budget_tokens ({thinking_budget_tokens:?})"
+    )]
+    ConflictingThinkingBudgets {
+        thinking_budget: Option<u32>,
+        thinking_token_budget: Option<u32>,
+        thinking_budget_tokens: Option<u32>,
+    },
     #[error("invalid image input: {0}")]
     ImageInput(#[source] crate::OpenAiChatCompletionValidationError),
     #[error("encrypted foreign reasoning cannot be replayed locally")]

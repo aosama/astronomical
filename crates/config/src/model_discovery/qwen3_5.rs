@@ -4,6 +4,12 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+/// Lowest context window disk discovery and download preflight accept: one token for the prompt
+/// and one for the completion. Anything smaller cannot serve a single user turn.
+pub const MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS: u64 = 2;
+
+const MTP_TENSOR_COMPONENT: &str = "mtp";
+
 /// Family-derived metadata returned to neutral discovery orchestration.
 pub(super) struct Qwen3_5DiscoveredModelMetadata {
     pub context_window: u32,
@@ -28,6 +34,12 @@ pub(super) fn discover_model_metadata(
     model_directory: &Path,
     config_value: &serde_json::Value,
 ) -> Option<Qwen3_5DiscoveredModelMetadata> {
+    // A converted per-expert streaming revision declares itself with
+    // manifest.json (format version 3) and carries no shard index; it
+    // discovers through its manifest and resident weight bundle.
+    if model_directory.join("manifest.json").is_file() {
+        return discover_streaming_model_metadata(model_directory, config_value);
+    }
     if !model_directory
         .join("model.safetensors.index.json")
         .is_file()
@@ -36,8 +48,6 @@ pub(super) fn discover_model_metadata(
         return None;
     }
 
-    // A missing MTP-only shard is valid for target-only serving. Every shard
-    // that carries at least one target or vision tensor remains mandatory.
     let index_path = model_directory.join("model.safetensors.index.json");
     let has_vision = if let Ok(index_bytes) = fs::read(&index_path)
         && let Ok(index_document) = serde_json::from_slice::<serde_json::Value>(&index_bytes)
@@ -45,16 +55,8 @@ pub(super) fn discover_model_metadata(
             .get("weight_map")
             .and_then(serde_json::Value::as_object)
     {
-        let mut shard_file_names = HashSet::new();
-        let mut required_shard_file_names = HashSet::new();
-        for (tensor_name, tensor_shard_file_name) in weight_map {
-            if let Some(tensor_shard_file_name) = tensor_shard_file_name.as_str() {
-                shard_file_names.insert(tensor_shard_file_name.to_owned());
-                if !contains_mtp_component(tensor_name) {
-                    required_shard_file_names.insert(tensor_shard_file_name.to_owned());
-                }
-            }
-        }
+        let shard_file_names = all_shard_file_names(weight_map);
+        let required_shard_file_names = required_shard_file_names(weight_map);
         for shard_file_name in &shard_file_names {
             if !model_directory.join(shard_file_name).is_file()
                 && required_shard_file_names.contains(shard_file_name)
@@ -69,13 +71,9 @@ pub(super) fn discover_model_metadata(
         false
     };
 
-    let context_window = config_value
-        .get("text_config")
-        .and_then(|text_config| text_config.get("max_position_embeddings"))
-        .or_else(|| config_value.get("max_position_embeddings"))
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0) as u32;
-    if context_window < 2 {
+    let context_window_tokens = context_window_tokens(config_value);
+    let context_window = u32::try_from(context_window_tokens).map_err(|_| ()).ok()?;
+    if context_window_tokens < MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS {
         return None;
     }
     let protocol_maximum_output_tokens = u32::from(u16::MAX).min(context_window - 1);
@@ -92,10 +90,94 @@ pub(super) fn discover_model_metadata(
     })
 }
 
+/// Reads the effective context window exactly like disk discovery: the text config carries it
+/// first, and a plain text-only config declares it at the root. Zero means the document declares
+/// no usable context window.
+#[must_use]
+pub fn context_window_tokens(config_value: &serde_json::Value) -> u64 {
+    config_value
+        .get("text_config")
+        .and_then(|text_config| text_config.get("max_position_embeddings"))
+        .or_else(|| config_value.get("max_position_embeddings"))
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default()
+}
+
+/// Extracts the shard file names disk discovery and download preflight both treat as mandatory:
+/// every shard that carries at least one non-MTP tensor. A missing MTP-only shard stays valid for
+/// target-only serving; a missing target or vision shard never does. Entries that do not map a
+/// tensor to a string shard are skipped, mirroring disk discovery's tolerance.
+#[must_use]
+pub fn required_shard_file_names(
+    weight_map: &serde_json::Map<String, serde_json::Value>,
+) -> HashSet<String> {
+    weight_map
+        .iter()
+        .filter_map(|(tensor_name, tensor_shard_file_name)| {
+            tensor_shard_file_name
+                .as_str()
+                .map(|shard| (tensor_name, shard))
+        })
+        .filter(|(tensor_name, _)| !contains_mtp_component(tensor_name))
+        .map(|(_, shard)| shard.to_owned())
+        .collect()
+}
+
+fn all_shard_file_names(
+    weight_map: &serde_json::Map<String, serde_json::Value>,
+) -> HashSet<String> {
+    weight_map
+        .values()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
 fn contains_mtp_component(tensor_name: &str) -> bool {
     tensor_name
         .split('.')
-        .any(|tensor_name_component| tensor_name_component == "mtp")
+        .any(|tensor_name_component| tensor_name_component == MTP_TENSOR_COMPONENT)
+}
+
+/// Discovers a converted per-expert streaming revision from its manifest and
+/// resident weight bundle. The manifest replaces the shard index; the vision
+/// bundle travels beside the resident weights unchanged.
+fn discover_streaming_model_metadata(
+    model_directory: &Path,
+    config_value: &serde_json::Value,
+) -> Option<Qwen3_5DiscoveredModelMetadata> {
+    #[derive(serde::Deserialize)]
+    struct StreamingManifestProbe {
+        format_version: u32,
+    }
+    let manifest: StreamingManifestProbe =
+        serde_json::from_slice(&fs::read(model_directory.join("manifest.json")).ok()?).ok()?;
+    if manifest.format_version != 3 || !model_directory.join("tokenizer.json").is_file() {
+        return None;
+    }
+    if !model_directory.join("resident.safetensors").is_file() {
+        return None;
+    }
+    let has_vision = model_directory
+        .join("optiq/optiq_vision.safetensors")
+        .is_file();
+
+    let context_window_tokens = context_window_tokens(config_value);
+    let context_window = u32::try_from(context_window_tokens).map_err(|_| ()).ok()?;
+    if context_window_tokens < MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS {
+        return None;
+    }
+    let protocol_maximum_output_tokens = u32::from(u16::MAX).min(context_window - 1);
+
+    Some(Qwen3_5DiscoveredModelMetadata {
+        context_window,
+        max_input_tokens: context_window - 1,
+        max_output_tokens: protocol_maximum_output_tokens,
+        has_vision,
+        supports_reasoning: true,
+        supports_tool_calls: true,
+        model_size_bytes: measure_model_safetensors_bytes(model_directory)?,
+    })
 }
 
 fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
@@ -111,12 +193,16 @@ fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
                 pending_directories.push(entry_path);
                 continue;
             }
-            if entry_path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                != Some("safetensors")
-                || !entry_path.is_file()
-            {
+            // Converted per-expert streaming revisions store expert weights in
+            // `.apack` pack files beside the resident safetensors bundles; a
+            // model's measured disk size must include every weight payload.
+            let is_weight_payload_file = matches!(
+                entry_path
+                    .extension()
+                    .and_then(|extension| extension.to_str()),
+                Some("safetensors") | Some("apack")
+            );
+            if !is_weight_payload_file || !entry_path.is_file() {
                 continue;
             }
             let canonical_safetensors_path = fs::canonicalize(&entry_path).ok()?;

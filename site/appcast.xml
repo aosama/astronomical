@@ -4,29 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.31</title>
-            <pubDate>Sun, 06 Sep 2026 09:09:04 -0400</pubDate>
-            <sparkle:version>426</sparkle:version>
-            <sparkle:shortVersionString>0.2.31</sparkle:shortVersionString>
+            <title>0.2.33</title>
+            <pubDate>Mon, 07 Sep 2026 15:44:58 -0400</pubDate>
+            <sparkle:version>440</sparkle:version>
+            <sparkle:shortVersionString>0.2.33</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.31
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.33
 
-User-visible changes:
+## What changed
 
-- Downloadable model catalog. The Library catalog (schema version 2) now ships two additional accepted model entries pinned to immutable Hugging Face revisions: the 8-bit affine ModernBERT embedding encoder (about 0.163 GB) for the native embeddings endpoint, and the 4-bit Qwen3.5 2B vision-language chat model (about 1.75 GB) with enforced structured outputs, reasoning, tool calls, and a 262144-token context window. The Observatory Library renders the ModernBERT family with a dedicated Embeddings capability badge.
+- Coding-agent clients can now send their thinking-token budget under the OpenAI-compatible spellings `thinking_token_budget` or `thinking_budget_tokens` on both Chat Completions and Responses. Previously these requests were rejected as unknown fields, so agent reasoning budgets never took effect. When several spellings appear together they must agree; disagreement is rejected with a structured error. Unknown fields continue to fail loudly with a structured error. (#431)
 
-Notes:
+## Compatibility
 
-- No REST API changes in this release; chat, responses, image-generation, and embeddings contracts are unchanged.
-- Existing configuration, Library, and prompt-cache state are preserved across the update.
+- No breaking changes. The canonical `thinking_budget` field keeps its meaning; no migration of models, configuration, or saved state is required.
 
-Astronomical Stable is code-signed with Developer ID, notarized by Apple, and distributed as a notarized disk image. The Sparkle update feed is signed, and this release activates it through the ordinary update channel.
+## Distribution
+
+- Signed with Developer ID, notarized through Apple notarization, and Sparkle-signed for the update feed. The published DMG is digest-bound to the release manifest.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.31/Astronomical-0.2.31-macOS-arm64.dmg" length="15943623" type="application/octet-stream" sparkle:edSignature="gq0dY7SOZKuTVd4HVM5ItE2IrQgzGY+f7hrH9nndGKOxlgp/no7rXpngcyTbkI4PeswxQ+zX0TqkFcQvzmRnAw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.33/Astronomical-0.2.33-macOS-arm64.dmg" length="16125299" type="application/octet-stream" sparkle:edSignature="DDRsDSjoBUYleEoHJ05FPh0oyrDXF5LHbA+VdYlWiI5FQAJ7sQswdonHQJzjhurMXyGyUcs1TWHm1plsE6WGDg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: m6I9UdwCAnAbIHiXvKdDwJklCZOmuKYRpkrMf7c/2tMV68rJj5JCYR0ssm/98Wvlx4DvZVSDxABRI56PhvwADw==
-length: 2225
+edSignature: HCWzL5TpbIbDviw/Fm8H5eD9mjHqNtpAwWN0h/RifhVHDPD/bLunrkAX0l560p3qJFCSSsDbcQQUEsJC1KWmAg==
+length: 2092
 -->

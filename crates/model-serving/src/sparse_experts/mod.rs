@@ -22,6 +22,8 @@ pub use assignment_permutation::invert_assignment_order;
 pub use assignment_sort::{
     SortedExpertAssignments, restore_expert_assignment_order, sort_expert_assignments,
 };
+#[cfg(feature = "direct-mlx")]
+pub use assignment_sort_policy::MINIMUM_SORTED_EXPERT_ASSIGNMENTS;
 pub use assignment_sort_policy::should_use_sorted_expert_reduction;
 pub use error::SparseExpertError;
 #[cfg(feature = "direct-mlx")]

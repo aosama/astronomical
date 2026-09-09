@@ -19,7 +19,7 @@ use crate::expert_paging::safetensors_header::{
 use crate::qwen3_5::{OptiQQuantizationProfile, Qwen3_5Config};
 
 /// The three MoE projection names in an expert's SwitchMLP block.
-const PROJECTION_NAMES: &[&str] = &["gate_proj", "up_proj", "down_proj"];
+pub(crate) const PROJECTION_NAMES: &[&str] = &["gate_proj", "up_proj", "down_proj"];
 
 /// The three quantized parameter names for each projection.
 const PARAMETER_NAMES: &[&str] = &["weight", "scales", "biases"];
@@ -199,14 +199,14 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
     })
 }
 
-struct ProjectionStorageContract {
-    quantization_bits: i32,
-    quantization_group_size: i32,
-    parameter_names: &'static [&'static str],
-    quantization_mode: QuantizationMode,
+pub(crate) struct ProjectionStorageContract {
+    pub(crate) quantization_bits: i32,
+    pub(crate) quantization_group_size: i32,
+    pub(crate) parameter_names: &'static [&'static str],
+    pub(crate) quantization_mode: QuantizationMode,
 }
 
-fn projection_storage_contract(
+pub(crate) fn projection_storage_contract(
     projection_quantization_profile: OptiQQuantizationProfile,
 ) -> Result<ProjectionStorageContract, ExpertManifestError> {
     if projection_quantization_profile.is_unquantized() {
@@ -234,7 +234,9 @@ fn projection_storage_contract(
     })
 }
 
-fn layer_quantization_mode(projection_quantization_modes: &[QuantizationMode]) -> QuantizationMode {
+pub(crate) fn layer_quantization_mode(
+    projection_quantization_modes: &[QuantizationMode],
+) -> QuantizationMode {
     if projection_quantization_modes
         .iter()
         .all(|quantization_mode| *quantization_mode == QuantizationMode::NativeBfloat16)
@@ -313,7 +315,7 @@ fn validate_quantized_tensor_source(
     })
 }
 
-fn validate_projection_quantization_geometry(
+pub(crate) fn validate_projection_quantization_geometry(
     projection_name: &str,
     weight_source: &QuantizedTensorSource,
     scales_source: &QuantizedTensorSource,

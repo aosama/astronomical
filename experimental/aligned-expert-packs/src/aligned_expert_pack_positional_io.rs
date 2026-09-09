@@ -1,4 +1,4 @@
-use std::{fs::File, os::unix::fs::FileExt};
+use std::{fs::File, os::unix::fs::FileExt, path::Path};
 
 use astronomical_model_serving::QuantizedTensorSource;
 
@@ -144,6 +144,114 @@ pub(super) fn compare_source_tensor_to_pack(
             .checked_add(next_comparison_byte_count)
             .ok_or(AlignedExpertPackError::ArithmeticOverflow {
                 operation: "advance aligned expert payload comparison cursor",
+            })?;
+    }
+    Ok(())
+}
+
+/// Copies one exact source byte range into a pack file without decoding values.
+pub(super) fn copy_file_range_to_pack(
+    source_file_path: &Path,
+    source_offset_bytes: u64,
+    logical_byte_count: usize,
+    aligned_expert_pack_file: &File,
+    destination_offset_bytes: u64,
+) -> Result<(), AlignedExpertPackError> {
+    let source_file = File::open(source_file_path)?;
+    let mut source_copy_scratch_bytes = vec![0_u8; PACK_COPY_SCRATCH_BYTES];
+    let mut copied_byte_count = 0_usize;
+    while copied_byte_count < logical_byte_count {
+        let remaining_byte_count = logical_byte_count - copied_byte_count;
+        let next_copy_byte_count = remaining_byte_count.min(source_copy_scratch_bytes.len());
+        let copied_byte_count_u64 = u64::try_from(copied_byte_count).map_err(|_| {
+            AlignedExpertPackError::ArithmeticOverflow {
+                operation: "convert an aligned expert slice copy offset",
+            }
+        })?;
+        read_exact_at(
+            &source_file,
+            &mut source_copy_scratch_bytes[..next_copy_byte_count],
+            source_offset_bytes
+                .checked_add(copied_byte_count_u64)
+                .ok_or(AlignedExpertPackError::ArithmeticOverflow {
+                    operation: "calculate an aligned expert slice source offset",
+                })?,
+        )?;
+        write_all_at(
+            aligned_expert_pack_file,
+            &source_copy_scratch_bytes[..next_copy_byte_count],
+            destination_offset_bytes
+                .checked_add(copied_byte_count_u64)
+                .ok_or(AlignedExpertPackError::ArithmeticOverflow {
+                    operation: "calculate an aligned expert slice destination offset",
+                })?,
+        )?;
+        copied_byte_count = copied_byte_count.checked_add(next_copy_byte_count).ok_or(
+            AlignedExpertPackError::ArithmeticOverflow {
+                operation: "advance an aligned expert slice copy cursor",
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Compares one exact source byte range with the packed destination range.
+pub(super) fn compare_file_range_to_pack(
+    source_file_path: &Path,
+    source_offset_bytes: u64,
+    logical_byte_count: usize,
+    aligned_expert_pack_file: &File,
+    destination_offset_bytes: u64,
+    tensor_name: &str,
+) -> Result<(), AlignedExpertPackError> {
+    let source_file = File::open(source_file_path)?;
+    let mut source_comparison_bytes = vec![0_u8; PACK_COPY_SCRATCH_BYTES];
+    let mut pack_comparison_bytes = vec![0_u8; PACK_COPY_SCRATCH_BYTES];
+    let mut compared_byte_count = 0_usize;
+    while compared_byte_count < logical_byte_count {
+        let remaining_byte_count = logical_byte_count - compared_byte_count;
+        let next_comparison_byte_count = remaining_byte_count.min(PACK_COPY_SCRATCH_BYTES);
+        let compared_byte_count_u64 = u64::try_from(compared_byte_count).map_err(|_| {
+            AlignedExpertPackError::ArithmeticOverflow {
+                operation: "convert aligned expert slice comparison offset",
+            }
+        })?;
+        read_exact_at(
+            &source_file,
+            &mut source_comparison_bytes[..next_comparison_byte_count],
+            source_offset_bytes
+                .checked_add(compared_byte_count_u64)
+                .ok_or(AlignedExpertPackError::ArithmeticOverflow {
+                    operation: "calculate aligned expert slice source comparison offset",
+                })?,
+        )?;
+        read_exact_at(
+            aligned_expert_pack_file,
+            &mut pack_comparison_bytes[..next_comparison_byte_count],
+            destination_offset_bytes
+                .checked_add(compared_byte_count_u64)
+                .ok_or(AlignedExpertPackError::ArithmeticOverflow {
+                    operation: "calculate aligned expert slice pack comparison offset",
+                })?,
+        )?;
+        if source_comparison_bytes[..next_comparison_byte_count]
+            != pack_comparison_bytes[..next_comparison_byte_count]
+        {
+            let mismatch_position = source_comparison_bytes[..next_comparison_byte_count]
+                .iter()
+                .zip(&pack_comparison_bytes[..next_comparison_byte_count])
+                .position(|(source_byte, pack_byte)| source_byte != pack_byte)
+                .unwrap_or(0);
+            return Err(AlignedExpertPackError::PayloadByteMismatch {
+                tensor_name: tensor_name.to_owned(),
+                tensor_byte_offset: compared_byte_count_u64
+                    .saturating_add(mismatch_position as u64),
+            });
+        }
+        compared_byte_count = compared_byte_count
+            .checked_add(next_comparison_byte_count)
+            .ok_or(AlignedExpertPackError::ArithmeticOverflow {
+                operation: "advance aligned expert slice comparison cursor",
             })?;
     }
     Ok(())
