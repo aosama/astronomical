@@ -4,30 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.33</title>
-            <pubDate>Mon, 07 Sep 2026 15:44:58 -0400</pubDate>
-            <sparkle:version>440</sparkle:version>
-            <sparkle:shortVersionString>0.2.33</sparkle:shortVersionString>
+            <title>0.2.34</title>
+            <pubDate>Wed, 09 Sep 2026 04:07:45 -0400</pubDate>
+            <sparkle:version>475</sparkle:version>
+            <sparkle:shortVersionString>0.2.34</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.33
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.34
 
 ## What changed
 
-- Coding-agent clients can now send their thinking-token budget under the OpenAI-compatible spellings `thinking_token_budget` or `thinking_budget_tokens` on both Chat Completions and Responses. Previously these requests were rejected as unknown fields, so agent reasoning budgets never took effect. When several spellings appear together they must agree; disagreement is rejected with a structured error. Unknown fields continue to fail loudly with a structured error. (#431)
+- Library downloads now transfer payload files concurrently within a bounded window, start the largest files first, and split large files into concurrent in-file segments. Catalog models reach Ready faster because one slow shard no longer serializes the rest of the transfer. (#441)
+- Library refuses artifacts Astronomical cannot execute before any payload byte is requested. Unrecognized families and recognized-but-non-executable families fail with `model_not_executable` instead of occupying disk and time.
+- The download catalog includes Qwen 3.5 0.8B 4-bit and Ornith 1.5 35B A3B OptiQ Static 5.5bpw, so those models can be installed from Observatory without a custom Hugging Face identity.
 
 ## Compatibility
 
-- No breaking changes. The canonical `thinking_budget` field keeps its meaning; no migration of models, configuration, or saved state is required.
+- No breaking changes. Installed models, download jobs, configuration, and saved state are preserved; no migration is required.
 
 ## Distribution
 
 - Signed with Developer ID, notarized through Apple notarization, and Sparkle-signed for the update feed. The published DMG is digest-bound to the release manifest.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.33/Astronomical-0.2.33-macOS-arm64.dmg" length="16125299" type="application/octet-stream" sparkle:edSignature="DDRsDSjoBUYleEoHJ05FPh0oyrDXF5LHbA+VdYlWiI5FQAJ7sQswdonHQJzjhurMXyGyUcs1TWHm1plsE6WGDg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.34/Astronomical-0.2.34-macOS-arm64.dmg" length="16196988" type="application/octet-stream" sparkle:edSignature="fn/2xAhi1c2iBO04GXzDtCghKVMAbT3mRQvTLBhif2Mp+dJCmvUtG7XhgLjE+vqo3stRmGQFQElpPQ5HSF1sCw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: HCWzL5TpbIbDviw/Fm8H5eD9mjHqNtpAwWN0h/RifhVHDPD/bLunrkAX0l560p3qJFCSSsDbcQQUEsJC1KWmAg==
-length: 2092
+edSignature: yoEl+AuW6ImrYDpopjyaVyigTm0wNqsHtWGLpAElf34TqSFxHYVow3Io+UgqVxCFjTM11pq1c3Obx+sxgWzJAQ==
+length: 2294
 -->
