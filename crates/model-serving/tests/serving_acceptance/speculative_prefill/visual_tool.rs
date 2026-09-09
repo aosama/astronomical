@@ -115,11 +115,13 @@ async fn should_preserve_a_visual_tool_call_and_reject_prior_state_for_a_changed
         let target_only_tool_call = parse_one_tool_call(
             &tokenizer,
             &declared_tools,
+            "target_only",
             &target_only_measurement.generated_token_ids,
         );
         let speculative_prefill_tool_call = parse_one_tool_call(
             &tokenizer,
             &declared_tools,
+            "speculative_prefill",
             &speculative_prefill_measurement.generated_token_ids,
         );
         assert_schema_valid_literary_analysis_tool_call(&target_only_tool_call);
@@ -313,7 +315,10 @@ fn prepare_visual_tool_prompt(
                     .ordinary_target_prefill_control_span_token_count(),
                 sampling_temperature_thousandths: 1_000,
                 sampling_top_p_thousandths: 1_000,
-                sampling_seed: None,
+                // Locked seed: the visual tool journey must be a deterministic
+                // replay at the mandated temperature 1, so a failure indicts the
+                // pipeline rather than sampling luck.
+                sampling_seed: Some(95_600),
             };
         }
     }

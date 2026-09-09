@@ -27,6 +27,7 @@ pub enum SupervisorPerformanceOperation {
     LibraryCatalogLoad,
     DiskPreflight,
     ManifestFetch,
+    ExecutablePreflight,
     FileTransfer,
     Verification,
     Publication,
@@ -40,6 +41,7 @@ impl SupervisorPerformanceOperation {
             Self::LibraryCatalogLoad => "library_catalog_load",
             Self::DiskPreflight => "disk_preflight",
             Self::ManifestFetch => "manifest_fetch",
+            Self::ExecutablePreflight => "executable_preflight",
             Self::FileTransfer => "file_transfer",
             Self::Verification => "verification",
             Self::Publication => "publication",
@@ -90,6 +92,22 @@ impl SupervisorPerformanceMeasurement {
             SupervisorDownloadOperationDetail::ManifestFetch {
                 manifest_file_count,
                 manifest_total_bytes,
+            },
+        )
+    }
+
+    pub(crate) fn validated_executable_preflight(
+        is_success: bool,
+        huggingface_id: &str,
+        revision: &str,
+        manifest_file_count: usize,
+    ) -> Self {
+        Self::validated_download_measurement(
+            is_success,
+            huggingface_id,
+            revision,
+            SupervisorDownloadOperationDetail::ExecutablePreflight {
+                manifest_file_count,
             },
         )
     }
