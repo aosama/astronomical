@@ -302,9 +302,18 @@ jobs:
               printf '%s\n' "Automated dependency pull request: refreshing third-party/RUST_DEPENDENCY_NOTICES in place (bots cannot commit the regenerated file)."
               scripts/generate-rust-dependency-notices.sh
               ;;
-            *)
+            pull_request:*)
               printf '%s\n' "Error: third-party/RUST_DEPENDENCY_NOTICES is stale; run scripts/generate-rust-dependency-notices.sh and commit the result" >&2
               exit 1
+              ;;
+            *)
+              # Default-branch pushes can carry a bot-merged dependency update
+              # whose committed notices file is one regeneration behind. The
+              # bundled app must never ship stale notices, so refresh in
+              # place; the next human commit restores the committed copy
+              # through the strict pre-commit verification.
+              printf '%s\n' "Default-branch build: refreshing third-party/RUST_DEPENDENCY_NOTICES in place."
+              scripts/generate-rust-dependency-notices.sh
               ;;
           esac
         timeout-minutes: 2
