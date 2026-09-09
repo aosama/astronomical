@@ -11,8 +11,9 @@ use crate::{
 
 use super::{
     DiskCapacityQuery, DownloadCatalogEntry, DownloadDiskCapacityCheck, DownloadDiskPreflight,
-    DownloadDiskPreflightError, DownloadJob, DownloadJobError, DownloadJobStore,
-    DownloadJobStoreError, HuggingFaceHub, HuggingFaceHubError,
+    DownloadDiskPreflightError, DownloadExecutablePreflight, DownloadExecutablePreflightError,
+    DownloadJob, DownloadJobError, DownloadJobStore, DownloadJobStoreError, HuggingFaceHub,
+    HuggingFaceHubError,
 };
 
 /// Owns the required disk-before-network ordering and durable phase transitions.
@@ -34,6 +35,8 @@ pub enum DownloadManifestPreflightError {
     Disk(#[from] DownloadDiskPreflightError),
     #[error("Hugging Face manifest retrieval failed: {0}")]
     Hub(#[from] HuggingFaceHubError),
+    #[error("the manifest does not describe an executable artifact: {0}")]
+    ExecutableIdentity(#[from] DownloadExecutablePreflightError),
     #[error("download performance attribution failed: {0}")]
     Attribution(#[from] io::Error),
     #[error("download blocking task failed: {0}")]
@@ -143,6 +146,8 @@ where
                 },
             )
             .await??;
+        self.validate_executable_identity(catalog_entry, &manifest_outcome)
+            .await?;
         let exact_job =
             DownloadJob::from_manifest(&manifest_outcome, manifest_ready_at_unix_millis)?;
         self.replace_job(&exact_job).await?;
@@ -153,6 +158,33 @@ where
         self.check_exact_capacity(catalog_entry, &reconciled_exact_job)
             .await?;
         Ok(reconciled_exact_job)
+    }
+
+    async fn validate_executable_identity(
+        &self,
+        catalog_entry: &DownloadCatalogEntry,
+        manifest: &super::hugging_face_hub::HuggingFaceManifest,
+    ) -> Result<(), DownloadManifestPreflightError> {
+        let executable_preflight = DownloadExecutablePreflight::new(self.hub.clone());
+        self.attribution_log
+            .measure_async_operation(
+                SupervisorPerformanceOperation::ExecutablePreflight,
+                || executable_preflight.validate(manifest),
+                |validation_outcome| {
+                    SupervisorPerformanceMeasurement::validated_executable_preflight(
+                        validation_outcome.is_ok(),
+                        catalog_entry.huggingface_id(),
+                        catalog_entry.revision(),
+                        manifest.files().len(),
+                    )
+                },
+            )
+            .await
+            .map_err(DownloadManifestPreflightError::Attribution)
+            .and_then(|executable_identity_outcome| {
+                executable_identity_outcome
+                    .map_err(DownloadManifestPreflightError::ExecutableIdentity)
+            })
     }
 
     async fn check_exact_capacity(

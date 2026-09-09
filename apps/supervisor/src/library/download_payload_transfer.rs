@@ -10,13 +10,16 @@ use std::{
 
 use futures_util::StreamExt;
 use thiserror::Error;
-use tokio::io::AsyncWriteExt;
 
 use super::{
     DownloadJob, DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore,
     DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadRequest, HubPayloadTransport,
     HubTransportError,
     download_payload_response::{payload_url, validate_payload_response},
+    download_payload_transfer_segment::{PayloadSegment, SegmentedFileAssembler},
+    download_payload_transfer_window::{
+        ObservedTransferProgress, SegmentOutcome, TransferWindowStop,
+    },
     download_payload_verification::verify_download_job,
     download_publication_reconciliation::reconcile_publication_intent,
     download_staged_file::open_staged_file_for_append,
@@ -139,76 +142,27 @@ impl DownloadPayloadTransfer {
         self.replace_job(download_job.clone()).await?;
         self.progress_snapshot.publish(download_job.clone());
 
-        for file_index in 0..download_job.files().len() {
-            let download_file = download_job.files()[file_index].clone();
-            if download_file.bytes_on_disk() == download_file.expected_bytes() {
-                continue;
-            }
-            if self.transfer_control.is_pause_requested() {
+        self.replace_job(download_job.clone()).await?;
+        self.progress_snapshot.publish(download_job.clone());
+
+        match self
+            .download_pending_files_within_bounded_window(&mut download_job, updated_at_unix_millis)
+            .await
+        {
+            Ok(()) => {}
+            Err(TransferWindowStop::Paused) => {
                 return self.pause(updated_at_unix_millis).await;
             }
-            download_job
-                .select_download_file(download_file.relative_path(), updated_at_unix_millis)
-                .map_err(DownloadJobStoreError::from)?;
-            self.replace_job(download_job.clone()).await?;
-            self.progress_snapshot.publish(download_job.clone());
-            let resume_offset_bytes = download_file.bytes_on_disk();
-            let huggingface_id = download_job.huggingface_id().to_owned();
-            let revision = download_job.revision().to_owned();
-            let relative_path = download_file.relative_path().to_owned();
-            let transfer_outcome = self
-                .attribution_log
-                .measure_async_operation(
-                    SupervisorPerformanceOperation::FileTransfer,
-                    || self.transfer_file(&download_job, &download_file, updated_at_unix_millis),
-                    |transfer_outcome| {
-                        let measurement = if transfer_outcome.is_ok() {
-                            SupervisorPerformanceMeasurement::success()
-                        } else {
-                            SupervisorPerformanceMeasurement::failure()
-                        };
-                        measurement
-                            .with_file_transfer(
-                                &huggingface_id,
-                                &revision,
-                                &relative_path,
-                                resume_offset_bytes,
-                                transfer_outcome.as_ref().copied().unwrap_or(0),
-                            )
-                            .unwrap_or_else(|_| SupervisorPerformanceMeasurement::failure())
-                    },
-                )
-                .await
-                .map_err(DownloadPayloadTransferError::Attribution);
-            let transferred_bytes = match transfer_outcome {
-                Ok(Ok(transferred_bytes)) => transferred_bytes,
-                Ok(Err(transfer_error)) => {
-                    let public_error_code =
-                        if matches!(transfer_error, DownloadPayloadTransferError::DownloadGated) {
-                            DownloadJobPublicErrorCode::DownloadGated
-                        } else {
-                            DownloadJobPublicErrorCode::DownloadFailed
-                        };
-                    self.persist_failure(public_error_code, updated_at_unix_millis)
-                        .await?;
-                    return Err(transfer_error);
-                }
-                Err(attribution_error) => return Err(attribution_error),
-            };
-            let completed_file_bytes = resume_offset_bytes
-                .checked_add(transferred_bytes)
-                .ok_or(DownloadPayloadTransferError::InvalidPayloadLength)?;
-            download_job
-                .record_file_progress(
-                    download_file.relative_path(),
-                    completed_file_bytes,
-                    updated_at_unix_millis,
-                )
-                .map_err(DownloadJobStoreError::from)?;
-            self.replace_job(download_job.clone()).await?;
-            self.progress_snapshot.publish(download_job.clone());
-            if self.transfer_control.is_pause_requested() {
-                return self.pause(updated_at_unix_millis).await;
+            Err(TransferWindowStop::TransferFailed(transfer_error)) => {
+                let public_error_code =
+                    if matches!(transfer_error, DownloadPayloadTransferError::DownloadGated) {
+                        DownloadJobPublicErrorCode::DownloadGated
+                    } else {
+                        DownloadJobPublicErrorCode::DownloadFailed
+                    };
+                self.persist_failure(public_error_code, updated_at_unix_millis)
+                    .await?;
+                return Err(transfer_error);
             }
         }
 
@@ -286,13 +240,21 @@ impl DownloadPayloadTransfer {
         Ok(DownloadPayloadTransferOutcome::ReadyToPublish(download_job))
     }
 
-    async fn transfer_file(
+    /// Streams one segment's ranged response through the file's ordered assembler while
+    /// publishing live progress. The assembler appends only at the contiguous prefix, so the
+    /// staged file's synchronized length keeps equaling its received bytes for pause and restart
+    /// reconciliation no matter which segment finishes first.
+    pub(super) async fn transfer_payload_segment(
         &self,
         download_job: &DownloadJob,
         download_file: &super::DownloadJobFile,
+        payload_segment: &PayloadSegment,
+        assembler: std::sync::Arc<SegmentedFileAssembler>,
         updated_at_unix_millis: u64,
-    ) -> Result<u64, DownloadPayloadTransferError> {
-        let resume_offset_bytes = download_file.bytes_on_disk();
+        observed_transfer_progress: &ObservedTransferProgress,
+    ) -> Result<SegmentOutcome, DownloadPayloadTransferError> {
+        let segment_start_bytes = payload_segment.start_offset_bytes();
+        let expected_segment_bytes = payload_segment.end_offset_bytes() - segment_start_bytes;
         let payload_url = payload_url(
             download_job.huggingface_id(),
             download_job.revision(),
@@ -300,7 +262,7 @@ impl DownloadPayloadTransfer {
         )?;
         let payload_response = self
             .transport
-            .execute_payload(HubPayloadRequest::get(payload_url, resume_offset_bytes))
+            .execute_payload(HubPayloadRequest::get(payload_url, segment_start_bytes))
             .await?;
         if matches!(payload_response.status(), 401 | 403) {
             return Err(DownloadPayloadTransferError::DownloadGated);
@@ -309,24 +271,11 @@ impl DownloadPayloadTransfer {
             payload_response.status(),
             payload_response.content_range(),
             payload_response.content_length(),
-            resume_offset_bytes,
+            segment_start_bytes,
             download_file.expected_bytes(),
         )?;
-        let staged_file_path = download_job
-            .staging_directory(self.job_store.models_directory())
-            .join(download_file.relative_path());
-        let models_directory = self.job_store.models_directory().to_path_buf();
-        let open_path = staged_file_path.clone();
-        let staged_file = tokio::task::spawn_blocking(move || {
-            open_staged_file_for_append(&models_directory, &open_path, resume_offset_bytes)
-        })
-        .await
-        .map_err(DownloadPayloadTransferError::Task)??;
-        let mut staged_file = tokio::fs::File::from_std(staged_file);
-        let expected_transfer_bytes = download_file.expected_bytes() - resume_offset_bytes;
         let mut transferred_bytes = 0_u64;
         let mut last_progress_publication_at = None;
-        let mut observed_download_job = download_job.clone();
         let mut deferred_transfer_error = None;
         let mut payload_stream = payload_response.into_byte_stream();
         while let Some(payload_chunk) = payload_stream.next().await {
@@ -338,54 +287,68 @@ impl DownloadPayloadTransfer {
                     break;
                 }
             };
+            let remaining_segment_bytes = expected_segment_bytes - transferred_bytes;
+            // Open-ended responses carry the whole remaining tail, so a single chunk may span
+            // the segment boundary; consume only this segment's share and drop the rest.
+            let consumed_chunk = if payload_chunk.len() as u64 > remaining_segment_bytes {
+                payload_chunk.slice(0..remaining_segment_bytes as usize)
+            } else {
+                payload_chunk
+            };
             let Some(updated_transferred_bytes) =
-                transferred_bytes.checked_add(payload_chunk.len() as u64)
+                transferred_bytes.checked_add(consumed_chunk.len() as u64)
             else {
                 deferred_transfer_error = Some(DownloadPayloadTransferError::InvalidPayloadLength);
                 break;
             };
-            if updated_transferred_bytes > expected_transfer_bytes {
-                deferred_transfer_error = Some(DownloadPayloadTransferError::InvalidPayloadLength);
-                break;
-            }
             transferred_bytes = updated_transferred_bytes;
-            staged_file
-                .write_all(&payload_chunk)
-                .await
-                .map_err(DownloadPayloadTransferError::WritePayload)?;
+            assembler
+                .write_chunk(
+                    segment_start_bytes + transferred_bytes - consumed_chunk.len() as u64,
+                    consumed_chunk,
+                )
+                .await?;
             let should_publish_progress =
                 last_progress_publication_at.is_none_or(|last_publication_at: Instant| {
                     last_publication_at.elapsed() >= LIVE_PROGRESS_PUBLICATION_INTERVAL
                 });
             if should_publish_progress {
-                observed_download_job
-                    .record_file_progress(
+                observed_transfer_progress
+                    .record_received_bytes(
                         download_file.relative_path(),
-                        resume_offset_bytes + transferred_bytes,
+                        assembler.contiguous_end_bytes().await,
                         updated_at_unix_millis,
                     )
                     .map_err(DownloadJobStoreError::from)?;
-                self.progress_snapshot
-                    .publish(observed_download_job.clone());
                 last_progress_publication_at = Some(Instant::now());
+            }
+            if transferred_bytes == expected_segment_bytes {
+                break;
             }
             if self.transfer_control.is_pause_requested() {
                 break;
             }
         }
-        staged_file
-            .sync_all()
-            .await
-            .map_err(DownloadPayloadTransferError::WritePayload)?;
         if let Some(transfer_error) = deferred_transfer_error {
             return Err(transfer_error);
         }
         if !self.transfer_control.is_pause_requested()
-            && transferred_bytes != expected_transfer_bytes
+            && transferred_bytes != expected_segment_bytes
         {
             return Err(DownloadPayloadTransferError::InvalidPayloadLength);
         }
-        Ok(transferred_bytes)
+        let contiguous_end_bytes = assembler.contiguous_end_bytes().await;
+        // The file completes when the assembler's contiguous prefix reaches the expected size;
+        // whichever segment's write advances the prefix past the file end observes it first.
+        let file_completed = !self.transfer_control.is_pause_requested()
+            && contiguous_end_bytes == download_file.expected_bytes();
+        if file_completed {
+            assembler.finalize().await?;
+        }
+        Ok(SegmentOutcome {
+            contiguous_end_bytes,
+            file_completed,
+        })
     }
 
     async fn load_recovered_job(
@@ -409,6 +372,61 @@ impl DownloadPayloadTransfer {
         tokio::task::spawn_blocking(move || job_store.replace_current(&download_job))
             .await
             .map_err(DownloadPayloadTransferError::Task)??;
+        Ok(())
+    }
+
+    pub(super) fn attribution_log(&self) -> &SupervisorPerformanceAttributionLog {
+        &self.attribution_log
+    }
+
+    pub(super) fn job_store(&self) -> &DownloadJobStore {
+        &self.job_store
+    }
+
+    pub(super) fn progress_snapshot(&self) -> &DownloadProgressSnapshot {
+        &self.progress_snapshot
+    }
+
+    pub(super) fn is_pause_requested(&self) -> bool {
+        self.transfer_control.is_pause_requested()
+    }
+
+    pub(super) fn request_pause(&self) {
+        self.transfer_control.request_pause();
+    }
+
+    pub(super) async fn select_pending_file_durably(
+        &self,
+        download_job: &mut DownloadJob,
+        pending_file: &super::DownloadJobFile,
+        updated_at_unix_millis: u64,
+        observed_transfer_progress: &ObservedTransferProgress,
+    ) -> Result<(), DownloadPayloadTransferError> {
+        download_job
+            .select_download_file(pending_file.relative_path(), updated_at_unix_millis)
+            .map_err(DownloadJobStoreError::from)?;
+        self.replace_job(download_job.clone()).await?;
+        observed_transfer_progress
+            .select_file(pending_file.relative_path(), updated_at_unix_millis)
+            .map_err(|_| DownloadPayloadTransferError::InvalidJobState)
+    }
+
+    pub(super) async fn record_file_progress_durably(
+        &self,
+        download_job: &mut DownloadJob,
+        pending_file: &super::DownloadJobFile,
+        bytes_on_disk: u64,
+        updated_at_unix_millis: u64,
+    ) -> Result<(), DownloadPayloadTransferError> {
+        download_job
+            .record_file_progress(
+                pending_file.relative_path(),
+                bytes_on_disk,
+                updated_at_unix_millis,
+            )
+            .map_err(DownloadJobStoreError::from)?;
+        self.replace_job(download_job.clone()).await?;
+        self.progress_snapshot.publish(download_job.clone());
         Ok(())
     }
 

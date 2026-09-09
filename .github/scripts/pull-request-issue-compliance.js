@@ -1,6 +1,14 @@
 // This validator owns the repository's pull-request-to-issue contract. Keeping
 // the policy pure makes every contributor-facing failure reproducible locally.
 
+// Dependency and workflow bots open pull requests programmatically and cannot
+// author issue-linked bodies, so the provenance contract is enforced on human
+// pull requests only. The suffix match covers Dependabot, Renovate, and any
+// future automation GitHub names with the [bot] marker.
+function isAutomatedPullRequest(pullRequestAuthorLogin) {
+    return /\[bot\]$/i.test(String(pullRequestAuthorLogin ?? ""));
+}
+
 function removeHtmlComments(markdown) {
     return markdown.replace(/<!--[\s\S]*?-->/g, "");
 }
@@ -63,5 +71,6 @@ async function validatePullRequestIssue({ pullRequestBody, loadIssue }) {
 }
 
 module.exports = {
+    isAutomatedPullRequest,
     validatePullRequestIssue,
 };

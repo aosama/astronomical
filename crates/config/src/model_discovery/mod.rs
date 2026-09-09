@@ -8,9 +8,11 @@ use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
 
 const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
 
+mod artifact_discovery;
 mod bounded_artifact_file;
 mod classified_artifacts;
 mod deepseek_v4;
+mod effective_models;
 mod flux2_klein;
 mod flux2_klein_documents;
 mod k2_horizon_mova;
@@ -19,14 +21,24 @@ mod model_family;
 mod modernbert;
 mod qwen3_5;
 
+pub(crate) use artifact_discovery::{try_discover_model, try_discover_model_with_id};
 pub use classified_artifacts::{
     ClassifiedModelArtifact, discover_classified_model_artifacts, requestable_model_id,
+};
+pub use effective_models::{
+    EffectiveModelDiscovery, EffectiveModelDiscoveryError, discover_effective_models,
 };
 pub use flux2_klein::{
     Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError,
     verify_model_directory as verify_flux2_klein_model_directory,
 };
-pub use model_family::{ModelFamily, ModelFamilyClassificationError, classify_model_directory};
+pub use model_family::{
+    ModelFamily, ModelFamilyClassificationError, classify_model_directory,
+    classify_pipeline_index_bytes,
+};
+pub use qwen3_5::{
+    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, context_window_tokens, required_shard_file_names,
+};
 
 /// Capability contract for one discovered executable model.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -387,154 +399,6 @@ fn scan_directory_recursive(
 /// `try_discover_model_with_id` instead.
 ///
 /// Returns `None` for classified families that are not executable yet.
-fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
-    let model_id = model_directory
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "unknown".to_owned());
-    try_discover_model_with_id(model_directory, &model_id)
-}
-
-/// Attempts to discover an executable model from a directory with an explicit model ID.
-///
-/// This variant accepts a custom `model_id`, useful for HuggingFace cache entries
-/// where the model_id is derived from the decoded `models--org--repo` directory name
-/// rather than the snapshot hash.
-fn try_discover_model_with_id(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
-    // The typed classifier rejects ambiguous duplicate family markers before
-    // the looser metadata document can participate in executable discovery.
-    let model_family = model_family::classify_model_directory(model_directory)
-        .ok()
-        .flatten()?;
-    match model_family {
-        ModelFamily::Qwen3_5 => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
-            let family_metadata = qwen3_5::discover_model_metadata(model_directory, &config_value)?;
-            let immutable_provenance =
-                classified_artifacts::immutable_model_provenance(model_directory);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id: immutable_provenance
-                    .as_ref()
-                    .map(|(provider_model_id, _)| provider_model_id.clone()),
-                model_family,
-                revision: immutable_provenance.map_or_else(
-                    || derive_revision_from_config_bytes(&config_bytes),
-                    |(_, revision)| revision,
-                ),
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-                    context_window: family_metadata.context_window,
-                    max_input_tokens: family_metadata.max_input_tokens,
-                    max_output_tokens: family_metadata.max_output_tokens,
-                    supports_vision: family_metadata.has_vision,
-                    supports_reasoning: family_metadata.supports_reasoning,
-                    supports_tool_calls: family_metadata.supports_tool_calls,
-                }),
-                license: None,
-                model_size_bytes: family_metadata.model_size_bytes,
-            })
-        }
-        ModelFamily::Laguna => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let laguna_metadata = laguna::discover_model_metadata(model_directory, &config_bytes)?;
-            let provider_model_id =
-                classified_artifacts::immutable_model_provenance(model_directory)
-                    .filter(|(_, revision)| revision == &laguna_metadata.revision)
-                    .map(|(provider_model_id, _)| provider_model_id);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id,
-                model_family,
-                revision: laguna_metadata.revision,
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-                    context_window: laguna_metadata.context_window,
-                    max_input_tokens: laguna_metadata.max_input_tokens,
-                    max_output_tokens: laguna_metadata.max_output_tokens,
-                    supports_vision: laguna_metadata.has_vision,
-                    supports_reasoning: laguna_metadata.supports_reasoning,
-                    supports_tool_calls: laguna_metadata.supports_tool_calls,
-                }),
-                license: None,
-                model_size_bytes: laguna_metadata.model_size_bytes,
-            })
-        }
-        ModelFamily::Flux2Klein => {
-            let verified_evidence = flux2_klein::verify_model_directory(model_directory).ok()?;
-            Some(DiscoveredModel {
-                model_id: verified_evidence.canonical_model_id,
-                provider_model_id: Some(verified_evidence.provider_model_id),
-                model_family,
-                revision: verified_evidence.revision,
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
-                license: Some(verified_evidence.license),
-                model_size_bytes: verified_evidence.model_size_bytes,
-            })
-        }
-        ModelFamily::ModernBert => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
-            let family_metadata =
-                modernbert::discover_model_metadata(model_directory, &config_value)?;
-            let immutable_provenance =
-                classified_artifacts::immutable_model_provenance(model_directory);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id: immutable_provenance
-                    .as_ref()
-                    .map(|(provider_model_id, _)| provider_model_id.clone()),
-                model_family,
-                revision: immutable_provenance.map_or_else(
-                    || derive_revision_from_config_bytes(&config_bytes),
-                    |(_, revision)| revision,
-                ),
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
-                    vector_width: family_metadata.vector_width,
-                    max_input_tokens: family_metadata.max_input_tokens,
-                }),
-                license: None,
-                model_size_bytes: family_metadata.model_size_bytes,
-            })
-        }
-        ModelFamily::K2HorizonMoVA => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let family_metadata =
-                k2_horizon_mova::discover_model_metadata(model_directory, &config_bytes)?;
-            let immutable_provenance =
-                classified_artifacts::immutable_model_provenance(model_directory);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id: immutable_provenance
-                    .as_ref()
-                    .map(|(provider_model_id, _)| provider_model_id.clone()),
-                model_family,
-                revision: immutable_provenance.map_or_else(
-                    || derive_revision_from_config_bytes(&config_bytes),
-                    |(_, revision)| revision,
-                ),
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-                    context_window: family_metadata.context_window,
-                    max_input_tokens: family_metadata.max_input_tokens,
-                    max_output_tokens: family_metadata.max_output_tokens,
-                    supports_vision: family_metadata.has_vision,
-                    supports_reasoning: family_metadata.supports_reasoning,
-                    supports_tool_calls: family_metadata.supports_tool_calls,
-                }),
-                license: Some(ModelLicense::Apache20),
-                model_size_bytes: family_metadata.model_size_bytes,
-            })
-        }
-        // Classification is intentionally broader than executable discovery.
-        ModelFamily::DeepSeekV4 => None,
-    }
-}
-
-/// Rejects ambiguous public identities before callers can build lookup maps.
 fn reject_duplicate_model_ids(
     directory_scans: &[ModelDiscoveryDirectoryScan],
 ) -> Result<(), DiscoveredModelError> {
@@ -562,7 +426,7 @@ fn reject_duplicate_model_ids(
 }
 
 /// Derives a 12-character hex revision string from the SHA-256 hash of config.json bytes.
-fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
+pub(crate) fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut sha256_hasher = Sha256::new();
     sha256_hasher.update(config_bytes);
