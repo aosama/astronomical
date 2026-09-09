@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+    isAutomatedPullRequest,
     validatePullRequestIssue,
 } = require("./pull-request-issue-compliance.js");
 
@@ -16,6 +17,15 @@ function createIssue(overrides = {}) {
         ...overrides,
     };
 }
+
+test("should treat bot-authored pull requests as exempt from issue linkage", () => {
+    for (const authorLogin of ["dependabot[bot]", "renovate[bot]", "app/dependabot[bot]"]) {
+        assert.equal(isAutomatedPullRequest(authorLogin), true, authorLogin);
+    }
+    for (const authorLogin of ["aosama", "maintenance-contributor", "", undefined, null]) {
+        assert.equal(isAutomatedPullRequest(authorLogin), false, String(authorLogin));
+    }
+});
 
 test("should validate linked issue provenance for the complete pull request journey", async () => {
     const loadedIssueNumbers = [];
