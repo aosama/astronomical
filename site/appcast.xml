@@ -4,33 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.32</title>
-            <pubDate>Mon, 07 Sep 2026 13:29:37 -0400</pubDate>
-            <sparkle:version>434</sparkle:version>
-            <sparkle:shortVersionString>0.2.32</sparkle:shortVersionString>
+            <title>0.2.33</title>
+            <pubDate>Mon, 07 Sep 2026 15:44:58 -0400</pubDate>
+            <sparkle:version>440</sparkle:version>
+            <sparkle:shortVersionString>0.2.33</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Highlights
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.33
 
-- **K2 Horizon MoVA model family support**: discovery, artifact validation, resident generation, quantized KV state, prompt cache, and fused expert decode served end to end, with decode-lever defaults measured before adoption.
-- **Per-expert streaming revisions**: a converted Qwen3.5-MoE artifact is now a standalone executable model identity — one `.apack` file per (layer, expert), all non-expert tensors in one standard `resident.safetensors`, with pack-read provenance recorded in streaming summaries. Full residency materializes through the packs.
-- Tool calls in replayed model history never fail a request; the strict tool-call grammar stays on caller-declared tool definitions.
-- Model size shown on disk counts every stored weight byte, including per-expert pack files.
+## What changed
+
+- Coding-agent clients can now send their thinking-token budget under the OpenAI-compatible spellings `thinking_token_budget` or `thinking_budget_tokens` on both Chat Completions and Responses. Previously these requests were rejected as unknown fields, so agent reasoning budgets never took effect. When several spellings appear together they must agree; disagreement is rejected with a structured error. Unknown fields continue to fail loudly with a structured error. (#431)
 
 ## Compatibility
 
-- Model support is driven by each model's config, quantization, and index; the streaming path activates only for on-disk format version 3 revisions, and classic shard artifacts keep loading.
-- No REST API compatibility shims; the OpenAI-compatible surface is unchanged.
+- No breaking changes. The canonical `thinking_budget` field keeps its meaning; no migration of models, configuration, or saved state is required.
 
 ## Distribution
 
-- Signed with the Developer ID identity (Hardened Runtime, timestamps), notarized by Apple, stapled, and validated.
-- Artifacts are digest-bound to `release-manifest.json`; the Sparkle update feed is Ed25519-signed and activated only after the public release is verified.
+- Signed with Developer ID, notarized through Apple notarization, and Sparkle-signed for the update feed. The published DMG is digest-bound to the release manifest.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.32/Astronomical-0.2.32-macOS-arm64.dmg" length="16125382" type="application/octet-stream" sparkle:edSignature="AvVnLexosoYVxhDPxdouPFd1O5Yp53/qTRmu0mE+NogDsSz4+CTNkOfv/AJlck2FfchxGW1sCX6/4OVr6Oy+Bg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.33/Astronomical-0.2.33-macOS-arm64.dmg" length="16125299" type="application/octet-stream" sparkle:edSignature="DDRsDSjoBUYleEoHJ05FPh0oyrDXF5LHbA+VdYlWiI5FQAJ7sQswdonHQJzjhurMXyGyUcs1TWHm1plsE6WGDg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 4wev5yVCXoA4QKpcgrVpeWOzAytT19EMTDgRzkgdpH8+eQ9dXXV+kvV5p87h/OGBxPj3XQpc/erMvhGdtNDkCQ==
-length: 2603
+edSignature: HCWzL5TpbIbDviw/Fm8H5eD9mjHqNtpAwWN0h/RifhVHDPD/bLunrkAX0l560p3qJFCSSsDbcQQUEsJC1KWmAg==
+length: 2092
 -->
