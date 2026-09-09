@@ -285,7 +285,28 @@ jobs:
           fi
           printf '[verification-tools] status=success elapsed_seconds=%s cargo_about=%s\n' "$(( $(date +%s) - started_at_seconds ))" "$required_cargo_about_version"
       - name: Verify Rust dependency notices
-        run: scripts/generate-rust-dependency-notices.sh --check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PULL_REQUEST_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+        run: |
+          if scripts/generate-rust-dependency-notices.sh --check; then
+            printf '%s\n' '[rust-dependency-notices] status=current'
+            exit 0
+          fi
+          case "${EVENT_NAME}:${PULL_REQUEST_AUTHOR_LOGIN}" in
+            pull_request:*"[bot]")
+              # Dependency bots change Cargo.lock but cannot regenerate the
+              # committed notices file. Refresh it in place so this build
+              # bundles accurate notices; the strict contract stays on human
+              # pull requests and the pre-commit verification.
+              printf '%s\n' "Automated dependency pull request: refreshing third-party/RUST_DEPENDENCY_NOTICES in place (bots cannot commit the regenerated file)."
+              scripts/generate-rust-dependency-notices.sh
+              ;;
+            *)
+              printf '%s\n' "Error: third-party/RUST_DEPENDENCY_NOTICES is stale; run scripts/generate-rust-dependency-notices.sh and commit the result" >&2
+              exit 1
+              ;;
+          esac
         timeout-minutes: 2
       - name: Provision verified native dependencies
         id: native-archive-provisioning

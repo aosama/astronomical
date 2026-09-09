@@ -44,7 +44,7 @@ jobs:
         with:
           script: |
             const path = require("node:path");
-            const { validatePullRequestIssue } = require(
+            const { validatePullRequestIssue, isAutomatedPullRequest } = require(
               path.join(process.env.GITHUB_WORKSPACE, ".github/scripts/pull-request-issue-compliance.js"),
             );
 
@@ -60,6 +60,25 @@ jobs:
               pull_number: pullRequestNumber,
             });
             try {
+              if (isAutomatedPullRequest(pullRequest.user?.login)) {
+                await github.rest.checks.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  head_sha: pullRequest.head.sha,
+                  name: "PR issue compliance",
+                  status: "completed",
+                  conclusion: "success",
+                  output: {
+                    title: "Automated pull request: issue linkage not required",
+                    summary: `Bot account ${pullRequest.user.login} cannot author issue-linked bodies; the provenance contract is enforced on human pull requests.`,
+                  },
+                });
+                core.info(
+                  `[pr-issue-compliance] status=success reason=automated_pull_request author=${pullRequest.user.login}`,
+                );
+                return;
+              }
+
               const compliance = await validatePullRequestIssue({
                 pullRequestBody: pullRequest.body,
                 loadIssue: async (issueNumber) => {

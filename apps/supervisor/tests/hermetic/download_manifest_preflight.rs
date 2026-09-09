@@ -44,9 +44,9 @@ async fn should_check_disk_before_hub_and_persist_exact_manifest_after_the_secon
                         "private": false,
                         "gated": false
                     })),
-                    json_response(serde_json::json!([
-                        {"type":"file","size":9,"path":"config.json","oid":GIT_BLOB_SHA1}
-                    ])),
+                    qwen_tree_response(),
+                    qwen_config_response(),
+                    qwen_index_response(),
                 ]
                 .into(),
             ),
@@ -73,7 +73,7 @@ async fn should_check_disk_before_hub_and_persist_exact_manifest_after_the_secon
             .expect("the ordered preflight and manifest journey should complete");
 
         assert_eq!(capacity_query_count.load(Ordering::SeqCst), 2);
-        assert_eq!(exact_job.bytes_total(), 9);
+        assert_eq!(exact_job.bytes_total(), 39);
         assert!(exact_job.has_exact_manifest());
         assert_eq!(
             job_store
@@ -83,11 +83,16 @@ async fn should_check_disk_before_hub_and_persist_exact_manifest_after_the_secon
             exact_job
         );
         assert_eq!(transport.remaining_response_count(), 0);
-        assert_eq!(transport.request_count.load(Ordering::SeqCst), 2);
+        assert_eq!(transport.request_count.load(Ordering::SeqCst), 4);
         let operations = attribution_operations(&written_attribution);
         assert_eq!(
             operations,
-            ["disk_preflight", "manifest_fetch", "disk_preflight"]
+            [
+                "disk_preflight",
+                "manifest_fetch",
+                "executable_preflight",
+                "disk_preflight"
+            ]
         );
     })
     .await
@@ -145,9 +150,9 @@ async fn should_stop_before_hub_io_when_initial_disk_admission_fails() {
                         "private": false,
                         "gated": false
                     })),
-                    json_response(serde_json::json!([
-                        {"type":"file","size":9,"path":"config.json","oid":GIT_BLOB_SHA1}
-                    ])),
+                    qwen_tree_response(),
+                    qwen_config_response(),
+                    qwen_index_response(),
                 ]
                 .into(),
             ),
@@ -169,7 +174,7 @@ async fn should_stop_before_hub_io_when_initial_disk_admission_fails() {
             .expect("a paused premanifest job should retry without destructive cancellation");
 
         assert!(retried_job.has_exact_manifest());
-        assert_eq!(retry_transport.request_count.load(Ordering::SeqCst), 2);
+        assert_eq!(retry_transport.request_count.load(Ordering::SeqCst), 4);
     })
     .await
     .expect("failed initial disk admission should remain bounded");
@@ -194,9 +199,9 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
                         "private": false,
                         "gated": false
                     })),
-                    json_response(serde_json::json!([
-                        {"type":"file","size":9,"path":"config.json","oid":GIT_BLOB_SHA1}
-                    ])),
+                    qwen_tree_response(),
+                    qwen_config_response(),
+                    qwen_index_response(),
                 ]
                 .into(),
             ),
@@ -218,7 +223,7 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
                 .await,
             Err(DownloadManifestPreflightError::Disk(
                 DownloadDiskPreflightError::InsufficientSpace {
-                    required_bytes: 9,
+                    required_bytes: 39,
                     available_bytes: 5,
                 }
             ))
@@ -243,7 +248,7 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
             job_store,
             DownloadDiskPreflight::new(SequenceCapacityQuery {
                 query_count: resumed_capacity_count,
-                available_bytes: Arc::new(Mutex::new([5].into())),
+                available_bytes: Arc::new(Mutex::new([35].into())),
             }),
             HuggingFaceHub::new(resumed_transport.clone()),
             SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
@@ -256,7 +261,7 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
             .expect("exact manifest should resume without another Hub request");
 
         assert_eq!(resumed_job.bytes_completed(), 4);
-        assert_eq!(resumed_job.remaining_bytes(), 5);
+        assert_eq!(resumed_job.remaining_bytes(), 35);
         assert_eq!(resumed_transport.request_count.load(Ordering::SeqCst), 0);
     })
     .await
@@ -312,6 +317,30 @@ impl HubTransport for OrderingTransport {
                 .ok_or_else(|| HubTransportError::new("unexpected Hub request"))
         })
     }
+}
+
+const QWEN_SHARD_FILE: &str = "model-00001-of-00001.safetensors";
+
+fn qwen_tree_response() -> HubHttpResponse {
+    json_response(serde_json::json!([
+        {"type":"file","size":9,"path":"config.json","oid":GIT_BLOB_SHA1},
+        {"type":"file","size":12,"path":"tokenizer.json","oid":GIT_BLOB_SHA1},
+        {"type":"file","size":7,"path":"model-00001-of-00001.safetensors","oid":GIT_BLOB_SHA1},
+        {"type":"file","size":11,"path":"model.safetensors.index.json","oid":GIT_BLOB_SHA1}
+    ]))
+}
+
+fn qwen_config_response() -> HubHttpResponse {
+    json_response(serde_json::json!({
+        "model_type": "qwen3_5",
+        "text_config": {"max_position_embeddings": 262144}
+    }))
+}
+
+fn qwen_index_response() -> HubHttpResponse {
+    json_response(serde_json::json!({
+        "weight_map": {"model.layers.0.weight": QWEN_SHARD_FILE}
+    }))
 }
 
 fn json_response(body: serde_json::Value) -> HubHttpResponse {
