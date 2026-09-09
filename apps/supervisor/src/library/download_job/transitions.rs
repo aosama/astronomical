@@ -40,15 +40,16 @@ impl DownloadJob {
         self.validate()
     }
 
+    /// Records received bytes for one file independently of the concurrent transfer window.
+    /// The current file remains a user-interface hint for the most recently launched file, not an
+    /// exclusive transfer owner, so several files may record progress during one window.
     pub(crate) fn record_file_progress(
         &mut self,
         relative_path: &str,
         bytes_on_disk: u64,
         updated_at_unix_millis: u64,
     ) -> Result<(), DownloadJobError> {
-        if self.state != DownloadJobState::Downloading
-            || self.current_file_relative_path.as_deref() != Some(relative_path)
-        {
+        if self.state != DownloadJobState::Downloading {
             return Err(DownloadJobError::InvalidStateTransition);
         }
         let file_index = self
@@ -68,7 +69,9 @@ impl DownloadJob {
             .bytes_completed
             .checked_add(progress_increment)
             .ok_or(DownloadJobError::InconsistentByteTotals)?;
-        if bytes_on_disk == download_file.expected_bytes {
+        if bytes_on_disk == download_file.expected_bytes
+            && self.current_file_relative_path.as_deref() == Some(relative_path)
+        {
             self.current_file_relative_path = None;
         }
         self.updated_at_unix_millis = updated_at_unix_millis;

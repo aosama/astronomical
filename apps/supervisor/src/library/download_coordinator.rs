@@ -12,12 +12,12 @@ use thiserror::Error;
 use tokio::{sync::Mutex, task::JoinHandle};
 
 use super::{
-    DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadDiskPreflight, DownloadJob,
-    DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
-    DownloadManifestPreflight, DownloadManifestPreflightError, DownloadPayloadTransfer,
-    DownloadPayloadTransferOutcome, DownloadProgressSnapshot, DownloadPublication,
-    DownloadPublicationRefresh, DownloadTransferControl, HubPayloadTransport, HubTransport,
-    HuggingFaceHub,
+    DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadDiskPreflight,
+    DownloadExecutablePreflightError, DownloadJob, DownloadJobPublicErrorCode, DownloadJobState,
+    DownloadJobStore, DownloadJobStoreError, DownloadManifestPreflight,
+    DownloadManifestPreflightError, DownloadPayloadTransfer, DownloadPayloadTransferOutcome,
+    DownloadProgressSnapshot, DownloadPublication, DownloadPublicationRefresh,
+    DownloadTransferControl, HubPayloadTransport, HubTransport, HuggingFaceHub,
 };
 use crate::SupervisorPerformanceAttributionLog;
 
@@ -370,10 +370,28 @@ fn preflight_public_error(
 ) -> DownloadJobPublicErrorCode {
     match preflight_error {
         DownloadManifestPreflightError::Disk(_) => DownloadJobPublicErrorCode::InsufficientDisk,
-        DownloadManifestPreflightError::Hub(super::HuggingFaceHubError::DownloadGated) => {
-            DownloadJobPublicErrorCode::DownloadGated
-        }
+        DownloadManifestPreflightError::Hub(hub_error) => hub_preflight_public_error(hub_error),
+        DownloadManifestPreflightError::ExecutableIdentity(gate_error) => match gate_error {
+            DownloadExecutablePreflightError::NotExecutable(_) => {
+                DownloadJobPublicErrorCode::ModelNotExecutable
+            }
+            // A gate retrieval failure is a transport problem, not a verdict about the model,
+            // so it keeps the same public surface as any other preflight Hub failure.
+            DownloadExecutablePreflightError::Hub(hub_error) => {
+                hub_preflight_public_error(hub_error)
+            }
+        },
         _ => DownloadJobPublicErrorCode::DownloadFailed,
+    }
+}
+
+fn hub_preflight_public_error(
+    hub_error: &super::HuggingFaceHubError,
+) -> DownloadJobPublicErrorCode {
+    if matches!(hub_error, super::HuggingFaceHubError::DownloadGated) {
+        DownloadJobPublicErrorCode::DownloadGated
+    } else {
+        DownloadJobPublicErrorCode::DownloadFailed
     }
 }
 
