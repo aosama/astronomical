@@ -4,6 +4,7 @@ mod config_reload;
 mod config_reload_resolver;
 mod download_catalog;
 mod download_disk_preflight;
+mod download_executable_preflight;
 mod download_job;
 mod download_job_store;
 mod download_manifest_preflight;

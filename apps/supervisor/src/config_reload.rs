@@ -4,15 +4,15 @@
 //! runtime config and a candidate config into one of three decisions:
 //! no worker restart, worker restart, or full REST API restart.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
-    AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError, LogLevel, LoggingConfig,
-    ModelCapabilities, ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, PromptCacheConfig,
-    ResolvedModelConfig, discover_models, discover_models_excluding_ambiguous_identities,
+    AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError,
+    EffectiveModelDiscoveryError, LogLevel, LoggingConfig, ModelCapabilities,
+    ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, PromptCacheConfig, ResolvedModelConfig,
 };
 use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
 use thiserror::Error;
@@ -189,81 +189,31 @@ impl ResolvedRuntimeConfigResolver {
         })
     }
 
-    fn effective_model_directories(
-        &self,
-        configured_model_directories: &[PathBuf],
-    ) -> Result<Vec<PathBuf>, ResolvedRuntimeConfigError> {
-        let automatic_model_directory = self.instance_paths.models_directory();
-        let mut ordered_model_directories =
-            Vec::with_capacity(configured_model_directories.len() + 1);
-        // An absent automatic Library root stays optional. Authored roots that the user deleted
-        // are skipped later during discovery so remaining models still start.
-        match automatic_model_directory.try_exists() {
-            Ok(true) => ordered_model_directories.push(automatic_model_directory.clone()),
-            Ok(false) => {}
-            Err(source) => {
-                return Err(
-                    ResolvedRuntimeConfigError::AutomaticModelDirectoryMetadata {
-                        model_directory: automatic_model_directory,
-                        source,
-                    },
-                );
-            }
-        }
-        ordered_model_directories.extend(configured_model_directories.iter().cloned());
-
-        let mut seen_model_directories = HashSet::with_capacity(ordered_model_directories.len());
-        ordered_model_directories
-            .retain(|model_directory| seen_model_directories.insert(model_directory.clone()));
-        Ok(ordered_model_directories)
-    }
-
     fn discover_effective_models(
         &self,
         configured_model_directories: &[PathBuf],
     ) -> Result<(Vec<DiscoveredModel>, Vec<ModelDiscoveryDiagnostic>), ResolvedRuntimeConfigError>
     {
-        let effective_model_directories =
-            self.effective_model_directories(configured_model_directories)?;
-        let automatic_model_directory = self.instance_paths.models_directory();
-        let has_automatic_model_directory = effective_model_directories
-            .first()
-            .is_some_and(|model_directory| model_directory == &automatic_model_directory);
-        if !has_automatic_model_directory {
-            let discovery_report =
-                discover_models_excluding_ambiguous_identities(configured_model_directories)?;
-            return Ok((
-                discovery_report
-                    .directory_scans
-                    .into_iter()
-                    .flat_map(|directory_scan| directory_scan.discovered_models)
-                    .collect(),
-                discovery_report.diagnostics,
-            ));
-        }
-
-        let mut automatic_models = discover_models(&effective_model_directories[..1])?
-            .into_iter()
-            .flat_map(|directory_scan| directory_scan.discovered_models)
-            .collect::<Vec<_>>();
-        let automatic_model_ids = automatic_models
-            .iter()
-            .map(|discovered_model| discovered_model.model_id.clone())
-            .collect::<HashSet<_>>();
-        let mut configured_discovery_report =
-            discover_models_excluding_ambiguous_identities(configured_model_directories)?;
-        let configured_models = configured_discovery_report
-            .directory_scans
-            .into_iter()
-            .flat_map(|directory_scan| directory_scan.discovered_models)
-            .filter(|discovered_model| !automatic_model_ids.contains(&discovered_model.model_id));
-        // Library publication owns the automatic destination, so authored ambiguity cannot hide a
-        // validated Library copy of the same public identity.
-        automatic_models.extend(configured_models);
-        configured_discovery_report
-            .diagnostics
-            .retain(|diagnostic| !automatic_model_ids.contains(&diagnostic.model_id));
-        Ok((automatic_models, configured_discovery_report.diagnostics))
+        let effective_discovery = astronomical_config::discover_effective_models(
+            &self.instance_paths.models_directory(),
+            configured_model_directories,
+        )
+        .map_err(|discovery_error| match discovery_error {
+            EffectiveModelDiscoveryError::AutomaticModelDirectoryMetadata {
+                directory_path,
+                source,
+            } => ResolvedRuntimeConfigError::AutomaticModelDirectoryMetadata {
+                model_directory: directory_path,
+                source,
+            },
+            EffectiveModelDiscoveryError::Discovered(source) => {
+                ResolvedRuntimeConfigError::ModelDiscovery(source)
+            }
+        })?;
+        Ok((
+            effective_discovery.discovered_models,
+            effective_discovery.diagnostics,
+        ))
     }
 }
 
