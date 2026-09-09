@@ -5,6 +5,7 @@ mod download_catalog;
 mod download_coordinator;
 mod download_disk_preflight;
 mod download_endpoint;
+mod download_executable_preflight;
 mod download_file_digest;
 mod download_job;
 mod download_job_store;
@@ -16,6 +17,8 @@ mod download_manifest_preflight;
 mod download_path_selection;
 mod download_payload_response;
 mod download_payload_transfer;
+mod download_payload_transfer_segment;
+mod download_payload_transfer_window;
 mod download_payload_verification;
 mod download_progress_snapshot;
 mod download_publication;
@@ -39,6 +42,9 @@ pub use download_disk_preflight::{
     DownloadDiskPreflightError, Fs4DiskCapacityQuery,
 };
 pub(crate) use download_endpoint::library_download_routes;
+pub use download_executable_preflight::{
+    DownloadExecutablePreflight, DownloadExecutablePreflightError,
+};
 pub use download_file_digest::DownloadFileDigest;
 pub use download_job::{
     DownloadJob, DownloadJobError, DownloadJobFile, DownloadJobPublicErrorCode, DownloadJobState,
@@ -51,6 +57,8 @@ pub use download_payload_transfer::{
     DownloadPayloadTransfer, DownloadPayloadTransferError, DownloadPayloadTransferOutcome,
     DownloadTransferControl,
 };
+pub use download_payload_transfer_segment::PAYLOAD_TRANSFER_SEGMENT_BYTES;
+pub use download_payload_transfer_window::MAXIMUM_CONCURRENT_PAYLOAD_TRANSFERS;
 pub use download_progress_snapshot::DownloadProgressSnapshot;
 pub use download_publication::{
     DownloadPublication, DownloadPublicationError, DownloadPublicationRefresh,

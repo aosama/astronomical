@@ -61,6 +61,15 @@ async fn run_configured_cold_cache_summary_journey(
         );
     }
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let sampled_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
+    // The cold-cache identity of this journey is a zero allocator-cache retention limit, which
+    // differs from the shared process policy other journeys in this binary pin. Adopt the shared
+    // policy first and transition through the live-update seam, restoring it on drop.
+    let _cold_cache_policy_guard = crate::common::MlxMemoryPolicyGuard::install_temporary_policy(
+        sampled_memory_limits,
+        MlxMemoryLimits::new(active_memory_limit_bytes, 0)
+            .expect("the cold-cache MLX memory limits should be valid"),
+    );
     let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the standard Astronomical configuration should load for the summary journey");
     let requested_target_model_id =
@@ -89,6 +98,8 @@ async fn run_configured_cold_cache_summary_journey(
         crate::serving_acceptance::support::configured_speculative_prefill_draft_model(
             &target_model_directory,
         );
+    // The cold-cache policy guard above already installed (active, 0) on the process, so the
+    // engine constructs against the identical policy instead of fighting the shared guard.
     let mlx_memory_limits = MlxMemoryLimits::new(active_memory_limit_bytes, 0)
         .expect("the configured MLX memory limits should be valid");
     let target_maximum_position_count = validated_target_artifact.config().maximum_position_count();

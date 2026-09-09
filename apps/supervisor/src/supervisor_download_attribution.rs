@@ -66,6 +66,9 @@ pub(crate) enum SupervisorDownloadOperationDetail {
         manifest_file_count: usize,
         manifest_total_bytes: u64,
     },
+    ExecutablePreflight {
+        manifest_file_count: usize,
+    },
     FileTransfer {
         relative_file_path: String,
         resume_offset_bytes: u64,

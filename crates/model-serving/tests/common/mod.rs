@@ -179,6 +179,55 @@ pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLi
     .expect("the machine-derived model-artifact MLX memory limits should be valid")
 }
 
+/// A temporary MLX memory policy installed on the shared process runtime and restored on drop.
+///
+/// MLX memory limits are process-global (one Metal device, one policy), and the serving
+/// invariant is one policy per process — the daemon restarts the worker instead of
+/// reconfiguring. Journeys that legitimately need a distinct policy (for example a cold
+/// allocator cache) adopt the shared policy first and then transition through the production
+/// live-transition seam (`update_memory_limits`), restoring it on both success and panic so
+/// later journeys in the same test process keep composing.
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) struct MlxMemoryPolicyGuard {
+    runtime: astronomical_runtime_integration::MlxRuntime,
+    shared_memory_limits: MlxMemoryLimits,
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+impl MlxMemoryPolicyGuard {
+    /// Requires the caller to already hold `direct_mlx_test_guard`, because the transition and
+    /// restore both mutate the shared process policy.
+    pub(crate) fn install_temporary_policy(
+        shared_memory_limits: MlxMemoryLimits,
+        temporary_memory_limits: MlxMemoryLimits,
+    ) -> Self {
+        let mut runtime =
+            astronomical_runtime_integration::MlxRuntime::initialize(shared_memory_limits)
+                .expect("the shared MLX memory policy should initialize for the journey");
+        runtime
+            .update_memory_limits(temporary_memory_limits)
+            .expect("the journey should transition to its temporary MLX memory policy");
+        Self {
+            runtime,
+            shared_memory_limits,
+        }
+    }
+}
+
+#[cfg(feature = "direct-mlx")]
+impl Drop for MlxMemoryPolicyGuard {
+    fn drop(&mut self) {
+        // A journey that panicked mid-generation must still hand the shared process policy back
+        // intact, or every later journey in the same binary fails on a policy it never chose.
+        let _restore_result = self.runtime.update_memory_limits(self.shared_memory_limits);
+        let _cache_release_result = self
+            .runtime
+            .synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(0);
+    }
+}
+
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 /// Uses only the machine ceiling so residency acceptance is not changed by
@@ -247,23 +296,40 @@ pub(crate) fn configured_large_sparse_moe_model_directory() -> PathBuf {
 }
 
 #[cfg(feature = "direct-mlx")]
+/// Resolves the executable models exactly as the supervisor daemon serves them: the automatic
+/// Library destination takes precedence over the authored config roots. Using this instead of
+/// raw `discover_models(config.model_directories())` keeps acceptance journeys consistent with
+/// production even when an artifact exists only under the instance state models directory.
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn effective_discovered_models(
+    astronomical_config: &AstronomicalConfig,
+) -> Vec<astronomical_config::DiscoveredModel> {
+    let instance_paths =
+        astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
+            astronomical_config::AstronomicalRuntimeInstance::Development,
+        )
+        .expect("the standard Astronomical instance paths should resolve");
+    astronomical_config::discover_effective_models(
+        &instance_paths.models_directory(),
+        astronomical_config.model_directories(),
+    )
+    .expect("effective model discovery should complete")
+    .discovered_models
+}
+
+#[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn configured_discovered_model_by_id(
     astronomical_config: &AstronomicalConfig,
     model_id: &str,
 ) -> astronomical_config::DiscoveredModel {
-    astronomical_config::discover_models(astronomical_config.model_directories())
-        .unwrap_or_else(|discovery_error| {
-            panic!(
-                "model_directories discovery should complete for model ID {model_id}: {discovery_error}"
-            )
-        })
+    effective_discovered_models(astronomical_config)
         .into_iter()
-        .flat_map(|model_directory_scan| model_directory_scan.discovered_models)
         .find(|discovered_model| discovered_model.model_id == model_id)
         .unwrap_or_else(|| {
             panic!(
-                "the standard Astronomical configuration model_directories should discover model ID {model_id}"
+                "effective model discovery should find model ID {model_id} under the standard Astronomical configuration"
             )
         })
 }

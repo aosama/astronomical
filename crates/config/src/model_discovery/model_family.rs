@@ -181,6 +181,18 @@ fn classify_pipeline_directory(
     Ok(is_flux2_klein.then_some(ModelFamily::Flux2Klein))
 }
 
+/// Classifies a Diffusers pipeline index document without a file-system read, reusing the exact
+/// production pipeline classifier so download preflight cannot drift from disk discovery.
+///
+/// # Errors
+/// Returns the pipeline document parse failure verbatim.
+pub fn classify_pipeline_index_bytes(
+    pipeline_index_bytes: &[u8],
+) -> Result<Option<ModelFamily>, serde_json::Error> {
+    flux2_klein::classifies_pipeline_index(pipeline_index_bytes)
+        .map(|is_flux2_klein| is_flux2_klein.then_some(ModelFamily::Flux2Klein))
+}
+
 /// Minimal duplicate-aware projection keeps family dispatch independent from full config shape.
 #[derive(Deserialize)]
 struct ModelFamilyConfigDocument {
