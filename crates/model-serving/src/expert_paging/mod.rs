@@ -8,6 +8,10 @@ pub mod quantized_expert_validation;
 mod retained_expert_page_cache;
 pub mod safetensors_header;
 mod source_manifests;
+mod streaming_expert_pack_pages;
+#[cfg(feature = "direct-mlx")]
+mod streaming_expert_pack_plans;
+pub mod streaming_expert_packs;
 
 pub use expert_cache_statistics::ExpertWeightMemoryCacheStatistics;
 pub use retained_expert_page_cache::{
@@ -38,3 +42,11 @@ pub use safetensors_header::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use source_manifests::{build_source_manifests, contiguous_selected_runs};
+#[cfg(feature = "direct-mlx")]
+pub use streaming_expert_pack_pages::assemble_streaming_expert_page_tensors;
+pub use streaming_expert_pack_pages::build_streaming_expert_page_manifest;
+#[cfg(feature = "direct-mlx")]
+pub use streaming_expert_pack_plans::build_streaming_expert_layer_plans;
+pub use streaming_expert_packs::{
+    StreamingExpertPackError, StreamingExpertPackSources, detect_streaming_expert_pack_sources,
+};

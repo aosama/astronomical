@@ -69,7 +69,7 @@ impl MlxMetalKernel {
         )
     }
 
-    fn new_with_options(
+    pub fn new_with_options(
         kernel_name: &str,
         input_names: &[&str],
         output_names: &[&str],
@@ -149,7 +149,7 @@ impl MlxRuntime {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn apply_metal_kernel_with_output_initialization(
+    pub fn apply_metal_kernel_with_output_initialization(
         &self,
         kernel: &MlxMetalKernel,
         input_arrays: &[&MlxArray],

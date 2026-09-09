@@ -7,7 +7,7 @@ use std::{
 };
 
 use astronomical_experimental_aligned_expert_packs::{
-    AlignedExpertPackPreparationInspection, AlignedExpertPackPreparer,
+    AlignedExpertPackPreparationInspection, AlignedExpertPackPreparer, StreamingModelPreparer,
 };
 
 const HELP: &str = "astronomical-experimental-aligned-expert-pack-preparer
@@ -16,19 +16,23 @@ Explicitly prepare experimental aligned expert packs for one already-downloaded 
 
 USAGE:
     astronomical-experimental-aligned-expert-pack-preparer --model-directory PATH [--dry-run] [--yes] [--replace]
+    astronomical-experimental-aligned-expert-pack-preparer --model-directory PATH --streaming-model --output-directory PATH [--yes] [--replace]
 
 OPTIONS:
-    --model-directory PATH  Complete downloaded Qwen3.5-MoE model directory
-    --dry-run               Validate and report planned disk use without mutation
-    --yes                   Confirm preparation without an interactive prompt
-    --replace               Replace an invalid existing generated pack revision
-    -h, --help              Show this help
-    --version               Show the application version
+    --model-directory PATH     Complete downloaded Qwen3.5-MoE model directory
+    --streaming-model          Publish a self-sufficient per-expert streaming model
+    --output-directory PATH    Destination directory for --streaming-model
+    --dry-run                  Validate and report planned disk use without mutation
+    --yes                      Confirm preparation without an interactive prompt
+    --replace                  Replace an invalid existing generated pack revision
+    -h, --help                 Show this help
+    --version                  Show the application version
 ";
 
 #[derive(Debug)]
 struct CommandArguments {
     model_directory: PathBuf,
+    streaming_output_directory: Option<PathBuf>,
     should_dry_run: bool,
     has_noninteractive_consent: bool,
     should_replace_existing_revision: bool,
@@ -48,6 +52,14 @@ fn run(arguments: impl Iterator<Item = OsString>) -> Result<(), CommandError> {
     let Some(command_arguments) = parse_arguments(arguments)? else {
         return Ok(());
     };
+    if let Some(streaming_output_directory) = command_arguments.streaming_output_directory {
+        return run_streaming_model_preparation(
+            &command_arguments.model_directory,
+            &streaming_output_directory,
+            command_arguments.has_noninteractive_consent,
+            command_arguments.should_replace_existing_revision,
+        );
+    }
     let preparer =
         AlignedExpertPackPreparer::for_model_directory(&command_arguments.model_directory)
             .map_err(CommandError::Preparation)?;
@@ -118,6 +130,8 @@ fn parse_arguments(
     mut arguments: impl Iterator<Item = OsString>,
 ) -> Result<Option<CommandArguments>, CommandError> {
     let mut model_directory = None;
+    let mut streaming_output_directory = None;
+    let mut should_prepare_streaming_model = false;
     let mut should_dry_run = false;
     let mut has_noninteractive_consent = false;
     let mut should_replace_existing_revision = false;
@@ -146,7 +160,23 @@ fn parse_arguments(
             Some("--replace") if !should_replace_existing_revision => {
                 should_replace_existing_revision = true;
             }
-            Some(known_repeated_flag @ ("--dry-run" | "--yes" | "--replace")) => {
+            Some("--streaming-model") if !should_prepare_streaming_model => {
+                should_prepare_streaming_model = true;
+            }
+            Some("--output-directory") => {
+                if streaming_output_directory.is_some() {
+                    return Err(CommandError::Usage(
+                        "--output-directory may be supplied only once".to_owned(),
+                    ));
+                }
+                streaming_output_directory =
+                    Some(PathBuf::from(arguments.next().ok_or_else(|| {
+                        CommandError::Usage("--output-directory requires PATH".to_owned())
+                    })?));
+            }
+            Some(
+                known_repeated_flag @ ("--dry-run" | "--yes" | "--replace" | "--streaming-model"),
+            ) => {
                 return Err(CommandError::Usage(format!(
                     "{known_repeated_flag} may be supplied only once"
                 )));
@@ -176,12 +206,71 @@ fn parse_arguments(
             "--replace cannot be combined with --dry-run".to_owned(),
         ));
     }
+    if should_prepare_streaming_model != streaming_output_directory.is_some() {
+        return Err(CommandError::Usage(
+            "--streaming-model requires --output-directory, and --output-directory requires --streaming-model".to_owned(),
+        ));
+    }
+    if should_prepare_streaming_model && should_dry_run {
+        return Err(CommandError::Usage(
+            "--dry-run cannot be combined with --streaming-model".to_owned(),
+        ));
+    }
     Ok(Some(CommandArguments {
         model_directory,
+        streaming_output_directory,
         should_dry_run,
         has_noninteractive_consent,
         should_replace_existing_revision,
     }))
+}
+
+fn run_streaming_model_preparation(
+    model_directory: &std::path::Path,
+    output_directory: &std::path::Path,
+    has_noninteractive_consent: bool,
+    should_replace_existing_revision: bool,
+) -> Result<(), CommandError> {
+    let preparer = StreamingModelPreparer::for_model_directory(model_directory)
+        .map_err(CommandError::Preparation)?;
+    eprintln!(
+        "status=preflight source_model_directory={} streaming_model_id={} destination={}",
+        model_directory.display(),
+        preparer.streaming_model_id(),
+        output_directory.display(),
+    );
+    if !output_directory.exists() && !has_noninteractive_consent {
+        request_interactive_consent()?;
+    }
+    let preparation_report = preparer
+        .prepare(
+            output_directory,
+            should_replace_existing_revision,
+            |progress_event| {
+                eprintln!(
+                    "status=progress completed_experts={}/{} layer_index={} expert_id={} expert_bytes={} elapsed_seconds={:.2}",
+                    progress_event.completed_expert_file_count,
+                    progress_event.total_expert_file_count,
+                    progress_event.layer_index,
+                    progress_event.expert_id,
+                    progress_event.expert_file_byte_count,
+                    progress_event.elapsed.as_secs_f64(),
+                );
+            },
+        )
+        .map_err(CommandError::Preparation)?;
+    println!(
+        "status=success source_model={} streaming_model={} revision={} experts={} total_bytes={} reused_existing_revision={} elapsed_seconds={:.2} destination={}",
+        preparation_report.source_model_id,
+        preparation_report.streaming_model_id,
+        preparation_report.model_revision,
+        preparation_report.completed_expert_file_count,
+        preparation_report.total_pack_byte_count,
+        preparation_report.reused_existing_revision,
+        preparation_report.elapsed.as_secs_f64(),
+        preparation_report.final_model_directory.display(),
+    );
+    Ok(())
 }
 
 fn print_inspection(preparation_inspection: &AlignedExpertPackPreparationInspection) {

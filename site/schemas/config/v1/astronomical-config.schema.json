@@ -150,6 +150,24 @@
           "description": "Experimental one-token submission interval used only while sparse experts stream from SSD.",
           "x-astronomical-apply-mode": "model-reload"
         },
+        "experimental_decode_stage_attribution_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Diagnostic mode that runs decode forwards as stage-split evaluations so one attribution report decomposes decode time. Roughly doubles decode time; never enable in normal serving.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "experimental_fused_moe_decode_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Uses fused single-token Metal kernels for the quantized expert chain at decode. Slightly different numerics; capability-probed per GPU.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "experimental_quantized_kv_cache_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Stores the KV cache as affine-quantized slabs so decode attention reads fewer KV bytes at long context. Changes attention numerics; quality-gate before enabling.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
         "prompt_cache_block_tokens": {
           "description": "Exact persistent-cache block length, or null for model-derived sizing.",
           "default": null,

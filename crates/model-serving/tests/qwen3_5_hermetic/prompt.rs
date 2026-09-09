@@ -395,3 +395,48 @@ fn should_seed_romeo_and_juliet_when_reopening_thinking_after_model_visible_corr
         "<|im_end|>\n<|im_start|>user\n<tool_response>\nPlease correct the tool call.\n</tool_response><|im_end|>\n<|im_start|>assistant\n<think>\nTwo households, both alike in dignity, in Romeo and Juliet.\n"
     );
 }
+
+#[test]
+fn should_render_history_tool_calls_with_malformed_arguments_instead_of_failing() {
+    // History is a fidelity path, never a validation gate: the output parser
+    // fail-opens malformed model tool calls to the harness, and clients replay
+    // that history verbatim. Malformed arguments must render best-effort so
+    // the model can observe and correct its own malformed call.
+    let rendered_prompt = Qwen3_5PromptRenderer::render(
+        &[
+            ChatMessage::User {
+                content: "Inspect the repository.".to_owned(),
+                images: Vec::new(),
+            },
+            ChatMessage::Assistant {
+                content: Some(String::new()),
+                reasoning_content: None,
+                tool_calls: vec![ChatAssistantToolCall {
+                    id: "call-model-invented-1".to_owned(),
+                    function: ChatAssistantToolFunction {
+                        name: "r=bash".to_owned(),
+                        arguments_json: "not json at all".to_owned(),
+                    },
+                }],
+            },
+            ChatMessage::Tool {
+                tool_call_id: "call-model-invented-1".to_owned(),
+                content: "unknown tool".to_owned(),
+            },
+        ],
+        &[],
+        true,
+        &[],
+        None,
+    )
+    .expect("malformed history tool-call arguments must never fail the prompt render");
+
+    assert!(
+        rendered_prompt.contains("<function=r=bash>"),
+        "the model-invented tool-call name must round-trip into the prompt"
+    );
+    assert!(
+        rendered_prompt.contains("not json at all"),
+        "malformed arguments must render best-effort instead of being dropped"
+    );
+}

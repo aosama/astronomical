@@ -50,6 +50,15 @@ pub struct OpenAiChatCompletionRequest {
     /// thinks freely up to `max_tokens`.
     #[serde(default)]
     thinking_budget: Option<u32>,
+    /// Coding-agent spelling of the thinking budget: the agent resolves this
+    /// field name from its provider compatibility configuration and falls back
+    /// to it when the server declares thinking-budget support.
+    #[serde(default)]
+    thinking_token_budget: Option<u32>,
+    /// Documented OpenAI-compatible alias for the thinking budget used by
+    /// coding-agent traffic alongside `thinking_token_budget`.
+    #[serde(default)]
+    thinking_budget_tokens: Option<u32>,
     #[serde(default)]
     stop: Option<OpenAiStopSequences>,
     #[serde(default)]
@@ -90,6 +99,7 @@ impl OpenAiChatCompletionRequest {
 
         self.validate_tool_choice()?;
         self.validate_output_token_budget()?;
+        self.thinking_budget_resolution()?;
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;
         validate_sampling_parameter("top_p", self.top_p, 0.0, 1.0)?;
         self.validate_unsupported_options()?;
@@ -147,8 +157,42 @@ impl OpenAiChatCompletionRequest {
     }
 
     /// Returns the optional thinking-token budget after request validation.
-    pub fn thinking_budget(&self) -> Option<u32> {
-        self.thinking_budget
+    ///
+    /// Canonical and alias spellings must agree when more than one appears on
+    /// the wire; the caller surfaces the disagreement as a structured error.
+    pub fn thinking_budget(&self) -> Result<Option<u32>, OpenAiChatCompletionValidationError> {
+        self.thinking_budget_resolution()
+    }
+
+    /// Resolves the thinking budget across the canonical spelling and the
+    /// coding-agent aliases, mirroring the output-token budget rule: several
+    /// spellings are fine while they agree, and disagreement is a caller bug
+    /// that must fail loudly instead of silently picking one.
+    fn thinking_budget_resolution(
+        &self,
+    ) -> Result<Option<u32>, OpenAiChatCompletionValidationError> {
+        let mut resolved_budget: Option<u32> = None;
+        for budget_spelling in [
+            self.thinking_budget,
+            self.thinking_token_budget,
+            self.thinking_budget_tokens,
+        ] {
+            match (resolved_budget, budget_spelling) {
+                (None, budget) => resolved_budget = budget,
+                (Some(agreed_budget), Some(budget)) if agreed_budget == budget => {}
+                (Some(_), Some(_)) => {
+                    return Err(
+                        OpenAiChatCompletionValidationError::ConflictingThinkingBudgets {
+                            thinking_budget: self.thinking_budget,
+                            thinking_token_budget: self.thinking_token_budget,
+                            thinking_budget_tokens: self.thinking_budget_tokens,
+                        },
+                    );
+                }
+                (Some(_), None) => {}
+            }
+        }
+        Ok(resolved_budget)
     }
 
     /// Validates and consumes this REST DTO into protocol-neutral request parts.
@@ -169,6 +213,7 @@ impl OpenAiChatCompletionRequest {
             self.structured_outputs.clone(),
             self.guided_grammar.as_deref(),
         )?;
+        let thinking_budget = self.thinking_budget_resolution()?;
         Ok(OpenAiChatCompletionRequestParts {
             model: self.model,
             messages: self
@@ -190,7 +235,7 @@ impl OpenAiChatCompletionRequest {
             temperature: self.temperature,
             top_p: self.top_p,
             seed: self.seed,
-            thinking_budget: self.thinking_budget,
+            thinking_budget,
             stream: self.stream,
             includes_usage_in_stream,
             structured_output,
@@ -378,6 +423,15 @@ pub enum OpenAiChatCompletionValidationError {
     ConflictingOutputTokenLimits {
         max_tokens: u32,
         max_completion_tokens: u32,
+    },
+    /// Two or more thinking-budget spellings were supplied and disagreed.
+    #[error(
+        "thinking_budget ({thinking_budget:?}) conflicts with thinking_token_budget ({thinking_token_budget:?}) and thinking_budget_tokens ({thinking_budget_tokens:?})"
+    )]
+    ConflictingThinkingBudgets {
+        thinking_budget: Option<u32>,
+        thinking_token_budget: Option<u32>,
+        thinking_budget_tokens: Option<u32>,
     },
     /// The output token budget was zero or too large for the worker representation.
     #[error(

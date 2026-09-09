@@ -183,6 +183,9 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32
   let promptCacheBlockTokens: UInt32?
   let promptCacheCommonPrefixStrideBlocks: UInt32
+  let experimentalDecodeStageAttributionEnabled: Bool
+  let experimentalQuantizedKvCacheEnabled: Bool
+  let experimentalFusedMoeDecodeEnabled: Bool
 
   enum CodingKeys: String, CodingKey, CaseIterable {
     case fixedPromptProcessingChunkSizeTokens = "fixed_prompt_processing_chunk_size_tokens"
@@ -194,6 +197,9 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case experimentalSsdPagingGenerationGraphSubmissionLayerInterval = "experimental_ssd_paging_generation_graph_submission_layer_interval"
     case promptCacheBlockTokens = "prompt_cache_block_tokens"
     case promptCacheCommonPrefixStrideBlocks = "prompt_cache_common_prefix_stride_blocks"
+    case experimentalDecodeStageAttributionEnabled = "experimental_decode_stage_attribution_enabled"
+    case experimentalQuantizedKvCacheEnabled = "experimental_quantized_kv_cache_enabled"
+    case experimentalFusedMoeDecodeEnabled = "experimental_fused_moe_decode_enabled"
   }
 
   init(from decoder: Decoder) throws {
@@ -218,5 +224,11 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       UInt32.self, forKey: .promptCacheBlockTokens)
     promptCacheCommonPrefixStrideBlocks = try container.decode(
       UInt32.self, forKey: .promptCacheCommonPrefixStrideBlocks)
+    experimentalDecodeStageAttributionEnabled = try container.decode(
+      Bool.self, forKey: .experimentalDecodeStageAttributionEnabled)
+    experimentalQuantizedKvCacheEnabled = try container.decode(
+      Bool.self, forKey: .experimentalQuantizedKvCacheEnabled)
+    experimentalFusedMoeDecodeEnabled = try container.decode(
+      Bool.self, forKey: .experimentalFusedMoeDecodeEnabled)
   }
 }

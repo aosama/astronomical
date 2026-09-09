@@ -107,6 +107,13 @@ pub enum AlignedExpertPackError {
         actual_layer_index: usize,
         actual_layer_prefix: String,
     },
+    #[error(
+        "aligned expert pack expert id differs: expected {expected_expert_id}, got {actual_expert_id}"
+    )]
+    ForeignExpertId {
+        expected_expert_id: usize,
+        actual_expert_id: usize,
+    },
     #[error("aligned expert pack quantization contract differs from the validated layer plan")]
     ForeignQuantizationContract,
     #[error(

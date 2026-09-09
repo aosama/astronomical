@@ -70,6 +70,7 @@ pub enum DownloadJobPublicErrorCode {
     ChecksumMismatch,
     DownloadFailed,
     ModelAlreadyPresent,
+    ModelNotExecutable,
 }
 
 /// Syntax or semantic validation failure in durable job metadata.
@@ -469,6 +470,7 @@ impl DownloadJobPublicErrorCode {
             Self::ChecksumMismatch => "checksum_mismatch",
             Self::DownloadFailed => "download_failed",
             Self::ModelAlreadyPresent => "model_already_present",
+            Self::ModelNotExecutable => "model_not_executable",
         }
     }
 }
