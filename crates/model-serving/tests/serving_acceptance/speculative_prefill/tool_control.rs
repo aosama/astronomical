@@ -70,6 +70,7 @@ async fn should_preserve_a_schema_valid_tool_call_while_fully_prefilling_control
         let target_only_tool_call = parse_one_tool_call(
             &tokenizer,
             &declared_tools,
+            "target_only",
             &target_only_measurement.generated_token_ids,
         );
 
@@ -94,6 +95,7 @@ async fn should_preserve_a_schema_valid_tool_call_while_fully_prefilling_control
         let speculative_prefill_tool_call = parse_one_tool_call(
             &tokenizer,
             &declared_tools,
+            "speculative_prefill",
             &speculative_prefill_measurement.generated_token_ids,
         );
 
@@ -141,6 +143,7 @@ async fn should_preserve_a_schema_valid_tool_call_while_fully_prefilling_control
         let warm_speculative_prefill_tool_call = parse_one_tool_call(
             &tokenizer,
             &declared_tools,
+            "warm_speculative_prefill",
             &warm_speculative_prefill_measurement.generated_token_ids,
         );
         eprintln!(
@@ -269,13 +272,16 @@ pub(super) fn literary_analysis_tools() -> Vec<ChatToolDefinition> {
 pub(super) fn parse_one_tool_call(
     tokenizer: &Qwen3_5Tokenizer,
     declared_tools: &[ChatToolDefinition],
+    generation_phase: &str,
     generated_token_ids: &[u32],
 ) -> Qwen3_5ToolCall {
     let tool_calls = parse_tool_calls(tokenizer, declared_tools, generated_token_ids);
     assert_eq!(
         tool_calls.len(),
         1,
-        "the model should emit exactly one declared tool call"
+        "the {generation_phase} generation should emit exactly one declared tool call; decoded_output={:?} generated_token_count={}",
+        super::support::decode_generated_output_text(tokenizer, generated_token_ids),
+        generated_token_ids.len(),
     );
     tool_calls
         .into_iter()

@@ -240,6 +240,7 @@ async fn run_process_pass(
         let tool_call = parse_one_tool_call(
             &tokenizer,
             &declared_tools,
+            process_pass_role,
             &process_pass_measurement.generated_token_ids,
         );
         assert_schema_valid_literary_analysis_tool_call(&tool_call);

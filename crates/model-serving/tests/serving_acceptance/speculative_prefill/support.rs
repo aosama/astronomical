@@ -112,7 +112,10 @@ fn prepare_romeo_and_juliet_summary_prompt(
             .ordinary_target_prefill_control_span_token_count(),
         sampling_temperature_thousandths: 1_000,
         sampling_top_p_thousandths: 1_000,
-        sampling_seed: None,
+        // A locked seed keeps this acceptance journey a deterministic replay at
+        // the mandated temperature 1: a rerun must reach the same verdict, so a
+        // failure indicts the pipeline rather than sampling luck.
+        sampling_seed: Some(request_id.value()),
     }
 }
 
@@ -206,6 +209,8 @@ pub(crate) fn prepare_representative_prompt(model_directory: &Path) -> Represent
             .ordinary_target_prefill_control_span_token_count(),
         sampling_temperature_thousandths: 1_000,
         sampling_top_p_thousandths: 1_000,
-        sampling_seed: None,
+        // Locked seed: the representative journey must be a deterministic replay
+        // at the mandated temperature 1 (same rationale as the summary prompt).
+        sampling_seed: Some(95_000),
     }
 }

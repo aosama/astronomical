@@ -133,6 +133,10 @@ impl SupervisorPerformanceMeasurement {
                     Some(SupervisorDownloadOperationDetail::ManifestFetch { .. })
                 )
                 | (
+                    SupervisorPerformanceOperation::ExecutablePreflight,
+                    Some(SupervisorDownloadOperationDetail::ExecutablePreflight { .. })
+                )
+                | (
                     SupervisorPerformanceOperation::FileTransfer,
                     Some(SupervisorDownloadOperationDetail::FileTransfer { .. })
                 )

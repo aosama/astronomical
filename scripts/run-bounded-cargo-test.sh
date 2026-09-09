@@ -2,6 +2,18 @@
 
 # Separates compilation from execution so cold acceptance builds can finish
 # without weakening the repository-wide 120-second test-process boundary.
+#
+# Two hard machine-protection guarantees beyond the per-phase timeouts:
+# 1. One real-model invocation at a time. Ignored journeys load multi-gigabyte
+#    model weights into wired GPU memory; two concurrent invocations exceed the
+#    machine's physical limit and hard-panic the whole system, so an exclusive
+#    lock refuses a second ignored invocation instead of trusting the operator.
+#    Hermetic invocations never take the lock and stay free to run in parallel.
+# 2. The timeout kills the whole process tree. GNU timeout with --foreground
+#    spares the command's children, so a timed-out cargo test leaked the test
+#    binary and its inference children still holding wired model memory. The
+#    phases below run without --foreground so the timeout signal reaches the
+#    entire process group.
 
 set -eu
 
@@ -11,6 +23,40 @@ TEST_TIMEOUT_SECONDS="${TEST_TIMEOUT_SECONDS:-$DEFAULT_TEST_TIMEOUT_SECONDS}"
 
 print_error() {
     printf '%s\n' "Error: $1" >&2
+}
+
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+
+# Real-model journeys must never overlap. The lock is a directory (atomic
+# creation) holding the owner pid; a lock left by a killed session is stolen
+# only when that pid is provably dead.
+acquire_invocation_lock() {
+    lock_directory="${repository_root}/target/bounded-cargo-test.lock"
+    if mkdir "$lock_directory" 2>/dev/null; then
+        printf '%s\n' "$$" > "${lock_directory}/owner-pid"
+        invocation_lock_directory="$lock_directory"
+        return
+    fi
+    lock_owner_pid="$(cat "${lock_directory}/owner-pid" 2>/dev/null || true)"
+    if [ -n "$lock_owner_pid" ] && kill -0 "$lock_owner_pid" 2>/dev/null; then
+        print_error "another bounded cargo test invocation (pid ${lock_owner_pid}) is already running; concurrent real-model journeys exceed the machine's wired GPU memory"
+        exit 2
+    fi
+    print_error "stealing a stale bounded-cargo-test lock left by dead pid ${lock_owner_pid:-unknown}"
+    rm -rf "$lock_directory"
+    if mkdir "$lock_directory" 2>/dev/null; then
+        printf '%s\n' "$$" > "${lock_directory}/owner-pid"
+        invocation_lock_directory="$lock_directory"
+        return
+    fi
+    print_error "failed to acquire the bounded cargo test invocation lock"
+    exit 2
+}
+
+release_invocation_lock() {
+    if [ -n "${invocation_lock_directory:-}" ]; then
+        rm -rf "$invocation_lock_directory"
+    fi
 }
 
 # Scans the caller's arguments for libtest threading options. Real-model ignored
@@ -62,6 +108,16 @@ main() {
     scan_test_threading_arguments "$@"
     enforce_serial_ignored_tests
 
+    # Only real-model journeys take the invocation lock: hermetic lanes (for
+    # example the parallel disposable-target lanes of the artifact lifecycle
+    # contract) never touch wired GPU memory and must keep running concurrently.
+    if [ "$ignored_tests_requested" -eq 1 ]; then
+        acquire_invocation_lock
+        # Released on every exit path, including the timeout failures below; a
+        # SIGKILLed session leaves the lock and the liveness check steals it.
+        trap 'release_invocation_lock' EXIT
+    fi
+
     if command -v timeout >/dev/null 2>&1; then
         timeout_executable="$(command -v timeout)"
     elif command -v gtimeout >/dev/null 2>&1; then
@@ -73,7 +129,9 @@ main() {
 
     compile_started_at_seconds="$(date +%s)"
     printf '%s\n' "[bounded-cargo-test] phase=compile status=start timeout_seconds=${COMPILE_TIMEOUT_SECONDS} started_at=$(date '+%Y-%m-%dT%H:%M:%S%z')"
-    "${timeout_executable}" --foreground -k 5s "${COMPILE_TIMEOUT_SECONDS}s" \
+    # No --foreground: the timeout signal must reach the whole process group so
+    # rustc children die with the timed-out compile.
+    "${timeout_executable}" -k 5s "${COMPILE_TIMEOUT_SECONDS}s" \
         cargo test --no-run "$@"
     printf '%s\n' "[bounded-cargo-test] phase=compile status=success elapsed_seconds=$(( $(date +%s) - compile_started_at_seconds ))"
 
@@ -97,7 +155,10 @@ main() {
 
     test_started_at_seconds="$(date +%s)"
     printf '%s\n' "[bounded-cargo-test] phase=test status=start timeout_seconds=${TEST_TIMEOUT_SECONDS} started_at=$(date '+%Y-%m-%dT%H:%M:%S%z')"
-    if "${timeout_executable}" --foreground -k 5s "${TEST_TIMEOUT_SECONDS}s" \
+    # No --foreground: the timeout signal must reach the whole process group so
+    # the test binary and its inference children die with the timed-out cargo,
+    # never leaking wired GPU model memory into the next invocation.
+    if "${timeout_executable}" -k 5s "${TEST_TIMEOUT_SECONDS}s" \
         cargo test "$@"; then
         printf '%s\n' "[bounded-cargo-test] phase=test status=success elapsed_seconds=$(( $(date +%s) - test_started_at_seconds ))"
         return
