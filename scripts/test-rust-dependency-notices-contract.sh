@@ -107,6 +107,8 @@ CARGO_ABOUT
     printf '%s\n' '[rust-dependency-notices-contract] case=ci-installs-only-the-pinned-version status=success'
     printf '%s\n' '[verification-tools-contract] status=start'
     "${repository_root}/scripts/test-install-verification-tools.sh"
+    printf '%s\n' '[rust-dependency-notices-digest] status=start'
+    "${repository_root}/scripts/test-rust-dependency-notices-digest.sh"
     printf '%s\n' '[rust-dependency-notices-contract] status=success'
 }
 
