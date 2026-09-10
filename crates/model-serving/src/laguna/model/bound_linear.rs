@@ -25,6 +25,134 @@ pub(in crate::laguna) enum LagunaBoundLinear {
 }
 
 impl LagunaBoundLinear {
+    /// Cheap handle retain so decode can slice one expert without copying bytes.
+    pub(in crate::laguna) fn retain(&self) -> Result<Self, LagunaExecutionError> {
+        match self {
+            Self::Native { weight } => Ok(Self::Native {
+                weight: weight.retain()?,
+            }),
+            Self::Affine {
+                packed_weight,
+                scales,
+                biases,
+                bits,
+                group_size,
+            } => Ok(Self::Affine {
+                packed_weight: packed_weight.retain()?,
+                scales: scales.retain()?,
+                biases: biases.retain()?,
+                bits: *bits,
+                group_size: *group_size,
+            }),
+        }
+    }
+
+    /// Slices the leading (expert) axis to `[start, stop)`.
+    pub(in crate::laguna) fn slice_leading_axis(
+        &self,
+        runtime: &MlxRuntime,
+        start: i32,
+        stop: i32,
+    ) -> Result<Self, LagunaExecutionError> {
+        let slice_array = |array: &MlxArray| -> Result<MlxArray, LagunaExecutionError> {
+            let shape = array.shape();
+            if shape.is_empty() {
+                return Err(LagunaExecutionError::invalid_geometry(
+                    "a Laguna projection must have a rank so decode can slice one expert",
+                ));
+            }
+            let mut starts = vec![0; shape.len()];
+            let mut stops = shape.clone();
+            starts[0] = start;
+            stops[0] = stop;
+            let strides = vec![1; shape.len()];
+            Ok(runtime.slice(array, &starts, &stops, &strides)?)
+        };
+        match self {
+            Self::Native { weight } => Ok(Self::Native {
+                weight: slice_array(weight)?,
+            }),
+            Self::Affine {
+                packed_weight,
+                scales,
+                biases,
+                bits,
+                group_size,
+            } => Ok(Self::Affine {
+                packed_weight: slice_array(packed_weight)?,
+                scales: slice_array(scales)?,
+                biases: slice_array(biases)?,
+                bits: *bits,
+                group_size: *group_size,
+            }),
+        }
+    }
+
+    /// Concatenates projections along the leading expert axis.
+    pub(in crate::laguna) fn concatenate_leading_axis(
+        runtime: &MlxRuntime,
+        projections: &[&Self],
+    ) -> Result<Self, LagunaExecutionError> {
+        let Some(first) = projections.first() else {
+            return Err(LagunaExecutionError::invalid_geometry(
+                "decode stacking requires at least one resident expert projection",
+            ));
+        };
+        if projections.len() == 1 {
+            return first.retain();
+        }
+        match first {
+            Self::Native { .. } => {
+                let weights = projections
+                    .iter()
+                    .map(|projection| match projection {
+                        Self::Native { weight } => Ok(weight),
+                        Self::Affine { .. } => Err(LagunaExecutionError::invalid_geometry(
+                            "decode stacking cannot mix native and affine expert projections",
+                        )),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Self::Native {
+                    weight: runtime.concatenate_axis(&weights, 0)?,
+                })
+            }
+            Self::Affine {
+                bits, group_size, ..
+            } => {
+                let mut packed_weights = Vec::new();
+                let mut scales = Vec::new();
+                let mut biases = Vec::new();
+                for projection in projections {
+                    match projection {
+                        Self::Affine {
+                            packed_weight,
+                            scales: projection_scales,
+                            biases: projection_biases,
+                            bits: projection_bits,
+                            group_size: projection_group_size,
+                        } if projection_bits == bits && projection_group_size == group_size => {
+                            packed_weights.push(packed_weight);
+                            scales.push(projection_scales);
+                            biases.push(projection_biases);
+                        }
+                        _ => {
+                            return Err(LagunaExecutionError::invalid_geometry(
+                                "decode stacking requires matching affine profiles",
+                            ));
+                        }
+                    }
+                }
+                Ok(Self::Affine {
+                    packed_weight: runtime.concatenate_axis(&packed_weights, 0)?,
+                    scales: runtime.concatenate_axis(&scales, 0)?,
+                    biases: runtime.concatenate_axis(&biases, 0)?,
+                    bits: *bits,
+                    group_size: *group_size,
+                })
+            }
+        }
+    }
+
     /// Returns the physical payload bytes owned by this bound projection.
     #[must_use]
     pub(in crate::laguna) fn payload_byte_count(&self) -> u64 {

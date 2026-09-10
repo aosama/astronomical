@@ -9,10 +9,13 @@ use crate::laguna::moe::{
     route_laguna_layer_experts, unique_routed_expert_ids,
 };
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaLayerDescriptor};
-use crate::memory::MemoryPhase;
+use crate::laguna::paging::load_laguna_expert_page;
+use crate::memory::{MemoryPhase, ResidentExpertWeight};
 use crate::performance_attribution::PerformanceAttribution;
 
+use super::LagunaLastExpertForward;
 use super::attention::{LagunaAttentionMaskCache, forward_attention};
+use super::decode_experts;
 use super::decoder_state::LagunaDecoderState;
 use super::dense_feed_forward::dense_swiglu;
 use super::error::LagunaExecutionError;
@@ -123,6 +126,20 @@ fn forward_sparse_feed_forward(
             )
         })?;
     let paging_slot_index = sparse_layer_plan.paging_slot_index();
+    if memory_phase == MemoryPhase::Decode {
+        return forward_decode_sparse_feed_forward(
+            runtime,
+            hidden_states,
+            model,
+            moe_descriptor,
+            layer_index,
+            paging_slot_index,
+            &sparse_layer_plan,
+            router_logit_softcap,
+            reduction_kernel,
+            performance_attribution,
+        );
+    }
     if model
         .residency()
         .has_retained_complete_layer(paging_slot_index)
@@ -224,6 +241,134 @@ fn forward_sparse_feed_forward(
             streamed_page,
             performance_attribution,
         )?;
+    }
+    Ok(output)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn forward_decode_sparse_feed_forward(
+    runtime: &MlxRuntime,
+    hidden_states: &MlxArray,
+    model: &LagunaModel,
+    moe_descriptor: &crate::laguna::normalization::LagunaMoeDescriptor,
+    layer_index: usize,
+    paging_slot_index: usize,
+    sparse_layer_plan: &crate::laguna::paging::LagunaSparseLayerPagingPlan,
+    router_logit_softcap: f64,
+    reduction_kernel: Option<&MlxMetalKernel>,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<MlxArray, LagunaExecutionError> {
+    // Prefill-pinned complete layers stay executable as-is. Unpacking them into
+    // demand-zero decode-cache experts lets later layers cannibalize them and
+    // forces a 256-expert restack on every token.
+    if model
+        .residency()
+        .has_retained_complete_layer(paging_slot_index)
+    {
+        return model.residency().with_retained_complete_layer(
+            paging_slot_index,
+            |retained_page| {
+                forward_retained_complete_mixture_of_experts(
+                    runtime,
+                    hidden_states,
+                    model.weights(),
+                    moe_descriptor,
+                    layer_index,
+                    retained_page,
+                    router_logit_softcap,
+                    reduction_kernel,
+                    performance_attribution,
+                )
+            },
+        );
+    }
+    let bytes_per_expert = sparse_layer_plan.expert_payload_byte_count()?;
+    decode_experts::handoff_prefill_page_into_decode_cache(
+        model.residency(),
+        runtime,
+        paging_slot_index,
+        bytes_per_expert,
+    )?;
+    let (selected_indices, selected_scores) = route_laguna_layer_experts(
+        runtime,
+        model.weights(),
+        moe_descriptor,
+        layer_index,
+        hidden_states,
+        router_logit_softcap,
+        performance_attribution,
+    )?;
+    let selected_expert_ids = unique_routed_expert_ids(&selected_indices)?;
+    let missing_expert_ids = model
+        .residency()
+        .decode_cache
+        .borrow()
+        .as_ref()
+        .map(|decode_cache| decode_cache.missing(paging_slot_index, &selected_expert_ids))
+        .unwrap_or_else(|| selected_expert_ids.clone());
+    let loaded_experts = if missing_expert_ids.is_empty() {
+        Vec::new()
+    } else {
+        let pending_page_payload_bytes = sparse_layer_plan
+            .routed_page(&missing_expert_ids)?
+            .payload_byte_count;
+        model.admit_expert_page_allocation(
+            runtime,
+            pending_page_payload_bytes,
+            performance_attribution,
+        )?;
+        let streamed_page = load_laguna_expert_page(
+            runtime,
+            sparse_layer_plan,
+            &missing_expert_ids,
+            performance_attribution,
+        )?;
+        streamed_page.split_resident_experts(runtime, bytes_per_expert)?
+    };
+    let streamed_expert_count = loaded_experts.len() as u32;
+    let streamed_payload_bytes = loaded_experts
+        .iter()
+        .map(|(_, expert)| expert.payload_bytes())
+        .fold(0_u64, u64::saturating_add);
+    decode_experts::admit_decode_experts(
+        model.residency(),
+        paging_slot_index,
+        &selected_expert_ids,
+        loaded_experts,
+    );
+    decode_experts::ensure_stacked_decode_page(
+        model.residency(),
+        runtime,
+        paging_slot_index,
+        sparse_layer_plan.expert_capacity(),
+        performance_attribution,
+    )?;
+    let output = decode_experts::with_stacked_decode_page(
+        model.residency(),
+        paging_slot_index,
+        |stacked_page| {
+            execute_paged_mixture_on_page(
+                runtime,
+                hidden_states,
+                model.weights(),
+                moe_descriptor,
+                layer_index,
+                stacked_page,
+                &selected_indices,
+                &selected_scores,
+                reduction_kernel,
+                performance_attribution,
+            )
+        },
+    )?;
+    if streamed_expert_count > 0 {
+        model
+            .residency()
+            .record_forward(LagunaLastExpertForward::StreamedRoutedPage {
+                layer_count: 1,
+                expert_count: streamed_expert_count,
+                payload_bytes: streamed_payload_bytes,
+            });
     }
     Ok(output)
 }

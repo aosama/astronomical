@@ -1,3 +1,4 @@
+mod decode_streaming;
 mod http;
 mod http_restore;
 mod malformed;

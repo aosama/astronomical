@@ -285,6 +285,19 @@ where
         Ok(())
     }
 
+    /// Transfers one retained page out without counting the move as eviction.
+    ///
+    /// Decode handoff uses this so prefill-pinned experts become ordinary
+    /// decode-cache residents instead of being recorded as a squeeze.
+    pub fn take_retained_layer(&mut self, layer_index: usize) -> Option<ExpertPage> {
+        let layer_slot = self.retained_layers.get_mut(layer_index)?;
+        let taken_entry = layer_slot.take()?;
+        self.resident_payload_bytes = self
+            .resident_payload_bytes
+            .saturating_sub(taken_entry.payload_bytes);
+        Some(taken_entry.page)
+    }
+
     /// Removes one stale page before a barrier-safe topology rebuild.
     pub fn remove_layer(&mut self, layer_index: usize) -> bool {
         let Some(layer_slot) = self.retained_layers.get_mut(layer_index) else {

@@ -52,7 +52,10 @@ pub use paging::{
     LagunaSparseLayerPagingPlan, laguna_sliding_prefill_transient_token_count,
 };
 #[cfg(feature = "direct-mlx")]
-pub use paging::{LagunaExpertWeightPage, forward_paged_routed_swiglu, load_laguna_expert_page};
+pub use paging::{
+    LagunaExpertWeightPage, LagunaResidentExpert, forward_paged_routed_swiglu,
+    load_laguna_expert_page,
+};
 pub use prompt_processing_chunk_sizer::{
     LagunaPromptProcessingChunkSizer, LagunaPromptProcessingChunkSizerError,
 };
