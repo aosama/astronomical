@@ -17,11 +17,15 @@ mod bound_linear;
 #[cfg(feature = "direct-mlx")]
 pub(in crate::laguna) use bound_linear::LagunaBoundLinear;
 #[cfg(feature = "direct-mlx")]
+mod decode_experts;
+#[cfg(feature = "direct-mlx")]
 mod decoder_layer;
 #[cfg(feature = "direct-mlx")]
 mod decoder_state;
 #[cfg(feature = "direct-mlx")]
 mod expert_residency;
+#[cfg(feature = "direct-mlx")]
+mod expert_residency_status;
 #[cfg(feature = "direct-mlx")]
 pub(in crate::laguna) use expert_residency::LagunaLastExpertForward;
 #[cfg(feature = "direct-mlx")]

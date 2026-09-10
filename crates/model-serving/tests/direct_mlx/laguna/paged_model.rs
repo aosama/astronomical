@@ -537,20 +537,14 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
             &mut decoder_state,
             &mut performance_attribution,
         )
-        .expect("second decode should reuse the retained routed page");
+        .expect("second decode should reuse resident experts without another SSD read");
     assert_eq!(model.expert_memory_mode(), ExpertMemoryMode::Hybrid);
     assert_eq!(
         model
             .expert_weight_memory_cache_statistics()
             .disk_page_load_count,
-        3
-    );
-    let reuse_plan = model
-        .active_expert_residency_plan()
-        .expect("routed reuse should still publish a plan");
-    assert_eq!(
-        reuse_plan.layer_targets[0],
-        ExpertLayerResidencyTarget::PreservePartial
+        3,
+        "a repeated decode route must hit the decode expert cache"
     );
 }
 

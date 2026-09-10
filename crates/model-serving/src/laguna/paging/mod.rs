@@ -12,6 +12,8 @@ mod source_slices;
 #[cfg(feature = "direct-mlx")]
 mod paged_execution;
 #[cfg(feature = "direct-mlx")]
+mod resident_expert;
+#[cfg(feature = "direct-mlx")]
 mod weight_page;
 
 pub use error::LagunaPagingError;
@@ -19,5 +21,7 @@ pub use geometry::{LagunaRequestMemoryRequirements, laguna_sliding_prefill_trans
 pub use layer_plan::{LagunaExpertPagingPlan, LagunaSparseLayerPagingPlan};
 #[cfg(feature = "direct-mlx")]
 pub use paged_execution::forward_paged_routed_swiglu;
+#[cfg(feature = "direct-mlx")]
+pub use resident_expert::LagunaResidentExpert;
 #[cfg(feature = "direct-mlx")]
 pub use weight_page::{LagunaExpertWeightPage, load_laguna_expert_page};

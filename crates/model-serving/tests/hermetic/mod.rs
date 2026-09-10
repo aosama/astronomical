@@ -3,6 +3,7 @@ mod adaptive_ram_growth_observations;
 mod artifact_validator;
 mod attention;
 mod complete_residency_headroom_boundary;
+mod decode_expert_cache;
 mod decoder_cache;
 mod e2e_test_model_names;
 mod engine_backed_worker;

@@ -17,14 +17,14 @@ use super::layer_plan::LagunaSparseLayerPagingPlan;
 /// One streamed complete-layer or routed expert page ready for gathered SwiGLU.
 #[derive(Debug)]
 pub struct LagunaExpertWeightPage {
-    manifest: QuantizedExpertPageManifest,
-    gate_up: LagunaGateUpPage,
-    down: LagunaBoundLinear,
+    pub(super) manifest: QuantizedExpertPageManifest,
+    pub(super) gate_up: LagunaGateUpPage,
+    pub(super) down: LagunaBoundLinear,
 }
 
 /// Mutually exclusive split or fused gate/up ownership for one expert page.
 #[derive(Debug)]
-enum LagunaGateUpPage {
+pub(super) enum LagunaGateUpPage {
     Split {
         gate: LagunaBoundLinear,
         up: LagunaBoundLinear,
