@@ -146,6 +146,8 @@ final class DaemonLifecycleController {
   private let ownershipStore: DaemonOwnershipStore
   private let readinessTimeout: Duration
   private let readinessPollInterval: Duration
+  private let unownedDaemonStopPollCount: Int
+  private let unownedDaemonStopPollInterval: Duration
   private let configuredMenuExecutableURL: URL?
   private let configuredDaemonExecutableURL: URL?
   private let configuredDaemonArguments: [String]?
@@ -157,6 +159,8 @@ final class DaemonLifecycleController {
     applicationIdentity: ApplicationIdentity = .current(),
     readinessTimeout: Duration = .seconds(8),
     readinessPollInterval: Duration = .milliseconds(100),
+    unownedDaemonStopPollCount: Int = 30,
+    unownedDaemonStopPollInterval: Duration = .milliseconds(100),
     menuExecutableURL: URL? = nil,
     daemonExecutableURL: URL? = nil,
     ownershipRecordURL: URL? = nil,
@@ -166,6 +170,8 @@ final class DaemonLifecycleController {
     self.applicationIdentity = applicationIdentity
     self.readinessTimeout = readinessTimeout
     self.readinessPollInterval = readinessPollInterval
+    self.unownedDaemonStopPollCount = unownedDaemonStopPollCount
+    self.unownedDaemonStopPollInterval = unownedDaemonStopPollInterval
     configuredMenuExecutableURL = menuExecutableURL
     configuredDaemonExecutableURL = daemonExecutableURL
     configuredDaemonArguments = daemonArguments
@@ -196,8 +202,8 @@ final class DaemonLifecycleController {
   func restartDaemon() async throws -> String {
     if await supervisorClient.healthIsAvailable() {
       try await supervisorClient.requestShutdown()
-      for _ in 0..<30 where await supervisorClient.healthIsAvailable() {
-        try await Task.sleep(for: .milliseconds(100))
+      for _ in 0..<unownedDaemonStopPollCount where await supervisorClient.healthIsAvailable() {
+        try await Task.sleep(for: unownedDaemonStopPollInterval)
       }
       if await supervisorClient.healthIsAvailable(), !ownsDaemon {
         throw DaemonLifecycleError.unownedDaemonDidNotStop
