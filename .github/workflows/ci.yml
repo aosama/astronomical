@@ -244,46 +244,7 @@ jobs:
         run: node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js
         timeout-minutes: 2
       - name: Install verification tools
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: 1
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
-        run: |
-          started_at_seconds="$(date +%s)"
-          printf '[verification-tools] status=start\n'
-          required_cargo_about_version="$(tr -d '[:space:]' < third-party/cargo-about-version)"
-          cargo_about_matches_pin=false
-          if command -v cargo-about >/dev/null 2>&1; then
-            installed_cargo_about_version="$(cargo-about --version)"
-            if [ "$installed_cargo_about_version" = "cargo-about ${required_cargo_about_version}" ]; then
-              cargo_about_matches_pin=true
-            fi
-          fi
-          if [ "$cargo_about_matches_pin" = true ] && command -v sccache >/dev/null 2>&1; then
-            printf '[verification-tools] status=already-installed elapsed_seconds=%s cargo_about=%s\n' "$(( $(date +%s) - started_at_seconds ))" "$required_cargo_about_version"
-            exit 0
-          fi
-          case "$(brew tap)" in
-            *aws/tap*) brew untap aws/tap ;;
-          esac
-          if ! command -v sccache >/dev/null 2>&1; then
-            brew install sccache
-          fi
-          if [ "$cargo_about_matches_pin" != true ]; then
-            export PATH="${HOME}/.cargo/bin:${PATH}"
-            command -v cargo >/dev/null 2>&1 || {
-              printf '%s\n' 'Error: cargo is required to install the pinned cargo-about' >&2
-              exit 1
-            }
-            cargo install cargo-about --version "$required_cargo_about_version" --locked --force --features cli
-            printf '%s\n' "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
-            export PATH="${HOME}/.cargo/bin:${PATH}"
-            installed_cargo_about_version="$(cargo-about --version)"
-            if [ "$installed_cargo_about_version" != "cargo-about ${required_cargo_about_version}" ]; then
-              printf '%s\n' "Error: installed cargo-about is ${installed_cargo_about_version}; Astronomical requires cargo-about ${required_cargo_about_version}" >&2
-              exit 1
-            fi
-          fi
-          printf '[verification-tools] status=success elapsed_seconds=%s cargo_about=%s\n' "$(( $(date +%s) - started_at_seconds ))" "$required_cargo_about_version"
+        run: scripts/install-verification-tools.sh
       - name: Verify Rust dependency notices
         env:
           EVENT_NAME: ${{ github.event_name }}
