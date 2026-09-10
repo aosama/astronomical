@@ -4,32 +4,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.34</title>
-            <pubDate>Wed, 09 Sep 2026 04:07:45 -0400</pubDate>
-            <sparkle:version>475</sparkle:version>
-            <sparkle:shortVersionString>0.2.34</sparkle:shortVersionString>
+            <title>0.2.35</title>
+            <pubDate>Thu, 10 Sep 2026 12:07:33 -0400</pubDate>
+            <sparkle:version>492</sparkle:version>
+            <sparkle:shortVersionString>0.2.35</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.34
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.35
 
-## What changed
+Stable macOS release for Apple Silicon.
 
-- Library downloads now transfer payload files concurrently within a bounded window, start the largest files first, and split large files into concurrent in-file segments. Catalog models reach Ready faster because one slow shard no longer serializes the rest of the transfer. (#441)
-- Library refuses artifacts Astronomical cannot execute before any payload byte is requested. Unrecognized families and recognized-but-non-executable families fail with `model_not_executable` instead of occupying disk and time.
-- The download catalog includes Qwen 3.5 0.8B 4-bit and Ornith 1.5 35B A3B OptiQ Static 5.5bpw, so those models can be installed from Observatory without a custom Hugging Face identity.
+## Changes
+
+- The Library catalog offers Laguna XS 2.1 at 6-bit, 5-bit, and 4-bit.
+- Laguna persistent prompt-cache restore is lossless for a repeated prompt.
+- Decode keeps routed experts and seated complete expert layers under a squeezed memory ceiling instead of dropping a whole layer.
+- When a Metal kernel is demoted, serving still produces valid output on the public MLX path.
 
 ## Compatibility
 
-- No breaking changes. Installed models, download jobs, configuration, and saved state are preserved; no migration is required.
+Existing configuration, Library downloads, and prompt-cache files remain in place. macOS 14.0 or later on Apple Silicon is required.
 
-## Distribution
-
-- Signed with Developer ID, notarized through Apple notarization, and Sparkle-signed for the update feed. The published DMG is digest-bound to the release manifest.
+This build is Developer ID signed and notarized. Sparkle verifies the update feed and the disk image before installation.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.34/Astronomical-0.2.34-macOS-arm64.dmg" length="16196988" type="application/octet-stream" sparkle:edSignature="fn/2xAhi1c2iBO04GXzDtCghKVMAbT3mRQvTLBhif2Mp+dJCmvUtG7XhgLjE+vqo3stRmGQFQElpPQ5HSF1sCw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.35/Astronomical-0.2.35-macOS-arm64.dmg" length="16214152" type="application/octet-stream" sparkle:edSignature="TpF3G93waC4n4p59AD+Yf+6FnUUCk3KnTtzX9dAC0Q8MrZSIXxtngzhoxe1Q6fep05yrBEc0ZDBUDqb6ZxeIBA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: yoEl+AuW6ImrYDpopjyaVyigTm0wNqsHtWGLpAElf34TqSFxHYVow3Io+UgqVxCFjTM11pq1c3Obx+sxgWzJAQ==
-length: 2294
+edSignature: lj9UBd5b51srPrmC1JXAMpdPwfPTJTMNt8Ip9BlPbDkHnE6LaZZD3S6KRHw6msAbKie5ZN93wwTdNrSpma72Dw==
+length: 1950
 -->
