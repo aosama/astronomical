@@ -204,11 +204,16 @@ append_compatibility_identity() {
     }
     printf 'compatibility\ttarget\t%s\n' "$target_identity" >> "$identity_manifest"
     printf 'compatibility\tbuild-type\t%s\n' "$build_type" >> "$identity_manifest"
-    capture_compatibility_input xcode ASTRONOMICAL_NATIVE_IDENTITY_XCODE capture_xcode_identity
-    capture_compatibility_input sdk ASTRONOMICAL_NATIVE_IDENTITY_SDK capture_sdk_identity
-    capture_compatibility_input clang ASTRONOMICAL_NATIVE_IDENTITY_CLANG capture_clang_identity
-    capture_compatibility_input cmake ASTRONOMICAL_NATIVE_IDENTITY_CMAKE capture_cmake_identity
-    capture_compatibility_input rustc ASTRONOMICAL_NATIVE_IDENTITY_RUSTC capture_rustc_identity
+    for compatibility_probe in xcode,ASTRONOMICAL_NATIVE_IDENTITY_XCODE,capture_xcode_identity sdk,ASTRONOMICAL_NATIVE_IDENTITY_SDK,capture_sdk_identity clang,ASTRONOMICAL_NATIVE_IDENTITY_CLANG,capture_clang_identity cmake,ASTRONOMICAL_NATIVE_IDENTITY_CMAKE,capture_cmake_identity rustc,ASTRONOMICAL_NATIVE_IDENTITY_RUSTC,capture_rustc_identity; do
+        probe_name="${compatibility_probe%%,*}"
+        probe_rest="${compatibility_probe#*,}"
+        probe_override="${probe_rest%%,*}"
+        probe_command="${probe_rest#*,}"
+        probe_started_at_seconds="$(date +%s)"
+        capture_compatibility_input "$probe_name" "$probe_override" "$probe_command"
+        printf '[native-build-cache-fingerprint] probe=%s elapsed_seconds=%s\n' \
+            "$probe_name" "$(( $(date +%s) - probe_started_at_seconds ))" >&2
+    done
 }
 
 main() {
