@@ -2,7 +2,7 @@ import Foundation
 
 private let maximumStatusRefreshErrorCharacterCount = 512
 private let maximumWorkerPolicyConfirmationAttempts = 3
-private let workerPolicyConfirmationRetryDelay = Duration.milliseconds(100)
+private let defaultWorkerPolicyConfirmationRetryDelay = Duration.milliseconds(100)
 
 enum ControlActionFeedback: Equatable {
   case inProgress(String)
@@ -37,6 +37,8 @@ final class TelemetryStore: ObservableObject {
   var onMenuBarTitleChanged: ((String) -> Void)?
 
   private let supervisorClient: any SupervisorClient
+  private let controlActionFeedbackDismissalDelay: Duration
+  private let workerPolicyConfirmationRetryDelay: Duration
   private let systemTelemetrySampler = SystemTelemetrySampler()
   private let systemTelemetryClock = ContinuousClock()
   private var pollingTask: Task<Void, Never>?
@@ -48,8 +50,14 @@ final class TelemetryStore: ObservableObject {
   private var popoverIsVisible = false
   private var lastSystemTelemetrySampleTime: ContinuousClock.Instant?
 
-  init(supervisorClient: any SupervisorClient = LocalSupervisorClient()) {
+  init(
+    supervisorClient: any SupervisorClient = LocalSupervisorClient(),
+    controlActionFeedbackDismissalDelay: Duration = .seconds(1),
+    workerPolicyConfirmationRetryDelay: Duration = defaultWorkerPolicyConfirmationRetryDelay
+  ) {
     self.supervisorClient = supervisorClient
+    self.controlActionFeedbackDismissalDelay = controlActionFeedbackDismissalDelay
+    self.workerPolicyConfirmationRetryDelay = workerPolicyConfirmationRetryDelay
   }
 
   func startPolling() {
@@ -295,10 +303,11 @@ final class TelemetryStore: ObservableObject {
 
   private func scheduleMaximumMlxMemoryFeedbackDismissal() {
     let feedbackGeneration = controlActionFeedbackGeneration
+    let dismissalDelay = controlActionFeedbackDismissalDelay
     controlActionFeedbackDismissalTask?.cancel()
     controlActionFeedbackDismissalTask = Task { [weak self] in
       do {
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(for: dismissalDelay)
       } catch {
         return
       }

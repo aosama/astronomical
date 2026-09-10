@@ -6,7 +6,7 @@ import XCTest
 final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_surface_a_successful_configuration_reload_to_the_popover() async {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: SuccessfulReloadSupervisorClient()
     )
 
@@ -20,7 +20,7 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_not_report_worker_restart_success_before_status_confirms_the_acknowledged_policy() async {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: RestartAcknowledgedButStatusUnconfirmedSupervisorClient()
     )
 
@@ -34,7 +34,7 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_report_worker_restart_success_after_status_confirms_the_acknowledged_policy() async {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: RestartAcknowledgedAndStatusConfirmedSupervisorClient()
     )
 
@@ -49,7 +49,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_confirm_a_worker_restart_when_polling_overlaps_delayed_confirmation() async {
     let supervisorClient = OverlappingRestartConfirmationSupervisorClient()
-    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let telemetryStore = contractTelemetryStore(supervisorClient: supervisorClient)
     let configurationReloadTask = Task { @MainActor in
       await telemetryStore.performConfigurationReload()
     }
@@ -69,7 +69,7 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_dismiss_a_successful_memory_update_one_second_after_application() async throws {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: SuccessfulMaximumMlxMemoryUpdateSupervisorClient()
     )
 
@@ -80,7 +80,7 @@ final class MenuControlStateTests: XCTestCase {
       .success("MLX memory setting persisted and applied")
     )
 
-    try await Task.sleep(for: .milliseconds(100))
+    try await Task.sleep(for: .milliseconds(10))
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
       .success("MLX memory setting persisted and applied")
@@ -92,7 +92,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_wait_for_a_queued_memory_update_to_take_effect_before_dismissing() async throws {
     let supervisorClient = QueuedMaximumMlxMemoryUpdateSupervisorClient()
-    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let telemetryStore = contractTelemetryStore(supervisorClient: supervisorClient)
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
     XCTAssertEqual(
@@ -102,7 +102,7 @@ final class MenuControlStateTests: XCTestCase {
 
     await supervisorClient.markMaximumMlxMemoryUpdateAsApplied()
     telemetryStore.refreshNow()
-    try await Task.sleep(for: .milliseconds(100))
+    try await Task.sleep(for: .milliseconds(10))
     XCTAssertNotNil(telemetryStore.controlActionFeedback)
 
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
@@ -110,7 +110,7 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_surface_a_late_memory_update_rejection_as_failure_feedback() async {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: RejectedMaximumMlxMemoryUpdateSupervisorClient()
     )
 
@@ -124,7 +124,7 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_start_dismissal_after_a_status_refresh_precedes_the_update_response() async throws {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: DelayedMaximumMlxMemoryUpdateSupervisorClient()
     )
     let memoryUpdateTask = Task { @MainActor in
@@ -145,21 +145,21 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_not_let_memory_success_dismiss_newer_server_feedback() async throws {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: SuccessfulMaximumMlxMemoryUpdateSupervisorClient()
     )
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
     telemetryStore.beginServerRestart()
 
-    try await Task.sleep(for: .milliseconds(1_100))
+    try await Task.sleep(for: .milliseconds(50))
 
     XCTAssertEqual(telemetryStore.controlActionFeedback, .inProgress("Restarting server…"))
   }
 
   @MainActor
   func test_should_ignore_a_memory_update_that_finishes_after_newer_feedback_begins() async {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: DelayedMaximumMlxMemoryUpdateSupervisorClient()
     )
     let memoryUpdateTask = Task { @MainActor in
@@ -175,7 +175,7 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_surface_a_configuration_reload_failure_to_the_popover() async {
-    let telemetryStore = TelemetryStore(
+    let telemetryStore = contractTelemetryStore(
       supervisorClient: FailingReloadSupervisorClient()
     )
 
@@ -190,14 +190,23 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   private func waitForControlActionFeedbackToDismiss(from telemetryStore: TelemetryStore) async throws {
     let feedbackDismissalClock = ContinuousClock()
-    let feedbackDismissalDeadline = feedbackDismissalClock.now.advanced(by: .seconds(2))
+    let feedbackDismissalDeadline = feedbackDismissalClock.now.advanced(by: .milliseconds(400))
     while telemetryStore.controlActionFeedback != nil,
       feedbackDismissalClock.now < feedbackDismissalDeadline
     {
-      try await Task.sleep(for: .milliseconds(25))
+      try await Task.sleep(for: .milliseconds(5))
     }
     XCTAssertNil(telemetryStore.controlActionFeedback)
   }
+}
+
+@MainActor
+private func contractTelemetryStore(supervisorClient: any SupervisorClient) -> TelemetryStore {
+  TelemetryStore(
+    supervisorClient: supervisorClient,
+    controlActionFeedbackDismissalDelay: .milliseconds(80),
+    workerPolicyConfirmationRetryDelay: .milliseconds(1)
+  )
 }
 
 private struct SuccessfulReloadSupervisorClient: SupervisorClient {
