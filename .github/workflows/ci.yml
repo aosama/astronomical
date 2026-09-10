@@ -284,7 +284,9 @@ jobs:
       - name: Set maximum parallel build jobs
         run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
-        run: cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
+        run: |
+          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
+          cargo test --timings --no-fail-fast --no-run -p astronomical-supervisor --test rest_api_tests
         timeout-minutes: 12
       - name: Classify native build result
         id: native-build-result

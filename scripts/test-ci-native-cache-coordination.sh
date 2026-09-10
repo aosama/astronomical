@@ -269,6 +269,12 @@ assert_workflow_contract() {
         ]
         raise "Library REST required-CI command changed" unless Shellwords.split(library_rest_step.fetch("run")) == expected_library_rest_command
         raise "Library REST contracts exceeded their bounded timeout" unless library_rest_step.fetch("timeout-minutes") <= 2
+        compile_step = steps.find { |step| step["name"] == "Compile hermetic tests" }
+        raise "hermetic compile step is missing from required CI" unless compile_step
+        compile_command = compile_step.fetch("run")
+        raise "hermetic compile does not use --no-run" unless compile_command.include?("--no-run")
+        raise "hermetic compile omits hermetic_tests" unless compile_command.include?("--test hermetic_tests")
+        raise "hermetic compile omits rest_api_tests" unless compile_command.include?("--test rest_api_tests")
         cache_owners = {
           "cargo-downloads-cache" => ["~/.cargo/registry", "~/.cargo/git"],
           "native-archives-cache" => ["~/Library/Caches/Astronomical/native-dependencies"],
