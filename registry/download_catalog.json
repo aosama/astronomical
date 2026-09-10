@@ -128,6 +128,99 @@
             "quantization_label": "OptiQ static 5.5bpw (mixed-precision affine, group 64)",
             "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
             "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "mlx-community/Laguna-XS-2.1-6bit",
+            "revision": "5f60b7511ea0be481a68be1500baf15b0bcccba6",
+            "display_name": "Laguna XS 2.1 6-bit",
+            "family": "laguna",
+            "approximate_size_bytes": 27185160853,
+            "public": true,
+            "description": "A 33B-parameter sparse mixture-of-experts reasoning model for coding and agentic work, with about 3B active parameters per token. Takes text, reasons before answering, and calls tools natively. Under one memory ceiling, experts stream from SSD when they do not fit, without hidden quantization. Text-only, about 27.2 GB on disk.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "6-bit affine (group 64)",
+            "architecture_summary": "Laguna sparse MoE, 33B parameters, about 3B active per token, 40 layers (10 global attention, 30 sliding-window), 256 routed plus 1 shared expert, 8 routed per token, text-only",
+            "upstream_license": "OpenMDW-1.1",
+            "included_paths": [
+                "config.json",
+                "model.safetensors.index.json",
+                "model-00001-of-00006.safetensors",
+                "model-00002-of-00006.safetensors",
+                "model-00003-of-00006.safetensors",
+                "model-00004-of-00006.safetensors",
+                "model-00005-of-00006.safetensors",
+                "model-00006-of-00006.safetensors",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "generation_config.json",
+                "chat_template.jinja",
+                "special_tokens_map.json"
+            ]
+        },
+        {
+            "huggingface_id": "mlx-community/Laguna-XS-2.1-5bit",
+            "revision": "f9990bed9f13df5089804c44a6ef9ea2589fe5df",
+            "display_name": "Laguna XS 2.1 5-bit",
+            "family": "laguna",
+            "approximate_size_bytes": 23007413034,
+            "public": true,
+            "description": "A 33B-parameter sparse mixture-of-experts reasoning model for coding and agentic work, with about 3B active parameters per token. Takes text, reasons before answering, and calls tools natively. Under one memory ceiling, experts stream from SSD when they do not fit, without hidden quantization. Text-only, about 23.0 GB on disk.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "5-bit affine (group 64)",
+            "architecture_summary": "Laguna sparse MoE, 33B parameters, about 3B active per token, 40 layers (10 global attention, 30 sliding-window), 256 routed plus 1 shared expert, 8 routed per token, text-only",
+            "upstream_license": "OpenMDW-1.1",
+            "included_paths": [
+                "config.json",
+                "model.safetensors.index.json",
+                "model-00001-of-00005.safetensors",
+                "model-00002-of-00005.safetensors",
+                "model-00003-of-00005.safetensors",
+                "model-00004-of-00005.safetensors",
+                "model-00005-of-00005.safetensors",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "generation_config.json",
+                "chat_template.jinja",
+                "special_tokens_map.json"
+            ]
+        },
+        {
+            "huggingface_id": "mlx-community/Laguna-XS-2.1-4bit",
+            "revision": "c42e0a8f8d504ceacde015a535dcb286d65c8799",
+            "display_name": "Laguna XS 2.1 4-bit",
+            "family": "laguna",
+            "approximate_size_bytes": 18829665100,
+            "public": true,
+            "description": "A 33B-parameter sparse mixture-of-experts reasoning model for coding and agentic work, with about 3B active parameters per token. Takes text, reasons before answering, and calls tools natively. Under one memory ceiling, experts stream from SSD when they do not fit, without hidden quantization. Text-only, about 18.8 GB on disk.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "4-bit affine (group 64)",
+            "architecture_summary": "Laguna sparse MoE, 33B parameters, about 3B active per token, 40 layers (10 global attention, 30 sliding-window), 256 routed plus 1 shared expert, 8 routed per token, text-only",
+            "upstream_license": "OpenMDW-1.1",
+            "included_paths": [
+                "config.json",
+                "model.safetensors.index.json",
+                "model-00001-of-00004.safetensors",
+                "model-00002-of-00004.safetensors",
+                "model-00003-of-00004.safetensors",
+                "model-00004-of-00004.safetensors",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "generation_config.json",
+                "chat_template.jinja",
+                "special_tokens_map.json"
+            ]
         }
     ]
 }

@@ -15,7 +15,6 @@ use astronomical_supervisor::{
 };
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
-
 #[test]
 fn should_package_flux_with_only_its_executable_diffusers_graph() {
     let download_catalog = DownloadCatalog::load_bundled()
