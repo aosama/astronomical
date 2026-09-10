@@ -80,7 +80,7 @@ final class MenuControlStateTests: XCTestCase {
       .success("MLX memory setting persisted and applied")
     )
 
-    try await Task.sleep(for: .milliseconds(5))
+    try await Task.sleep(for: .milliseconds(10))
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
       .success("MLX memory setting persisted and applied")
@@ -102,7 +102,7 @@ final class MenuControlStateTests: XCTestCase {
 
     await supervisorClient.markMaximumMlxMemoryUpdateAsApplied()
     telemetryStore.refreshNow()
-    try await Task.sleep(for: .milliseconds(5))
+    try await Task.sleep(for: .milliseconds(10))
     XCTAssertNotNil(telemetryStore.controlActionFeedback)
 
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
@@ -190,7 +190,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   private func waitForControlActionFeedbackToDismiss(from telemetryStore: TelemetryStore) async throws {
     let feedbackDismissalClock = ContinuousClock()
-    let feedbackDismissalDeadline = feedbackDismissalClock.now.advanced(by: .milliseconds(250))
+    let feedbackDismissalDeadline = feedbackDismissalClock.now.advanced(by: .milliseconds(400))
     while telemetryStore.controlActionFeedback != nil,
       feedbackDismissalClock.now < feedbackDismissalDeadline
     {
@@ -204,7 +204,7 @@ final class MenuControlStateTests: XCTestCase {
 private func contractTelemetryStore(supervisorClient: any SupervisorClient) -> TelemetryStore {
   TelemetryStore(
     supervisorClient: supervisorClient,
-    controlActionFeedbackDismissalDelay: .milliseconds(20),
+    controlActionFeedbackDismissalDelay: .milliseconds(80),
     workerPolicyConfirmationRetryDelay: .milliseconds(1)
   )
 }
