@@ -26,7 +26,9 @@
 //!   `AdmitPartialOnMandatoryRouteRead`, `StreamOperationLocal`,
 //!   `ReleasePartial`, `ReleaseCompleteForExactDeficit`).
 //! - **2 page classes** — `StableCompleteLayer` and `ElasticRoutedExperts`,
-//!   the eviction-priority classes for retained pages.
+//!   the eviction-priority classes for retained *prefill* pages.
+//! - **Decode expert cache** — `expert_cache/decode`: the unit is one expert
+//!   id, never a layer pin. Families supply `ResidentExpertWeight`.
 //!
 //! # The naming constitution
 //!
@@ -51,6 +53,7 @@
 mod admission;
 mod budget;
 mod ceiling;
+mod expert_cache;
 mod phase;
 mod reclamation;
 mod recovery;
@@ -87,6 +90,7 @@ pub use budget::{
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 pub use ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
+pub use expert_cache::{DecodeExpertCache, ResidentExpertWeight};
 pub use phase::MemoryPhase;
 pub use reclamation::{
     ExpertMemoryAdmissionError, ExpertReclamationPlan,
