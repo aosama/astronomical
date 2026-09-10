@@ -125,9 +125,19 @@ impl Qwen3_5EngineState {
                 }
             }
         }
-        // Internal ownership log: this deliberately reports the retained cache's
-        // seated bookkeeping, not the published measured claim — the seating pass
-        // just enqueued these lazy pages and no snapshot is taken here.
+        // Seating adopts lazy pages. Evaluate them now so the first decode
+        // admission snapshot includes the seated weights. Leaving them lazy made
+        // the first generate token look like a huge activation spike and leftover
+        // publication evicted the same pages.
+        if let Err(materialize_error) = model.materialize_seated_complete_layers() {
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %materialize_error,
+                "continued decode after seated complete-layer materialization failed"
+            );
+        }
+        // Cache bookkeeping after seating and materialization. Decode admission
+        // takes its own MLX snapshot next.
         let expert_statistics = model.expert_weight_memory_cache_statistics();
         let total_layer_count = model
             .expert_pager

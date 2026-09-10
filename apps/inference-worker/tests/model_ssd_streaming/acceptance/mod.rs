@@ -2,6 +2,7 @@
 
 mod cached_suffix_streaming_prefill_rest_journey;
 mod complete_expert_residency_rest_journey;
+mod decode_expert_eviction_rest_journey;
 mod laguna_paging_journey;
 mod leftover_complete_layer_seating_rest_journey;
 mod live_memory_ceiling_expert_residency_round_trip_rest_journey;

@@ -7,7 +7,7 @@ pub(crate) use rust_expert_streaming::Qwen3_5ExpertStreamingRequestShape;
 use std::fs::File;
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::MlxRuntimeError;
+use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
 use thiserror::Error;
 
 use crate::expert_paging::{
@@ -79,6 +79,17 @@ impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
         affine_payload_byte_count(&self.gate_projection)
             .saturating_add(affine_payload_byte_count(&self.up_projection))
             .saturating_add(affine_payload_byte_count(&self.down_projection))
+    }
+}
+
+impl Qwen3_5PagedExpertWeights {
+    pub(crate) fn append_array_references<'weights>(
+        &'weights self,
+        arrays: &mut Vec<&'weights MlxArray>,
+    ) {
+        self.gate_projection.append_array_references(arrays);
+        self.up_projection.append_array_references(arrays);
+        self.down_projection.append_array_references(arrays);
     }
 }
 

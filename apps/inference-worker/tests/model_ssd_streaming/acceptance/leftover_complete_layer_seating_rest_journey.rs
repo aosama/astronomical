@@ -25,7 +25,8 @@ use crate::support::serving_rest::{
 fn model_id() -> &'static str {
     crate::support::resident_sparse_moe_model_id()
 }
-const MAXIMUM_MLX_MEMORY_BYTES: u64 = 26_000_000_000;
+const LEFTOVER_SEATING_MLX_MEMORY_BYTES: u64 = 26_000_000_000;
+const ORNITH_4BIT_DECODE_RETENTION_MLX_MEMORY_BYTES: u64 = 20_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 4_096;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 128;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 64;
@@ -42,16 +43,33 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 async fn should_keep_leftover_complete_expert_layers_in_ram_during_squeezed_generation() {
     timeout(
         JOURNEY_DEADLINE,
-        run_leftover_complete_layer_seating_rest_journey(),
+        run_leftover_complete_layer_seating_rest_journey(LEFTOVER_SEATING_MLX_MEMORY_BYTES),
     )
     .await
     .expect("the leftover complete-layer seating REST journey must finish within 115 seconds");
 }
 
-async fn run_leftover_complete_layer_seating_rest_journey() {
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "launches Ornith-1.5-35B-A3B-OptiQ-4bit under a 20 GB ceiling and proves decode keeps leftover experts"]
+async fn should_keep_decode_experts_for_ornith_4bit_under_a_20gb_ceiling() {
+    timeout(
+        JOURNEY_DEADLINE,
+        run_leftover_complete_layer_seating_rest_journey(
+            ORNITH_4BIT_DECODE_RETENTION_MLX_MEMORY_BYTES,
+        ),
+    )
+    .await
+    .expect("the Ornith 4-bit 20 GB decode-retention journey must finish within 115 seconds");
+}
+
+async fn run_leftover_complete_layer_seating_rest_journey(maximum_mlx_memory_bytes: u64) {
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home = isolated_leftover_seating_worker_home();
-    write_acceptance_config(&isolated_worker_home, &model_directory);
+    write_acceptance_config(
+        &isolated_worker_home,
+        &model_directory,
+        maximum_mlx_memory_bytes,
+    );
     let user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
         &model_directory,
         ROMEO_AND_JULIET_SOURCE,
@@ -62,7 +80,7 @@ async fn run_leftover_complete_layer_seating_rest_journey() {
         model_id(),
         model_directory,
         &isolated_worker_home,
-        MAXIMUM_MLX_MEMORY_BYTES,
+        maximum_mlx_memory_bytes,
     )
     .await;
     let server_address = real_model_rest_server.server_address;
@@ -81,7 +99,8 @@ async fn run_leftover_complete_layer_seating_rest_journey() {
         "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
     });
     eprintln!(
-        "[leftover-complete-layer-seating] status=progress phase=request_send prompt_characters={} ceiling_bytes={MAXIMUM_MLX_MEMORY_BYTES}",
+        "[leftover-complete-layer-seating] status=progress phase=request_send model={} prompt_characters={} ceiling_bytes={maximum_mlx_memory_bytes}",
+        model_id(),
         user_message.len()
     );
     let streamed_completion: StreamResponse<Value> = timeout(
@@ -110,8 +129,16 @@ async fn run_leftover_complete_layer_seating_rest_journey() {
             >= MINIMUM_GENERATION_EXPERT_PAYLOAD_BYTES,
         "leftover RAM that can hold complete layers must not generate with empty expert RAM: {generation_memory:?}"
     );
+    assert!(
+        generation_memory
+            .average_generation_tokens_per_second
+            .is_finite()
+            && generation_memory.average_generation_tokens_per_second > 0.0,
+        "decode throughput must be a positive finite measurement: {generation_memory:?}"
+    );
     eprintln!(
-        "[leftover-complete-layer-seating] status=success expert_memory_mode={} largest_generating_expert_payload_bytes={} average_prefill_tokens_per_second={:.2} average_generation_tokens_per_second={:.2} output_characters={}",
+        "[leftover-complete-layer-seating] status=success model={} ceiling_bytes={maximum_mlx_memory_bytes} expert_memory_mode={} largest_generating_expert_payload_bytes={} average_prefill_tokens_per_second={:.2} average_generation_tokens_per_second={:.2} output_characters={}",
+        model_id(),
         generation_memory.final_expert_memory_mode,
         generation_memory.largest_generating_expert_payload_bytes,
         generation_memory.average_prefill_tokens_per_second,
@@ -241,13 +268,17 @@ async fn consume_completed_stream(
     }
 }
 
-fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
+fn write_acceptance_config(
+    isolated_worker_home: &Path,
+    model_directory: &Path,
+    maximum_mlx_memory_bytes: u64,
+) {
     let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the leftover-seating configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
-        "maximum_mlx_memory_gb": MAXIMUM_MLX_MEMORY_BYTES / 1_000_000_000,
+        "maximum_mlx_memory_gb": maximum_mlx_memory_bytes / 1_000_000_000,
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": 50,

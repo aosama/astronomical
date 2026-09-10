@@ -152,18 +152,16 @@ impl Qwen3_5Model {
             .filter(|residency| residency.class == RetainedExpertPageClass::StableCompleteLayer)
             .map(|residency| residency.payload_bytes)
             .fold(0_u64, u64::saturating_add);
-        // Prefill leftover can shrink after a chunk because learned context
-        // reserve grew. Planning and cache eviction against that smaller number
-        // discards a complete layer this request already paid to read. Floor at
-        // current complete payload so only a real capacity failure may shrink.
-        let retained_page_ceiling_bytes = if phase == MemoryPhase::Prefill {
+        // Leftover can shrink after a chunk or a decode token because learned
+        // context reserve grew. Planning and cache eviction against that smaller
+        // number discards a complete layer this request already paid to read.
+        // Floor at current complete payload so only a real capacity failure may
+        // shrink — Prefill, GenerationPreparation, and Decode share this rule.
+        let retained_page_ceiling_bytes =
             retained_complete_layer_ceiling_after_prefill_budget_refresh(
                 retained_expert_ceiling_bytes,
                 current_complete_layer_payload_bytes,
-            )
-        } else {
-            retained_expert_ceiling_bytes
-        };
+            );
         let budget_reclamation = retained_experts
             .borrow_mut()
             .update_maximum_resident_payload_bytes(retained_page_ceiling_bytes);

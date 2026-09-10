@@ -29,7 +29,7 @@
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
-use crate::InferenceEngineError;
+use crate::{InferenceEngineError, retained_complete_layer_ceiling_after_prefill_budget_refresh};
 
 use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
 use crate::qwen3_5::model::Qwen3_5Model;
@@ -40,8 +40,15 @@ impl Qwen3_5Model {
     /// at the post-evaluation flush so the hot-expert cache can only grow into
     /// the adaptive growth guard's unclaimed headroom, never into the margin
     /// the next forward's admission must hold for transients and KV growth.
-    /// Returns whether owned arrays were released.
+    /// Already-seated complete layers floor this cap: leftover publication must
+    /// not evict pages this request already paid to read. Returns whether owned
+    /// arrays were released.
     pub(crate) fn limit_retained_experts_to(&self, maximum_resident_payload_bytes: u64) -> bool {
+        let maximum_resident_payload_bytes =
+            retained_complete_layer_ceiling_after_prefill_budget_refresh(
+                maximum_resident_payload_bytes,
+                self.seated_complete_layer_payload_bytes(),
+            );
         self.retained_experts
             .as_ref()
             .is_none_or(|retained_experts| {
@@ -102,13 +109,16 @@ impl Qwen3_5Model {
         current_retained_expert_payload_bytes: u64,
         admitted_forward_reserve_bytes: u64,
     ) -> bool {
-        let retained_expert_budget_bytes = self
-            .mlx_ram_budget
-            .borrow()
-            .retained_expert_budget_for_admitted_forward(
-                current_active_memory_bytes,
-                current_retained_expert_payload_bytes,
-                admitted_forward_reserve_bytes,
+        let retained_expert_budget_bytes =
+            retained_complete_layer_ceiling_after_prefill_budget_refresh(
+                self.mlx_ram_budget
+                    .borrow()
+                    .retained_expert_budget_for_admitted_forward(
+                        current_active_memory_bytes,
+                        current_retained_expert_payload_bytes,
+                        admitted_forward_reserve_bytes,
+                    ),
+                self.seated_complete_layer_payload_bytes(),
             );
         let Some(retained_experts) = self.retained_experts.as_ref() else {
             return false;

@@ -24,6 +24,7 @@ use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError,
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
     RetainedExpertReclamation, measured_non_expert_forward_growth_bytes,
+    retained_complete_layer_ceiling_after_prefill_budget_refresh,
 };
 
 use super::qwen3_5_runtime_error;
@@ -188,14 +189,16 @@ fn record_composed_ram_budget_measurement(
         u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
         0,
     );
+    let retained_page_ceiling_bytes = retained_complete_layer_ceiling_after_prefill_budget_refresh(
+        retained_expert_budget.retained_expert_budget_bytes,
+        model.seated_complete_layer_payload_bytes(),
+    );
     model.retained_experts.as_ref().map_or_else(
         RetainedExpertReclamation::default,
         |retained_experts| {
             retained_experts
                 .borrow_mut()
-                .update_maximum_resident_payload_bytes(
-                    retained_expert_budget.retained_expert_budget_bytes,
-                )
+                .update_maximum_resident_payload_bytes(retained_page_ceiling_bytes)
         },
     )
 }

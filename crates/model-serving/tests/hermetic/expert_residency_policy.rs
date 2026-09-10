@@ -235,6 +235,20 @@ fn should_plan_prefill_with_the_floored_ceiling_when_seated_layers_exceed_leftov
         &seated_complete_layers,
     )
     .expect("the floored Prefill ceiling must accept already-seated complete layers");
+    plan_expert_residency(
+        MemoryPhase::Decode,
+        floored_ceiling_bytes,
+        &geometries,
+        &seated_complete_layers,
+    )
+    .expect("the floored Decode ceiling must accept already-seated complete layers");
+    plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
+        floored_ceiling_bytes,
+        &geometries,
+        &seated_complete_layers,
+    )
+    .expect("the floored GenerationPreparation ceiling must accept already-seated complete layers");
 }
 
 #[test]
