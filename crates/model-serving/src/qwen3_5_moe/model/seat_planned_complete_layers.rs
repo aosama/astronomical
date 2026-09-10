@@ -64,4 +64,38 @@ impl Qwen3_5Model {
         }
         Ok(seated_payload_bytes)
     }
+
+    /// Bytes already held as complete layers. Decode leftover publication floors
+    /// here so a poisoned activation measurement cannot evict pages this request
+    /// already paid to read.
+    pub(crate) fn seated_complete_layer_payload_bytes(&self) -> u64 {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return 0;
+        };
+        let expert_capacity = self
+            .expert_pager
+            .as_ref()
+            .and_then(|expert_pager| expert_pager.layer_plans().first())
+            .map_or(0, |layer_plan| layer_plan.expert_capacity);
+        retained_experts
+            .borrow()
+            .complete_layer_payload_bytes(expert_capacity)
+    }
+
+    /// Evaluates seated complete-layer weights so the next MLX snapshot includes
+    /// them. Decode handoff seating adopts lazy pages; without this eval the first
+    /// generate token materializes those pages, admission records them as
+    /// activation, and leftover publication evicts the same pages.
+    pub(crate) fn materialize_seated_complete_layers(&self) -> Result<(), Qwen3_5ExecutionError> {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return Ok(());
+        };
+        let retained_experts = retained_experts.borrow();
+        let mut seated_weight_arrays = Vec::new();
+        retained_experts.append_resident_array_references(&mut seated_weight_arrays);
+        if seated_weight_arrays.is_empty() {
+            return Ok(());
+        }
+        Ok(self.runtime.evaluate_arrays(&seated_weight_arrays)?)
+    }
 }

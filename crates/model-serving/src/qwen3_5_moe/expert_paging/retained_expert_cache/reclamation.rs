@@ -3,7 +3,10 @@
 //! effective-ceiling arithmetic the insert path and the residency planner
 //! share.
 
+use astronomical_runtime_integration::MlxArray;
+
 use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, RetainedExpertReclamation};
+use crate::memory::RetainedExpertPageClass;
 
 use super::RetainedExpertCache;
 
@@ -75,6 +78,25 @@ impl RetainedExpertCache {
     #[must_use]
     pub(crate) fn normal_maximum_resident_payload_bytes(&self) -> u64 {
         self.normal_maximum_resident_payload_bytes
+    }
+
+    /// Payload of tables that already hold every expert of their decoder index.
+    #[must_use]
+    pub(crate) fn complete_layer_payload_bytes(&self, expert_capacity: usize) -> u64 {
+        self.topology_snapshot(expert_capacity)
+            .iter()
+            .filter(|residency| residency.class == RetainedExpertPageClass::StableCompleteLayer)
+            .map(|residency| residency.payload_bytes)
+            .fold(0_u64, u64::saturating_add)
+    }
+
+    pub(crate) fn append_resident_array_references<'weights>(
+        &'weights self,
+        arrays: &mut Vec<&'weights MlxArray>,
+    ) {
+        for table in self.tables_by_layer.iter().flatten() {
+            table.weights.append_array_references(arrays);
+        }
     }
 
     pub(super) fn can_admit(&self, new_payload_bytes: u64) -> bool {
