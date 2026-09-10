@@ -42,20 +42,31 @@ require_pinned_cargo_about() {
 
 list_notices_input_paths() {
     repository_root="$1"
-    printf '%s\n' \
+    command -v git >/dev/null 2>&1 || {
+        print_error "git is required to digest tracked notices inputs"
+        exit 1
+    }
+    git -C "$repository_root" ls-files -- \
         Cargo.lock \
         Cargo.toml \
         third-party/about.toml \
         third-party/rust-dependency-notices.hbs \
-        third-party/cargo-about-version
-    for source_tree in apps crates experimental; do
-        [ -d "${repository_root}/${source_tree}" ] || continue
-        (
-            CDPATH='' cd -- "${repository_root}/${source_tree}" || exit 1
-            find . -name target -prune -o -name Cargo.toml -print
-            find . -name target -prune -o \( -name LICENSE -o -name LICENSE.md -o -name COPYING \) -print
-        ) | sed "s#^\./#${source_tree}/#"
-    done
+        third-party/cargo-about-version \
+        apps \
+        crates \
+        experimental \
+        | awk '
+            $0 == "Cargo.lock" || $0 == "Cargo.toml" ||
+            $0 == "third-party/about.toml" ||
+            $0 == "third-party/rust-dependency-notices.hbs" ||
+            $0 == "third-party/cargo-about-version" {
+                print
+                next
+            }
+            $0 ~ /^(apps|crates|experimental)\// && ($0 ~ /\/Cargo.toml$/ || $0 ~ /(^|\/)(LICENSE|LICENSE.md|COPYING)$/) {
+                print
+            }
+        '
 }
 
 hash_file_sha256() {
