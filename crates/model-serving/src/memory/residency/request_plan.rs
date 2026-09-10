@@ -151,12 +151,14 @@ impl RequestExpertResidency {
     }
 }
 
-/// Floors the Prefill retained-page ceiling at complete layers already in RAM.
+/// Floors the retained-page ceiling at complete layers already in RAM.
 ///
-/// Leftover arithmetic can tighten after a chunk because learned context reserve
-/// grew. Evicting a seated complete layer to match that smaller number throws away
-/// a page this request already paid to read, then every later chunk streams it
-/// again. Real capacity failure still shrinks through `shrink_after_capacity_failure`.
+/// Leftover arithmetic can tighten after a chunk or a decode token because a
+/// learned context reserve grew — including when lazy seated pages materialize
+/// and get mis-attributed as activation. Evicting a seated complete layer to
+/// match that smaller number throws away a page this request already paid to
+/// read, then every later token streams it again. Real capacity failure still
+/// shrinks through `shrink_after_capacity_failure` or request-pressure deficit.
 #[must_use]
 pub const fn retained_complete_layer_ceiling_after_prefill_budget_refresh(
     leftover_expert_budget_bytes: u64,
