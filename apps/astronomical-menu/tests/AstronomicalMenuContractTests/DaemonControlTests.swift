@@ -48,7 +48,7 @@ final class DaemonControlTests: XCTestCase {
     defer { testContext.removeTemporaryDirectory() }
     let daemonLifecycleController = testContext.makeController(
       supervisorClient: ExistingDelayedReadinessSupervisorClient(readyAfterCheckCount: 3),
-      readinessTimeout: .seconds(1))
+      readinessTimeout: .milliseconds(100))
 
     try await daemonLifecycleController.startDaemonIfNeeded()
 
@@ -269,7 +269,9 @@ final class DaemonControlTests: XCTestCase {
   @MainActor
   func test_should_report_when_an_unowned_server_does_not_stop() async {
     let daemonLifecycleController = DaemonLifecycleController(
-      supervisorClient: StuckExternalSupervisorClient()
+      supervisorClient: StuckExternalSupervisorClient(),
+      unownedDaemonStopPollCount: 3,
+      unownedDaemonStopPollInterval: .milliseconds(1)
     )
 
     do {
@@ -311,6 +313,8 @@ private struct DaemonLifecycleTestContext {
       applicationIdentity: applicationIdentity,
       readinessTimeout: readinessTimeout,
       readinessPollInterval: .milliseconds(5),
+      unownedDaemonStopPollCount: 3,
+      unownedDaemonStopPollInterval: .milliseconds(1),
       menuExecutableURL: URL(
         fileURLWithPath: "/Applications/Astronomical.app/Contents/MacOS/astronomical-menu"),
       daemonExecutableURL: daemonExecutableURL,
