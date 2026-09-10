@@ -1,5 +1,6 @@
 mod affine_moe;
 mod affine_moe_demotion;
+mod decoder_cache_bridge;
 mod hybrid_attention;
 mod hybrid_attention_reference;
 mod memory_policy;
