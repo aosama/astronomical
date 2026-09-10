@@ -13,14 +13,18 @@ const E2E_TEST_MODEL_NAMES_JSON: &str = include_str!(concat!(
 const LARGE_SPARSE_MOE_ROLE: &str = "large_sparse_moe";
 const RESIDENT_SPARSE_MOE_ROLE: &str = "resident_sparse_moe";
 const LAGUNA_XS_ROLE: &str = "laguna_xs";
+const LAGUNA_XS_5BIT_ROLE: &str = "laguna_xs_5bit";
+const LAGUNA_XS_4BIT_ROLE: &str = "laguna_xs_4bit";
 const DENSE_MTP_ROLE: &str = "dense_mtp";
 const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
 const K2_HORIZON_MOVA_ROLE: &str = "k2_horizon_mova";
-const E2E_TEST_MODEL_ROLES: [&str; 7] = [
+const E2E_TEST_MODEL_ROLES: [&str; 9] = [
     LARGE_SPARSE_MOE_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
     LAGUNA_XS_ROLE,
+    LAGUNA_XS_5BIT_ROLE,
+    LAGUNA_XS_4BIT_ROLE,
     DENSE_MTP_ROLE,
     SMALL_DENSE_ROLE,
     FLUX2_KLEIN_ROLE,
@@ -84,6 +88,17 @@ pub(crate) fn laguna_xs_model_id() -> &'static str {
     model_id_for_role(LAGUNA_XS_ROLE)
 }
 
+/// The smaller Laguna catalog variants validate the same family against lower
+/// memory ceilings; they stay out of the required on-disk set because only the
+/// 6-bit reference is pinned by the resident journeys.
+pub(crate) fn laguna_xs_5bit_model_id() -> &'static str {
+    model_id_for_role(LAGUNA_XS_5BIT_ROLE)
+}
+
+pub(crate) fn laguna_xs_4bit_model_id() -> &'static str {
+    model_id_for_role(LAGUNA_XS_4BIT_ROLE)
+}
+
 pub(crate) fn dense_mtp_model_id() -> &'static str {
     model_id_for_role(DENSE_MTP_ROLE)
 }
@@ -100,11 +115,13 @@ pub(crate) fn k2_horizon_mova_model_id() -> &'static str {
     model_id_for_role(K2_HORIZON_MOVA_ROLE)
 }
 
-pub(crate) fn e2e_test_model_ids() -> [&'static str; 7] {
+pub(crate) fn e2e_test_model_ids() -> [&'static str; 9] {
     [
         large_sparse_moe_model_id(),
         resident_sparse_moe_model_id(),
         laguna_xs_model_id(),
+        laguna_xs_5bit_model_id(),
+        laguna_xs_4bit_model_id(),
         dense_mtp_model_id(),
         small_dense_model_id(),
         flux2_klein_model_id(),

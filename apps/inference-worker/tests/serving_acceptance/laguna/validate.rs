@@ -329,3 +329,58 @@ fn romeo_and_juliet_source_with_character_limit(maximum_characters: usize) -> &'
 pub(crate) fn resolve_reference_model_directory() -> PathBuf {
     crate::support::configured_installed_model_directory_by_id(laguna_xs_public_model_id())
 }
+
+/// Validates every installed Laguna catalog variant against its own pinned
+/// revision. The reference 6-bit artifact is required; the smaller catalog
+/// variants validate only when their downloads are present, so machines that
+/// have not installed them still exercise the family contract they do have.
+#[test]
+#[ignore = "validates every installed Laguna catalog variant against its pinned revision"]
+fn should_validate_installed_laguna_catalog_variants() {
+    let discovered_laguna_directories: std::collections::HashMap<String, PathBuf> =
+        crate::support::configured_discovered_models()
+            .into_iter()
+            .filter(|discovered_model| discovered_model.model_family == ModelFamily::Laguna)
+            .map(|discovered_model| (discovered_model.model_id, discovered_model.model_directory))
+            .collect();
+
+    let started_at = Instant::now();
+    let mut validated_model_ids = Vec::new();
+    for (variant_model_id, is_required) in [
+        (laguna_xs_public_model_id(), true),
+        (crate::support::laguna_xs_5bit_model_id(), false),
+        (crate::support::laguna_xs_4bit_model_id(), false),
+    ] {
+        let Some(model_directory) = discovered_laguna_directories.get(variant_model_id) else {
+            assert!(
+                !is_required,
+                "the reference Laguna artifact {variant_model_id} must be discoverable"
+            );
+            eprintln!(
+                "[laguna-variants] status=skipped reason=not-installed model={variant_model_id}"
+            );
+            continue;
+        };
+        let validated_artifact = LagunaArtifactValidator::new()
+            .validate(model_directory)
+            .unwrap_or_else(|validation_error| {
+                panic!("the installed Laguna variant {variant_model_id} must validate: {validation_error}")
+            });
+        assert_structurally_valid_laguna_artifact(&validated_artifact);
+        validated_model_ids.push(variant_model_id);
+        eprintln!(
+            "[laguna-variants] status=validated model={variant_model_id} elapsed_seconds={:.1}",
+            started_at.elapsed().as_secs_f32()
+        );
+    }
+
+    assert!(
+        validated_model_ids.contains(&laguna_xs_public_model_id()),
+        "the reference 6-bit variant must be installed and validated"
+    );
+    eprintln!(
+        "[laguna-variants] status=complete validated_models={} elapsed_seconds={:.1}",
+        validated_model_ids.len(),
+        started_at.elapsed().as_secs_f32()
+    );
+}
