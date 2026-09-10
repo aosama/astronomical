@@ -32,7 +32,11 @@ async fn run_repeated_http_restore() {
     let public_model_id = laguna_xs_public_model_id();
     let isolated_development_home =
         tempfile::tempdir().expect("an isolated Laguna cache home should be created");
-    write_cache_enabled_config(isolated_development_home.path(), &model_directory);
+    write_cache_enabled_config(
+        isolated_development_home.path(),
+        &public_model_id,
+        &model_directory,
+    );
     let rest_server = launch_serving_rest_server_for_model(
         public_model_id,
         model_directory,
@@ -56,33 +60,73 @@ async fn run_repeated_http_restore() {
     .to_string();
 
     eprintln!("[laguna-http-restore] phase=cold");
+    let cold_started_at = std::time::Instant::now();
     let cold_response = post_chat_completion(server_address, request_body.clone()).await;
     assert_successful_streaming_chat_response(&cold_response);
     let cold_cache_stats = json_endpoint(server_address, "/v1/cache/stats").await;
     assert_eq!(cold_cache_stats["persistent_prompt_cache_tokens_saved"], 0);
+    eprintln!(
+        "[laguna-http-restore] phase=cold status=measured elapsed_seconds={:.2}",
+        cold_started_at.elapsed().as_secs_f32()
+    );
 
     eprintln!("[laguna-http-restore] phase=warm");
+    let warm_started_at = std::time::Instant::now();
     let warm_response = post_chat_completion(server_address, request_body).await;
     assert_successful_streaming_chat_response(&warm_response);
     let warm_cache_stats = json_endpoint(server_address, "/v1/cache/stats").await;
+    let restored_token_count = warm_cache_stats["persistent_prompt_cache_tokens_saved"]
+        .as_u64()
+        .unwrap_or(0);
     assert!(
-        warm_cache_stats["persistent_prompt_cache_tokens_saved"]
-            .as_u64()
-            .unwrap_or(0)
-            >= u64::from(PROMPT_CACHE_BLOCK_TOKEN_COUNT),
+        restored_token_count >= u64::from(PROMPT_CACHE_BLOCK_TOKEN_COUNT),
         "the repeated request must restore one cache block: {warm_cache_stats}"
+    );
+    eprintln!(
+        "[laguna-http-restore] phase=warm status=measured elapsed_seconds={:.2} restored_tokens={restored_token_count}",
+        warm_started_at.elapsed().as_secs_f32()
     );
     let status_document = json_endpoint(server_address, "/v1/status").await;
     assert_eq!(status_document["status"], "ready");
     stop_serving_rest_server(rest_server).await;
 }
 
-fn write_cache_enabled_config(isolated_home: &std::path::Path, model_directory: &std::path::Path) {
+fn write_cache_enabled_config(
+    isolated_home: &std::path::Path,
+    model_id: &str,
+    model_directory: &std::path::Path,
+) {
     let configuration_directory = isolated_home.join(".astronomical-dev");
-    fs::create_dir_all(&configuration_directory)
-        .expect("the isolated configuration directory should be created");
+    let models_root = configuration_directory.join("models");
+    // Laguna discovery derives its immutable revision from a Hugging Face
+    // cache entry, and the entry's shard links are relative to the entry
+    // root, so the whole entry is published into the isolated home. A single
+    // directory link keeps the multi-gigabyte weights on their original
+    // volume while the worker discovers them under the public leaf id.
+    let reference_cache_entry_directory = model_directory
+        .parent()
+        .and_then(|snapshots_directory| snapshots_directory.parent())
+        .expect("the resolved reference snapshot should live inside a Hugging Face cache entry");
+    let cache_entry_name = reference_cache_entry_directory
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .expect("the reference cache entry should be named");
+    let decoded_model_id =
+        astronomical_config::decode_huggingface_cache_directory_name(cache_entry_name)
+            .expect("the reference cache entry name should decode");
+    assert_eq!(
+        astronomical_config::leaf_model_id(&decoded_model_id),
+        model_id,
+        "the reference cache entry should decode to the public leaf model id"
+    );
+    fs::create_dir_all(&models_root).expect("the isolated models root should be created");
+    std::os::unix::fs::symlink(
+        reference_cache_entry_directory,
+        models_root.join(cache_entry_name),
+    )
+    .expect("the isolated reference cache entry link should publish");
     let configuration_document = json!({
-        "model_directories": [model_directory],
+        "model_directories": [models_root],
         "max_output_tokens": 8,
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": 80,
