@@ -233,6 +233,15 @@ jobs:
           CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.swiftpm-cache-start.outputs.started_at }}
         run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" scripts/report-build-cache-restoration.sh
 
+      - name: Keep restored SwiftPM artifacts newer than checkout
+        if: ${{ steps.swiftpm-cache.outputs.cache-hit == 'true' }}
+        run: |
+          set -euo pipefail
+          started_at_seconds="$(date +%s)"
+          printf '[swiftpm-timestamps] status=start\n'
+          find apps/astronomical-menu/.build -type f -exec touch -c {} +
+          printf '[swiftpm-timestamps] status=success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
+
       - name: Verify CI native cache contracts
         run: scripts/test-ci-native-cache-coordination.sh
         timeout-minutes: 2

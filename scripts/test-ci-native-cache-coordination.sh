@@ -275,6 +275,10 @@ assert_workflow_contract() {
         raise "hermetic compile does not use --no-run" unless compile_command.include?("--no-run")
         raise "hermetic compile omits hermetic_tests" unless compile_command.include?("--test hermetic_tests")
         raise "hermetic compile omits rest_api_tests" unless compile_command.include?("--test rest_api_tests")
+        swiftpm_timestamp_step = steps.find { |step| step["name"] == "Keep restored SwiftPM artifacts newer than checkout" }
+        raise "SwiftPM timestamp reuse step is missing from required CI" unless swiftpm_timestamp_step
+        raise "SwiftPM timestamp reuse is not gated on a cache hit" unless swiftpm_timestamp_step.fetch("if").include?("swiftpm-cache.outputs.cache-hit")
+        raise "SwiftPM timestamp reuse does not touch restored artifacts" unless swiftpm_timestamp_step.fetch("run").include?("touch -c")
         cache_owners = {
           "cargo-downloads-cache" => ["~/.cargo/registry", "~/.cargo/git"],
           "native-archives-cache" => ["~/Library/Caches/Astronomical/native-dependencies"],
