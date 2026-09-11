@@ -287,3 +287,71 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
 
     close_worker_transport(supervisor_writer, worker_task).await;
 }
+
+#[tokio::test]
+async fn should_publish_the_unused_ceiling_split_on_the_model_loaded_memory_sample() {
+    let idle_mlx_memory_telemetry = MlxMemoryTelemetry::new(
+        16_000_000_000,
+        0,
+        16_000_000_000,
+        MlxActiveMemoryBreakdown {
+            expert_payload_bytes: 12_000_000_000,
+            model_core_payload_bytes: 3_000_000_000,
+            context_state_payload_bytes: 0,
+            speculative_prefill_draft_memory_bytes: 0,
+        },
+    )
+    .with_memory_ceiling_utilization(MemoryCeilingUtilization {
+        mlx_active_memory_ceiling_bytes: 23_000_000_000,
+        active_memory_bytes: 16_000_000_000,
+        unused_headroom_bytes: 7_000_000_000,
+        reserved_model_core_slack_bytes: 0,
+        reserved_context_growth_bytes: 2_000_000_000,
+        reserved_activation_and_workspace_bytes: 1_000_000_000,
+        unseated_expert_entitlement_bytes: 4_000_000_000,
+        speculative_draft_payload_bytes: 0,
+        unexplained_headroom_bytes: 0,
+        owner_overrun_bytes: 0,
+    });
+    let engine_worker = EngineBackedWorker::new(
+        ScriptedChatProcessor::new(),
+        ScriptedChatEngine::new().with_idle_mlx_memory_telemetry(idle_mlx_memory_telemetry),
+    );
+    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
+    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+    let worker_task = tokio::spawn(async move {
+        engine_worker
+            .run(worker_reader_transport, worker_writer_transport)
+            .await
+    });
+
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::Ready { .. }
+    ));
+    let WorkerEvent::MlxMemorySample {
+        mlx_memory_snapshot: Some(model_loaded_snapshot),
+        ..
+    } = next_event(&mut supervisor_reader).await
+    else {
+        panic!("load-complete must emit an MLX memory sample after Ready");
+    };
+    assert_eq!(
+        model_loaded_snapshot.source,
+        MlxMemorySnapshotSource::ModelLoaded
+    );
+    let utilization = model_loaded_snapshot
+        .memory_ceiling_utilization
+        .expect("the model-loaded sample must carry the unused-ceiling split the menu shows");
+    assert_eq!(utilization.unused_headroom_bytes, 7_000_000_000);
+    assert_eq!(utilization.unexplained_headroom_bytes, 0);
+    assert_eq!(utilization.owner_overrun_bytes, 0);
+
+    close_worker_transport(
+        ProtocolWriter::new(supervisor_writer_transport),
+        worker_task,
+    )
+    .await;
+}

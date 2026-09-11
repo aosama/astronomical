@@ -277,6 +277,7 @@ pub(crate) struct ScriptedChatEngine {
     active_generation_prompt_cache_stats: Option<WorkerEvent>,
     prompt_cache_clear_event: Option<WorkerEvent>,
     pub(super) maximum_allocator_cache_memory_limit_bytes: u64,
+    idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
 }
 
 impl ScriptedChatEngine {
@@ -331,7 +332,16 @@ impl ScriptedChatEngine {
             active_generation_prompt_cache_stats: None,
             prompt_cache_clear_event: None,
             maximum_allocator_cache_memory_limit_bytes: u64::MAX,
+            idle_mlx_memory_telemetry: None,
         }
+    }
+
+    pub(super) fn with_idle_mlx_memory_telemetry(
+        mut self,
+        idle_mlx_memory_telemetry: MlxMemoryTelemetry,
+    ) -> Self {
+        self.idle_mlx_memory_telemetry = Some(idle_mlx_memory_telemetry);
+        self
     }
 
     pub(super) fn with_restored_prompt_prefix_token_count(
@@ -542,5 +552,11 @@ impl InferenceEngine for ScriptedChatEngine {
         _model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         Ok(self.prompt_cache_clear_event.clone())
+    }
+
+    async fn collect_mlx_memory_telemetry(
+        &self,
+    ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
+        Ok(self.idle_mlx_memory_telemetry.clone())
     }
 }
