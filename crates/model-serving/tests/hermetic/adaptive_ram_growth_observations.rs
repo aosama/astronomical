@@ -44,6 +44,80 @@ fn should_keep_prefill_and_decode_transient_high_water_values_independent() {
 }
 
 #[test]
+fn should_cap_decode_warming_with_decode_evidence_instead_of_the_all_phase_maximum() {
+    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
+        .expect("a positive active-memory limit should create a guard");
+
+    // One huge prefill teaches a large transient window; decode teaches a
+    // small one. Issue #512: decode warming must reserve against decode's own
+    // workspace, not stay suppressed by prefill's spent transient forever.
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        DEFAULT_PREFILL_CONTEXT,
+        true,
+        1_000,
+        2_000,
+        10_000,
+        0,
+    );
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        DEFAULT_DECODE_CONTEXT,
+        true,
+        2_000,
+        2_100,
+        2_600,
+        0,
+    );
+
+    let decode_ceiling_bytes = adaptive_ram_growth_guard.hot_expert_retention_ceiling_bytes(
+        MemoryPhase::Decode,
+        2_100,
+        0,
+        0,
+    );
+    let prefill_ceiling_bytes = adaptive_ram_growth_guard.hot_expert_retention_ceiling_bytes(
+        MemoryPhase::Prefill,
+        2_100,
+        0,
+        0,
+    );
+
+    // Ceiling = retained + (ceiling + 1% allowance - active - phase reserve).
+    // Decode reserve is 500 bytes; the all-phase maximum is 8_000 bytes.
+    assert_eq!(decode_ceiling_bytes, 10_000 + 100 - 2_100 - 500);
+    assert_eq!(prefill_ceiling_bytes, 10_000 + 100 - 2_100 - 8_000);
+    assert!(
+        decode_ceiling_bytes > prefill_ceiling_bytes,
+        "decode warming must claim more than a prefill-sized reserve allows"
+    );
+}
+
+#[test]
+fn should_fall_back_to_the_all_phase_maximum_before_the_phase_has_evidence() {
+    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
+        .expect("a positive active-memory limit should create a guard");
+
+    // Only prefill has observed anything. The first decode warming steps must
+    // stay conservative until decode teaches its own workspace.
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        DEFAULT_PREFILL_CONTEXT,
+        true,
+        1_000,
+        2_000,
+        10_000,
+        0,
+    );
+
+    let decode_ceiling_bytes = adaptive_ram_growth_guard.hot_expert_retention_ceiling_bytes(
+        MemoryPhase::Decode,
+        2_000,
+        0,
+        0,
+    );
+
+    assert_eq!(decode_ceiling_bytes, 10_000 + 100 - 2_000 - 8_000);
+}
+
+#[test]
 fn should_record_a_completed_zero_transient_prefill_observation() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
         .expect("a positive active-memory limit should create a guard");

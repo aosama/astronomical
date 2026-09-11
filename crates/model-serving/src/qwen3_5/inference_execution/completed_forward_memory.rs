@@ -21,7 +21,7 @@ use astronomical_runtime_integration::MlxMemorySnapshot;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::qwen3_5_moe::model::record_expert_reclamation_attribution;
 use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
     RetainedExpertReclamation, measured_non_expert_forward_growth_bytes,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
@@ -104,6 +104,7 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
         let context_observed_transient_high_water_bytes = adaptive_ram_growth_guard
             .observed_transient_high_water_bytes_for_context(adaptive_ram_growth_context);
         let budget_reclamation = record_composed_ram_budget_measurement(
+            adaptive_ram_growth_guard,
             adaptive_ram_growth_context,
             model,
             active_memory_bytes_before_growth,
@@ -147,6 +148,7 @@ pub(in crate::qwen3_5) fn record_completed_adaptive_ram_growth(
 }
 
 fn record_composed_ram_budget_measurement(
+    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     model: &Qwen3_5Model,
     active_memory_bytes_before_growth: usize,
@@ -193,12 +195,32 @@ fn record_composed_ram_budget_measurement(
         retained_expert_budget.retained_expert_budget_bytes,
         model.seated_complete_layer_payload_bytes(),
     );
-    model.retained_experts.as_ref().map_or_else(
+    let budget_reclamation = model.retained_experts.as_ref().map_or_else(
         RetainedExpertReclamation::default,
         |retained_experts| {
             retained_experts
                 .borrow_mut()
                 .update_maximum_resident_payload_bytes(retained_page_ceiling_bytes)
         },
-    )
+    );
+    // Issue #512: resize the hot-expert warm tables as decode evidence
+    // accumulates. The decode handoff sizes them before any decode forward
+    // exists, against the conservative no-decode-evidence fallback, and the
+    // slot count bounds every later insert. Decode forwards prove their
+    // transients are small within a few tokens; a frozen slot count kept the
+    // warm tables churning at that first conservative size while the plan
+    // ceiling admitted gigabytes more. Every completed decode forward
+    // re-sizes here, on both the plain and the multi-token-prediction paths,
+    // so warming grows into the entitlement the fresh evidence supports.
+    if adaptive_ram_growth_context.memory_phase() == MemoryPhase::Decode {
+        let decoded_warm_slot_count = super::decode_expert_memory_handoff::decode_warm_slot_count(
+            adaptive_ram_growth_guard,
+            model,
+            model.expert_weight_memory_cache_statistics(),
+        );
+        if decoded_warm_slot_count != model.hot_expert_warm_slot_count() {
+            model.set_hot_expert_warm_slot_count(decoded_warm_slot_count);
+        }
+    }
+    budget_reclamation
 }
