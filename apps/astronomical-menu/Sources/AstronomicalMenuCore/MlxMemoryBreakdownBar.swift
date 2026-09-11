@@ -125,11 +125,6 @@ struct MlxMemoryBreakdownBar: View {
           )
           if headroomSplit.enginePublishedTheSplit {
             memorySegment(
-              MlxMemoryPalette.unusedBudget,
-              headroomSplit.unusedBudgetByteCount,
-              geometry.size.width
-            )
-            memorySegment(
               MlxMemoryPalette.reservedContextGrowth,
               headroomSplit.reservedContextGrowthByteCount,
               geometry.size.width
@@ -150,8 +145,8 @@ struct MlxMemoryBreakdownBar: View {
               geometry.size.width
             )
             memorySegment(
-              MlxMemoryPalette.available,
-              headroomSplit.remainderByteCount,
+              MlxMemoryPalette.unusedBudget,
+              headroomSplit.unusedBudgetByteCount + headroomSplit.remainderByteCount,
               geometry.size.width
             )
           } else {
@@ -171,11 +166,6 @@ struct MlxMemoryBreakdownBar: View {
       memoryLegendRow(.runtimeWork, MlxMemoryPalette.runtimeWork, breakdown.runtimeWorkByteCount)
       memoryLegendRow(.contextState, MlxMemoryPalette.contextState, breakdown.contextStatePayloadByteCount)
       if headroomSplit.enginePublishedTheSplit {
-        memoryLegendRow(
-          .unusedBudget,
-          MlxMemoryPalette.unusedBudget,
-          headroomSplit.unusedBudgetByteCount
-        )
         memoryLegendRow(
           .reservedContextGrowth,
           MlxMemoryPalette.reservedContextGrowth,
@@ -200,6 +190,11 @@ struct MlxMemoryBreakdownBar: View {
             headroomSplit.unexplainedHeadroomByteCount
           )
         }
+        memoryLegendRow(
+          .unusedBudget,
+          MlxMemoryPalette.unusedBudget,
+          headroomSplit.unusedBudgetByteCount
+        )
         if headroomSplit.ownerOverrunByteCount > 0 {
           memoryLegendRow(
             .ownerOverrun,
