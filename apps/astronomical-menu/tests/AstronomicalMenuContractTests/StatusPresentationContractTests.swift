@@ -71,6 +71,8 @@ final class StatusPresentationContractTests: XCTestCase {
       (MlxMemoryPalette.modelCore, 86, 180, 233),
       (MlxMemoryPalette.contextState, 240, 228, 66),
       (MlxMemoryPalette.runtimeWork, 167, 139, 250),
+      (MlxMemoryPalette.reservedContextGrowth, 204, 121, 167),
+      (MlxMemoryPalette.reservedActivations, 213, 94, 0),
     ]
 
     for (paletteColor, expectedRed, expectedGreen, expectedBlue) in expectedColorComponents {
@@ -102,6 +104,22 @@ final class StatusPresentationContractTests: XCTestCase {
       MlxMemoryLegendItem.available.explanationText,
       "Calculated capacity below this Mac's MLX ceiling. It is not free RAM; macOS memory pressure and temporary work can reduce what is safely usable."
     )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.unusedBudget.explanationText,
+      "Unused budget the ceiling already granted for expert weights that are not in RAM. Distinct from Experts, which are weights already resident."
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.reservedContextGrowth.explanationText,
+      "Held so conversation state can grow. Spending it on expert weights invites eviction mid-request."
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.reservedActivations.explanationText,
+      "Held for temporary decode and prefill workspace, including one expert page. It is a promise, not idle RAM."
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.unexplainedHeadroom.explanationText,
+      "Unused capacity with no named owner yet. The engine reports this instead of folding it into a reserved bucket."
+    )
   }
 
   func test_should_name_each_mlx_memory_explanation_control() {
@@ -114,6 +132,18 @@ final class StatusPresentationContractTests: XCTestCase {
       MlxMemoryLegendItem.available.infoButtonAccessibilityLabel,
       "Explain Nominal MLX headroom"
     )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.unusedBudget.infoButtonAccessibilityLabel,
+      "Explain Unused"
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.reservedContextGrowth.infoButtonAccessibilityLabel,
+      "Explain Held for context"
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.ownerOverrun.infoButtonAccessibilityLabel,
+      "Explain Owner overrun"
+    )
   }
 
   func test_should_match_the_available_memory_color_to_the_unused_utilization_track() throws {
@@ -125,6 +155,16 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(availableAppearanceColor.greenComponent, trackAppearanceColor.greenComponent, accuracy: 0.001)
     XCTAssertEqual(availableAppearanceColor.blueComponent, trackAppearanceColor.blueComponent, accuracy: 0.001)
     XCTAssertEqual(availableAppearanceColor.alphaComponent, trackAppearanceColor.alphaComponent, accuracy: 0.001)
+    let unusedBudgetAppearanceColor = try XCTUnwrap(
+      NSColor(MlxMemoryPalette.unusedBudget).usingColorSpace(.sRGB))
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.redComponent, trackAppearanceColor.redComponent, accuracy: 0.001)
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.greenComponent, trackAppearanceColor.greenComponent, accuracy: 0.001)
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.blueComponent, trackAppearanceColor.blueComponent, accuracy: 0.001)
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.alphaComponent, trackAppearanceColor.alphaComponent, accuracy: 0.001)
   }
 
   func test_should_match_the_visually_rendered_dark_background() throws {
