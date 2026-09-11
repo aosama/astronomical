@@ -296,13 +296,33 @@ impl Qwen3_5Model {
             self.runtime
                 .synchronize_gpu_stream_and_clear_allocator_cache()?;
 
-            if let Some(retained_experts) = self.retained_experts.as_ref() {
-                retained_experts.borrow_mut().release_all();
-            }
+            // Issue #501: adopt the complete layers the retained cache already
+            // holds before releasing the rest, so the resident owner is built
+            // from those arrays instead of re-reading the identical payload from
+            // storage. Ownership and accounting transfer together, so the fit
+            // projection above remains the only memory decision.
+            let expert_capacity = self
+                .expert_pager
+                .as_ref()
+                .and_then(|expert_pager| expert_pager.layer_plans().first())
+                .map_or(0, |layer_plan| layer_plan.expert_capacity);
+            let adopted_complete_layers =
+                self.retained_experts
+                    .as_ref()
+                    .map_or(Vec::new(), |retained_experts| {
+                        retained_experts
+                            .borrow_mut()
+                            .take_complete_layers_for_resident_adoption(expert_capacity)
+                    });
 
             // Build every resident layer into a candidate owner. Publication is
             // still delayed until the match below confirms the complete load.
-            Qwen3_5ResidentExpertWeights::load(self, positional_file_read_metrics).map(Some)
+            Qwen3_5ResidentExpertWeights::load(
+                self,
+                positional_file_read_metrics,
+                adopted_complete_layers,
+            )
+            .map(Some)
         })();
         let candidate_resident_expert_weights = match candidate_resident_expert_weights_result {
             Ok(Some(candidate_resident_expert_weights)) => candidate_resident_expert_weights,
