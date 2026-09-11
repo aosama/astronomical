@@ -20,7 +20,9 @@ use crate::worker_embeddings_request::handle_generate_embeddings_command;
 use crate::worker_generate::handle_generate_command;
 use crate::worker_image_request::handle_generate_image_command;
 use crate::worker_memory_limit::{
-    MlxMemoryLimitUpdateOutcome, apply_mlx_memory_limit, contain_mlx_memory_limit_failure,
+    MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate, apply_mlx_memory_limit,
+    apply_pending_mlx_memory_limit_if_idle, contain_mlx_memory_limit_failure,
+    take_generation_start_after_pending_memory_limit,
 };
 use crate::{
     ChatGenerationStreamErrorCode, CompletionAttributionLog, GenerationPerformanceLog,
@@ -40,11 +42,6 @@ use crate::{
     worker_loop_types::{ActiveWorkerRequest, WorkerLoopCommand},
     worker_replacement::WorkerReplacement,
 };
-
-struct PendingMlxMemoryLimitUpdate {
-    effective_mlx_memory_ceiling_bytes: u64,
-    configuration_generation: String,
-}
 
 // Keeping process-loop dependencies explicit is clearer than hiding them in a context object.
 #[allow(clippy::too_many_arguments)]
@@ -75,12 +72,9 @@ pub(crate) async fn run_worker(
 
     loop {
         if active_generation.is_none()
-            && let Some(pending_memory_limit_update) = pending_mlx_memory_limit_update.take()
-        {
-            if let Err(memory_limit_error) = apply_mlx_memory_limit(
+            && let Err(memory_limit_error) = apply_pending_mlx_memory_limit_if_idle(
+                &mut pending_mlx_memory_limit_update,
                 &mut worker_process,
-                pending_memory_limit_update.effective_mlx_memory_ceiling_bytes,
-                pending_memory_limit_update.configuration_generation,
                 model_load_timeout,
                 &health_snapshot,
                 &mut is_ready,
@@ -90,16 +84,15 @@ pub(crate) async fn run_worker(
                 &mut completion_log,
             )
             .await
-            {
-                contain_mlx_memory_limit_failure(
-                    &mut worker_process,
-                    &health_snapshot,
-                    &mut active_generation,
-                    &mut is_ready,
-                    memory_limit_error,
-                )
-                .await;
-            }
+        {
+            contain_mlx_memory_limit_failure(
+                &mut worker_process,
+                &health_snapshot,
+                &mut active_generation,
+                &mut is_ready,
+                memory_limit_error,
+            )
+            .await;
         }
         apply_pending_prompt_cache_clear_if_idle(
             &mut pending_prompt_cache_clear,
@@ -159,6 +152,22 @@ pub(crate) async fn run_worker(
                             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
                             continue;
                         }
+                        let Some(start_sender) = take_generation_start_after_pending_memory_limit(
+                            &mut pending_mlx_memory_limit_update,
+                            &mut worker_process,
+                            model_load_timeout,
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                            &mut completion_log,
+                            start_sender,
+                        )
+                        .await
+                        else {
+                            continue;
+                        };
                         if let Err(control_error) = handle_generate_command(
                             &mut worker_process,
                             active_generation_permit,
@@ -199,6 +208,22 @@ pub(crate) async fn run_worker(
                             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
                             continue;
                         }
+                        let Some(start_sender) = take_generation_start_after_pending_memory_limit(
+                            &mut pending_mlx_memory_limit_update,
+                            &mut worker_process,
+                            model_load_timeout,
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                            &mut completion_log,
+                            start_sender,
+                        )
+                        .await
+                        else {
+                            continue;
+                        };
                         if let Err(control_error) = handle_generate_image_command(
                             &mut worker_process,
                             active_generation_permit,
@@ -239,6 +264,22 @@ pub(crate) async fn run_worker(
                             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
                             continue;
                         }
+                        let Some(start_sender) = take_generation_start_after_pending_memory_limit(
+                            &mut pending_mlx_memory_limit_update,
+                            &mut worker_process,
+                            model_load_timeout,
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                            &mut completion_log,
+                            start_sender,
+                        )
+                        .await
+                        else {
+                            continue;
+                        };
                         if let Err(control_error) = handle_generate_embeddings_command(
                             &mut worker_process,
                             active_generation_permit,

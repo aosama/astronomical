@@ -133,6 +133,66 @@ async fn should_queue_a_memory_limit_while_generation_is_active() {
         .expect("the worker should shut down");
 }
 
+#[tokio::test]
+async fn should_apply_a_queued_memory_limit_before_the_next_chat_starts() {
+    let worker_executor = launch_fixture().await;
+    let active_stream = worker_executor
+        .start_chat_generation(command_with_request_id(
+            "astronomical/delayed-fragment-chat-fixture",
+            1,
+        ))
+        .await
+        .expect("the delayed request should start");
+
+    assert_eq!(
+        worker_executor
+            .update_mlx_memory_limit(32_000_000_000, "raise-before-next-chat".to_owned())
+            .await
+            .expect("the active request should accept a queued limit"),
+        MlxMemoryLimitUpdateOutcome::Queued
+    );
+
+    let executor_for_next_chat = worker_executor.clone();
+    let next_chat_task = tokio::spawn(async move {
+        executor_for_next_chat
+            .start_chat_generation(command_with_request_id("astronomical/test-worker", 2))
+            .await
+    });
+
+    sleep(Duration::from_millis(50)).await;
+    drop(active_stream);
+
+    let mut next_stream = timeout(Duration::from_secs(5), next_chat_task)
+        .await
+        .expect("the next chat should start after the raise")
+        .expect("the next chat task should not panic")
+        .expect("the next chat should be admitted");
+
+    let worker_health_snapshot = worker_executor.worker_health_snapshot();
+    assert_eq!(
+        worker_health_snapshot.mlx_memory_ceiling_bytes, 32_000_000_000,
+        "the next chat must be admitted against the raised ceiling, not the old one: {worker_health_snapshot:?}"
+    );
+    assert!(
+        worker_health_snapshot
+            .pending_mlx_memory_ceiling_bytes
+            .is_none(),
+        "the pending flag must clear once the worker has applied the raise: {worker_health_snapshot:?}"
+    );
+
+    let completed_event =
+        receive_event_with_timeout(&mut next_stream, Duration::from_secs(2)).await;
+    assert!(
+        matches!(completed_event, ChatGenerationStreamEvent::Completed { .. }),
+        "the next chat should complete, got {completed_event:?}"
+    );
+
+    worker_executor
+        .shutdown()
+        .await
+        .expect("the worker should shut down");
+}
+
 /// The existing behavior of rejecting a request when capacity is full
 /// should still work: when the active slot AND all queue slots are taken,
 /// new requests get CapacityUnavailable immediately.
