@@ -247,10 +247,7 @@ pub(in crate::qwen3_5) fn decode_warm_slot_count(
             if expert_capacity == 0 || per_expert_payload_bytes == 0 {
                 return 0;
             }
-            let warm_capacity = crate::hot_expert_warm_slot_count(
-                expert_capacity,
-                usize::try_from(model.config.experts_per_token()).unwrap_or(usize::MAX),
-            );
+            let warm_capacity = crate::hot_expert_warm_slot_count(expert_capacity);
             // The real expert capacity decides the elastic/complete
             let complete_layer_count =
                 model
