@@ -51,22 +51,18 @@ pub const fn should_commit_mandatory_routed_page(
     }
 }
 
-/// Slot capacity for one decode warm table (hot-expert caching).
+/// Structural slot cap for one decode warm table (hot-expert caching).
 ///
-/// A warm table accumulates routed experts across decode tokens and is LFU-
-/// evicted per slot. The capacity must exceed one routing set or every new
-/// token would churn the whole table, but must stay far below the complete
-/// layer so the padded (zero-filled) slots do not waste the retained budget.
-/// Eight routing sets give the least-frequently-used eviction enough samples
-/// to separate a stable hot set from one-off routing noise; the layer's
-/// expert capacity caps it. Budget admission still gates every creation, so
-/// an oversized capacity on a tight machine simply stays operation-local.
+/// Issue #514: a history-length multiplier (`experts_per_token * 8`) left
+/// leftover decode entitlement unclaimed on every machine, because the cap
+/// did not depend on leftover RAM. The structural ceiling is the layer's
+/// own expert count — a table that fills becomes a complete layer, which
+/// the complete-layer residency machinery already understands. The economic
+/// ceiling is leftover decode entitlement, applied by the caller
+/// (`decode_warm_slot_count`) as `min(this, budget_affordable_capacity)`.
+/// Least-frequently-used eviction still drops one-off routing noise; budget
+/// admission still refuses a table the machine cannot hold.
 #[must_use]
-pub const fn hot_expert_warm_slot_count(expert_capacity: usize, experts_per_token: usize) -> usize {
-    let routed_set_capacity = experts_per_token.saturating_mul(8);
-    if expert_capacity < routed_set_capacity {
-        expert_capacity
-    } else {
-        routed_set_capacity
-    }
+pub const fn hot_expert_warm_slot_count(expert_capacity: usize) -> usize {
+    expert_capacity
 }

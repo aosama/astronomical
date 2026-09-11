@@ -124,16 +124,12 @@ fn should_seat_complete_layers_on_mandatory_prefill_reads() {
 }
 
 #[test]
-fn should_size_hot_expert_warm_tables_to_eight_routing_sets_within_the_layer_capacity() {
-    // Eight routing sets give the least-frequently-used eviction enough
-    // samples to separate a stable hot set from one-off routing noise.
-    assert_eq!(hot_expert_warm_slot_count(512, 8), 64);
-    // Small layers never grow beyond their own capacity.
-    assert_eq!(hot_expert_warm_slot_count(4, 2), 4);
-    // Wide routing sets scale the warm window with the routing set.
-    assert_eq!(hot_expert_warm_slot_count(512, 16), 128);
-    // The layer capacity caps an oversized routing set.
-    assert_eq!(hot_expert_warm_slot_count(6, 4), 6);
+fn should_cap_hot_expert_warm_tables_at_the_layer_expert_count() {
+    // Issue #514: leftover decode entitlement is the economic cap, applied
+    // by the caller. This function is only the structural cap.
+    assert_eq!(hot_expert_warm_slot_count(512), 512);
+    assert_eq!(hot_expert_warm_slot_count(4), 4);
+    assert_eq!(hot_expert_warm_slot_count(6), 6);
 }
 
 #[test]
