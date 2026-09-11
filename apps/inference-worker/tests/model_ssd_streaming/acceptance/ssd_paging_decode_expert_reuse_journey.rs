@@ -319,6 +319,30 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "status-published named owners must not overrun the headroom: unused={status_unused_headroom_bytes} named={status_named_bytes}"
     );
 
+    // --- Measured assertion 8: decode warming grows with decode evidence
+    // (issue #512). The handoff sizes warm tables before any decode forward
+    // exists, against the conservative no-evidence fallback; every completed
+    // decode forward re-sizes them. The during-generation expert payload must
+    // therefore exceed the post-prefill seated payload by a real margin
+    // instead of churning at the handoff size. ---
+    let seated_expert_payload_bytes = memory_evidence
+        .retained_expert_payload_bytes
+        .last()
+        .copied()
+        .expect("prompt processing must observe the seated expert payload");
+    let peak_generation_expert_payload_bytes = memory_evidence
+        .generation_expert_payload_bytes
+        .iter()
+        .copied()
+        .max()
+        .expect("generation must observe the expert payload at least once");
+    let decode_warming_growth_bytes =
+        peak_generation_expert_payload_bytes.saturating_sub(seated_expert_payload_bytes);
+    assert!(
+        decode_warming_growth_bytes > 500_000_000,
+        "decode warming must grow the retained expert payload beyond the seated level with decode-phase evidence; seated={seated_expert_payload_bytes} peak_generation={peak_generation_expert_payload_bytes} growth={decode_warming_growth_bytes}"
+    );
+
     // --- Structural assertion 7: exactly one generation attribution report ---
     assert_eq!(
         generation_attribution_report_count(isolated_worker_home.path()),
@@ -356,6 +380,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          mem_unseated_entitlement_gb={:.2} \
          mem_unexplained_gb={:.2} \
          mem_owner_overrun_gb={:.2} \
+         decode_warming_growth_gb={:.2} \
          decode_streamed_layer_count={} \
          retained_payload_increments={} \
          average_prefill_tok_per_second={average_prefill_tokens_per_second:.2} \
@@ -375,6 +400,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         memory_unseated_expert_entitlement_bytes as f64 / 1e9,
         memory_unexplained_headroom_bytes as f64 / 1e9,
         memory_owner_overrun_bytes as f64 / 1e9,
+        decode_warming_growth_bytes as f64 / 1e9,
         decode_streamed_layer_indices.len(),
         retained_expert_payload_increments,
         completed_stream.model_text.len(),
@@ -428,6 +454,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
 /// the numbers living only in this test's stdout.
 struct ProgressiveExpertMemoryEvidence {
     retained_expert_payload_bytes: Vec<u64>,
+    generation_expert_payload_bytes: Vec<u64>,
     final_status: Value,
 }
 
@@ -437,6 +464,7 @@ async fn observe_ssd_paging_decode_expert_reuse(
     let deadline = Instant::now() + JOURNEY_TIMEOUT;
     let mut observed_prompt_processing = false;
     let mut retained_expert_payload_bytes = Vec::new();
+    let mut generation_expert_payload_bytes = Vec::new();
     let mut last_status_log_at = Instant::now() - STATUS_LOG_INTERVAL;
     loop {
         let status_document = get_json_endpoint(server_address, "/v1/status").await;
@@ -448,6 +476,9 @@ async fn observe_ssd_paging_decode_expert_reuse(
             observed_prompt_processing = true;
             record_expert_payload_increase(&status_document, &mut retained_expert_payload_bytes);
         }
+        if observed_prompt_processing && status_document["activity"] == "generating" {
+            record_expert_payload_increase(&status_document, &mut generation_expert_payload_bytes);
+        }
         let snapshot_source = status_document["mlx_memory_snapshot"]["source"].as_str();
         if observed_prompt_processing
             && status_document["activity"] == "idle"
@@ -455,6 +486,7 @@ async fn observe_ssd_paging_decode_expert_reuse(
         {
             return ProgressiveExpertMemoryEvidence {
                 retained_expert_payload_bytes,
+                generation_expert_payload_bytes,
                 final_status: status_document,
             };
         }

@@ -194,6 +194,19 @@ impl PerformanceAttribution {
             enabled_attribution.counter_values[counter as usize].saturating_add(amount);
     }
 
+    /// Replaces one report counter with an exact amount.
+    ///
+    /// Peak-coherent snapshots need this: recording each term of a split with
+    /// `record_maximum_counter` lets terms from different instants mix, and a
+    /// mixed split reconstructs no real moment. The caller gates on which
+    /// instant wins and replaces every term of that instant together.
+    pub fn record_snapshot_counter(&mut self, counter: PerformanceCounter, amount: u64) {
+        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
+            return;
+        };
+        enabled_attribution.counter_values[counter as usize] = amount;
+    }
+
     /// Retains the largest observed amount for one report counter.
     pub fn record_maximum_counter(&mut self, counter: PerformanceCounter, amount: u64) {
         let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {

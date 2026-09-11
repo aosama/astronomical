@@ -180,7 +180,7 @@ impl Qwen3_5Model {
                 utilization.owner_overrun_bytes,
             ),
         ] {
-            performance_attribution.record_maximum_counter(counter, amount);
+            performance_attribution.record_snapshot_counter(counter, amount);
         }
     }
 

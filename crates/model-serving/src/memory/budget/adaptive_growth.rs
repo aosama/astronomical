@@ -343,6 +343,7 @@ impl AdaptiveRamGrowthGuard {
     #[must_use]
     pub fn hot_expert_retention_ceiling_bytes(
         &self,
+        memory_phase: MemoryPhase,
         current_active_memory_bytes: usize,
         current_retained_payload_bytes: u64,
         routed_expert_page_reservation_bytes: usize,
@@ -350,12 +351,25 @@ impl AdaptiveRamGrowthGuard {
         let transient_allowance_bytes = self.active_memory_ceiling_bytes / 100;
         let allowed_active_memory_bytes =
             self.active_memory_ceiling_bytes + transient_allowance_bytes;
+        // Warming runs inside one phase, so the reserve it must respect is that
+        // phase's own learned workspace. Capping decode warming at the largest
+        // workspace ever seen in any phase let one huge prefill suppress decode
+        // warming forever (issue #512): the prefill transient is spent by the
+        // time decode runs, and prefill admission still reserves against the
+        // all-phase maximum through `project_growth_for_context`, so a later
+        // large prefill reclaims warm tables through the existing pressure path
+        // instead of needing warming to have predicted it. Before this phase has
+        // any observation the all-phase maximum keeps the first warming steps
+        // conservative.
+        let phase_transient_reserve_bytes = if self.has_completed_growth_observation(memory_phase) {
+            self.observed_transient_high_water_bytes(memory_phase)
+        } else {
+            self.admission_transient_high_water_bytes()
+        };
         let signed_headroom_bytes = i128::try_from(allowed_active_memory_bytes)
             .unwrap_or(i128::MAX)
             .saturating_sub(i128::try_from(current_active_memory_bytes).unwrap_or(i128::MAX))
-            .saturating_sub(
-                i128::try_from(self.admission_transient_high_water_bytes()).unwrap_or(i128::MAX),
-            )
+            .saturating_sub(i128::try_from(phase_transient_reserve_bytes).unwrap_or(i128::MAX))
             .saturating_sub(
                 i128::try_from(routed_expert_page_reservation_bytes).unwrap_or(i128::MAX),
             );

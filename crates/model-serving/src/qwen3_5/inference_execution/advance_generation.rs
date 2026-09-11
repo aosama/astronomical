@@ -346,6 +346,7 @@ impl Qwen3_5EngineState {
                 let warm_retention_ceiling_bytes = self
                     .adaptive_ram_growth_guard
                     .hot_expert_retention_ceiling_bytes(
+                        crate::MemoryPhase::Decode,
                         memory_snapshot.active_memory_bytes(),
                         model
                             .expert_weight_memory_cache_statistics()
