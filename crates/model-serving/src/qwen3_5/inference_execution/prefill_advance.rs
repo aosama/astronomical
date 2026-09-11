@@ -458,6 +458,17 @@ impl Qwen3_5EngineState {
                     // (issue #337).
                     .with_expert_residency_telemetry(
                         model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+                    )
+                    // Issue #510: the prefill progress sample carries the same
+                    // utilization split, planned against the full prompt so the
+                    // context reserve reflects the request the user submitted.
+                    .with_memory_ceiling_utilization(
+                        model.memory_ceiling_utilization_for_breakdown(
+                            crate::MemoryPhase::Prefill,
+                            u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX),
+                            active_memory_bytes,
+                            active_memory_breakdown,
+                        ),
                     ),
                 )
             })

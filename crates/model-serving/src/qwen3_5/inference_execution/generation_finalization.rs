@@ -50,6 +50,17 @@ impl Qwen3_5EngineState {
             // demote (issue #337).
             .with_expert_residency_telemetry(
                 model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+            )
+            // Issue #510: the idle sample answers "is the remaining headroom
+            // free or promised" by planning the next request's decode budget
+            // against a fresh zero-token context.
+            .with_memory_ceiling_utilization(
+                model.memory_ceiling_utilization_for_breakdown(
+                    crate::MemoryPhase::Decode,
+                    0,
+                    active_memory_bytes,
+                    active_memory_breakdown,
+                ),
             ),
         ))
     }
@@ -210,12 +221,22 @@ impl Qwen3_5EngineState {
                         model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
                     );
                     (
-                        Some(MlxMemoryTelemetry::new(
-                            active_memory_bytes,
-                            allocator_cache_memory_bytes,
-                            peak_memory_bytes,
-                            active_memory_breakdown,
-                        )),
+                        Some(
+                            MlxMemoryTelemetry::new(
+                                active_memory_bytes,
+                                allocator_cache_memory_bytes,
+                                peak_memory_bytes,
+                                active_memory_breakdown,
+                            )
+                            .with_memory_ceiling_utilization(
+                                model.memory_ceiling_utilization_for_breakdown(
+                                    crate::MemoryPhase::Decode,
+                                    0,
+                                    active_memory_bytes,
+                                    active_memory_breakdown,
+                                ),
+                            ),
+                        ),
                         expert_residency_telemetry,
                     )
                 }

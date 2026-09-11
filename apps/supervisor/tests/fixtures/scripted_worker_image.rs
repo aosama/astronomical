@@ -334,6 +334,7 @@ where
                 model_core_payload_bytes: 96_000_000,
                 context_state_payload_bytes: 0,
                 speculative_prefill_draft_memory_bytes: 0,
+                memory_ceiling_utilization: None,
             }),
         })
         .await
