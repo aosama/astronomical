@@ -71,7 +71,6 @@ final class StatusPresentationContractTests: XCTestCase {
       (MlxMemoryPalette.modelCore, 86, 180, 233),
       (MlxMemoryPalette.contextState, 240, 228, 66),
       (MlxMemoryPalette.runtimeWork, 167, 139, 250),
-      (MlxMemoryPalette.unusedBudget, 0, 158, 115),
       (MlxMemoryPalette.reservedContextGrowth, 204, 121, 167),
       (MlxMemoryPalette.reservedActivations, 213, 94, 0),
     ]
@@ -156,6 +155,16 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(availableAppearanceColor.greenComponent, trackAppearanceColor.greenComponent, accuracy: 0.001)
     XCTAssertEqual(availableAppearanceColor.blueComponent, trackAppearanceColor.blueComponent, accuracy: 0.001)
     XCTAssertEqual(availableAppearanceColor.alphaComponent, trackAppearanceColor.alphaComponent, accuracy: 0.001)
+    let unusedBudgetAppearanceColor = try XCTUnwrap(
+      NSColor(MlxMemoryPalette.unusedBudget).usingColorSpace(.sRGB))
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.redComponent, trackAppearanceColor.redComponent, accuracy: 0.001)
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.greenComponent, trackAppearanceColor.greenComponent, accuracy: 0.001)
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.blueComponent, trackAppearanceColor.blueComponent, accuracy: 0.001)
+    XCTAssertEqual(
+      unusedBudgetAppearanceColor.alphaComponent, trackAppearanceColor.alphaComponent, accuracy: 0.001)
   }
 
   func test_should_match_the_visually_rendered_dark_background() throws {

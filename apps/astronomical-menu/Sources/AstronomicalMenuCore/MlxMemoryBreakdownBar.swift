@@ -8,9 +8,8 @@ enum MlxMemoryPalette {
   static let contextState = Color(.sRGB, red: 240 / 255, green: 228 / 255, blue: 66 / 255, opacity: 1)
   static let runtimeWork = Color(.sRGB, red: 167 / 255, green: 139 / 255, blue: 250 / 255, opacity: 1)
   static let available = Color.secondary.opacity(0.18)
-  /// Unused expert budget — Okabe-Ito bluish green, not occupancy.
-  static let unusedBudget = Color(
-    .sRGB, red: 0 / 255, green: 158 / 255, blue: 115 / 255, opacity: 1)
+  /// Unused budget — same grey capsule as the empty Cache efficacy track.
+  static let unusedBudget = Color.secondary.opacity(0.18)
   /// Context-growth reserve — Okabe-Ito reddish purple, distinct from live context yellow.
   static let reservedContextGrowth = Color(
     .sRGB, red: 204 / 255, green: 121 / 255, blue: 167 / 255, opacity: 1)
