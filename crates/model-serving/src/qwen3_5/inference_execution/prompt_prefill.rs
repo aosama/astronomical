@@ -62,6 +62,27 @@ impl Qwen3_5EngineState {
             );
         }
 
+        // Admission can demote a complete resident expert owner into paged
+        // streaming. The Prefill plan published before admission described the
+        // owner that existed then, so it names no complete-layer target and this
+        // chunk would stream every expert layer and retain nothing. Decode
+        // seating would then read the identical payload from storage a second
+        // time in the same request (issue #339). Republish the plan now, after
+        // the demotion and before the forward, so the streamed complete layers
+        // are offered to retained ownership bounded by the retained ceiling.
+        if admission_outcome.demoted_complete_resident_expert_owner {
+            let input_token_count =
+                u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+            self.model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                .republish_prefill_residency_plan_after_demotion(
+                    input_token_count,
+                    &mut active_request.performance_attribution,
+                )
+                .map_err(qwen3_5_runtime_error)?;
+        }
+
         let prefill_request_checkpoint = active_request
             .prefill_request_checkpoint()
             .map_err(qwen3_5_runtime_error)?;

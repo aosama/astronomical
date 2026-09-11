@@ -223,6 +223,10 @@ pub(super) fn read_generation_evidence(
                     attribution_report,
                     "positional_file_read_byte_count",
                 ),
+                decode_seating_streamed_complete_payload_bytes: attribution_counter(
+                    attribution_report,
+                    "expert_residency_decode_seating_streamed_complete_payload_bytes",
+                ),
             }
         })
         .collect()
@@ -352,6 +356,11 @@ pub(super) struct GenerationEvidence {
     pub(super) model_revision: String,
     pub(super) prompt_token_count: u64,
     pub(super) expert_source_read_bytes: u64,
+    /// Complete-layer payload the decode seating pass streamed from storage for
+    /// this request. Issue #339 requires this to stay at zero: prefill already
+    /// streamed those layers, so seating them again is a second read of the
+    /// same bytes in one request.
+    pub(super) decode_seating_streamed_complete_payload_bytes: u64,
 }
 
 pub(super) fn acceptance_evidence_root() -> PathBuf {

@@ -99,6 +99,12 @@ impl Qwen3_5Model {
                     &complete_expert_ids,
                     &streamed_weights,
                 )?;
+                if seated {
+                    performance_attribution.record_counter(
+                        PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
+                        streamed_manifest.payload_byte_count,
+                    );
+                }
                 tracing::debug!(
                     layer_index,
                     seated,

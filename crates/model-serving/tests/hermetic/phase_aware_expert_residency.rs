@@ -2,6 +2,7 @@ use astronomical_model_serving::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertResidencyPlanError, MemoryPhase, RetainedExpertPageClass,
     complete_layer_indexes_required_before_decode, plan_expert_residency,
+    publish_request_stable_residency_plan, should_commit_mandatory_complete_layer,
 };
 
 fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
@@ -187,6 +188,60 @@ fn should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_th
         plan.layer_targets.iter().any(|target| {
             *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
         })
+    );
+}
+
+/// Issue #339: a Prefill plan republished after a mid-prefill demotion must name
+/// the complete layers its ceiling admits, and the request-stable contract must
+/// keep naming them. That is what lets the prefill stream hand each freshly
+/// streamed complete layer to retained ownership instead of dropping it and
+/// making decode seating read the identical payload again.
+#[test]
+fn should_name_every_admissible_complete_layer_after_a_prefill_demotion() {
+    let layer_geometries = uniform_geometry(3);
+    let complete_model_payload_bytes = layer_geometries
+        .iter()
+        .map(|geometry| geometry.complete_layer_payload_bytes)
+        .sum::<u64>();
+    let candidate_plan = plan_expert_residency(
+        MemoryPhase::Prefill,
+        complete_model_payload_bytes,
+        &layer_geometries,
+        &[],
+    )
+    .expect("a Prefill ceiling that fits the complete model must plan every complete layer");
+
+    assert_eq!(candidate_plan.complete_layer_targets, vec![0, 1, 2]);
+    assert!(
+        candidate_plan.layer_targets.iter().all(|target| {
+            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        })
+    );
+
+    let (opened_residency, opened_plan) = publish_request_stable_residency_plan(
+        MemoryPhase::Prefill,
+        None,
+        candidate_plan,
+        &[],
+        0,
+        &layer_geometries,
+    );
+    let opened_residency = opened_residency.expect("Prefill must open a request contract");
+
+    assert_eq!(
+        opened_residency.pinned_complete_layer_indexes(),
+        vec![0, 1, 2]
+    );
+    assert!(
+        opened_plan.layer_targets.iter().all(|target| {
+            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        })
+    );
+    assert!(
+        opened_plan
+            .layer_targets
+            .iter()
+            .all(|target| { should_commit_mandatory_complete_layer(2_048, true, Some(*target)) })
     );
 }
 
