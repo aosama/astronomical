@@ -5,8 +5,7 @@
 //! topology snapshot is the single source the planner reads current ownership
 //! from.
 
-use crate::expert_paging::RetainedExpertPageClass;
-use crate::memory::CurrentExpertLayerResidency;
+use crate::memory::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 
 use super::RetainedExpertCache;
 
