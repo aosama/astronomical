@@ -7,6 +7,7 @@ use astronomical_runtime_integration::{
 };
 
 use crate::PerformanceAttribution;
+use crate::expert_paging::ExpertWeightPage;
 use crate::expert_paging::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
@@ -132,6 +133,7 @@ impl Qwen3_5ResidentExpertWeights {
     pub(crate) fn load(
         model: &Qwen3_5Model,
         positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
+        adopted_complete_layers: Vec<(usize, Qwen3_5PagedExpertWeights)>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let expert_pager =
             model
@@ -172,6 +174,11 @@ impl Qwen3_5ResidentExpertWeights {
             "completed detaching resident expert tensors from safetensors source maps"
         );
         let mut resident_layers = Vec::with_capacity(layer_plans.len());
+        let mut adopted_layer_payload_bytes = 0_u64;
+        let adopted_complete_layer_count = adopted_complete_layers.len();
+        let mut adopted_complete_layers = adopted_complete_layers
+            .into_iter()
+            .collect::<HashMap<usize, Qwen3_5PagedExpertWeights>>();
         let mut fused_gate_up_layer_count = 0_usize;
         let mut separate_gate_up_layer_count = 0_usize;
 
@@ -189,8 +196,24 @@ impl Qwen3_5ResidentExpertWeights {
                 complete_layer_payload_bytes,
                 "started materializing one complete resident expert layer"
             );
+            // Issue #501: a complete layer the retained cache already holds is
+            // adopted instead of re-reading the identical payload from storage.
+            // Its plan tensors are dropped unread, so the shard read never pays
+            // for a layer the request already streamed.
             let resident_layer =
-                load_resident_layer(&model.runtime, &mut resident_source_tensors, layer_plan)?;
+                if let Some(adopted_weights) = adopted_complete_layers.remove(&layer_index) {
+                    for tensor_source in &layer_plan.tensor_sources {
+                        resident_source_tensors.remove(&(
+                            tensor_source.source_file.clone(),
+                            tensor_source.tensor_name.clone(),
+                        ));
+                    }
+                    adopted_layer_payload_bytes = adopted_layer_payload_bytes
+                        .saturating_add(adopted_weights.resident_payload_byte_count());
+                    resident_layer_from_paged_weights(&model.runtime, layer_plan, adopted_weights)?
+                } else {
+                    load_resident_layer(&model.runtime, &mut resident_source_tensors, layer_plan)?
+                };
             let gate_up_fusion_applied = resident_layer.gate_up_weights.is_fused();
             let gate_up_fusion_transient_payload_bytes = resident_layer
                 .gate_up_weights
@@ -232,6 +255,8 @@ impl Qwen3_5ResidentExpertWeights {
             total_layer_count = layer_plans.len(),
             fused_gate_up_layer_count,
             separate_gate_up_layer_count,
+            adopted_complete_layer_count,
+            adopted_layer_payload_bytes,
             "completed resident expert gate/up materialization"
         );
 
@@ -241,6 +266,28 @@ impl Qwen3_5ResidentExpertWeights {
             complete_model_payload_bytes,
         ))
     }
+}
+
+/// Builds one resident layer from already-retained paged weights.
+///
+/// Issue #501: a complete layer the retained cache holds adopted its streamed
+/// page as-is, so these arrays are compact and expert-index ordered — exactly
+/// the shape the resident owner wants. This is the same construction the
+/// streaming-pack path performs, so both provenances produce identical owners.
+fn resident_layer_from_paged_weights(
+    runtime: &MlxRuntime,
+    layer_plan: &QuantizedExpertLayerPlan,
+    streamed_weights: Qwen3_5PagedExpertWeights,
+) -> Result<Qwen3_5ResidentExpertLayerWeights, Qwen3_5ExecutionError> {
+    let Qwen3_5PagedExpertWeights {
+        gate_projection,
+        up_projection,
+        down_projection,
+    } = streamed_weights;
+    Ok(Qwen3_5ResidentExpertLayerWeights::new(
+        Qwen3_5ResidentGateUpWeights::build(runtime, layer_plan, gate_projection, up_projection)?,
+        down_projection,
+    ))
 }
 
 fn load_resident_layer(

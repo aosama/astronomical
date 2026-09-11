@@ -15,6 +15,7 @@ use crate::expert_paging::{
 use crate::memory::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 
+mod demand;
 mod reclamation;
 mod slot_writes;
 
@@ -464,6 +465,30 @@ impl RetainedExpertCache {
         Ok(written_expert_count)
     }
 
+    /// Takes ownership of every complete layer for resident adoption, then
+    /// releases whatever remains.
+    ///
+    /// Issue #501: the complete-resident promotion can build the resident owner
+    /// from these arrays instead of re-reading the identical payload from
+    /// storage. Complete layers are returned in the layer-index order the
+    /// resident owner consumes; a partial page is not adoptable and is released
+    /// with the rest of the cache. Accounting is transferred with ownership, so
+    /// the cache stops charging adopted payload before the promotion's fit
+    /// projection re-adds it as resident payload.
+    pub fn take_complete_layers_for_resident_adoption(
+        &mut self,
+        expert_capacity: usize,
+    ) -> Vec<(usize, Qwen3_5PagedExpertWeights)> {
+        let mut adopted_complete_layers = Vec::new();
+        for layer_index in 0..self.tables_by_layer.len() {
+            if let Some(weights) = self.take_complete_layer(layer_index, expert_capacity) {
+                adopted_complete_layers.push((layer_index, weights));
+            }
+        }
+        self.release_all();
+        adopted_complete_layers
+    }
+
     pub fn remove_layer(&mut self, layer_index: usize) -> bool {
         let Some(Some(removed)) = self
             .tables_by_layer
@@ -479,76 +504,30 @@ impl RetainedExpertCache {
         true
     }
 
-    pub fn record_expert_demand(
+    /// Takes ownership of one complete layer's weights for resident adoption.
+    ///
+    /// Issue #501: the complete-resident promotion can build the resident owner
+    /// from these arrays instead of re-reading the identical payload from
+    /// storage. A complete layer's table adopted its streamed page as-is, so the
+    /// returned weights are compact and expert-index ordered — the shape the
+    /// resident owner wants. Accounting is transferred: the caller now owns the
+    /// payload, so the cache stops charging it. Returns `None` when the layer is
+    /// absent or only partially retained, because a partial page cannot become
+    /// a complete resident layer.
+    pub fn take_complete_layer(
         &mut self,
         layer_index: usize,
         expert_capacity: usize,
-        selected_expert_ids: &[usize],
-    ) {
-        let Some(demand) = self.expert_demand_counts_by_layer.get_mut(layer_index) else {
-            return;
-        };
-        if demand.len() < expert_capacity {
-            demand.resize(expert_capacity, 0);
+    ) -> Option<Qwen3_5PagedExpertWeights> {
+        if !self.has_complete_layer(layer_index, expert_capacity) {
+            return None;
         }
-        let weight = self.demand_assignment_weight.max(1);
-        for expert_id in selected_expert_ids {
-            if let Some(count) = demand.get_mut(*expert_id) {
-                *count = count.saturating_add(weight);
-            }
-        }
-    }
-
-    pub fn clear_expert_demand(&mut self) {
-        for demand in &mut self.expert_demand_counts_by_layer {
-            demand.fill(0);
-        }
-        self.demand_assignment_weight = 1;
-    }
-
-    pub fn record_disk_load(&mut self, expert_count: usize, batch_count: usize) {
-        self.disk_page_load_count = self
-            .disk_page_load_count
-            .saturating_add(u64::try_from(expert_count).unwrap_or(u64::MAX));
-        self.disk_batch_load_count = self
-            .disk_batch_load_count
-            .saturating_add(u64::try_from(batch_count).unwrap_or(u64::MAX));
-    }
-
-    #[must_use]
-    pub fn topology_snapshot(&self, expert_capacity: usize) -> Vec<CurrentExpertLayerResidency> {
-        self.tables_by_layer
-            .iter()
-            .enumerate()
-            .filter_map(|(layer_index, table)| {
-                let table = table.as_ref()?;
-                let mut expert_ids: Vec<usize> = table.slot_by_expert_id.keys().copied().collect();
-                expert_ids.sort_unstable();
-                // A slot table that has grown to hold every expert is effectively
-                // a complete layer and must be classified as StableCompleteLayer
-                // so the residency validation passes (ElasticRoutedExperts requires
-                // retained_count < expert_capacity, which is false when all are held).
-                let class = if expert_ids.len() >= expert_capacity {
-                    RetainedExpertPageClass::StableCompleteLayer
-                } else {
-                    RetainedExpertPageClass::ElasticRoutedExperts
-                };
-                let covered_weighted_demand = expert_ids
-                    .iter()
-                    .filter_map(|expert_id| {
-                        self.expert_demand_counts_by_layer[layer_index].get(*expert_id)
-                    })
-                    .copied()
-                    .fold(0_u64, u64::saturating_add);
-                Some(CurrentExpertLayerResidency {
-                    layer_index,
-                    class,
-                    retained_expert_ids: expert_ids,
-                    payload_bytes: table.payload_bytes,
-                    covered_weighted_demand,
-                })
-            })
-            .collect()
+        let table_slot = self.tables_by_layer.get_mut(layer_index)?;
+        let removed = table_slot.take()?;
+        self.resident_payload_bytes = self
+            .resident_payload_bytes
+            .saturating_sub(removed.full_padded_payload_bytes);
+        Some(removed.weights)
     }
 
     pub fn update_maximum_resident_payload_bytes(
