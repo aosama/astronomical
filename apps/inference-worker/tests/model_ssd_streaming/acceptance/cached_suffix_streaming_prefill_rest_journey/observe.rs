@@ -79,6 +79,15 @@ pub(super) async fn execute_observed_request(
             .as_str()
             .unwrap_or("unknown"),
     );
+    let isolated_worker_home = logging_directory
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("worker logs live under the isolated worker home");
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "cached-suffix-streaming-prefill",
+        isolated_worker_home,
+        &live_evidence.final_status,
+    );
     ObservedRequestOutcome {
         model_text: completed_stream.model_text,
         finish_reason: completed_stream.finish_reason,
