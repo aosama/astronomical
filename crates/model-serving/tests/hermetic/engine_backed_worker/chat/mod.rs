@@ -17,10 +17,10 @@ use astronomical_ipc_protocol::{
 use astronomical_model_serving::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry,
     GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
-    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory,
-    ModelFactoryRuntime, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
-    ModelGenerationProcessor, PreparedInferenceRequest, PreparedModelGeneration,
-    WorkerRuntimeError,
+    MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment,
+    MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime, ModelGeneratedTokenTranslation,
+    ModelGenerationOutputError, ModelGenerationProcessor, PreparedInferenceRequest,
+    PreparedModelGeneration, WorkerRuntimeError,
 };
 use tokio::{
     io::{AsyncWrite, duplex, split},
