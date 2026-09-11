@@ -222,23 +222,34 @@ async fn wait_until_ready(server_address: SocketAddr) {
     // Poll the public readiness endpoint with visible progress. Model loading can
     // legitimately take tens of seconds, and repository commands must never look
     // stalled while expensive real artifacts are being prepared.
+    let mut last_readiness_response = String::new();
     for readiness_attempt in 1..=READY_ATTEMPT_LIMIT {
         let request_text =
             format!("GET /ready HTTP/1.1\r\nHost: {server_address}\r\nConnection: close\r\n\r\n");
-        if super::http::send_http_request(server_address, request_text)
-            .await
-            .starts_with("HTTP/1.1 200 OK")
-        {
+        let readiness_response =
+            super::http::send_http_request(server_address, request_text).await;
+        last_readiness_response = readiness_response.clone();
+        if readiness_response.starts_with("HTTP/1.1 200 OK") {
             eprintln!("[real-model-rest] worker ready after {readiness_attempt} attempts");
             return;
         }
         let remaining_seconds = u16::from(READY_ATTEMPT_LIMIT - readiness_attempt);
+        let readiness_status_line = readiness_response
+            .lines()
+            .next()
+            .unwrap_or("missing status line");
+        let readiness_body = readiness_response
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body.trim())
+            .unwrap_or("");
         eprintln!(
-            "[real-model-rest] loading attempt {readiness_attempt}/{READY_ATTEMPT_LIMIT}, ETA <= {remaining_seconds}s"
+            "[real-model-rest] loading attempt {readiness_attempt}/{READY_ATTEMPT_LIMIT}, ETA <= {remaining_seconds}s status_line={readiness_status_line} body={readiness_body}"
         );
         sleep(Duration::from_secs(1)).await;
     }
-    panic!("the real-model worker did not become ready before the deadline");
+    panic!(
+        "the real-model worker did not become ready before the deadline; last /ready response: {last_readiness_response}"
+    );
 }
 
 pub(crate) struct ServingRestServer {
