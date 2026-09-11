@@ -90,6 +90,10 @@ impl Qwen3_5EngineState {
         model.shrink_request_expert_residency_after_reclamation(
             retained_payload_before_reclamation.saturating_sub(retained_payload_after_reclamation),
         );
+        let sparse_experts_are_paged = model.sparse_experts_are_paged();
+        if did_demote_complete_resident_owner {
+            republish_prefill_residency_plan_after_demotion(self, active_request)?;
+        }
 
         if active_request.should_use_speculative_prefill {
             active_request.performance_attribution.record_counter(
@@ -98,7 +102,7 @@ impl Qwen3_5EngineState {
                     .saturating_sub(retained_payload_after_reclamation),
             );
         }
-        let sparse_experts_are_paged = model.sparse_experts_are_paged();
+
         let should_retry_same_prefill_chunk = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
@@ -193,6 +197,9 @@ impl Qwen3_5EngineState {
             retained_payload_before_reclamation.saturating_sub(retained_payload_after_reclamation),
         );
         let sparse_experts_are_paged = model.sparse_experts_are_paged();
+        if did_demote_complete_resident_owner {
+            republish_prefill_residency_plan_after_demotion(self, active_request)?;
+        }
         let should_retry_same_prefill_chunk = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
@@ -262,6 +269,31 @@ fn clear_allocator_cache_without_stream_sync(
             |_performance_attribution| model.runtime().clear_allocator_cache(),
         )
         .map_err(qwen3_5_runtime_error)
+}
+
+/// Republishes the Prefill residency plan after a recovery demotion.
+///
+/// Recovery demotes the complete resident expert owner and shrinks the request
+/// contract before the chunk retries. The plan in effect at that point was
+/// published before the transition and describes the owner that existed then,
+/// so the retried forward streams every complete expert layer with no target
+/// and retains none. Decode seating would then read the identical payload from
+/// storage a second time in the same request (issue #339).
+fn republish_prefill_residency_plan_after_demotion(
+    engine_state: &mut Qwen3_5EngineState,
+    active_request: &mut Qwen3_5EngineRequest,
+) -> Result<(), InferenceEngineError> {
+    let context_token_count =
+        u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+    engine_state
+        .model
+        .as_ref()
+        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+        .republish_prefill_residency_plan_after_demotion(
+            context_token_count,
+            &mut active_request.performance_attribution,
+        )
+        .map_err(InferenceEngineError::from)
 }
 
 fn demote_complete_resident_owner_for_prefill_recovery(

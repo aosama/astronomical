@@ -273,13 +273,36 @@ async fn run_mid_streaming_raise_settlement() {
         generation_evidence[0].expert_source_read_bytes > 0,
         "the first long turn must stream experts under the initial streaming ceiling"
     );
+    // Issue #339: decode seating re-owns the complete layers prefill already
+    // streamed, so it must never read that payload from storage a second time
+    // in the same request. Read-through seating during prefill keeps every turn
+    // here at zero; a regression that drops the prefill handoff reads the
+    // complete expert payload again immediately before the first generated
+    // token.
+    for (turn_index, turn_evidence) in generation_evidence.iter().enumerate() {
+        assert_eq!(
+            turn_evidence.decode_seating_streamed_complete_payload_bytes,
+            0,
+            "turn {} streamed {} bytes of complete expert layers during decode seating; prefill already read those bytes for this request",
+            turn_index + 1,
+            turn_evidence.decode_seating_streamed_complete_payload_bytes,
+        );
+    }
     eprintln!(
-        "{LOG_MARKER} phase=mid_streaming_raise status=success elapsed_seconds={:.3} raised_ceiling_gb={raised_ceiling_gb} turn_1_expert_read_gb={:.3} turn_2_expert_read_gb={:.3} turn_3_expert_read_gb={:.3} turn_4_expert_read_gb={:.3}",
+        "{LOG_MARKER} phase=mid_streaming_raise status=success elapsed_seconds={:.3} raised_ceiling_gb={raised_ceiling_gb} turn_1_expert_read_gb={:.3} turn_2_expert_read_gb={:.3} turn_3_expert_read_gb={:.3} turn_4_expert_read_gb={:.3} turn_1_decode_seating_gb={:.3} turn_2_decode_seating_gb={:.3} turn_3_decode_seating_gb={:.3} turn_4_decode_seating_gb={:.3}",
         journey_started_at.elapsed().as_secs_f64(),
         generation_evidence[0].expert_source_read_bytes as f64 / 1_000_000_000.0,
         generation_evidence[1].expert_source_read_bytes as f64 / 1_000_000_000.0,
         generation_evidence[2].expert_source_read_bytes as f64 / 1_000_000_000.0,
         generation_evidence[3].expert_source_read_bytes as f64 / 1_000_000_000.0,
+        generation_evidence[0].decode_seating_streamed_complete_payload_bytes as f64
+            / 1_000_000_000.0,
+        generation_evidence[1].decode_seating_streamed_complete_payload_bytes as f64
+            / 1_000_000_000.0,
+        generation_evidence[2].decode_seating_streamed_complete_payload_bytes as f64
+            / 1_000_000_000.0,
+        generation_evidence[3].decode_seating_streamed_complete_payload_bytes as f64
+            / 1_000_000_000.0,
     );
 }
 
