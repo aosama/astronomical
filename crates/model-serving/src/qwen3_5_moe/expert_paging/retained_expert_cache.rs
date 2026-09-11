@@ -12,7 +12,6 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use crate::expert_paging::{
     ExpertWeightPage, QuantizedExpertPageManifest, RetainedExpertReclamation,
 };
-use crate::memory::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 
 mod demand;
@@ -22,6 +21,13 @@ mod slot_writes;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod tests;
 use slot_writes::{RetainedReferenceOk, create_warm_table_weights, write_expert_into_slot};
+
+/// Warm-table coverage of one decode token's routed experts.
+#[derive(Debug, Eq, PartialEq)]
+pub struct RoutedExpertCoverage {
+    pub retained_expert_ids: Vec<usize>,
+    pub missing_expert_ids: Vec<usize>,
+}
 
 /// One layer's slot table: a preallocated weight tensor and its slot map.
 #[derive(Debug)]
@@ -487,6 +493,40 @@ impl RetainedExpertCache {
         }
         self.release_all();
         adopted_complete_layers
+    }
+
+    /// Probes warm-table coverage for one decode token's routed experts.
+    ///
+    /// Issue #373: the all-or-nothing rule serves a token from retained RAM only
+    /// when every routed expert is warm. Measuring how often tokens arrive
+    /// partially covered is the prerequisite for deciding whether mixed serving
+    /// is worth its added forward path. This probe reads no arrays and builds no
+    /// page, so classification stays free for tokens that cannot be served.
+    #[must_use]
+    pub fn routed_expert_coverage(
+        &self,
+        layer_index: usize,
+        routed_expert_ids: &[usize],
+    ) -> RoutedExpertCoverage {
+        let Some(Some(table)) = self.tables_by_layer.get(layer_index) else {
+            return RoutedExpertCoverage {
+                retained_expert_ids: Vec::new(),
+                missing_expert_ids: routed_expert_ids.to_vec(),
+            };
+        };
+        let mut retained_expert_ids = Vec::new();
+        let mut missing_expert_ids = Vec::new();
+        for routed_expert_id in routed_expert_ids {
+            if table.slot_by_expert_id.contains_key(routed_expert_id) {
+                retained_expert_ids.push(*routed_expert_id);
+            } else {
+                missing_expert_ids.push(*routed_expert_id);
+            }
+        }
+        RoutedExpertCoverage {
+            retained_expert_ids,
+            missing_expert_ids,
+        }
     }
 
     pub fn remove_layer(&mut self, layer_index: usize) -> bool {

@@ -19,3 +19,5 @@ mod retained_expert_cache;
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use retained_expert_cache::RetainedExpertCache;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use retained_expert_cache::RoutedExpertCoverage;

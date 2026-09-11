@@ -246,29 +246,62 @@ impl Qwen3_5Model {
                                 == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                             performance_attribution,
                         )?
-                    } else if let Some((cached_weights, cached_manifest)) = self
-                        .hot_expert_partial_page(
-                            layer_index,
-                            expert_capacity,
-                            routed_expert_ids,
-                            performance_attribution,
-                        )
-                    {
-                        // Hot-expert cache hit: the warm table covers every
-                        // routed expert of this token, so the routed set is
-                        // served from retained RAM with no storage read
-                        // (issue #372).
-                        (cached_weights, cached_manifest)
                     } else {
-                        self.stream_operation_local_routed_experts(
-                            expert_pager,
+                        // Issue #373: classify warm-table coverage before
+                        // dispatch so the all-or-nothing cost is measurable. A
+                        // partially covered token still reads every routed
+                        // expert from storage today, including the ones already
+                        // in RAM.
+                        let route_coverage = self.record_decode_route_coverage(
                             layer_index,
-                            token_count,
                             routed_expert_ids,
-                            paged_prefill_execution_mode
-                                == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                             performance_attribution,
-                        )?
+                        );
+                        if !route_coverage.retained_expert_ids.is_empty()
+                            && !route_coverage.missing_expert_ids.is_empty()
+                        {
+                            // Mixed serving: serve the covered assignments from
+                            // retained RAM and stream only the missing experts.
+                            return self
+                                .forward_moe_mixed_decode_route_with_performance_attribution(
+                                    hidden_states,
+                                    mixture_of_experts_weights,
+                                    expert_pager,
+                                    layer_index,
+                                    &selected_indices,
+                                    &selected_scores,
+                                    selected_expert_ids,
+                                    &route_coverage,
+                                    expert_capacity,
+                                    paged_prefill_execution_mode,
+                                    should_use_compiled_elementwise_graphs,
+                                    performance_attribution,
+                                );
+                        }
+                        if let Some((cached_weights, cached_manifest)) = self
+                            .hot_expert_partial_page(
+                                layer_index,
+                                expert_capacity,
+                                routed_expert_ids,
+                                performance_attribution,
+                            )
+                        {
+                            // Hot-expert cache hit: the warm table covers every
+                            // routed expert of this token, so the routed set is
+                            // served from retained RAM with no storage read
+                            // (issue #372).
+                            (cached_weights, cached_manifest)
+                        } else {
+                            self.stream_operation_local_routed_experts(
+                                expert_pager,
+                                layer_index,
+                                token_count,
+                                routed_expert_ids,
+                                paged_prefill_execution_mode
+                                    == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                                performance_attribution,
+                            )?
+                        }
                     };
                     let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
                     let gather_expert_ids = if token_count > 1 {

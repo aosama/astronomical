@@ -56,6 +56,12 @@ impl Qwen3_5Model {
                 // expert of this token, so the whole routed set is served from
                 // retained RAM and no storage read happens for this layer
                 // (issue #372).
+                //
+                self.record_decode_route_coverage(
+                    layer_index,
+                    sorted_unique_expert_ids,
+                    performance_attribution,
+                );
                 match self.hot_expert_partial_page(
                     layer_index,
                     expert_capacity,

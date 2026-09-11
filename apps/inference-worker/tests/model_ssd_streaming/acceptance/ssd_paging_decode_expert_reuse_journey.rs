@@ -165,6 +165,48 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "decode must warm routed experts and reuse them; hot_expert_partial_route_hit_count={hot_expert_partial_route_hit_count} hot_expert_warm_insert_count={hot_expert_warm_insert_count}"
     );
 
+    // --- Measured assertion 4c: route-coverage classification (issue #373) ---
+    // The all-or-nothing warm-table rule serves a token from RAM only when every
+    // routed expert is warm. These counters classify every decode token so the
+    // mixed-serving opportunity is measured rather than assumed.
+    let hot_expert_route_fully_covered_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "hot_expert_route_fully_covered_count",
+    );
+    let hot_expert_route_partially_covered_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "hot_expert_route_partially_covered_count",
+    );
+    let hot_expert_route_fully_missed_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "hot_expert_route_fully_missed_count",
+    );
+    let hot_expert_route_retained_assignment_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "hot_expert_route_retained_assignment_count",
+    );
+    let hot_expert_route_missing_assignment_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "hot_expert_route_missing_assignment_count",
+    );
+    let hot_expert_mixed_route_count =
+        generation_attribution_counter(isolated_worker_home.path(), "hot_expert_mixed_route_count");
+    let classified_token_count = hot_expert_route_fully_covered_count
+        + hot_expert_route_partially_covered_count
+        + hot_expert_route_fully_missed_count;
+    assert!(
+        classified_token_count > 0,
+        "decode must classify route coverage per token; classified_token_count={classified_token_count}"
+    );
+    assert!(
+        hot_expert_mixed_route_count > 0,
+        "partially covered tokens must be served by the mixed route instead of reading every routed expert from storage; hot_expert_mixed_route_count={hot_expert_mixed_route_count} partially_covered={hot_expert_route_partially_covered_count}"
+    );
+    assert!(
+        hot_expert_route_retained_assignment_count > hot_expert_route_missing_assignment_count,
+        "mixed serving must serve the majority of routed assignments from retained RAM; retained={hot_expert_route_retained_assignment_count} missing={hot_expert_route_missing_assignment_count}"
+    );
+
     // --- Measured assertion 5: throughput remains portable evidence ---
     let average_generation_tokens_per_second =
         memory_evidence.final_status["serving_session"]["average_generation_tok_per_second"]
@@ -202,6 +244,12 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          retained_route_hits={retained_route_assignment_hit_count} \
          hot_expert_partial_route_hits={hot_expert_partial_route_hit_count} \
          hot_expert_warm_insert_count={hot_expert_warm_insert_count} \
+         hot_expert_route_fully_covered={hot_expert_route_fully_covered_count} \
+         hot_expert_route_partially_covered={hot_expert_route_partially_covered_count} \
+         hot_expert_route_fully_missed={hot_expert_route_fully_missed_count} \
+         hot_expert_route_retained_assignments={hot_expert_route_retained_assignment_count} \
+         hot_expert_route_missing_assignments={hot_expert_route_missing_assignment_count} \
+         hot_expert_mixed_routes={hot_expert_mixed_route_count} \
          decode_streamed_layer_count={} \
          retained_payload_increments={} \
          average_prefill_tok_per_second={average_prefill_tokens_per_second:.2} \

@@ -49,6 +49,18 @@ pub enum PerformanceCounter {
     RetainedRouteAssignmentMissCount,
     HotExpertPartialRouteHitCount,
     HotExpertWarmInsertCount,
+    /// Decode tokens whose routed experts were all warm (issue #373 baseline).
+    HotExpertRouteFullyCoveredCount,
+    /// Decode tokens with some warm and some cold routed experts: the mixed-serving target.
+    HotExpertRoutePartiallyCoveredCount,
+    /// Decode tokens with no warm routed experts.
+    HotExpertRouteFullyMissedCount,
+    /// Routed assignments served from retained RAM across classified tokens.
+    HotExpertRouteRetainedAssignmentCount,
+    /// Routed assignments read from storage across classified tokens.
+    HotExpertRouteMissingAssignmentCount,
+    /// Decode forwards served partly from RAM and partly from storage (issue #373).
+    HotExpertMixedRouteCount,
     ExpertResidencyCommitRejectionCount,
     MtpDepthSelectionFallbackCount,
     MtpAdmittedAttemptCount,
@@ -149,6 +161,12 @@ impl PerformanceCounter {
         Self::RetainedRouteAssignmentMissCount,
         Self::HotExpertPartialRouteHitCount,
         Self::HotExpertWarmInsertCount,
+        Self::HotExpertRouteFullyCoveredCount,
+        Self::HotExpertRoutePartiallyCoveredCount,
+        Self::HotExpertRouteFullyMissedCount,
+        Self::HotExpertRouteRetainedAssignmentCount,
+        Self::HotExpertRouteMissingAssignmentCount,
+        Self::HotExpertMixedRouteCount,
         Self::ExpertResidencyCommitRejectionCount,
         Self::MtpDepthSelectionFallbackCount,
         Self::MtpAdmittedAttemptCount,
@@ -287,6 +305,16 @@ impl PerformanceCounter {
             Self::RetainedRouteAssignmentMissCount => "retained_route_assignment_miss_count",
             Self::HotExpertPartialRouteHitCount => "hot_expert_partial_route_hit_count",
             Self::HotExpertWarmInsertCount => "hot_expert_warm_insert_count",
+            Self::HotExpertRouteFullyCoveredCount => "hot_expert_route_fully_covered_count",
+            Self::HotExpertRoutePartiallyCoveredCount => "hot_expert_route_partially_covered_count",
+            Self::HotExpertRouteFullyMissedCount => "hot_expert_route_fully_missed_count",
+            Self::HotExpertRouteRetainedAssignmentCount => {
+                "hot_expert_route_retained_assignment_count"
+            }
+            Self::HotExpertRouteMissingAssignmentCount => {
+                "hot_expert_route_missing_assignment_count"
+            }
+            Self::HotExpertMixedRouteCount => "hot_expert_mixed_route_count",
             Self::ExpertResidencyCommitRejectionCount => "expert_residency_commit_rejection_count",
             Self::MtpDepthSelectionFallbackCount => "mtp_memory_admission_fallback_count",
             Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
