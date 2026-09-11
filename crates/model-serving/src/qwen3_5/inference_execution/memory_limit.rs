@@ -88,7 +88,18 @@ impl Qwen3_5EngineState {
                 peak_memory_bytes,
                 active_memory_breakdown,
             )
-            .with_expert_residency_telemetry(expert_residency),
+            .with_expert_residency_telemetry(expert_residency)
+            // Issue #510: the adjustment event lands after the ModelLoaded
+            // sample, so a split-less telemetry here would overwrite the
+            // load-complete split on the status the menu paints.
+            .with_memory_ceiling_utilization(
+                model.memory_ceiling_utilization_for_breakdown(
+                    crate::MemoryPhase::Decode,
+                    0,
+                    active_memory_bytes,
+                    active_memory_breakdown,
+                ),
+            ),
         );
         let expert_memory_mode = model.expert_memory_mode();
         let expert_residency_transition_occurred =
