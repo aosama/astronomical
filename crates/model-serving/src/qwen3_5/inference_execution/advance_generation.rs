@@ -319,6 +319,27 @@ impl Qwen3_5EngineState {
             if self.adaptive_ram_growth_guard_enabled
                 && let Ok(memory_snapshot) = model.runtime().memory_snapshot()
             {
+                // Issue #507: record why the ceiling is not fully in use at this
+                // step, alongside the warming cap that decides it. Without the
+                // split, an idle gigabyte cannot be told apart from a reserve
+                // held for context growth.
+                let decode_context_token_count = u64::try_from(
+                    active_request
+                        .input_token_ids
+                        .len()
+                        .saturating_add(usize::from(active_request.generated_token_count)),
+                )
+                .unwrap_or(u64::MAX);
+                let decode_active_memory_bytes =
+                    u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX);
+                model.record_memory_ceiling_utilization(
+                    crate::MemoryPhase::Decode,
+                    decode_context_token_count,
+                    &active_request.request_decoder_state,
+                    active_request.additional_context_state_payload_bytes(),
+                    decode_active_memory_bytes,
+                    &mut active_request.performance_attribution,
+                );
                 let routed_expert_page_reservation_bytes = model
                     .expert_page_reservation_bytes_for_forward(1)
                     .unwrap_or(u64::MAX);
