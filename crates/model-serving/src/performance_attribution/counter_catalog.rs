@@ -93,6 +93,13 @@ pub enum PerformanceCounter {
     MtpPredictorReplayTokenCount,
     MtpQueuedFrontierRestorationCount,
     MtpCancellationWithQueuedStateCount,
+    /// Complete-layer payload prefill handed to retained ownership while
+    /// streaming it, so decode seating does not read the same bytes again.
+    ExpertResidencyReadThroughSeatedCompletePayloadBytes,
+    /// Complete-layer payload the decode seating pass streamed from storage.
+    /// Issue #339 drives this to zero whenever prefill already seated the
+    /// layers the decode plan would otherwise re-read.
+    ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
     MtpOperationalFallbackCount,
 }
 
@@ -186,6 +193,8 @@ impl PerformanceCounter {
         Self::MtpPredictorReplayTokenCount,
         Self::MtpQueuedFrontierRestorationCount,
         Self::MtpCancellationWithQueuedStateCount,
+        Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
+        Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
         Self::MtpOperationalFallbackCount,
     ];
 
@@ -364,6 +373,12 @@ impl PerformanceCounter {
             Self::MtpPredictorReplayTokenCount => "mtp_predictor_replay_token_count",
             Self::MtpQueuedFrontierRestorationCount => "mtp_queued_frontier_restoration_count",
             Self::MtpCancellationWithQueuedStateCount => "mtp_cancellation_with_queued_state_count",
+            Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes => {
+                "expert_residency_read_through_seated_complete_payload_bytes"
+            }
+            Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes => {
+                "expert_residency_decode_seating_streamed_complete_payload_bytes"
+            }
             Self::MtpOperationalFallbackCount => "mtp_operational_fallback_count",
         }
     }

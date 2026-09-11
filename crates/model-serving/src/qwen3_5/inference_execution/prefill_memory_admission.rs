@@ -14,6 +14,18 @@ pub(super) struct AdmissionOutcome {
     pub(super) active_memory_bytes_before_growth: usize,
     pub(super) retained_expert_payload_bytes_before_growth: u64,
     pub(super) target_expert_payload_bytes_reclaimed_during_context_admission: u64,
+    /// This admission demoted a complete resident expert owner into paged
+    /// streaming.
+    ///
+    /// The Prefill residency plan is published before admission and describes
+    /// the owner that existed then: while a complete owner is resident the plan
+    /// is deliberately absent, so the forward streams every expert layer with
+    /// no target and drops it. Without a republished plan the chunk reads the
+    /// complete expert payload and retains nothing, and decode seating then
+    /// reads the same payload again (issue #339). The caller republishes the
+    /// Prefill plan before the forward so those pages are offered to retained
+    /// ownership instead.
+    pub(super) demoted_complete_resident_expert_owner: bool,
 }
 
 impl Qwen3_5EngineState {
@@ -34,6 +46,8 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let owned_complete_resident_experts_before_admission =
+            model.resident_expert_weights.is_some();
         let target_expert_payload_bytes_before_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
@@ -62,6 +76,9 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let demoted_complete_resident_expert_owner =
+            owned_complete_resident_experts_before_admission
+                && model.resident_expert_weights.is_none();
         let target_expert_payload_bytes_after_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
@@ -84,6 +101,7 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             target_expert_payload_bytes_reclaimed_during_context_admission,
+            demoted_complete_resident_expert_owner,
         })
     }
 }

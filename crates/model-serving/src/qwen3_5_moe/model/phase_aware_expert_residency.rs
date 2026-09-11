@@ -321,6 +321,28 @@ impl Qwen3_5Model {
         Ok(())
     }
 
+    /// Republishes the Prefill residency plan after an admission or recovery
+    /// demoted the complete resident expert owner into paged streaming.
+    ///
+    /// A plan published before that transition described the resident owner, so
+    /// it names no complete-layer target and the retried forward streams every
+    /// expert layer with no target and retains none. Decode seating then reads
+    /// the identical payload from storage a second time in the same request
+    /// (issue #339). Recovery reclaims retained pages before this call, so the
+    /// republished plan is built from the topology the retry will actually
+    /// stream from.
+    pub(crate) fn republish_prefill_residency_plan_after_demotion(
+        &self,
+        context_token_count: u64,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        self.refresh_phase_aware_expert_residency_plan(
+            MemoryPhase::Prefill,
+            context_token_count,
+            performance_attribution,
+        )
+    }
+
     /// Returns the current execution-required read-through action for one layer.
     pub(super) fn expert_residency_target(
         &self,

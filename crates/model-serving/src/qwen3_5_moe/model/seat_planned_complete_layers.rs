@@ -6,7 +6,9 @@
 //! walks the decided indexes.
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::{PerformanceAttribution, complete_layer_indexes_required_before_decode};
+use crate::{
+    PerformanceAttribution, PerformanceCounter, complete_layer_indexes_required_before_decode,
+};
 
 impl Qwen3_5Model {
     /// Complete-layer indexes `memory/` requires seated before decode.
@@ -55,6 +57,13 @@ impl Qwen3_5Model {
                 true,
                 performance_attribution,
             )?;
+            // Issue #339: every byte here is a complete layer read after prefill
+            // already streamed this request. Read-through seating during prefill
+            // keeps this at zero.
+            performance_attribution.record_counter(
+                PerformanceCounter::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
+                streamed_manifest.payload_byte_count,
+            );
             if self.has_seated_complete_layer(layer_index, expert_capacity) {
                 seated_payload_bytes =
                     seated_payload_bytes.saturating_add(streamed_manifest.payload_byte_count);
