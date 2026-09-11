@@ -71,6 +71,7 @@ mod worker_model_swap;
 mod worker_prefill_progress;
 mod worker_process;
 mod worker_replacement;
+mod worker_startup_runtime;
 mod worker_stderr_tail;
 
 pub use application::{

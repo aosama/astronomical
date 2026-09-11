@@ -30,7 +30,7 @@ async fn should_load_a_model_after_a_live_memory_update_changes_the_configuratio
         .await
         .expect("the model should load after the live configuration update");
 
-    assert_generation_completed(&mut generation_events).await;
+    assert_generation_completed(&mut generation_events, "after live memory update").await;
     assert_eq!(
         worker_handle.worker_health_snapshot().status,
         WorkerHealthStatus::Ready
