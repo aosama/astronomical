@@ -13,6 +13,12 @@ pub(crate) mod http;
     feature = "memory-management-acceptance",
 ))]
 #[allow(dead_code)]
+pub(crate) mod memory_utilization_parity;
+#[cfg(any(
+    feature = "serving-acceptance",
+    feature = "memory-management-acceptance",
+))]
+#[allow(dead_code)]
 pub(crate) mod serving_rest;
 
 #[path = "../../../../crates/model-serving/tests/common/e2e_test_model_names.rs"]

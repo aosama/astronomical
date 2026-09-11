@@ -3,7 +3,7 @@
 use astronomical_runtime_integration::{MlxMemorySnapshot, MlxRuntime};
 
 use crate::laguna::{LagunaDecoderState, LagunaModel};
-use crate::memory::context_token_bucket;
+use crate::memory::{MemoryCeilingUtilization, context_token_bucket};
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxActiveMemoryBreakdown, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetMeasurement,
@@ -320,12 +320,21 @@ impl LagunaInferenceExecution {
                 .saturating_sub(active_memory_breakdown.context_state_payload_bytes),
             "Laguna reconciled one MLX active-memory snapshot"
         );
-        Some(MlxMemoryTelemetry::new(
-            active_memory_bytes,
-            allocator_cache_memory_bytes,
-            peak_memory_bytes,
-            active_memory_breakdown,
-        ))
+        Some(
+            MlxMemoryTelemetry::new(
+                active_memory_bytes,
+                allocator_cache_memory_bytes,
+                peak_memory_bytes,
+                active_memory_breakdown,
+            )
+            // Same idle contract as Qwen: plan the next decode against a fresh
+            // context so the menu can tell free RAM from promised reserves.
+            .with_memory_ceiling_utilization(MemoryCeilingUtilization::compose(
+                laguna_ram_budget_snapshot(mlx_ram_budget, MemoryPhase::Decode, 0),
+                active_memory_bytes,
+                active_memory_breakdown,
+            )),
+        )
     }
 }
 

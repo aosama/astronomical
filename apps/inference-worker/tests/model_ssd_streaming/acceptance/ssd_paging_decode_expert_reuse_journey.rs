@@ -286,37 +286,8 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
 
     // --- Measured assertion 7: the status document carries the same split the
     // attribution counters do (issue #510 observability parity) ---
-    let status_utilization =
-        &memory_evidence.final_status["mlx_memory_snapshot"]["memory_ceiling_utilization"];
-    let status_unused_headroom_bytes = status_utilization["unused_headroom_bytes"]
-        .as_u64()
-        .expect("the finalized status must publish the utilization decomposition (issue #510)");
-    let status_named_bytes = [
-        "reserved_model_core_slack_bytes",
-        "reserved_context_growth_bytes",
-        "reserved_activation_and_workspace_bytes",
-        "unseated_expert_entitlement_bytes",
-    ]
-    .into_iter()
-    .map(|field| status_utilization[field].as_u64().unwrap_or(0))
-    .sum::<u64>();
-    let status_unexplained_bytes = status_utilization["unexplained_headroom_bytes"]
-        .as_u64()
-        .unwrap_or(u64::MAX);
-    let status_owner_overrun_bytes = status_utilization["owner_overrun_bytes"]
-        .as_u64()
-        .unwrap_or(u64::MAX);
-    assert_eq!(
-        status_unexplained_bytes, 0,
-        "the status-published decomposition must close with no residual: {status_utilization}"
-    );
-    assert_eq!(
-        status_owner_overrun_bytes, 0,
-        "the status-published decomposition must report no owner overrun: {status_utilization}"
-    );
-    assert!(
-        status_named_bytes <= status_unused_headroom_bytes,
-        "status-published named owners must not overrun the headroom: unused={status_unused_headroom_bytes} named={status_named_bytes}"
+    crate::support::memory_utilization_parity::assert_status_memory_ceiling_utilization_closes(
+        &memory_evidence.final_status,
     );
 
     // --- Measured assertion 8: decode warming grows with decode evidence

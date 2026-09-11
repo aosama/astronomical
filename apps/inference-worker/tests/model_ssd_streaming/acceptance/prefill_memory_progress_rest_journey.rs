@@ -156,6 +156,11 @@ async fn run_mlx_memory_progress_rest_journey() {
         peak_memory_bytes <= MAXIMUM_MLX_MEMORY_BYTES.saturating_add(memory_ceiling_tolerance),
         "peak MLX memory {peak_memory_bytes} should stay within the {MAXIMUM_MLX_MEMORY_BYTES} ceiling plus 1% tolerance"
     );
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "prefill-memory-progress",
+        isolated_worker_home.path(),
+        &get_json_endpoint(server_address, "/v1/status").await,
+    );
     stop_real_model_rest_server(real_model_rest_server).await;
     eprintln!(
         "[mlx-memory-progress] status=success prompt_tokens={PROMPT_TOKEN_COUNT} \
@@ -209,6 +214,9 @@ async fn observe_mlx_memory_progress(
                 .as_u64()
                 .unwrap_or(0);
             if snapshot_source == "prefill" {
+                crate::support::memory_utilization_parity::assert_status_memory_ceiling_utilization_closes(
+                    &status_document,
+                );
                 observed_prefill_source = true;
                 prefill_active_memory_bytes.push(active_memory_bytes);
                 let current_peak = peak_active_memory_bytes.unwrap_or(0);

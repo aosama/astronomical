@@ -94,6 +94,9 @@ async fn run_persistent_prompt_cache_memory_rest_journey(
         "the cold request must stream model-generated text through the public OpenAI-compatible client"
     );
     let cold_status_document = get_json_endpoint(server_address, "/v1/status").await;
+    crate::support::memory_utilization_parity::assert_status_memory_ceiling_utilization_closes(
+        &cold_status_document,
+    );
     assert_expert_memory_mode(
         &cold_status_document,
         expected_expert_memory_mode,
@@ -190,6 +193,11 @@ async fn run_persistent_prompt_cache_memory_rest_journey(
         );
     }
     let final_status_document = get_json_endpoint(server_address, "/v1/status").await;
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "persistent-prompt-cache-restore",
+        configured_worker_home.path(),
+        &final_status_document,
+    );
     assert_expert_memory_mode(
         &final_status_document,
         expected_expert_memory_mode,

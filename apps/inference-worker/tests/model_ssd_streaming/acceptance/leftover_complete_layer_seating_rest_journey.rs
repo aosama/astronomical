@@ -114,6 +114,11 @@ async fn run_leftover_complete_layer_seating_rest_journey(maximum_mlx_memory_byt
         consume_completed_stream(streamed_completion),
         observe_generation_expert_payload(server_address),
     );
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "leftover-complete-layer-seating",
+        &isolated_worker_home,
+        &generation_memory.final_status,
+    );
     stop_real_model_rest_server(real_model_rest_server).await;
     assert!(!completed_stream.model_text.is_empty());
     assert!(matches!(
@@ -154,6 +159,7 @@ struct GenerationMemoryEvidence {
     final_expert_memory_mode: String,
     average_prefill_tokens_per_second: f64,
     average_generation_tokens_per_second: f64,
+    final_status: serde_json::Value,
 }
 
 async fn observe_generation_expert_payload(server_address: SocketAddr) -> GenerationMemoryEvidence {
@@ -227,6 +233,7 @@ async fn observe_generation_expert_payload(server_address: SocketAddr) -> Genera
             final_status["serving_session"]["average_generation_tok_per_second"]
                 .as_f64()
                 .unwrap_or(0.0),
+        final_status,
     }
 }
 

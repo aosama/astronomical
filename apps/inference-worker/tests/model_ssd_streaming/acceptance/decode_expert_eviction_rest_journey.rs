@@ -105,6 +105,7 @@ async fn run_two_request_retention_journey(
     });
     let mut smallest_generating_expert_payload_bytes = u64::MAX;
     let mut final_expert_memory_mode = String::new();
+    let mut last_request_status = serde_json::json!({});
     for request_number in 1..=2 {
         eprintln!(
             "[decode-expert-eviction] status=progress phase=request_send request_number={request_number} model={} prompt_characters={} ceiling_bytes={maximum_mlx_memory_bytes}",
@@ -136,12 +137,18 @@ async fn run_two_request_retention_journey(
         smallest_generating_expert_payload_bytes = smallest_generating_expert_payload_bytes
             .min(generation_memory.smallest_generating_expert_payload_bytes);
         final_expert_memory_mode = generation_memory.final_expert_memory_mode.clone();
+        last_request_status = generation_memory.final_status;
         eprintln!(
             "[decode-expert-eviction] status=progress phase=request_complete request_number={request_number} smallest_generating_expert_payload_gb={:.2} average_generation_tokens_per_second={:.2}",
             generation_memory.smallest_generating_expert_payload_bytes as f64 / 1e9,
             generation_memory.average_generation_tokens_per_second,
         );
     }
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "decode-expert-eviction",
+        &isolated_worker_home,
+        &last_request_status,
+    );
     stop_real_model_rest_server(real_model_rest_server).await;
     preserve_journey_evidence(&isolated_worker_home, prompt_token_count);
     assert!(
@@ -242,6 +249,11 @@ async fn run_decode_retention_journey(maximum_mlx_memory_bytes: u64) {
         consume_completed_stream(streamed_completion),
         observe_generation_expert_payload(server_address),
     );
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "decode-expert-eviction",
+        &isolated_worker_home,
+        &generation_memory.final_status,
+    );
     stop_real_model_rest_server(real_model_rest_server).await;
     assert!(!completed_stream.model_text.is_empty());
     assert!(matches!(
@@ -284,6 +296,7 @@ struct GenerationMemoryEvidence {
     final_expert_memory_mode: String,
     average_prefill_tokens_per_second: f64,
     average_generation_tokens_per_second: f64,
+    final_status: serde_json::Value,
 }
 
 async fn observe_generation_expert_payload(server_address: SocketAddr) -> GenerationMemoryEvidence {
@@ -363,6 +376,7 @@ async fn observe_generation_expert_payload(server_address: SocketAddr) -> Genera
             final_status["serving_session"]["average_generation_tok_per_second"]
                 .as_f64()
                 .unwrap_or(0.0),
+        final_status,
     }
 }
 
