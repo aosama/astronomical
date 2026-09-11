@@ -19,6 +19,17 @@ use super::routing::{
 };
 use crate::sparse_experts::should_use_sorted_expert_reduction;
 
+/// Per-assignment routed expert rows before any weighted reduction.
+pub(super) enum RoutedExpertAssignmentOutputs {
+    /// Sorted gather rows plus the inverse permutation the sorted reduction needs.
+    Sorted {
+        sorted_outputs: MlxArray,
+        inverse_order: MlxArray,
+    },
+    /// Original-order assignment rows.
+    Unsorted { assignment_outputs: MlxArray },
+}
+
 impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_paged_target_verification_with_performance_attribution(
@@ -154,6 +165,50 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let selected_outputs = self.streamed_expert_assignment_outputs(
+            hidden_states,
+            paged_expert_weights,
+            selected_expert_indices,
+            performance_attribution,
+        )?;
+        let sparse_output = match selected_outputs {
+            RoutedExpertAssignmentOutputs::Sorted {
+                sorted_outputs,
+                inverse_order,
+            } => qwen3_5_moe_sorted_expert_weighted_sum(
+                &self.runtime,
+                self.sorted_expert_weighted_sum_kernel()?,
+                &sorted_outputs,
+                &inverse_order,
+                selected_scores,
+            )?,
+            RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs } => {
+                qwen3_5_moe_unsorted_expert_weighted_sum(
+                    &self.runtime,
+                    &assignment_outputs,
+                    selected_scores,
+                )?
+            }
+        };
+        Ok(sparse_output)
+    }
+
+    /// Runs the routed expert chain through one page and returns one row per
+    /// assignment, before any weighted reduction.
+    ///
+    /// Issue #373: mixed serving gathers the covered assignments from the warm
+    /// table and the missing assignments from the streamed page, then restores
+    /// the original assignment order so ONE weighted reduction consumes the
+    /// same values in the same order as the single-page path. Returning rows
+    /// instead of a reduced output is what makes that possible.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn streamed_expert_assignment_outputs(
+        &self,
+        hidden_states: &MlxArray,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        selected_expert_indices: &MlxArray,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<RoutedExpertAssignmentOutputs, Qwen3_5ExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
         let sorted_assignments = if should_use_sorted_expert_reduction(
@@ -199,24 +254,20 @@ impl Qwen3_5Model {
             indices_are_sorted,
             performance_attribution,
         )?;
-        let sparse_output = match sorted_assignments.as_ref() {
-            Some((_, _, inverse_order)) => qwen3_5_moe_sorted_expert_weighted_sum(
-                &self.runtime,
-                self.sorted_expert_weighted_sum_kernel()?,
-                &selected_outputs,
+        if indices_are_sorted {
+            let Some((_, _, inverse_order)) = sorted_assignments else {
+                return Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "sorted routed assignments lost their inverse order",
+                });
+            };
+            Ok(RoutedExpertAssignmentOutputs::Sorted {
+                sorted_outputs: selected_outputs,
                 inverse_order,
-                selected_scores,
-            )?,
-            None => {
-                let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
-                qwen3_5_moe_unsorted_expert_weighted_sum(
-                    &self.runtime,
-                    &selected_outputs,
-                    selected_scores,
-                )?
-            }
-        };
-        Ok(sparse_output)
+            })
+        } else {
+            let assignment_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
+            Ok(RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs })
+        }
     }
 
     fn streamed_expert_linear(

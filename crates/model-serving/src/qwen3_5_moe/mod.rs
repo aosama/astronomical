@@ -33,9 +33,10 @@ pub(crate) use model::{
 #[cfg(feature = "direct-mlx")]
 pub use model::{
     Qwen3_5MoECachedPlusStreamedPageRoute, Qwen3_5MoEPagedPrefillExecutionMode,
-    qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,
-    qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
-    qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
+    qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
+    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
+    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
+    qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
 
 /// Model identity constants retained for sparse-artifact test fixtures.

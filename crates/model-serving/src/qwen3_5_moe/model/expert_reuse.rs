@@ -2,6 +2,7 @@
 
 use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_moe::expert_paging::RoutedExpertCoverage;
 use crate::qwen3_5_moe::expert_paging::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
 };
@@ -36,6 +37,52 @@ impl Qwen3_5Model {
         } else {
             ExpertPageDisposition::Miss
         }
+    }
+
+    /// Classifies one decode token's warm-table route coverage and records it.
+    ///
+    /// Issue #373: the all-or-nothing rule serves a token from retained RAM only
+    /// when every routed expert is warm, so a partially covered token still pays
+    /// a full storage read. Classifying before dispatch makes that cost
+    /// measurable and is the prerequisite for deciding whether mixed serving is
+    /// worth its added forward path. Both decode dispatch sites call this so
+    /// there is one classification answer.
+    pub(super) fn record_decode_route_coverage(
+        &self,
+        layer_index: usize,
+        routed_expert_ids: &[usize],
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> RoutedExpertCoverage {
+        let route_coverage = self.retained_experts.as_ref().map_or_else(
+            || RoutedExpertCoverage {
+                retained_expert_ids: Vec::new(),
+                missing_expert_ids: routed_expert_ids.to_vec(),
+            },
+            |retained_experts| {
+                retained_experts
+                    .borrow()
+                    .routed_expert_coverage(layer_index, routed_expert_ids)
+            },
+        );
+        if route_coverage.missing_expert_ids.is_empty() {
+            performance_attribution
+                .record_counter(PerformanceCounter::HotExpertRouteFullyCoveredCount, 1);
+        } else if route_coverage.retained_expert_ids.is_empty() {
+            performance_attribution
+                .record_counter(PerformanceCounter::HotExpertRouteFullyMissedCount, 1);
+        } else {
+            performance_attribution
+                .record_counter(PerformanceCounter::HotExpertRoutePartiallyCoveredCount, 1);
+        }
+        performance_attribution.record_counter(
+            PerformanceCounter::HotExpertRouteRetainedAssignmentCount,
+            u64::try_from(route_coverage.retained_expert_ids.len()).unwrap_or(u64::MAX),
+        );
+        performance_attribution.record_counter(
+            PerformanceCounter::HotExpertRouteMissingAssignmentCount,
+            u64::try_from(route_coverage.missing_expert_ids.len()).unwrap_or(u64::MAX),
+        );
+        route_coverage
     }
 
     /// Returns the cached complete packed page.
