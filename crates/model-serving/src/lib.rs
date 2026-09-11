@@ -357,6 +357,9 @@ pub use qwen3_5_moe::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     build_quantized_expert_layer_plan,
 };
+pub use qwen3_5_moe::{
+    ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
+};
 pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
