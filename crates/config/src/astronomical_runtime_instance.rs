@@ -4,8 +4,8 @@ use crate::AstronomicalConfigError;
 
 const STABLE_STATE_DIRECTORY_NAME: &str = ".astronomical";
 const DEVELOPMENT_STATE_DIRECTORY_NAME: &str = ".astronomical-dev";
-const STABLE_BIND_ADDRESS: &str = "127.0.0.1:6732";
-const DEVELOPMENT_BIND_ADDRESS: &str = "127.0.0.1:6733";
+const STABLE_LOOPBACK_PORT: u16 = 6732;
+const DEVELOPMENT_LOOPBACK_PORT: u16 = 6733;
 // App Store channel state roots. Sandboxed apps may write only inside their
 // container, and the platform-standard Application Support directory is mapped
 // into that container automatically, so the store build derives all state from
@@ -34,6 +34,15 @@ impl AstronomicalRuntimeInstance {
         match self {
             Self::Stable => "Stable",
             Self::Development => "Development",
+        }
+    }
+
+    /// Loopback listener owned by this runtime instance.
+    #[must_use]
+    pub fn loopback_socket_addr(self) -> SocketAddr {
+        match self {
+            Self::Stable => SocketAddr::from(([127, 0, 0, 1], STABLE_LOOPBACK_PORT)),
+            Self::Development => SocketAddr::from(([127, 0, 0, 1], DEVELOPMENT_LOOPBACK_PORT)),
         }
     }
 }
@@ -195,12 +204,7 @@ impl AstronomicalInstancePaths {
         state_directory: PathBuf,
         runtime_instance: AstronomicalRuntimeInstance,
     ) -> Self {
-        let default_bind_address = match runtime_instance {
-            AstronomicalRuntimeInstance::Stable => STABLE_BIND_ADDRESS,
-            AstronomicalRuntimeInstance::Development => DEVELOPMENT_BIND_ADDRESS,
-        }
-        .parse()
-        .expect("built-in Astronomical loopback addresses must remain valid");
+        let default_bind_address = runtime_instance.loopback_socket_addr();
         Self {
             runtime_instance: Some(runtime_instance),
             state_directory,

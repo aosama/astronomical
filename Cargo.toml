@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "apps/astronomical",
     "apps/inference-worker",
     "apps/supervisor",
     "crates/config",
@@ -10,6 +11,7 @@ members = [
     "experimental/aligned-expert-packs",
 ]
 default-members = [
+    "apps/astronomical",
     "apps/inference-worker",
     "apps/supervisor",
     "crates/config",
