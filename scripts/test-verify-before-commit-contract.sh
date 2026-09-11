@@ -122,6 +122,7 @@ expected_alias_arguments = [
     "test",
     "--no-fail-fast",
     "-p", "astronomical-config",
+    "-p", "astronomical-cli",
     "-p", "astronomical-ipc-protocol",
     "-p", "astronomical-runtime-integration",
     "-p", "astronomical-model-serving",
