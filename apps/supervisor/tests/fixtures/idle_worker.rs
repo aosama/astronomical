@@ -23,6 +23,8 @@ const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
 const TELEMETRY_BEFORE_SWAP_MODEL_ID: &str = "astronomical/telemetry-before-swap-model";
 const DELAYED_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-policy-ack-model";
 const DELAYED_IMAGE_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-image-policy-ack-model";
+const DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION: &str =
+    "delayed-startup-runtime-configuration";
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -51,6 +53,11 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     while let Some(worker_command) = command_reader.next_command().await? {
         match worker_command {
             WorkerCommand::InitializeWorker(worker_startup_configuration) => {
+                if worker_startup_configuration.configuration_generation
+                    == DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                }
                 let runtime_configuration = WorkerRuntimeFeatureConfiguration {
                     configuration_generation: worker_startup_configuration.configuration_generation,
                     persistent_prompt_cache_enabled: worker_startup_configuration

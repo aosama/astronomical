@@ -44,13 +44,17 @@ async fn should_complete_a_queued_model_swap_when_idle_telemetry_arrives_before_
             .await
     });
 
-    assert_generation_completed(&mut first_generation_events).await;
+    assert_generation_completed(&mut first_generation_events, "first delayed completion").await;
     let mut queued_generation_events = timeout(Duration::from_secs(2), queued_generation_task)
         .await
         .expect("the queued model swap should finish before the timeout")
         .expect("the queued generation task should not panic")
         .expect("idle telemetry must not make the queued model swap unavailable");
-    assert_generation_completed(&mut queued_generation_events).await;
+    assert_generation_completed(
+        &mut queued_generation_events,
+        "queued telemetry-before-swap",
+    )
+    .await;
 
     let worker_health_snapshot = worker_handle.worker_health_snapshot();
     assert_eq!(worker_health_snapshot.status, WorkerHealthStatus::Ready);
@@ -115,7 +119,7 @@ async fn should_swap_chat_to_image_to_chat_with_exact_runtime_policy() {
         .start_chat_generation(chat_command(TELEMETRY_BEFORE_SWAP_MODEL_ID, 10))
         .await
         .expect("the chat model should load");
-    assert_generation_completed(&mut first_chat).await;
+    assert_generation_completed(&mut first_chat, "chat before image swap").await;
 
     let mut image_result = worker_handle
         .start_image_generation(ImageGenerationCommand {
@@ -153,7 +157,7 @@ async fn should_swap_chat_to_image_to_chat_with_exact_runtime_policy() {
         .start_chat_generation(chat_command(TELEMETRY_BEFORE_SWAP_MODEL_ID, 12))
         .await
         .expect("the chat model should reload");
-    assert_generation_completed(&mut final_chat).await;
+    assert_generation_completed(&mut final_chat, "chat after image swap").await;
     worker_handle
         .shutdown()
         .await
@@ -195,7 +199,11 @@ async fn should_publish_model_identity_and_runtime_policy_as_one_health_snapshot
         .start_chat_generation(chat_command(TELEMETRY_BEFORE_SWAP_MODEL_ID, 15))
         .await
         .expect("the initial model should load");
-    assert_generation_completed(&mut first_generation).await;
+    assert_generation_completed(
+        &mut first_generation,
+        "health snapshot before delayed policy",
+    )
+    .await;
 
     let swapping_worker_handle = worker_handle.clone();
     let swap_task = tokio::spawn(async move {
@@ -223,7 +231,11 @@ async fn should_publish_model_identity_and_runtime_policy_as_one_health_snapshot
         .expect("the exact swap acknowledgements should arrive")
         .expect("the swap task should not panic")
         .expect("the swapped generation should start");
-    assert_generation_completed(&mut swapped_generation).await;
+    assert_generation_completed(
+        &mut swapped_generation,
+        "health snapshot after delayed policy",
+    )
+    .await;
     let committed_health_snapshot = worker_handle.worker_health_snapshot();
     assert_eq!(
         committed_health_snapshot.ready_model_id.as_deref(),
@@ -408,7 +420,7 @@ fn image_generation_command(model_id: &str, request_id: u64) -> ImageGenerationC
     }
 }
 
-fn runtime_model_policy(
+pub(super) fn runtime_model_policy(
     model_id: &str,
     model_directory: &str,
     maximum_output_tokens: u32,
@@ -452,7 +464,7 @@ fn runtime_model_policy(
     }
 }
 
-async fn wait_for_ready_worker(worker_handle: &WorkerHandle) {
+pub(super) async fn wait_for_ready_worker(worker_handle: &WorkerHandle) {
     let readiness_deadline = Instant::now() + Duration::from_secs(1);
     loop {
         let worker_health_status = worker_handle.worker_health_snapshot().status;
@@ -469,18 +481,22 @@ async fn wait_for_ready_worker(worker_handle: &WorkerHandle) {
 
 pub(super) async fn assert_generation_completed(
     generation_events: &mut tokio::sync::mpsc::Receiver<ChatGenerationStreamEvent>,
+    generation_label: &str,
 ) {
     let generation_event = timeout(Duration::from_secs(2), generation_events.recv())
         .await
         .expect("the generation should complete before the timeout")
         .expect("the generation stream should contain a completion event");
-    assert!(matches!(
-        generation_event,
-        ChatGenerationStreamEvent::Completed {
-            reason: ChatGenerationCompletionReason::EndOfSequence,
-            ..
-        }
-    ));
+    assert!(
+        matches!(
+            generation_event,
+            ChatGenerationStreamEvent::Completed {
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+                ..
+            }
+        ),
+        "{generation_label}: expected EndOfSequence completion, received {generation_event:?}"
+    );
 }
 
 pub(super) fn chat_command(model_id: &str, request_id: u64) -> ChatGenerationCommand {

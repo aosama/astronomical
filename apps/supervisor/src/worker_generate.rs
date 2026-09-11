@@ -17,6 +17,7 @@ use crate::{
     worker_health::{clear_active_request_progress, publish_activity},
     worker_loop_types::{ActiveGeneration, ActiveWorkerRequest},
     worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
+    worker_startup_runtime::wait_for_startup_runtime_configuration,
 };
 
 pub(super) async fn handle_generate_command(
@@ -44,6 +45,17 @@ pub(super) async fn handle_generate_command(
         );
         return Ok(());
     }
+    wait_for_startup_runtime_configuration(
+        worker_process,
+        health_snapshot,
+        is_ready,
+        model_load_deadline,
+        active_request,
+        performance_log,
+        completion_log,
+        model_load_timeout,
+    )
+    .await?;
     // REST validates model IDs, but direct WorkerHandle callers share this
     // boundary and therefore still need the empty-worker guard.
     let loaded_model_id = health_snapshot
