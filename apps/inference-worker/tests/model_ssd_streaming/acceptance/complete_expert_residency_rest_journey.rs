@@ -114,6 +114,11 @@ async fn run_complete_expert_residency_rest_journey() {
         final_status["serving_session"]["average_generation_tok_per_second"]
             .as_f64()
             .expect("the completed status should report average generation throughput");
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "complete-expert-residency",
+        &isolated_worker_home,
+        &final_status,
+    );
     stop_real_model_rest_server(real_model_rest_server).await;
     assert_eq!(
         final_status["expert_memory_mode"].as_str(),

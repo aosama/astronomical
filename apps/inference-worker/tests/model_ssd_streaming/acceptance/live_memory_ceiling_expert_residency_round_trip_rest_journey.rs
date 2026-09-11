@@ -349,6 +349,11 @@ async fn run_residency_round_trip() {
     )
     .await;
     let first_status = wait_for_idle_status(server_address, "turn_1_finalization").await;
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "live-memory-ceiling-round-trip",
+        isolated_worker_home.path(),
+        &first_status,
+    );
     assert_streaming_status(&first_status, INITIAL_MLX_MEMORY_CEILING_BYTES);
     let first_evidence = read_generation_evidence(
         isolated_worker_home.path(),
