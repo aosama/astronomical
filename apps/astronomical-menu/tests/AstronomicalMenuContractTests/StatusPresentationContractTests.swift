@@ -71,6 +71,9 @@ final class StatusPresentationContractTests: XCTestCase {
       (MlxMemoryPalette.modelCore, 86, 180, 233),
       (MlxMemoryPalette.contextState, 240, 228, 66),
       (MlxMemoryPalette.runtimeWork, 167, 139, 250),
+      (MlxMemoryPalette.recoverableExperts, 0, 158, 115),
+      (MlxMemoryPalette.reservedContextGrowth, 204, 121, 167),
+      (MlxMemoryPalette.reservedActivations, 213, 94, 0),
     ]
 
     for (paletteColor, expectedRed, expectedGreen, expectedBlue) in expectedColorComponents {
@@ -102,6 +105,22 @@ final class StatusPresentationContractTests: XCTestCase {
       MlxMemoryLegendItem.available.explanationText,
       "Calculated capacity below this Mac's MLX ceiling. It is not free RAM; macOS memory pressure and temporary work can reduce what is safely usable."
     )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.recoverableExperts.explanationText,
+      "Expert budget the ceiling already granted that warming has not filled. This is the only unused slice a residency change can still spend."
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.reservedContextGrowth.explanationText,
+      "Held so conversation state can grow. Spending it on expert weights invites eviction mid-request."
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.reservedActivations.explanationText,
+      "Held for temporary decode and prefill workspace, including one expert page. It is a promise, not idle RAM."
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.unexplainedHeadroom.explanationText,
+      "Unused capacity with no named owner yet. The engine reports this instead of folding it into a reserved bucket."
+    )
   }
 
   func test_should_name_each_mlx_memory_explanation_control() {
@@ -113,6 +132,18 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(
       MlxMemoryLegendItem.available.infoButtonAccessibilityLabel,
       "Explain Nominal MLX headroom"
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.recoverableExperts.infoButtonAccessibilityLabel,
+      "Explain Recoverable experts"
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.reservedContextGrowth.infoButtonAccessibilityLabel,
+      "Explain Held for context"
+    )
+    XCTAssertEqual(
+      MlxMemoryLegendItem.ownerOverrun.infoButtonAccessibilityLabel,
+      "Explain Owner overrun"
     )
   }
 

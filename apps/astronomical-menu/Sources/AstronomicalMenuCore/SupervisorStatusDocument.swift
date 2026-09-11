@@ -41,6 +41,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     let modelCorePayloadBytes: UInt64
     let contextStatePayloadBytes: UInt64
     let speculativePrefillDraftMemoryBytes: UInt64
+    let memoryCeilingUtilization: MlxMemoryCeilingUtilization?
 
     enum CodingKeys: String, CodingKey {
       case source
@@ -51,6 +52,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
       case modelCorePayloadBytes = "model_core_payload_bytes"
       case contextStatePayloadBytes = "context_state_payload_bytes"
       case speculativePrefillDraftMemoryBytes = "speculative_prefill_draft_memory_bytes"
+      case memoryCeilingUtilization = "memory_ceiling_utilization"
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +68,9 @@ struct SupervisorStatusDocument: Codable, Equatable {
         try container.decode(UInt64.self, forKey: .contextStatePayloadBytes)
       speculativePrefillDraftMemoryBytes =
         try container.decodeIfPresent(UInt64.self, forKey: .speculativePrefillDraftMemoryBytes) ?? 0
+      memoryCeilingUtilization =
+        try container.decodeIfPresent(
+          MlxMemoryCeilingUtilization.self, forKey: .memoryCeilingUtilization)
     }
   }
   struct ServingSession: Codable, Equatable {
@@ -375,6 +380,12 @@ struct SupervisorStatusDocument: Codable, Equatable {
         mlxMemoryActiveBytes)
     )
   }
+  var mlxHeadroomSplit: MlxHeadroomSplit {
+    MlxHeadroomSplit.from(
+      utilization: mlxMemorySnapshot?.memoryCeilingUtilization,
+      availableByteCount: mlxMemoryBreakdown.availableByteCount
+    )
+  }
   var sessionTitle: String {
     let requestCount = servingSession.completedRequestCount
     return
@@ -430,7 +441,7 @@ extension UInt64 {
     return didOverflow ? UInt64.max : summedTokenCount
   }
 
-  fileprivate func saturatingSubtracting(_ byteCount: UInt64) -> UInt64 {
+  func saturatingSubtracting(_ byteCount: UInt64) -> UInt64 {
     self >= byteCount ? self - byteCount : 0
   }
 }
