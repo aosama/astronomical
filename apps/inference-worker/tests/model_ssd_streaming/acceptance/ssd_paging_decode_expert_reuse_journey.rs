@@ -21,6 +21,14 @@
 
 use std::{fs, path::Path};
 
+use super::ssd_paging_decode_expert_reuse_journey::support::{
+    decode_streamed_layer_indices, generation_attribution_counter,
+    generation_attribution_report_count, generation_expert_source_read_bytes, log_status_progress,
+    preserve_memory_utilization_evidence, record_expert_payload_increase,
+};
+
+mod support;
+
 use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -276,6 +284,41 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "the utilization identity must close with no residual; unused={memory_unused_headroom_bytes} named={named_headroom_bytes} unexplained={memory_unexplained_headroom_bytes}"
     );
 
+    // --- Measured assertion 7: the status document carries the same split the
+    // attribution counters do (issue #510 observability parity) ---
+    let status_utilization =
+        &memory_evidence.final_status["mlx_memory_snapshot"]["memory_ceiling_utilization"];
+    let status_unused_headroom_bytes = status_utilization["unused_headroom_bytes"]
+        .as_u64()
+        .expect("the finalized status must publish the utilization decomposition (issue #510)");
+    let status_named_bytes = [
+        "reserved_model_core_slack_bytes",
+        "reserved_context_growth_bytes",
+        "reserved_activation_and_workspace_bytes",
+        "unseated_expert_entitlement_bytes",
+    ]
+    .into_iter()
+    .map(|field| status_utilization[field].as_u64().unwrap_or(0))
+    .sum::<u64>();
+    let status_unexplained_bytes = status_utilization["unexplained_headroom_bytes"]
+        .as_u64()
+        .unwrap_or(u64::MAX);
+    let status_owner_overrun_bytes = status_utilization["owner_overrun_bytes"]
+        .as_u64()
+        .unwrap_or(u64::MAX);
+    assert_eq!(
+        status_unexplained_bytes, 0,
+        "the status-published decomposition must close with no residual: {status_utilization}"
+    );
+    assert_eq!(
+        status_owner_overrun_bytes, 0,
+        "the status-published decomposition must report no owner overrun: {status_utilization}"
+    );
+    assert!(
+        status_named_bytes <= status_unused_headroom_bytes,
+        "status-published named owners must not overrun the headroom: unused={status_unused_headroom_bytes} named={status_named_bytes}"
+    );
+
     // --- Structural assertion 7: exactly one generation attribution report ---
     assert_eq!(
         generation_attribution_report_count(isolated_worker_home.path()),
@@ -336,102 +379,53 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         retained_expert_payload_increments,
         completed_stream.model_text.len(),
     );
+    preserve_memory_utilization_evidence(
+        isolated_worker_home.path(),
+        &memory_evidence.final_status,
+        &[
+            (
+                "memory_ceiling_utilization_ceiling_bytes",
+                memory_ceiling_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_active_bytes",
+                memory_active_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_unused_headroom_bytes",
+                memory_unused_headroom_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_reserved_model_core_slack_bytes",
+                memory_reserved_model_core_slack_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_reserved_context_growth_bytes",
+                memory_reserved_context_growth_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_reserved_activation_and_workspace_bytes",
+                memory_reserved_activation_and_workspace_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_unseated_expert_entitlement_bytes",
+                memory_unseated_expert_entitlement_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_unexplained_headroom_bytes",
+                memory_unexplained_headroom_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_owner_overrun_bytes",
+                memory_owner_overrun_bytes,
+            ),
+        ],
+    );
 }
 
-fn generation_attribution_counter(isolated_worker_home: &Path, counter_identifier: &str) -> u64 {
-    let attribution_log_path = isolated_worker_home
-        .join(".astronomical-dev")
-        .join("logs")
-        .join("performance-attribution.jsonl");
-    fs::read_to_string(attribution_log_path)
-        .expect("the completed request should flush performance attribution")
-        .lines()
-        .filter_map(|json_line| serde_json::from_str::<Value>(json_line).ok())
-        .filter(|attribution_report| attribution_report["report_kind"] == "generation")
-        .flat_map(|attribution_report| {
-            attribution_report["counters"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default()
-        })
-        .filter(|counter_report| counter_report["counter"] == counter_identifier)
-        .filter_map(|counter_report| counter_report["amount"].as_u64())
-        .sum()
-}
-
-fn generation_attribution_report_count(isolated_worker_home: &Path) -> usize {
-    let attribution_log_path = isolated_worker_home
-        .join(".astronomical-dev")
-        .join("logs")
-        .join("performance-attribution.jsonl");
-    fs::read_to_string(attribution_log_path)
-        .expect("the completed request should flush performance attribution")
-        .lines()
-        .filter_map(|json_line| serde_json::from_str::<Value>(json_line).ok())
-        .filter(|attribution_report| attribution_report["report_kind"] == "generation")
-        .count()
-}
-
-fn decode_streamed_layer_indices(isolated_worker_home: &Path) -> std::collections::BTreeSet<usize> {
-    isolated_worker_log_lines(isolated_worker_home)
-        .into_iter()
-        .filter(|log_line| {
-            log_line.contains("Rust expert layer streaming completed")
-                && !log_line.contains("streamed_expert_count=256")
-        })
-        .filter_map(|log_line| {
-            log_line
-                .split_whitespace()
-                .find_map(|field| field.strip_prefix("layer_index="))
-                .and_then(|layer_index| layer_index.parse::<usize>().ok())
-        })
-        .collect()
-}
-
-fn generation_expert_source_read_bytes(isolated_worker_home: &Path) -> u64 {
-    let attribution_log_path = isolated_worker_home
-        .join(".astronomical-dev")
-        .join("logs")
-        .join("performance-attribution.jsonl");
-    let attribution_log = fs::read_to_string(attribution_log_path)
-        .expect("the paging acceptance journey should write performance attribution");
-    attribution_log
-        .lines()
-        .filter_map(|json_line| serde_json::from_str::<Value>(json_line).ok())
-        .filter(|attribution_report| attribution_report["report_kind"] == "generation")
-        .filter_map(|attribution_report| {
-            attribution_report["counters"]
-                .as_array()
-                .map(|counters| counters.to_owned())
-        })
-        .flatten()
-        .filter(|counter_report| counter_report["counter"] == "positional_file_read_byte_count")
-        .filter_map(|counter_report| counter_report["amount"].as_u64())
-        .sum()
-}
-
-fn isolated_worker_log_lines(isolated_worker_home: &Path) -> Vec<String> {
-    let logging_directory = isolated_worker_home.join(".astronomical-dev").join("logs");
-    let logging_entries = fs::read_dir(logging_directory)
-        .expect("the paging acceptance journey should create its logging directory");
-    let mut log_lines = Vec::new();
-    for logging_entry in logging_entries {
-        let log_path = logging_entry
-            .expect("the isolated log entry should be readable")
-            .path();
-        if log_path.is_file() {
-            let log_content = fs::read_to_string(&log_path).unwrap_or_else(|log_read_error| {
-                panic!(
-                    "{} should be readable: {log_read_error}",
-                    log_path.display()
-                )
-            });
-            log_lines.extend(log_content.lines().map(str::to_owned));
-        }
-    }
-    log_lines
-}
-
+/// Writes the utilization decomposition and attribution counters into evidence
+/// that survives the run (issue #510), so runs can be compared later instead of
+/// the numbers living only in this test's stdout.
 struct ProgressiveExpertMemoryEvidence {
     retained_expert_payload_bytes: Vec<u64>,
     final_status: Value,
@@ -466,54 +460,6 @@ async fn observe_ssd_paging_decode_expert_reuse(
         }
         assert!(Instant::now() < deadline);
         sleep(Duration::from_millis(100)).await;
-    }
-}
-
-fn log_status_progress(status_document: &Value) {
-    let phase = status_document["progress"]["phase"]
-        .as_str()
-        .unwrap_or("idle");
-    let processed_tokens = status_document["progress"]["processed_tokens"]
-        .as_u64()
-        .unwrap_or(0);
-    let total_tokens = status_document["progress"]["total_tokens"]
-        .as_u64()
-        .unwrap_or(0);
-    let elapsed_millis = status_document["progress"]["elapsed_ms"]
-        .as_u64()
-        .unwrap_or(0);
-    let observed_tokens_per_second = if elapsed_millis == 0 {
-        0.0
-    } else {
-        processed_tokens as f64 * 1_000.0 / elapsed_millis as f64
-    };
-    let expert_payload_bytes = status_document["mlx_memory_snapshot"]["expert_payload_bytes"]
-        .as_u64()
-        .unwrap_or(0);
-    eprintln!(
-        "[ssd-paging-decode-expert-reuse] status=progress phase={phase} processed_tokens={processed_tokens} total_tokens={total_tokens} elapsed_seconds={:.3} observed_tokens_per_second={observed_tokens_per_second:.2} expert_payload_bytes={expert_payload_bytes}",
-        elapsed_millis as f64 / 1_000.0,
-    );
-}
-
-fn record_expert_payload_increase(
-    status_document: &Value,
-    retained_expert_payload_bytes: &mut Vec<u64>,
-) {
-    let expert_payload_bytes = status_document["mlx_memory_snapshot"]["expert_payload_bytes"]
-        .as_u64()
-        .unwrap_or(0);
-    let largest_recorded_expert_payload_bytes = retained_expert_payload_bytes
-        .iter()
-        .copied()
-        .max()
-        .unwrap_or(0);
-    if expert_payload_bytes > largest_recorded_expert_payload_bytes {
-        retained_expert_payload_bytes.push(expert_payload_bytes);
-        eprintln!(
-            "[ssd-paging-decode-expert-reuse] status=progress processed_tokens={} expert_payload_bytes={expert_payload_bytes}",
-            status_document["progress"]["processed_tokens"]
-        );
     }
 }
 

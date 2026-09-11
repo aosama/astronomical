@@ -453,6 +453,7 @@ async fn should_expose_mlx_memory_snapshot_and_serving_session_in_status_for_the
         model_core_payload_bytes: 4_000,
         context_state_payload_bytes: 1_000,
         speculative_prefill_draft_memory_bytes: 5_000,
+        memory_ceiling_utilization: None,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
     let response = application

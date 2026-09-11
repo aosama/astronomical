@@ -8,6 +8,8 @@
 
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
+use crate::memory::MemoryCeilingUtilization;
+
 /// Reconciled ownership view of one MLX active-memory measurement.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MlxActiveMemoryBreakdown {
@@ -91,6 +93,10 @@ pub struct MlxMemoryTelemetry {
     /// Sparse-expert ownership captured at the same instant as the measurement,
     /// so a published snapshot can never pair with a stale residency claim.
     pub expert_residency_telemetry: Option<crate::ExpertResidencyTelemetry>,
+    /// Reason-tagged split of the ceiling's unused headroom at this instant
+    /// (issue #510). `None` when the owner that composes the budget split did
+    /// not participate in this measurement, for example image engines.
+    pub memory_ceiling_utilization: Option<MemoryCeilingUtilization>,
 }
 
 impl MlxMemoryTelemetry {
@@ -107,7 +113,18 @@ impl MlxMemoryTelemetry {
             peak_memory_bytes,
             active_memory_breakdown,
             expert_residency_telemetry: None,
+            memory_ceiling_utilization: None,
         }
+    }
+
+    /// Attaches the ceiling-utilization split observed at this measurement instant.
+    #[must_use]
+    pub const fn with_memory_ceiling_utilization(
+        mut self,
+        memory_ceiling_utilization: MemoryCeilingUtilization,
+    ) -> Self {
+        self.memory_ceiling_utilization = Some(memory_ceiling_utilization);
+        self
     }
 
     /// Attaches the sparse-expert ownership observed at this measurement instant.

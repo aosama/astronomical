@@ -293,6 +293,7 @@ fn finalized_image_memory_snapshot() -> WorkerMlxMemorySnapshot {
         model_core_payload_bytes: 0,
         context_state_payload_bytes: 0,
         speculative_prefill_draft_memory_bytes: 0,
+        memory_ceiling_utilization: None,
     }
 }
 

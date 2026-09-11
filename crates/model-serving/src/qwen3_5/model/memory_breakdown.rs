@@ -87,6 +87,28 @@ impl Qwen3_5Model {
         )
     }
 
+    /// Composes the ceiling-utilization split for one measured instant (issue #510).
+    ///
+    /// The budget owner is the single source of the reserve arithmetic, so the
+    /// published split and the engine's own admission decisions can never
+    /// drift apart. Callers pass the breakdown reconciled from the same
+    /// measurement, keeping every term pinned to one instant.
+    pub(crate) fn memory_ceiling_utilization_for_breakdown(
+        &self,
+        phase: crate::MemoryPhase,
+        context_token_count: u64,
+        mlx_active_memory_bytes: u64,
+        active_breakdown: MlxActiveMemoryBreakdown,
+    ) -> MemoryCeilingUtilization {
+        MemoryCeilingUtilization::compose(
+            self.mlx_ram_budget
+                .borrow()
+                .plan(phase, context_token_count, 0),
+            mlx_active_memory_bytes,
+            active_breakdown,
+        )
+    }
+
     /// Records why part of the MLX ceiling is unused at one decode step (issue #507).
     ///
     /// Only the step with the largest unused headroom is kept, and all terms are
@@ -109,10 +131,9 @@ impl Qwen3_5Model {
             mlx_active_memory_bytes,
             0,
         );
-        let utilization = MemoryCeilingUtilization::compose(
-            self.mlx_ram_budget
-                .borrow()
-                .plan(phase, context_token_count, 0),
+        let utilization = self.memory_ceiling_utilization_for_breakdown(
+            phase,
+            context_token_count,
             mlx_active_memory_bytes,
             active_breakdown,
         );
