@@ -1,6 +1,9 @@
 use astronomical_runtime_integration::MlxArray;
 
 use crate::MlxActiveMemoryBreakdown;
+use crate::PerformanceAttribution;
+use crate::PerformanceCounter;
+use crate::memory::MemoryCeilingUtilization;
 
 use super::{Qwen3_5Model, Qwen3_5VisionModel, RequestDecoderStateStack};
 
@@ -82,6 +85,82 @@ impl Qwen3_5Model {
             context_state_payload_bytes,
             draft_model_payload_bytes,
         )
+    }
+
+    /// Records why part of the MLX ceiling is unused at one decode step (issue #507).
+    ///
+    /// Only the step with the largest unused headroom is kept, and all terms are
+    /// recorded together from that same step. Recording each term as its own
+    /// maximum would mix terms from different steps and break the identity the
+    /// acceptance journey asserts. `record_maximum_counter` alone cannot express
+    /// that, so the peak is read back before re-recording the whole split.
+    pub(crate) fn record_memory_ceiling_utilization(
+        &self,
+        phase: crate::MemoryPhase,
+        context_token_count: u64,
+        request_decoder_state: &RequestDecoderStateStack,
+        additional_context_state_payload_bytes: u64,
+        mlx_active_memory_bytes: u64,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        let active_breakdown = self.active_memory_breakdown(
+            request_decoder_state,
+            additional_context_state_payload_bytes,
+            mlx_active_memory_bytes,
+            0,
+        );
+        let utilization = MemoryCeilingUtilization::compose(
+            self.mlx_ram_budget
+                .borrow()
+                .plan(phase, context_token_count, 0),
+            mlx_active_memory_bytes,
+            active_breakdown,
+        );
+        let previous_peak_unused_headroom_bytes = performance_attribution
+            .counter_value(PerformanceCounter::MemoryCeilingUtilizationUnusedHeadroomBytes);
+        if utilization.unused_headroom_bytes < previous_peak_unused_headroom_bytes {
+            return;
+        }
+        for (counter, amount) in [
+            (
+                PerformanceCounter::MemoryCeilingUtilizationCeilingBytes,
+                utilization.mlx_active_memory_ceiling_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationActiveBytes,
+                utilization.active_memory_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationUnusedHeadroomBytes,
+                utilization.unused_headroom_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationReservedModelCoreSlackBytes,
+                utilization.reserved_model_core_slack_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationReservedContextGrowthBytes,
+                utilization.reserved_context_growth_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationReservedActivationAndWorkspaceBytes,
+                utilization.reserved_activation_and_workspace_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationUnseatedExpertEntitlementBytes,
+                utilization.unseated_expert_entitlement_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationUnexplainedHeadroomBytes,
+                utilization.unexplained_headroom_bytes,
+            ),
+            (
+                PerformanceCounter::MemoryCeilingUtilizationOwnerOverrunBytes,
+                utilization.owner_overrun_bytes,
+            ),
+        ] {
+            performance_attribution.record_maximum_counter(counter, amount);
+        }
     }
 
     fn active_memory_breakdown_with_context_state_payload_bytes(

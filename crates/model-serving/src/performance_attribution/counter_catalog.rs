@@ -112,6 +112,27 @@ pub enum PerformanceCounter {
     /// Issue #339 drives this to zero whenever prefill already seated the
     /// layers the decode plan would otherwise re-read.
     ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
+    /// Peak MLX active-memory ceiling observed during decode (issue #507).
+    MemoryCeilingUtilizationCeilingBytes,
+    /// Active memory at the same decode step as the utilization split.
+    MemoryCeilingUtilizationActiveBytes,
+    /// Ceiling minus active at that step: the headroom a reader sees idle.
+    MemoryCeilingUtilizationUnusedHeadroomBytes,
+    /// Model-core reserve the loaded core did not occupy at that step.
+    MemoryCeilingUtilizationReservedModelCoreSlackBytes,
+    /// Context-window reserve persistent request state did not occupy.
+    MemoryCeilingUtilizationReservedContextGrowthBytes,
+    /// Activation workspace, stream slot, and other fixed reserves.
+    MemoryCeilingUtilizationReservedActivationAndWorkspaceBytes,
+    /// Expert entitlement granted but never filled by warming: the recoverable
+    /// part of the headroom, and the only part a residency change should target.
+    MemoryCeilingUtilizationUnseatedExpertEntitlementBytes,
+    /// Headroom with no named owner. A non-trivial value means an unexplained
+    /// decision point exists, which is why it is reported rather than absorbed.
+    MemoryCeilingUtilizationUnexplainedHeadroomBytes,
+    /// Headroom a named owner consumed beyond its reserve, which clamped terms
+    /// would otherwise hide.
+    MemoryCeilingUtilizationOwnerOverrunBytes,
     MtpOperationalFallbackCount,
 }
 
@@ -213,6 +234,15 @@ impl PerformanceCounter {
         Self::MtpCancellationWithQueuedStateCount,
         Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
         Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
+        Self::MemoryCeilingUtilizationCeilingBytes,
+        Self::MemoryCeilingUtilizationActiveBytes,
+        Self::MemoryCeilingUtilizationUnusedHeadroomBytes,
+        Self::MemoryCeilingUtilizationReservedModelCoreSlackBytes,
+        Self::MemoryCeilingUtilizationReservedContextGrowthBytes,
+        Self::MemoryCeilingUtilizationReservedActivationAndWorkspaceBytes,
+        Self::MemoryCeilingUtilizationUnseatedExpertEntitlementBytes,
+        Self::MemoryCeilingUtilizationUnexplainedHeadroomBytes,
+        Self::MemoryCeilingUtilizationOwnerOverrunBytes,
         Self::MtpOperationalFallbackCount,
     ];
 
@@ -406,6 +436,31 @@ impl PerformanceCounter {
             }
             Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes => {
                 "expert_residency_decode_seating_streamed_complete_payload_bytes"
+            }
+            Self::MemoryCeilingUtilizationCeilingBytes => {
+                "memory_ceiling_utilization_ceiling_bytes"
+            }
+            Self::MemoryCeilingUtilizationActiveBytes => "memory_ceiling_utilization_active_bytes",
+            Self::MemoryCeilingUtilizationUnusedHeadroomBytes => {
+                "memory_ceiling_utilization_unused_headroom_bytes"
+            }
+            Self::MemoryCeilingUtilizationReservedModelCoreSlackBytes => {
+                "memory_ceiling_utilization_reserved_model_core_slack_bytes"
+            }
+            Self::MemoryCeilingUtilizationReservedContextGrowthBytes => {
+                "memory_ceiling_utilization_reserved_context_growth_bytes"
+            }
+            Self::MemoryCeilingUtilizationReservedActivationAndWorkspaceBytes => {
+                "memory_ceiling_utilization_reserved_activation_and_workspace_bytes"
+            }
+            Self::MemoryCeilingUtilizationUnseatedExpertEntitlementBytes => {
+                "memory_ceiling_utilization_unseated_expert_entitlement_bytes"
+            }
+            Self::MemoryCeilingUtilizationUnexplainedHeadroomBytes => {
+                "memory_ceiling_utilization_unexplained_headroom_bytes"
+            }
+            Self::MemoryCeilingUtilizationOwnerOverrunBytes => {
+                "memory_ceiling_utilization_owner_overrun_bytes"
             }
             Self::MtpOperationalFallbackCount => "mtp_operational_fallback_count",
         }

@@ -59,6 +59,7 @@ mod reclamation;
 mod recovery;
 mod residency;
 mod telemetry;
+mod utilization;
 mod vocabulary;
 
 pub use admission::{
@@ -113,4 +114,5 @@ pub use residency::{
     should_enact_planned_expert_release,
 };
 pub use telemetry::{MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+pub use utilization::MemoryCeilingUtilization;
 pub use vocabulary::{MemoryAdmissionDecision, MemoryBoundary};

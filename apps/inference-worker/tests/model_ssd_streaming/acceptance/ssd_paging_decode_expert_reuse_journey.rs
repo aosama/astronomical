@@ -222,7 +222,61 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "decode throughput must be a positive finite measurement"
     );
 
-    // --- Structural assertion 6: exactly one generation attribution report ---
+    // --- Measured assertion 6: the unused ceiling has a named owner (issue #507) ---
+    let memory_ceiling_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_ceiling_bytes",
+    );
+    let memory_active_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_active_bytes",
+    );
+    let memory_unused_headroom_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_unused_headroom_bytes",
+    );
+    let memory_reserved_model_core_slack_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_reserved_model_core_slack_bytes",
+    );
+    let memory_reserved_context_growth_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_reserved_context_growth_bytes",
+    );
+    let memory_reserved_activation_and_workspace_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_reserved_activation_and_workspace_bytes",
+    );
+    let memory_unseated_expert_entitlement_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_unseated_expert_entitlement_bytes",
+    );
+    let memory_unexplained_headroom_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_unexplained_headroom_bytes",
+    );
+    let memory_owner_overrun_bytes = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "memory_ceiling_utilization_owner_overrun_bytes",
+    );
+    assert!(
+        memory_unused_headroom_bytes > 0,
+        "decode must observe unused headroom to explain; memory_unused_headroom_bytes={memory_unused_headroom_bytes}"
+    );
+    let named_headroom_bytes = memory_reserved_model_core_slack_bytes
+        + memory_reserved_context_growth_bytes
+        + memory_reserved_activation_and_workspace_bytes
+        + memory_unseated_expert_entitlement_bytes;
+    assert!(
+        memory_unexplained_headroom_bytes * 100 <= memory_unused_headroom_bytes,
+        "every unused byte must have a named owner or surface as a small residual; unused={memory_unused_headroom_bytes} named={named_headroom_bytes} unexplained={memory_unexplained_headroom_bytes}"
+    );
+    assert_eq!(
+        memory_unexplained_headroom_bytes, 0,
+        "the utilization identity must close with no residual; unused={memory_unused_headroom_bytes} named={named_headroom_bytes} unexplained={memory_unexplained_headroom_bytes}"
+    );
+
+    // --- Structural assertion 7: exactly one generation attribution report ---
     assert_eq!(
         generation_attribution_report_count(isolated_worker_home.path()),
         1,
@@ -250,6 +304,15 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          hot_expert_route_retained_assignments={hot_expert_route_retained_assignment_count} \
          hot_expert_route_missing_assignments={hot_expert_route_missing_assignment_count} \
          hot_expert_mixed_routes={hot_expert_mixed_route_count} \
+         mem_ceiling_gb={:.2} \
+         mem_active_gb={:.2} \
+         mem_unused_gb={:.2} \
+         mem_reserved_core_slack_gb={:.2} \
+         mem_reserved_context_gb={:.2} \
+         mem_reserved_workspace_gb={:.2} \
+         mem_unseated_entitlement_gb={:.2} \
+         mem_unexplained_gb={:.2} \
+         mem_owner_overrun_gb={:.2} \
          decode_streamed_layer_count={} \
          retained_payload_increments={} \
          average_prefill_tok_per_second={average_prefill_tokens_per_second:.2} \
@@ -260,6 +323,15 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         final_active_memory_bytes as f64 / 1e9,
         peak_memory_bytes as f64 / 1e9,
         expert_source_read_bytes as f64 / 1e9,
+        memory_ceiling_bytes as f64 / 1e9,
+        memory_active_bytes as f64 / 1e9,
+        memory_unused_headroom_bytes as f64 / 1e9,
+        memory_reserved_model_core_slack_bytes as f64 / 1e9,
+        memory_reserved_context_growth_bytes as f64 / 1e9,
+        memory_reserved_activation_and_workspace_bytes as f64 / 1e9,
+        memory_unseated_expert_entitlement_bytes as f64 / 1e9,
+        memory_unexplained_headroom_bytes as f64 / 1e9,
+        memory_owner_overrun_bytes as f64 / 1e9,
         decode_streamed_layer_indices.len(),
         retained_expert_payload_increments,
         completed_stream.model_text.len(),
