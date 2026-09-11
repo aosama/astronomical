@@ -452,5 +452,18 @@ pub(crate) fn worker_memory_snapshot(
         context_state_payload_bytes: mlx_active_memory_breakdown.context_state_payload_bytes,
         speculative_prefill_draft_memory_bytes: mlx_active_memory_breakdown
             .speculative_prefill_draft_memory_bytes,
+        memory_ceiling_utilization: mlx_memory_telemetry.memory_ceiling_utilization.map(
+            |utilization| astronomical_ipc_protocol::WorkerMemoryCeilingUtilizationSnapshot {
+                unused_headroom_bytes: utilization.unused_headroom_bytes,
+                reserved_model_core_slack_bytes: utilization.reserved_model_core_slack_bytes,
+                reserved_context_growth_bytes: utilization.reserved_context_growth_bytes,
+                reserved_activation_and_workspace_bytes: utilization
+                    .reserved_activation_and_workspace_bytes,
+                unseated_expert_entitlement_bytes: utilization.unseated_expert_entitlement_bytes,
+                speculative_draft_payload_bytes: utilization.speculative_draft_payload_bytes,
+                unexplained_headroom_bytes: utilization.unexplained_headroom_bytes,
+                owner_overrun_bytes: utilization.owner_overrun_bytes,
+            },
+        ),
     }
 }

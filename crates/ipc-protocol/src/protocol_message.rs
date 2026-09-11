@@ -180,6 +180,24 @@ pub struct WorkerMlxMemorySnapshot {
     pub context_state_payload_bytes: u64,
     /// Complete active MLX memory attributed to the request-scoped drafter phase.
     pub speculative_prefill_draft_memory_bytes: u64,
+    /// Reason-tagged split of the ceiling's unused headroom at this instant
+    /// (issue #510), composed by the same budget owner the engine acts on.
+    /// `None` from engines without a composed RAM budget.
+    #[serde(default)]
+    pub memory_ceiling_utilization: Option<WorkerMemoryCeilingUtilizationSnapshot>,
+}
+
+/// One utilization decomposition published beside its memory snapshot.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerMemoryCeilingUtilizationSnapshot {
+    pub unused_headroom_bytes: u64,
+    pub reserved_model_core_slack_bytes: u64,
+    pub reserved_context_growth_bytes: u64,
+    pub reserved_activation_and_workspace_bytes: u64,
+    pub unseated_expert_entitlement_bytes: u64,
+    pub speculative_draft_payload_bytes: u64,
+    pub unexplained_headroom_bytes: u64,
+    pub owner_overrun_bytes: u64,
 }
 
 /// A command sent from the HTTP process to its one inference worker.

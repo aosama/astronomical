@@ -340,6 +340,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     model_core_payload_bytes: 3_000,
                                     context_state_payload_bytes: 2_000,
                                     speculative_prefill_draft_memory_bytes: 0,
+                                    memory_ceiling_utilization: None,
                                 }),
                                 expert_residency: None,
                                 speculative_prefill_draft_memory_snapshot: None,
@@ -377,6 +378,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     model_core_payload_bytes: 3_000,
                                     context_state_payload_bytes: 0,
                                     speculative_prefill_draft_memory_bytes: 0,
+                                    memory_ceiling_utilization: None,
                                 }),
                             })
                             .await?;
@@ -526,5 +528,6 @@ fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMlxMemorySnap
         model_core_payload_bytes: 10_000,
         context_state_payload_bytes: 5_000,
         speculative_prefill_draft_memory_bytes: 0,
+        memory_ceiling_utilization: None,
     }
 }

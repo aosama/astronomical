@@ -166,6 +166,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     model_core_payload_bytes: 4_000,
                     context_state_payload_bytes: 2_000,
                     speculative_prefill_draft_memory_bytes: 0,
+                    memory_ceiling_utilization: None,
                 })
             );
             assert_eq!(
@@ -179,6 +180,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     model_core_payload_bytes: 3_000,
                     context_state_payload_bytes: 1_000,
                     speculative_prefill_draft_memory_bytes: 14_000,
+                    memory_ceiling_utilization: None,
                 })
             );
         }
