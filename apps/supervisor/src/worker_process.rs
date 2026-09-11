@@ -66,6 +66,7 @@ pub struct WorkerProcess {
     command_write_timeout: Duration,
     launch_executable_path: PathBuf,
     launch_startup_configuration: Option<WorkerStartupConfiguration>,
+    startup_runtime_configuration_applied: bool,
     shutdown_timeout: Duration,
     stderr_drain_task: Option<JoinHandle<()>>,
     worker_stderr_tail: WorkerStderrTail,
@@ -204,6 +205,7 @@ impl WorkerProcess {
             command_write_timeout,
             launch_executable_path,
             launch_startup_configuration,
+            startup_runtime_configuration_applied: false,
             shutdown_timeout,
             stderr_drain_task: Some(stderr_drain_task),
             worker_stderr_tail,
@@ -229,6 +231,14 @@ impl WorkerProcess {
         self.launch_startup_configuration
             .as_ref()
             .map(|configuration| configuration.configuration_generation.as_str())
+    }
+
+    pub(crate) fn startup_runtime_configuration_applied(&self) -> bool {
+        self.startup_runtime_configuration_applied
+    }
+
+    pub(crate) fn mark_startup_runtime_configuration_applied(&mut self) {
+        self.startup_runtime_configuration_applied = true;
     }
 
     pub async fn start_generation(

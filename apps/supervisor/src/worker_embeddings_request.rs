@@ -14,6 +14,7 @@ use crate::{
     worker_health::{clear_active_request_progress, publish_activity},
     worker_loop_types::{ActiveEmbeddingsGeneration, ActiveWorkerRequest},
     worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
+    worker_startup_runtime::wait_for_startup_runtime_configuration,
 };
 
 /// Bounded embeddings execution deadline; the single forward pass has no
@@ -46,6 +47,17 @@ pub(super) async fn handle_generate_embeddings_command(
         tracing::error!("received GenerateEmbeddings while another request is active");
         return Ok(());
     }
+    wait_for_startup_runtime_configuration(
+        worker_process,
+        health_snapshot,
+        is_ready,
+        model_load_deadline,
+        active_request,
+        performance_log,
+        completion_log,
+        model_load_timeout,
+    )
+    .await?;
     let loaded_model_id = health_snapshot
         .read()
         .ok()
