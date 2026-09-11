@@ -35,7 +35,7 @@ struct MlxMemoryCeilingUtilization: Codable, Equatable {
 /// unchanged. Integer scaling keeps the colored segments summing to
 /// `availableByteCount` instead of drifting from the occupancy bar.
 struct MlxHeadroomSplit: Equatable {
-  let recoverableExpertBudgetByteCount: UInt64
+  let unusedBudgetByteCount: UInt64
   let reservedContextGrowthByteCount: UInt64
   let reservedActivationByteCount: UInt64
   let reservedModelCoreSlackByteCount: UInt64
@@ -46,7 +46,7 @@ struct MlxHeadroomSplit: Equatable {
 
   static func undifferentiated(availableByteCount: UInt64) -> MlxHeadroomSplit {
     MlxHeadroomSplit(
-      recoverableExpertBudgetByteCount: 0,
+      unusedBudgetByteCount: 0,
       reservedContextGrowthByteCount: 0,
       reservedActivationByteCount: 0,
       reservedModelCoreSlackByteCount: 0,
@@ -74,7 +74,7 @@ struct MlxHeadroomSplit: Equatable {
     let allocated = allocateProportions(weights, onto: availableByteCount)
     let allocatedSum = allocated.reduce(0, +)
     return MlxHeadroomSplit(
-      recoverableExpertBudgetByteCount: allocated[0],
+      unusedBudgetByteCount: allocated[0],
       reservedContextGrowthByteCount: allocated[1],
       reservedActivationByteCount: allocated[2],
       reservedModelCoreSlackByteCount: allocated[3],
@@ -86,7 +86,7 @@ struct MlxHeadroomSplit: Equatable {
   }
 
   var paintedByteCount: UInt64 {
-    recoverableExpertBudgetByteCount
+    unusedBudgetByteCount
       + reservedContextGrowthByteCount
       + reservedActivationByteCount
       + reservedModelCoreSlackByteCount

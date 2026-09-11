@@ -8,8 +8,8 @@ enum MlxMemoryPalette {
   static let contextState = Color(.sRGB, red: 240 / 255, green: 228 / 255, blue: 66 / 255, opacity: 1)
   static let runtimeWork = Color(.sRGB, red: 167 / 255, green: 139 / 255, blue: 250 / 255, opacity: 1)
   static let available = Color.secondary.opacity(0.18)
-  /// Recoverable expert entitlement — Okabe-Ito bluish green, unused in occupancy.
-  static let recoverableExperts = Color(
+  /// Unused expert budget — Okabe-Ito bluish green, not occupancy.
+  static let unusedBudget = Color(
     .sRGB, red: 0 / 255, green: 158 / 255, blue: 115 / 255, opacity: 1)
   /// Context-growth reserve — Okabe-Ito reddish purple, distinct from live context yellow.
   static let reservedContextGrowth = Color(
@@ -29,7 +29,7 @@ enum MlxMemoryLegendItem: Equatable {
   case contextState
   case runtimeWork
   case available
-  case recoverableExperts
+  case unusedBudget
   case reservedContextGrowth
   case reservedActivations
   case reservedModelCoreSlack
@@ -44,7 +44,7 @@ enum MlxMemoryLegendItem: Equatable {
     case .contextState: return "Live context state"
     case .runtimeWork: return "Runtime work"
     case .available: return "Nominal MLX headroom"
-    case .recoverableExperts: return "Recoverable experts"
+    case .unusedBudget: return "Unused"
     case .reservedContextGrowth: return "Held for context"
     case .reservedActivations: return "Held for activations"
     case .reservedModelCoreSlack: return "Core slack"
@@ -67,8 +67,8 @@ enum MlxMemoryLegendItem: Equatable {
       return "Temporary computation work and other active MLX memory not attributed above."
     case .available:
       return "Calculated capacity below this Mac's MLX ceiling. It is not free RAM; macOS memory pressure and temporary work can reduce what is safely usable."
-    case .recoverableExperts:
-      return "Expert budget the ceiling already granted that warming has not filled. This is the only unused slice a residency change can still spend."
+    case .unusedBudget:
+      return "Unused budget the ceiling already granted for expert weights that are not in RAM. Distinct from Experts, which are weights already resident."
     case .reservedContextGrowth:
       return "Held so conversation state can grow. Spending it on expert weights invites eviction mid-request."
     case .reservedActivations:
@@ -126,8 +126,8 @@ struct MlxMemoryBreakdownBar: View {
           )
           if headroomSplit.enginePublishedTheSplit {
             memorySegment(
-              MlxMemoryPalette.recoverableExperts,
-              headroomSplit.recoverableExpertBudgetByteCount,
+              MlxMemoryPalette.unusedBudget,
+              headroomSplit.unusedBudgetByteCount,
               geometry.size.width
             )
             memorySegment(
@@ -173,9 +173,9 @@ struct MlxMemoryBreakdownBar: View {
       memoryLegendRow(.contextState, MlxMemoryPalette.contextState, breakdown.contextStatePayloadByteCount)
       if headroomSplit.enginePublishedTheSplit {
         memoryLegendRow(
-          .recoverableExperts,
-          MlxMemoryPalette.recoverableExperts,
-          headroomSplit.recoverableExpertBudgetByteCount
+          .unusedBudget,
+          MlxMemoryPalette.unusedBudget,
+          headroomSplit.unusedBudgetByteCount
         )
         memoryLegendRow(
           .reservedContextGrowth,

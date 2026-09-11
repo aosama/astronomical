@@ -8,7 +8,7 @@ final class MlxHeadroomSplitTests: XCTestCase {
 
     XCTAssertFalse(headroomSplit.enginePublishedTheSplit)
     XCTAssertEqual(headroomSplit.remainderByteCount, 5_400_000_000)
-    XCTAssertEqual(headroomSplit.recoverableExpertBudgetByteCount, 0)
+    XCTAssertEqual(headroomSplit.unusedBudgetByteCount, 0)
     XCTAssertEqual(headroomSplit.paintedByteCount, 5_400_000_000)
   }
 
@@ -30,7 +30,7 @@ final class MlxHeadroomSplitTests: XCTestCase {
     XCTAssertTrue(headroomSplit.enginePublishedTheSplit)
     XCTAssertEqual(headroomSplit.paintedByteCount, availableByteCount)
     XCTAssertEqual(
-      headroomSplit.recoverableExpertBudgetByteCount
+      headroomSplit.unusedBudgetByteCount
         + headroomSplit.reservedContextGrowthByteCount
         + headroomSplit.reservedActivationByteCount
         + headroomSplit.reservedModelCoreSlackByteCount
@@ -38,7 +38,7 @@ final class MlxHeadroomSplitTests: XCTestCase {
         + headroomSplit.remainderByteCount,
       availableByteCount
     )
-    XCTAssertGreaterThan(headroomSplit.recoverableExpertBudgetByteCount, 0)
+    XCTAssertGreaterThan(headroomSplit.unusedBudgetByteCount, 0)
     XCTAssertGreaterThan(headroomSplit.reservedContextGrowthByteCount, 0)
     XCTAssertEqual(headroomSplit.ownerOverrunByteCount, 0)
   }

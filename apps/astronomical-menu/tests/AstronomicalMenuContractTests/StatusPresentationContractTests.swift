@@ -71,7 +71,7 @@ final class StatusPresentationContractTests: XCTestCase {
       (MlxMemoryPalette.modelCore, 86, 180, 233),
       (MlxMemoryPalette.contextState, 240, 228, 66),
       (MlxMemoryPalette.runtimeWork, 167, 139, 250),
-      (MlxMemoryPalette.recoverableExperts, 0, 158, 115),
+      (MlxMemoryPalette.unusedBudget, 0, 158, 115),
       (MlxMemoryPalette.reservedContextGrowth, 204, 121, 167),
       (MlxMemoryPalette.reservedActivations, 213, 94, 0),
     ]
@@ -106,8 +106,8 @@ final class StatusPresentationContractTests: XCTestCase {
       "Calculated capacity below this Mac's MLX ceiling. It is not free RAM; macOS memory pressure and temporary work can reduce what is safely usable."
     )
     XCTAssertEqual(
-      MlxMemoryLegendItem.recoverableExperts.explanationText,
-      "Expert budget the ceiling already granted that warming has not filled. This is the only unused slice a residency change can still spend."
+      MlxMemoryLegendItem.unusedBudget.explanationText,
+      "Unused budget the ceiling already granted for expert weights that are not in RAM. Distinct from Experts, which are weights already resident."
     )
     XCTAssertEqual(
       MlxMemoryLegendItem.reservedContextGrowth.explanationText,
@@ -134,8 +134,8 @@ final class StatusPresentationContractTests: XCTestCase {
       "Explain Nominal MLX headroom"
     )
     XCTAssertEqual(
-      MlxMemoryLegendItem.recoverableExperts.infoButtonAccessibilityLabel,
-      "Explain Recoverable experts"
+      MlxMemoryLegendItem.unusedBudget.infoButtonAccessibilityLabel,
+      "Explain Unused"
     )
     XCTAssertEqual(
       MlxMemoryLegendItem.reservedContextGrowth.infoButtonAccessibilityLabel,
