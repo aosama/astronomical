@@ -8,6 +8,7 @@ function libraryFamilyLabel(family) {
     if (family === "laguna") return "Laguna";
     if (family === "flux2_klein") return "FLUX.2 Klein";
     if (family === "modernbert") return "ModernBERT";
+    if (family === "k2_horizon_mova") return "K2 Horizon MoVA";
     return family;
 }
 

@@ -7,9 +7,9 @@ use thiserror::Error;
 
 use super::DownloadPathSelection;
 
-// Version 2 extends the closed executable-family set with ModernBERT
-// embedding artifacts. There are no downstream catalog consumers, so the
-// schema moves forward without compatibility shims.
+// Version 2 is the current closed executable-family set. There are no
+// downstream catalog consumers, so the schema moves forward without
+// compatibility shims when a new executable family is offered.
 const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 2;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
 const MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT: usize = 1_024;
@@ -69,6 +69,9 @@ pub enum DownloadCatalogFamily {
     /// The wire name matches the discovery model_type, which has no underscore.
     #[serde(rename = "modernbert")]
     ModernBert,
+    /// Wire name matches discovery `model_type` (`k2_horizon_mova`, not split MoVA).
+    #[serde(rename = "k2_horizon_mova")]
+    K2HorizonMoVA,
 }
 
 impl DownloadCatalogFamily {
@@ -79,6 +82,7 @@ impl DownloadCatalogFamily {
             Self::Laguna => "laguna",
             Self::Flux2Klein => "flux2_klein",
             Self::ModernBert => "modernbert",
+            Self::K2HorizonMoVA => "k2_horizon_mova",
         }
     }
 }
