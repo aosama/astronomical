@@ -24,6 +24,7 @@ mod performance_attribution;
 mod persistent_cache;
 mod qwen3_5;
 mod qwen3_5_moe;
+mod qwen4_exp;
 mod safetensors;
 mod sampling_seed;
 mod sparse_experts;
@@ -374,6 +375,15 @@ pub use qwen3_5_moe::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_moe::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
+};
+pub use qwen4_exp::hyper_connection::{
+    GatedMixOutput, GatedResidualWeights, StreamAlgebraError, StreamMixingPlan, average_combine,
+    average_mix, gated_combine, gated_mix, grouped_rms_norm,
+};
+pub use qwen4_exp::ple::{
+    DEFAULT_NGRAM_SEED, NgramIdentityConfiguration, NgramIdentityError, NgramPlanError,
+    NgramRowIdentity, NgramVocabLayout, PLE_LAYER_PRIME, SPLITMIX_GAMMA, SPLITMIX_MULTIPLIER_1,
+    SPLITMIX_MULTIPLIER_2, head_count_for, is_prime_u64, nth_prime_after, splitmix64,
 };
 pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]
