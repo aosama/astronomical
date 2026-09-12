@@ -160,5 +160,9 @@ pub fn try_discover_model_with_id(
         }
         // Classification is intentionally broader than executable discovery.
         ModelFamily::DeepSeekV4 => None,
+        // Recognized but deliberately not executable: no engine exists yet, so
+        // the artifact stays unpublished while classification still names the
+        // family for download preflight and bounded diagnostics.
+        ModelFamily::Qwen4Exp => None,
     }
 }

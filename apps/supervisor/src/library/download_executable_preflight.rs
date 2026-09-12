@@ -129,6 +129,9 @@ impl DownloadExecutablePreflight {
             ModelFamily::DeepSeekV4 => Err(DownloadExecutablePreflightError::NotExecutable(
                 "DeepSeek-V4 artifacts are recognized but not executable".to_owned(),
             )),
+            ModelFamily::Qwen4Exp => Err(DownloadExecutablePreflightError::NotExecutable(
+                "Qwen 3.8 Flash artifacts are recognized but not executable".to_owned(),
+            )),
             // Families whose shallow rules need files on disk keep publication as their backstop.
             ModelFamily::Laguna
             | ModelFamily::K2HorizonMoVA
