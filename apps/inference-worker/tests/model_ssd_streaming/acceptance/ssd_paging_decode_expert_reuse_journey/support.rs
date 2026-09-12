@@ -178,6 +178,48 @@ pub(super) fn log_status_progress(status_document: &Value) {
     );
 }
 
+pub(super) fn assert_predictor_status_reconciles(
+    final_status: &Value,
+    top_k_hit_count: u64,
+    evaluated_expert_count: u64,
+    pages_avoided_hit_count: u64,
+    pages_avoided_opportunity_count: u64,
+) {
+    let predictor = final_status
+        .get("predictor")
+        .expect("attributed paged decode must publish predictor status");
+    assert!(predictor.is_object(), "predictor status must be an object");
+    let expected_accuracy = if evaluated_expert_count == 0 {
+        0.0
+    } else {
+        (top_k_hit_count as f64 / evaluated_expert_count as f64 * 1_000.0).round() / 10.0
+    };
+    let expected_pages = if pages_avoided_opportunity_count == 0 {
+        0.0
+    } else {
+        (pages_avoided_hit_count as f64 / pages_avoided_opportunity_count as f64 * 1_000.0).round()
+            / 10.0
+    };
+    assert_eq!(
+        predictor["runtime"], "cpu",
+        "the first predictor path is CPU"
+    );
+    assert!(
+        predictor["training_active"].is_boolean(),
+        "training_active must be a boolean"
+    );
+    assert_eq!(
+        predictor["top_k_accuracy_percent"].as_f64(),
+        Some(expected_accuracy),
+        "published accuracy must match top-k counters hits={top_k_hit_count} evaluated={evaluated_expert_count}"
+    );
+    assert_eq!(
+        predictor["pages_avoided_percent"].as_f64(),
+        Some(expected_pages),
+        "published pages-avoided must match prefetch counters hits={pages_avoided_hit_count} opportunities={pages_avoided_opportunity_count}"
+    );
+}
+
 pub(super) fn record_expert_payload_increase(
     status_document: &Value,
     retained_expert_payload_bytes: &mut Vec<u64>,

@@ -317,4 +317,7 @@ fn background_owner_trains_without_blocking_the_caller() {
         "the background trainer must consume submitted observations"
     );
     assert!(owner.evaluated_expert_count() > 0);
+    let predictor_program_status = owner.program_status();
+    assert_eq!(predictor_program_status.pages_avoided_tenths, 0);
+    assert!(predictor_program_status.top_k_accuracy_tenths <= 1_000);
 }

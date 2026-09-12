@@ -6,6 +6,7 @@ mod graph_submission_layer_interval;
 mod image_generation;
 mod minimal_protocol;
 mod persistent_prompt_cache_diagnostics;
+mod predictor_program_status;
 mod prompt_cache_clear_protocol;
 mod prompt_processing_progress_protocol;
 mod runtime_feature_configuration;

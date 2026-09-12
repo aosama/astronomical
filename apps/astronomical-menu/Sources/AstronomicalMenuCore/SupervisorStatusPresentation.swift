@@ -161,4 +161,16 @@ extension SupervisorStatusDocument {
 
   var progressCompletedUnitCount: UInt32 { progress?.completedUnitCount ?? 0 }
   var progressTotalUnitCount: UInt32 { max(1, progress?.totalUnitCount ?? 1) }
+
+  var predictorProgramTitle: String? {
+    guard let predictor else { return nil }
+    let runtimeTitle = predictor.runtime == "neural_engine" ? "Neural Engine" : "CPU"
+    let activityTitle = predictor.trainingActive ? "training" : "idle"
+    return String(
+      format: "%.1f%% accuracy · %.1f%% pages avoided · %@ · %@",
+      predictor.topKAccuracyPercent,
+      predictor.pagesAvoidedPercent,
+      runtimeTitle,
+      activityTitle)
+  }
 }
