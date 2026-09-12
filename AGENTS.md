@@ -10,29 +10,13 @@
 
 - All and any tests must have a built in timeout with a maximum of 120 seconds. Exceptions can be made for tests that deal with performance endurance tests and/or reproducing OOM issues.
 
-- Astronomical is expected to adapt to any laptop, any RAM size, any GPU wired memory limit. Do not hardwire or optimize the codebase just for this laptop that we are developing in.
+- Astronomical is expected to adapt to any laptop, any RAM size, any GPU wired memory limit. Do not hardwire or optimize the codebase just for this laptop that you are developing in.
 
 - Keep full workspace verification and formatting verification only before committing and pushing when the user asks you to commit. This codebase is slow to format check and do a full workspace/test runs.
 
 - Before every requested commit run scripts/verify-before-commit.sh; never substitute cargo test --workspace --all-targets because it runs broad integration binaries serially.
 
 - Run cargo fmt or similar commands only before committing, i.e. when the user asks you to commit then you do the cargo fmt
-
-## Public Repository And GitHub Decorum
-
-- Treat every GitHub issue, pull request, comment, release note, repository setting, and committed file as potentially permanent public material.
-
-- Write GitHub content as concise, project-owned prose in English unless the user explicitly requests another language.
-
-- GitHub issues must describe Astronomical goals, evidence, scope, constraints, and acceptance criteria. Do not publish raw agent opinions, dictation fragments, private working notes, or broad external-project audits.
-
-- Cite public documentation, model cards, standards, and upstream APIs only when they establish compatibility, provenance, or licensing.
-
-- Never publish or commit personal names, user names, email addresses, phone numbers, private repository links, local endpoints, local model inventories, credentials, tokens, or machine-specific logs unless the user explicitly approves the exact disclosure.
-
-- Before creating or editing public GitHub content, review it for local paths, personal details, credentials, stale internal terminology, and wording that suggests unapproved source reuse.
-
-- No written language should convey a negative connutation about a person, entity or a programming library.
 
 ## Local Environment Boundaries
 
@@ -42,27 +26,23 @@
 
 - Tests must use temporary directories, repository fixtures, or clearly fictional placeholder paths that cannot identify a developer workstation.
 
-- When upstream source is needed for research, discover its local location from the active environment. Refer to projects by name in repository content and never persist a personal checkout path.
-
 ## There are No Downstream Consumers or Dependencies
 
 - There are no downstream consumers or other dependant applications -- hence no need for deprication or compatibilty shims or any other techniques. Work in a fail forward fashion.
 
-## Coding Principles
+## Code File Length and Memory Measurement Units
 
 - Code files should remain around the 500 lines marker not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
-- Compiler warnings are defects. If a compile or test run you invoked emits a warning, remediate it in the same turn before moving on. There is no "I can do this later." Do not leave unused imports, dead code, visibility mismatches, or other warnings as known leftovers.
 
-## No Backward Compatibility for REST API surface
+## There is No Backward Compatibility Requirements for the REST API surface
 
-- There is no requirement for Backward compatibility for the REST API surface. There are no downstream consumers of these surfaces so compatibility is not an issue.
-- There is no requirement for backward compatibility shims.
+- There is no requirement for Backward compatibility for the REST API surface. There are no downstream consumers of these surfaces so RESTAPI backward compatibility is not a constraint.
 
 ## Prohibited Terminology: "qualification"
 
-- Self-instruction for the coding agent (Jack): the term "qualification" and all of its variants ("qualify", "qualified", "qualifier", etc.) are prohibited in this repository and in all our discourse. Never use them in code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies to the user.
-- Describe the activity with the repository's own vocabulary instead: run the acceptance journeys and check the acceptance criteria that prove a model or feature is fit for its purpose.
+- The term "qualification" and all of its variants ("qualify", "qualified", "qualifier", etc.) are prohibited in this repository and in your discourse. Never use these terms in code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies to the user.
+- Describe the activity with the repository's own vocabulary instead: run the acceptance journeys and check the acceptance criteria that proves a model or feature is fit for its purpose.
 
 ## Requirements for Performance Profiling and Attribution
 
@@ -84,4 +64,3 @@
 ## Memory Management Codebase
 
 - The package under <repo-root>/crates/model-serving/src/memory must be where all memory management code is located. Including but not limited to policies, decisions, streaming and any other memory related calculations.
-- You are encourage to discover this package and understand how memory management works.
