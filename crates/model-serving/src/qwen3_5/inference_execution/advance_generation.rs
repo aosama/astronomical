@@ -278,10 +278,9 @@ impl Qwen3_5EngineState {
                         active_request.advance_position(1)?;
                         let first_generated_token =
                             active_request.build_generated_token(model, &final_prompt_logits)?;
-                        // Issue #536: the first decode token's route history
-                        // record. Logits were sampled, so the retained router
-                        // arrays are already computed and this costs no new
-                        // graphics-processor work.
+                        // Issue #536/#542: first decode token route history.
+                        // Logits evaluation already materialized the retained
+                        // router arrays; this only copies host identifiers.
                         model.finalize_route_observation_record(
                             final_prompt_token_id,
                             &mut active_request.performance_attribution,
@@ -480,8 +479,8 @@ impl Qwen3_5EngineState {
                 .map_err(InferenceEngineError::from)?;
             active_request.advance_position(1)?;
             let next_generated_token = active_request.build_generated_token(model, &next_logits)?;
-            // Issue #536: this decode token's route history record, finalized
-            // after sampling already evaluated the forward's logits.
+            // Issue #536/#542: decode route history after sampling. Route
+            // arrays were extra roots of the logits wait.
             model.finalize_route_observation_record(
                 current_generated_token_id,
                 &mut active_request.performance_attribution,
