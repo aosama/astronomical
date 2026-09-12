@@ -2,9 +2,10 @@
 //!
 //! The capture hook runs inside the sparse mixture-of-experts forward: for a
 //! one-token decode it retains the router's selected-indices array lazily and
-//! pays no synchronization at all. The engine finalizes one record per token
-//! after the forward's logits were already evaluated, so the batched array
-//! evaluation there observes arrays the graphics processor already computed.
+//! pays no synchronization at all. Those arrays are added as extra roots of the
+//! same decode evaluation that materializes logits, so finalization only copies
+//! host identifiers. A second graphics-processor wait per token is the cost
+//! issue #542 removes.
 //!
 //! Capture is gated on attribution being enabled: a disabled report performs
 //! no retain, no allocation, and no clock read. The chain of previous-token
@@ -66,6 +67,14 @@ impl RouteObservationCollector {
         }
     }
 
+    /// Borrows pending route arrays so they can join the decode evaluation
+    /// roots without taking them from the collector.
+    pub(crate) fn pending_route_array_refs(&self) -> impl Iterator<Item = &MlxArray> {
+        self.pending_layer_route_arrays
+            .iter()
+            .filter_map(Option::as_ref)
+    }
+
     /// Takes every pending route array, leaving the collector empty for the
     /// next token.
     fn take_pending_layer_route_arrays(&mut self) -> Vec<Option<MlxArray>> {
@@ -85,9 +94,8 @@ impl Qwen3_5Model {
     /// Finalizes one route-observation record for a completed decode forward.
     ///
     /// Call this exactly once per decode token, after the token's logits were
-    /// evaluated: the retained router arrays are ancestors of those logits, so
-    /// the batched evaluation here observes already-computed arrays instead of
-    /// scheduling new graphics-processor work.
+    /// evaluated. Route arrays were extra roots of that same wait, so this
+    /// copies host identifiers and must not call `evaluate_arrays` again.
     ///
     /// Fail-open by contract: every failure logs a bounded warning and drops
     /// the pending capture rather than affecting the generation request.
@@ -149,28 +157,29 @@ impl Qwen3_5Model {
         );
     }
 
-    /// Evaluates the pending route arrays in one batch and compacts each
-    /// layer's identifiers. Returns `Ok(None)` when nothing was observable.
+    /// Copies already-evaluated route arrays. A failed host copy leaves that
+    /// layer unobserved instead of scheduling another graphics-processor wait.
     fn evaluate_pending_route_arrays(
         &self,
         pending_layer_route_arrays: &[Option<MlxArray>],
     ) -> Result<Option<ObservedExpertRoute>, Qwen3_5ExecutionError> {
-        let retained_arrays: Vec<&MlxArray> = pending_layer_route_arrays
+        if pending_layer_route_arrays
             .iter()
-            .filter_map(|pending_route_array| pending_route_array.as_ref())
-            .collect();
-        if retained_arrays.is_empty() {
+            .all(|pending_route_array| pending_route_array.is_none())
+        {
             return Ok(None);
         }
-        self.runtime.evaluate_arrays(&retained_arrays)?;
         let mut observed_route: ObservedExpertRoute =
             Vec::with_capacity(pending_layer_route_arrays.len());
         for pending_route_array in pending_layer_route_arrays {
-            let layer_route = pending_route_array
-                .as_ref()
-                .map(|route_array| route_array.copy_evaluated_u32_values())
-                .transpose()?
-                .and_then(|raw_expert_ids| sorted_unique_layer_routed_expert_ids(&raw_expert_ids));
+            let layer_route = pending_route_array.as_ref().and_then(|route_array| {
+                route_array
+                    .copy_evaluated_u32_values()
+                    .ok()
+                    .and_then(|raw_expert_ids| {
+                        sorted_unique_layer_routed_expert_ids(&raw_expert_ids)
+                    })
+            });
             observed_route.push(layer_route);
         }
         Ok(Some(observed_route))

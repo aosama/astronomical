@@ -41,6 +41,17 @@ impl Qwen3_5Model {
         // loaded expert page used by this forward.
         let mut completion_roots = Vec::with_capacity(evaluation_arrays.len());
         completion_roots.extend_from_slice(evaluation_arrays);
+        // Issue #542: decode route arrays join this wait so finalization never
+        // pays a second graphics-processor evaluation. Attribution-disabled
+        // decode has an empty collector and must not allocate here.
+        let pending_route_observation = performance_attribution
+            .is_enabled()
+            .then(|| self.route_observation.borrow());
+        if let Some(pending_route_observation) = pending_route_observation.as_ref() {
+            for pending_route_array in pending_route_observation.pending_route_array_refs() {
+                completion_roots.push(pending_route_array);
+            }
+        }
 
         // Attribute the blocking MLX evaluation boundary separately from graph
         // construction. With experimental solid-state-drive paging interval 0,
