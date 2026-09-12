@@ -10,6 +10,8 @@ pub(super) struct LazyScriptedModelFactory {
     pub(super) model_configurations: Arc<Mutex<Vec<WorkerModelConfiguration>>>,
     /// Lets lifecycle tests prove readiness propagation without model-serving.
     pub(super) expert_memory_mode: Option<ExpertMemoryMode>,
+    /// Lets lifecycle tests prove memory-snapshot parity without model-serving.
+    pub(super) created_engine_idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
 }
 
 pub(super) struct FirstCreationFailsScriptedModelFactory {
@@ -29,6 +31,12 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
             .push(model_configuration);
         let mut scripted_engine = ScriptedChatEngine::new();
         scripted_engine.initial_expert_memory_mode = self.expert_memory_mode;
+        if let Some(created_engine_idle_mlx_memory_telemetry) =
+            self.created_engine_idle_mlx_memory_telemetry.clone()
+        {
+            scripted_engine = scripted_engine
+                .with_idle_mlx_memory_telemetry(created_engine_idle_mlx_memory_telemetry);
+        }
         let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
             self.mlx_memory_limits;
         scripted_engine.maximum_allocator_cache_memory_limit_bytes =
