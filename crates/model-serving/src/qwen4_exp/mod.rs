@@ -7,8 +7,10 @@
 //! the naming ruling, and the artifact-independence contract.
 //!
 //! Current contents:
+//! - `configuration` — validated text configuration for the family.
 //! - `ple` — row identity for the hashed n-gram embedding table.
 //! - `hyper_connection` — the residual stream mixing algebra.
 
+pub mod configuration;
 pub mod hyper_connection;
 pub mod ple;
