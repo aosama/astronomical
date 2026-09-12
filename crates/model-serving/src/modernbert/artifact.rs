@@ -19,6 +19,9 @@ pub struct ModernBertArtifact {
     pub configuration: ModernBertConfiguration,
     pub tokenizer_bytes: Vec<u8>,
     pub weights_file: std::fs::File,
+    /// Exact safetensors payload bytes: file length minus the header block.
+    /// This is the resident model core the utilization split attributes.
+    pub weights_payload_bytes: u64,
 }
 
 impl ModernBertArtifact {
@@ -34,14 +37,40 @@ impl ModernBertArtifact {
             model_directory.join("tokenizer.json"),
             MAXIMUM_TOKENIZER_JSON_BYTES,
         )?;
-        let weights_file = std::fs::File::open(model_directory.join("model.safetensors"))
+        let mut weights_file = std::fs::File::open(model_directory.join("model.safetensors"))
             .map_err(|source| ModernBertArtifactError::MissingWeights { source })?;
+        let weights_payload_bytes = safetensors_payload_bytes(&mut weights_file)?;
         Ok(Self {
             configuration,
             tokenizer_bytes,
             weights_file,
+            weights_payload_bytes,
         })
     }
+}
+
+/// Reads the safetensors header length and returns the exact payload size.
+///
+/// The format stores an 8-byte little-endian header byte count before the
+/// JSON header, so the weight payload is the file length minus both blocks.
+fn safetensors_payload_bytes(
+    weights_file: &mut std::fs::File,
+) -> Result<u64, ModernBertArtifactError> {
+    use std::io::Read;
+    let file_length_bytes = weights_file
+        .metadata()
+        .map_err(|source| ModernBertArtifactError::MissingWeights { source })?
+        .len();
+    let mut header_length_bytes = [0_u8; 8];
+    weights_file
+        .read_exact(&mut header_length_bytes)
+        .map_err(|source| ModernBertArtifactError::MissingWeights { source })?;
+    let header_byte_count = u64::from_le_bytes(header_length_bytes);
+    let payload_bytes = file_length_bytes
+        .checked_sub(8)
+        .and_then(|remaining_bytes| remaining_bytes.checked_sub(header_byte_count))
+        .ok_or(ModernBertArtifactError::MalformedWeightsHeader)?;
+    Ok(payload_bytes)
 }
 
 fn bounded_read(
@@ -84,6 +113,8 @@ pub enum ModernBertArtifactError {
     MalformedConfig(#[from] serde_json::Error),
     #[error("ModernBERT embedding artifact model.safetensors is missing: {source}")]
     MissingWeights { source: std::io::Error },
+    #[error("ModernBERT embedding artifact model.safetensors header is malformed")]
+    MalformedWeightsHeader,
 }
 
 /// Maps a bounded artifact validation failure into a worker-admissible failure reason.

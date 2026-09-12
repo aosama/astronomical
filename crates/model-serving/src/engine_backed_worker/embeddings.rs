@@ -1,11 +1,13 @@
 //! Serializes one synchronous embeddings request and publishes its cleanup event.
 
 use astronomical_ipc_protocol::{
-    EmbeddingsCommand, EmbeddingsFailureReason, ProtocolWriter, RequestId, WorkerEvent,
+    EmbeddingsCommand, EmbeddingsFailureReason, MlxMemorySnapshotSource, ProtocolWriter, RequestId,
+    WorkerEvent,
 };
 use tokio::io::AsyncWrite;
 
 use super::WorkerRuntimeError;
+use super::output::worker_memory_snapshot;
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::EmbeddingEngine;
 use crate::InferenceEngine;
@@ -111,11 +113,22 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
+        // The engine captured its post-cleanup observation during the embed
+        // call, so the finalization publishes the same split the menu paints
+        // (issue #510).
+        let mlx_memory_snapshot = match self.loaded_runtime.as_mut() {
+            Some(LoadedRuntime::Embeddings(embedding_engine)) => embedding_engine
+                .take_post_cleanup_memory_telemetry()
+                .map(|mlx_memory_telemetry| {
+                    worker_memory_snapshot(MlxMemorySnapshotSource::Finalized, mlx_memory_telemetry)
+                }),
+            _ => None,
+        };
         event_writer
             .send_event(&WorkerEvent::EmbeddingsFinalized {
                 request_id,
                 elapsed_millis,
-                mlx_memory_snapshot: None,
+                mlx_memory_snapshot,
             })
             .await?;
         Ok(())

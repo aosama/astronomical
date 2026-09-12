@@ -9,6 +9,7 @@ mod artifact;
 mod configuration;
 mod engine;
 mod forward;
+mod memory_utilization;
 mod tokenizer;
 
 pub use engine::ModernBertEmbeddingEngine;
