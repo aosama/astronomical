@@ -3,6 +3,7 @@
 ## Before Starting
 
 - Open or join an issue before substantial feature work.
+- Issue bodies are free-form. A clear goal, the evidence behind it, the intended scope, and the conditions that prove completion are welcome, and they are never enforced by a form.
 - Keep changes focused on local Apple Silicon model serving.
 - Prefer direct code and fewer layers over new frameworks, facades, managers, or services.
 - Do not reduce model precision or hide changed model behavior behind an optimization.
