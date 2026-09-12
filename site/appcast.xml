@@ -4,22 +4,28 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.35</title>
-            <pubDate>Thu, 10 Sep 2026 12:07:33 -0400</pubDate>
-            <sparkle:version>492</sparkle:version>
-            <sparkle:shortVersionString>0.2.35</sparkle:shortVersionString>
+            <title>0.2.36</title>
+            <pubDate>Fri, 11 Sep 2026 21:08:24 -0400</pubDate>
+            <sparkle:version>515</sparkle:version>
+            <sparkle:shortVersionString>0.2.36</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.35
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.36
 
 Stable macOS release for Apple Silicon.
 
 ## Changes
 
-- The Library catalog offers Laguna XS 2.1 at 6-bit, 5-bit, and 4-bit.
-- Laguna persistent prompt-cache restore is lossless for a repeated prompt.
-- Decode keeps routed experts and seated complete expert layers under a squeezed memory ceiling instead of dropping a whole layer.
-- When a Metal kernel is demoted, serving still produces valid output on the public MLX path.
+- The memory popover names unused MLX headroom by owner instead of leaving it unexplained.
+- Chat, image generation, and embeddings each publish that split from the owners they actually hold.
+- A queued memory-ceiling raise now applies before the next chat starts.
+- Decode can serve a token from mixed retained complete expert layers and streamed experts.
+- Complete expert layers streamed during prefill stay seated for decode instead of being read again.
+- Resident promotion adopts already-retained complete expert layers.
+- Decode warming is sized from decode-phase evidence and capped by leftover entitlement.
+- The worker applies its runtime acknowledgement before the first model swap, so the first request after startup can proceed.
+- `astronomical launch opencode` starts OpenCode against the local Astronomical instance.
+- The Library catalog offers K2 Horizon MoVA 36B A4B 4-bit.
 
 ## Compatibility
 
@@ -27,10 +33,10 @@ Existing configuration, Library downloads, and prompt-cache files remain in plac
 
 This build is Developer ID signed and notarized. Sparkle verifies the update feed and the disk image before installation.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.35/Astronomical-0.2.35-macOS-arm64.dmg" length="16214152" type="application/octet-stream" sparkle:edSignature="TpF3G93waC4n4p59AD+Yf+6FnUUCk3KnTtzX9dAC0Q8MrZSIXxtngzhoxe1Q6fep05yrBEc0ZDBUDqb6ZxeIBA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.36/Astronomical-0.2.36-macOS-arm64.dmg" length="16280041" type="application/octet-stream" sparkle:edSignature="JUwf+bII3hrTFMeJ5Dn2dzXIg7/ejkhbBX00TAvejLtCZ2SpmaejFPhVW5B9A4Pd5YZxlPYTZl7T6Jdv2WbyAw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: lj9UBd5b51srPrmC1JXAMpdPwfPTJTMNt8Ip9BlPbDkHnE6LaZZD3S6KRHw6msAbKie5ZN93wwTdNrSpma72Dw==
-length: 1950
+edSignature: MwWFjrcucEZGMQo2dqnrU73qYL3z5ag1cvdbtp+o9M73uoaKZ1g/jjWyrXvHWOQJ6ISHmHErm7aulok/RE/BAg==
+length: 2470
 -->
