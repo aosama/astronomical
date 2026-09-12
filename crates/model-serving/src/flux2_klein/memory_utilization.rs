@@ -192,6 +192,30 @@ mod tests {
     }
 
     #[test]
+    fn should_charge_the_vae_workspace_reserve_during_decoding() {
+        let geometry = geometry();
+        // Complete VAE decoder resident with its workspace partially occupied.
+        let active_memory_bytes = 500_000_000 + 300_000_000;
+        let utilization = compose_flux2_klein_memory_ceiling_utilization(
+            2_000_000_000,
+            active_memory_bytes,
+            500_000_000,
+            Flux2KleinMemoryPhase::VaeDecoding,
+            &geometry,
+        );
+        // The phase promise is VAE workspace plus the shared RGB handoff.
+        assert_eq!(
+            utilization.reserved_activation_and_workspace_bytes,
+            600_000_000 + 100_000_000 - 300_000_000
+        );
+        assert_eq!(
+            utilization.unused_headroom_bytes,
+            2_000_000_000 - active_memory_bytes
+        );
+        assert!(utilization.is_fully_explained());
+    }
+
+    #[test]
     fn should_surface_a_phase_reserve_that_overruns_the_headroom() {
         let geometry = geometry();
         // Encoding promises RGB plus PNG plus base64, but the ceiling is

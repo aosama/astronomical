@@ -2,12 +2,14 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::WorkerEvent;
+use astronomical_ipc_protocol::{MlxMemorySnapshotSource, WorkerEvent};
 
 use crate::{
     WorkerControlError, WorkerHealthSnapshot,
     worker_event_handler::protocol_violation,
-    worker_health::{clear_active_request_progress, publish_activity},
+    worker_health::{
+        clear_active_request_progress, publish_activity, publish_latest_mlx_memory_snapshot,
+    },
     worker_loop_types::ActiveWorkerRequest,
 };
 
@@ -47,7 +49,11 @@ pub(super) fn handle_worker_embeddings_event(
             active_embeddings.terminal_received_at = Some(tokio::time::Instant::now());
             Ok(())
         }
-        WorkerEvent::EmbeddingsFinalized { request_id, .. } => {
+        WorkerEvent::EmbeddingsFinalized {
+            request_id,
+            mlx_memory_snapshot,
+            ..
+        } => {
             let active_embeddings = matching_active_embeddings(active_worker_request, request_id)?;
             let Some(terminal_outcome) = active_embeddings.terminal_outcome.take() else {
                 return Err(protocol_violation(
@@ -60,10 +66,50 @@ pub(super) fn handle_worker_embeddings_event(
                 .try_send(terminal_outcome.map_err(crate::EmbeddingsExecutionError::WorkerFailure));
             publish_activity(health_snapshot, crate::WorkerActivity::Idle);
             clear_active_request_progress(health_snapshot);
+            publish_embeddings_finalized_memory_snapshot(health_snapshot, mlx_memory_snapshot)?;
             Ok(())
         }
         _ => Ok(()),
     }
+}
+
+/// Publishes the cleanup observation the embeddings engine captured, so the
+/// status the menu paints carries the same unused-headroom split the journeys
+/// assert (issue #510). The embeddings engine owns no experts, context
+/// state, or drafter, so any nonzero owner there is a protocol violation.
+pub(super) fn publish_embeddings_finalized_memory_snapshot(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    mlx_memory_snapshot: Option<astronomical_ipc_protocol::WorkerMlxMemorySnapshot>,
+) -> Result<(), WorkerControlError> {
+    let Some(mlx_memory_snapshot) = mlx_memory_snapshot else {
+        return Ok(());
+    };
+    let attributed_memory_bytes = mlx_memory_snapshot
+        .expert_payload_bytes
+        .saturating_add(mlx_memory_snapshot.model_core_payload_bytes)
+        .saturating_add(mlx_memory_snapshot.context_state_payload_bytes)
+        .saturating_add(mlx_memory_snapshot.speculative_prefill_draft_memory_bytes);
+    let effective_ceiling_bytes = health_snapshot
+        .read()
+        .ok()
+        .map(|snapshot| snapshot.mlx_memory_ceiling_bytes)
+        .unwrap_or(0);
+    if mlx_memory_snapshot.source != MlxMemorySnapshotSource::Finalized
+        || mlx_memory_snapshot.allocator_cache_memory_bytes != 0
+        || mlx_memory_snapshot.active_memory_bytes > mlx_memory_snapshot.peak_memory_bytes
+        || attributed_memory_bytes > mlx_memory_snapshot.active_memory_bytes
+        || mlx_memory_snapshot.expert_payload_bytes != 0
+        || mlx_memory_snapshot.context_state_payload_bytes != 0
+        || mlx_memory_snapshot.speculative_prefill_draft_memory_bytes != 0
+        || (effective_ceiling_bytes > 0
+            && mlx_memory_snapshot.active_memory_bytes > effective_ceiling_bytes)
+    {
+        return Err(protocol_violation(
+            "invalid embeddings finalization MLX memory snapshot",
+        ));
+    }
+    publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
+    Ok(())
 }
 
 fn matching_active_embeddings(

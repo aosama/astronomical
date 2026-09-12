@@ -142,6 +142,52 @@ async fn run_embeddings_gpu_journey() {
         "[embeddings-rest 6/6] status=success phase=semantic_similarity play={play_similarity:.3} finance={finance_similarity:.3}"
     );
 
+    // Issue #510: the finalized status must publish the unused-headroom
+    // split the menu paints. The embeddings engine owns no experts, context
+    // state, or drafter, so no owner may overrun and nothing is unexplained.
+    let status_response = get_endpoint(server_address, "/v1/status").await;
+    assert_http_ok(&status_response);
+    let status_document = http_json_body(&status_response);
+    let memory_snapshot = &status_document["mlx_memory_snapshot"];
+    assert_eq!(
+        memory_snapshot["source"].as_str(),
+        Some("finalized"),
+        "status should retain the embeddings cleanup observation: {status_document}"
+    );
+    let utilization = &memory_snapshot["memory_ceiling_utilization"];
+    assert!(
+        utilization.is_object(),
+        "the finalized embeddings status must publish the unused-headroom split: {memory_snapshot}"
+    );
+    assert_eq!(
+        utilization["unexplained_headroom_bytes"].as_u64(),
+        Some(0),
+        "the embeddings split must carry no unexplained headroom: {utilization}"
+    );
+    assert_eq!(
+        utilization["owner_overrun_bytes"].as_u64(),
+        Some(0),
+        "no embeddings owner may overrun its reserve: {utilization}"
+    );
+    let active_memory_bytes = memory_snapshot["active_memory_bytes"].as_u64().unwrap_or(0);
+    let unused_headroom_bytes = utilization["unused_headroom_bytes"].as_u64().unwrap_or(0);
+    let mlx_memory_ceiling_bytes = status_document["mlx_memory_ceiling_bytes"]
+        .as_u64()
+        .unwrap_or(0);
+    assert_eq!(
+        unused_headroom_bytes,
+        mlx_memory_ceiling_bytes.saturating_sub(active_memory_bytes),
+        "the embeddings split must report the measured unused headroom: {utilization}"
+    );
+    eprintln!(
+        "[embeddings-rest] status=progress phase=utilization unused_gb={:.2} reserved_transient_gb={:.2}",
+        unused_headroom_bytes as f64 / 1_000_000_000.0,
+        utilization["reserved_activation_and_workspace_bytes"]
+            .as_u64()
+            .unwrap_or(0) as f64
+            / 1_000_000_000.0,
+    );
+
     stop_serving_rest_server(rest_server).await;
     eprintln!(
         "[embeddings-rest] status=success model={}",
