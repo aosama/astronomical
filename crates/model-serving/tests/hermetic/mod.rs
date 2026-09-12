@@ -24,5 +24,6 @@ mod qwen_prompt_processing_chunk_sizer;
 mod raw_safetensors_inventory;
 mod required_files;
 mod retained_expert_page_cache;
+mod route_observation;
 mod sparse_experts;
 mod tensor_inventory;

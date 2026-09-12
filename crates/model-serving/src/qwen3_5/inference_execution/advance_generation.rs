@@ -276,7 +276,17 @@ impl Qwen3_5EngineState {
                                 .map_err(InferenceEngineError::from)?
                         };
                         active_request.advance_position(1)?;
-                        active_request.build_generated_token(model, &final_prompt_logits)?
+                        let first_generated_token =
+                            active_request.build_generated_token(model, &final_prompt_logits)?;
+                        // Issue #536: the first decode token's route history
+                        // record. Logits were sampled, so the retained router
+                        // arrays are already computed and this costs no new
+                        // graphics-processor work.
+                        model.finalize_route_observation_record(
+                            final_prompt_token_id,
+                            &mut active_request.performance_attribution,
+                        );
+                        first_generated_token
                     };
                     if !model.sparse_experts_are_paged() {
                         active_request
@@ -454,6 +464,7 @@ impl Qwen3_5EngineState {
                 model,
                 active_request,
                 &current_generated_token,
+                current_generated_token_id,
             )? {
             prediction_token
         } else {
@@ -466,7 +477,14 @@ impl Qwen3_5EngineState {
                 )
                 .map_err(InferenceEngineError::from)?;
             active_request.advance_position(1)?;
-            active_request.build_generated_token(model, &next_logits)?
+            let next_generated_token = active_request.build_generated_token(model, &next_logits)?;
+            // Issue #536: this decode token's route history record, finalized
+            // after sampling already evaluated the forward's logits.
+            model.finalize_route_observation_record(
+                current_generated_token_id,
+                &mut active_request.performance_attribution,
+            );
+            next_generated_token
         };
         if !model.sparse_experts_are_paged() {
             active_request

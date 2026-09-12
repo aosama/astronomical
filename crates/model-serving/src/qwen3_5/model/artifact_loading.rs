@@ -453,6 +453,9 @@ impl Qwen3_5Model {
             // memory sample in the engine loading path.
             resident_expert_weights: None,
             retained_experts,
+            route_observation: RefCell::new(
+                crate::qwen3_5_moe::model::route_observation::RouteObservationCollector::new(),
+            ),
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),
