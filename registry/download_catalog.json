@@ -53,6 +53,24 @@
             "upstream_license": "Apache-2.0"
         },
         {
+            "huggingface_id": "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
+            "revision": "70a3aa32c7feef511182bf16aa332f37e8d82014",
+            "display_name": "Qwen 3.6 35B A3B OptiQ 4-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 24693956069,
+            "public": true,
+            "description": "A mixed-precision OptiQ quant of Qwen 3.6 35B-A3B, per-layer 4/8-bit affine (group 64). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. The MoE architecture registers through OptiQ; the bf16 vision tower stays in a separate vision sidecar and the int4 MTP head stays in optiq/mtp.safetensors; image input and MTP require mlx-optiq.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
+            "architecture_summary": "Qwen3.6 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
             "revision": "27ea26a6175ead91d1067f020be41318d045849b",
             "display_name": "Ornith 1.5 9B Vision OptiQ Static 4.5bpw",
