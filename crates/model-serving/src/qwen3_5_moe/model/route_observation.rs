@@ -215,4 +215,38 @@ impl Qwen3_5Model {
             predictor_owner.last_slice_nanoseconds(),
         );
     }
+
+    /// Ranks leftover experts the next forward is predicted to need and asks
+    /// the warm table not to evict them. Fail-open: lock contention or a missing
+    /// trainer leaves the existing eviction order unchanged.
+    pub(crate) fn refresh_predictor_retention_hints(
+        &self,
+        next_token_id: u32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        if !performance_attribution.is_enabled() {
+            return;
+        }
+        let predicted_experts_by_layer = {
+            let predictor_owner_slot = self.expert_route_predictor.borrow();
+            let Some(predictor_owner) = predictor_owner_slot.as_ref() else {
+                return;
+            };
+            let previous_route = performance_attribution.previous_observed_expert_route();
+            let top_k = usize::try_from(self.config.experts_per_token()).unwrap_or(1);
+            predictor_owner.try_predict_top_experts_per_layer(
+                next_token_id,
+                previous_route.map(Vec::as_slice),
+                top_k,
+            )
+        };
+        let Some(predicted_experts_by_layer) = predicted_experts_by_layer else {
+            return;
+        };
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
+            retained_experts
+                .borrow_mut()
+                .set_predicted_retention_experts(&predicted_experts_by_layer);
+        }
+    }
 }

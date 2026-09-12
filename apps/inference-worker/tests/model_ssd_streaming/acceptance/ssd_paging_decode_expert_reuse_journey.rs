@@ -237,43 +237,25 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "captured observations must include at least one sparse layer route; captured_layers={route_observation_captured_layer_count}"
     );
 
-    // --- Measured assertion 4e: previous-token leftover prefetch (issue #537) ---
-    let previous_token_prefetch_issue_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "previous_token_prefetch_issue_count",
-    );
-    let previous_token_prefetch_hit_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "previous_token_prefetch_hit_count",
-    );
-    let previous_token_prefetch_miss_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "previous_token_prefetch_miss_count",
-    );
-    let previous_token_prefetch_byte_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "previous_token_prefetch_byte_count",
-    );
-    let previous_token_prefetch_capacity_drop_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "previous_token_prefetch_capacity_drop_count",
-    );
-    let expert_route_predictor_train_step_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "expert_route_predictor_train_step_count",
-    );
-    let expert_route_predictor_top_k_hit_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "expert_route_predictor_top_k_hit_count",
-    );
-    let expert_route_predictor_evaluated_expert_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "expert_route_predictor_evaluated_expert_count",
-    );
-    let expert_route_predictor_train_slice_nanoseconds = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "expert_route_predictor_train_slice_nanoseconds",
-    );
+    // --- Measured assertion 4e: leftover prefetch and predictor hints (#537, #539) ---
+    let attribution_home = isolated_worker_home.path();
+    let count = |name: &'static str| generation_attribution_counter(attribution_home, name);
+    let previous_token_prefetch_issue_count = count("previous_token_prefetch_issue_count");
+    let previous_token_prefetch_hit_count = count("previous_token_prefetch_hit_count");
+    let previous_token_prefetch_miss_count = count("previous_token_prefetch_miss_count");
+    let previous_token_prefetch_byte_count = count("previous_token_prefetch_byte_count");
+    let previous_token_prefetch_capacity_drop_count =
+        count("previous_token_prefetch_capacity_drop_count");
+    let expert_route_predictor_train_step_count = count("expert_route_predictor_train_step_count");
+    let expert_route_predictor_top_k_hit_count = count("expert_route_predictor_top_k_hit_count");
+    let expert_route_predictor_evaluated_expert_count =
+        count("expert_route_predictor_evaluated_expert_count");
+    let expert_route_predictor_train_slice_nanoseconds =
+        count("expert_route_predictor_train_slice_nanoseconds");
+    let predictor_retention_hint_requested_count =
+        count("predictor_retention_hint_requested_count");
+    let predictor_retention_hint_accepted_count =
+        count("predictor_retention_hint_accepted_count");
 
     // --- Measured assertion 5: throughput remains portable evidence ---
     let average_generation_tokens_per_second =
@@ -414,6 +396,8 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          predictor_top_k_hits={expert_route_predictor_top_k_hit_count} \
          predictor_evaluated_experts={expert_route_predictor_evaluated_expert_count} \
          predictor_slice_ns={expert_route_predictor_train_slice_nanoseconds} \
+         predictor_retention_requested={predictor_retention_hint_requested_count} \
+         predictor_retention_accepted={predictor_retention_hint_accepted_count} \
          mem_ceiling_gb={:.2} \
          mem_active_gb={:.2} \
          mem_unused_gb={:.2} \
