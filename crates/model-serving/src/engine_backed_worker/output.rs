@@ -7,8 +7,8 @@ use tokio::io::AsyncWrite;
 use super::support::{ActiveEngineGeneration, engine_generation_error};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{
-    EngineBackedWorker, GenerationFinalization, ImageGenerationEngine, InferenceEngine,
-    MlxMemoryTelemetry, WorkerRuntimeError,
+    EmbeddingEngine, EngineBackedWorker, GenerationFinalization, ImageGenerationEngine,
+    InferenceEngine, MlxMemoryTelemetry, WorkerRuntimeError,
 };
 
 use super::LoadedRuntime;
@@ -19,6 +19,7 @@ where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
+    EmbeddingsEngine: EmbeddingEngine,
 {
     pub(crate) async fn emit_model_outputs<WriteTransport>(
         &self,
@@ -392,7 +393,11 @@ where
                 .map(|mlx_memory_telemetry| {
                     worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
                 }),
-            Some(LoadedRuntime::Embeddings(_)) => None,
+            Some(LoadedRuntime::Embeddings(embedding_engine)) => embedding_engine
+                .collect_mlx_memory_telemetry()
+                .map(|mlx_memory_telemetry| {
+                    worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
+                }),
             None => None,
         };
         let Some((mlx_memory_snapshot, expert_residency)) = mlx_memory_observation else {

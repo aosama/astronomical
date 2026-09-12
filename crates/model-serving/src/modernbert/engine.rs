@@ -13,29 +13,35 @@ use astronomical_ipc_protocol::{
     EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities,
 };
 use astronomical_runtime_integration::{
-    MlxMemoryLimits, MlxRuntime, MlxRuntimeError, MlxSafetensors,
+    MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError, MlxSafetensors,
 };
 use tokenizers::Tokenizer;
 
 use crate::modernbert::artifact::ModernBertArtifact;
 use crate::modernbert::configuration::ModernBertConfiguration;
 use crate::modernbert::forward::embed_token_ids;
+use crate::modernbert::memory_utilization::compose_modernbert_memory_ceiling_utilization;
 use crate::modernbert::tokenizer::encode_embedding_input;
 use crate::performance_attribution::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
-use crate::{EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput};
+use crate::{
+    EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, MemoryCeilingUtilization,
+    MlxMemoryTelemetry,
+};
 
 /// Loaded ModernBERT runtime bound to one artifact directory.
 pub struct ModernBertEmbeddingEngine {
     model_id: String,
     effective_mlx_memory_ceiling_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
+    weights_payload_bytes: u64,
     performance_attribution_enabled: bool,
     performance_attribution_log: PerformanceAttributionLog,
     preloaded_artifact: Option<ModernBertArtifact>,
     loaded_state: Option<LoadedModernBertState>,
+    post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
 }
 
 struct LoadedModernBertState {
@@ -65,10 +71,12 @@ impl ModernBertEmbeddingEngine {
             model_id: model_id.into(),
             effective_mlx_memory_ceiling_bytes,
             allocator_cache_memory_limit_bytes,
+            weights_payload_bytes: artifact.weights_payload_bytes,
             performance_attribution_enabled,
             performance_attribution_log,
             preloaded_artifact: Some(artifact),
             loaded_state: None,
+            post_cleanup_memory_telemetry: None,
         })
     }
 
@@ -88,6 +96,46 @@ impl ModernBertEmbeddingEngine {
             return;
         };
         let _ignored_log_result = self.performance_attribution_log.record(&attribution_report);
+    }
+
+    /// Composes the embeddings-lane unused-headroom split for one measurement.
+    ///
+    /// The transient reserve is evidence, not policy: the allocator's
+    /// cumulative peak minus the current active bytes is exactly the forward
+    /// workspace high-water this process has proven, so an idle engine
+    /// promises its last forward's footprint and a mid-forward engine
+    /// promises the partial peak above current usage.
+    fn memory_ceiling_utilization(
+        &self,
+        active_memory_bytes: u64,
+        peak_memory_bytes: u64,
+    ) -> Option<MemoryCeilingUtilization> {
+        Some(compose_modernbert_memory_ceiling_utilization(
+            self.effective_mlx_memory_ceiling_bytes as u64,
+            active_memory_bytes,
+            self.weights_payload_bytes,
+            peak_memory_bytes.saturating_sub(active_memory_bytes),
+        ))
+    }
+
+    fn memory_telemetry_from_snapshot(
+        &self,
+        memory_snapshot: &MlxMemorySnapshot,
+    ) -> MlxMemoryTelemetry {
+        let active_memory_bytes = memory_snapshot.active_memory_bytes() as u64;
+        let mut telemetry = MlxMemoryTelemetry::new(
+            active_memory_bytes,
+            memory_snapshot.allocator_cache_memory_bytes() as u64,
+            memory_snapshot.peak_memory_bytes() as u64,
+            crate::MlxActiveMemoryBreakdown::default(),
+        );
+        if let Some(memory_ceiling_utilization) = self.memory_ceiling_utilization(
+            active_memory_bytes,
+            memory_snapshot.peak_memory_bytes() as u64,
+        ) {
+            telemetry = telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
+        }
+        telemetry
     }
 }
 
@@ -219,6 +267,18 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
             },
         )?;
         let elapsed_millis = u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+        // The forward arrays are owned inside embed_token_ids and dropped on
+        // return, so this snapshot is the honest post-cleanup observation.
+        // Synchronizing and clearing the allocator cache first keeps the
+        // captured state free of reusable-cache bytes, exactly like the
+        // image engine's cleanup observation.
+        let _cleanup_result = loaded_state
+            .runtime
+            .synchronize_gpu_stream_and_clear_allocator_cache();
+        if let Some(memory_snapshot) = loaded_state.runtime.memory_snapshot().ok() {
+            self.post_cleanup_memory_telemetry =
+                Some(self.memory_telemetry_from_snapshot(&memory_snapshot));
+        }
         let total_input_tokens = input_token_counts
             .iter()
             .fold(0u32, |total, count| total.saturating_add(*count));
@@ -241,6 +301,16 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
             input_token_counts,
             elapsed_millis,
         })
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.post_cleanup_memory_telemetry.take()
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        let loaded_state = self.loaded_state.as_ref()?;
+        let memory_snapshot = loaded_state.runtime.memory_snapshot().ok()?;
+        Some(self.memory_telemetry_from_snapshot(&memory_snapshot))
     }
 }
 
