@@ -333,6 +333,18 @@ impl PerformanceAttribution {
         )
     }
 
+    /// The previous decode token's true route, used as predictor input.
+    #[must_use]
+    pub fn previous_observed_expert_route(&self) -> Option<&ObservedExpertRoute> {
+        self.enabled_attribution
+            .as_ref()
+            .and_then(|enabled_attribution| {
+                enabled_attribution
+                    .route_observation_previous_route
+                    .as_ref()
+            })
+    }
+
     /// Returns one accumulated counter, or zero when attribution is disabled.
     #[must_use]
     pub fn counter_value(&self, counter: PerformanceCounter) -> u64 {

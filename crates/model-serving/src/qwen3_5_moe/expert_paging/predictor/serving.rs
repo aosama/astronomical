@@ -6,14 +6,15 @@
 //! Spawn failure, poison, and disconnect all degrade to no prediction.
 
 use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
+use std::sync::{Arc, Mutex, TryLockError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use super::network::{ExpertRoutePredictor, ExpertRoutePredictorConfig};
 use super::trainer::evaluate_then_train;
+use crate::memory::select_top_expert_ids_from_logits;
 use crate::qwen3_5_moe::expert_paging::route_observation::RouteObservationRecord;
 
 const PREDICTOR_TRAINING_QUEUE_CAPACITY: usize = 64;
@@ -28,6 +29,7 @@ const PREDICTOR_SEED: u64 = 1;
 pub struct ExpertRoutePredictorOwner {
     observation_sender: Option<SyncSender<RouteObservationRecord>>,
     trainer_thread: Option<JoinHandle<()>>,
+    predictor: Arc<Mutex<ExpertRoutePredictor>>,
     trained_record_count: Arc<AtomicU64>,
     top_k_hit_count: Arc<AtomicU64>,
     evaluated_expert_count: Arc<AtomicU64>,
@@ -87,16 +89,21 @@ impl ExpertRoutePredictorOwner {
         let evaluated_expert_count_for_thread = Arc::clone(&evaluated_expert_count);
         let last_slice_nanoseconds_for_thread = Arc::clone(&last_slice_nanoseconds);
         let top_k = experts_per_token.max(1);
+        let predictor = Arc::new(Mutex::new(ExpertRoutePredictor::new(config)));
+        let predictor_for_thread = Arc::clone(&predictor);
         let trainer_thread = thread::Builder::new()
             .name("expert-route-predictor".to_owned())
             .spawn(move || {
-                let mut predictor = ExpertRoutePredictor::new(config);
                 while let Ok(first_record) = observation_receiver.recv() {
                     let slice_started_at = Instant::now();
                     let mut record = first_record;
                     loop {
-                        let (hit_count, evaluated_count) =
-                            evaluate_then_train(&mut predictor, &record, top_k);
+                        let (hit_count, evaluated_count) = {
+                            let Ok(mut predictor) = predictor_for_thread.try_lock() else {
+                                break;
+                            };
+                            evaluate_then_train(&mut predictor, &record, top_k)
+                        };
                         top_k_hit_count_for_thread.fetch_add(hit_count, Ordering::Relaxed);
                         evaluated_expert_count_for_thread
                             .fetch_add(evaluated_count, Ordering::Relaxed);
@@ -119,6 +126,7 @@ impl ExpertRoutePredictorOwner {
         Some(Self {
             observation_sender: Some(observation_sender),
             trainer_thread: Some(trainer_thread),
+            predictor,
             trained_record_count,
             top_k_hit_count,
             evaluated_expert_count,
@@ -155,15 +163,37 @@ impl ExpertRoutePredictorOwner {
     pub fn last_slice_nanoseconds(&self) -> u64 {
         self.last_slice_nanoseconds.load(Ordering::Relaxed)
     }
+
+    /// Ranks leftover experts the next token is predicted to need.
+    ///
+    /// `try_lock` so decode never waits on a training step. Contention or
+    /// poison returns `None` and the warm table keeps its existing policy.
+    #[must_use]
+    pub fn try_predict_top_experts_per_layer(
+        &self,
+        token_id: u32,
+        previous_token_route: Option<&[Option<Vec<u16>>]>,
+        top_k: usize,
+    ) -> Option<Vec<Vec<usize>>> {
+        let predictor = match self.predictor.try_lock() {
+            Ok(predictor) => predictor,
+            Err(TryLockError::WouldBlock | TryLockError::Poisoned(_)) => return None,
+        };
+        let logits_per_layer = predictor.forward_logits(token_id, previous_token_route);
+        Some(
+            logits_per_layer
+                .iter()
+                .map(|layer_logits| select_top_expert_ids_from_logits(layer_logits, top_k))
+                .collect(),
+        )
+    }
 }
 
 impl Drop for ExpertRoutePredictorOwner {
     fn drop(&mut self) {
-        // Drop the sender first so the trainer's recv returns and the thread
-        // can exit; joining while the sender still lives would deadlock.
+        // Disconnect the queue so the trainer's recv returns. Do not join:
+        // a trainer stuck on a write lock must not stall model teardown.
         self.observation_sender.take();
-        if let Some(trainer_thread) = self.trainer_thread.take() {
-            let _ = trainer_thread.join();
-        }
+        let _ = self.trainer_thread.take();
     }
 }
