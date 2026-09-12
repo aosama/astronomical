@@ -17,6 +17,7 @@ mod mlx_ram_budget;
 mod paged_route_materialization;
 mod performance_attribution;
 mod phase_aware_expert_residency;
+mod predictor_retention;
 mod previous_token_prefetch;
 mod quantized_expert_page_manifest;
 #[cfg(feature = "direct-mlx")]

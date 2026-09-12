@@ -371,6 +371,12 @@ impl Qwen3_5EngineState {
                     warm_retention_ceiling_bytes.min(plan_retained_ceiling_bytes),
                 );
             }
+            if model.sparse_experts_are_paged() {
+                model.refresh_predictor_retention_hints(
+                    current_generated_token_id,
+                    &mut active_request.performance_attribution,
+                );
+            }
             model
                 .record_warm_insert_and_prefetch_statistics(
                     &mut active_request.performance_attribution,
