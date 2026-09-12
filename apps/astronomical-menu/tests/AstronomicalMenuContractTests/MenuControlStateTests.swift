@@ -69,8 +69,10 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_dismiss_a_successful_memory_update_one_second_after_application() async throws {
+    let feedbackDismissalGate = FeedbackDismissalGate()
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: SuccessfulMaximumMlxMemoryUpdateSupervisorClient()
+      supervisorClient: SuccessfulMaximumMlxMemoryUpdateSupervisorClient(),
+      feedbackDismissalGate: feedbackDismissalGate
     )
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
@@ -86,13 +88,18 @@ final class MenuControlStateTests: XCTestCase {
       .success("MLX memory setting persisted and applied")
     )
 
+    feedbackDismissalGate.release()
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
   }
 
   @MainActor
   func test_should_wait_for_a_queued_memory_update_to_take_effect_before_dismissing() async throws {
     let supervisorClient = QueuedMaximumMlxMemoryUpdateSupervisorClient()
-    let telemetryStore = contractTelemetryStore(supervisorClient: supervisorClient)
+    let feedbackDismissalGate = FeedbackDismissalGate()
+    let telemetryStore = contractTelemetryStore(
+      supervisorClient: supervisorClient,
+      feedbackDismissalGate: feedbackDismissalGate
+    )
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
     XCTAssertEqual(
@@ -105,6 +112,7 @@ final class MenuControlStateTests: XCTestCase {
     try await Task.sleep(for: .milliseconds(10))
     XCTAssertNotNil(telemetryStore.controlActionFeedback)
 
+    feedbackDismissalGate.release()
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
   }
 
@@ -124,8 +132,10 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_start_dismissal_after_a_status_refresh_precedes_the_update_response() async throws {
+    let feedbackDismissalGate = FeedbackDismissalGate()
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: DelayedMaximumMlxMemoryUpdateSupervisorClient()
+      supervisorClient: DelayedMaximumMlxMemoryUpdateSupervisorClient(),
+      feedbackDismissalGate: feedbackDismissalGate
     )
     let memoryUpdateTask = Task { @MainActor in
       await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
@@ -140,6 +150,7 @@ final class MenuControlStateTests: XCTestCase {
       telemetryStore.controlActionFeedback,
       .success("MLX memory setting persisted and applied")
     )
+    feedbackDismissalGate.release()
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
   }
 
@@ -200,11 +211,49 @@ final class MenuControlStateTests: XCTestCase {
   }
 }
 
+/// Holds the feedback-dismissal task until the test releases it, so assertions
+/// on transient feedback cannot race the real wall-clock window (issue #524).
+final class FeedbackDismissalGate: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuations: [CheckedContinuation<Void, Never>] = []
+  private var isReleased = false
+
+  func suspendDismissal() async {
+    await withCheckedContinuation { continuation in
+      self.lock.lock()
+      defer { self.lock.unlock() }
+      if self.isReleased {
+        continuation.resume()
+      } else {
+        self.continuations.append(continuation)
+      }
+    }
+  }
+
+  func release() {
+    lock.lock()
+    defer { lock.unlock() }
+    isReleased = true
+    continuations.forEach { $0.resume() }
+    continuations.removeAll()
+  }
+}
+
 @MainActor
-private func contractTelemetryStore(supervisorClient: any SupervisorClient) -> TelemetryStore {
-  TelemetryStore(
+private func contractTelemetryStore(
+  supervisorClient: any SupervisorClient,
+  feedbackDismissalGate: FeedbackDismissalGate? = nil
+) -> TelemetryStore {
+  let controlActionFeedbackDismissalSleep: TelemetryStore.ControlActionFeedbackDismissalSleep?
+  if let feedbackDismissalGate {
+    controlActionFeedbackDismissalSleep = { _ in await feedbackDismissalGate.suspendDismissal() }
+  } else {
+    controlActionFeedbackDismissalSleep = nil
+  }
+  return TelemetryStore(
     supervisorClient: supervisorClient,
     controlActionFeedbackDismissalDelay: .milliseconds(80),
+    controlActionFeedbackDismissalSleep: controlActionFeedbackDismissalSleep,
     workerPolicyConfirmationRetryDelay: .milliseconds(1)
   )
 }
