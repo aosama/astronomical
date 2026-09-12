@@ -6,8 +6,13 @@
 mod cache;
 mod demand_ledger;
 mod eviction;
+mod previous_token_prefetch;
 mod resident_set;
 mod weight;
 
 pub use cache::DecodeExpertCache;
+pub use previous_token_prefetch::{
+    PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity, PreviousTokenPrefetchPlan,
+    plan_previous_token_prefetch,
+};
 pub use weight::ResidentExpertWeight;

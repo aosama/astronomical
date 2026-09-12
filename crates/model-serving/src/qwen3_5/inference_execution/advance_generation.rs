@@ -371,15 +371,11 @@ impl Qwen3_5EngineState {
                     warm_retention_ceiling_bytes.min(plan_retained_ceiling_bytes),
                 );
             }
-            let written_expert_count = model
-                .flush_pending_expert_slot_inserts()
+            model
+                .record_warm_insert_and_prefetch_statistics(
+                    &mut active_request.performance_attribution,
+                )
                 .map_err(InferenceEngineError::from)?;
-            if written_expert_count > 0 {
-                active_request.performance_attribution.record_counter(
-                    crate::PerformanceCounter::HotExpertWarmInsertCount,
-                    written_expert_count,
-                );
-            }
         }
         if let Some(first_decode_forward_started_at) = first_decode_forward_started_at {
             active_request.first_decode_forward_elapsed_millis = Some(
