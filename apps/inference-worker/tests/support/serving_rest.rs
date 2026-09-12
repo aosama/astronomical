@@ -226,8 +226,7 @@ async fn wait_until_ready(server_address: SocketAddr) {
     for readiness_attempt in 1..=READY_ATTEMPT_LIMIT {
         let request_text =
             format!("GET /ready HTTP/1.1\r\nHost: {server_address}\r\nConnection: close\r\n\r\n");
-        let readiness_response =
-            super::http::send_http_request(server_address, request_text).await;
+        let readiness_response = super::http::send_http_request(server_address, request_text).await;
         last_readiness_response = readiness_response.clone();
         if readiness_response.starts_with("HTTP/1.1 200 OK") {
             eprintln!("[real-model-rest] worker ready after {readiness_attempt} attempts");

@@ -229,12 +229,6 @@ fn parse_image_attribution_reports(report_text: &str) -> Vec<Value> {
         .collect()
 }
 
-fn required_u64(document: &Value, field_name: &str) -> u64 {
-    document[field_name]
-        .as_u64()
-        .unwrap_or_else(|| panic!("{field_name} must contain numeric memory telemetry: {document}"))
-}
-
 pub(crate) async fn get_status(server_address: SocketAddr) -> serde_json::Value {
     let response = send_http_request(
         server_address,
@@ -292,4 +286,91 @@ async fn wait_until_ready(server_address: SocketAddr) {
         sleep(Duration::from_secs(1)).await;
     }
     panic!("the FLUX acceptance worker did not become ready before the deadline");
+}
+pub(super) fn assert_worker_reuse_state(
+    status: &Value,
+    canonical_flux_model_id: &str,
+    configuration_generation: &str,
+) {
+    assert_eq!(status["ready_model_id"], canonical_flux_model_id);
+    assert_eq!(
+        status["worker_runtime_feature_configuration"]["configuration_generation"].as_str(),
+        Some(configuration_generation)
+    );
+    let loaded_model = &status["worker_runtime_feature_configuration"]["loaded_model"];
+    assert_eq!(loaded_model["kind"], "flux2_klein");
+    assert_eq!(
+        loaded_model["configuration"]["model_id"],
+        canonical_flux_model_id
+    );
+    assert_immutable_revision(
+        loaded_model["configuration"]["artifact_revision"]
+            .as_str()
+            .expect("loaded Klein status should name the artifact revision"),
+    );
+    let memory_snapshot = &status["mlx_memory_snapshot"];
+    let memory_snapshot_source = memory_snapshot["source"].as_str();
+    assert!(
+        matches!(memory_snapshot_source, Some("finalized" | "idle_poll")),
+        "status should retain finalized cleanup or a newer idle sample: {memory_snapshot}"
+    );
+    assert_eq!(
+        required_u64(memory_snapshot, "allocator_cache_memory_bytes"),
+        0
+    );
+    assert_eq!(required_u64(memory_snapshot, "expert_payload_bytes"), 0);
+    assert_eq!(
+        required_u64(memory_snapshot, "context_state_payload_bytes"),
+        0
+    );
+    assert_eq!(
+        required_u64(memory_snapshot, "speculative_prefill_draft_memory_bytes"),
+        0
+    );
+    let active_memory_bytes = required_u64(memory_snapshot, "active_memory_bytes");
+    let peak_memory_bytes = required_u64(memory_snapshot, "peak_memory_bytes");
+    let mlx_memory_ceiling_bytes = required_u64(status, "mlx_memory_ceiling_bytes");
+    assert!(active_memory_bytes <= peak_memory_bytes);
+    assert!(active_memory_bytes <= mlx_memory_ceiling_bytes);
+    // Issue #510: the image engine publishes the same unused-headroom split
+    // the menu paints. After cleanup no phase holds a promise, so the whole
+    // unused remainder is free and no owner overran.
+    let utilization = &memory_snapshot["memory_ceiling_utilization"];
+    assert!(
+        utilization.is_object(),
+        "the finalized image status must publish the unused-headroom split: {memory_snapshot}"
+    );
+    assert_eq!(
+        required_u64(utilization, "unexplained_headroom_bytes"),
+        0,
+        "the image split must carry no unexplained headroom: {utilization}"
+    );
+    assert_eq!(
+        required_u64(utilization, "owner_overrun_bytes"),
+        0,
+        "no image owner may overrun its reserve: {utilization}"
+    );
+    assert_eq!(
+        required_u64(utilization, "unused_headroom_bytes"),
+        mlx_memory_ceiling_bytes.saturating_sub(active_memory_bytes),
+        "the image split must report the measured unused headroom: {utilization}"
+    );
+}
+
+pub(super) fn assert_immutable_revision(revision: &str) {
+    assert_eq!(
+        revision.len(),
+        40,
+        "artifact revision must be an immutable 40-character hex digest"
+    );
+    assert!(
+        revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "artifact revision must be hexadecimal: {revision}"
+    );
+}
+
+pub(super) fn required_u64(document: &Value, field_name: &str) -> u64 {
+    document[field_name]
+        .as_u64()
+        .unwrap_or_else(|| panic!("{field_name} must contain numeric memory telemetry: {document}"))
 }

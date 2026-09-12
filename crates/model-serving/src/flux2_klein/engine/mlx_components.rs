@@ -16,19 +16,23 @@ use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
 
 use crate::{
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelLoadingPerformanceAttributionMetadata,
-    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
-    PerformanceOperation, ValidatedWeightsFile,
+    MemoryCeilingUtilization, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
+    PerformanceAttributionOutcome, PerformanceOperation, ValidatedWeightsFile,
 };
 
+use super::super::memory_utilization::{
+    Flux2KleinMemoryPhase, compose_flux2_klein_memory_ceiling_utilization,
+};
 use super::super::transformer::{Flux2KleinForwardAdvance, Flux2KleinForwardState};
 use super::super::vae::{Flux2KleinVaeDecodeAdvance, Flux2KleinVaeDecodeState};
 use super::super::{
     Flux2KleinArtifactProvenance, Flux2KleinArtifactValidator, Flux2KleinFlowSchedule,
     Flux2KleinFlowScheduler, Flux2KleinFlowStep, Flux2KleinImageDimensions,
-    Flux2KleinMemoryAdmission, Flux2KleinPackedLatentLayout, Flux2KleinPngEncoder,
-    Flux2KleinResidencyPlan, Flux2KleinTransformer, Flux2KleinTransformerInputs,
-    Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder, ValidatedFlux2KleinArtifact,
+    Flux2KleinMemoryAdmission, Flux2KleinMemoryGeometry, Flux2KleinPackedLatentLayout,
+    Flux2KleinPngEncoder, Flux2KleinResidencyPlan, Flux2KleinTransformer,
+    Flux2KleinTransformerInputs, Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder,
+    ValidatedFlux2KleinArtifact,
 };
 use super::request_geometry::{
     build_position_ids, memory_geometry, official_capabilities, signed_shape,
@@ -77,6 +81,7 @@ pub(super) struct Flux2KleinMlxComponents {
     vae_decoder: Option<Flux2KleinVaeDecoder>,
     vae_decode_state: Option<Flux2KleinVaeDecodeState>,
     decoded_rgb: Option<MlxArray>,
+    memory_geometry: Option<Flux2KleinMemoryGeometry>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
 }
 
@@ -87,6 +92,72 @@ impl Flux2KleinMlxComponents {
         } else {
             PerformanceAttribution::disabled()
         }
+    }
+    /// The sequential image phase a memory measurement belongs to.
+    ///
+    /// Request state drives the answer: whichever request-scoped owner is
+    /// currently populated marks the phase, and a request with no populated
+    /// owner is in the transformer streaming window between conditioning and
+    /// the first denoising step. Without a request the engine is idle and no
+    /// transient work is promised.
+    fn current_memory_phase(&self) -> Flux2KleinMemoryPhase {
+        if self.decoded_rgb.is_some() {
+            Flux2KleinMemoryPhase::Encoding
+        } else if self.vae_decode_state.is_some() {
+            Flux2KleinMemoryPhase::VaeDecoding
+        } else if self.forward_state.is_some() {
+            Flux2KleinMemoryPhase::Denoising
+        } else if self.text_conditioning_state.is_some() {
+            Flux2KleinMemoryPhase::TextConditioning
+        } else if self.request_id.is_some() {
+            Flux2KleinMemoryPhase::Denoising
+        } else {
+            Flux2KleinMemoryPhase::Idle
+        }
+    }
+
+    /// Component weights the engine knows are resident at this instant.
+    ///
+    /// The transformer reports its resident payload exactly, the VAE decoder
+    /// is all-or-nothing, and completed conditioning taps are durable request
+    /// state. The streamed text encoder stays unattributed on purpose: its
+    /// streamed layer weights are transient work inside the very reserve the
+    /// plan promises for the conditioning phase.
+    fn resident_attributed_bytes(&self) -> u64 {
+        let Some(memory_geometry) = self.memory_geometry.as_ref() else {
+            return 0;
+        };
+        let transformer_resident_bytes = self.transformer.as_ref().map_or(0, |transformer| {
+            transformer.weights().resident_payload_bytes()
+        });
+        let vae_resident_bytes = if self.vae_decoder.is_some() {
+            memory_geometry.vae_payload_bytes
+        } else {
+            0
+        };
+        let conditioning_tap_bytes = if self.conditioning.is_some() {
+            memory_geometry.conditioning_bytes
+        } else {
+            0
+        };
+        transformer_resident_bytes
+            .saturating_add(vae_resident_bytes)
+            .saturating_add(conditioning_tap_bytes)
+    }
+
+    /// Composes the image-lane unused-headroom split for one measurement.
+    fn memory_ceiling_utilization(
+        &self,
+        active_memory_bytes: u64,
+    ) -> Option<MemoryCeilingUtilization> {
+        let memory_geometry = self.memory_geometry.as_ref()?;
+        Some(compose_flux2_klein_memory_ceiling_utilization(
+            self.effective_mlx_memory_ceiling_bytes as u64,
+            active_memory_bytes,
+            self.resident_attributed_bytes(),
+            self.current_memory_phase(),
+            memory_geometry,
+        ))
     }
 
     fn runtime(&self) -> Result<&MlxRuntime, String> {
@@ -416,12 +487,19 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
             .as_ref()
             .and_then(|runtime| runtime.memory_snapshot().ok())
             .map(|snapshot| {
-                MlxMemoryTelemetry::new(
+                let mut telemetry = MlxMemoryTelemetry::new(
                     snapshot.active_memory_bytes() as u64,
                     snapshot.allocator_cache_memory_bytes() as u64,
                     snapshot.peak_memory_bytes() as u64,
                     crate::MlxActiveMemoryBreakdown::default(),
-                )
+                );
+                if let Some(memory_ceiling_utilization) =
+                    self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
+                {
+                    telemetry =
+                        telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
+                }
+                telemetry
             })
     }
 

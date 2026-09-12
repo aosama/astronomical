@@ -36,8 +36,14 @@ final class TelemetryStore: ObservableObject {
   @Published var editableMaximumMlxMemoryGigabytes: UInt64 = 0
   var onMenuBarTitleChanged: ((String) -> Void)?
 
+  /// Suspends the feedback-dismissal task for its delay. Production sleeps the
+  /// real duration; tests inject a gate they release explicitly so assertions
+  /// on transient feedback never race the dismissal window.
+  typealias ControlActionFeedbackDismissalSleep = @Sendable (Duration) async -> Void
+
   private let supervisorClient: any SupervisorClient
   private let controlActionFeedbackDismissalDelay: Duration
+  private let controlActionFeedbackDismissalSleep: ControlActionFeedbackDismissalSleep
   private let workerPolicyConfirmationRetryDelay: Duration
   private let systemTelemetrySampler = SystemTelemetrySampler()
   private let systemTelemetryClock = ContinuousClock()
@@ -53,10 +59,13 @@ final class TelemetryStore: ObservableObject {
   init(
     supervisorClient: any SupervisorClient = LocalSupervisorClient(),
     controlActionFeedbackDismissalDelay: Duration = .seconds(1),
+    controlActionFeedbackDismissalSleep: ControlActionFeedbackDismissalSleep? = nil,
     workerPolicyConfirmationRetryDelay: Duration = defaultWorkerPolicyConfirmationRetryDelay
   ) {
     self.supervisorClient = supervisorClient
     self.controlActionFeedbackDismissalDelay = controlActionFeedbackDismissalDelay
+    self.controlActionFeedbackDismissalSleep = controlActionFeedbackDismissalSleep
+      ?? { delay in try? await Task.sleep(for: delay) }
     self.workerPolicyConfirmationRetryDelay = workerPolicyConfirmationRetryDelay
   }
 
@@ -303,14 +312,11 @@ final class TelemetryStore: ObservableObject {
 
   private func scheduleMaximumMlxMemoryFeedbackDismissal() {
     let feedbackGeneration = controlActionFeedbackGeneration
+    let controlActionFeedbackDismissalSleep = controlActionFeedbackDismissalSleep
     let dismissalDelay = controlActionFeedbackDismissalDelay
     controlActionFeedbackDismissalTask?.cancel()
     controlActionFeedbackDismissalTask = Task { [weak self] in
-      do {
-        try await Task.sleep(for: dismissalDelay)
-      } catch {
-        return
-      }
+      await controlActionFeedbackDismissalSleep(dismissalDelay)
       guard let self, self.controlActionFeedbackGeneration == feedbackGeneration else { return }
       self.controlActionFeedback = nil
       self.controlActionFeedbackDismissalTask = nil

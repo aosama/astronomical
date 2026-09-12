@@ -12,6 +12,7 @@ mod engine;
 mod image_encoding;
 mod inventory;
 mod memory_admission;
+mod memory_utilization;
 mod official_profile;
 mod scheduler;
 #[cfg(feature = "direct-mlx")]
